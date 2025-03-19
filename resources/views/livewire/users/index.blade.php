@@ -33,14 +33,14 @@ new class extends Component
     }
 
     // Table headers
+
     public function headers(): array
     {
-        return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-            ['key' => 'name', 'label' => 'Name', 'class' => 'w-64'],
-
-            ['key' => 'email', 'label' => 'E-mail', 'sortable' => false, 'class' => 'hidden lg:table-cell'],
-        ];
+    return [
+        ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
+        ['key' => 'name', 'label' => 'نام', 'class' => 'w-64'],
+        ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-32'],
+    ];
     }
 
     /**
@@ -51,14 +51,19 @@ new class extends Component
      */
 
 
-    public function users(): LengthAwarePaginator
-    {
-        return User::query()
-            //->withAggregate('country', 'name')
-            ->when($this->search, fn(Builder $q) => $q->where('name', 'like', "%$this->search%"))
-            ->orderBy(...array_values($this->sortBy))
-            ->paginate(5); // No more `->get()`
-    }
+ public function users(): LengthAwarePaginator
+{
+    return User::query()
+        ->with('person')  // بارگذاری اطلاعات شخص
+        ->when($this->search, fn($q) => $q->whereHas('person', function ($query) {
+            $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%$this->search%"]);
+        }))
+        ->orderBy('n_code', $this->sortBy['direction'])  // مرتب‌سازی بر اساس کد ملی
+        ->paginate(5);
+}
+
+
+
 
     public function with(): array
     {
@@ -84,11 +89,27 @@ new class extends Component
 
     <!-- TABLE  -->
     <x-card shadow>
-        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy">
-            @scope('actions', $user)
-            <x-button icon="o-trash" wire:click="delete({{ $user['id'] }})" wire:confirm="Are you sure?" spinner class="btn-ghost btn-sm text-error" />
-            @endscope
-        </x-table>
+   <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy">
+    @foreach($users as $user)
+        <tr>
+            <td>{{ $user->id }}</td>
+            <td>{{ $user->person->f_name }} {{ $user->person->l_name }}</td> 
+            <td>{{ $user->n_code }}</td>
+            <td>
+               @scope('actions', $user)
+        <!-- دکمه ویرایش -->
+        <x-button icon="o-pencil" wire:click="edit({{ $user->id }})" 
+            class="btn-ghost btn-sm text-primary" label="Edit" />
+
+        <!-- دکمه حذف -->
+        <x-button icon="o-trash" wire:click="delete({{ $user->id }})" 
+            wire:confirm="Are you sure?" spinner 
+            class="btn-ghost btn-sm text-error" label="Delete" />
+    @endscope      </td>
+        </tr>
+    @endforeach
+</x-table>
+
     </x-card>
 
     <!-- FILTER DRAWER -->
