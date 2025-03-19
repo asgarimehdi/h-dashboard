@@ -10,8 +10,10 @@ new
 #[Title('Login')]
 class extends Component {
 
-    #[Rule('required|email')]
-    public string $email = '';
+    // #[Rule('required|email')]
+    // public string $email = '';
+     #[Rule('required')]
+    public string $n_code = '';
 
     #[Rule('required')]
     public string $password = '';
@@ -43,7 +45,9 @@ class extends Component {
     <div class="mb-10">Cool image here</div>
 
     <x-form wire:submit="login">
-        <x-input label="E-mail" wire:model="email" icon="o-envelope" inline />
+        {{-- <x-input label="E-mail" wire:model="email" icon="o-envelope" inline /> --}}
+        <x-input label="N_code" wire:model="n_code" icon="o-envelope" inline />
+
         <x-input label="Password" wire:model="password" type="password" icon="o-key" inline />
 
         <x-slot:actions>
