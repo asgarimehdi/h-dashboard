@@ -1,11 +1,15 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Support\Collection;
+
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Livewire\WithPagination;
 
-new class extends Component {
+new class extends Component
+{
+    use WithPagination;
     use Toast;
 
     public string $search = '';
@@ -33,7 +37,7 @@ new class extends Component {
         return [
             ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
             ['key' => 'name', 'label' => 'Name', 'class' => 'w-64'],
-            ['key' => 'age', 'label' => 'Age', 'class' => 'w-20'],
+
             ['key' => 'email', 'label' => 'E-mail', 'sortable' => false],
         ];
     }
@@ -44,17 +48,15 @@ new class extends Component {
      * On real projects you do it with Eloquent collections.
      * Please, refer to maryUI docs to see the eloquent examples.
      */
-    public function users(): Collection
+
+
+    public function users(): LengthAwarePaginator
     {
-        return collect([
-            ['id' => 1, 'name' => 'Mary', 'email' => 'mary@mary-ui.com', 'age' => 23],
-            ['id' => 2, 'name' => 'Giovanna', 'email' => 'giovanna@mary-ui.com', 'age' => 7],
-            ['id' => 3, 'name' => 'Marina', 'email' => 'marina@mary-ui.com', 'age' => 5],
-        ])
-            ->sortBy([[...array_values($this->sortBy)]])
-            ->when($this->search, function (Collection $collection) {
-                return $collection->filter(fn(array $item) => str($item['name'])->contains($this->search, true));
-            });
+        return User::query()
+            //->withAggregate('country', 'name')
+            ->when($this->search, fn(Builder $q) => $q->where('name', 'like', "%$this->search%"))
+            ->orderBy(...array_values($this->sortBy))
+            ->paginate(5); // No more `->get()`
     }
 
     public function with(): array
