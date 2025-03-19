@@ -74,6 +74,8 @@ new class extends Component {
         </x-slot:middle>
         <x-slot:actions>
             <x-button label="Filters" @click="$wire.drawer = true" responsive icon="o-funnel" />
+            <x-theme-toggle darkTheme="dark"  lightTheme="light"  />
+
         </x-slot:actions>
     </x-header>
 
