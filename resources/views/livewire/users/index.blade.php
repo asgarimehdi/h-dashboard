@@ -54,10 +54,14 @@ new class extends Component
  public function users(): LengthAwarePaginator
 {
     return User::query()
-        ->with('person')  // بارگذاری اطلاعات شخص
-        ->when($this->search, fn($q) => $q->whereHas('person', function ($query) {
-            $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%$this->search%"]);
-        }))
+
+        ->withAggregate('person', 'f_name')
+        ->withAggregate('person', 'l_name')
+       // ->withAggregate('person.tahsilat', 'tahsilat')  // دریافت میزان تحصیلات از جدول tahsilat
+//        ->when($this->search, fn($q) => $q->whereHas('person', function ($query) {
+//            $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%$this->search%"]);
+//        }))
+        ->when($this->search, fn(Builder $q) => $q->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%$this->search%"]))
         ->orderBy('n_code', $this->sortBy['direction'])  // مرتب‌سازی بر اساس کد ملی
         ->paginate(5);
 }
@@ -93,17 +97,17 @@ new class extends Component
     @foreach($users as $user)
         <tr>
             <td>{{ $user->id }}</td>
-            <td>{{ $user->person->f_name }} {{ $user->person->l_name }}</td> 
+            <td>{{ $user->person->f_name }} {{ $user->person->l_name }}</td>
             <td>{{ $user->n_code }}</td>
             <td>
                @scope('actions', $user)
         <!-- دکمه ویرایش -->
-        <x-button icon="o-pencil" wire:click="edit({{ $user->id }})" 
+        <x-button icon="o-pencil" wire:click="edit({{ $user->id }})"
             class="btn-ghost btn-sm text-primary" label="Edit" />
 
         <!-- دکمه حذف -->
-        <x-button icon="o-trash" wire:click="delete({{ $user->id }})" 
-            wire:confirm="Are you sure?" spinner 
+        <x-button icon="o-trash" wire:click="delete({{ $user->id }})"
+            wire:confirm="Are you sure?" spinner
             class="btn-ghost btn-sm text-error" label="Delete" />
     @endscope      </td>
         </tr>

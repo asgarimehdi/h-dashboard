@@ -21,6 +21,10 @@ class DatabaseSeeder extends Seeder
         // ]);
 
         $this->call([
+            EstekhdamSeeder::class,
+            TahsilSeeder::class,
+            RadifSeeder::class,
+            SematSeeder::class,
             PersonsTableSeeder::class,
             UsersTableSeeder::class,
         ]);
