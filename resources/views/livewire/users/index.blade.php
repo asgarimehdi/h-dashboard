@@ -11,7 +11,7 @@ new class extends Component
 {
     use WithPagination;
     use Toast;
-
+    public array $expanded = [];
     public string $search = '';
 
     public bool $drawer = false;
@@ -38,7 +38,7 @@ new class extends Component
     {
     return [
         ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-        ['key' => 'name', 'label' => 'نام', 'class' => 'w-64'],
+        ['key' => 'name', 'label' => 'نام', 'class' => 'w-64', 'sortable' => false],
         ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-32'],
     ];
     }
@@ -103,7 +103,7 @@ new class extends Component
 
     <!-- TABLE  -->
     <x-card shadow >
-   <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy">
+   <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy"  wire:model="expanded" expandable>
     @foreach($users as $user)
         <tr>
             <td>{{ $user->id }}</td>
@@ -121,6 +121,11 @@ new class extends Component
             class="btn-ghost btn-sm text-error" label="Delete" />
     @endscope      </td>
         </tr>
+           @scope('expansion', $user)
+           <div class="bg-base-200 p-8 font-bold">
+                اطلاعات بیشتر درباره کاربر , {{ $user->name }}!
+           </div>
+           @endscope
     @endforeach
 </x-table>
 

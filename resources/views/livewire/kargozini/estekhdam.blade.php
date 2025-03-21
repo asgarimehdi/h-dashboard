@@ -14,7 +14,7 @@ new class extends Component
     public $name;
     public int|null $editingId = null;
     public string $search = '';
-
+    public int $perPage = 3;
     public bool $drawer = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
@@ -92,7 +92,7 @@ new class extends Component
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
         $query->orderBy(...array_values($this->sortBy));
-        return $this->estekhdams = $query->paginate(5);
+        return $this->estekhdams = $query->paginate($this->perPage);
 
     }
 
@@ -136,12 +136,13 @@ new class extends Component
     <x-card shadow >
         @if (isset($editingId))
             <div class="flex items-center space-x-2">
-                <x-input type="text" wire:model="name" class="flex-1"/>
+                <x-input type="text" wire:model="name" class="flex-1"  wire:keydown.enter="updateEstekhdam"/>
                 <x-button wire:click="updateEstekhdam" class="btn-success btn-sm" icon="o-check"/>
                 <x-button wire:click="$set('editingId', null)" class="btn-outline btn-sm" icon="o-x-mark"/>
             </div>
         @endif
-        <x-table :headers="$headers" :rows="$estekhdams" :sort-by="$sortBy" with-pagination>
+        <x-table :headers="$headers" :rows="$estekhdams" :sort-by="$sortBy" with-pagination per-page="perPage"
+                 :per-page-values="[3, 5, 10]" @class(['opacity-10' => isset($editingId)])>>
             @foreach($estekhdams as $estekhdam)
                 <tr wire:key="{{ $estekhdam->id }}" >
                     <td>{{ $estekhdam->id }}</td>
@@ -159,7 +160,8 @@ new class extends Component
                                   class="btn-ghost btn-sm text-error" label="Delete" />
 
 
-                        @endscope      </td>
+                        @endscope
+                    </td>
                 </tr>
             @endforeach
         </x-table>
