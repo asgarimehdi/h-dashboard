@@ -86,7 +86,7 @@ new class extends Component
         </x-slot:middle>
         <x-slot:actions>
             <x-button label="Filters" @click="$wire.drawer = true" responsive icon="o-funnel" />
-            <x-dropdown label="Theme" title="Theme" icon="o-swatch" >
+            <x-dropdown class="btn-sm" label="Theme" title="Theme" icon="o-swatch" >
                 <x-slot:trigger>
                     <x-button icon="o-swatch" class="btn-circle btn-outline" />
                 </x-slot:trigger>

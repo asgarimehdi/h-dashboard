@@ -23,6 +23,7 @@ Route::middleware('auth')->group(function () {
         return view('dashboard');
     });
     Volt::route('/users', 'users.index');
+    Volt::route('/kargozini/estekhdams', 'kargozini.estekhdam');
     Volt::route('/users/create', 'users.create');
     Volt::route('/users/{user}/edit', 'users.edit');
     // ... more
