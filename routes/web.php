@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
@@ -16,14 +17,17 @@ Route::get('/logout', function () {
 
 // Protected routes here
 Route::middleware('auth')->group(function () {
-    Route::get('/',function () {
+    Route::get('/', function () {
         return view('welcome');
     });
-    Route::get('/dashboard',function () {
+    Route::get('/dashboard', function () {
         return view('dashboard');
     });
     Volt::route('/users', 'users.index');
     Volt::route('/users/create', 'users.create');
     Volt::route('/users/{user}/edit', 'users.edit');
+    Volt::route('/units', 'units.index');
+    Volt::route('/units/create', 'units.create');
+    Volt::route('/units/{unit}/edit', 'units.edit');
     // ... more
 });
