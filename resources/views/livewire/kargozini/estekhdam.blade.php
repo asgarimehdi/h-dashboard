@@ -14,7 +14,7 @@ new class extends Component
     public $name;
     public int|null $editingId = null;
     public string $search = '';
-    public int $perPage = 3;
+    public int $perPage = 5;
     public bool $drawer = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
@@ -117,17 +117,8 @@ new class extends Component
         </x-slot:middle>
         <x-slot:actions>
             <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.drawer = true" responsive icon="o-plus" />
-            <x-dropdown class="btn-sm" label="Theme" title="Theme" icon="o-swatch" >
-                <x-slot:trigger>
-                    <x-button icon="o-swatch" class="btn-circle btn-outline" />
-                </x-slot:trigger>
-                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Luxury" value="luxury" />
-                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Valentine" value="valentine" />
-                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Cupcake" value="cupcake" />
-                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Aqua" value="aqua" />
-                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Dark" value="dark" />
-                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Light" value="light" />
-            </x-dropdown>
+
+            <x-theme-selector />
         </x-slot:actions>
 
     </x-header>
@@ -136,7 +127,7 @@ new class extends Component
     <x-card shadow >
         @if (isset($editingId))
             <div class="flex items-center space-x-2">
-                <x-input type="text" wire:model="name" class="flex-1"  wire:keydown.enter="updateEstekhdam"/>
+                <x-input type="text" wire:model="name" class="flex-1 w-lg"  wire:keydown.enter="updateEstekhdam"/>
                 <x-button wire:click="updateEstekhdam" class="btn-success btn-sm" icon="o-check"/>
                 <x-button wire:click="$set('editingId', null)" class="btn-outline btn-sm" icon="o-x-mark"/>
             </div>
