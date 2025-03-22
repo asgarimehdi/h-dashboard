@@ -1,7 +1,7 @@
 <?php
 
 
-use App\Models\Estekhdam;
+use App\Models\Tahsil;
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -27,41 +27,41 @@ new class extends Component
     }
 
     // Delete action
-    public function delete(Estekhdam $estekhdam): void
+    public function delete(Tahsil $tahsil): void
     {
-        $estekhdam->delete();
-        $this->warning("$estekhdam->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        $tahsil->delete();
+        $this->warning("$tahsil->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
     }
     // create action
-    public function createEstekhdam(Estekhdam $estekhdam): void
+    public function createTahsil(Tahsil $tahsil): void
     {
         $this->validate([
-            'name' => 'required|string|max:255|unique:estekhdams,name',
+            'name' => 'required|string|max:255|unique:tahsils,name',
         ]);
 
-        $estekhdam::create(['name' => $this->name]);
+        $tahsil::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name']);
     }
 
     //edit clicked
-    public function editEstekhdam($id)
+    public function editTahsil($id)
     {
         //dd($id);
-        $estekhdam = Estekhdam::findOrFail($id);
+        $tahsil = Tahsil::findOrFail($id);
         $this->editingId = $id;
-        $this->name = $estekhdam->name;
+        $this->name = $tahsil->name;
     }
 //edit action
-    public function updateEstekhdam()
+    public function updateTahsil()
     {
         $this->validate([
-            'name' => 'required|string|max:255|unique:estekhdams,name,' . $this->editingId,
+            'name' => 'required|string|max:255|unique:tahsils,name,' . $this->editingId,
         ]);
 
-        $estekhdam = Estekhdam::findOrFail($this->editingId);
-        $estekhdam->update(['name' => $this->name]);
+        $tahsil = Tahsil::findOrFail($this->editingId);
+        $tahsil->update(['name' => $this->name]);
 
         $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name', 'editingId']);
@@ -84,15 +84,15 @@ new class extends Component
      */
 
 
-    public function estekhdams(): LengthAwarePaginator
+    public function tahsils(): LengthAwarePaginator
     {
-        $query = Estekhdam::query();
+        $query = Tahsil::query();
 
         if (!empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
         $query->orderBy(...array_values($this->sortBy));
-        return $this->estekhdams = $query->paginate($this->perPage);
+        return $this->tahsils = $query->paginate($this->perPage);
 
     }
 
@@ -103,7 +103,7 @@ new class extends Component
     {
         return [
             'editingId' => $this->editingId,
-            'estekhdams' => $this->estekhdams(),
+            'tahsils' => $this->tahsils(),
             'headers' => $this->headers()
         ];
     }
@@ -111,7 +111,7 @@ new class extends Component
 
 <div>
     <!-- HEADER -->
-    <x-header title="مدیریت وضعیت های استخدامی" separator progress-indicator>
+    <x-header title="مدیریت وضعیت های تحصیلی" separator progress-indicator>
         <x-slot:middle class="!justify-end">
             <x-input placeholder="Search..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass" />
         </x-slot:middle>
@@ -127,26 +127,26 @@ new class extends Component
     <x-card shadow >
         @if (isset($editingId))
             <div class="flex items-center space-x-2">
-                <x-input type="text" wire:model="name" class="flex-1 w-lg"  wire:keydown.enter="updateEstekhdam"/>
-                <x-button wire:click="updateEstekhdam" class="btn-success btn-sm" icon="o-check"/>
+                <x-input type="text" wire:model="name" class="flex-1 w-lg"  wire:keydown.enter="updateTahsil"/>
+                <x-button wire:click="updateTahsil" class="btn-success btn-sm" icon="o-check"/>
                 <x-button wire:click="$set('editingId', null)" class="btn-outline btn-sm" icon="o-x-mark"/>
             </div>
         @endif
-        <x-table :headers="$headers" :rows="$estekhdams" :sort-by="$sortBy" with-pagination per-page="perPage"
+        <x-table :headers="$headers" :rows="$tahsils" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]" @class(['opacity-10' => isset($editingId)])>>
-            @foreach($estekhdams as $estekhdam)
-                <tr wire:key="{{ $estekhdam->id }}" >
-                    <td>{{ $estekhdam->id }}</td>
+            @foreach($tahsils as $tahsil)
+                <tr wire:key="{{ $tahsil->id }}" >
+                    <td>{{ $tahsil->id }}</td>
 
-                    <td>{{ $estekhdam->name }}</td>
+                    <td>{{ $tahsil->name }}</td>
                     <td>
-                        @scope('actions', $estekhdam)
+                        @scope('actions', $tahsil)
                         <!-- دکمه ویرایش -->
-                        <x-button icon="o-pencil" wire:click="editEstekhdam({{ $estekhdam->id }})"
+                        <x-button icon="o-pencil" wire:click="editTahsil({{ $tahsil->id }})"
                                   class="btn-ghost btn-sm text-primary" label="Edit" />
 
                         <!-- دکمه حذف -->
-                        <x-button icon="o-trash" wire:click="delete({{ $estekhdam->id }})"
+                        <x-button icon="o-trash" wire:click="delete({{ $tahsil->id }})"
                                   wire:confirm="Are you sure?" spinner
                                   class="btn-ghost btn-sm text-error" label="Delete" />
 
@@ -161,9 +161,9 @@ new class extends Component
 
     <!-- FILTER DRAWER -->
     <x-drawer wire:model="drawer" title="ثبت جدید" left separator with-close-button class="lg:w-1/3">
-        <form wire:submit.prevent="createEstekhdam" class="space-y-4">
+        <form wire:submit.prevent="createTahsil" class="space-y-4">
             <x-input wire:model="name"
-                     label="عنوان استخدامی"
+                     label="عنوان تحصیلی"
                      placeholder="عنوان"
                      required icon="o-magnifying-glass" @keydown.enter="$wire.drawer = false" />
             <x-button type="submit"  label="ایجاد" icon="o-check" class="btn-primary"  spinner />

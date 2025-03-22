@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Semat extends Model
 {
+    protected $fillable = ['name'];
     public function person():hasMany
     {
         return $this->hasMany(Person::class);

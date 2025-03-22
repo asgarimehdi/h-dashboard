@@ -46,10 +46,18 @@
                     <x-menu-separator />
                 @endif
 
-                <x-menu-item title="استخدام" icon="o-sparkles" link="/kargozini/estekhdams" />
+                <x-menu-item title="صفحه اول" icon="o-sparkles" link="/"/>
 
-                <x-menu-sub title="Settings" icon="o-cog-6-tooth">
-test
+
+                <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
+                    <x-menu-item title="کاربران" icon="o-sparkles" link="/users" />
+                <x-menu-sub title="کارگزینی" icon="o-cog-6-tooth">
+                    <x-menu-item title="استخدام" icon="o-sparkles" link="/kargozini/estekhdams" />
+                    <x-menu-item title="ردیف سازمانی" icon="o-sparkles" link="/kargozini/radifs" />
+                    <x-menu-item title="تحصیلات" icon="o-sparkles" link="/kargozini/tahsils" />
+                    <x-menu-item title="سمت ها" icon="o-sparkles" link="/kargozini/semats" />
+                    <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons" />
+                </x-menu-sub>
                 </x-menu-sub>
             </x-menu>
         </x-slot:sidebar>
