@@ -27,6 +27,11 @@ class DatabaseSeeder extends Seeder
             SematSeeder::class,
             PersonsTableSeeder::class,
             UsersTableSeeder::class,
+            ProvinceSeeder::class,
+            CountySeeder::class,
+            UnitTypeSeeder::class,
+            UnitTypeRelationshipSeeder::class,
+            UnitSeeder::class,
         ]);
     }
 }
