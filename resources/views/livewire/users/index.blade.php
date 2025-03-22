@@ -11,7 +11,7 @@ new class extends Component
 {
     use WithPagination;
     use Toast;
-
+    public array $expanded = [];
     public string $search = '';
 
     public bool $drawer = false;
@@ -38,7 +38,7 @@ new class extends Component
     {
     return [
         ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-        ['key' => 'name', 'label' => 'نام', 'class' => 'w-64'],
+        ['key' => 'name', 'label' => 'نام', 'class' => 'w-64', 'sortable' => false],
         ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-32'],
     ];
     }
@@ -86,14 +86,24 @@ new class extends Component
         </x-slot:middle>
         <x-slot:actions>
             <x-button label="Filters" @click="$wire.drawer = true" responsive icon="o-funnel" />
-            <x-theme-toggle darkTheme="dark"  lightTheme="light"  />
-
+            <x-dropdown class="btn-sm" label="Theme" title="Theme" icon="o-swatch" >
+                <x-slot:trigger>
+                    <x-button icon="o-swatch" class="btn-circle btn-outline" />
+                </x-slot:trigger>
+                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Luxury" value="luxury" />
+                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Valentine" value="valentine" />
+                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Cupcake" value="cupcake" />
+                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Aqua" value="aqua" />
+                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Dark" value="dark" />
+                <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start" aria-label="Light" value="light" />
+            </x-dropdown>
         </x-slot:actions>
+
     </x-header>
 
     <!-- TABLE  -->
-    <x-card shadow>
-   <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy">
+    <x-card shadow >
+   <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy"  wire:model="expanded" expandable>
     @foreach($users as $user)
         <tr>
             <td>{{ $user->id }}</td>
@@ -111,6 +121,11 @@ new class extends Component
             class="btn-ghost btn-sm text-error" label="Delete" />
     @endscope      </td>
         </tr>
+           @scope('expansion', $user)
+           <div class="bg-base-200 p-8 font-bold">
+                اطلاعات بیشتر درباره کاربر , {{ $user->name }}!
+           </div>
+           @endscope
     @endforeach
 </x-table>
 
