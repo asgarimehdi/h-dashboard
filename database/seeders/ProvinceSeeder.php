@@ -14,10 +14,9 @@ class ProvinceSeeder extends Seeder
     public function run(): void
     {
         $provinces = [
-            ['name' => 'Tehran'],
-            ['name' => 'Isfahan'],
-            ['name' => 'Zanjan'],
-            // می‌توانید استان‌های بیشتری اضافه کنید
+            ['name' => 'تهران'],
+            ['name' => 'زنجان'],
+           
         ];
 
         foreach ($provinces as $province) {

@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
-
+     <script src="https://code.highcharts.com/highcharts.js"></script>
+     <script src="https://code.highcharts.com/modules/treemap.js"></script>
+     <script src="https://code.highcharts.com/modules/treegraph.js"></script>
+     <script src="https://code.highcharts.com/modules/exporting.js"></script>
+     <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+     <style>
+         #container {
+             max-width: 900px;
+             min-width: 760px;
+             margin: 0 auto;
+         }
+     </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
@@ -57,6 +68,11 @@
                     <x-menu-item title="تحصیلات" icon="o-sparkles" link="/kargozini/tahsils" />
                     <x-menu-item title="سمت ها" icon="o-sparkles" link="/kargozini/semats" />
                     <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons" />
+                </x-menu-sub>
+                 <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">
+                    <x-menu-item title="لیست واحد ها " icon="o-sparkles" link="/units" />
+                    <x-menu-item title="ایجاد واحد جدید " icon="o-sparkles" link="/units/create" />
+                    <x-menu-item title="چارت گرافیکی " icon="o-sparkles" link="/units/chart" />
                 </x-menu-sub>
                 </x-menu-sub>
             </x-menu>

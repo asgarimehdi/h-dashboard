@@ -29,6 +29,7 @@ Route::middleware('auth')->group(function () {
     Volt::route('/units', 'units.index');
     Volt::route('/units/create', 'units.create');
     Volt::route('/units/{unit}/edit', 'units.edit');
+    Volt::route('/units/chart', 'units.chart');
     // ... more
 
     Volt::route('/kargozini/estekhdams', 'kargozini.estekhdam');
@@ -36,4 +37,3 @@ Route::middleware('auth')->group(function () {
     Volt::route('/kargozini/semats', 'kargozini.semat');
     Volt::route('/kargozini/radifs', 'kargozini.radif');
 });
-
