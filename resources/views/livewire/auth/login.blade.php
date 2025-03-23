@@ -86,17 +86,16 @@ class extends Component {
     }
 };?>
 
-
-<div class="md:w-96 mx-auto mt-20">
-    <div class="mb-10">Cool image here</div>
+<div class="auth-page">
+    <h2>ورود</h2>
 
     <x-form wire:submit="login">
-        {{-- <x-input label="E-mail" wire:model="email" icon="o-envelope" inline /> --}}
         <x-input label="کد ملی" wire:model="n_code" icon="o-envelope" inline />
-
         <x-input label="پسورد" wire:model="password" type="password" icon="o-key" inline />
-        <!-- Remember Me -->
-        <x:checkbox wire:model="remember" :label="__('Remember me')" />
+        <div class="password-options">
+            <x-checkbox wire:model="remember" :label="__('Remember me')" />
+            <a href="#">فراموشی رمز عبور</a>
+        </div>
         <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
         <x-slot:actions>
             <x-button label="ساخت حساب کاربری" class="btn-ghost" link="/register" />
@@ -104,3 +103,4 @@ class extends Component {
         </x-slot:actions>
     </x-form>
 </div>
+ 

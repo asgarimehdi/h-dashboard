@@ -65,17 +65,18 @@ class extends Component {
 
 ; ?>
 
-<div class="md:w-96 mx-auto mt-20">
-    <div class="mb-10">Cool image here</div>
+<div class="auth-page">
+    <h2>ثبت نام</h2>
+
 
     <x-form wire:submit="register">
-        <x-input label="n_coce" wire:model="n_code" icon="o-envelope" inline />
-        <x-input label="Password" wire:model="password" type="password" icon="o-key" inline />
-        <x-input label="Confirm Password" wire:model="password_confirmation" type="password" icon="o-key" inline />
+        <x-input label="کدملی" wire:model="n_code" icon="o-envelope" inline />
+        <x-input label="رمز عبور " wire:model="password" type="password" icon="o-key" inline />
+        <x-input label="تکرار رمز عبور " wire:model="password_confirmation" type="password" icon="o-key" inline />
         <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
         <x-slot:actions>
-            <x-button label="Already registered?" class="btn-ghost" link="/login" />
-            <x-button label="Register" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="register" />
+            <x-button label="رفتن به صفحه ورود؟" class="btn-ghost" link="/login" />
+            <x-button label="ثبت نام" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="register" />
         </x-slot:actions>
     </x-form>
 </div>
