@@ -4,6 +4,12 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Rule;
 use Livewire\Attributes\Title;
 use Livewire\Volt\Component;
+use Illuminate\Auth\Events\Lockout;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 new
 #[Layout('components.layouts.auth')]       // <-- Here is the `empty` layout
@@ -18,6 +24,8 @@ class extends Component {
     #[Rule('required')]
     public string $password = '';
 
+    public bool $remember = false;
+
     public function mount()
     {
         // It is logged in
@@ -25,18 +33,56 @@ class extends Component {
             return redirect('/');
         }
     }
-
     public function login()
     {
-        $credentials = $this->validate();
+        $this->validate();
 
-        if (auth()->attempt($credentials)) {
-            request()->session()->regenerate();
+        $this->ensureIsNotRateLimited();
 
-            return redirect()->intended('/');
+        if (! Auth::attempt(['n_code' => $this->n_code, 'password' => $this->password], $this->remember)) {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'n_code' => __('نام کاربری یا رمز عبور اشتباه است'),
+            ]);
         }
 
-        $this->addError('email', 'The provided credentials do not match our records.');
+        RateLimiter::clear($this->throttleKey());
+        Session::regenerate();
+
+        // اطمینان از ذخیره remember me
+        Auth::login(auth()->user(), $this->remember);
+
+        return redirect()->intended('/');
+    }
+
+    /**
+     * Ensure the authentication request is not rate limited.
+     */
+    protected function ensureIsNotRateLimited(): void
+    {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+            return;
+        }
+
+        event(new Lockout(request()));
+
+        $seconds = RateLimiter::availableIn($this->throttleKey());
+
+        throw ValidationException::withMessages([
+            'n_code' => __('auth.throttle', [
+                'seconds' => $seconds,
+                'minutes' => ceil($seconds / 60),
+            ]),
+        ]);
+    }
+
+    /**
+     * Get the authentication rate limiting throttle key.
+     */
+    protected function throttleKey(): string
+    {
+        return Str::transliterate(Str::lower($this->n_code).'|'.request()->ip());
     }
 };?>
 
@@ -46,13 +92,15 @@ class extends Component {
 
     <x-form wire:submit="login">
         {{-- <x-input label="E-mail" wire:model="email" icon="o-envelope" inline /> --}}
-        <x-input label="N_code" wire:model="n_code" icon="o-envelope" inline />
+        <x-input label="کد ملی" wire:model="n_code" icon="o-envelope" inline />
 
-        <x-input label="Password" wire:model="password" type="password" icon="o-key" inline />
-
+        <x-input label="پسورد" wire:model="password" type="password" icon="o-key" inline />
+        <!-- Remember Me -->
+        <x:checkbox wire:model="remember" :label="__('Remember me')" />
+        <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
         <x-slot:actions>
-            <x-button label="Create an account" class="btn-ghost" link="/register" />
-            <x-button label="Login" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="login" />
+            <x-button label="ساخت حساب کاربری" class="btn-ghost" link="/register" />
+            <x-button label="ورود" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="login" />
         </x-slot:actions>
     </x-form>
 </div>

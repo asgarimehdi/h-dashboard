@@ -72,7 +72,7 @@ class extends Component {
         <x-input label="n_coce" wire:model="n_code" icon="o-envelope" inline />
         <x-input label="Password" wire:model="password" type="password" icon="o-key" inline />
         <x-input label="Confirm Password" wire:model="password_confirmation" type="password" icon="o-key" inline />
-
+        <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
         <x-slot:actions>
             <x-button label="Already registered?" class="btn-ghost" link="/login" />
             <x-button label="Register" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="register" />
