@@ -7,7 +7,7 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 <h2>
-    working plan
+    next steps:
 </h2>
 <ul>
     <li>
@@ -17,6 +17,9 @@
         login remember me
     </li>
     <li>
-        sub menu kargozini
+        add mary style to unit
+    </li>    
+    <li>
+        person page
     </li>
 </ul>
