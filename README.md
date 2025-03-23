@@ -21,5 +21,8 @@
     </li>    
     <li>
         person page
+    </li>        
+    <li>
+        user change password
     </li>
 </ul>
