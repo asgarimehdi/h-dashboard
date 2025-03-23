@@ -19,7 +19,7 @@
 
 /** daisyUI */
 @plugin "daisyui" {
-    themes: light --default, dark --prefersdark, aqua, valentine ,cupcake,luxury;
+    themes: light, dark, aqua, valentine ,cupcake --default,luxury --prefersdark;
 }
 
 /* maryUI */

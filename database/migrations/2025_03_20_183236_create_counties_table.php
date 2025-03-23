@@ -19,7 +19,7 @@ return new class extends Migration
             $table->timestamps();
 
             // تعریف کلید خارجی به استان‌ها
-            $table->foreign('province_id')->references('id')->on('provinces')->onDelete('cascade');
+            $table->foreign('province_id')->references('id')->on('provinces');
         });
     }
 
