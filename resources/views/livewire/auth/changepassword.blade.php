@@ -45,11 +45,7 @@ new class extends Component {
 }; ?>
 
 <div class="change-password-page">
-    @if (session('success'))
-    <div class="alert alert-success">
-        {{ session('success') }}
-    </div>
-@endif
+   
  <!-- HEADER -->
     <x-header title=" تغییر رمز ورود به سیستم" separator progress-indicator>
        
