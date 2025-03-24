@@ -27,10 +27,10 @@ new class extends Component {
         return [
             ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
             ['key' => 'name', 'label' => 'Name', 'class' => 'w-48'],
-            ['key' => 'unitType.name', 'label' => 'Type', 'class' => 'w-16', 'sortable' => false],
-            ['key' => 'province.name', 'label' => 'Province', 'class' => 'w-16', 'sortable' => false],
-            ['key' => 'county.name', 'label' => 'County', 'class' => 'w-16', 'sortable' => false],
-            ['key' => 'parent.name', 'label' => 'Parent Unit', 'class' => 'w-16', 'sortable' => false],
+            ['key' => 'unitType.name', 'label' => 'Type', 'class' => 'w-16', 'sortable' => false], // table name bug
+            ['key' => 'province_name', 'label' => 'Province', 'class' => 'w-16'],
+            ['key' => 'county_name', 'label' => 'County', 'class' => 'w-16'],
+            ['key' => 'parent_name', 'label' => 'Parent Unit', 'class' => 'w-16'],
         ];
     }
     public function units(): LengthAwarePaginator

@@ -11,8 +11,7 @@ use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component
-{
+new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -98,7 +97,10 @@ new class extends Component
         $this->u_id = $person->u_id;
         $this->modal = true; // باز کردن مدال برای ویرایش
     }
-
+    public function resetModal():void
+    {
+        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId']);
+    }
     // تعریف سرستون‌های جدول
     public function headers(): array
     {
@@ -127,8 +129,8 @@ new class extends Component
 
         if (!empty($this->search)) {
             $query->where('n_code', 'LIKE', '%' . $this->search . '%')
-                  ->orWhere('f_name', 'LIKE', '%' . $this->search . '%')
-                  ->orWhere('l_name', 'LIKE', '%' . $this->search . '%');
+                ->orWhere('f_name', 'LIKE', '%' . $this->search . '%')
+                ->orWhere('l_name', 'LIKE', '%' . $this->search . '%');
         }
 
         $query->orderBy(...array_values($this->sortBy));
@@ -154,17 +156,18 @@ new class extends Component
     <!-- هدر -->
     <x-header title="مدیریت اشخاص" separator progress-indicator>
         <x-slot:middle class="!justify-end">
-            <x-input placeholder="جستجو..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass" />
+            <x-input placeholder="جستجو..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass"/>
         </x-slot:middle>
         <x-slot:actions>
-            <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.modal = true" responsive icon="o-plus" />
-            <x-theme-selector />
+            <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.modal = true,$wire.resetModal()" responsive icon="o-plus"/>
+            <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
     <!-- جدول -->
     <x-card shadow>
-        <x-table :headers="$headers" :rows="$persons" :sort-by="$sortBy" with-pagination per-page="perPage" :per-page-values="[5, 10, 20]">
+        <x-table :headers="$headers" :rows="$persons" :sort-by="$sortBy" with-pagination per-page="perPage"
+                 :per-page-values="[5, 10, 20]">
             @foreach($persons as $person)
                 <tr wire:key="{{ $person->id }}">
                     {{-- <td>{{ $person->id }}</td>
@@ -179,9 +182,11 @@ new class extends Component
                     <td>
                         @scope('actions', $person)
                         <!-- دکمه ویرایش -->
-                        <x-button icon="o-pencil" wire:click="editPerson({{ $person->id }})" class="btn-ghost btn-sm text-primary" label="Edit" />
+                        <x-button icon="o-pencil" wire:click="editPerson({{ $person->id }})"
+                                  class="btn-ghost btn-sm text-primary" label="Edit"/>
                         <!-- دکمه حذف -->
-                        <x-button icon="o-trash" wire:click="delete({{ $person->id }})" wire:confirm="مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" label="Delete" />
+                        <x-button icon="o-trash" wire:click="delete({{ $person->id }})" wire:confirm="مطمئن هستید؟"
+                                  spinner class="btn-ghost btn-sm text-error" label="Delete"/>
                         @endscope
                     </td>
                 </tr>
@@ -205,89 +210,91 @@ new class extends Component
                 <x-button label="لغو" @click="$wire.modal = false" icon="o-x-mark" />
             </div>
         </form> --}}
-        <form wire:submit.prevent="savePerson" class="grid grid-cols-2 gap-4">
-    <!-- کد ملی -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">کد ملی</label>
-        <input wire:model="n_code" type="text" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="کد ملی" required />
-    </div>
+        <x-form wire:submit.prevent="savePerson" class="grid grid-cols-2 gap-4">
+            <!-- کد ملی -->
+            <x-input wire:model="n_code" type="text" label="کد ملی" placeholder="کد ملی" required/>
+            <!-- نام -->
 
-    <!-- نام -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">نام</label>
-        <input wire:model="f_name" type="text" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="نام" required />
-    </div>
+            <x-input wire:model="f_name" type="text" label="نام" placeholder="نام" required/>
 
-    <!-- نام خانوادگی -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">نام خانوادگی</label>
-        <input wire:model="l_name" type="text" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="نام خانوادگی" required />
-    </div>
+            <!-- نام خانوادگی -->
 
-    <!-- تحصیلات -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">تحصیلات</label>
-        <select wire:model="t_id" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none" required>
-            <option value="">انتخاب کنید</option>
-            @foreach($tahsils as $id => $name)
-                <option value="{{ $id }}">{{ $name }}</option>
-            @endforeach
-        </select>
-    </div>
+            <x-input wire:model="l_name" type="text" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
 
-    <!-- استخدام -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">استخدام</label>
-        <select wire:model="e_id" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none" required>
-            <option value="">انتخاب کنید</option>
-            @foreach($estekhdams as $id => $name)
-                <option value="{{ $id }}">{{ $name }}</option>
-            @endforeach
-        </select>
-    </div>
+            <!-- تحصیلات -->
+            <div>
+                <label class="block text-sm font-medium  mb-1">تحصیلات</label>
+                <select wire:model="t_id"
+                        class="w-full p-1 mt-4 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none rounded-2"
+                        required>
+                    <option value="">انتخاب کنید</option>
+                    @foreach($tahsils as $id => $name)
+                        <option value="{{ $id }}">{{ $name }}</option>
+                    @endforeach
+                </select>
+            </div>
 
-    <!-- سمت -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">سمت</label>
-        <select wire:model="s_id" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none" required>
-            <option value="">انتخاب کنید</option>
-            @foreach($semats as $id => $name)
-                <option value="{{ $id }}">{{ $name }}</option>
-            @endforeach
-        </select>
-    </div>
+            <!-- استخدام -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">استخدام</label>
+                <select wire:model="e_id"
+                        class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                        required>
+                    <option value="">انتخاب کنید</option>
+                    @foreach($estekhdams as $id => $name)
+                        <option value="{{ $id }}">{{ $name }}</option>
+                    @endforeach
+                </select>
+            </div>
 
-    <!-- ردیف سازمانی -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">ردیف سازمانی</label>
-        <select wire:model="r_id" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none" required>
-            <option value="">انتخاب کنید</option>
-            @foreach($radifs as $id => $name)
-                <option value="{{ $id }}">{{ $name }}</option>
-            @endforeach
-        </select>
-    </div>
+            <!-- سمت -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">سمت</label>
+                <select wire:model="s_id"
+                        class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                        required>
+                    <option value="">انتخاب کنید</option>
+                    @foreach($semats as $id => $name)
+                        <option value="{{ $id }}">{{ $name }}</option>
+                    @endforeach
+                </select>
+            </div>
 
-    <!-- واحد -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">واحد</label>
-        <select wire:model="u_id" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none" required>
-            <option value="">انتخاب کنید</option>
-            @foreach($units as $id => $name)
-                <option value="{{ $id }}">{{ $name }}</option>
-            @endforeach
-        </select>
-    </div>
+            <!-- ردیف سازمانی -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">ردیف سازمانی</label>
+                <select wire:model="r_id"
+                        class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                        required>
+                    <option value="">انتخاب کنید</option>
+                    @foreach($radifs as $id => $name)
+                        <option value="{{ $id }}">{{ $name }}</option>
+                    @endforeach
+                </select>
+            </div>
 
-    <!-- دکمه‌ها -->
-    <div class="col-span-2 flex justify-end space-x-2">
-        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center">
-            <i class="o-check mr-2"></i> {{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}
-        </button>
-        <button type="button" @click="$wire.modal = false" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 flex items-center">
-            <i class="o-x-mark mr-2"></i> لغو
-        </button>
-    </div>
-</form>
+            <!-- واحد -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">واحد</label>
+                <select wire:model="u_id"
+                        class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                        required>
+                    <option value="">انتخاب کنید</option>
+                    @foreach($units as $id => $name)
+                        <option value="{{ $id }}">{{ $name }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <!-- دکمه‌ها -->
+            <div class="col-span-2 flex justify-end space-x-2">
+                <x-button type="submit" icon="o-check">
+                    {{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}
+                </x-button>
+                <x-button type="button" @click="$wire.modal = false" icon="o-x-mark">
+                    لغو
+                </x-button>
+            </div>
+        </x-form>
     </x-modal>
 </div>
