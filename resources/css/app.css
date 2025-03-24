@@ -18,8 +18,8 @@
 
 /** daisyUI */
 @plugin "daisyui" {
-    themes: light, dark, aqua, valentine, cupcake --default,
-        luxury --prefersdark;
+    themes: light, dark, aqua --prefersdark, valentine, cupcake --default,
+        luxury;
 }
 
 /* maryUI */
@@ -44,13 +44,13 @@
 /* ------------------ */
 @font-face {
     font-family: "Vazir";
-    src: url("/fonts/Vazirmatn-Regular.woff2") format("truetype");
+    src: url("/public/fonts/Vazirmatn-Regular.woff2") format("truetype");
     font-weight: normal;
     font-style: normal;
 }
 @font-face {
     font-family: "Vazir";
-    src: url("/fonts/Vazirmatn-Bold.woff2") format("truetype");
+    src: url("/public/fonts/Vazirmatn-Bold.woff2") format("truetype");
     font-weight: bold;
     font-style: normal;
 }
