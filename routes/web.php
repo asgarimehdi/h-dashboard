@@ -37,4 +37,5 @@ Route::middleware('auth')->group(function () {
     Volt::route('/kargozini/tahsils', 'kargozini.tahsil');
     Volt::route('/kargozini/semats', 'kargozini.semat');
     Volt::route('/kargozini/radifs', 'kargozini.radif');
+    Volt::route('/kargozini/persons', 'kargozini.person');
 });
