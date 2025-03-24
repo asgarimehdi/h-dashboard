@@ -11,18 +11,15 @@
 </h2>
 <ul>
     <li>
-        login show error
+        unit edit
     </li>
     <li>
-        login remember me
-    </li>
-    <li>
-        add mary style to unit
+        add mary style to unit create
     </li>    
     <li>
         person page
     </li>        
     <li>
-        user change password
+        role , permission
     </li>
 </ul>
