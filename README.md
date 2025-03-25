@@ -17,9 +17,12 @@
         add mary style to unit create
     </li>    
     <li>
-        person page
+        fix font vazir error
     </li>        
     <li>
         role , permission
+    </li>
+    <li>
+        copy remote css,js to local
     </li>
 </ul>
