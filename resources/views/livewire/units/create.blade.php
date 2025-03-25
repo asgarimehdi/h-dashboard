@@ -48,7 +48,7 @@ new class extends Component {
         // $this->unitTypes = UnitType::all();
         $this->unitTypes = UnitType::where('id', '!=', 1)->get();
     }
- 
+
 public function getAllowedParentUnitsProperty()
 {
     if (!$this->unit_type_id) {
@@ -95,7 +95,7 @@ public function getAllowedParentUnitsProperty()
         // دریافت شناسه‌های نوع والد مجاز برای نوع فرزند انتخاب‌شده
         $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
             ->pluck('allowed_parent_unit_type_id')->toArray();
-        
+
         if (! in_array($parentUnit->unit_type_id, $allowedParentTypeIds)) {
             $this->addError('parent_id', 'واحد بالادستی انتخاب شده مجاز نیست.');
             return;
@@ -121,9 +121,9 @@ public function getAllowedParentUnitsProperty()
 
 <div>
   <x-header title="ایجاد واحد های سازمانی" separator progress-indicator>
-     
+
         <x-slot:actions>
-        
+
             <x-theme-toggle darkTheme="dark"  lightTheme="light"  />
 
         </x-slot:actions>
@@ -142,10 +142,10 @@ public function getAllowedParentUnitsProperty()
         <!-- نام واحد -->
         <div class=" flex items-center space-x-4">
   <label class="text-gray-700 whitespace-nowrap w-32">نام واحد</label>
-            <input 
-                type="text" 
-                wire:model="name" 
-                placeholder="نام واحد را وارد کنید" 
+            <input
+                type="text"
+                wire:model="name"
+                placeholder="نام واحد را وارد کنید"
                 required
                 class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring focus:border-blue-300"
             />
@@ -154,10 +154,10 @@ public function getAllowedParentUnitsProperty()
         <!-- توضیحات -->
         <div class="flex items-center space-x-4">
             <label class="text-gray-700 whitespace-nowrap w-32">توضیحات</label>
-            <input 
-                type="text" 
-                wire:model="description" 
-                placeholder="توضیحات " 
+            <input
+                type="text"
+                wire:model="description"
+                placeholder="توضیحات "
                 class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring focus:border-blue-300"
             />
         </div>
@@ -165,8 +165,8 @@ public function getAllowedParentUnitsProperty()
         <!-- انتخاب نوع واحد -->
         <div class="flex items-center space-x-4">
             <label class="text-gray-700 whitespace-nowrap w-32">نوع واحد </label>
-            <select 
-                wire:model.live="unit_type_id" 
+            <select
+                wire:model.live="unit_type_id"
                 class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring focus:border-blue-300"
             >
                 <option value="">انتخاب کنید</option>
@@ -177,42 +177,20 @@ public function getAllowedParentUnitsProperty()
         </div>
 
         <!-- انتخاب استان -->
-        <div class="flex items-center space-x-4">
-            <label class="text-gray-700 whitespace-nowrap w-32">استان</label>
-            <select 
-                wire:model.live="province_id" 
-                class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring focus:border-blue-300"
-            >
-                <option value="">انتخاب کنید</option>
-                @foreach($provinces as $province)
-                    <option value="{{ $province->id }}">{{ $province->name }}</option>
-                @endforeach
-            </select>
-        </div>
+
+            <x-select :options="$provinces" wire:model.live="province_id" label="استان"/>
+
 
         <!-- انتخاب شهرستان -->
-        <div class="flex items-center space-x-4">
-            <label class="text-gray-700 whitespace-nowrap w-32">شهرستان</label>
-            <select 
-                wire:model.live="county_id" 
-                class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring focus:border-blue-300"
-            >
-                @if($province_id)
-                    <option value="">انتخاب کنید</option>
-                    @foreach($this->counties as $county)
-                        <option value="{{ $county->id }}">{{ $county->name }}</option>
-                    @endforeach
-                @else
-                    <option value="">ابتدا یک استان انتخاب کنید</option>
-                @endif
-            </select>
-        </div>
+
+            <x-select wire:model.live="county_id" :options="$counties" label="شهرستان"/>
+
 
         <!-- انتخاب واحد بالادستی -->
         <div class="flex items-center space-x-4">
             <label class="text-gray-700 whitespace-nowrap w-32">واحد بالادستی </label>
-            <select 
-                wire:model="parent_id" 
+            <select
+                wire:model="parent_id"
                 class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring focus:border-blue-300"
             >
                 @if($province_id && $unit_type_id)
@@ -231,15 +209,15 @@ public function getAllowedParentUnitsProperty()
     <div class="text-red-500 text-sm mt-1">{{ $message }}</div>
 @enderror
         <!-- دکمه ایجاد -->
-        <button 
-            type="submit" 
+        <button
+            type="submit"
             class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
         >
             ایجاد واحد
         </button>
     </form>
 
-  
+
 </div>
 
 </div>
