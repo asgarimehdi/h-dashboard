@@ -72,8 +72,7 @@
                     <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons" />
                 </x-menu-sub>
                  <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">
-                    <x-menu-item title="لیست واحد ها " icon="o-sparkles" link="/units" />
-                    <x-menu-item title="ایجاد واحد جدید " icon="o-sparkles" link="/units/create" />
+                    <x-menu-item title="ایجاد واحد جدید " icon="o-sparkles" link="/units" />
                     <x-menu-item title="چارت گرافیکی " icon="o-sparkles" link="/units/chart" />
                 </x-menu-sub>
                 </x-menu-sub>
