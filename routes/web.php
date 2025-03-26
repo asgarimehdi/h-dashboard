@@ -28,8 +28,6 @@ Route::middleware('auth')->group(function () {
     Volt::route('/users/{user}/edit', 'users.edit');
     Volt::route('/users/changepassword', 'auth.changepassword');
     Volt::route('/units', 'units.index');
-    Volt::route('/units/create', 'units.create');
-    Volt::route('/units/{unit}/edit', 'units.edit');
     Volt::route('/units/chart', 'units.chart');
     // ... more
 
