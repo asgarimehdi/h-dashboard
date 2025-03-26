@@ -1,12 +1,12 @@
 <?php
- 
+
  use Livewire\Volt\Component;
  use App\Models\Unit;
- 
+
  new class extends Component {
       public $treeData;
       public $units;         // لیست واحدهای سازمانی
- 
+
        public function mount()
      {
          $this->loadData();
@@ -14,7 +14,7 @@
       public function loadData()
      {
          $this->units = Unit::with(['province', 'county', 'parent', 'unitType'])->get();
-        
+
          $this->treeData = $this->units->map(function ($unit) {
               return [
                    'id'    => (string) $unit->id,
@@ -22,28 +22,36 @@
                    'name'  => $unit->name,
                    ];
                  })->toArray();
- 
- 
- 
+
+
+
      }
  }; ?>
- 
- <div>
-         <div id="container"></div>
- 
- </div>
+<div>
+    <x-header title="نمودار چارت سازمانی" separator progress-indicator>
+        <x-slot:middle class="!justify-end">
+        </x-slot:middle>
+        <x-slot:actions>
+            <x-theme-selector/>
+        </x-slot:actions>
+    </x-header>
+    <div id="containerChart" class="rounded-box shadow-neutral h-200"></div>
+</div>
+
+
+
  <script>
      (function() {
      const chartData = @json($treeData);
- 
-     Highcharts.chart('container', {
+
+     Highcharts.chart('containerChart', {
          chart: {
              inverted: true,
-             marginBottom: 170
+             marginBottom: 10
          },
          title: {
              text: 'نمودار چارت سازمانی',
-             align: 'left'
+             align: 'center'
          },
          series: [{
              type: 'treegraph',
@@ -55,7 +63,7 @@
                  pointFormat: '{point.name}',
                  style: {
                      whiteSpace: 'nowrap',
-                     color: '#000000',
+                     color: '#200000',
                      textOutline: '3px contrast'
                  },
                  crop: false
@@ -109,7 +117,7 @@
                      dataLabels: {
                          verticalAlign: 'bottom',
                          y: -20,
-                         
+
                      }
                  },
                  {
@@ -124,7 +132,7 @@
                          y: 20
                      }
                  }
-                 
+
              ]
          }]
      });

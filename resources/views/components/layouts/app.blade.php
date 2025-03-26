@@ -10,13 +10,7 @@
      <script src="https://code.highcharts.com/modules/treegraph.js"></script>
      <script src="https://code.highcharts.com/modules/exporting.js"></script>
      <script src="https://code.highcharts.com/modules/accessibility.js"></script>
-     <style>
-         #container {
-             max-width: 900px;
-             min-width: 760px;
-             margin: 0 auto;
-         }
-     </style>
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
@@ -52,7 +46,7 @@
                         <x-slot:actions>
                           <x-button icon="o-cog" class="btn-circle btn-ghost btn-xs" tooltip-right="changepassword" no-wire-navigate link="/users/changepassword" />
                         <x-button icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate link="/logout" />
-                        
+
 
                     </x-slot:actions>
                     </x-list-item>
