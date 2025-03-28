@@ -37,7 +37,7 @@
 <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
 
 <script>
-    var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    var osm = L.tileLayer('http://192.168.2.9:8080/tile/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://zums.ac.ir">Zums</a>'
     });

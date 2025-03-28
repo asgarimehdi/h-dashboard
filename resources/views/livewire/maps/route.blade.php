@@ -40,8 +40,8 @@
     var map = L.map('map').setView([36.1500, 49.2212], 12); // تهران
 
     // اضافه کردن نقشه OpenStreetMap
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+    L.tileLayer('http://192.168.2.9:8080/tile/{z}/{x}/{y}.png', {
+        attribution: '&copy; Health-Dashboard'
     }).addTo(map);
 
     let markers = [];
@@ -70,7 +70,7 @@
 
         routingControl = L.Routing.control({
             waypoints: [start, end],
-            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+            router: L.Routing.osrmv1({ serviceUrl: 'http://192.168.2.9:5000/route/v1' }),
             lineOptions: { styles: [{ color: 'blue', weight: 5 }] },
             createMarker: function () { return null; } // جلوگیری از اضافه‌شدن مارکرهای اضافی
         }).addTo(map);
