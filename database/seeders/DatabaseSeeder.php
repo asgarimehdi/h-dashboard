@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             UnitTypeRelationshipSeeder::class,
             UnitSeeder::class,
             RoleSeeder::class,
+            PermissionSeeder::class,
         ]);
     }
 }

@@ -38,4 +38,5 @@ Route::middleware('auth')->group(function () {
     Volt::route('/kargozini/persons', 'kargozini.person');
 
     Volt::route('/roles', 'auth.roles');
+    Volt::route('/permissions', 'auth.permissions');
 });
