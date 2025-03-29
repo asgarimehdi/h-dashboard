@@ -69,6 +69,10 @@
                     <x-menu-item title="ایجاد واحد جدید " icon="o-sparkles" link="/units" />
                     <x-menu-item title="چارت گرافیکی " icon="o-sparkles" link="/units/chart" />
                 </x-menu-sub>
+                <x-menu-sub title=" سطوح دسترسی کاربران" icon="o-cog-6-tooth">
+                    <x-menu-item title="  نقش ها" icon="o-sparkles" link="/roles" />
+                    <x-menu-item title="  مجوزها " icon="o-sparkles" link="/permissions" />
+                </x-menu-sub>
                 </x-menu-sub>
             </x-menu>
         </x-slot:sidebar>
