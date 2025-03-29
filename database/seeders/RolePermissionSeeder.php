@@ -29,7 +29,11 @@ class RolePermissionSeeder extends Seeder
             'delete-role',
             'create-unit',
             'edit-unit',
-            'delete-unit'
+            'delete-unit',
+            'create-permission',
+            'edit-permission',
+            'delete-permission'
+
         ])->pluck('id');
 
         // اتصال مجوزها به نقش admin
