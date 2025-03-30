@@ -202,8 +202,8 @@ new class extends Component
         <x-slot:actions>
             <x-theme-selector/>
             <x-button class="btn-success btn-sm" label="ثبت جدید" wire:click="openModalForCreate" responsive icon="o-plus" />
-           
-             
+
+
         </x-slot:actions>
     </x-header>
 
@@ -212,7 +212,7 @@ new class extends Component
         <x-table :headers="$headers" :rows="$units" :sort-by="$sortBy" with-pagination per-page="perPage" :per-page-values="[5, 10, 20]">
             @foreach($units as $unit)
                 <tr >
-                   
+
                     <td>
                         @scope('actions', $unit)
                         <x-button icon="o-pencil" wire:click="editUnit({{ $unit->id }})" class="btn-ghost btn-sm text-primary" label="Edit" />
