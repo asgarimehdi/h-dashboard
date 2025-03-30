@@ -38,7 +38,11 @@
     <div id="containerChart" class="rounded-box shadow-neutral h-200"></div>
 </div>
 
-
+<script src="{{ asset('js/chart/highcharts.js') }}"></script>
+<script src="{{ asset('js/chart/treemap.js') }}"></script>
+<script src="{{ asset('js/chart/treegraph.js') }}"></script>
+<script src="{{ asset('js/chart/exporting.js') }}"></script>
+<script src="{{ asset('js/chart/accessibility.js') }}"></script>
 
  <script>
      (function() {

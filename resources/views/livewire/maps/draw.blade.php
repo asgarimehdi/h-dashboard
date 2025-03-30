@@ -3,7 +3,7 @@
 
 <style>
     #map {
-        height: 600px;
+        height: 400px;
     }
     #geojson-output {
         margin-top: 10px;
