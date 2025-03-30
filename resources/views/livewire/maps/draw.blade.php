@@ -1,3 +1,21 @@
+<?php
+
+use Livewire\Volt\Component;
+
+new class extends Component {
+    public string $map_ip;
+    public string $setview;
+    public string $zoom;
+
+    public function mount()
+    {
+        $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
+        $this->setview = '[36.1500, 49.2212]';
+        $this->zoom = '12';
+    }
+};
+?>
+
 <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
 <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
 
@@ -37,14 +55,14 @@
 <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
 
 <script>
-    var osm = L.tileLayer('http://192.168.2.9:8080/tile/{z}/{x}/{y}.png', {
+    var osm = L.tileLayer('http://10.100.252.137:8080/tile/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://zums.ac.ir">Zums</a>'
     });
 
     var map = L.map('map', {
-        center: [36.1500, 49.2212],
-        zoom: 12,
+        center: {{$setview}},
+        zoom: {{$zoom}},
         layers: [osm]
     });
 

@@ -39,4 +39,5 @@ Route::middleware('auth')->group(function () {
 
     Volt::route('/maps/draw', 'maps/draw');
     Volt::route('/maps/route', 'maps/route');
+    Volt::route('/maps/county', 'maps/county');
 });
