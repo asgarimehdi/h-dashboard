@@ -6,40 +6,48 @@ new class extends Component {
     public string $map_ip;
     public string $setview;
     public string $zoom;
+    public array $counties;
 
     public function mount()
     {
         $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
         $this->setview = '[36.558188, 48.716125]';
         $this->zoom = '8';
+        $this->counties = [
+            "abhar" => asset('geojsons/abhar.geojson'),
+            "ijrood" => asset('geojsons/ijrood.geojson'),
+            "khodabande" => asset('geojsons/khodabande.geojson'),
+            "khorramdare" => asset('geojsons/khorramdare.geojson'),
+            "mahneshan" => asset('geojsons/mahneshan.geojson'),
+            "soltanie" => asset('geojsons/soltanie.geojson'),
+            "tarom" => asset('geojsons/tarom.geojson'),
+            "zanjan" => asset('geojsons/zanjan.geojson')
+        ];
     }
 };
 ?>
 
 <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
 <style>
-    #map { height: 600px; }
+    #map {
+
+        z-index: 0;
+    }
     .county-menu {
 
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        padding: 5px;
+
         position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
+        top: 20px;
+        right: 20px;
+        z-index: 1;
     }
-    .county-menu button {
-        display: block;
-        margin: 5px;
-        padding: 5px 10px;
-        cursor: pointer;
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 3px;
+    .dark .leaflet-layer,
+    .dark .leaflet-control-zoom-in,
+    .dark .leaflet-control-zoom-out,
+    .dark .leaflet-control-attribution {
+        filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
     }
-    .county-menu button:hover { background: #0056b3; }
 </style>
 
 <div>
@@ -51,8 +59,14 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div id="map"></div>
-            <div class="county-menu" id="countyMenu"></div>
+            <div id="map" class="h-180 rounded"></div>
+            <div class="county-menu bg-base-100/60 rounded-l-box" id="countyMenu" >
+                @foreach ($counties as $county => $geojson)
+                    <x-toggle label="{{ ucfirst($county) }}"
+
+                              onclick="toggleGeoJson('{{ $county }}')"></x-toggle>
+                @endforeach
+            </div>
         </div>
     </x-card>
 </div>
@@ -61,31 +75,14 @@ new class extends Component {
 <script>
     var map = L.map('map').setView({{$setview}}, {{$zoom}});
     L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
-        attribution: '&copy; Health-Dashboard'
+        attribution: '&copy; Health-Dashboard',
+        className: 'map-tiles'
     }).addTo(map);
-
     var geojsonLayers = {};
-    var selectedLayer = null;
-    var counties = {
-        "abhar": "{{ asset('geojsons/abhar.geojson') }}",
-        "ijrood": "{{ asset('geojsons/ijrood.geojson') }}",
-        "khodabande": "{{ asset('geojsons/khodabande.geojson') }}",
-        "khorramdare": "{{ asset('geojsons/khorramdare.geojson') }}",
-        "mahneshan": "{{ asset('geojsons/mahneshan.geojson') }}",
-        "soltanie": "{{ asset('geojsons/soltanie.geojson') }}",
-        "tarom": "{{ asset('geojsons/tarom.geojson') }}",
-        "zanjan": "{{ asset('geojsons/zanjan.geojson') }}"
-    };
-
-    var menuDiv = document.getElementById("countyMenu");
-    Object.keys(counties).forEach(function (county) {
-        var btn = document.createElement("button");
-        btn.innerHTML = county;
-        btn.onclick = function () { toggleGeoJson(county); };
-        menuDiv.appendChild(btn);
-    });
 
     function toggleGeoJson(county) {
+        var counties = @json($counties); // انتقال داده‌های PHP به JavaScript
+
         if (geojsonLayers[county]) {
             map.removeLayer(geojsonLayers[county]);
             delete geojsonLayers[county];
@@ -96,10 +93,12 @@ new class extends Component {
                     var newLayer = L.geoJSON(data, {
                         style: function (feature) {
                             return {
-                                color: "blue",
-                                weight: 2,
-                                opacity: 0.5,
-                                fillOpacity: 0.3
+                                color: "orange",
+                                weight: 5,
+                                opacity: 0.2,
+                                fillOpacity: 0.2,
+
+
                             };
                         }
                     }).addTo(map);
@@ -107,4 +106,5 @@ new class extends Component {
                 });
         }
     }
+
 </script>

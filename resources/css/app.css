@@ -18,15 +18,16 @@
 
 /** daisyUI */
 @plugin "daisyui" {
-    themes: light, dark, aqua --prefersdark, valentine, cupcake --default,
-        luxury;
+    themes: light, dark, aqua, coffee, cupcake --default,
+        luxury --prefersdark;
 }
 
 /* maryUI */
 @source "../../vendor/robsontenorio/mary/src/View/Components/**/*.php";
 
 /* Theme toggle */
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where([data-theme=coffee], [data-theme=coffee] *));
+
 
 /**
 * Paginator - Traditional style
