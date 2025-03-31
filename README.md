@@ -11,18 +11,21 @@
 </h2>
 <ul>
     <li>
-        unit edit
+        ایجاد کاربر با تعریف دسترسی و انتخاب از اشخاص
     </li>
     <li>
-        add mary style to unit create
+        سید شهرستانها و واحد ها اصلاح شود
     </li>    
     <li>
-        fix font vazir error
+        برای ایجاد و ویرایش همه قسمت ها از روش مدال استفاده شود
     </li>        
     <li>
         role , permission
     </li>
     <li>
-        copy remote css,js to local
+        کار با دیتابیس در نقشه
+    </li>
+    <li>
+       وقتی ردیف سازمانی پاک میشود باید خطا بدهد که در جدول دیگر از آن استفاده شده
     </li>
 </ul>
