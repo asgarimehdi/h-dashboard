@@ -32,7 +32,10 @@ class RolePermissionSeeder extends Seeder
             'delete-unit',
             'create-permission',
             'edit-permission',
-            'delete-permission'
+            'delete-permission',
+            'create-permission-role',
+            'edit-permission-role',
+            'delete-permission-role',
 
         ])->pluck('id');
 

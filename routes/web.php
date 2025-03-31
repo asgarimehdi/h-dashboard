@@ -39,4 +39,5 @@ Route::middleware('auth')->group(function () {
 
     Volt::route('/roles', 'auth.roles');
     Volt::route('/permissions', 'auth.permissions');
+    Volt::route('/permissions-roles', 'auth.permissionsroles');
 });

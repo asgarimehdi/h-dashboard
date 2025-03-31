@@ -72,6 +72,8 @@
                 <x-menu-sub title=" سطوح دسترسی کاربران" icon="o-cog-6-tooth">
                     <x-menu-item title="  نقش ها" icon="o-sparkles" link="/roles" />
                     <x-menu-item title="  مجوزها " icon="o-sparkles" link="/permissions" />
+                    <x-menu-item title=" اتصال مجوز به نقش‌ " icon="o-sparkles" link="/permissions-roles" />
+
                 </x-menu-sub>
                 </x-menu-sub>
             </x-menu>
