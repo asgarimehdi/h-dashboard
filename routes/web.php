@@ -37,6 +37,11 @@ Route::middleware('auth')->group(function () {
     Volt::route('/kargozini/radifs', 'kargozini.radif');
     Volt::route('/kargozini/persons', 'kargozini.person');
 
+
+    Volt::route('/roles', 'auth.roles');
+    Volt::route('/permissions', 'auth.permissions');
+    Volt::route('/permissions-roles', 'auth.permissionsroles');
+
     Volt::route('/maps/draw', 'maps/draw');
     Volt::route('/maps/route', 'maps/route');
     Volt::route('/maps/county', 'maps/county');
