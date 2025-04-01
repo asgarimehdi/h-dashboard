@@ -35,7 +35,16 @@ class User extends Authenticatable
             get: fn() => $this->person->f_name . ' ' . $this->person->l_name,
         );
     }
-
+    // Accessor برای گرفتن نام واحد
+    public function getUnitNameAttribute()
+    {
+        return $this->person->unit->name ?? '-';
+    }
+    // Accessor برای نقش‌ها
+    public function getRolesNameAttribute()
+    {
+        return $this->roles->pluck('name')->implode(', ') ?: '-';
+    }
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'role_user');
