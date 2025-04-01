@@ -28,15 +28,7 @@
      }
  }; ?>
 <div>
-    @pushonce('chart')
-        @vite([
-          'resources/js/chart/highcharts.js',
-          'resources/js/chart/treemap.js',
-          'resources/js/chart/treegraph.js',
-          'resources/js/chart/exporting.js',
-          'resources/js/chart/accessibility.js',
-        ])
-    @endpushonce
+
     <x-header title="نمودار چارت سازمانی" separator progress-indicator>
         <x-slot:middle class="!justify-end">
         </x-slot:middle>
@@ -46,6 +38,14 @@
     </x-header>
     <div id="containerChart" class="rounded-box shadow-neutral h-200"></div>
 </div>
+
+    @vite([
+      'resources/js/chart/highcharts.js',
+      'resources/js/chart/treemap.js',
+      'resources/js/chart/treegraph.js',
+      'resources/js/chart/exporting.js',
+      'resources/js/chart/accessibility.js',
+    ])
 
  <script>
      function onChartLoaded() {
