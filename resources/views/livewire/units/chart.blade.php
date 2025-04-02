@@ -39,136 +39,102 @@
     <div id="containerChart" class="rounded-box shadow-neutral h-200"></div>
 </div>
 
-    @vite([
-      'resources/js/chart/highcharts.js',
-      'resources/js/chart/treemap.js',
-      'resources/js/chart/treegraph.js',
-      'resources/js/chart/exporting.js',
-      'resources/js/chart/accessibility.js',
-    ])
 
- <script>
-     function onChartLoaded() {
-         (function() {
-             const chartData = @json($treeData);
+<script>
+    (function() {
+        const chartData = @json($treeData);
 
-             Highcharts.chart('containerChart', {
-                 chart: {
-                     inverted: true,
-                     marginBottom: 10
-                 },
-                 title: {
-                     text: 'نمودار چارت سازمانی',
-                     align: 'center'
-                 },
-                 series: [{
-                     type: 'treegraph',
-                     data: chartData,
-                     tooltip: {
-                         pointFormat: '{point.name}'
-                     },
-                     dataLabels: {
-                         pointFormat: '{point.name}',
-                         style: {
-                             whiteSpace: 'nowrap',
-                             color: '#200000',
-                             textOutline: '3px contrast'
-                         },
-                         crop: false
-                     },
-                     marker: {
-                         radius: 6
-                     },
-                     levels: [
-                         {
-                             level: 1,
-                             dataLabels: {
-                                 align: 'center',
-                                 x: 20
-                             }
-                         },
-                         {
-                             level: 2,
-                             colorByPoint: true,
-                             dataLabels: {
-                                 verticalAlign: 'bottom',
-                                 y: -20
-                             }
-                         },
-                         {
-                             level: 3,
-                             colorByPoint: true,
-                             dataLabels: {
-                                 verticalAlign: 'bottom',
-                                 y: -20
-                             }
-                         },
-                         {
-                             level: 4,
-                             colorByPoint: true,
-                             dataLabels: {
-                                 verticalAlign: 'bottom',
-                                 y: -20
-                             }
-                         },
-                         {
-                             level: 5,
-                             colorByPoint: true,
-                             dataLabels: {
-                                 verticalAlign: 'bottom',
-                                 y: -20
-                             }
-                         },
-                         {
-                             level: 6,
-                             colorByPoint: true,
-                             dataLabels: {
-                                 verticalAlign: 'bottom',
-                                 y: -20,
+        Highcharts.chart('containerChart', {
+            chart: {
+                inverted: true,
+                marginBottom: 10
+            },
+            title: {
+                text: 'نمودار چارت سازمانی',
+                align: 'center'
+            },
+            series: [{
+                type: 'treegraph',
+                data: chartData,
+                tooltip: {
+                    pointFormat: '{point.name}'
+                },
+                dataLabels: {
+                    pointFormat: '{point.name}',
+                    style: {
+                        whiteSpace: 'nowrap',
+                        color: '#200000',
+                        textOutline: '3px contrast'
+                    },
+                    crop: false
+                },
+                marker: {
+                    radius: 6
+                },
+                levels: [
+                    {
+                        level: 1,
+                        dataLabels: {
+                            align: 'center',
+                            x: 20
+                        }
+                    },
+                    {
+                        level: 2,
+                        colorByPoint: true,
+                        dataLabels: {
+                            verticalAlign: 'bottom',
+                            y: -20
+                        }
+                    },
+                    {
+                        level: 3,
+                        colorByPoint: true,
+                        dataLabels: {
+                            verticalAlign: 'bottom',
+                            y: -20
+                        }
+                    },
+                    {
+                        level: 4,
+                        colorByPoint: true,
+                        dataLabels: {
+                            verticalAlign: 'bottom',
+                            y: -20
+                        }
+                    },
+                    {
+                        level: 5,
+                        colorByPoint: true,
+                        dataLabels: {
+                            verticalAlign: 'bottom',
+                            y: -20
+                        }
+                    },
+                    {
+                        level: 6,
+                        colorByPoint: true,
+                        dataLabels: {
+                            verticalAlign: 'bottom',
+                            y: -20,
 
-                             }
-                         },
-                         {
-                             level: 7,
-                             colorVariation: {
-                                 key: 'brightness',
-                                 to: -0.5
-                             },
-                             dataLabels: {
-                                 verticalAlign: 'top',
-                                 rotation: 90,
-                                 y: 20
-                             }
-                         }
+                        }
+                    },
+                    {
+                        level: 7,
+                        colorVariation: {
+                            key: 'brightness',
+                            to: -0.5
+                        },
+                        dataLabels: {
+                            verticalAlign: 'top',
+                            rotation: 90,
+                            y: 20
+                        }
+                    }
 
-                     ]
-                 }]
-             });
-         })();
-
-
-     }
-
-     function loadHighcharts() {
-         return new Promise((resolve, reject) => {
-             if (window.Highcharts) return resolve();
-
-             const checkInterval = setInterval(() => {
-                 if (window.Highcharts) {
-                     clearInterval(checkInterval);
-                     resolve();
-                 }
-             }, 100);
-
-             setTimeout(() => {
-                 clearInterval(checkInterval);
-                 reject(new Error('Highcharts loading timeout'));
-             }, 5000);
-         });
-     }
-
-     loadHighcharts()
-         .then(() => onChartLoaded())
-         .catch(err => console.error(err));
- </script>
-
+                ]
+            }]
+        });
+    })();
+</script>

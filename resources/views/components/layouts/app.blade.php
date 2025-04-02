@@ -7,7 +7,11 @@
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js',])
-
+    <script src="{{ asset('js/chart/highcharts.js') }}"></script>
+    <script src="{{ asset('js/chart/treemap.js') }}"></script>
+    <script src="{{ asset('js/chart/treegraph.js') }}"></script>
+    <script src="{{ asset('js/chart/exporting.js') }}"></script>
+    <script src="{{ asset('js/chart/accessibility.js') }}"></script>
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
 
