@@ -9,6 +9,7 @@
 .leaflet-control-container .leaflet-routing-container-hide {
     width: 32px;
     height: 32px;
+    z-index: 1000;
 }
 
 .leaflet-routing-container h2 {
@@ -34,7 +35,7 @@
     transition: all 0.2s ease;
 }
 
-.leaflet-control-container .leaflet-routing-container-hide .leaflet-routing-alt, 
+.leaflet-control-container .leaflet-routing-container-hide .leaflet-routing-alt,
 .leaflet-control-container .leaflet-routing-container-hide .leaflet-routing-geocoders {
     display: none;
 }

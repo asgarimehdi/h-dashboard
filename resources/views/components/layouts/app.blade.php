@@ -7,11 +7,12 @@
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js',])
-    <script src="{{ asset('js/chart/highcharts.js') }}"></script>
-    <script src="{{ asset('js/chart/treemap.js') }}"></script>
-    <script src="{{ asset('js/chart/treegraph.js') }}"></script>
-    <script src="{{ asset('js/chart/exporting.js') }}"></script>
-    <script src="{{ asset('js/chart/accessibility.js') }}"></script>
+    <script src="{{ asset('js/chart/highcharts.js') }}" defer></script>
+    <script src="{{ asset('js/chart/treemap.js') }}" defer></script>
+    <script src="{{ asset('js/chart/treegraph.js') }}" defer></script>
+    <script src="{{ asset('js/chart/exporting.js') }}" defer></script>
+    <script src="{{ asset('js/chart/accessibility.js') }}" defer></script>
+
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
 
@@ -73,6 +74,13 @@
                     <x-menu-item title="  نقش ها" icon="o-sparkles" link="/roles" />
                     <x-menu-item title="  مجوزها " icon="o-sparkles" link="/permissions" />
                     <x-menu-item title=" اتصال مجوز به نقش‌ " icon="o-sparkles" link="/permissions-roles" />
+
+                </x-menu-sub>
+                <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">
+                    <x-menu-item title="  مسیر" icon="o-sparkles" link="/maps/route" />
+                    <x-menu-item title="  یافتن مسیر " icon="o-sparkles" link="/maps/route2" reload />
+                    <x-menu-item title=" رسم شکل " icon="o-sparkles" link="/maps/draw" />
+                    <x-menu-item title=" شهرستانها " icon="o-sparkles" link="/maps/county" />
 
                 </x-menu-sub>
                 </x-menu-sub>

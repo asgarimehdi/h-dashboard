@@ -21,16 +21,23 @@ new class extends Component {
 
 <style>
     #map {
-        height: 400px;
+        z-index: 0;
     }
     #geojson-output {
         margin-top: 10px;
         padding: 10px;
-        background: #f4f4f4;
+
         border: 1px solid #ddd;
         white-space: pre-wrap;
         height: 200px;
         overflow: auto;
+    }
+    .dark .leaflet-left,
+
+    .dark .leaflet-layer,
+
+    .dark .leaflet-control-attribution {
+        filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
     }
 </style>
 
@@ -43,9 +50,9 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div id="map"></div>
+            <div id="map" class="h-180 rounded"></div>
             <h5 class="mt-3">GeoJSON Output:</h5>
-            <pre id="geojson-output" dir="ltr"></pre>
+            <div id="geojson-output" dir="ltr" class="bg-base-200"></div>
         </div>
     </x-card>
 </div>
@@ -55,7 +62,7 @@ new class extends Component {
 <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
 
 <script>
-    var osm = L.tileLayer('http://10.100.252.137:8080/tile/{z}/{x}/{y}.png', {
+    var osm = L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://zums.ac.ir">Zums</a>'
     });
