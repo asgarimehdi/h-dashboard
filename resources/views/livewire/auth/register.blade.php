@@ -68,7 +68,7 @@ class extends Component {
 <div class="auth-page">
     <h2>ثبت نام</h2>
 
-
+    <x-theme-selector/>
     <x-form wire:submit="register">
         <x-input label="کدملی" wire:model="n_code" icon="o-envelope" inline />
         <x-input label="رمز عبور " wire:model="password" type="password" icon="o-key" inline />

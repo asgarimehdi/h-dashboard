@@ -88,7 +88,7 @@ class extends Component {
 
 <div class="auth-page">
     <h2>ورود</h2>
-
+    <x-theme-selector/>
     <x-form wire:submit="login">
         <x-input label="کد ملی" wire:model="n_code" icon="o-envelope" inline />
         <x-input label="پسورد" wire:model="password" type="password" icon="o-key" inline />
@@ -103,4 +103,3 @@ class extends Component {
         </x-slot:actions>
     </x-form>
 </div>
- 

@@ -79,7 +79,7 @@
                 <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">
                     <x-menu-item title="  مسیر" icon="o-sparkles" link="/maps/route" />
                     <x-menu-item title="  یافتن مسیر " icon="o-sparkles" link="/maps/route2" reload />
-                    <x-menu-item title=" رسم شکل " icon="o-sparkles" link="/maps/draw" />
+                    <x-menu-item title=" رسم شکل " icon="o-sparkles" link="/maps/draw" target="_blank" />
                     <x-menu-item title=" شهرستانها " icon="o-sparkles" link="/maps/county" />
 
                 </x-menu-sub>

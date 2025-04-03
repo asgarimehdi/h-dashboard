@@ -28,7 +28,7 @@ new class extends Component
         $this->canEdit = $user->hasPermission('edit-permission-role');
         $this->canDelete = $user->hasPermission('delete-permission-role');
 
-      
+
     }
 
     public function createPermissionRole()
@@ -163,6 +163,7 @@ new class extends Component
             @if($this->canCreate)
                 <x-button class="btn-success btn-sm" label="ثبت جدید" wire:click="openModalForCreate" responsive icon="o-plus" rounded />
             @endif
+                <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 

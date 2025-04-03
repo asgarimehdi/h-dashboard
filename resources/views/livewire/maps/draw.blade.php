@@ -50,9 +50,11 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div id="map" class="h-180 rounded"></div>
-            <h5 class="mt-3">GeoJSON Output:</h5>
-            <div id="geojson-output" dir="ltr" class="bg-base-200"></div>
+            <div id="map" class="h-120 rounded"></div>
+            <div class="bg-base-20">
+                <h5 class="mt-3">خروجی: </h5>
+                <div id="geojson-output" dir="ltr"></div>
+            </div>
         </div>
     </x-card>
 </div>

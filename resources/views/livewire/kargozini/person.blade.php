@@ -129,8 +129,7 @@ new class extends Component {
 
         if (!empty($this->search)) {
             $query->where('n_code', 'LIKE', '%' . $this->search . '%')
-                ->orWhere('f_name', 'LIKE', '%' . $this->search . '%')
-                ->orWhere('l_name', 'LIKE', '%' . $this->search . '%');
+                 ->orwhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
         }
 
         $query->orderBy(...array_values($this->sortBy));
