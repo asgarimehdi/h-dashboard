@@ -18,8 +18,7 @@ new class extends Component {
 };
 ?>
 
-<link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}"/>
-<link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}"/>
+
 
 <style>
     #map {
@@ -48,6 +47,7 @@ new class extends Component {
     }
 </style>
 
+
 <div>
     <x-header title="محاسبه فاصله جاده‌ای" separator>
         <x-slot:actions>
@@ -72,12 +72,10 @@ new class extends Component {
     </x-card>
 </div>
 
-<script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
-<script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
 
 
 <script>
-    // Initialize map
+
     var map = L.map('map').setView({{$setview}}, {{$zoom}});
     L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
@@ -88,7 +86,7 @@ new class extends Component {
         waypoints: [],
         router: L.Routing.osrmv1({serviceUrl: 'http://{{$map_ip}}:5000/route/v1'}),
         routeWhileDragging: true,
-        show: false
+        show: true
     }).addTo(map);
 
     // Handle route results
@@ -111,7 +109,7 @@ new class extends Component {
     // Search using Nominatim (OpenStreetMap's search engine)
     async function geocode(query) {
         try {
-            var response = await axios.get('https://nominatim.openstreetmap.org/search', {
+            var response = await axios.get('http://{{$map_ip}}:8088/search', {
                 params: {
                     q: query,
                     format: 'json',
@@ -146,4 +144,6 @@ new class extends Component {
             alert('لطفاً مبدا و مقصد معتبر وارد کنید');
         }
     }
+
 </script>
+

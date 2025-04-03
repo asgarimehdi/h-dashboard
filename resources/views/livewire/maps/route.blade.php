@@ -21,9 +21,6 @@ new class extends Component {
 };
 ?>
 
-<link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
-<link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
-
 
 <style>
     #map {
@@ -70,11 +67,10 @@ new class extends Component {
     </x-card>
 </div>
 
-<script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
-<script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
-
 
 <script>
+
+
     var map = L.map('map').setView({{$setview}}, {{$zoom}});
 
     L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
@@ -110,4 +106,6 @@ new class extends Component {
             container.style.display = 'none';
         }
     }
+
 </script>
+

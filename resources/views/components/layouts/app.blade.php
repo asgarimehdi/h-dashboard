@@ -7,12 +7,21 @@
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js',])
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
+
     <script src="{{ asset('js/chart/highcharts.js') }}" defer></script>
     <script src="{{ asset('js/chart/treemap.js') }}" defer></script>
     <script src="{{ asset('js/chart/treegraph.js') }}" defer></script>
     <script src="{{ asset('js/chart/exporting.js') }}" defer></script>
     <script src="{{ asset('js/chart/accessibility.js') }}" defer></script>
 
+@stack('leaflet')
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
 
@@ -60,27 +69,27 @@
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     <x-menu-item title="کاربران" icon="o-sparkles" link="/users" />
                 <x-menu-sub title="کارگزینی" icon="o-cog-6-tooth">
-                    <x-menu-item title="استخدام" icon="o-sparkles" link="/kargozini/estekhdams" />
-                    <x-menu-item title="ردیف سازمانی" icon="o-sparkles" link="/kargozini/radifs" />
-                    <x-menu-item title="تحصیلات" icon="o-sparkles" link="/kargozini/tahsils" />
-                    <x-menu-item title="سمت ها" icon="o-sparkles" link="/kargozini/semats" />
-                    <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons" />
+                    <x-menu-item title="استخدام" icon="o-sparkles" link="/kargozini/estekhdams"   wire:navigate/>
+                    <x-menu-item title="ردیف سازمانی" icon="o-sparkles" link="/kargozini/radifs"   wire:navigate/>
+                    <x-menu-item title="تحصیلات" icon="o-sparkles" link="/kargozini/tahsils"  wire:navigate />
+                    <x-menu-item title="سمت ها" icon="o-sparkles" link="/kargozini/semats"   wire:navigate/>
+                    <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons"   wire:navigate/>
                 </x-menu-sub>
                  <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">
-                    <x-menu-item title="ایجاد واحد جدید " icon="o-sparkles" link="/units" />
-                    <x-menu-item title="چارت گرافیکی " icon="o-sparkles" link="/units/chart" />
+                    <x-menu-item title="ایجاد واحد جدید " icon="o-sparkles" link="/units"  wire:navigate />
+                    <x-menu-item title="چارت گرافیکی " icon="o-sparkles" link="/units/chart"   wire:navigate/>
                 </x-menu-sub>
                 <x-menu-sub title=" سطوح دسترسی کاربران" icon="o-cog-6-tooth">
-                    <x-menu-item title="  نقش ها" icon="o-sparkles" link="/roles" />
-                    <x-menu-item title="  مجوزها " icon="o-sparkles" link="/permissions" />
-                    <x-menu-item title=" اتصال مجوز به نقش‌ " icon="o-sparkles" link="/permissions-roles" />
+                    <x-menu-item title="  نقش ها" icon="o-sparkles" link="/roles"   wire:navigate/>
+                    <x-menu-item title="  مجوزها " icon="o-sparkles" link="/permissions"   wire:navigate/>
+                    <x-menu-item title=" اتصال مجوز به نقش‌ " icon="o-sparkles" link="/permissions-roles"   wire:navigate/>
 
                 </x-menu-sub>
                 <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">
-                    <x-menu-item title="  مسیر" icon="o-sparkles" link="/maps/route" />
-                    <x-menu-item title="  یافتن مسیر " icon="o-sparkles" link="/maps/route2" reload />
-                    <x-menu-item title=" رسم شکل " icon="o-sparkles" link="/maps/draw" target="_blank" />
-                    <x-menu-item title=" شهرستانها " icon="o-sparkles" link="/maps/county" />
+                    <x-menu-item title="  مسیر" icon="o-sparkles" link="/maps/route"  wire:navigate />
+                    <x-menu-item title="  یافتن مسیر " icon="o-sparkles" link="/maps/route2"  wire:navigate />
+                    <x-menu-item title=" رسم شکل " icon="o-sparkles" link="/maps/draw"  wire:navigate/>
+                    <x-menu-item title=" شهرستانها " icon="o-sparkles" link="/maps/county"  wire:navigate/>
 
                 </x-menu-sub>
                 </x-menu-sub>
