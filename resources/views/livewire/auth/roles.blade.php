@@ -26,12 +26,7 @@ new class extends Component
         $this->canEdit = $user->hasPermission('edit-role');
         $this->canDelete = $user->hasPermission('delete-role');
 
-        // برای دیباگ
-        \Log::info('Mount Permissions for Roles:', [
-            'canCreate' => $this->canCreate,
-            'canEdit' => $this->canEdit,
-            'canDelete' => $this->canDelete,
-        ]);
+     
     }
 
     public function createRole()

@@ -19,9 +19,13 @@ class PermissionSeeder extends Seeder
             ['name' => 'create-permission', 'description' => 'ایجاد مجوز جدید'],
             ['name' => 'edit-permission', 'description' => 'ویرایش مجوزها'],
             ['name' => 'delete-permission', 'description' => 'حذف مجوزها'],
-            ['name' => 'create-permission-role', 'description' => 'ایجاد اتصال مجوز به نقش'],
-            ['name' => 'edit-permission-role', 'description' => 'ویرایش اتصال مجوز به نقش'],
-            ['name' => 'delete-permission-role', 'description' => 'حذف اتصال مجوز به نقش'],
+            ['name' => 'create-permission-access-level', 'description' => 'ایجاد اتصال مجوز به دسترسی'],
+            ['name' => 'edit-permission-access-level', 'description' => 'ویرایش اتصال مجوز به دسترسی'],
+            ['name' => 'delete-permission-access-level', 'description' => 'حذف اتصال مجوز به دسترسی'],
+            ['name' => 'create-access-level', 'description' => 'ایجاد دسترسی جدید'],
+            ['name' => 'edit-access-level', 'description' => 'ویرایش دسترسی '],
+            ['name' => 'delete-access-level', 'description' => 'حذف دسترسی'],
+        
         ];
 
         foreach ($permissions as $permission) {

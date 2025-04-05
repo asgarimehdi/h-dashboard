@@ -82,7 +82,8 @@
                 <x-menu-sub title=" سطوح دسترسی کاربران" icon="o-cog-6-tooth">
                     <x-menu-item title="  نقش ها" icon="o-sparkles" link="/roles"   wire:navigate/>
                     <x-menu-item title="  مجوزها " icon="o-sparkles" link="/permissions"   wire:navigate/>
-                    <x-menu-item title=" اتصال مجوز به نقش‌ " icon="o-sparkles" link="/permissions-roles"   wire:navigate/>
+                    <x-menu-item title="  دسترسی ها " icon="o-sparkles" link="/accesslevels"   wire:navigate/>
+                    <x-menu-item title=" اتصال مجوز به دسترسی " icon="o-sparkles" link="/permissions-accesslevels"   wire:navigate/>
 
                 </x-menu-sub>
                 <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">

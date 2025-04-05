@@ -54,11 +54,18 @@ class User extends Authenticatable
         return $this->roles()->where('name', $role)->exists();
     }
 
+    // public function hasPermission($permission): bool
+    // {
+    //     return $this->roles()->whereHas('permissions', function ($query) use ($permission) {
+    //         $query->where('name', $permission);
+    //     })->exists();
+    // }
     public function hasPermission($permission): bool
     {
-        return $this->roles()->whereHas('permissions', function ($query) use ($permission) {
-            $query->where('name', $permission);
-        })->exists();
+        return $this->roles()
+            ->whereHas('accesslevels.permissions', function ($query) use ($permission) {
+                $query->where('name', $permission);
+            })->exists();
     }
     /**
      * The attributes that should be hidden for serialization.
