@@ -29,8 +29,12 @@ new class extends Component
     // Delete action
     public function delete(Estekhdam $estekhdam): void
     {
+        try {
         $estekhdam->delete();
         $this->warning("$estekhdam->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Exception $e) {
+            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        }
     }
     // create action
     public function createEstekhdam(Estekhdam $estekhdam): void

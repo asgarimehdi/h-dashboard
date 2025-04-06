@@ -29,8 +29,12 @@ new class extends Component
     // Delete action
     public function delete(Semat $semat): void
     {
+        try {
         $semat->delete();
         $this->warning("$semat->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Exception $e) {
+            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        }
     }
     // create action
     public function createSemat(Semat $semat): void

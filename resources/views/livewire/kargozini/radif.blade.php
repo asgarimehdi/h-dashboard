@@ -7,10 +7,10 @@ use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component
-{
+new class extends Component {
     use WithPagination;
     use Toast;
+
     public $name;
     public int|null $editingId = null;
     public string $search = '';
@@ -29,9 +29,14 @@ new class extends Component
     // Delete action
     public function delete(Radif $radif): void
     {
-        $radif->delete();
-        $this->warning("$radif->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        try {
+            $radif->delete();
+            $this->warning("$radif->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Exception $e) {
+            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        }
     }
+
     // create action
     public function createRadif(Radif $radif): void
     {
@@ -53,6 +58,7 @@ new class extends Component
         $this->editingId = $id;
         $this->name = $radif->name;
     }
+
 //edit action
     public function updateRadif()
     {
@@ -66,6 +72,7 @@ new class extends Component
         $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name', 'editingId']);
     }
+
     // Table headers
 
     public function headers(): array
@@ -97,8 +104,6 @@ new class extends Component
     }
 
 
-
-
     public function with(): array
     {
         return [
@@ -113,21 +118,22 @@ new class extends Component
     <!-- HEADER -->
     <x-header title="مدیریت وضعیت های ردیف سازمانی" separator progress-indicator>
         <x-slot:middle class="!justify-end">
-            <x-input placeholder="Search..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass" />
+            <x-input placeholder="Search..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass"/>
         </x-slot:middle>
         <x-slot:actions>
-            <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.drawer = true" responsive icon="o-plus" />
+            <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.drawer = true" responsive
+                      icon="o-plus"/>
 
-            <x-theme-selector />
+            <x-theme-selector/>
         </x-slot:actions>
 
     </x-header>
 
     <!-- TABLE  -->
-    <x-card shadow >
+    <x-card shadow>
         @if (isset($editingId))
             <div class="flex items-center space-x-2">
-                <x-input type="text" wire:model="name" class="flex-1 w-lg"  wire:keydown.enter="updateRadif"/>
+                <x-input type="text" wire:model="name" class="flex-1 w-lg" wire:keydown.enter="updateRadif"/>
                 <x-button wire:click="updateRadif" class="btn-success btn-sm" icon="o-check"/>
                 <x-button wire:click="$set('editingId', null)" class="btn-outline btn-sm" icon="o-x-mark"/>
             </div>
@@ -135,7 +141,7 @@ new class extends Component
         <x-table :headers="$headers" :rows="$radifs" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]" @class(['opacity-10' => isset($editingId)])>>
             @foreach($radifs as $radif)
-                <tr wire:key="{{ $radif->id }}" >
+                <tr wire:key="{{ $radif->id }}">
                     <td>{{ $radif->id }}</td>
 
                     <td>{{ $radif->name }}</td>
@@ -143,12 +149,12 @@ new class extends Component
                         @scope('actions', $radif)
                         <!-- دکمه ویرایش -->
                         <x-button icon="o-pencil" wire:click="editRadif({{ $radif->id }})"
-                                  class="btn-ghost btn-sm text-primary" label="Edit" />
+                                  class="btn-ghost btn-sm text-primary" label="Edit"/>
 
                         <!-- دکمه حذف -->
                         <x-button icon="o-trash" wire:click="delete({{ $radif->id }})"
                                   wire:confirm="Are you sure?" spinner
-                                  class="btn-ghost btn-sm text-error" label="Delete" />
+                                  class="btn-ghost btn-sm text-error" label="Delete"/>
 
 
                         @endscope

@@ -31,12 +31,16 @@ new class extends Component {
     }
 
     // حذف رکورد
+
     public function delete(Person $person): void
     {
-        $person->delete();
-        $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
+        try {
+            $person->delete();
+            $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Exception $e) {
+            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        }
     }
-
     // ذخیره یا به‌روزرسانی رکورد
     public function savePerson(): void
     {
