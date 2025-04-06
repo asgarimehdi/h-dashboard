@@ -19,7 +19,7 @@ new class extends Component {
 
     public array $expanded = [];
     public string $search = '';
-    public bool $drawer = false;
+
     public bool $modal = false;
     public array $sortBy = ['column' => 'name', 'direction' => 'asc'];
 
@@ -194,7 +194,7 @@ new class extends Component {
         </x-slot:middle>
         <x-slot:actions>
             <x-button label="ثبت جدید" wire:click="openModalForCreate" class="btn-success btn-sm" responsive icon="o-plus" rounded />
-            <x-button label="فیلترها" @click="$wire.drawer = true" responsive icon="o-funnel"/>
+
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -245,11 +245,4 @@ new class extends Component {
         </x-form>
     </x-modal>
 
-    <x-drawer wire:model="drawer" title="فیلترها" right separator with-close-button class="lg:w-1/3">
-        <x-input placeholder="جستجو..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass" @keydown.enter="$wire.drawer = false"/>
-        <x-slot:actions>
-            <x-button label="پاک کردن" icon="o-x-mark" wire:click="clear" spinner/>
-            <x-button label="انجام" icon="o-check" class="btn-primary" @click="$wire.drawer = false"/>
-        </x-slot:actions>
-    </x-drawer>
 </div>
