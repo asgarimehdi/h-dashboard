@@ -85,8 +85,9 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-            ['key' => 'name', 'label' => 'عنوان', 'class' => 'w-64'],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell', ],
+            ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
+
         ];
     }
 
@@ -118,10 +119,10 @@ new class extends Component {
     <!-- HEADER -->
     <x-header title="مدیریت وضعیت های استخدامی" separator progress-indicator>
         <x-slot:middle class="!justify-end">
-            <x-input placeholder="Search..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass"/>
+
         </x-slot:middle>
         <x-slot:actions>
-            <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.modal = true" responsive icon="o-plus"/>
+
 
             <x-theme-selector/>
         </x-slot:actions>
@@ -130,27 +131,49 @@ new class extends Component {
 
     <!-- TABLE  -->
     <x-card shadow>
-
+        <div class="breadcrumbs flex gap-2 items-center">
+            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <div class="flex-1">
+                <x-input
+                    placeholder="Search..."
+                    wire:model.live.debounce="search"
+                    clearable
+                    icon="o-magnifying-glass"
+                    class="w-full"
+                />
+            </div>
+        </div>
         <x-table :headers="$headers" :rows="$estekhdams" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]">
             @foreach($estekhdams as $estekhdam)
                 <tr wire:key="{{ $estekhdam->id }}">
-                    <td>{{ $estekhdam->id }}</td>
 
-                    <td>{{ $estekhdam->name }}</td>
-                    <td>
+
                         @scope('actions', $estekhdam)
+                    <div class="flex w-1/4">
                         <!-- دکمه ویرایش -->
-                        <x-button icon="o-pencil" wire:click="editEstekhdam({{ $estekhdam->id }})"
-                                  class="btn-ghost btn-sm text-primary" label="Edit"
-                                  @click="$wire.modal = true"/>
+                        <x-button
+                            icon="o-pencil"
+                            wire:click="editEstekhdam({{ $estekhdam->id }})"
+                            class="btn-ghost btn-sm text-primary"
+                            @click="$wire.modal = true"
+                        >
+                            <span class="hidden sm:inline">ویرایش</span>
+                        </x-button>
 
                         <!-- دکمه حذف -->
-                        <x-button icon="o-trash" wire:click="delete({{ $estekhdam->id }})"
-                                  wire:confirm="Are you sure?" spinner
-                                  class="btn-ghost btn-sm text-error" label="Delete"/>
+                        <x-button
+                            icon="o-trash"
+                            wire:click="delete({{ $estekhdam->id }})"
+                            wire:confirm="Are you sure?"
+                            spinner
+                            class="btn-ghost btn-sm text-error"
+                        >
+                            <span class="hidden sm:inline">حذف</span>
+                        </x-button>
+                    </div>
                         @endscope
-                    </td>
+
                 </tr>
             @endforeach
         </x-table>

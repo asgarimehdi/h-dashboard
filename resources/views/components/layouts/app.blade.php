@@ -23,7 +23,7 @@
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
-    @stack('leaflet-Geocoder')
+
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
 
