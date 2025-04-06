@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Volt::route('/permissions', 'auth.permissions');
     Volt::route('/accesslevels', 'auth.accesslevels');
     Volt::route('/permissions-accesslevels', 'auth.permissionsaccesslevels');
+    Volt::route('/roles-accesslevels', 'auth.rolesaccesslevels');
 
     Volt::route('/maps/draw', 'maps/draw');
     Volt::route('/maps/route', 'maps/route');

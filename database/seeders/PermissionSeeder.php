@@ -25,6 +25,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'create-access-level', 'description' => 'ایجاد دسترسی جدید'],
             ['name' => 'edit-access-level', 'description' => 'ویرایش دسترسی '],
             ['name' => 'delete-access-level', 'description' => 'حذف دسترسی'],
+            ['name' => 'create-role-access-level', 'description' => 'ایجاد اتصال دسترسی به نقش'],
+            ['name' => 'edit-role-access-level', 'description' => 'ویرایش اتصال دسترسی به نقش'],
+            ['name' => 'delete-role-access-level', 'description' => 'حذف اتصال مجوزدسترسی به نقش'],
         
         ];
 
