@@ -31,13 +31,11 @@ new class extends Component {
         direction: rtl;
     }
     .search-container {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 10px;
+
     }
     .search-input {
-        flex: 1;
-        padding: 8px;
+
+
     }
     .dark .leaflet-layer,
     .dark .leaflet-control-zoom-in,
@@ -57,10 +55,10 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div class="search-container">
-                <input type="text" id="start-input" class="search-input" placeholder="مبدا (مختصات یا آدرس)" wire:model="start_point">
-                <input type="text" id="end-input" class="search-input" placeholder="مقصد (مختصات یا آدرس)" wire:model="end_point">
-                <button onclick="searchRoute()" class="btn btn-primary">محاسبه مسیر</button>
+            <div class="search-container row flex-1 pb-3">
+                <input type="text" id="start-input" class="search-input flex-1/3" placeholder="مبدا (مختصات یا آدرس)" wire:model="start_point">
+                <input type="text" id="end-input" class="search-input flex-1/3" placeholder="مقصد (مختصات یا آدرس)" wire:model="end_point">
+                <button onclick="searchRoute()" class="btn btn-primary flex-1/3">محاسبه مسیر</button>
             </div>
 
             <div id="map" class="h-180 rounded"></div>
