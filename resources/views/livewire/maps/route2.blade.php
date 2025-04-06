@@ -30,14 +30,12 @@ new class extends Component {
         text-align: right;
         direction: rtl;
     }
-    .search-container {
-
-    }
-    .search-input {
-
-
-    }
-    .dark .leaflet-layer,
+.leaflet-routing-alt{
+    background-color: whitesmoke;
+    font-family: Vazir;
+}
+.dark .leaflet-routing-alt,
+.dark .leaflet-layer,
     .dark .leaflet-control-zoom-in,
     .dark .leaflet-control-zoom-out,
     .dark .leaflet-control-attribution {
@@ -45,7 +43,10 @@ new class extends Component {
     }
 </style>
 
+@pushonce('leaflet-Geocoder')
+    <link rel="stylesheet" href="{{ asset('css/leaflet/Control.Geocoder.css') }}" />
 
+@endpushonce
 <div>
     <x-header title="محاسبه فاصله جاده‌ای" separator>
         <x-slot:actions>
@@ -55,11 +56,14 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div class="search-container row flex-1 pb-3">
-                <input type="text" id="start-input" class="search-input flex-1/3" placeholder="مبدا (مختصات یا آدرس)" wire:model="start_point">
-                <input type="text" id="end-input" class="search-input flex-1/3" placeholder="مقصد (مختصات یا آدرس)" wire:model="end_point">
-                <button onclick="searchRoute()" class="btn btn-primary flex-1/3">محاسبه مسیر</button>
+            <div class="flex items-center gap-2 flex-wrap pb-3">
+                <input type="text" id="start-input" class="x-input" placeholder="مبدا (مختصات یا آدرس)" wire:model="start_point" />
+                <input type="text" id="end-input" class="x-input" placeholder="مقصد (مختصات یا آدرس)" wire:model="end_point" />
+                <x-button onclick="searchRoute()" class="btn btn-sm btn-primary" label="محاسبه مسیر" icon="o-arrow-turn-up-right" />
+                <x-button onclick="reverseRoute()" class="btn btn-sm btn-secondary" label="معکوس مسیر" icon="o-arrows-up-down" />
+                <x-toggle onClick="toggleRoutingContainer()" label="نمایش متنی مسیر" />
             </div>
+
 
             <div id="map" class="h-180 rounded"></div>
             <div id="route-info">
@@ -71,31 +75,35 @@ new class extends Component {
 </div>
 
 
-
 <script>
-
+    // تنظیم اولیه نقشه
     var map = L.map('map').setView({{$setview}}, {{$zoom}});
     L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Routing control
+
+
+
+
+    // کنترل مسیر‌یابی
     var routingControl = L.Routing.control({
         waypoints: [],
         router: L.Routing.osrmv1({serviceUrl: 'http://{{$map_ip}}:5000/route/v1'}),
         routeWhileDragging: true,
+
         show: true
     }).addTo(map);
 
-    // Handle route results
-    routingControl.on('routesfound', function(e) {
+    // نمایش فاصله و زمان تقریبی
+    routingControl.on('routesfound', function (e) {
         var routes = e.routes;
         var summary = routes[0].summary;
         document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
         document.getElementById('duration').textContent = (summary.totalTime / 60).toFixed(0);
     });
 
-    // Simple coordinate parser
+    // تبدیل متن به مختصات
     function parseCoordinates(input) {
         var coords = input.split(',').map(Number);
         if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
@@ -104,7 +112,7 @@ new class extends Component {
         return null;
     }
 
-    // Search using Nominatim (OpenStreetMap's search engine)
+    // جستجوی آدرس با nominatim
     async function geocode(query) {
         try {
             var response = await axios.get('http://{{$map_ip}}:8088/search', {
@@ -126,12 +134,11 @@ new class extends Component {
         }
     }
 
-    // Main route search function
+    // تابع جستجوی مسیر
     async function searchRoute() {
         var startInput = document.getElementById('start-input').value;
         var endInput = document.getElementById('end-input').value;
 
-        // Try to parse as coordinates first
         var startPoint = parseCoordinates(startInput) || await geocode(startInput);
         var endPoint = parseCoordinates(endInput) || await geocode(endInput);
 
@@ -142,6 +149,30 @@ new class extends Component {
             alert('لطفاً مبدا و مقصد معتبر وارد کنید');
         }
     }
+    var plan = L.Routing.plan([], {});
+    function reverseRoute() {
+        var currentWaypoints = routingControl.getWaypoints().slice().reverse();
+
+        // جا‌به‌جایی مقادیر در inputها هم برای هم‌راستایی
+        let startInput = document.getElementById('start-input');
+        let endInput = document.getElementById('end-input');
+        let temp = startInput.value;
+        startInput.value = endInput.value;
+        endInput.value = temp;
+
+        // به‌روزرسانی روی نقشه
+        routingControl.setWaypoints(currentWaypoints);
+    }
+    routingControl._container.style.display = 'none';
+    function toggleRoutingContainer() {
+        let container = routingControl._container;
+        if (container.style.display === 'none' || container.style.display === '') {
+            container.style.display = 'block';
+        } else {
+            container.style.display = 'none';
+        }
+    }
 
 </script>
+
 
