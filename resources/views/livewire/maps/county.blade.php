@@ -59,7 +59,7 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div id="map" class="h-180 rounded"></div>
+            <livewire:maps.map />
             <div class="county-menu bg-base-100/60 rounded-l-box" id="countyMenu" >
                 @foreach ($counties as $county => $geojson)
                     <x-toggle label="{{ ucfirst($county) }}"
@@ -72,11 +72,7 @@ new class extends Component {
 </div>
 
 <script>
-    var map = L.map('map').setView({{$setview}}, {{$zoom}});
-    L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
-        attribution: '&copy; Health-Dashboard',
-        className: 'map-tiles'
-    }).addTo(map);
+
     var geojsonLayers = {};
 
     function toggleGeoJson(county) {

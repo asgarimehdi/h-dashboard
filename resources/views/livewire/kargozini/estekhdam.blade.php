@@ -175,4 +175,5 @@ new class extends Component
 
         </form>
     </x-drawer>
+    <livewire:maps.map />
 </div>
