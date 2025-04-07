@@ -45,7 +45,7 @@ new class extends Component {
         </x-slot:actions>
     </x-header>
 
-    <x-card shadow>
+    <x-card shadow class="p-0">
         <div class="container">
             <livewire:maps.map />
             <div class="county-menu bg-base-100/60 rounded-l-box" id="countyMenu" >

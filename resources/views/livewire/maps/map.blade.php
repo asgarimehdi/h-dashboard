@@ -32,13 +32,13 @@ new class extends Component {
     }
 </style>
 
-<div>
 
 
-            <div id="map" class="h-[60vh] rounded"></div>
+
+            <div id="map" class="h-[80lvh]  rounded"></div>
 
 
-</div>
+
 
 <script>
     var map = L.map('map').setView({{$setview}}, {{$zoom}});

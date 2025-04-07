@@ -1,37 +1,72 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# H-Dashboard
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
-<h2>
-    next steps:
-</h2>
-<ul>
-    <li>
-       افزودن گزینه تغییر سمت موقع ورود
-    </li>
-    <li>
-        سید شهرستانها و واحد ها اصلاح شود
-    </li>    
-    <li>
-        برای ایجاد و ویرایش همه قسمت ها از روش مدال استفاده شود
-    </li> 
-    <li>
-        کار با دیتابیس در نقشه
-    </li>
-    <li>
-       در جدول داده ها اندازه صفحه موبایل رعایت شود و فیلد اضافه غیب شود
-    </li>
-    <li>
-       دکمه افزودن جدید در ردیف پایین سمت راست  باشد
-    </li>
-    <li>
-       امکان حذف کاربر نباشد و فقط بتوان آن را غیر فعال کرد تا در لیست نباشد و لاگین نکند
-    </li>
-    <li>
-       کاربران ادمین امکان حذف نداشته باشند
-    </li>
-</ul>
+&#x20; &#x20;
+
+## معرفی
+
+**H-Dashboard** یک داشبورد مدیریت بر پایه [Laravel](https://laravel.com/) است که با هدف ارائه یک پنل مدیریت کاربرپسند و کارآمد توسعه یافته است.
+
+## ویژگی‌ها
+
+- مدیریت کاربران با سطوح دسترسی مختلف
+- مدیریت شهرستان‌ها و واحدها با قابلیت سیدینگ
+- طراحی واکنشگرا برای نمایش در دستگاه‌های مختلف
+- نقشه تعاملی و متصل به پایگاه داده
+
+## نصب و راه‌اندازی
+
+1. کلون کردن مخزن:
+
+   ```bash
+   git clone https://github.com/asgarimehdi/h-dashboard.git
+   ```
+
+2. نصب وابستگی‌ها:
+
+   ```bash
+   cd h-dashboard
+   composer install
+   npm install
+   ```
+
+3. تنظیم فایل محیطی:
+
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+
+4. مایگریشن و سید:
+
+   ```bash
+   php artisan migrate --seed
+   ```
+
+5. راه‌اندازی سرور:
+
+   ```bash
+   php artisan serve
+   ```
+
+
+## مشارکت
+
+1. Fork کردن مخزن
+2. ساخت شاخه جدید:
+   ```bash
+   git checkout -b feature/YourFeature
+   ```
+3. کامیت تغییرات:
+   ```bash
+   git commit -m "Add some feature"
+   ```
+4. Push کردن به شاخه:
+   ```bash
+   git push origin feature/YourFeature
+   ```
+5. ایجاد Pull Request
+
+## مجوز
+
+این پروژه تحت مجوز [MIT](LICENSE) منتشر شده است.
+
