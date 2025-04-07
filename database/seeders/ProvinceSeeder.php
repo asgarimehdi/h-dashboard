@@ -14,7 +14,7 @@ class ProvinceSeeder extends Seeder
     public function run(): void
     {
         $provinces = [
-            ['name' => 'تهران'],
+            
             ['name' => 'زنجان'],
            
         ];

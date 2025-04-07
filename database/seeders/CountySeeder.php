@@ -18,9 +18,9 @@ class CountySeeder extends Seeder
 
         foreach ($provinces as $province) {
             $counties = [
-                ['province_id' => $province->id, 'name' => "مرکز $province->name"],
-                ['province_id' => $province->id, 'name' => "شمال $province->name"],
-               
+                ['province_id' => $province->id, 'name' => "ابهر $province->name"],
+
+
             ];
 
             foreach ($counties as $county) {
