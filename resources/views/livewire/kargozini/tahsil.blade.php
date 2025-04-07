@@ -75,8 +75,8 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-            ['key' => 'name', 'label' => 'عنوان', 'class' => 'w-64'],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
+            ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
         ];
     }
 
@@ -105,7 +105,7 @@ new class extends Component {
     <x-header title="مدیریت وضعیت های تحصیلی" separator progress-indicator>
         <x-slot:middle class="!justify-end"></x-slot:middle>
         <x-slot:actions>
-            <x-theme-selector />
+            <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
@@ -131,20 +131,22 @@ new class extends Component {
                     <td>{{ $tahsil->name }}</td>
                     <td>
                         @scope('actions', $tahsil)
-                        <x-button icon="o-pencil"
-                                  wire:click="editTahsil({{ $tahsil->id }})"
-                                  class="btn-ghost btn-sm text-primary"
-                                  @click="$wire.modal = true">
-                            <span class="hidden sm:inline">ویرایش</span>
-                        </x-button>
+                        <div class="flex w-1/4">
+                            <x-button icon="o-pencil"
+                                      wire:click="editTahsil({{ $tahsil->id }})"
+                                      class="btn-ghost btn-sm text-primary"
+                                      @click="$wire.modal = true">
+                                <span class="hidden sm:inline">ویرایش</span>
+                            </x-button>
 
-                        <x-button icon="o-trash"
-                                  wire:click="delete({{ $tahsil->id }})"
-                                  wire:confirm="Are you sure?"
-                                  spinner
-                                  class="btn-ghost btn-sm text-error">
-                            <span class="hidden sm:inline">حذف</span>
-                        </x-button>
+                            <x-button icon="o-trash"
+                                      wire:click="delete({{ $tahsil->id }})"
+                                      wire:confirm="Are you sure?"
+                                      spinner
+                                      class="btn-ghost btn-sm text-error">
+                                <span class="hidden sm:inline">حذف</span>
+                            </x-button>
+                        </div>
                         @endscope
                     </td>
                 </tr>
@@ -152,7 +154,8 @@ new class extends Component {
         </x-table>
     </x-card>
 
-    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان تحصیلی' : 'ثبت عنوان تحصیلی جدید'" persistent separator>
+    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان تحصیلی' : 'ثبت عنوان تحصیلی جدید'" persistent
+             separator>
         <x-form wire:submit.prevent="{{ $editingId ? 'updateTahsil' : 'createTahsil' }}" class="grid gap-4">
             <x-input
                 wire:model="name"
@@ -163,7 +166,7 @@ new class extends Component {
             />
 
             <div class="flex gap-4">
-                <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner />
+                <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner/>
                 <x-button label="ریست" icon="o-x-mark" wire:click="clear" class="btn-default pl-6" spinner/>
             </div>
         </x-form>

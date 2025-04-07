@@ -1,6 +1,8 @@
 <?php
 
-use App\Models\Radif; // Changed from Estekhdam
+use App\Models\Radif;
+
+// Changed from Estekhdam
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -96,7 +98,7 @@ new class extends Component {
         }
         $query->orderBy(...array_values($this->sortBy));
         return $this->radifs = $query->paginate($this->perPage);
-       // Removed redundant assignment: return $query->paginate($this->perPage);
+        // Removed redundant assignment: return $query->paginate($this->perPage);
     }
 
 

@@ -85,7 +85,7 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell', ],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
             ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
 
         ];
@@ -149,7 +149,7 @@ new class extends Component {
                 <tr wire:key="{{ $estekhdam->id }}">
 
 
-                        @scope('actions', $estekhdam)
+                    @scope('actions', $estekhdam)
                     <div class="flex w-1/4">
                         <!-- دکمه ویرایش -->
                         <x-button
@@ -172,7 +172,7 @@ new class extends Component {
                             <span class="hidden sm:inline">حذف</span>
                         </x-button>
                     </div>
-                        @endscope
+                    @endscope
 
                 </tr>
             @endforeach

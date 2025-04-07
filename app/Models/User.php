@@ -46,8 +46,10 @@ class User extends Authenticatable
     {
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
-
-    // ... بقیه متدهای User (roles, hasRole, hasPermission, hidden, casts) ...
+    public function getRolesNameAttribute()
+    {
+        return $this->roles->pluck('name')->implode(', ') ?: '-';
+    }
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'role_user');
