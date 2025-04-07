@@ -17,12 +17,16 @@ Route::get('/logout', function () {
 
 // Protected routes here
 Route::middleware('auth')->group(function () {
-    Route::get('/', function () {
-        return view('welcome');
-    });
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    });
+    // Route::get('/', function () {
+    //     return view('welcome');
+    // });
+    // Route::get('/dashboard', function () {
+    //     return view('dashboard');
+    // });
+    Volt::route('/', 'index'); // صفحه انتخاب نقش
+    Volt::route('/dashboard', 'dashboard'); // صفحه داشبورد
+
+
     Volt::route('/users', 'users.index');
     Volt::route('/users/create', 'users.create');
     Volt::route('/users/{user}/edit', 'users.edit');

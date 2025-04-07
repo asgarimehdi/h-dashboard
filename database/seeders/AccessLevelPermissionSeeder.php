@@ -45,6 +45,11 @@ class AccessLevelPermissionSeeder extends Seeder
             'create-role-access-level',
             'edit-role-access-level',
             'delete-role-access-level',
+            'manage-users',
+            'manage-kargozini',
+            'manage-units',
+            'manage-access',
+            'manage-maps',
 
         ])->pluck('id');
 
