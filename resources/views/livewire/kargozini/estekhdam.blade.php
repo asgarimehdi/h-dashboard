@@ -62,7 +62,7 @@ new class extends Component {
     }
 
     //edit action
-    public function updateEstekhdam(Estekhdam $estekhdam): void
+    public function updateEstekhdam(): void
     {
 
         $this->validate([
