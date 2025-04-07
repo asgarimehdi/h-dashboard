@@ -7,15 +7,15 @@ use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component
-{
+new class extends Component {
     use WithPagination;
     use Toast;
+
     public $name;
     public int|null $editingId = null;
     public string $search = '';
     public int $perPage = 5;
-    public bool $drawer = false;
+    public bool $modal = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
@@ -23,15 +23,20 @@ new class extends Component
     public function clear(): void
     {
         $this->reset();
-        $this->success('Filters cleared.', position: 'toast-bottom');
+        $this->info('فیلدها خالی شدند', position: 'toast-bottom');
     }
 
     // Delete action
     public function delete(Estekhdam $estekhdam): void
     {
-        $estekhdam->delete();
-        $this->warning("$estekhdam->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        try {
+            $estekhdam->delete();
+            $this->warning("$estekhdam->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Exception $e) {
+            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        }
     }
+
     // create action
     public function createEstekhdam(Estekhdam $estekhdam): void
     {
@@ -43,6 +48,7 @@ new class extends Component
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name']);
+        $this->modal = false;
     }
 
     //edit clicked
@@ -52,36 +58,38 @@ new class extends Component
         $estekhdam = Estekhdam::findOrFail($id);
         $this->editingId = $id;
         $this->name = $estekhdam->name;
+
     }
-//edit action
-    public function updateEstekhdam()
+
+    //edit action
+    public function updateEstekhdam(): void
     {
+
         $this->validate([
             'name' => 'required|string|max:255|unique:estekhdams,name,' . $this->editingId,
         ]);
+        try {
+            $estekhdam = Estekhdam::findOrFail($this->editingId);
+            $estekhdam->update(['name' => $this->name]);
 
-        $estekhdam = Estekhdam::findOrFail($this->editingId);
-        $estekhdam->update(['name' => $this->name]);
-
-        $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
-        $this->reset(['name', 'editingId']);
+            $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
+            $this->reset(['name', 'editingId']);
+            $this->modal = false;
+        } catch (\Exception $e) {
+            $this->error("خطا در ویرایش", position: 'toast-bottom');
+        }
     }
+
     // Table headers
 
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-            ['key' => 'name', 'label' => 'عنوان', 'class' => 'w-64'],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
+            ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
+
         ];
     }
-
-    /**
-     * For demo purpose, this is a static collection.
-     *
-     * On real projects you do it with Eloquent collections.
-     * Please, refer to maryUI docs to see the eloquent examples.
-     */
 
 
     public function estekhdams(): LengthAwarePaginator
@@ -95,8 +103,6 @@ new class extends Component
         return $this->estekhdams = $query->paginate($this->perPage);
 
     }
-
-
 
 
     public function with(): array
@@ -113,62 +119,83 @@ new class extends Component
     <!-- HEADER -->
     <x-header title="مدیریت وضعیت های استخدامی" separator progress-indicator>
         <x-slot:middle class="!justify-end">
-            <x-input placeholder="Search..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass" />
+
         </x-slot:middle>
         <x-slot:actions>
-            <x-button class="btn-success btn-sm" label="ثبت جدید" @click="$wire.drawer = true" responsive icon="o-plus" />
 
-            <x-theme-selector />
+
+            <x-theme-selector/>
         </x-slot:actions>
 
     </x-header>
 
     <!-- TABLE  -->
-    <x-card shadow >
-        @if (isset($editingId))
-            <div class="flex items-center space-x-2">
-                <x-input type="text" wire:model="name" class="flex-1 w-lg"  wire:keydown.enter="updateEstekhdam"/>
-                <x-button wire:click="updateEstekhdam" class="btn-success btn-sm" icon="o-check"/>
-                <x-button wire:click="$set('editingId', null)" class="btn-outline btn-sm" icon="o-x-mark"/>
+    <x-card shadow>
+        <div class="breadcrumbs flex gap-2 items-center">
+            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <div class="flex-1">
+                <x-input
+                    placeholder="Search..."
+                    wire:model.live.debounce="search"
+                    clearable
+                    icon="o-magnifying-glass"
+                    class="w-full"
+                />
             </div>
-        @endif
+        </div>
         <x-table :headers="$headers" :rows="$estekhdams" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[3, 5, 10]" @class(['opacity-10' => isset($editingId)])>>
+                 :per-page-values="[3, 5, 10]">
             @foreach($estekhdams as $estekhdam)
-                <tr wire:key="{{ $estekhdam->id }}" >
-                    <td>{{ $estekhdam->id }}</td>
+                <tr wire:key="{{ $estekhdam->id }}">
 
-                    <td>{{ $estekhdam->name }}</td>
-                    <td>
-                        @scope('actions', $estekhdam)
+
+                    @scope('actions', $estekhdam)
+                    <div class="flex w-1/4">
                         <!-- دکمه ویرایش -->
-                        <x-button icon="o-pencil" wire:click="editEstekhdam({{ $estekhdam->id }})"
-                                  class="btn-ghost btn-sm text-primary" label="Edit" />
+                        <x-button
+                            icon="o-pencil"
+                            wire:click="editEstekhdam({{ $estekhdam->id }})"
+                            class="btn-ghost btn-sm text-primary"
+                            @click="$wire.modal = true"
+                        >
+                            <span class="hidden sm:inline">ویرایش</span>
+                        </x-button>
 
                         <!-- دکمه حذف -->
-                        <x-button icon="o-trash" wire:click="delete({{ $estekhdam->id }})"
-                                  wire:confirm="Are you sure?" spinner
-                                  class="btn-ghost btn-sm text-error" label="Delete" />
+                        <x-button
+                            icon="o-trash"
+                            wire:click="delete({{ $estekhdam->id }})"
+                            wire:confirm="Are you sure?"
+                            spinner
+                            class="btn-ghost btn-sm text-error"
+                        >
+                            <span class="hidden sm:inline">حذف</span>
+                        </x-button>
+                    </div>
+                    @endscope
 
-
-                        @endscope
-                    </td>
                 </tr>
             @endforeach
         </x-table>
 
     </x-card>
+    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان استخدامی' : 'ثبت عنوان استخدامی جدید'" persistent
+             separator>
 
-    <!-- FILTER DRAWER -->
-    <x-drawer wire:model="drawer" title="ثبت جدید" left separator with-close-button class="lg:w-1/3">
-        <form wire:submit.prevent="createEstekhdam" class="space-y-4">
-            <x-input wire:model="name"
-                     label="عنوان استخدامی"
-                     placeholder="عنوان"
-                     required icon="o-magnifying-glass" @keydown.enter="$wire.drawer = false" />
-            <x-button type="submit"  label="ایجاد" icon="o-check" class="btn-primary"  spinner />
-            <x-button label="ریست" icon="o-x-mark" wire:click="clear"  spinner/>
+        <x-form wire:submit.prevent="{{ $editingId ? 'updateEstekhdam' : 'createEstekhdam' }}" class="grid gap-4">
+            <x-input
+                wire:model="name"
+                label="عنوان استخدامی"
+                placeholder="عنوان"
+                required
+                icon="o-magnifying-glass"
+            />
 
-        </form>
-    </x-drawer>
+            <div class="flex gap-4">
+                <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner />
+                <x-button label="ریست" icon="o-x-mark" wire:click="clear" class="btn-default pl-6" spinner/>
+            </div>
+        </x-form>
+
+    </x-modal>
 </div>

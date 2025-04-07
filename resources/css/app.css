@@ -59,3 +59,24 @@ body {
     font-family: "Vazir", sans-serif;
 }
 
+#map {
+    z-index: 0;
+}
+#route-info {
+    margin-top: 10px;
+    padding: 10px;
+    text-align: right;
+    direction: rtl;
+}
+.leaflet-routing-alt{
+    background-color: whitesmoke;
+    font-family: Vazir;
+}
+.dark .leaflet-routing-alt,
+.dark .leaflet-layer,
+.dark .leaflet-control-zoom-in,
+.dark .leaflet-control-zoom-out,
+.dark .leaflet-control-attribution {
+    filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
+}
+

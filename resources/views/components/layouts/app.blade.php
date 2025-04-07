@@ -11,17 +11,18 @@
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
 
+
     <script src="{{ asset('js/chart/highcharts.js') }}" defer></script>
     <script src="{{ asset('js/chart/treemap.js') }}" defer></script>
     <script src="{{ asset('js/chart/treegraph.js') }}" defer></script>
     <script src="{{ asset('js/chart/exporting.js') }}" defer></script>
     <script src="{{ asset('js/chart/accessibility.js') }}" defer></script>
 
-    @stack('leaflet')
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
+
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
     <x-nav sticky class="lg:hidden">
@@ -36,7 +37,10 @@
     </x-nav>
 
     <x-main>
-        <x-slot:sidebar drawer="main-drawer" collapsible class="bg-base-100 lg:bg-inherit">
+        {{-- SIDEBAR --}}
+        <x-slot:sidebar drawer="main-drawer" collapsible  class="bg-base-100 lg:bg-inherit 2xl:collapse ">
+
+            {{-- BRAND --}}
             <x-app-brand class="px-5 pt-4" />
             <x-menu activate-by-route>
                 @if($user = auth()->user())

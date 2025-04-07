@@ -1,5 +1,5 @@
 <?php
-
+// database/migrations/xxxx_xx_xx_xxxxxx_create_users_table.php
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -13,12 +13,18 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('n_code')->unique()->index();
+            // --->>> اصلاح شد: نوع داده باید با persons.n_code مطابقت داشته باشد
+            $table->string('n_code', 10)->unique()->index();
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();
-        });
 
+            // تعریف محدودیت کلید خارجی صحیح است و onDelete('restrict') کار مورد نظر شما را انجام می‌دهد
+            $table->foreign('n_code')
+                ->references('n_code')->on('persons')
+                ->onDelete('restrict') // <-- این باعث می‌شود حذف person محدود شود اگر user مرتبط وجود داشته باشد
+                ->onUpdate('cascade');
+        });
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');
@@ -45,3 +51,4 @@ return new class extends Migration
         Schema::dropIfExists('sessions');
     }
 };
+
