@@ -6,23 +6,13 @@ new class extends Component {
     public string $map_ip;
     public string $setview;
     public string $zoom;
-    public array $counties;
+
 
     public function mount()
     {
         $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
         $this->setview = '[36.558188, 48.716125]';
         $this->zoom = '8';
-        $this->counties = [
-            "abhar" => asset('geojsons/abhar.geojson'),
-            "ijrood" => asset('geojsons/ijrood.geojson'),
-            "khodabande" => asset('geojsons/khodabande.geojson'),
-            "khorramdare" => asset('geojsons/khorramdare.geojson'),
-            "mahneshan" => asset('geojsons/mahneshan.geojson'),
-            "soltanie" => asset('geojsons/soltanie.geojson'),
-            "tarom" => asset('geojsons/tarom.geojson'),
-            "zanjan" => asset('geojsons/zanjan.geojson')
-        ];
     }
 };
 ?>
@@ -33,15 +23,7 @@ new class extends Component {
 
         z-index: 0;
     }
-    .county-menu {
 
-        padding: 5px;
-
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        z-index: 1;
-    }
     .dark .leaflet-layer,
     .dark .leaflet-control-zoom-in,
     .dark .leaflet-control-zoom-out,
@@ -53,7 +35,7 @@ new class extends Component {
 <div>
 
 
-            <div id="map" class="h-180 rounded"></div>
+            <div id="map" class="h-[60vh] rounded"></div>
 
 
 </div>

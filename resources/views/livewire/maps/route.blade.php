@@ -4,16 +4,12 @@ use Livewire\Volt\Component;
 
 new class extends Component {
     public string $map_ip;
-    public string $setview;
-    public string $zoom;
     public string $waypoint1;
     public string $waypoint2;
 
     public function mount()
     {
         $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
-        $this->setview = '[36.147694, 49.227870]';
-        $this->zoom = '15';
         $this->waypoint1 = '36.149617, 49.217189';
         $this->waypoint2 = '36.146862, 49.229586';
     }
@@ -22,25 +18,6 @@ new class extends Component {
 ?>
 
 
-<style>
-    #map {
-        z-index: 0;
-    }
-    #route-info {
-        margin-top: 10px;
-        padding: 10px;
-
-        text-align: right;
-        direction: rtl;
-    }
-    .dark .leaflet-layer,
-    .dark .leaflet-control-zoom-in,
-    .dark .leaflet-control-zoom-out,
-    .dark .leaflet-control-attribution {
-        filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
-    }
-
-</style>
 <div>
     <x-header title="محاسبه فاصله جاده‌ای بدون API" separator progress-indicator>
         <x-slot:actions>
@@ -58,7 +35,7 @@ new class extends Component {
         </div>
 
         <div class="container">
-            <div id="map" class="h-180 rounded"></div>
+            <livewire:maps.map/>
             <div id="route-info" class="bg-base-200">
                  <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>
                 <strong>⌛ زمان تقریبی سفر:</strong> <span id="duration">---</span> دقیقه
@@ -71,11 +48,6 @@ new class extends Component {
 <script>
 
 
-    var map = L.map('map').setView({{$setview}}, {{$zoom}});
-
-    L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
-        attribution: '&copy; Health-Dashboard'
-    }).addTo(map);
 
 
     routingControl =L.Routing.control({

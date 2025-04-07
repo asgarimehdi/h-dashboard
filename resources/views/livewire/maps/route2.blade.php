@@ -4,16 +4,13 @@ use Livewire\Volt\Component;
 
 new class extends Component {
     public string $map_ip;
-    public string $setview;
-    public string $zoom;
     public string $start_point = '';
     public string $end_point = '';
 
     public function mount()
     {
         $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
-        $this->setview = '[36.1500, 49.2212]';
-        $this->zoom = '12';
+
     }
 
     public function swapPoints()
@@ -37,14 +34,14 @@ new class extends Component {
     <x-card shadow>
         <div class="container">
             <div class="flex items-center gap-2 flex-wrap pb-3">
-                <x-input type="text" id="start-input" class="x-input" placeholder="مبدا (مختصات یا آدرس)" wire:model.live="start_point" />
-                <x-input type="text" id="end-input" class="x-input" placeholder="مقصد (مختصات یا آدرس)" wire:model.live="end_point" />
+                <input type="text" id="start-input" class="x-input" placeholder="مبدا (مختصات یا آدرس)" wire:model="start_point" />
+                <input type="text" id="end-input" class="x-input" placeholder="مقصد (مختصات یا آدرس)" wire:model="end_point" />
                 <x-button onclick="searchRoute()" class="btn btn-sm btn-primary" label="محاسبه مسیر" icon="o-arrow-turn-up-right" />
                 <x-button onclick="reverseRoute()" class="btn btn-sm btn-secondary" label="معکوس مسیر" icon="o-arrows-up-down" />
                 <x-toggle onClick="toggleRoutingContainer()" label="نمایش متنی مسیر" />
             </div>
 
-            <div id="map" class="h-180 rounded" wire:ignore></div>
+            <livewire:maps.map/>
             <div id="route-info">
                 {{$this->start_point}}
                 <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>
@@ -56,10 +53,7 @@ new class extends Component {
 
 <script>
     // تنظیم اولیه نقشه
-    var map = L.map('map').setView({{$this->setview}}, {{$this->zoom}});
-    L.tileLayer('http://{{$this->map_ip}}:8080/tile/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+
 
     // کنترل مسیریابی
     var routingControl = L.Routing.control({

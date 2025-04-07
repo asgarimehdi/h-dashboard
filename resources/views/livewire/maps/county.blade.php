@@ -3,16 +3,12 @@
 use Livewire\Volt\Component;
 
 new class extends Component {
-    public string $map_ip;
-    public string $setview;
-    public string $zoom;
+
     public array $counties;
 
     public function mount()
     {
-        $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
-        $this->setview = '[36.558188, 48.716125]';
-        $this->zoom = '8';
+
         $this->counties = [
             "abhar" => asset('geojsons/abhar.geojson'),
             "ijrood" => asset('geojsons/ijrood.geojson'),
@@ -29,10 +25,7 @@ new class extends Component {
 
 
 <style>
-    #map {
 
-        z-index: 0;
-    }
     .county-menu {
 
         padding: 5px;
@@ -42,12 +35,7 @@ new class extends Component {
         right: 20px;
         z-index: 1;
     }
-    .dark .leaflet-layer,
-    .dark .leaflet-control-zoom-in,
-    .dark .leaflet-control-zoom-out,
-    .dark .leaflet-control-attribution {
-        filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
-    }
+
 </style>
 
 <div>

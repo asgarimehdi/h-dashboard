@@ -2,25 +2,15 @@
 
 use Livewire\Volt\Component;
 
-new class extends Component {
-    public string $map_ip;
-    public string $setview;
-    public string $zoom;
 
-    public function mount()
-    {
-        $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
-        $this->setview = '[36.1500, 49.2212]';
-        $this->zoom = '12';
-    }
-};
+
 ?>
 
 
 
 <style>
     #map {
-        z-index: 0;
+        /*max-height: 400px;*/
     }
     #geojson-output {
         margin-top: 10px;
@@ -28,16 +18,10 @@ new class extends Component {
 
         border: 1px solid #ddd;
         white-space: pre-wrap;
-        height: 200px;
-        overflow: auto;
+        height: 100px;
+        overflow: scroll;
     }
-    .dark .leaflet-left,
 
-    .dark .leaflet-layer,
-
-    .dark .leaflet-control-attribution {
-        filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
-    }
 </style>
 
 <div>
@@ -49,7 +33,7 @@ new class extends Component {
 
     <x-card shadow>
         <div class="container">
-            <div id="map" class="h-120 rounded"></div>
+            <livewire:maps.map/>
             <div class="bg-base-20">
                 <h5 class="mt-3">خروجی: </h5>
                 <div id="geojson-output" dir="ltr"></div>
@@ -60,16 +44,7 @@ new class extends Component {
 
 
 <script>
-    var osm = L.tileLayer('http://{{$map_ip}}:8080/tile/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://zums.ac.ir">Zums</a>'
-    });
 
-    var map = L.map('map', {
-        center: {{$setview}},
-        zoom: {{$zoom}},
-        layers: [osm]
-    });
 
     var drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
