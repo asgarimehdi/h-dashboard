@@ -42,6 +42,8 @@ return new class extends Migration
                 ->references('id')->on('radifs')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
+
+
         });
     }
 

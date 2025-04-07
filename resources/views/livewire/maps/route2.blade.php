@@ -25,9 +25,7 @@ new class extends Component {
 };
 ?>
 
-@pushonce('leaflet-Geocoder')
-    <link rel="stylesheet" href="{{ asset('css/leaflet/Control.Geocoder.css') }}" />
-@endpushonce
+
 
 <div>
     <x-header title="محاسبه فاصله جاده‌ای" separator>
@@ -39,8 +37,8 @@ new class extends Component {
     <x-card shadow>
         <div class="container">
             <div class="flex items-center gap-2 flex-wrap pb-3">
-                <input type="text" id="start-input" class="x-input" placeholder="مبدا (مختصات یا آدرس)" wire:model.live="start_point" />
-                <input type="text" id="end-input" class="x-input" placeholder="مقصد (مختصات یا آدرس)" wire:model.live="end_point" />
+                <x-input type="text" id="start-input" class="x-input" placeholder="مبدا (مختصات یا آدرس)" wire:model.live="start_point" />
+                <x-input type="text" id="end-input" class="x-input" placeholder="مقصد (مختصات یا آدرس)" wire:model.live="end_point" />
                 <x-button onclick="searchRoute()" class="btn btn-sm btn-primary" label="محاسبه مسیر" icon="o-arrow-turn-up-right" />
                 <x-button onclick="reverseRoute()" class="btn btn-sm btn-secondary" label="معکوس مسیر" icon="o-arrows-up-down" />
                 <x-toggle onClick="toggleRoutingContainer()" label="نمایش متنی مسیر" />
