@@ -50,10 +50,12 @@ class User extends Authenticatable
     {
         return $this->roles->pluck('name')->implode(', ') ?: '-';
     }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'role_user');
     }
+
     public function hasRole($role): bool
     {
         return $this->roles()->where('name', $role)->exists();
@@ -61,14 +63,20 @@ class User extends Authenticatable
 
     public function hasPermission($permission): bool
     {
-        return $this->roles()->whereHas('permissions', function ($query) use ($permission) {
-            $query->where('name', $permission);
-        })->exists();
+        $selectedRoleId = session('selected_role');
+        if (!$selectedRoleId) {
+            return false; // اگر نقش انتخاب نشده باشه، دسترسی نداره
+        }
+
+        return $this->roles()
+            ->where('roles.id', $selectedRoleId)
+            ->whereHas('accesslevels.permissions', function ($query) use ($permission) {
+                $query->where('name', $permission);
+            })->exists();
     }
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+
+    protected $hidden = ['password', 'remember_token'];
+
     protected function casts(): array
     {
         return [

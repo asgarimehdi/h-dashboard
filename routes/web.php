@@ -17,12 +17,16 @@ Route::get('/logout', function () {
 
 // Protected routes here
 Route::middleware('auth')->group(function () {
-    Route::get('/', function () {
-        return view('welcome');
-    });
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    });
+    // Route::get('/', function () {
+    //     return view('welcome');
+    // });
+    // Route::get('/dashboard', function () {
+    //     return view('dashboard');
+    // });
+    Volt::route('/', 'index'); // صفحه انتخاب نقش
+    Volt::route('/dashboard', 'dashboard'); // صفحه داشبورد
+
+
     Volt::route('/users', 'users.index');
     Volt::route('/users/create', 'users.create');
     Volt::route('/users/{user}/edit', 'users.edit');
@@ -40,7 +44,9 @@ Route::middleware('auth')->group(function () {
 
     Volt::route('/roles', 'auth.roles');
     Volt::route('/permissions', 'auth.permissions');
-    Volt::route('/permissions-roles', 'auth.permissionsroles');
+    Volt::route('/accesslevels', 'auth.accesslevels');
+    Volt::route('/permissions-accesslevels', 'auth.permissionsaccesslevels');
+    Volt::route('/roles-accesslevels', 'auth.rolesaccesslevels');
 
     Volt::route('/maps/draw', 'maps/draw');
     Volt::route('/maps/route', 'maps/route');
