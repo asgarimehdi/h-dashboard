@@ -22,8 +22,8 @@ class AccessLevelPermissionSeeder extends Seeder
         $Manager = Role::where('name', 'Manager')->first();
         $It = Role::where('name', 'It')->first();
         // اتصال کاربر به نقش
-        $user1->roles()->sync([$Manager->id]);
-        $user2->roles()->sync([$It->id]);
+        $user1->roles()->sync([$Manager->id, $It->id]);
+        $user2->roles()->sync([$Manager->id, $It->id]);
 
         // پیدا کردن مجوزها
         $permissions = Permission::whereIn('name', [
@@ -64,6 +64,6 @@ class AccessLevelPermissionSeeder extends Seeder
         $editor->permissions()->sync($editorPermissions);
 
         $Manager->accesslevels()->sync($admin);
-        $It->accesslevels()->sync($admin);
+        $It->accesslevels()->sync($editor);
     }
 }
