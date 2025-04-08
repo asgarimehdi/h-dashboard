@@ -46,7 +46,14 @@
    ```bash
    php artisan serve
    ```
-
+6. در لینوکس
+   ```bash
+   chmod +x linux-composer.sh
+   ``` 
+7. پیشنیاز لینوکس فرانکین و ...
+   ```bash
+   chmod +x linux-composer.sh
+   ``` 
 
 ## مشارکت
 
