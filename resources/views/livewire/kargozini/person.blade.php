@@ -214,7 +214,7 @@ new class extends Component {
     </x-card>
 
     <!-- مدال برای ایجاد و ویرایش -->
-    <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش کاربر' : 'ثبت کاربر جدید' }}" separator>
+    <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش کاربر' : 'ثبت کاربر جدید' }}" persistent separator>
         <x-form wire:submit.prevent="savePerson" class="grid grid-cols-2 gap-4">
             <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
             <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
