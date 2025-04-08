@@ -19,4 +19,8 @@ class County extends Model
     {
         return $this->hasMany(Unit::class, 'county_id');
     }
+    public function boundary()
+    {
+        return $this->belongsTo(Boundary::class);
+    }
 }

@@ -48,4 +48,8 @@ class Unit extends Model
     {
         return $this->hasMany(Unit::class, 'parent_id');
     }
+    public function boundary()
+    {
+        return $this->belongsTo(Boundary::class);
+    }
 }

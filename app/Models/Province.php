@@ -20,4 +20,8 @@ class Province extends Model
         // واحدهایی که در سطح استان هستند (county_id null)
         return $this->hasMany(Unit::class, 'province_id');
     }
+    public function boundary()
+    {
+        return $this->belongsTo(Boundary::class);
+    }
 }

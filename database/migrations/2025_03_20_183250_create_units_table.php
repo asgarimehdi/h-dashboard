@@ -26,13 +26,19 @@ return new class extends Migration
 
             $table->text('description')->nullable();
             $table->timestamps();
-
+            $table->foreignId('boundary_id')->nullable()->constrained('boundaries')->cascadeOnDelete();
             // تعریف کلید خارجی به استان‌ها
-            $table->foreign('province_id')->references('id')->on('provinces');
+            $table->foreign('province_id')->references('id')->on('provinces')
+                ->onDelete('restrict')
+                ->onUpdate('cascade');
             // تعریف کلید خارجی به شهرستان‌ها
-            $table->foreign('county_id')->references('id')->on('counties');
+            $table->foreign('county_id')->references('id')->on('counties')
+                ->onDelete('restrict')
+                ->onUpdate('cascade');
             // تعریف کلید خارجی برای سلسله مراتب واحدها
-            $table->foreign('parent_id')->references('id')->on('units');
+            $table->foreign('parent_id')->references('id')->on('units')
+                ->onDelete('restrict')
+                ->onUpdate('cascade');
         });
     }
 

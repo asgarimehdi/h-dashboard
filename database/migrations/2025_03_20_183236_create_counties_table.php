@@ -13,13 +13,13 @@ return new class extends Migration
     {
         Schema::create('counties', function (Blueprint $table) {
             $table->id();
-            // ستون province_id برای ارتباط با جدول استان‌ها
             $table->unsignedBigInteger('province_id');
             $table->string('name');
+            $table->foreign('province_id')->references('id')->on('provinces')
+                ->onDelete('restrict')
+                ->onUpdate('cascade');
+            $table->foreignId('boundary_id')->nullable()->constrained('boundaries')->cascadeOnDelete();
             $table->timestamps();
-
-            // تعریف کلید خارجی به استان‌ها
-            $table->foreign('province_id')->references('id')->on('provinces');
         });
     }
 
