@@ -33,11 +33,7 @@ new class extends Component {
 </style>
 
 
-
-
-            <div id="map" class="h-[80lvh]  rounded"></div>
-
-
+<div id="map" class="h-[80lvh]  rounded"></div>
 
 
 <script>

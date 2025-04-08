@@ -10,7 +10,7 @@ use Livewire\Volt\Component;
 
 <style>
     #map {
-        /*max-height: 400px;*/
+        max-height: 400px;
     }
     #geojson-output {
         margin-top: 10px;
@@ -18,7 +18,7 @@ use Livewire\Volt\Component;
 
         border: 1px solid #ddd;
         white-space: pre-wrap;
-        height: 100px;
+
         overflow: scroll;
     }
 
