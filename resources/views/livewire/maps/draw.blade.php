@@ -17,7 +17,7 @@ use Livewire\Volt\Component;
         padding: 10px;
 
         border: 1px solid #ddd;
-        white-space: pre-wrap;
+
 
         overflow: scroll;
     }

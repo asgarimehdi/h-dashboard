@@ -14,8 +14,7 @@ return new class extends Migration
     {
         Schema::create('boundaries', function (Blueprint $table) {
             $table->id();
-            $table->geometry('boundary', 'multipolygon');
-
+            $table->geometry('boundary')->srid(4326);
             $table->timestamps();
         });
      //   DB::statement('ALTER TABLE boundaries ADD boundary MULTIPOLYGON NOT NULL SRID 4326');
