@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -13,10 +14,13 @@ return new class extends Migration
     {
         Schema::create('boundaries', function (Blueprint $table) {
             $table->id();
-            $table->geometry('geometry');
+            $table->geometry('boundary', 'multipolygon');
+
             $table->timestamps();
         });
-
+     //   DB::statement('ALTER TABLE boundaries ADD boundary MULTIPOLYGON NOT NULL SRID 4326');
+//
+//        DB::statement("ALTER TABLE boundaries ADD COLUMN boundary GEOMETRY(MULTIPOLYGON, 4326) NOT NULL");
     }
 
     /**
