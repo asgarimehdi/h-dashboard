@@ -4,11 +4,19 @@ use Livewire\Volt\Component;
 
 new class extends Component {
     public $selectedRole = null; // نقش انتخاب‌شده
+    public $roleOptions = null; // نقش انتخاب‌شده
 
     public function mount()
     {
         // گرفتن نقش‌های کاربر
         $roles = auth()->user()->roles;
+        $this->roleOptions = $this->roles->pluck('description', 'id')->all();
+        $this->roleOptions = $this->roles->map(function ($role) {
+            return [
+                'id' => $role->id,
+                'name' => $role->description, // description رو به name مپ می‌کنیم
+            ];
+        })->all();
 
         // اگر فقط یک نقش داره، مستقیم به داشبورد بره
         if ($roles->count() === 1) {
@@ -56,30 +64,14 @@ new class extends Component {
 
     <!-- TABLE  -->
     <x-card shadow>
-        {{-- Search and Create Button Area --}}
-        <div class="flex gap-2 items-center mb-4"> {{-- Added margin-bottom --}}
 
-            <div class="flex-1">
-
-            </div>
-        </div>
         <x-form wire:submit="selectRole">
-            @foreach($this->roles as $role)
-                <div class="mb-2 flex items-center">
-                    <input
-                        type="radio"
-                        wire:model="selectedRole"
-                        id="role-{{ $role->id }}"
-                        value="{{ $role->id }}"
-                        class="mr-2 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <label for="role-{{ $role->id }}" class="text-gray-700">
+            <x-group
+                label="انتخاب نقش"
+                wire:model="selectedRole"
+                :options="$this->roleOptions"
+            />
 
-                        <span class="text-sm text-gray-500"> - {{ $role->description ?? 'بدون توضیح' }}</span>
-                    </label>
-                </div>
-            @endforeach
-            <x-errors />
             <x-button
                 type="submit"
                 label="ورود به داشبورد"
