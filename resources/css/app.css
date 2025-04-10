@@ -18,15 +18,14 @@
 
 /** daisyUI */
 @plugin "daisyui" {
-    themes: light, dark, aqua, coffee, cupcake --default,
-        luxury --prefersdark;
+    themes: light, dark, synthwave --prefersdark, coffee, cupcake,fantasy --default,luxury;
 }
 
 /* maryUI */
 @source "../../vendor/robsontenorio/mary/src/View/Components/**/*.php";
 
 /* Theme toggle */
-@custom-variant dark (&:where([data-theme=coffee], [data-theme=coffee] *));
+@custom-variant dark (&:where([data-theme=synthwave], [data-theme=synthwave] *));
 
 
 /**

@@ -74,8 +74,8 @@
                     @endif
                     @if($user->hasPermission('manage-units'))
                         <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">
-                            <x-menu-item title="ایجاد واحد جدید" icon="o-sparkles" link="/units" wire:navigate/>
-                            <x-menu-item title="چارت گرافیکی" icon="o-sparkles" link="/units/chart" wire:navigate/>
+                            <x-menu-item title="مدیریت واحدها" icon="o-sparkles" link="/units" wire:navigate/>
+                            <x-menu-item title="نمودار چارت سازمانی" icon="o-sparkles" link="/units/chart" wire:navigate/>
                         </x-menu-sub>
                     @endif
                     @if($user->hasPermission('manage-access'))

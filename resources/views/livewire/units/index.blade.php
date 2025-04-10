@@ -10,8 +10,7 @@ use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component
-{
+new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -29,7 +28,7 @@ new class extends Component
         $this->loadDropdowns();
     }
 
-    public function loadDropdowns()
+    public function loadDropdowns(): void
     {
         $this->unitTypes = UnitType::where('id', '!=', 1)->get();
         $this->provinces = Province::all();
@@ -37,7 +36,7 @@ new class extends Component
         $this->parentUnits = $this->getAllowedParentUnitsProperty();
     }
 
-    public function updatedUnitTypeId($value)
+    public function updatedUnitTypeId($value): void
     {
         $this->reset(['province_id', 'county_id', 'parent_id']);
         $this->loadDropdowns();
@@ -75,7 +74,7 @@ new class extends Component
         return $parentUnits;
     }
 
-    public function saveUnit()
+    public function saveUnit(): void
     {
         $rules = [
             'name' => 'required|string|max:255|unique:units,name,' . $this->editingId,
@@ -106,20 +105,22 @@ new class extends Component
             'county_id' => $this->county_id ?: null,
             'parent_id' => $this->parent_id,
         ];
-
-        if ($this->editingId) {
-            Unit::findOrFail($this->editingId)->update($data);
-            $this->success("واحد '{$this->name}' به‌روزرسانی شد");
-        } else {
-            Unit::create($data);
-            $this->success("واحد '{$this->name}' ایجاد شد");
+        try {
+            if ($this->editingId) {
+                Unit::findOrFail($this->editingId)->update($data);
+                $this->success("واحد '{$this->name}' به‌روزرسانی شد");
+            } else {
+                Unit::create($data);
+                $this->success("واحد '{$this->name}' ایجاد شد");
+            }
+        } catch (\Exception $e) {
+            $this->error("خطا ", position: 'toast-bottom');
         }
-
         $this->resetForm();
         $this->modal = false;
     }
 
-    public function editUnit($id)
+    public function editUnit($id): void
     {
         $unit = Unit::findOrFail($id);
         $this->editingId = $id;
@@ -133,19 +134,24 @@ new class extends Component
         $this->modal = true;
     }
 
-    public function deleteUnit(Unit $unit)
+    public function deleteUnit(Unit $unit): void
     {
-        $unit->delete();
-        $this->warning("واحد '{$unit->name}' حذف شد");
+
+        try {
+            $unit->delete();
+            $this->warning("$unit->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Exception $e) {
+            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        }
     }
 
-    public function resetForm()
+    public function resetForm(): void
     {
         $this->reset(['name', 'description', 'unit_type_id', 'province_id', 'county_id', 'parent_id', 'editingId']);
         $this->loadDropdowns();
     }
 
-    public function openModalForCreate()
+    public function openModalForCreate(): void
     {
         $this->resetForm();
         $this->modal = true;
@@ -154,13 +160,13 @@ new class extends Component
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1'],
-            ['key' => 'name', 'label' => 'نام', 'class' => 'w-20'],
-            ['key' => 'description', 'label' => 'توضیحات', 'class' => 'w-32'],
-            ['key' => 'unit_type_name', 'label' => 'نوع واحد', 'class' => 'w-20'],
-            ['key' => 'province_name', 'label' => 'استان', 'class' => 'w-20'],
-            ['key' => 'county_name', 'label' => 'شهرستان', 'class' => 'w-20'],
-            ['key' => 'parent_name', 'label' => 'واحد بالادستی', 'class' => 'w-20'],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden 2xl:table-cell'],
+            ['key' => 'name', 'label' => 'نام', 'class' => 'w-40'],
+            ['key' => 'description', 'label' => 'توضیحات', 'class' => 'w-8 hidden 2xl:table-cell'],
+            ['key' => 'unit_type_name', 'label' => 'نوع واحد', 'class' => 'w-50 hidden sm:table-cell'],
+            ['key' => 'province_name', 'label' => 'استان', 'class' => 'w-8 hidden sm:table-cell'],
+            ['key' => 'county_name', 'label' => 'شهرستان', 'class' => 'w-8 hidden sm:table-cell'],
+            ['key' => 'parent_name', 'label' => 'واحد بالادستی', 'class' => 'w-20 hidden xl:table-cell'],
         ];
     }
 
@@ -197,26 +203,50 @@ new class extends Component
     <!-- هدر -->
     <x-header title="مدیریت واحدها" separator progress-indicator>
         <x-slot:middle class="!justify-end">
-            <x-input placeholder="جستجو..." wire:model.live.debounce="search" clearable icon="o-magnifying-glass" />
         </x-slot:middle>
         <x-slot:actions>
             <x-theme-selector/>
-            <x-button class="btn-success btn-sm" label="ثبت جدید" wire:click="openModalForCreate" responsive icon="o-plus" />
-
-
         </x-slot:actions>
     </x-header>
 
     <!-- جدول -->
     <x-card shadow>
-        <x-table :headers="$headers" :rows="$units" :sort-by="$sortBy" with-pagination per-page="perPage" :per-page-values="[5, 10, 20]">
+
+        <div class="breadcrumbs flex gap-2 items-center">
+            <x-button class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
+            <div class="flex-1">
+                <x-input
+                    placeholder="Search..."
+                    wire:model.live.debounce="search"
+                    clearable
+                    icon="o-magnifying-glass"
+                    class="w-full"
+                />
+            </div>
+        </div>
+        <x-table :headers="$headers" :rows="$units" :sort-by="$sortBy" with-pagination per-page="perPage"
+                 :per-page-values="[5, 10, 20]">
             @foreach($units as $unit)
-                <tr >
+                <tr>
 
                     <td>
                         @scope('actions', $unit)
-                        <x-button icon="o-pencil" wire:click="editUnit({{ $unit->id }})" class="btn-ghost btn-sm text-primary" label="Edit" />
-                        <x-button icon="o-trash" wire:click="deleteUnit({{ $unit->id }})" wire:confirm="مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" label="Delete" />
+                        <div class="flex w-1/12">
+                            <x-button icon="o-pencil"
+                                      wire:click="editUnit({{ $unit->id }})"
+                                      class="btn-ghost btn-sm text-primary"
+                                      @click="$wire.modal = true">
+                                <span class="hidden 2xl:inline">ویرایش</span>
+                            </x-button>
+
+                            <x-button icon="o-trash"
+                                      wire:click="deleteUnit({{ $unit->id }})"
+                                      wire:confirm="آیا مطمئن هستید"
+                                      spinner
+                                      class="btn-ghost btn-sm text-error">
+                                <span class="hidden 2xl:inline">حذف</span>
+                            </x-button>
+                        </div>
                         @endscope
                     </td>
                 </tr>
@@ -225,26 +255,30 @@ new class extends Component
     </x-card>
 
     <!-- مدال -->
-    <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش واحد' : 'ثبت واحد جدید' }}" separator>
+    <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش واحد' : 'ثبت واحد جدید' }}" separator persistent>
         <x-form wire:submit.prevent="saveUnit">
             <div class="grid grid-cols-2 gap-4">
                 <!-- نام -->
-                <x-input wire:model="name" label="نام واحد" placeholder="نام واحد" required />
+                <x-input wire:model="name" label="نام واحد" placeholder="نام واحد" required/>
 
                 <!-- توضیحات -->
-                <x-input wire:model="description" label="توضیحات" placeholder="توضیحات" />
+                <x-input wire:model="description" label="توضیحات" placeholder="توضیحات"/>
 
                 <!-- نوع واحد -->
-                <x-select wire:model.live="unit_type_id" label="نوع واحد" :options="$unitTypes" option-value="id" option-label="name" required placeholder="انتخاب کنید" />
+                <x-select wire:model.live="unit_type_id" label="نوع واحد" :options="$unitTypes" option-value="id"
+                          option-label="name" required placeholder="انتخاب کنید"/>
 
                 <!-- استان -->
-                <x-select wire:model.live="province_id" label="استان" :options="$provinces" option-value="id" option-label="name" placeholder="انتخاب کنید" />
+                <x-select wire:model.live="province_id" label="استان" :options="$provinces" option-value="id"
+                          option-label="name" placeholder="انتخاب کنید" required/>
 
                 <!-- شهرستان -->
-                <x-select wire:model="county_id" label="شهرستان" :options="$counties" option-value="id" option-label="name" placeholder="انتخاب کنید" />
+                <x-select wire:model="county_id" label="شهرستان" :options="$counties" option-value="id"
+                          option-label="name" placeholder="انتخاب کنید" required/>
 
                 <!-- واحد بالادستی -->
-                <x-select wire:model="parent_id" label="واحد بالادستی" :options="$parentUnits" option-value="id" option-label="name" required placeholder="انتخاب کنید" />
+                <x-select wire:model="parent_id" label="واحد بالادستی" :options="$parentUnits" option-value="id"
+                          option-label="name" required placeholder="انتخاب کنید"/>
 
                 <!-- دکمه‌ها -->
                 <div class="col-span-2 flex justify-end space-x-2">
