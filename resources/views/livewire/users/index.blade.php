@@ -40,17 +40,17 @@ new class extends Component {
     public function delete(User $user): void
     {
          // لود کردن تمام روابط مرتبط با کاربر
-        $user->load('roles'); // اینجا می‌تونی روابط دیگه رو هم اضافه کنی
+        // $user->load('roles'); // اینجا می‌تونی روابط دیگه رو هم اضافه کنی
 
         // چک کردن اینکه آیا کاربر توی روابط استفاده شده یا نه
-        $isInUse = $user->roles()->exists(); // برای رابطه roles
+        // $isInUse = $user->roles()->exists(); // برای رابطه roles
         // $isInUse = $user->roles()->exists() || $user->orders()->exists() || $user->comments()->exists();
         
 
-        if ($isInUse) {
-            $this->error("نمی‌توانید $user->name را غیرفعال کنید چون در بخش‌های دیگر سیستم (مثل نقش‌ها) استفاده شده است.", position: 'toast-bottom');
-            return;
-        }
+        // if ($isInUse) {
+        //     $this->error("نمی‌توانید $user->name را غیرفعال کنید چون در بخش‌های دیگر سیستم (مثل نقش‌ها) استفاده شده است.", position: 'toast-bottom');
+        //     return;
+        // }
         $user->delete(); // Soft delete
         $this->warning("$user->name غیرفعال شد", 'غیرفعال شد!', position: 'toast-bottom');
     }
