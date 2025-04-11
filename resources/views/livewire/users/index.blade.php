@@ -167,7 +167,7 @@ new class extends Component {
         ];
     }
 
-    public function users(): LengthAwarePaginator
+     public function users(): LengthAwarePaginator
     {
         $query = User::query()
             ->with(['person.unit', 'roles'])
@@ -177,7 +177,8 @@ new class extends Component {
                 $q->whereHas('person', function ($query) {
                     $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
                 });
-            });
+            })
+            ->whereNot('id', auth()->id()); // حذف کاربر لاگین‌شده از نتایج
 
         if ($this->filterStatus === 'active') {
             $query->whereNull('deleted_at');
