@@ -7,6 +7,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes; // اضافه کردن SoftDeletes
+
 // --->>> اضافه شد
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,13 +17,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable,SoftDeletes;
 
     protected $fillable = [
         'n_code',
         'password',
     ];
-
+    protected $dates = ['deleted_at']; // برای مدیریت تاریخ حذف
     /**
      * دریافت اطلاعات Person مرتبط با این User.
      * چون کلید خارجی (n_code) در جدول users است، از belongsTo استفاده می‌کنیم.

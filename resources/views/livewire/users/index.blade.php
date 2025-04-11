@@ -19,9 +19,10 @@ new class extends Component {
 
     public array $expanded = [];
     public string $search = '';
+    public string $filterStatus = 'active'; // فیلتر پیش‌فرض: فقط کاربران فعال
 
     public bool $modal = false;
-    public array $sortBy = ['column' => 'name', 'direction' => 'asc'];
+    public array $sortBy = ['column' => 'n_code', 'direction' => 'asc'];
 
     public $n_code;
     public $password;
@@ -31,14 +32,22 @@ new class extends Component {
 
     public function clear(): void
     {
-        $this->reset();
+        $this->reset(['search', 'filterStatus']);
+        $this->filterStatus = 'active'; // برگشت به پیش‌فرض
         $this->success('فیلترها پاک شدند.', position: 'toast-bottom');
     }
 
     public function delete(User $user): void
     {
-        $user->delete();
-        $this->warning("$user->name حذف شد", 'خداحافظ!', position: 'toast-bottom');
+        $user->delete(); // Soft delete
+        $this->warning("$user->name غیرفعال شد", 'غیرفعال شد!', position: 'toast-bottom');
+    }
+
+    public function restore($userId): void
+    {
+        $user = User::withTrashed()->findOrFail($userId);
+        $user->restore();
+        $this->success("$user->name فعال شد", 'کاربر برگشت!', position: 'toast-bottom');
     }
 
     public function openModalForCreate(): void
@@ -49,7 +58,7 @@ new class extends Component {
 
     public function edit($userId): void
     {
-        $user = User::findOrFail($userId);
+        $user = User::withTrashed()->findOrFail($userId); // برای ویرایش کاربران غیرفعال
         $this->editing_user_id = $user->id;
         $this->n_code = $user->n_code;
         $person = Person::where('n_code', $user->n_code)->first();
@@ -68,21 +77,20 @@ new class extends Component {
 
     public function createUser(): void
     {
-
-            $this->validate([
-                'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
-                'password' => 'required|string|min:6',
-                'role_ids' => 'required|array|min:1',
-                'role_ids.*' => 'exists:roles,id',
-            ], [
-                'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
-                'n_code.required' => 'کد ملی الزامی است.',
-                'n_code.exists' => 'این کد ملی در سیستم موجود نیست.',
-                'password.required' => 'رمز عبور الزامی است.',
-                'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
-                'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
-            ]);
-            try {
+        $this->validate([
+            'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
+            'password' => 'required|string|min:6',
+            'role_ids' => 'required|array|min:1',
+            'role_ids.*' => 'exists:roles,id',
+        ], [
+            'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
+            'n_code.required' => 'کد ملی الزامی است.',
+            'n_code.exists' => 'این کد ملی در سیستم موجود نیست.',
+            'password.required' => 'رمز عبور الزامی است.',
+            'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
+            'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
+        ]);
+        try {
             $person = Person::where('n_code', $this->n_code)->first();
 
             $user = User::create([
@@ -104,7 +112,6 @@ new class extends Component {
 
     public function updateUser(): void
     {
-
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code,' . $this->editing_user_id,
             'password' => 'nullable|string|min:6',
@@ -118,7 +125,7 @@ new class extends Component {
             'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
         ]);
         try {
-            $user = User::findOrFail($this->editing_user_id);
+            $user = User::withTrashed()->findOrFail($this->editing_user_id);
             $data = ['n_code' => $this->n_code];
             if ($this->password) {
                 $data['password'] = bcrypt($this->password);
@@ -136,7 +143,7 @@ new class extends Component {
         }
     }
 
-    public function headers(): array
+     public function headers(): array
     {
         return [
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden xl:table-cell'],
@@ -144,12 +151,13 @@ new class extends Component {
             ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-30 hidden md:table-cell'],
             ['key' => 'unit_name', 'label' => 'واحد اصلی', 'class' => 'w-40 hidden md:table-cell'],
             ['key' => 'roles_name', 'label' => 'نقش‌ها', 'w-70 hidden md:table-cell'],
+                        ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-20'], // ستون وضعیت
+
         ];
     }
-
     public function users(): LengthAwarePaginator
     {
-        return User::query()
+        $query = User::query()
             ->with(['person.unit', 'roles'])
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
@@ -157,8 +165,18 @@ new class extends Component {
                 $q->whereHas('person', function ($query) {
                     $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
                 });
-            })
-            ->orderBy('n_code', $this->sortBy['direction'])
+            });
+
+        // اعمال فیلتر وضعیت
+        if ($this->filterStatus === 'active') {
+            $query->whereNull('deleted_at');
+        } elseif ($this->filterStatus === 'inactive') {
+            $query->onlyTrashed();
+        } else {
+            $query->withTrashed(); // همه (فعال و غیرفعال)
+        }
+
+        return $query->orderBy('n_code', $this->sortBy['direction'])
             ->paginate(5);
     }
 
@@ -198,40 +216,63 @@ new class extends Component {
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <x-button class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
-                    placeholder="Search..."
+                    placeholder="جستجو..."
                     wire:model.live.debounce="search"
                     clearable
                     icon="o-magnifying-glass"
                     class="w-full"
                 />
             </div>
-        </div>
-        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable>
-            @scope('actions', $user)
-            <div class="flex w-1/12">
-                <x-button icon="o-pencil"
-                          wire:click="edit({{ $user->id }}))"
-                          class="btn-ghost btn-sm text-primary"
-                          @click="$wire.modal = true">
-                    <span class="hidden 2xl:inline">ویرایش</span>
-                </x-button>
-
-                <x-button icon="o-trash"
-                          wire:click="delete({{ $user->id }})"
-                          wire:confirm="آیا مطمئن هستید"
-                          spinner
-                          class="btn-ghost btn-sm text-error">
-                    <span class="hidden 2xl:inline">حذف</span>
-                </x-button>
+            <div>
+               
+                <select wire:model.live="filterStatus" class="select select-bordered w-40">
+                    <option value="all">همه</option>
+                    <option value="active">فعال</option>
+                    <option value="inactive">غیرفعال</option>
+                </select>
             </div>
+        </div>
+     <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable>
+           @scope('cell_status', $user)
+                <x-badge 
+                    :value="$user->trashed() ? 'غیرفعال' : 'فعال'" 
+                    :class="$user->trashed() ? 'badge-error' : 'badge-success'" 
+                    rounded
+                />
+            @endscope
+            @scope('actions', $user)
+                <div class="flex w-1/12">
+                    <x-button icon="o-pencil"
+                              wire:click="edit({{ $user->id }})"
+                              class="btn-ghost btn-sm text-primary">
+                        <span class="hidden 2xl:inline">ویرایش</span>
+                    </x-button>
+                    @if($user->trashed())
+                        <x-button icon="o-arrow-path"
+                                  wire:click="restore({{ $user->id }})"
+                                  wire:confirm="آیا مطمئن هستید که می‌خواهید این کاربر را فعال کنید؟"
+                                  spinner
+                                  class="btn-ghost btn-sm text-success">
+                            <span class="hidden 2xl:inline">فعال‌سازی</span>
+                        </x-button>
+                    @else
+                        <x-button icon="o-trash"
+                                  wire:click="delete({{ $user->id }})"
+                                  wire:confirm="آیا مطمئن هستید که می‌خواهید این کاربر را غیرفعال کنید؟"
+                                  spinner
+                                  class="btn-ghost btn-sm text-error">
+                            <span class="hidden 2xl:inline">غیرفعال</span>
+                        </x-button>
+                    @endif
+                </div>
             @endscope
             @scope('expansion', $user)
-            <div class="bg-base-200 p-8 font-bold">
-                اطلاعات بیشتر درباره کاربر، {{ $user->name }}!
-            </div>
+                <div class="bg-base-200 p-8 font-bold">
+                    اطلاعات بیشتر درباره کاربر، {{ $user->name }}!
+                </div>
             @endscope
         </x-table>
     </x-card>
@@ -240,9 +281,8 @@ new class extends Component {
         <x-form wire:submit.prevent="{{ $editing_user_id ? 'updateUser' : 'createUser' }}"
                 class="grid grid-cols-2 gap-4">
             <div class="relative">
-
                 <x-input wire:model.live="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
-                       placeholder="جستجوی نام یا کد ملی"/>
+                         placeholder="جستجوی نام یا کد ملی"/>
                 @error('n_code') <span class="text-error text-sm">{{ $message }}</span> @enderror
                 @if($person_search)
                     <div>
@@ -273,5 +313,4 @@ new class extends Component {
             </div>
         </x-form>
     </x-modal>
-
 </div>

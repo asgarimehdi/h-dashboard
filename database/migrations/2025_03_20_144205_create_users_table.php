@@ -16,6 +16,7 @@ return new class extends Migration
             // --->>> اصلاح شد: نوع داده باید با persons.n_code مطابقت داشته باشد
             $table->string('n_code', 10)->unique()->index();
             $table->string('password');
+            $table->softDeletes(); // اضافه کردن ستون deleted_at
             $table->rememberToken();
             $table->timestamps();
 
@@ -51,4 +52,3 @@ return new class extends Migration
         Schema::dropIfExists('sessions');
     }
 };
-
