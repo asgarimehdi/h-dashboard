@@ -143,18 +143,18 @@ new class extends Component {
         }
     }
 
-     public function headers(): array
+    public function headers(): array
     {
         return [
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden xl:table-cell'],
             ['key' => 'name', 'label' => 'نام', 'class' => 'w-40', 'sortable' => false],
             ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-30 hidden md:table-cell'],
-            ['key' => 'unit_name', 'label' => 'واحد اصلی', 'class' => 'w-40 hidden md:table-cell'],
-            ['key' => 'roles_name', 'label' => 'نقش‌ها', 'w-70 hidden md:table-cell'],
-                        ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-20'], // ستون وضعیت
-
+            ['key' => 'unit_name', 'label' => 'واحد اصلی'],
+            ['key' => 'roles_name', 'label' => 'نقش‌ها'],
+            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-20'],
         ];
     }
+
     public function users(): LengthAwarePaginator
     {
         $query = User::query()
@@ -167,13 +167,12 @@ new class extends Component {
                 });
             });
 
-        // اعمال فیلتر وضعیت
         if ($this->filterStatus === 'active') {
             $query->whereNull('deleted_at');
         } elseif ($this->filterStatus === 'inactive') {
             $query->onlyTrashed();
         } else {
-            $query->withTrashed(); // همه (فعال و غیرفعال)
+            $query->withTrashed();
         }
 
         return $query->orderBy('n_code', $this->sortBy['direction'])
@@ -227,7 +226,6 @@ new class extends Component {
                 />
             </div>
             <div>
-               
                 <select wire:model.live="filterStatus" class="select select-bordered w-40">
                     <option value="all">همه</option>
                     <option value="active">فعال</option>
@@ -235,8 +233,9 @@ new class extends Component {
                 </select>
             </div>
         </div>
-     <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable>
-           @scope('cell_status', $user)
+        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable>
+           
+            @scope('cell_status', $user)
                 <x-badge 
                     :value="$user->trashed() ? 'غیرفعال' : 'فعال'" 
                     :class="$user->trashed() ? 'badge-error' : 'badge-success'" 
