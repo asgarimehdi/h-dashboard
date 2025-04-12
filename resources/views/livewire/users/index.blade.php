@@ -45,7 +45,7 @@ new class extends Component {
         // چک کردن اینکه آیا کاربر توی روابط استفاده شده یا نه
         // $isInUse = $user->roles()->exists(); // برای رابطه roles
         // $isInUse = $user->roles()->exists() || $user->orders()->exists() || $user->comments()->exists();
-        
+
 
         // if ($isInUse) {
         //     $this->error("نمی‌توانید $user->name را غیرفعال کنید چون در بخش‌های دیگر سیستم (مثل نقش‌ها) استفاده شده است.", position: 'toast-bottom');
@@ -160,9 +160,9 @@ new class extends Component {
         return [
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden xl:table-cell'],
             ['key' => 'name', 'label' => 'نام', 'class' => 'w-40', 'sortable' => false],
-            ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-30 hidden md:table-cell'],
-            ['key' => 'unit_name', 'label' => 'واحد اصلی'],
-            ['key' => 'roles_name', 'label' => 'نقش‌ها'],
+            ['key' => 'n_code', 'label' => 'کد ملی', 'class' => 'w-30 hidden sm:table-cell'],
+            ['key' => 'unit_name', 'label' => 'واحد اصلی', 'class' => 'w-40 hidden sm:table-cell'],
+            ['key' => 'roles_name', 'label' => 'نقش‌ها', 'class' => 'w-70 hidden sm:table-cell'],
             ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-20'],
         ];
     }
@@ -247,11 +247,11 @@ new class extends Component {
             </div>
         </div>
         <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable>
-           
+
             @scope('cell_status', $user)
-                <x-badge 
-                    :value="$user->trashed() ? 'غیرفعال' : 'فعال'" 
-                    :class="$user->trashed() ? 'badge-error' : 'badge-success'" 
+                <x-badge
+                    :value="$user->trashed() ? 'غیرفعال' : 'فعال'"
+                    :class="$user->trashed() ? 'badge-error' : 'badge-success'"
                     rounded
                 />
             @endscope
