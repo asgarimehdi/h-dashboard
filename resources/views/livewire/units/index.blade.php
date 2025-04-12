@@ -19,6 +19,7 @@ new class extends Component {
     public string $search = '';
     public int $perPage = 5;
     public bool $modal = false;
+    public bool $modal2 = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     public $unitTypes, $provinces, $counties, $parentUnits;
@@ -149,6 +150,7 @@ new class extends Component {
     {
         $this->reset(['name', 'description', 'unit_type_id', 'province_id', 'county_id', 'parent_id', 'editingId']);
         $this->loadDropdowns();
+        $this->modal2 = false;
     }
 
     public function openModalForCreate(): void
@@ -232,6 +234,12 @@ new class extends Component {
                     <td>
                         @scope('actions', $unit)
                         <div class="flex w-1/12">
+                            <x-button icon="o-map"
+
+                                      class="btn-ghost btn-sm text-primary"
+                                      @click="$wire.modal2 = true">
+                                <span class="hidden 2xl:inline">نقشه</span>
+                            </x-button>
                             <x-button icon="o-pencil"
                                       wire:click="editUnit({{ $unit->id }})"
                                       class="btn-ghost btn-sm text-primary"
@@ -282,10 +290,16 @@ new class extends Component {
 
                 <!-- دکمه‌ها -->
                 <div class="col-span-2 flex justify-end space-x-2">
-                    <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check" class="btn-primary" />
-                    <x-button label="لغو" wire:click="resetForm" @click="$wire.modal = false" icon="o-x-mark" class="btn-outline" />
+                    <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check"
+                              class="btn-primary"/>
+                    <x-button label="لغو" wire:click="resetForm" @click="$wire.modal = false" icon="o-x-mark"
+                              class="btn-outline"/>
                 </div>
             </div>
         </x-form>
+    </x-modal>
+    <x-modal wire:model="modal2" title="ثبت مرز" separator persistent>
+        <livewire:maps.polygon/>
+
     </x-modal>
 </div>
