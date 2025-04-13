@@ -5,6 +5,7 @@ use App\Models\Province;
 use App\Models\County;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
+use Livewire\Attributes\On;
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -16,6 +17,8 @@ new class extends Component {
 
     public $name, $description, $unit_type_id, $province_id, $county_id, $parent_id;
     public int|null $editingId = null;
+    public int|null $editingIdMap = null;
+    public int|null $boundaryId = null;
     public string $search = '';
     public int $perPage = 5;
     public bool $modal = false;
@@ -146,6 +149,15 @@ new class extends Component {
         }
     }
 
+    #[On('boundarySaved')]
+    public function saveBoundaryId($boundaryId): void
+    {
+        Unit::find($this->editingIdMap)?->update([
+            'boundary_id' => $this->boundaryId,
+        ]);
+//        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
+    }
+
     public function resetForm(): void
     {
         $this->reset(['name', 'description', 'unit_type_id', 'province_id', 'county_id', 'parent_id', 'editingId']);
@@ -237,7 +249,7 @@ new class extends Component {
                             <x-button icon="o-map"
 
                                       class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal2 = true">
+                                      @click="$wire.modal2 = true,$wire.editingId2={{ $unit->id }}">
                                 <span class="hidden 2xl:inline">نقشه</span>
                             </x-button>
                             <x-button icon="o-pencil"
