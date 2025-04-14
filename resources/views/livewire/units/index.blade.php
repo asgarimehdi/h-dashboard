@@ -20,7 +20,7 @@ new class extends Component {
     public int|null $editingIdMap = null;
     public int|null $boundaryId = null;
     public string $search = '';
-    public int $perPage = 5;
+    public int $perPage = 10;
     public bool $modal = false;
     public bool $modal2 = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
@@ -149,13 +149,20 @@ new class extends Component {
         }
     }
 
+    public function mapModal($editingIdMap): void
+    {
+        $this->editingIdMap=$editingIdMap;
+        $this->modal2 = true;
+    }
+
     #[On('boundarySaved')]
     public function saveBoundaryId($boundaryId): void
     {
         Unit::find($this->editingIdMap)?->update([
-            'boundary_id' => $this->boundaryId,
+            'boundary_id' => $boundaryId,
         ]);
-//        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
+        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
+        $this->modal2 = false;
     }
 
     public function resetForm(): void
@@ -249,7 +256,7 @@ new class extends Component {
                             <x-button icon="o-map"
 
                                       class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal2 = true,$wire.editingId2={{ $unit->id }}">
+                                      wire:click="mapModal({{ $unit->id }})">
                                 <span class="hidden 2xl:inline">نقشه</span>
                             </x-button>
                             <x-button icon="o-pencil"
@@ -311,7 +318,7 @@ new class extends Component {
         </x-form>
     </x-modal>
     <x-modal wire:model="modal2" title="ثبت مرز" separator persistent>
-        <livewire:maps.polygon/>
+        <livewire:maps.polygon />
 
     </x-modal>
 </div>

@@ -28,9 +28,7 @@ new class extends Component {
         ]);
 // ارسال ایونت به والد
         $this->dispatch('boundarySaved', boundaryId: $boundaryId);
-
-        //$this->geojson = $geojsonData;
-
+        $this->reset(['geojson']);
     }
 
 

@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Unit extends Model
 {
@@ -18,6 +20,7 @@ class Unit extends Model
         'county_id',
         'parent_id',
         'unit_type_id',
+        'boundary_id',
 
     ];
     public function unitType()
@@ -48,8 +51,8 @@ class Unit extends Model
     {
         return $this->hasMany(Unit::class, 'parent_id');
     }
-    public function boundary()
+    public function boundary(): hasOne
     {
-        return $this->belongsTo(Boundary::class);
+        return $this->hasOne(Boundary::class, 'boundary_id');
     }
 }

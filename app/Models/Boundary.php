@@ -11,7 +11,7 @@ class Boundary extends Model
 
     protected $guarded = [];
     protected $casts = [
-        'geometry' => 'geometry',
+        'boundary' => 'geometry',
     ];
 
     /**
