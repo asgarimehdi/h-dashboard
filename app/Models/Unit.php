@@ -51,8 +51,9 @@ class Unit extends Model
     {
         return $this->hasMany(Unit::class, 'parent_id');
     }
-    public function boundary(): hasOne
+    public function boundary(): BelongsTo
     {
-        return $this->hasOne(Boundary::class, 'boundary_id');
+        return $this->belongsTo(Boundary::class, 'boundary_id');
     }
+
 }
