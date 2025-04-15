@@ -52,5 +52,5 @@ Route::middleware('auth')->group(function () {
     Volt::route('/maps/route', 'maps/route');
     Volt::route('/maps/route2', 'maps/route2');
     Volt::route('/maps/county', 'maps/county');
-    Volt::route('/maps/polygon', 'maps/polygon');
+    Volt::route('/maps/unit', 'maps/unit');
 });
