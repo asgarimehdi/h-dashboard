@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Unit;
 use Illuminate\Http\Request;
 
 class UnitController extends Controller
@@ -10,9 +11,10 @@ class UnitController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): string
     {
-        //
+        $data=Unit::all();
+        return $data->toJson(JSON_UNESCAPED_UNICODE);
     }
 
     /**
