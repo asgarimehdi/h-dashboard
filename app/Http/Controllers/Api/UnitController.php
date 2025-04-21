@@ -11,7 +11,7 @@ class UnitController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): string
+    public function __invoke(): string
     {
         $data=Unit::all();
         return $data->toJson(JSON_UNESCAPED_UNICODE);
