@@ -11,13 +11,14 @@ use Illuminate\Database\Eloquent\SoftDeletes; // اضافه کردن SoftDeletes
 
 // --->>> اضافه شد
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Laravel\Sanctum\HasApiTokens;
 
 // --->>> حذف شد: HasOne دیگر اینجا استفاده نمی‌شود
 // use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable,SoftDeletes;
+    use HasApiTokens,HasFactory, Notifiable,SoftDeletes;
 
     protected $fillable = [
         'n_code',

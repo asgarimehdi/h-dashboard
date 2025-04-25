@@ -13,7 +13,7 @@ class UnitController extends Controller
      */
     public function __invoke(): string
     {
-        $data=Unit::all();
+        $data=Unit::paginate();
         return $data->toJson(JSON_UNESCAPED_UNICODE);
     }
 
