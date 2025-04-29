@@ -96,6 +96,7 @@
                             <x-menu-item title="رسم شکل" icon="o-sparkles" link="/maps/draw" wire:navigate/>
                             <x-menu-item title="شهرستان‌ها" icon="o-sparkles" link="/maps/county" wire:navigate/>
                             <x-menu-item title="نقشه واحدها" icon="o-sparkles" link="/maps/unit" wire:navigate/>
+                            <x-menu-item title="موقعیت کاربر" icon="o-sparkles" link="/maps/location" wire:navigate/>
                         </x-menu-sub>
                     @endif
                 </x-menu-sub>
