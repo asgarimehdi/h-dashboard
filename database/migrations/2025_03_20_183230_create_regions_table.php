@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('provinces', function (Blueprint $table) {
+        Schema::create('regions', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->unsignedBigInteger('parent_id')->nullable(); // برای رابطه سلسله‌مراتبی (شهرستان‌ها به استان‌ها)
+            $table->string('type'); // برای مشخص کردن نوع: province یا county
             $table->foreignId('boundary_id')->nullable()->constrained('boundaries')->cascadeOnDelete();
+            $table->foreign('parent_id')->references('id')->on('regions')->onDelete('restrict')->onUpdate('cascade');
             $table->timestamps();
         });
     }
@@ -24,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('provinces');
+        Schema::dropIfExists('regions');
     }
 };

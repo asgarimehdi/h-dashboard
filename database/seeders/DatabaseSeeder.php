@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AccessLevel;
+use App\Models\Region;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -28,8 +29,7 @@ class DatabaseSeeder extends Seeder
             SematSeeder::class,
             PersonsTableSeeder::class,
             UsersTableSeeder::class,
-            ProvinceSeeder::class,
-            CountySeeder::class,
+            RegionSeeder::class,
             UnitTypeSeeder::class,
             UnitTypeRelationshipSeeder::class,
             UnitSeeder::class,
