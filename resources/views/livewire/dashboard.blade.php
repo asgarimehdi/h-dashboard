@@ -31,7 +31,7 @@ new  class extends Component {
 
 <div>
     <!-- HEADER -->
-    <x-header title="مدیریت وضعیت های ردیف سازمانی" separator progress-indicator>
+    <x-header title=" داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
         <x-slot:middle class="!justify-end">
             {{-- Search moved below --}}
         </x-slot:middle>

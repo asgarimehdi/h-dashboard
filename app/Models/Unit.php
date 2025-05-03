@@ -5,55 +5,48 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Unit extends Model
 {
-    public function person(): hasMany
-    {
-        return $this->hasMany(Person::class);
-    }
     protected $fillable = [
         'name',
         'description',
-        'province_id',
-        'county_id',
+        'region_id', // جایگزین province_id و county_id
         'parent_id',
         'unit_type_id',
         'boundary_id',
-
     ];
-    public function unitType()
+
+    public function person(): HasMany
+    {
+        return $this->hasMany(Person::class);
+    }
+
+    public function unitType(): BelongsTo
     {
         return $this->belongsTo(UnitType::class);
     }
 
-    // اگر این واحد در سطح استان باشد
-    public function province()
+    // رابطه با منطقه (استان یا شهرستان)
+    public function region(): BelongsTo
     {
-        return $this->belongsTo(Province::class);
+        return $this->belongsTo(Region::class);
     }
 
-    // اگر این واحد مربوط به شهرستان باشد
-    public function county()
-    {
-        return $this->belongsTo(County::class);
-    }
-
-    // رابطه برای ساختار سلسله مراتب: والد
-    public function parent()
+    // رابطه برای ساختار سلسله‌مراتب: والد
+    public function parent(): BelongsTo
     {
         return $this->belongsTo(Unit::class, 'parent_id');
     }
 
-    // رابطه برای ساختار سلسله مراتب: فرزندان
-    public function children()
+    // رابطه برای ساختار سلسله‌مراتب: فرزندان
+    public function children(): HasMany
     {
         return $this->hasMany(Unit::class, 'parent_id');
     }
+
     public function boundary(): BelongsTo
     {
         return $this->belongsTo(Boundary::class, 'boundary_id');
     }
-
 }

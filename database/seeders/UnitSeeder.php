@@ -20,8 +20,7 @@ class UnitSeeder extends Seeder
         $units = [
             [
                 'id' => 1,
-                'province_id' => null,
-                'county_id' => null,
+                'region_id' => null, // وزارت بهداشت به منطقه خاصی وابسته نیست
                 'parent_id' => null,
                 'name' => 'وزارت بهداشت',
                 'unit_type_id' => 1,
@@ -31,8 +30,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 2,
-                'province_id' => 1,
-                'county_id' => null,
+                'region_id' => 1, // فرض: ID=1 برای استان زنجان در جدول regions
                 'parent_id' => 1,
                 'name' => 'دانشگاه علوم پزشکی زنجان',
                 'unit_type_id' => 2,
@@ -42,8 +40,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 3,
-                'province_id' => 1,
-                'county_id' => null,
+                'region_id' => 1, // استان زنجان
                 'parent_id' => 2,
                 'name' => 'معاونت بهداشت دانشگاه علوم پزشکی زنجان',
                 'unit_type_id' => 3,
@@ -53,8 +50,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 4,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // فرض: ID=2 برای شهرستان ابهر در جدول regions
                 'parent_id' => 3,
                 'name' => 'شبکه بهداشت و درمان ابهر',
                 'unit_type_id' => 8,
@@ -64,8 +60,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 5,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 4,
                 'name' => 'مرکز بهداشت ابهر',
                 'unit_type_id' => 9,
@@ -75,8 +70,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 6,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 5,
                 'name' => 'مرکز خدمات جامع سلامت عباس آباد',
                 'unit_type_id' => 12,
@@ -86,8 +80,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 7,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 5,
                 'name' => 'مرکز خدمات جامع سلامت حسین آباد',
                 'unit_type_id' => 11,
@@ -97,8 +90,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 8,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 5,
                 'name' => 'مرکز خدمات جامع سلامت اعلایی',
                 'unit_type_id' => 10,
@@ -108,8 +100,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 9,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 6,
                 'name' => 'خانه بهداشت قفس آباد',
                 'unit_type_id' => 14,
@@ -119,8 +110,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 10,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 7,
                 'name' => 'خانه بهداشت فنوش آباد',
                 'unit_type_id' => 14,
@@ -130,8 +120,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 11,
-                'province_id' => 1,
-                'county_id' => 1,
+                'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 8,
                 'name' => 'پایگاه سلامت ضمیمه مرکز اعلایی',
                 'unit_type_id' => 13,
@@ -141,8 +130,7 @@ class UnitSeeder extends Seeder
             ],
             [
                 'id' => 13,
-                'province_id' => 1,
-                'county_id' => null,
+                'region_id' => 1, // استان زنجان
                 'parent_id' => 2,
                 'name' => 'معاونت درمان دانشگاه علوم پزشکی زنجان',
                 'unit_type_id' => 4,
