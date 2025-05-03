@@ -18,7 +18,7 @@
 
 /** daisyUI */
 @plugin "daisyui" {
-    themes: light, dark, synthwave --prefersdark, coffee, cupcake,fantasy --default,luxury;
+    themes: light, dark, synthwave, coffee, cupcake,fantasy --default,luxury --prefersdark;
 }
 
 /* maryUI */

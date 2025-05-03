@@ -18,7 +18,7 @@ class extends Component {
 
     // #[Rule('required|email')]
     // public string $email = '';
-     #[Rule('required')]
+    #[Rule('required')]
     public string $n_code = '';
 
     #[Rule('required')]
@@ -86,20 +86,32 @@ class extends Component {
     }
 };?>
 
-<div class="auth-page">
-    <h2>ورود</h2>
-    <x-theme-selector/>
-    <x-form wire:submit="login">
-        <x-input label="کد ملی" wire:model="n_code" icon="o-envelope" inline />
-        <x-input label="پسورد" wire:model="password" type="password" icon="o-key" inline />
-        <div class="password-options">
-            <x-checkbox wire:model="remember" :label="__('Remember me')" />
-            <a href="#">فراموشی رمز عبور</a>
-        </div>
-        <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
+<div>
+    <x-nav sticky>
+        <x-slot:brand>
+            <x-app-brand/>
+        </x-slot:brand>
         <x-slot:actions>
-            <x-button label="ساخت حساب کاربری" class="btn-ghost" link="/register" />
-            <x-button label="ورود" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="login" />
+            <x-theme-selector/>
         </x-slot:actions>
-    </x-form>
+    </x-nav>
+    <div class="flex items-center justify-center ">
+        <x-card shadow class="m-5 p-5 w-full max-w-xl bg-base-300/60 shadow bg-linear-to-bl from-base-500 via-base-100 to-base-900" >
+
+            <x-header  class="px-4 py-2" title="ورود" separator progress-indicator>
+            </x-header>
+            <x-form wire:submit="login">
+                <x-input label="کد ملی" wire:model="n_code" icon="o-envelope"  />
+                <x-input label="پسورد" wire:model="password" type="password" icon="o-key"  />
+                <div class="password-options">
+                    <x-checkbox wire:model="remember" label="مرا به خاطر بسپار" />
+                </div>
+                <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
+                <x-slot:actions>
+                    <x-button label="ساخت حساب کاربری" class="btn-ghost" link="/register" />
+                    <x-button label="ورود" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="login" />
+                </x-slot:actions>
+            </x-form>
+        </x-card>
+    </div>
 </div>

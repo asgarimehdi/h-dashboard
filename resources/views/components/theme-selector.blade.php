@@ -9,4 +9,4 @@
 {{--    <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm  btn-ghost justify-start" aria-label="Dark" value="dark" />--}}
 {{--    <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm  btn-ghost justify-start" aria-label="Light" value="light" />--}}
 {{--</x-dropdown>--}}
-<x-theme-toggle darkTheme="synthwave" lightTheme="fantasy" />
+<x-theme-toggle darkTheme="luxury" lightTheme="fantasy" />
