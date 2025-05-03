@@ -37,6 +37,14 @@ class Boundary extends Model
     {
         return $this->hasOne(Unit::class);
     }
+    protected $appends = ['geojson'];
 
+    public function getGeojsonAttribute()
+    {
+        return \DB::table('boundaries')
+            ->where('id', $this->id)
+            ->selectRaw('ST_AsGeoJSON(boundary) as geojson')
+            ->value('geojson');
+    }
 
 }

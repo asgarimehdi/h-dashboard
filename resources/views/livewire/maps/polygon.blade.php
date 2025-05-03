@@ -23,12 +23,12 @@ new class extends Component {
 
         $geometry = json_encode($feature['geometry']);
 
-        DB::table('boundaries')->insert([
+        $boundaryId = DB::table('boundaries')->insertGetId([
             'boundary' => DB::raw("ST_GeomFromGeoJSON(" . DB::getPdo()->quote($geometry) . ")")
         ]);
-
-        //$this->geojson = $geojsonData;
-        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
+// ارسال ایونت به والد
+        $this->dispatch('boundarySaved', boundaryId: $boundaryId);
+        $this->reset(['geojson']);
     }
 
 

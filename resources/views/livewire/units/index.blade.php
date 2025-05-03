@@ -5,6 +5,7 @@ use App\Models\Province;
 use App\Models\County;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
+use Livewire\Attributes\On;
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -16,8 +17,10 @@ new class extends Component {
 
     public $name, $description, $unit_type_id, $province_id, $county_id, $parent_id;
     public int|null $editingId = null;
+    public int|null $editingIdMap = null;
+    public int|null $boundaryId = null;
     public string $search = '';
-    public int $perPage = 5;
+    public int $perPage = 10;
     public bool $modal = false;
     public bool $modal2 = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
@@ -146,6 +149,22 @@ new class extends Component {
         }
     }
 
+    public function mapModal($editingIdMap): void
+    {
+        $this->editingIdMap=$editingIdMap;
+        $this->modal2 = true;
+    }
+
+    #[On('boundarySaved')]
+    public function saveBoundaryId($boundaryId): void
+    {
+        Unit::find($this->editingIdMap)?->update([
+            'boundary_id' => $boundaryId,
+        ]);
+        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
+        $this->modal2 = false;
+    }
+
     public function resetForm(): void
     {
         $this->reset(['name', 'description', 'unit_type_id', 'province_id', 'county_id', 'parent_id', 'editingId']);
@@ -237,7 +256,7 @@ new class extends Component {
                             <x-button icon="o-map"
 
                                       class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal2 = true">
+                                      wire:click="mapModal({{ $unit->id }})">
                                 <span class="hidden 2xl:inline">نقشه</span>
                             </x-button>
                             <x-button icon="o-pencil"
@@ -299,7 +318,7 @@ new class extends Component {
         </x-form>
     </x-modal>
     <x-modal wire:model="modal2" title="ثبت مرز" separator persistent>
-        <livewire:maps.polygon/>
+        <livewire:maps.polygon />
 
     </x-modal>
 </div>
