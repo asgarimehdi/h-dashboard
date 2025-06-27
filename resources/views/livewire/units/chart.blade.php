@@ -13,7 +13,7 @@
      }
       public function loadData()
      {
-         $this->units = Unit::with(['province', 'county', 'parent', 'unitType'])->get();
+         $this->units = Unit::with(['region', 'parent', 'unitType'])->get();
 
          $this->treeData = $this->units->map(function ($unit) {
               return [
