@@ -1,0 +1,17 @@
+FROM php:8.3-fpm
+
+WORKDIR /var/www/html
+
+RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip unzip git curl \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+COPY . /var/www/html
+
+RUN chown -R www-data:www-data /var/www/html
+RUN chmod -R 775 /var/www/html/storage
+RUN chmod -R 775 /var/www/html/bootstrap/cache

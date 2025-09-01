@@ -3,7 +3,7 @@
 /public/build
 /public/hot
 /public/storage
-/storage/*
+/storage/debugbar
 /storage/pail
 /vendor
 .env
@@ -21,3 +21,4 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+package-lock.json

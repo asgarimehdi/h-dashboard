@@ -38,7 +38,7 @@
 
 <x-main>
     {{-- SIDEBAR --}}
-    <x-slot:sidebar drawer="main-drawer" collapsible class="bg-base-100 lg:bg-inherit 2xl:collapse ">
+    <x-slot:sidebar drawer="main-drawer" collapsible collapse-text="بستن منو" class="bg-base-100 lg:bg-inherit 2xl:collapse ">
 
         {{-- BRAND --}}
         <x-app-brand class="px-5 pt-4"/>
