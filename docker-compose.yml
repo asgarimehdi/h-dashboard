@@ -23,6 +23,15 @@ services:
             - ./.docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
         depends_on:
             - web
+    node:
+        image: node:20
+        container_name: h-dashboard-node
+        working_dir: /var/www/html
+        volumes:
+        - .:/var/www/html
+        command: sh -c "npm install && npm run dev"
+        depends_on:
+        - web
 
     mysql:
         image: mysql:8.0

@@ -1,7 +1,9 @@
 FROM php:8.3-fpm
 
+# مسیر کاری پروژه
 WORKDIR /var/www/html
 
+# نصب ابزارهای مورد نیاز برای Laravel
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -10,8 +12,16 @@ RUN apt-get update && apt-get install -y \
     zip unzip git curl \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
+# نصب Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# کپی پروژه
 COPY . /var/www/html
 
-RUN chown -R www-data:www-data /var/www/html
-RUN chmod -R 775 /var/www/html/storage
-RUN chmod -R 775 /var/www/html/bootstrap/cache
+# تنظیم دسترسی‌ها
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
+
+# اجرای composer install
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader
