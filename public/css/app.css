@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+        "Noto Color Emoji";
+}
+
+/**
+    The lines above are intact.
+    The lines below were added by maryUI installer.
+*/
+
+/** daisyUI */
+@plugin "daisyui" {
+    themes: light, dark, synthwave, coffee, cupcake,fantasy --default,luxury --prefersdark;
+}
+
+/* maryUI */
+@source "../../vendor/robsontenorio/mary/src/View/Components/**/*.php";
+
+/* Theme toggle */
+@custom-variant dark (&:where([data-theme=synthwave], [data-theme=synthwave] *));
+
+
+/**
+* Paginator - Traditional style
+* Because Laravel defaults does not match well the design of daisyUI.
+*/
+
+.mary-table-pagination span[aria-current="page"] > span {
+    @apply bg-primary text-base-100;
+}
+
+.mary-table-pagination button {
+    @apply cursor-pointer;
+}
+
+/* ------------------ */
+@font-face {
+    font-family: "Vazir";
+    src: url("/public/fonts/Vazirmatn-Regular.woff2") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+@font-face {
+    font-family: "Vazir";
+    src: url("/public/fonts/Vazirmatn-Bold.woff2") format("truetype");
+    font-weight: bold;
+    font-style: normal;
+}
+body {
+    font-family: "Vazir", sans-serif;
+}
+
+#map {
+    z-index: 0;
+}
+#route-info {
+    margin-top: 10px;
+    padding: 10px;
+    text-align: right;
+    direction: rtl;
+}
+.leaflet-routing-alt{
+    background-color: whitesmoke;
+    font-family: Vazir;
+}
+.dark .leaflet-routing-alt,
+.dark .leaflet-layer,
+.dark .leaflet-control-zoom-in,
+.dark .leaflet-control-zoom-out,
+.dark .leaflet-control-attribution {
+    filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
+}
+

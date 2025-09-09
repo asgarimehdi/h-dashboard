@@ -1,7 +1,11 @@
-version: '3.8'
+networks:
+  app_net:
+    driver: bridge
 
 services:
     web:
+        networks:
+             - app_net
         build:
             context: .
             dockerfile: DockerFile
@@ -9,11 +13,14 @@ services:
         volumes:
             - .:/var/www/html
         working_dir: /var/www/html
-        user: "www-data"
+        user: "www-data"     
+        command: sh -c "php artisan migrate:fresh --seed && php-fpm"  
         depends_on:
             - mysql
 
     nginx:
+        networks:
+             - app_net    
         image: nginx:latest
         container_name: h-dashboard_nginx
         ports:
@@ -24,16 +31,23 @@ services:
         depends_on:
             - web
     node:
-        image: node:20
+        networks:
+             - app_net
+        image: node:22.19
         container_name: h-dashboard-node
         working_dir: /var/www/html
         volumes:
         - .:/var/www/html
-        command: sh -c "npm install && npm run dev"
+        ports:
+            - "5173:5173"
+
+        command: sh -c "npm install && npm run build"
         depends_on:
         - web
 
     mysql:
+        networks:
+             - app_net
         image: mysql:8.0
         container_name: h-dashboard_mysql
         restart: always
@@ -46,6 +60,15 @@ services:
             - "3306:3306"
         volumes:
             - mysql_data:/var/lib/mysql
-
+    redis:
+        networks:
+             - app_net
+        image: redis:7
+        container_name: h-dashboard-redis
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis_data:/data
 volumes:
     mysql_data:
+    redis_data:
