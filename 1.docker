@@ -1,0 +1,7 @@
+MYSQL_ROOT_PASSWORD=root_secret
+MYSQL_DATABASE=h_dashboard
+MYSQL_USER=h_user
+MYSQL_PASSWORD=h_pass
+
+APP_ENV=production
+APP_DEBUG=false

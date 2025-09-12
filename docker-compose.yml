@@ -1,65 +1,54 @@
-networks:
-  app_net:
-    driver: bridge
+version: '3.8'
 
 services:
-    web:
-        networks:
-             - app_net
-        build:
-            context: .
-            dockerfile: DockerFile
-        container_name: h-dashboard-web
-        volumes:
-            - .:/var/www/html
-        working_dir: /var/www/html
-        user: "www-data"     
-        command: sh -c "composer install --no-interaction && php artisan migrate:fresh --seed && php-fpm"  
-        depends_on:
-            - mysql
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: myapp/php-fpm:latest
+    container_name: php-fpm
+    restart: unless-stopped
+    env_file:
+    - .env.docker
 
-    nginx:
-        networks:
-             - app_net    
-        image: nginx:latest
-        container_name: h-dashboard_nginx
-        ports:
-            - "80:80"
-        volumes:
-            - .:/var/www/html
-            - ./.docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
-        depends_on:
-            - web
-    node:
-        networks:
-             - app_net
-        image: node:22.19
-        container_name: h-dashboard-node
-        working_dir: /var/www/html
-        volumes:
-        - .:/var/www/html
-        ports:
-            - "5173:5173"
+    expose:
+      - "9000"
+    depends_on:
+      - mysql
 
-        command: sh -c "npm install && npm run build"
-        depends_on:
-        - web
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - php
 
-    mysql:
-        networks:
-             - app_net
-        image: mysql:8.0
-        container_name: h-dashboard_mysql
-        restart: always
-        environment:
-            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-            MYSQL_DATABASE: ${MYSQL_DATABASE}
-            MYSQL_USER: ${MYSQL_USER}
-            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-        ports:
-            - "3306:3306"
-        volumes:
-            - mysql_data:/var/lib/mysql
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    env_file:
+    - .env.docker
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
 
 volumes:
-    mysql_data:
+  mysql_data:
+  caddy_data:
+  caddy_config:
