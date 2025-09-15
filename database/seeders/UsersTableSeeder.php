@@ -13,13 +13,13 @@ class UsersTableSeeder extends Seeder
     {
         DB::table('users')->insert([
             [
-                'n_code' => '4400176134',
+                'n_code' => '4411015056',
                 'password' => Hash::make('12345678'),
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ],
             [
-                'n_code' => '4411015056',
+                'n_code' => '4400176134',
                 'password' => Hash::make('12345678'),
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),

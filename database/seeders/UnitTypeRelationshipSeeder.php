@@ -14,10 +14,10 @@ class UnitTypeRelationshipSeeder extends Seeder
     public function run(): void
     {
         // آرایه مقادیر فیلد child_unit_type_id
-        $childUnitTypeIds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15];
+        $childUnitTypeIds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15, 16, 16, 17];
 
         // آرایه مقادیر فیلد allowed_parent_unit_type_id
-        $allowedParentUnitTypeIds = [1, 2, 2, 2, 2, 3, 3, 8, 9, 9, 9, 10, 11, 12, 10];
+        $allowedParentUnitTypeIds = [1, 2, 2, 2, 2, 3, 3, 8, 9, 9, 9, 10, 11, 12, 10, 15, 13, 14];
 
         // اطمینان از اینکه هر دو آرایه طول یکسانی دارند
         $count = count($childUnitTypeIds);
