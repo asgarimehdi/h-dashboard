@@ -1,0 +1,13 @@
+localhost {
+    reverse_proxy web:8000
+
+    header {
+        X-Forwarded-Proto https
+        X-Forwarded-Port 443
+        -Server
+    }
+
+    log {
+        output stdout
+    }
+}

@@ -1,0 +1,84 @@
+networks:
+  app_net:
+    driver: bridge
+
+services:
+  web:
+    networks:
+      - app_net
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: h-dashboard-web
+    volumes:
+      - .:/var/www/html
+    working_dir: /var/www/html
+    user: "www-data"
+    # ❌ حذف ports از اینجا — چون دیگر مستقیماً از بیرون دسترسی ندارد
+    command: sh -c "php artisan migrate:fresh --seed && php artisan octane:start --host=0.0.0.0 --port=8000 --workers=4 --max-requests=500"
+    # ports:
+    #     - "8000:8000"  # فقط برای دیباگ — اختیاری
+    depends_on:
+      - mysql
+
+  node:
+    networks:
+      - app_net
+    image: node:22.19
+    container_name: h-dashboard-node
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run build"
+    depends_on:
+      - web
+
+  mysql:
+    networks:
+      - app_net
+    image: mysql:8.0
+    container_name: h-dashboard_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      - mysql
+    networks:
+      - app_net
+
+  caddy:
+    image: caddy:2
+    container_name: h-dashboard_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile        # <-- فایل کانفیگ اصلی
+      - caddy_data:/data                        # <-- ذخیره گواهی‌ها
+      - caddy_config:/config                    # <-- تنظیمات داخلی Caddy
+    depends_on:
+      - web
+    networks:
+      - app_net
+
+volumes:
+  mysql_data:
+  caddy_data:    # <-- اضافه شد
+  caddy_config:  # <-- اضافه شد
