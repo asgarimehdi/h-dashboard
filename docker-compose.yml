@@ -10,6 +10,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: h-dashboard-web
+    restart: unless-stopped
     volumes:
       - .:/var/www/html
     working_dir: /var/www/html
@@ -40,7 +41,7 @@ services:
       - app_net
     image: mysql:8.0
     container_name: h-dashboard_mysql
-    restart: always
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -53,6 +54,7 @@ services:
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
+    restart: unless-stopped
     ports:
       - "8081:80"
     environment:
@@ -66,6 +68,7 @@ services:
   caddy:
     image: caddy:2
     container_name: h-dashboard_caddy
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
