@@ -36,7 +36,7 @@
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
-    <div id="containerChart" class="rounded-box shadow-neutral h-200"></div>
+    <div id="containerChart" class="rounded-box shadow-neutral h-230"></div>
 </div>
 
 
@@ -47,7 +47,7 @@
         Highcharts.chart('containerChart', {
             chart: {
                 inverted: true,
-                marginBottom: 10
+                marginBottom: 200
             },
             title: {
                 text: 'نمودار چارت سازمانی',

@@ -48,11 +48,11 @@ Route::middleware('auth')->group(function () {
     Volt::route('/permissions-accesslevels', 'auth.permissionsaccesslevels');
     Volt::route('/roles-accesslevels', 'auth.rolesaccesslevels');
 
-    Volt::route('/maps/draw', 'maps/draw');
-    Volt::route('/maps/route', 'maps/route');
-    Volt::route('/maps/route2', 'maps/route2');
-    Volt::route('/maps/county', 'maps/county');
-    Volt::route('/maps/unit', 'maps/unit');
-    Volt::route('/maps/location', 'maps/location');
+//    Volt::route('/maps/draw', 'maps/draw');
+//    Volt::route('/maps/route', 'maps/route');
+//    Volt::route('/maps/route2', 'maps/route2');
+//    Volt::route('/maps/county', 'maps/county');
+//    Volt::route('/maps/unit', 'maps/unit');
+//    Volt::route('/maps/location', 'maps/location');
     Volt::route('/card', 'glowingcard');
 });
