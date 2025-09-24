@@ -1,87 +1,53 @@
-networks:
-  app_net:
-    driver: bridge
-
 services:
+  # --- Web (FrankenPHP + Laravel) ---
   web:
-    networks:
-      - app_net
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/frankenphp/Dockerfile
     container_name: h-dashboard-web
-    restart: unless-stopped
-    volumes:
-      - .:/var/www/html
-    working_dir: /var/www/html
-    user: "www-data"
-    # ❌ حذف ports از اینجا — چون دیگر مستقیماً از بیرون دسترسی ندارد
-    command: sh -c "php artisan migrate:fresh --seed && php artisan octane:start --host=0.0.0.0 --port=8000 --workers=4 --max-requests=500"
-    # ports:
-    #     - "8000:8000"  # فقط برای دیباگ — اختیاری
-    depends_on:
-      - mysql
-
-  node:
-    networks:
-      - app_net
-    image: node:22.19
-    container_name: h-dashboard-node
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
+      - ./docker/frankenphp/Caddyfile:/etc/caddy/Caddyfile
+      - ./docker/frankenphp/init.sh:/init.sh
     ports:
-      - "5173:5173"
-    command: sh -c "npm install && npm run build"
+      - "80:8000"
+      - "443:443"
+    environment:
+      APP_ENV: ${APP_ENV}
+      APP_DEBUG: ${APP_DEBUG}
+      APP_KEY: ${APP_KEY}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FRANKENPHP_CONFIG: fpm
     depends_on:
-      - web
+        mysql:
+           condition: service_healthy
+    restart: unless-stopped
+    command: sh /init.sh
 
+  # --- MySQL Database ---
   mysql:
-    networks:
-      - app_net
     image: mysql:8.0
-    container_name: h-dashboard_mysql
+    container_name: h-dashboard-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}
       MYSQL_USER: ${DB_USERNAME}
       MYSQL_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    restart: unless-stopped
     ports:
-      - "8081:80"
-    environment:
-      PMA_HOST: mysql
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-    depends_on:
-      - mysql
-    networks:
-      - app_net
-
-  caddy:
-    image: caddy:2
-    container_name: h-dashboard_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile        # <-- فایل کانفیگ اصلی
-      - caddy_data:/data                        # <-- ذخیره گواهی‌ها
-      - caddy_config:/config                    # <-- تنظیمات داخلی Caddy
-    depends_on:
-      - web
-    networks:
-      - app_net
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      retries: 10
 
 volumes:
   mysql_data:
-  caddy_data:    # <-- اضافه شد
-  caddy_config:  # <-- اضافه شد

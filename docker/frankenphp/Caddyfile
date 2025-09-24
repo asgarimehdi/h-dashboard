@@ -1,0 +1,5 @@
+:80 {
+    root * /var/www/html/public
+    try_files {path} /index.php
+    file_server
+}
