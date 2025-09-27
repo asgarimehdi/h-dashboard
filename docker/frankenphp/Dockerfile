@@ -19,6 +19,11 @@ RUN apt-get update && apt-get install -y \
         bcmath \
         gd \
         zip \
+        opcache \
     && rm -rf /var/lib/apt/lists/*
+
+# نصب phpredis
+RUN pecl install redis \
+    && docker-php-ext-enable redis
 
 WORKDIR /var/www/html
