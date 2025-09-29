@@ -7,9 +7,9 @@
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-{{--    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}"/>--}}
-{{--    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}"/>--}}
-{{--    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}"/>--}}
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}"/>
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}"/>
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}"/>
 
 
     <script src="{{ asset('js/chart/highcharts.js') }}" defer></script>
@@ -18,10 +18,10 @@
     <script src="{{ asset('js/chart/exporting.js') }}" defer></script>
     <script src="{{ asset('js/chart/accessibility.js') }}" defer></script>
 
-{{--    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>--}}
-{{--    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>--}}
-{{--    <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>--}}
-{{--    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>--}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
 
 </head>
 <body class="min-h-screen font-sans antialiased bg-base-200">
@@ -89,16 +89,16 @@
                                          wire:navigate/>
                         </x-menu-sub>
                     @endif
-{{--                    @if($user->hasPermission('manage-maps'))--}}
-{{--                        <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">--}}
-{{--                            <x-menu-item title="مسیر" icon="o-sparkles" link="/maps/route" wire:navigate/>--}}
-{{--                            <x-menu-item title="یافتن مسیر" icon="o-sparkles" link="/maps/route2" wire:navigate/>--}}
-{{--                            <x-menu-item title="رسم شکل" icon="o-sparkles" link="/maps/draw" wire:navigate/>--}}
-{{--                            <x-menu-item title="شهرستان‌ها" icon="o-sparkles" link="/maps/county" wire:navigate/>--}}
-{{--                            <x-menu-item title="نقشه واحدها" icon="o-sparkles" link="/maps/unit" wire:navigate/>--}}
-{{--                            <x-menu-item title="موقعیت کاربر" icon="o-sparkles" link="/maps/location" wire:navigate/>--}}
-{{--                        </x-menu-sub>--}}
-{{--                    @endif--}}
+                    @if($user->hasPermission('manage-maps'))
+                        <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">
+                            <x-menu-item title="مسیر" icon="o-sparkles" link="/maps/route" wire:navigate/>
+                            <x-menu-item title="یافتن مسیر" icon="o-sparkles" link="/maps/route2" wire:navigate/>
+                            <x-menu-item title="رسم شکل" icon="o-sparkles" link="/maps/draw" wire:navigate/>
+                            <x-menu-item title="شهرستان‌ها" icon="o-sparkles" link="/maps/county" wire:navigate/>
+                            <x-menu-item title="نقشه واحدها" icon="o-sparkles" link="/maps/unit" wire:navigate/>
+                            <x-menu-item title="موقعیت کاربر" icon="o-sparkles" link="/maps/location" wire:navigate/>
+                        </x-menu-sub>
+                    @endif
                 </x-menu-sub>
             @endif
         </x-menu>
