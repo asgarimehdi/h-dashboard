@@ -59,11 +59,11 @@
 
 
 
-            @if($user && $user->hasPermission('manage-users') && (session()->has('selected_role')))
+
                 <x-menu-item title="صفحه اول" icon="o-sparkles" link="/" wire:navigate/>
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     <x-menu-item title="کاربران" icon="o-sparkles" link="/users" wire:navigate/>
-                    @if($user->hasPermission('manage-kargozini'))
+
                         <x-menu-sub title="کارگزینی" icon="o-cog-6-tooth">
                             <x-menu-item title="استخدام" icon="o-sparkles" link="/kargozini/estekhdams" wire:navigate/>
                             <x-menu-item title="ردیف سازمانی" icon="o-sparkles" link="/kargozini/radifs" wire:navigate/>
@@ -71,25 +71,14 @@
                             <x-menu-item title="سمت‌ها" icon="o-sparkles" link="/kargozini/semats" wire:navigate/>
                             <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons" wire:navigate/>
                         </x-menu-sub>
-                    @endif
-                    @if($user->hasPermission('manage-units'))
+
                         <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">
                             <x-menu-item title="مدیریت واحدها" icon="o-sparkles" link="/units" wire:navigate/>
                             <x-menu-item title="نمودار چارت سازمانی" icon="o-sparkles" link="/units/chart" wire:navigate/>
                         </x-menu-sub>
-                    @endif
-                    @if($user->hasPermission('manage-access'))
-                        <x-menu-sub title="سطوح دسترسی کاربران" icon="o-cog-6-tooth">
-                            <x-menu-item title="نقش‌ها" icon="o-sparkles" link="/roles" wire:navigate/>
-                            <x-menu-item title="مجوزها" icon="o-sparkles" link="/permissions" wire:navigate/>
-                            <x-menu-item title="دسترسی‌ها" icon="o-sparkles" link="/accesslevels" wire:navigate/>
-                            <x-menu-item title="اتصال مجوز به دسترسی" icon="o-sparkles" link="/permissions-accesslevels"
-                                         wire:navigate/>
-                            <x-menu-item title="اتصال دسترسی به نقش" icon="o-sparkles" link="/roles-accesslevels"
-                                         wire:navigate/>
-                        </x-menu-sub>
-                    @endif
-                    @if($user->hasPermission('manage-maps'))
+
+
+
                         <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">
                             <x-menu-item title="مسیر" icon="o-sparkles" link="/maps/route" wire:navigate/>
                             <x-menu-item title="یافتن مسیر" icon="o-sparkles" link="/maps/route2" wire:navigate/>
@@ -98,9 +87,9 @@
                             <x-menu-item title="نقشه واحدها" icon="o-sparkles" link="/maps/unit" wire:navigate/>
                             <x-menu-item title="موقعیت کاربر" icon="o-sparkles" link="/maps/location" wire:navigate/>
                         </x-menu-sub>
-                    @endif
+
                 </x-menu-sub>
-            @endif
+
         </x-menu>
     </x-slot:sidebar>
     <x-slot:content>

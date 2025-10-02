@@ -5,7 +5,6 @@ namespace App\Livewire\Users;
 use App\Models\User;
 use App\Models\Person;
 use App\Models\Unit;
-use App\Models\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
@@ -26,7 +25,6 @@ new class extends Component {
 
     public $n_code;
     public $password;
-    public array $role_ids = [];
     public $person_search = '';
     public $editing_user_id = null;
 
@@ -64,7 +62,7 @@ new class extends Component {
 
     public function openModalForCreate(): void
     {
-        $this->reset(['n_code', 'password', 'role_ids', 'person_search', 'editing_user_id']);
+        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id']);
         $this->modal = true;
     }
 
@@ -76,7 +74,6 @@ new class extends Component {
         $person = Person::where('n_code', $user->n_code)->first();
         $this->person_search = "{$person->f_name} {$person->l_name} ({$person->n_code})";
         $this->password = null;
-        $this->role_ids = $user->roles->pluck('id')->toArray();
         $this->modal = true;
     }
 
@@ -92,15 +89,12 @@ new class extends Component {
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
             'password' => 'required|string|min:6',
-            'role_ids' => 'required|array|min:1',
-            'role_ids.*' => 'exists:roles,id',
         ], [
             'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
             'n_code.required' => 'کد ملی الزامی است.',
             'n_code.exists' => 'این کد ملی در سیستم موجود نیست.',
             'password.required' => 'رمز عبور الزامی است.',
             'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
-            'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
         ]);
         try {
             $person = Person::where('n_code', $this->n_code)->first();
@@ -112,7 +106,7 @@ new class extends Component {
 
             $user->roles()->sync($this->role_ids);
 
-            $this->reset(['n_code', 'password', 'role_ids', 'person_search', 'editing_user_id']);
+            $this->reset(['n_code', 'password', 'person_search', 'editing_user_id']);
             $this->success('کاربر با موفقیت ایجاد شد.');
             $this->modal = false;
         } catch (ValidationException $e) {
@@ -170,7 +164,7 @@ new class extends Component {
      public function users(): LengthAwarePaginator
     {
         $query = User::query()
-            ->with(['person.unit', 'roles'])
+
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
             ->when($this->search, function (Builder $q) {
@@ -212,7 +206,6 @@ new class extends Component {
             'users' => $this->users(),
             'headers' => $this->headers(),
             'persons' => $this->getFilteredPersonsProperty(),
-            'roles' => Role::all()
         ];
     }
 }; ?>
@@ -313,11 +306,6 @@ new class extends Component {
                          :placeholder="$editing_user_id ? 'در صورت نیاز وارد کنید' : 'رمز عبور'"
                          :required="!$editing_user_id" rounded/>
                 @error('password') <span class="text-error text-sm">{{ $message }}</span> @enderror
-            </div>
-            <div>
-                <x-choices wire:model="role_ids" label="نقش‌ها" :options="$roles" multiple
-                           placeholder="نقش‌ها را انتخاب کنید" required rounded searchable/>
-                @error('role_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
             </div>
             <div class="col-span-2 flex justify-end space-x-2">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" rounded />

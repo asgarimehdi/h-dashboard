@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
 use Illuminate\Database\Eloquent\SoftDeletes; // اضافه کردن SoftDeletes
 
 // --->>> اضافه شد
@@ -49,34 +49,13 @@ class User extends Authenticatable
     {
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
-    public function getRolesNameAttribute()
-    {
-        return $this->roles->pluck('name')->implode(', ') ?: '-';
-    }
 
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'role_user');
-    }
 
-    public function hasRole($role): bool
-    {
-        return $this->roles()->where('name', $role)->exists();
-    }
 
-    public function hasPermission($permission): bool
-    {
-        $selectedRoleId = session('selected_role');
-        if (!$selectedRoleId) {
-            return false; // اگر نقش انتخاب نشده باشه، دسترسی نداره
-        }
 
-        return $this->roles()
-            ->where('roles.id', $selectedRoleId)
-            ->whereHas('accesslevels.permissions', function ($query) use ($permission) {
-                $query->where('name', $permission);
-            })->exists();
-    }
+
+
+
 
     protected $hidden = ['password', 'remember_token'];
 
