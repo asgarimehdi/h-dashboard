@@ -42,7 +42,7 @@ Route::middleware('auth')->group(function () {
     Volt::route('/kargozini/persons', 'kargozini.person');
 
 
-    Volt::route('/roles', 'auth.roles');
+//    Volt::route('/roles', 'auth.roles');
     Volt::route('/permissions', 'auth.permissions');
     Volt::route('/accesslevels', 'auth.accesslevels');
     Volt::route('/permissions-accesslevels', 'auth.permissionsaccesslevels');
@@ -54,5 +54,7 @@ Route::middleware('auth')->group(function () {
    Volt::route('/maps/county', 'maps/county');
    Volt::route('/maps/unit', 'maps/unit');
    Volt::route('/maps/location', 'maps/location');
-    Volt::route('/card', 'glowingcard');
+   Volt::route('/card', 'glowingcard');
+
+   Volt::route('/roles', 'roles/index')->name('roles');
 });

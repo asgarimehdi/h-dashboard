@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes; // اضافه کردن SoftDeletes
 // --->>> اضافه شد
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 // --->>> حذف شد: HasOne دیگر اینجا استفاده نمی‌شود
 // use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -19,7 +20,8 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     use HasApiTokens,HasFactory, Notifiable,SoftDeletes;
-
+    // The User model requires this trait
+    use HasRoles;
     protected $fillable = [
         'n_code',
         'password',
