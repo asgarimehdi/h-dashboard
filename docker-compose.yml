@@ -36,7 +36,7 @@ services:
     container_name: h-dashboard-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}
       MYSQL_USER: ${DB_USERNAME}
       MYSQL_PASSWORD: ${DB_PASSWORD}
@@ -50,7 +50,7 @@ services:
       retries: 10
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin
+    image: phpmyadmin/phpmyadmin:latest
     restart: unless-stopped
     ports:
       - "8081:80"
@@ -61,7 +61,7 @@ services:
       - mysql
    # --- Redis ---
   redis:
-    image: redis:7
+    image: redis:latest
     container_name: h-dashboard-redis
     restart: unless-stopped
     ports:
@@ -72,7 +72,7 @@ services:
 
   # --- phpRedisAdmin ---
   phpredisadmin:
-    image: erikdubbelboer/phpredisadmin
+    image: docker.kernel.ir/erikdubbelboer/phpredisadmin:latest
     container_name: h-dashboard-phpredisadmin
     restart: unless-stopped
     environment:

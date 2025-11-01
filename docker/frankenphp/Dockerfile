@@ -1,4 +1,4 @@
-FROM dunglas/frankenphp
+FROM docker.kernel.ir/dunglas/frankenphp:latest
 
 # نصب اکستنشن‌های ضروری برای Laravel
 RUN apt-get update && apt-get install -y \
