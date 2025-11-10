@@ -8,6 +8,12 @@ Volt::route('/login', 'auth.login')->name('login');
 Volt::route('/register', 'auth.register');
 // Define the logout
 Route::get('/logout', function () {
+    $userId = Auth::id();
+
+    // ✅ پاک کردن نام کش‌شده در session
+    if ($userId) {
+        Session::forget("user_{$userId}_display_name");
+    }
     auth()->logout();
     request()->session()->invalidate();
     request()->session()->regenerateToken();

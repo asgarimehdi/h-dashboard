@@ -42,10 +42,11 @@
 
         {{-- BRAND --}}
         <x-app-brand class="px-5 pt-4"/>
+
         <x-menu activate-by-route>
             @if($user = auth()->user())
                 <x-menu-separator/>
-                <x-list-item :item="$user" value="name" sub-value="email" no-separator no-hover
+                <x-list-item :item="auth()->user()" value="name"  no-separator no-hover
                              class="-mx-2 !-my-2 rounded">
                     <x-slot:actions>
                         <x-button icon="o-cog" class="btn-circle btn-ghost btn-xs" tooltip-right="changepassword"

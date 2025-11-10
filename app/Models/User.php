@@ -7,15 +7,11 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 
-use Illuminate\Database\Eloquent\SoftDeletes; // اضافه کردن SoftDeletes
-
-// --->>> اضافه شد
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-// --->>> حذف شد: HasOne دیگر اینجا استفاده نمی‌شود
-// use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
@@ -41,9 +37,33 @@ class User extends Authenticatable
     // Accessor ها به درستی از $this->person استفاده می‌کنند و نیازی به تغییر ندارند
     protected function name(): Attribute
     {
-        // اطمینان از وجود person قبل از دسترسی به پراپرتی‌ها
         return Attribute::make(
-            get: fn() => $this->person ? ($this->person->f_name . ' ' . $this->person->l_name) : 'کاربر بدون پروفایل',
+            get: function () {
+                // کلید یکتا برای هر کاربر
+                $sessionKey = "user_{$this->id}_display_name";
+
+                // اول از session بخوان
+                if (($cached = session($sessionKey)) !== null) {
+//                    \Log::info("[SESSION] Hit for user {$this->id}");
+                    return $cached;
+                }
+
+//                \Log::info("[DB] Loading person for user {$this->id}");
+
+                // دیتابیس — فقط اولین بار بعد از لاگین
+                $person = $this->relationLoaded('person')
+                    ? $this->person
+                    : $this->person()->first();
+
+                $name = $person
+                    ? ($person->f_name . ' ' . $person->l_name)
+                    : 'کاربر بدون پروفایل';
+
+                // ذخیره در session — تا لاگ‌اوت
+                session([$sessionKey => $name]);
+
+                return $name;
+            }
         );
     }
 
@@ -51,12 +71,6 @@ class User extends Authenticatable
     {
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
-
-
-
-
-
-
 
 
     protected $hidden = ['password', 'remember_token'];
