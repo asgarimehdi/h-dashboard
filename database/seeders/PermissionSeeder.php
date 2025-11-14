@@ -2,46 +2,27 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+//use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 
 class PermissionSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        $permissions = [
-            'role.create',
-            'role.edit',
-            'role.delete',
-            'unit.create',
-            'unit.edit',
-            'unit.delete',
-            'permission.create',
-            'permission.edit',
-            'permission.delete',
-            'permission-access-level.create',
-            'permission-access-level.edit',
-            'permission-access-level.delete',
-            'access-level.create',
-            'access-level.edit',
-            'access-level.delete',
-            'role-access-level.create',
-            'role-access-level.edit',
-            'role-access-level.delete',
-            'users.manage',
-            'kargozini.manage',
-            'units.manage',
-            'access.manage',
-            'maps.manage',
+        // Reset cached roles and permissions
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        ];
+        // create permissions
+        Permission::create(['name' => 'add radif','label'=>'افزودن ردیف سازمانی']);
+        Permission::create(['name' => 'edit radif','label'=>'ویرایش ردیف سازمانی']);
+        Permission::create(['name' => 'delete radif','label'=>'حذف ردیف سازمانی']);
 
-        foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
-        }
+        Permission::create(['name' => 'op cache','label'=>'دسترسی به کش سرور']);
+
+        // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+
     }
 }
