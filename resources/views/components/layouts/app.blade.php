@@ -72,7 +72,8 @@
                             <x-menu-item title="سمت‌ها" icon="o-sparkles" link="/kargozini/semats" wire:navigate/>
                             <x-menu-item title="پرسنل" icon="o-sparkles" link="/kargozini/persons" wire:navigate/>
                         </x-menu-sub>
-                    <x-menu-sub title="مدیریت دسترسی ها" icon="o-cog-6-tooth">
+                    <x-menu-sub title="مدیریت سطح دسترسی" icon="o-cog-6-tooth">
+                        <x-menu-item title="مدیریت دسترسی ها" icon="o-users" link="/permissions" wire:navigate/>
                         <x-menu-item title="مدیریت نقش ها" icon="o-users" link="/roles" wire:navigate/>
                     </x-menu-sub>
                         <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">

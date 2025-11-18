@@ -48,11 +48,7 @@ Route::middleware('auth')->group(function () {
     Volt::route('/kargozini/persons', 'kargozini.person');
 
 
-//    Volt::route('/roles', 'auth.roles');
-    Volt::route('/permissions', 'auth.permissions');
-    Volt::route('/accesslevels', 'auth.accesslevels');
-    Volt::route('/permissions-accesslevels', 'auth.permissionsaccesslevels');
-    Volt::route('/roles-accesslevels', 'auth.rolesaccesslevels');
+
 
    Volt::route('/maps/draw', 'maps/draw');
    Volt::route('/maps/route', 'maps/route');
@@ -62,5 +58,6 @@ Route::middleware('auth')->group(function () {
    Volt::route('/maps/location', 'maps/location');
    Volt::route('/card', 'glowingcard');
 
+   Volt::route('/permissions', 'permissions/index')->name('permissions');
    Volt::route('/roles', 'roles/index')->name('roles');
 });
