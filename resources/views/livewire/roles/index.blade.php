@@ -5,6 +5,7 @@ use Livewire\Volt\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 
 new class extends Component {
     use WithPagination;
@@ -15,9 +16,14 @@ new class extends Component {
     public string $search = '';
     public int $perPage = 5;
     public bool $modal = false;
-
+    public array $allPermissions=[];
+    public array $permissions=[];
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    public function mount(): void
+    {
+        $this->allPermissions=Permission::all()->toArray();
+    }
     public function clear(): void
     {
         $this->reset();
@@ -39,21 +45,23 @@ new class extends Component {
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
             'label' => 'required|string|max:255|unique:roles,label',
+            'permissions' => 'required'
         ]);
 
         $role::create(['name' => $this->name,'label' => $this->label]);
-
+        $role->syncPermissions($this->permissions);
         $this->success("$this->label ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset();
         $this->modal = false;
     }
 
-    public function editRole($id)
+    public function editRole($id): void
     {
         $role = Role::findOrFail($id);
         $this->editingId = $id;
         $this->name = $role->name;
         $this->label = $role->label;
+        $this->permissions=$role->permissions;
     }
 
     public function updateRole(): void
@@ -61,12 +69,13 @@ new class extends Component {
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name,' . $this->editingId,
             'label' => 'required|string|max:255|unique:roles,label,' . $this->editingId,
+            'permissions' => 'required',
         ]);
 
         try {
             $role = Role::findOrFail($this->editingId);
             $role->update(['name' => $this->name,'label' => $this->label]);
-
+            $role->syncPermissions($this->permissions);
             $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
             $this->reset();
             $this->modal = false;
@@ -175,6 +184,15 @@ new class extends Component {
                 placeholder="عنوان فارسی نقش"
                 required
                 icon="o-magnifying-glass"
+            />
+{{--            <x-choices label="دسترسی" wire:model="permissions" :options="$allPermissions"  clearable />--}}
+            <x-choices-offline
+                label="دسترسی ها"
+                wire:model="permissions"
+                :options="$allPermissions"
+                placeholder="Search ..."
+                clearable
+                searchable
             />
 
             <div class="flex gap-4">
