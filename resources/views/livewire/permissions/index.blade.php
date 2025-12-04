@@ -37,8 +37,20 @@ new class extends Component {
     public function createPermission(Permission $permission): void
     {
         $this->validate([
-            'name' => 'required|string|alpha_num:ascii|max:255|unique:permissions,name',
-            'label' => 'required|string|max:255|unique:permissions,label',
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                'unique:permissions,name,',
+                'regex:/^[a-zA-Z0-9\s\-]+$/u', // فقط حروف، اعداد، فاصله، خط فاصله و زیرخط
+            ],
+            'label' => [
+                'required',
+                'string',
+                'max:255',
+                'unique:permissions,label,',
+                'regex:/^[\p{L}\p{N}\s\-]+$/u', // برای پشتیبانی از فارسی هم (بر اساس نیاز شما)
+            ],
         ]);
 
         $permission::create(['name' => $this->name,'label' => $this->label]);
@@ -59,8 +71,20 @@ new class extends Component {
     public function updatePermission(): void
     {
         $this->validate([
-            'name' => 'required|string|alpha_num:ascii|max:255|unique:permissions,name,' . $this->editingId,
-            'label' => 'required|string|max:255|unique:permissions,label,' . $this->editingId,
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                'unique:permissions,name,' . $this->editingId,
+                'regex:/^[a-zA-Z0-9\s\-]+$/u', // فقط حروف، اعداد، فاصله، خط فاصله و زیرخط
+            ],
+            'label' => [
+                'required',
+                'string',
+                'max:255',
+                'unique:permissions,label,' . $this->editingId,
+                'regex:/^[\p{L}\p{N}\s\-]+$/u', // برای پشتیبانی از فارسی هم (بر اساس نیاز شما)
+            ],
         ]);
 
         try {
