@@ -11,23 +11,37 @@ new class extends Component {
     use WithPagination;
     use Toast;
 
-    public string $name, $label;
+    // تعریف صریح پروپرتی‌ها با مقدار اولیه
+    public string $name = '';
+    public string $label = '';
     public int|null $editingId = null;
     public string $search = '';
     public int $perPage = 5;
     public bool $modal = false;
-    public array $allPermissions=[];
-    public array $permissions=[];
+    public array $allPermissions = [];
+    public array $permissions = [];
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
+    
+    // تعریف headers به عنوان پروپرتی برای جلوگیری از خطای Method Not Found
+    public array $headers = [];
 
-    public function mount(): void
-    {
-        $this->allPermissions=Permission::all()->toArray();
-    }
+public function mount(): void
+{
+    // اضافه کردن label به فیلدهای انتخابی
+    $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
+    
+    $this->headers = [
+        ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
+        ['key' => 'label', 'label' => 'عنوان', 'class' => 'flex-1'],
+        ['key' => 'name', 'label' => 'نام', 'class' => 'flex-1'],
+    ];
+}
+
     public function clear(): void
     {
-        $this->reset();
-        $this->info('فیلدها خالی شدند', position: 'toast-bottom');
+        // فقط فیلدهای مربوط به فرم را ریست کنید
+        $this->reset(['name', 'label', 'permissions', 'editingId', 'modal']);
+       // $this->info('فیلدها خالی شدند', position: 'toast-bottom');
     }
 
     public function delete(Role $role): void
@@ -36,11 +50,11 @@ new class extends Component {
             $role->delete();
             $this->warning("$role->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+            $this->error("امکان حذف وجود ندارد.", position: 'toast-bottom');
         }
     }
 
-    public function createRole(Role $role): void
+    public function createRole(): void
     {
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
@@ -48,20 +62,24 @@ new class extends Component {
             'permissions' => 'required'
         ]);
 
-        $role::create(['name' => $this->name,'label' => $this->label]);
-        $role->syncPermissions($this->permissions);
+        $newRole = Role::create(['name' => $this->name, 'label' => $this->label]);
+        $newRole->syncPermissions($this->permissions);
+        
         $this->success("$this->label ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
-        $this->reset();
-        $this->modal = false;
+        $this->clear();
     }
 
     public function editRole($id): void
     {
-        $role = Role::findOrFail($id);
+        $role = Role::with('permissions')->findOrFail($id);
         $this->editingId = $id;
         $this->name = $role->name;
         $this->label = $role->label;
-        $this->permissions=$role->permissions;
+        
+        // تبدیل IDها به رشته برای سازگاری با x-choices
+        $this->permissions = $role->permissions->pluck('name')->map(fn($name) => (string) $name)->toArray();
+        
+        $this->modal = true;
     }
 
     public function updateRole(): void
@@ -72,44 +90,31 @@ new class extends Component {
             'permissions' => 'required',
         ]);
 
-        try {
-            $role = Role::findOrFail($this->editingId);
-            $role->update(['name' => $this->name,'label' => $this->label]);
-            $role->syncPermissions($this->permissions);
-            $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
-            $this->reset();
-            $this->modal = false;
-        } catch (\Exception $e) {
-            $this->error("خطا در ویرایش", position: 'toast-bottom');
-        }
-    }
-
-    public function headers(): array
-    {
-        return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
-            ['key' => 'label', 'label' => 'عنوان', 'class' => 'flex-1'],
-            ['key' => 'name', 'label' => 'نام', 'class' => 'flex-1'],
-        ];
+        $role = Role::findOrFail($this->editingId);
+        $role->update(['name' => $this->name, 'label' => $this->label]);
+        $role->syncPermissions($this->permissions);
+        
+        $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
+        $this->clear();
     }
 
     public function roles(): LengthAwarePaginator
     {
         $query = Role::query();
-
         if (!empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%')->orWhere('label', 'LIKE', '%' . $this->search . '%');
+            $query->where('name', 'LIKE', '%' . $this->search . '%')
+                  ->orWhere('label', 'LIKE', '%' . $this->search . '%');
         }
         $query->orderBy(...array_values($this->sortBy));
-        return $this->roles = $query->paginate($this->perPage);
+        
+        return $query->paginate($this->perPage);
     }
 
     public function with(): array
     {
         return [
-            'editingId' => $this->editingId,
             'roles' => $this->roles(),
-            'headers' => $this->headers()
+            // نیازی به پاس دادن headers و editingId نیست چون public هستند
         ];
     }
 }; ?>
@@ -136,35 +141,21 @@ new class extends Component {
             </div>
         </div>
 
-        <x-table :headers="$headers" :rows="$roles" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[3, 5, 10]">
-            @foreach($roles as $role)
-                <tr wire:key="{{ $role->id }}">
-                    <td>{{ $role->id }}</td>
-                    <td>{{ $role->name }}</td>
-                    <td>{{ $role->label }}</td>
-                    <td>
-                        @scope('actions', $role)
-                        <div class="flex w-1/4">
-                            <x-button icon="o-pencil"
-                                      wire:click="editRole({{ $role->id }})"
-                                      class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal = true">
-                                <span class="hidden sm:inline">ویرایش</span>
-                            </x-button>
+        <x-table :headers="$headers" :rows="$roles" :sort-by="$sortBy" with-pagination>
+            {{-- بخش Actions به صورت خودکار برای هر ردیف رندر می‌شود --}}
+            @scope('actions', $role)
+            <div class="flex gap-2">
+                <x-button icon="o-pencil"
+                        wire:click="editRole({{ $role->id }})"
+                        class="btn-ghost btn-sm text-primary" />
 
-                            <x-button icon="o-trash"
-                                      wire:click="delete({{ $role->id }})"
-                                      wire:confirm="Are you sure?"
-                                      spinner
-                                      class="btn-ghost btn-sm text-error">
-                                <span class="hidden sm:inline">حذف</span>
-                            </x-button>
-                        </div>
-                        @endscope
-                    </td>
-                </tr>
-            @endforeach
+                <x-button icon="o-trash"
+                        wire:click="delete({{ $role->id }})"
+                        wire:confirm="آیا مطمئن هستید؟"
+                        spinner
+                        class="btn-ghost btn-sm text-error" />
+            </div>
+            @endscope
         </x-table>
     </x-card>
 
@@ -186,14 +177,16 @@ new class extends Component {
                 icon="o-magnifying-glass"
             />
 {{--            <x-choices label="دسترسی" wire:model="permissions" :options="$allPermissions"  clearable />--}}
-            <x-choices-offline
-                label="دسترسی ها"
-                wire:model="permissions"
-                :options="$allPermissions"
-                placeholder="Search ..."
-                clearable
-                searchable
-            />
+<x-choices-offline
+    label="دسترسی ها"
+    wire:model="permissions"
+    :options="$allPermissions"
+    option-label="label"    {{-- نمایش عنوان فارسی به کاربر --}}
+    option-value="name"     {{-- ارسال نام انگلیسی به سمت سرور برای syncPermissions --}}
+    placeholder="جستجو..."
+    clearable
+    searchable
+/>
 
             <div class="flex gap-4">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner/>
