@@ -39,6 +39,7 @@ public function mount(): void
 
     public function clear(): void
     {
+        $this->resetValidation();
         // فقط فیلدهای مربوط به فرم را ریست کنید
         $this->reset(['name', 'label', 'permissions', 'editingId', 'modal']);
        // $this->info('فیلدها خالی شدند', position: 'toast-bottom');
