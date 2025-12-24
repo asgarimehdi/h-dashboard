@@ -11,6 +11,8 @@ use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 
 new class extends Component {
     use WithPagination;
@@ -27,6 +29,21 @@ new class extends Component {
     public $password;
     public $person_search = '';
     public $editing_user_id = null;
+    // لیست تمام نقش‌ها برای انتخاب در فرم (بارگذاری در mount)
+    public array $allRoles = [];
+    // شناسه نقش‌های انتخاب‌شده برای کاربر (برای sync)
+    public array $role_ids = [];
+    // لیست تمام دسترسی‌ها برای انتخاب مستقیم به کاربر
+    public array $allPermissions = [];
+    // دسترسی‌های مستقیم انتخاب‌شده برای کاربر (نام‌ها برای syncPermissions)
+    public array $user_permissions = [];
+
+    // بارگذاری اولیه داده‌های کمکی مانند نقش‌ها و دسترسی‌ها
+    public function mount(): void
+    {
+        $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
+        $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
+    }
 
     public function clear(): void
     {
@@ -62,7 +79,7 @@ new class extends Component {
 
     public function openModalForCreate(): void
     {
-        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id']);
+        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions']);
         $this->modal = true;
     }
 
@@ -74,6 +91,9 @@ new class extends Component {
         $person = Person::where('n_code', $user->n_code)->first();
         $this->person_search = "{$person->f_name} {$person->l_name} ({$person->n_code})";
         $this->password = null;
+        // بارگذاری نقش‌ها و دسترسی‌های مستقیم کاربر برای ویرایش
+        $this->role_ids = $user->roles->pluck('id')->toArray();
+        $this->user_permissions = $user->getDirectPermissions()->pluck('name')->map(fn($n) => (string)$n)->toArray();
         $this->modal = true;
     }
 
@@ -89,6 +109,10 @@ new class extends Component {
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
             'password' => 'required|string|min:6',
+            'role_ids' => 'nullable|array',
+            'role_ids.*' => 'exists:roles,id',
+            'user_permissions' => 'nullable|array',
+            'user_permissions.*' => 'exists:permissions,name',
         ], [
             'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
             'n_code.required' => 'کد ملی الزامی است.',
@@ -104,9 +128,12 @@ new class extends Component {
                 'password' => bcrypt($this->password),
             ]);
 
-            $user->roles()->sync($this->role_ids);
+            // همگام‌سازی نقش‌ها (با شناسه)
+            $user->roles()->sync($this->role_ids ?? []);
+            // همگام‌سازی دسترسی‌های مستقیم کاربر (با نام دسترسی)
+            $user->syncPermissions($this->user_permissions ?? []);
 
-            $this->reset(['n_code', 'password', 'person_search', 'editing_user_id']);
+            $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions']);
             $this->success('کاربر با موفقیت ایجاد شد.');
             $this->modal = false;
         } catch (ValidationException $e) {
@@ -123,6 +150,8 @@ new class extends Component {
             'password' => 'nullable|string|min:6',
             'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'exists:roles,id',
+            'user_permissions' => 'nullable|array',
+            'user_permissions.*' => 'exists:permissions,name',
         ], [
             'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
             'n_code.required' => 'کد ملی الزامی است.',
@@ -137,7 +166,9 @@ new class extends Component {
                 $data['password'] = bcrypt($this->password);
             }
             $user->update($data);
-            $user->roles()->sync($this->role_ids);
+            // همگام‌سازی نقش‌ها و دسترسی‌های مستقیم
+            $user->roles()->sync($this->role_ids ?? []);
+            $user->syncPermissions($this->user_permissions ?? []);
 
             $this->reset(['n_code', 'password', 'role_ids', 'person_search', 'editing_user_id']);
             $this->success('کاربر با موفقیت ویرایش شد.');
@@ -275,8 +306,23 @@ new class extends Component {
                 </div>
             @endscope
             @scope('expansion', $user)
-                <div class="bg-base-200 p-8 font-bold">
-                    اطلاعات بیشتر درباره کاربر، {{ $user->name }}!
+                <div class="bg-base-200 p-6">
+                    <div class="mb-3">
+                        <span class="font-bold">دسترسی‌ها برای</span>
+                        <span class="font-medium">{{ $user->name }}</span>
+                    </div>
+                    @php
+                        $permissions = $user->getAllPermissions();
+                    @endphp
+                    @if($permissions->isEmpty())
+                        <div class="text-sm text-muted">هیچ دسترسی ثبت نشده است.</div>
+                    @else
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($permissions as $perm)
+                                <x-badge :value="$perm->label ?? $perm->name" class="badge-info" rounded/>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
             @endscope
         </x-table>
@@ -306,6 +352,34 @@ new class extends Component {
                          :placeholder="$editing_user_id ? 'در صورت نیاز وارد کنید' : 'رمز عبور'"
                          :required="!$editing_user_id" rounded/>
                 @error('password') <span class="text-error text-sm">{{ $message }}</span> @enderror
+            </div>
+            {{-- انتخاب نقش‌ها برای کاربر: از شناسه‌ها استفاده می‌کنیم و label برای نمایش فارسی است --}}
+            <div>
+                <x-choices-offline
+                    label="نقش‌ها"
+                    wire:model="role_ids"
+                    :options="$allRoles"
+                    option-label="label"
+                    option-value="id"
+                    placeholder="انتخاب نقش..."
+                    clearable
+                    searchable
+                />
+                @error('role_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
+            </div>
+            {{-- انتخاب دسترسی‌های مستقیم برای کاربر (این دسترسی‌ها به user->syncPermissions ارسال می‌شوند) --}}
+            <div>
+                <x-choices-offline
+                    label="دسترسی‌های مستقیم"
+                    wire:model="user_permissions"
+                    :options="$allPermissions"
+                    option-label="label"
+                    option-value="name"
+                    placeholder="جستجو در دسترسی‌ها..."
+                    clearable
+                    searchable
+                />
+                @error('user_permissions') <span class="text-error text-sm">{{ $message }}</span> @enderror
             </div>
             <div class="col-span-2 flex justify-end space-x-2">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" rounded />
