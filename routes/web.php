@@ -49,15 +49,18 @@ Route::middleware('auth')->group(function () {
 
 
 
+    Route::middleware('role_or_permission:map')->group(function () {
+        Volt::route('/maps/draw', 'maps/draw');
+        Volt::route('/maps/route', 'maps/route');
+        Volt::route('/maps/route2', 'maps/route2');
+        Volt::route('/maps/county', 'maps/county');
+        Volt::route('/maps/unit', 'maps/unit');
+        Volt::route('/maps/location', 'maps/location'); //->can('map');
+        Volt::route('/card', 'glowingcard');
+    });
 
-   Volt::route('/maps/draw', 'maps/draw');
-   Volt::route('/maps/route', 'maps/route');
-   Volt::route('/maps/route2', 'maps/route2');
-   Volt::route('/maps/county', 'maps/county');
-   Volt::route('/maps/unit', 'maps/unit');
-   Volt::route('/maps/location', 'maps/location');
-   Volt::route('/card', 'glowingcard');
 
    Volt::route('/permissions', 'permissions/index')->name('permissions');
    Volt::route('/roles', 'roles/index')->name('roles');
 });
+

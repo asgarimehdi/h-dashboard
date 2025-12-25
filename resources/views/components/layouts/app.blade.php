@@ -82,7 +82,7 @@
                         </x-menu-sub>
 
 
-
+                    @can('map')
                         <x-menu-sub title="کار با نقشه" icon="o-cog-6-tooth">
                             <x-menu-item title="مسیر" icon="o-sparkles" link="/maps/route" wire:navigate/>
                             <x-menu-item title="یافتن مسیر" icon="o-sparkles" link="/maps/route2" wire:navigate/>
@@ -91,7 +91,7 @@
                             <x-menu-item title="نقشه واحدها" icon="o-sparkles" link="/maps/unit" wire:navigate/>
                             <x-menu-item title="موقعیت کاربر" icon="o-sparkles" link="/maps/location" wire:navigate/>
                         </x-menu-sub>
-
+                    @endcan
                 </x-menu-sub>
 
         </x-menu>
