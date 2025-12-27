@@ -23,7 +23,7 @@ class RoleSeeder extends Seeder
         // or may be done by chaining
        // Role::create(['name' => 'it'])->givePermissionTo(['organization', 'op-cache']);
 
-        Role::create(['name' => 'admin'])->givePermissionTo(Permission::all());
+        Role::create(['name' => 'admin','label' => 'مدیر کل'])->givePermissionTo(Permission::all());
 
         // Assign roles to demo users
         $superadmins = User::where('id', 1)->orwhere('id', 2)->get();

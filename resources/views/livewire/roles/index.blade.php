@@ -21,7 +21,7 @@ new class extends Component {
     public array $allPermissions = [];
     public array $permissions = [];
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
-    
+
     // تعریف headers به عنوان پروپرتی برای جلوگیری از خطای Method Not Found
     public array $headers = [];
 
@@ -29,7 +29,7 @@ public function mount(): void
 {
     // اضافه کردن label به فیلدهای انتخابی
     $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
-    
+
     $this->headers = [
         ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
         ['key' => 'label', 'label' => 'عنوان', 'class' => 'flex-1'],
@@ -65,7 +65,7 @@ public function mount(): void
 
         $newRole = Role::create(['name' => $this->name, 'label' => $this->label]);
         $newRole->syncPermissions($this->permissions);
-        
+
         $this->success("$this->label ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->clear();
     }
@@ -76,10 +76,10 @@ public function mount(): void
         $this->editingId = $id;
         $this->name = $role->name;
         $this->label = $role->label;
-        
+
         // تبدیل IDها به رشته برای سازگاری با x-choices
         $this->permissions = $role->permissions->pluck('name')->map(fn($name) => (string) $name)->toArray();
-        
+
         $this->modal = true;
     }
 
@@ -94,7 +94,7 @@ public function mount(): void
         $role = Role::findOrFail($this->editingId);
         $role->update(['name' => $this->name, 'label' => $this->label]);
         $role->syncPermissions($this->permissions);
-        
+
         $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
         $this->clear();
     }
@@ -107,7 +107,7 @@ public function mount(): void
                   ->orWhere('label', 'LIKE', '%' . $this->search . '%');
         }
         $query->orderBy(...array_values($this->sortBy));
-        
+
         return $query->paginate($this->perPage);
     }
 

@@ -62,5 +62,18 @@ Route::middleware('auth')->group(function () {
 
    Volt::route('/permissions', 'permissions/index')->name('permissions');
    Volt::route('/roles', 'roles/index')->name('roles');
+  
+    Route::middleware('role_or_permission:op-cache')->group(function () {
+        // Serve OPcache GUI from non-public resources/views/op/index.php
+        Route::get('/op', function () {
+            $path = resource_path('views/op/index.php');
+            if (!is_file($path)) {
+                abort(404, 'OPcache GUI not found.');
+            }
+            
+            include $path;
+            
+        })->name('op');
+    });
 });
 

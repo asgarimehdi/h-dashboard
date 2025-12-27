@@ -4067,16 +4067,16 @@
         },
         {
             "name": "robsontenorio/mary",
-            "version": "2.4.10",
+            "version": "2.5.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/robsontenorio/mary.git",
-                "reference": "a2c6933a00b664184b3a47364d8569dcd676037d"
+                "reference": "3971e466b947fee5b270e8f8a2ec7449b2866fa3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/robsontenorio/mary/zipball/a2c6933a00b664184b3a47364d8569dcd676037d",
-                "reference": "a2c6933a00b664184b3a47364d8569dcd676037d",
+                "url": "https://api.github.com/repos/robsontenorio/mary/zipball/3971e466b947fee5b270e8f8a2ec7449b2866fa3",
+                "reference": "3971e466b947fee5b270e8f8a2ec7449b2866fa3",
                 "shasum": ""
             },
             "require": {
@@ -4142,7 +4142,7 @@
             ],
             "support": {
                 "issues": "https://github.com/robsontenorio/mary/issues",
-                "source": "https://github.com/robsontenorio/mary/tree/2.4.10"
+                "source": "https://github.com/robsontenorio/mary/tree/2.5.0"
             },
             "funding": [
                 {
@@ -4150,7 +4150,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2025-12-01T16:01:09+00:00"
+            "time": "2025-12-26T14:19:12+00:00"
         },
         {
             "name": "spatie/laravel-permission",
@@ -7032,16 +7032,16 @@
     "packages-dev": [
         {
             "name": "barryvdh/laravel-debugbar",
-            "version": "v3.16.2",
+            "version": "v3.16.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/barryvdh/laravel-debugbar.git",
-                "reference": "730dbf8bf41f5691e026dd771e64dd54ad1b10b3"
+                "reference": "c91e57ea113edd6526f5b8cd6b1c6ee02c67b28e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/barryvdh/laravel-debugbar/zipball/730dbf8bf41f5691e026dd771e64dd54ad1b10b3",
-                "reference": "730dbf8bf41f5691e026dd771e64dd54ad1b10b3",
+                "url": "https://api.github.com/repos/barryvdh/laravel-debugbar/zipball/c91e57ea113edd6526f5b8cd6b1c6ee02c67b28e",
+                "reference": "c91e57ea113edd6526f5b8cd6b1c6ee02c67b28e",
                 "shasum": ""
             },
             "require": {
@@ -7050,7 +7050,7 @@
                 "illuminate/support": "^10|^11|^12",
                 "php": "^8.1",
                 "php-debugbar/php-debugbar": "^2.2.4",
-                "symfony/finder": "^6|^7"
+                "symfony/finder": "^6|^7|^8"
             },
             "require-dev": {
                 "mockery/mockery": "^1.3.3",
@@ -7101,7 +7101,7 @@
             ],
             "support": {
                 "issues": "https://github.com/barryvdh/laravel-debugbar/issues",
-                "source": "https://github.com/barryvdh/laravel-debugbar/tree/v3.16.2"
+                "source": "https://github.com/barryvdh/laravel-debugbar/tree/v3.16.3"
             },
             "funding": [
                 {
@@ -7113,7 +7113,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2025-12-03T14:52:46+00:00"
+            "time": "2025-12-23T17:37:00+00:00"
         },
         {
             "name": "fakerphp/faker",
@@ -7808,16 +7808,16 @@
         },
         {
             "name": "php-debugbar/php-debugbar",
-            "version": "v2.2.5",
+            "version": "v2.2.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-debugbar/php-debugbar.git",
-                "reference": "c5dce08e98dd101c771e55949fd89124b216271d"
+                "reference": "abb9fa3c5c8dbe7efe03ddba56782917481de3e8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-debugbar/php-debugbar/zipball/c5dce08e98dd101c771e55949fd89124b216271d",
-                "reference": "c5dce08e98dd101c771e55949fd89124b216271d",
+                "url": "https://api.github.com/repos/php-debugbar/php-debugbar/zipball/abb9fa3c5c8dbe7efe03ddba56782917481de3e8",
+                "reference": "abb9fa3c5c8dbe7efe03ddba56782917481de3e8",
                 "shasum": ""
             },
             "require": {
@@ -7876,9 +7876,9 @@
             ],
             "support": {
                 "issues": "https://github.com/php-debugbar/php-debugbar/issues",
-                "source": "https://github.com/php-debugbar/php-debugbar/tree/v2.2.5"
+                "source": "https://github.com/php-debugbar/php-debugbar/tree/v2.2.6"
             },
-            "time": "2025-12-21T08:50:08+00:00"
+            "time": "2025-12-22T13:21:32+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
