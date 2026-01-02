@@ -1,45 +1,45 @@
 <?php
 
+use App\Models\Region;
 use Livewire\Volt\Component;
 
-new class extends Component {
-
-    public array $counties;
+new class extends Component
+{
+    public $regions;
 
     public function mount()
     {
+        $this->regions = Region::with('boundary')
+            ->whereNotNull('boundary_id')
+            ->get()
+            ->map(function ($region) {
+                $region->geojson = $region->boundary?->geojson ?? null;
+                return [
+                    'id' => $region->id,
+                    'name' => $region->name,
+                    'geojson' => $region->geojson,
+                ];
+            });
 
-        $this->counties = [
-            "abhar" => asset('geojsons/abhar.geojson'),
-            "ijrood" => asset('geojsons/ijrood.geojson'),
-            "khodabande" => asset('geojsons/khodabande.geojson'),
-            "khorramdare" => asset('geojsons/khorramdare.geojson'),
-            "mahneshan" => asset('geojsons/mahneshan.geojson'),
-            "soltanie" => asset('geojsons/soltanie.geojson'),
-            "tarom" => asset('geojsons/tarom.geojson'),
-            "zanjan" => asset('geojsons/zanjan.geojson')
-        ];
+
     }
 };
+
 ?>
 
 
 <style>
-
-    .county-menu {
-
+    .unit-menu {
         padding: 5px;
-
         position: absolute;
         top: 20px;
         right: 20px;
-        z-index: 1;
+        z-index: 1000;
     }
-
 </style>
 
 <div>
-    <x-header title="تقسیم بندی شهرستان" separator progress-indicator>
+    <x-header title="تقسیم‌بندی شهرستان" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector />
         </x-slot:actions>
@@ -48,46 +48,46 @@ new class extends Component {
     <x-card shadow class="p-0">
         <div class="container">
             <livewire:maps.map />
-            <div class="county-menu bg-base-100/60 rounded-l-box" id="countyMenu" >
-                @foreach ($counties as $county => $geojson)
-                    <x-toggle label="{{ ucfirst($county) }}"
 
-                              onclick="toggleGeoJson('{{ $county }}')"></x-toggle>
+            <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
+                @foreach ($regions as $region)
+                    <x-toggle
+                        label="{{ $region['name'] }}"
+                        onclick="toggleGeoJson({{ $region['id'] }})"
+                    ></x-toggle>
                 @endforeach
+
             </div>
         </div>
     </x-card>
 </div>
 
 <script>
-
     var geojsonLayers = {};
+    var allregions = @json($regions);
 
-    function toggleGeoJson(county) {
-        var counties = @json($counties); // انتقال داده‌های PHP به JavaScript
+    function toggleGeoJson(regionId) {
+        const region = allregions.find(r => r.id === regionId);
+        if (!region || !region.geojson) {
+            console.warn('No geojson found for region:', regionId);
+            return;
+        }
 
-        if (geojsonLayers[county]) {
-            map.removeLayer(geojsonLayers[county]);
-            delete geojsonLayers[county];
+        if (geojsonLayers[regionId]) {
+            map.removeLayer(geojsonLayers[regionId]);
+            delete geojsonLayers[regionId];
         } else {
-            fetch(counties[county])
-                .then(response => response.json())
-                .then(data => {
-                    var newLayer = L.geoJSON(data, {
-                        style: function (feature) {
-                            return {
-                                color: "orange",
-                                weight: 5,
-                                opacity: 0.2,
-                                fillOpacity: 0.2,
-
-
-                            };
-                        }
-                    }).addTo(map);
-                    geojsonLayers[county] = newLayer;
-                });
+            let data = JSON.parse(region.geojson);
+            let newLayer = L.geoJSON(data, {
+                style: {
+                    color: "orange",
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0.1,
+                }
+            }).addTo(map);
+            geojsonLayers[regionId] = newLayer;
         }
     }
-
 </script>
+

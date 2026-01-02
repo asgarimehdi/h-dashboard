@@ -11,7 +11,7 @@ class RegionSeeder extends Seeder
     {
         // ایجاد استان‌ها
         $provinces = [
-            ['name' => 'زنجان', 'type' => 'province'],
+            ['name' => 'زنجان', 'type' => 'province', 'boundary_id' => 9],
         ];
 
         foreach ($provinces as $province) {
@@ -24,9 +24,10 @@ class RegionSeeder extends Seeder
                 ['name' => "ایجرود", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 3],
                 ['name' => "خدابنده", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 4],
                 ['name' => "خرمدره", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 5],
-                ['name' => "سلطانیه", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 6],
-                ['name' => "طارم", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 7],
-                ['name' => "ماهنشان", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 8],
+                ['name' => "ماهنشان", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 6],
+                ['name' => "سلطانیه", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 7],
+                ['name' => "طارم", 'type' => 'county', 'parent_id' => 1, 'boundary_id' => 8],
+
             ];
 
             foreach ($counties as $county) {
