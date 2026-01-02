@@ -18,7 +18,7 @@ return new class extends Migration
             $table->timestamps();
         });
      //   DB::statement('ALTER TABLE boundaries ADD boundary MULTIPOLYGON NOT NULL SRID 4326');
-//
+        DB::statement('ALTER TABLE boundaries MODIFY boundary MULTIPOLYGON;');
 //        DB::statement("ALTER TABLE boundaries ADD COLUMN boundary GEOMETRY(MULTIPOLYGON, 4326) NOT NULL");
     }
 

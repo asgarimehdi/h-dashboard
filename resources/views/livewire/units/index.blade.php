@@ -16,8 +16,8 @@ new class extends Component {
 
     public $name, $description, $unit_type_id, $region_id, $province_id, $parent_id;
     public int|null $editingId = null;
-//    public int|null $editingIdMap = null;
-//    public int|null $boundaryId = null;
+    public int|null $editingIdMap = null;
+    public int|null $boundaryId = null;
     public string $search = '';
     public int $perPage = 10;
     public bool $modal = false;
@@ -261,27 +261,27 @@ new class extends Component {
         }
     }
 
-//    public function mapModal($editingIdMap): void
-//    {
-//        $this->editingIdMap = $editingIdMap;
-//        $this->modal2 = true;
-//    }
+    public function mapModal($editingIdMap): void
+    {
+        $this->editingIdMap = $editingIdMap;
+        $this->modal2 = true;
+    }
 
-//    #[On('boundarySaved')]
-//    public function saveBoundaryId($boundaryId): void
-//    {
-//        Unit::find($this->editingIdMap)?->update([
-//            'boundary_id' => $boundaryId,
-//        ]);
-//        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
-//        $this->modal2 = false;
-//    }
+    #[On('boundarySaved')]
+    public function saveBoundaryId($boundaryId): void
+    {
+        Unit::find($this->editingIdMap)?->update([
+            'boundary_id' => $boundaryId,
+        ]);
+        $this->success("ایجاد شد", 'با موفقیت', position: 'toast-bottom');
+        $this->modal2 = false;
+    }
 
     public function resetForm(): void
     {
         $this->reset(['name', 'description', 'unit_type_id', 'region_id', 'province_id', 'parent_id', 'editingId']);
         $this->loadDropdowns();
-//        $this->modal2 = false;
+        $this->modal2 = false;
     }
 
     public function openModalForCreate(): void
@@ -347,11 +347,11 @@ new class extends Component {
                     <td>
                         @scope('actions', $unit)
                         <div class="flex w-1/12">
-{{--                            <x-button icon="o-map"--}}
-{{--                                      class="btn-ghost btn-sm text-primary"--}}
-{{--                                      wire:click="mapModal({{ $unit->id }})">--}}
-{{--                                <span class="hidden 2xl:inline">نقشه</span>--}}
-{{--                            </x-button>--}}
+                            <x-button icon="o-map"
+                                      class="btn-ghost btn-sm text-primary"
+                                      wire:click="mapModal({{ $unit->id }})">
+                                <span class="hidden 2xl:inline">نقشه</span>
+                            </x-button>
                             <x-button icon="o-pencil"
                                       wire:click="editUnit({{ $unit->id }})"
                                       class="btn-ghost btn-sm text-primary"

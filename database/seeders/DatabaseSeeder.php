@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AccessLevel;
+use App\Models\Boundary;
 use App\Models\Region;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -23,6 +24,7 @@ class DatabaseSeeder extends Seeder
         // ]);
 
         $this->call([
+            BoundarySeeder::class,
             EstekhdamSeeder::class,
             TahsilSeeder::class,
             RadifSeeder::class,
@@ -35,6 +37,7 @@ class DatabaseSeeder extends Seeder
             UnitSeeder::class,
             PermissionSeeder::class,
             RoleSeeder::class,
+
 
 
         ]);

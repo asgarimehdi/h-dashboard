@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('units', function (Blueprint $table) {
             $table->id();
-            // افزودن ستون region_id 
+            // افزودن ستون region_id
             $table->unsignedBigInteger('region_id')->nullable();
             // برای ساختار سلسله مراتب
             $table->unsignedBigInteger('parent_id')->nullable();
@@ -21,7 +21,8 @@ return new class extends Migration
             // افزودن ستون unit_type_id
             $table->unsignedBigInteger('unit_type_id')->nullable();
             $table->foreign('unit_type_id')->references('id')->on('unit_types');
-
+            $table->double('lat')->nullable();
+            $table->double('lng')->nullable();
             $table->text('description')->nullable();
             $table->timestamps();
 
