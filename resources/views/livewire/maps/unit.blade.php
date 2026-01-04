@@ -39,7 +39,7 @@ new class extends Component
 </style>
 
 <div>
-    <x-header title="تقسیم‌بندی شهرستان" separator progress-indicator>
+    <x-header title="نقشه واحد ها" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector />
         </x-slot:actions>

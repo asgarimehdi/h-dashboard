@@ -65,7 +65,7 @@
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     <x-menu-item title="کاربران" icon="o-sparkles" link="/users" wire:navigate/>
 
-                        <x-menu-sub title="کارگزینی" icon="o-cog-6-tooth">
+                        <x-menu-sub title="منابع انسانی" icon="o-cog-6-tooth">
                             <x-menu-item title="استخدام" icon="o-sparkles" link="/kargozini/estekhdams" wire:navigate/>
                             <x-menu-item title="ردیف سازمانی" icon="o-sparkles" link="/kargozini/radifs" wire:navigate/>
                             <x-menu-item title="تحصیلات" icon="o-sparkles" link="/kargozini/tahsils" wire:navigate/>

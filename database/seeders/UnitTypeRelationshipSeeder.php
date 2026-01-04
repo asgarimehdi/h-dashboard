@@ -13,19 +13,36 @@ class UnitTypeRelationshipSeeder extends Seeder
      */
     public function run(): void
     {
-        // آرایه مقادیر فیلد child_unit_type_id
-        $childUnitTypeIds = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15, 16, 16, 17];
+        // در هر جفت، مقدار سمت چپ میتواند پدر سمت راست را داشته باشه
+        $relationships = [
+            [2, 1],
+            [3, 2],
+            [4, 3],
+            [5, 4],
+            [6, 4],
+            [7, 4],
+            [8, 5],
+            [8, 6],
+            [9, 6],
+            [9, 7],
+            [10, 5],
+            [10, 6],
+            [11, 8],
+            [11, 10],
+            [12, 4],
+            [13, 4],
+            [14, 4],
+            [15, 4],
+            [16, 4],
+            [17, 4],
+            [18, 4],
+            [19, 4],
+        ];
 
-        // آرایه مقادیر فیلد allowed_parent_unit_type_id
-        $allowedParentUnitTypeIds = [1, 2, 2, 2, 2, 3, 3, 8, 9, 9, 9, 10, 11, 12, 10, 15, 13, 14];
-
-        // اطمینان از اینکه هر دو آرایه طول یکسانی دارند
-        $count = count($childUnitTypeIds);
-
-        for ($i = 0; $i < $count; $i++) {
+        foreach ($relationships as [$childId, $parentId]) {
             UnitTypeRelationship::create([
-                'child_unit_type_id'         => $childUnitTypeIds[$i],
-                'allowed_parent_unit_type_id' => $allowedParentUnitTypeIds[$i],
+                'child_unit_type_id'         => $childId,
+                'allowed_parent_unit_type_id' => $parentId,
             ]);
         }
     }

@@ -53,27 +53,18 @@ class UnitSeeder extends Seeder
                 'region_id' => 2, // فرض: ID=2 برای شهرستان ابهر در جدول regions
                 'parent_id' => 3,
                 'name' => 'شبکه بهداشت و درمان ابهر',
-                'unit_type_id' => 8,
+                'unit_type_id' => 4,
                 'description' => null,
                 'created_at' => '2025-04-07 23:00:12',
                 'updated_at' => '2025-04-07 23:00:12',
             ],
-            [
-                'id' => 5,
-                'region_id' => 2, // شهرستان ابهر
-                'parent_id' => 4,
-                'name' => 'مرکز بهداشت ابهر',
-                'unit_type_id' => 9,
-                'description' => null,
-                'created_at' => '2025-04-07 23:00:37',
-                'updated_at' => '2025-04-07 23:00:37',
-            ],
+
             [
                 'id' => 6,
                 'region_id' => 2, // شهرستان ابهر
-                'parent_id' => 5,
+                'parent_id' => 4,
                 'name' => 'مرکز خدمات جامع سلامت عباس آباد',
-                'unit_type_id' => 12,
+                'unit_type_id' => 7,
                 'description' => null,
                 'created_at' => '2025-04-07 23:01:20',
                 'updated_at' => '2025-04-07 23:01:20',
@@ -81,9 +72,9 @@ class UnitSeeder extends Seeder
             [
                 'id' => 7,
                 'region_id' => 2, // شهرستان ابهر
-                'parent_id' => 5,
+                'parent_id' => 4,
                 'name' => 'مرکز خدمات جامع سلامت حسین آباد',
-                'unit_type_id' => 11,
+                'unit_type_id' => 6,
                 'description' => null,
                 'created_at' => '2025-04-07 23:01:48',
                 'updated_at' => '2025-04-07 23:01:48',
@@ -91,9 +82,9 @@ class UnitSeeder extends Seeder
             [
                 'id' => 8,
                 'region_id' => 2, // شهرستان ابهر
-                'parent_id' => 5,
+                'parent_id' => 4,
                 'name' => 'مرکز خدمات جامع سلامت اعلایی',
-                'unit_type_id' => 10,
+                'unit_type_id' => 5,
                 'description' => null,
                 'created_at' => '2025-04-07 23:02:13',
                 'updated_at' => '2025-04-07 23:02:13',
@@ -103,7 +94,7 @@ class UnitSeeder extends Seeder
                 'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 6,
                 'name' => 'خانه بهداشت قفس آباد',
-                'unit_type_id' => 14,
+                'unit_type_id' => 9,
                 'description' => null,
                 'created_at' => '2025-04-07 23:02:50',
                 'updated_at' => '2025-04-07 23:02:50',
@@ -113,7 +104,7 @@ class UnitSeeder extends Seeder
                 'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 7,
                 'name' => 'خانه بهداشت فنوش آباد',
-                'unit_type_id' => 14,
+                'unit_type_id' => 9,
                 'description' => null,
                 'created_at' => '2025-04-07 23:03:12',
                 'updated_at' => '2025-04-07 23:03:12',
@@ -123,20 +114,10 @@ class UnitSeeder extends Seeder
                 'region_id' => 2, // شهرستان ابهر
                 'parent_id' => 8,
                 'name' => 'پایگاه سلامت ضمیمه مرکز اعلایی',
-                'unit_type_id' => 13,
+                'unit_type_id' => 10,
                 'description' => null,
                 'created_at' => '2025-04-07 23:04:28',
                 'updated_at' => '2025-04-07 23:04:28',
-            ],
-            [
-                'id' => 13,
-                'region_id' => 1, // استان زنجان
-                'parent_id' => 2,
-                'name' => 'معاونت درمان دانشگاه علوم پزشکی زنجان',
-                'unit_type_id' => 4,
-                'description' => null,
-                'created_at' => '2025-04-07 23:06:20',
-                'updated_at' => '2025-04-07 23:06:20',
             ],
         ];
 
