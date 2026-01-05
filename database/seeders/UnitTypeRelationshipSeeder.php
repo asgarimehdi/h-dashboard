@@ -29,7 +29,7 @@ class UnitTypeRelationshipSeeder extends Seeder
             [10, 6],
             [11, 8],
             [11, 10],
-            [12, 4],
+            [12, 9],
             [13, 4],
             [14, 4],
             [15, 4],

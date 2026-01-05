@@ -174,9 +174,6 @@ new class extends Component {
             ->when($this->userUnitLevel === 'province', function ($query) {
                 return $query->whereIn('region_id', Region::where('parent_id', $this->userRegionId)->pluck('id')->push($this->userRegionId));
             })
-            ->when($this->region_id, function ($query) {
-                return $query->where('region_id', $this->region_id);
-            })
             ->get();
         if ($parentUnits->isEmpty() && $this->userUnitLevel === 'ministry') {
             $parentUnits = Unit::where('unit_type_id', 1)->get();
@@ -200,7 +197,9 @@ new class extends Component {
             $parentUnit = Unit::find($this->parent_id);
             $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
                 ->pluck('allowed_parent_unit_type_id')->toArray();
-            if ((!in_array($parentUnit->unit_type_id, $allowedParentTypeIds))or($parentUnit->region_id!=$this->region_id)) {
+            if ((!in_array($parentUnit->unit_type_id, $allowedParentTypeIds))
+//                or($parentUnit->region_id!=$this->region_id)
+            ) {
                 $this->error('واحد بالادستی انتخاب‌شده مجاز نیست.');
                 return;
             }
