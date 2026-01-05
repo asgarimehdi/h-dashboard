@@ -31,7 +31,7 @@ class PersonsTableSeeder extends Seeder
                 'e_id' => 1,
                 's_id' => 1,
                 'r_id' => 1,
-                'u_id' => 1,
+                'u_id' => 2,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
