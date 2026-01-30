@@ -56,13 +56,14 @@ Route::middleware('auth')->group(function () {
         Volt::route('/maps/county', 'maps/county');
         Volt::route('/maps/unit', 'maps/unit');
         Volt::route('/maps/location', 'maps/location'); //->can('map');
+        Volt::route('/maps/point', 'maps/point');
         Volt::route('/card', 'glowingcard');
     });
 
 
    Volt::route('/permissions', 'permissions/index')->name('permissions');
    Volt::route('/roles', 'roles/index')->name('roles');
-  
+
     Route::middleware('role_or_permission:op-cache')->group(function () {
         // Serve OPcache GUI from non-public resources/views/op/index.php
         Route::get('/op', function () {
@@ -70,9 +71,9 @@ Route::middleware('auth')->group(function () {
             if (!is_file($path)) {
                 abort(404, 'OPcache GUI not found.');
             }
-            
+
             include $path;
-            
+
         })->name('op');
     });
 });

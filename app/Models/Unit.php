@@ -15,6 +15,8 @@ class Unit extends Model
         'parent_id',
         'unit_type_id',
         'boundary_id',
+        'lat',
+        'lng',
     ];
 
     public function person(): HasMany
