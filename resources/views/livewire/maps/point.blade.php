@@ -170,8 +170,8 @@ new class extends Component
                 [loc.lat, loc.lng],
                 { icon: getIcon(loc.unit_type_id) }
             )
-            .bindPopup(loc.name)
-            .addTo(markersLayer);
+                .bindPopup(loc.name)
+                .addTo(markersLayer);
         });
     }
 
