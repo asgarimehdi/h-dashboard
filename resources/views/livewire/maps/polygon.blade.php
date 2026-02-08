@@ -90,7 +90,7 @@ new class extends Component {
             if (layer instanceof L.Polygon && !(layer instanceof L.Rectangle)) {
                 let latlngs = layer.getLatLngs()[0];
                 let coords = latlngs.map(function(latlng) {
-                    return [ latlng.lat,latlng.lng];
+                    return [ latlng.lng,latlng.lat];
                 });
 
                 // بستن حلقه اگر بسته نیست
