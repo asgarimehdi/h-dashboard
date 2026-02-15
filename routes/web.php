@@ -2,6 +2,18 @@
 
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
+Route::get('/zabbix/traffic', function (\App\Services\ZabbixService $zabbix) {
+
+    $outgoing = $zabbix->getInterfaceTraffic(73638); // Bits sent
+    $incoming = $zabbix->getInterfaceTraffic(73494); // Bits received
+
+    return response()->json([
+        'out' => $outgoing,
+        'in'  => $incoming,
+    ]);
+});
+
+
 
 // Users will be redirected to this route if not logged in
 Volt::route('/login', 'auth.login')->name('login');
@@ -58,6 +70,7 @@ Route::middleware('auth')->group(function () {
         Volt::route('/maps/location', 'maps/location'); //->can('map');
         Volt::route('/maps/point', 'maps/point');
         Volt::route('/card', 'glowingcard');
+        Volt::route('/z', 'network-traffic-chart');
     });
 
 

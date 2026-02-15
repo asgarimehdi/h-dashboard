@@ -32,6 +32,7 @@ new  class extends Component {
         </div>
         <div class="p-6">
             <h1 class="text-3xl font-bold mb-4">خوش آمدید به داشبورد</h1>
+            <livewire:network-traffic-chart />
 
         </div>
     </x-card>
