@@ -2,7 +2,7 @@ APP_NAME=h-dashboard
 APP_ENV=local
 APP_KEY=base64:aelQP/iruUmruqDr1iZ9XEFB/EgFm3crvwHN1lqnix8=
 APP_DEBUG=true
-APP_URL=http://127.0.0.1
+APP_URL=http://h-dashboard.test
 TILE_SERVER_IP=10.100.252.137
 
 APP_LOCALE=fa
@@ -72,3 +72,6 @@ QUEUE_CONNECTION=redis
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_PASSWORD=123
+
+ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
+ZABBIX_TOKEN=
