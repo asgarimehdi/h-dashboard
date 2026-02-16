@@ -68,5 +68,16 @@ class ZabbixService
         return $points;
     }
 
+public function getItemIdByKey($key)
+{
+    $response = $this->request("item.get", [
+        "output" => ["itemid"],
+        "filter" => [
+            "key_" => $key
+        ]
+    ]);
+
+    return $response['result'][0]['itemid'] ?? null;
+}
 
 }

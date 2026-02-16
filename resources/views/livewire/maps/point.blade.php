@@ -156,7 +156,7 @@ new class extends Component
     function getIcon(typeId) {
         return L.icon({
             iconUrl: typeIcons[typeId] ?? defaultIcon,
-            iconSize: [18, 30],
+            iconSize: [10, 20],
             iconAnchor: [16, 32],
             popupAnchor: [0, -32],
         });
