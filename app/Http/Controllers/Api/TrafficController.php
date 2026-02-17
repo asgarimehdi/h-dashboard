@@ -10,29 +10,31 @@ use Illuminate\Support\Facades\Cache;
 class TrafficController extends Controller
 {
     public function index(Request $request, ZabbixService $zabbix)
-{
-    $validated = $request->validate([
-        'interface' => 'required'
-    ]);
+    {
+        $validated = $request->validate([
+            'interface' => 'required',
+            'duration'  => 'nullable|integer|min:60|max:86400' // بین ۱ دقیقه تا ۲۴ ساعت
+        ]);
 
-    $interface = $validated['interface'];
+        $interface = $validated['interface'];
+        $duration = $validated['duration'] ?? 3600; // پیش‌فرض ۱ ساعت
 
-    $data = Cache::remember(
-        "traffic_{$interface}",
-        20,
-        function () use ($zabbix, $interface) {
+        // کلید کش شامل duration نیز می‌شود
+        $data = Cache::remember(
+            "traffic_{$interface}_{$duration}",
+            20,
+            function () use ($zabbix, $interface, $duration) {
 
-            $outItemId = $zabbix->getItemIdByKey("net.if.out[{$interface}]");
-            $inItemId  = $zabbix->getItemIdByKey("net.if.in[{$interface}]");
+                $outItemId = $zabbix->getItemIdByKey("net.if.out[{$interface}]");
+                $inItemId  = $zabbix->getItemIdByKey("net.if.in[{$interface}]");
 
-            return [
-                'out' => $zabbix->getInterfaceTraffic($outItemId),
-                'in'  => $zabbix->getInterfaceTraffic($inItemId),
-            ];
-        }
-    );
+                return [
+                    'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
+                    'in'  => $zabbix->getInterfaceTraffic($inItemId, $duration),
+                ];
+            }
+        );
 
-    return response()->json($data);
-}
-
+        return response()->json($data);
+    }
 }

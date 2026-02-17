@@ -28,18 +28,18 @@ class ZabbixService
         ])->json();
     }
 
-    public function getInterfaceTraffic($itemId)
+    public function getInterfaceTraffic($itemId, $duration = 3600) // <-- پارامتر جدید
     {
         $now = time();
-        $oneHourAgo = $now - 3600;
+        $timeFrom = $now - $duration; // استفاده از duration
 
         $response = $this->request("history.get", [
             "output" => "extend",
-            "history" => 3, // numeric unsigned
+            "history" => 3,
             "itemids" => $itemId,
             "sortfield" => "clock",
             "sortorder" => "ASC",
-            "time_from" => $oneHourAgo,
+            "time_from" => $timeFrom,
             "time_till" => $now,
         ]);
 
@@ -54,30 +54,27 @@ class ZabbixService
             $prev = $history[$i - 1];
             $curr = $history[$i];
 
-
             $timeDiff = $curr['clock'] - $prev['clock'];
-
             $bps = $timeDiff > 0 ? ($curr['value']) : 0;
 
             $points[] = [
-                'x' => $curr['clock'] * 1000,   // timestamp برای JS
-                'y' => round($bps / 1000000, 2) // Mbps
+                'x' => $curr['clock'] * 1000,
+                'y' => round($bps / 1000000, 2)
             ];
         }
 
         return $points;
     }
 
-public function getItemIdByKey($key)
-{
-    $response = $this->request("item.get", [
-        "output" => ["itemid"],
-        "filter" => [
-            "key_" => $key
-        ]
-    ]);
+    public function getItemIdByKey($key)
+    {
+        $response = $this->request("item.get", [
+            "output" => ["itemid"],
+            "filter" => [
+                "key_" => $key
+            ]
+        ]);
 
-    return $response['result'][0]['itemid'] ?? null;
-}
-
+        return $response['result'][0]['itemid'] ?? null;
+    }
 }

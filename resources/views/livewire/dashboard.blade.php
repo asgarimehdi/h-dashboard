@@ -32,9 +32,9 @@ new  class extends Component {
         </div>
         <div class="p-6">
             <h1 class="text-3xl font-bold mb-4">خوش آمدید به داشبورد</h1>
-            <livewire:network-traffic-chart  interface="10101" title="فیبر اصلی"/>
-            <livewire:network-traffic-chart  interface="10110" title="بیمارستان امدادی"/>
-            <livewire:network-traffic-chart  interface="10124" title="سویچ دوم"/>
+<livewire:network-traffic-chart interface="10101" title="فیبر اصلی" :initial-duration="7200" />
+<livewire:network-traffic-chart interface="10110" title="بیمارستان امدادی" :initial-duration="1800" />
+<livewire:network-traffic-chart interface="10124" title="سویچ دوم" />
         </div>
     </x-card>
 </div>
