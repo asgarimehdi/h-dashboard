@@ -417,7 +417,7 @@
                             <div class="bg-gray-50/80 backdrop-blur-sm p-4 rounded-2xl border border-gray-100 shadow-sm group hover:bg-white hover:border-indigo-200 transition-all">
                                 <div class="flex justify-between items-center mb-3 text-[11px]">
                                     <div class="flex items-center gap-3">
-                                        <span class="font-black text-gray-800 bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100">{{ $activity->user->full_name }}</span>
+                                        <span class="font-black text-gray-800 bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100">{{ $activity->user->person?->f_name . ' ' . $activity->user->person?->l_name ?: 'کاربر سیستم' }}</span>
                                         
                                         {{-- نمایش فایل‌های مخصوص این فعالیت --}}
                                         @if($activity->attachments->count() > 0)
