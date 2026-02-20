@@ -51,4 +51,9 @@ class Unit extends Model
     {
         return $this->belongsTo(Boundary::class, 'boundary_id');
     }
+    // برای بارگذاری تمام سطوح زیرمجموعه به صورت خودکار
+public function childrenRecursive()
+{
+    return $this->children()->with('childrenRecursive');
+}
 }

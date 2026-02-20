@@ -42,6 +42,7 @@ Route::middleware('auth')->group(function () {
     Volt::route('/users/changepassword', 'auth.changepassword');
     Volt::route('/units', 'units.index');
     Volt::route('/units/chart', 'units.chart');
+
     // ... more
 
     Volt::route('/kargozini/estekhdams', 'kargozini.estekhdam');
