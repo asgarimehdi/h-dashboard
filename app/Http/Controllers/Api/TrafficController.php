@@ -9,32 +9,30 @@ use Illuminate\Support\Facades\Cache;
 
 class TrafficController extends Controller
 {
-    public function index(Request $request, ZabbixService $zabbix)
-    {
-        $validated = $request->validate([
-            'interface' => 'required',
-            'duration'  => 'nullable|integer|min:60|max:86400' // بین ۱ دقیقه تا ۲۴ ساعت
-        ]);
+  public function index(Request $request, ZabbixService $zabbix)
+{
+    $validated = $request->validate([
+        'out_item_id' => 'required',
+        'in_item_id'  => 'required',
+        'duration'    => 'nullable|integer|min:60|max:86400'
+    ]);
 
-        $interface = $validated['interface'];
-        $duration = $validated['duration'] ?? 3600; // پیش‌فرض ۱ ساعت
+    $outItemId = $validated['out_item_id'];
+    $inItemId  = $validated['in_item_id'];
+    $duration  = $validated['duration'] ?? 3600;
 
-        // کلید کش شامل duration نیز می‌شود
-        $data = Cache::remember(
-            "traffic_{$interface}_{$duration}",
-            20,
-            function () use ($zabbix, $interface, $duration) {
+    // Cache key now includes both IDs
+    $data = Cache::remember(
+        "traffic_{$outItemId}_{$inItemId}_{$duration}",
+        30,
+        function () use ($zabbix, $outItemId, $inItemId, $duration) {
+            return [
+                'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
+                'in'  => $zabbix->getInterfaceTraffic($inItemId, $duration),
+            ];
+        }
+    );
 
-                $outItemId = $zabbix->getItemIdByKey("net.if.out[{$interface}]");
-                $inItemId  = $zabbix->getItemIdByKey("net.if.in[{$interface}]");
-
-                return [
-                    'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
-                    'in'  => $zabbix->getInterfaceTraffic($inItemId, $duration),
-                ];
-            }
-        );
-
-        return response()->json($data);
-    }
+    return response()->json($data);
+}
 }
