@@ -14,7 +14,7 @@ class UnitSeeder extends Seeder
     public function run(): void
     {
         // پاک کردن جدول قبل از وارد کردن داده‌ها (اختیاری)
-        DB::table('units')->truncate();
+      //  DB::table('units')->truncate();
 
         // داده‌های ثابت از جدول units
         $units = [

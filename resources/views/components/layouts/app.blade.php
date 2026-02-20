@@ -23,7 +23,25 @@
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
+ <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css">
+<script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
+<style>
+    @font-face {
+        font-family: 'Vazirmatn';
+        src: url('/fonts/vazir/Vazirmatn-Regular.woff2') format('woff2');
+        font-weight: normal;
+    }
 
+    body {
+        font-family: 'Vazirmatn', sans-serif !important;
+        direction: rtl;
+    }
+    
+    /* برای اینکه کلاس‌های پیش‌فرض تیلوند هم از این فونت استفاده کنند */
+    .font-sans {
+        font-family: 'Vazirmatn', sans-serif !important;
+    }
+</style>
 </head>
 
 <body class="min-h-screen font-sans antialiased bg-base-200">
@@ -78,6 +96,12 @@
                         <x-menu-item title="مدیریت دسترسی ها" icon="o-users" link="/permissions" wire:navigate />
                         <x-menu-item title="مدیریت نقش ها" icon="o-users" link="/roles" wire:navigate />
                     </x-menu-sub>
+                     <x-menu-sub title="مدیریت تیکت ها" icon="o-cog-6-tooth">
+                        <x-menu-item title="  ایجاد تیکت " icon="o-users" link="/tickets/new" wire:navigate />
+                        <x-menu-item title="صندوق تیکت ها  " icon="o-users" link="/tickets/inbox" wire:navigate />
+                       <x-menu-item title="مانیتورینگ کل تیکت ها  " icon="o-users" link="/monitoring" wire:navigate />
+
+                    </x-menu-sub>
                     <x-menu-sub title="ساختار سازمان" icon="o-cog-6-tooth">
                         <x-menu-item title="مدیریت واحدها" icon="o-sparkles" link="/units" wire:navigate />
                         <x-menu-item title=" درختواره واحدها " icon="o-document-text" link="/units/chart" wire:navigate />
@@ -111,6 +135,23 @@
     </x-main>
 
     <x-toast />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('livewire:init', () => {
+       Livewire.on('swal', (event) => {
+           const data = event[0]; // در لاووایر ۳ داده‌ها در اولین ایندکس آرایه هستند
+           Swal.fire({
+               title: data.title,
+               icon: data.icon,
+               confirmButtonText: 'تایید',
+               timer: 3000,
+               toast: true,
+               position: 'top-end'
+           });
+       });
+    });
+</script>
+
 </body>
 
 </html>

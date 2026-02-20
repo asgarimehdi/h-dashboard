@@ -2,7 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
-
+use App\Livewire\Tickets\CreateTicket;
+use App\Livewire\Tickets\TicketInbox;
 
 
 
@@ -64,9 +65,15 @@ Route::middleware('auth')->group(function () {
         Volt::route('/card', 'glowingcard');
     });
 
+    Route::get('/monitoring', \App\Livewire\Tickets\AllTicketsMonitoring::class)->name('tickets.monitoring');
 
-   Volt::route('/permissions', 'permissions/index')->name('permissions');
-   Volt::route('/roles', 'roles/index')->name('roles');
+    Route::prefix('tickets')->name('tickets.')->group(function () {
+        Route::get('/inbox', TicketInbox::class)->name('inbox');
+        Route::get('/new', CreateTicket::class)->name('create');
+    });
+    
+    Volt::route('/permissions', 'permissions/index')->name('permissions');
+    Volt::route('/roles', 'roles/index')->name('roles');
 
     Route::middleware('role_or_permission:op-cache')->group(function () {
         // Serve OPcache GUI from non-public resources/views/op/index.php
@@ -77,8 +84,6 @@ Route::middleware('auth')->group(function () {
             }
 
             include $path;
-
         })->name('op');
     });
 });
-

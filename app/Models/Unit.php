@@ -56,4 +56,5 @@ public function childrenRecursive()
 {
     return $this->children()->with('childrenRecursive');
 }
+
 }

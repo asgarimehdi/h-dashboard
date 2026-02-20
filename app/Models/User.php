@@ -72,7 +72,10 @@ class User extends Authenticatable
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
 
-
+public function unit()
+    {
+        return $this->belongsTo(Unit::class);
+    }
     protected $hidden = ['password', 'remember_token'];
 
     protected function casts(): array

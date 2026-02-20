@@ -24,7 +24,7 @@ return new class extends Migration
             $table->double('lat')->nullable();
             $table->double('lng')->nullable();
             $table->text('description')->nullable();
-            
+
 
 
             $table->foreign('region_id')->references('id')->on('regions')
@@ -43,6 +43,9 @@ return new class extends Migration
             $table->foreign('parent_id')->references('id')->on('units')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
+            $table->boolean('is_active')->default(true);
+            // فیلد جدید برای قابلیت دریافت تیکت
+            $table->boolean('can_receive_tickets')->default(false);
 
             $table->timestamps();
         });

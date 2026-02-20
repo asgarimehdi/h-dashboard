@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
             UnitTypeSeeder::class,
             UnitTypeRelationshipSeeder::class,
             UnitSeeder::class,
+            UnitCapabilitySeeder::class,
             PermissionSeeder::class,
             RoleSeeder::class,
 
