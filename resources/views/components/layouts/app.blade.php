@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
+    <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 
 
     <script src="{{ asset('js/chart/highcharts.js') }}" defer></script>
@@ -23,12 +24,11 @@
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
- <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css">
-<script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
 <style>
     @font-face {
         font-family: 'Vazirmatn';
-        src: url('/fonts/vazir/Vazirmatn-Regular.woff2') format('woff2');
+        src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
         font-weight: normal;
     }
 
