@@ -135,7 +135,7 @@
     </x-main>
 
     <x-toast />
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
     document.addEventListener('livewire:init', () => {
        Livewire.on('swal', (event) => {

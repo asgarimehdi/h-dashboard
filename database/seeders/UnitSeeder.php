@@ -6779,16 +6779,6 @@ class UnitSeeder extends Seeder
                 'boundary_id' => null
             ],
             [
-                'id' => 675,
-                'region_id' => 2,
-                'parent_id' => null,
-                'name' => 'خانه نيماور',
-                'unit_type_id' => 9,
-                'lat' => 36.554277,
-                'lng' => 48.679098,
-                'boundary_id' => null
-            ],
-            [
                 'id' => 676,
                 'region_id' => 2,
                 'parent_id' => 74,
@@ -6796,16 +6786,6 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.567326,
                 'lng' => 48.491765,
-                'boundary_id' => null
-            ],
-            [
-                'id' => 677,
-                'region_id' => 2,
-                'parent_id' => null,
-                'name' => 'خانه میرجان زنجان',
-                'unit_type_id' => 9,
-                'lat' => 36.742755,
-                'lng' => 48.001077,
                 'boundary_id' => null
             ],
             [
@@ -7529,16 +7509,6 @@ class UnitSeeder extends Seeder
                 'boundary_id' => null
             ],
             [
-                'id' => 750,
-                'region_id' => 5,
-                'parent_id' => null,
-                'name' => 'پایگاه شماره 2',
-                'unit_type_id' => 10,
-                'lat' => 36.120214,
-                'lng' => 48.596474,
-                'boundary_id' => null
-            ],
-            [
                 'id' => 751,
                 'region_id' => 9,
                 'parent_id' => 177,
@@ -7606,26 +7576,6 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.672583,
                 'lng' => 48.513154,
-                'boundary_id' => null
-            ],
-            [
-                'id' => 758,
-                'region_id' => 2,
-                'parent_id' => null,
-                'name' => 'پایگاه شماره يک مرکز 19 زنجان',
-                'unit_type_id' => 10,
-                'lat' => 36.682861,
-                'lng' => 48.440168,
-                'boundary_id' => null
-            ],
-            [
-                'id' => 759,
-                'region_id' => 2,
-                'parent_id' => null,
-                'name' => 'پایگاه شماره 2 مرکز 19 زنجان',
-                'unit_type_id' => 10,
-                'lat' => 36.687722,
-                'lng' => 48.455068,
                 'boundary_id' => null
             ],
             [
