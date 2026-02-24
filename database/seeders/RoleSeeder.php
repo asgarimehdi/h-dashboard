@@ -16,22 +16,37 @@ class RoleSeeder extends Seeder
         // Reset cached roles and permissions
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // create permissions
-       // Role::create(['name' => 'gostaresh'])>givePermissionTo('organization');
+        // ۱. ایجاد نقش مدیر کل و اختصاص تمام مجوزها
+        $adminRole = Role::create(['name' => 'admin', 'label' => 'مدیر کل']);
+        $adminRole->givePermissionTo(Permission::all());
 
+        // ۲. ایجاد نقش مدیر واحد
+        $managerRole = Role::create(['name' => 'unit_manager', 'label' => 'مدیر واحد']);
+        $managerRole->givePermissionTo([
+            'create_ticket',
+            'manage_unit_tickets',
+            'view_assigned_tickets',
+            'organization'
+        ]);
 
-        // or may be done by chaining
-       // Role::create(['name' => 'it'])->givePermissionTo(['organization', 'op-cache']);
+        // ۳. ایجاد نقش کارشناس واحد
+        $expertRole = Role::create(['name' => 'expert', 'label' => 'کارشناس واحد']);
+        $expertRole->givePermissionTo([
+            'create_ticket',
+            'view_assigned_tickets'
+        ]);
 
-        Role::create(['name' => 'admin','label' => 'مدیر کل'])->givePermissionTo(Permission::all());
+        // ۴. ایجاد نقش کاربر عادی
+        $userRole = Role::create(['name' => 'user', 'label' => 'کاربر']);
+        $userRole->givePermissionTo([
+            'create_ticket'
+        ]);
 
         // Assign roles to demo users
-        $superadmins = User::where('id', 1)->orwhere('id', 2)->get();
+        $superadmins = User::whereIn('id', [1, 2])->get();
 
-//
         foreach($superadmins as $user){
             $user->assignRole('admin');
         }
-
     }
 }
