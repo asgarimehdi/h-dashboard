@@ -48,8 +48,8 @@ new class extends Component {
     @js($responseTimeUnit),
     @js($title)
 )"
-     x-init="init(); interval = setInterval(fetchValues, 10000)"
-     class="flex flex-col items-center p-4 border rounded-lg shadow-sm bg-base-100 w-64">
+     x-init="init(); interval = setInterval(fetchValues, 30000)"
+     class="flex flex-col items-center p-4 border rounded-lg shadow-sm bg-base-100 w-full">
 
     <!-- عنوان -->
     <div class="text-lg font-semibold mb-2" x-text="title"></div>
@@ -61,10 +61,10 @@ new class extends Component {
                     stroke-opacity="0.2" class="text-base-content/20"/>
             <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
                     stroke-linecap="round" :stroke-dasharray="circumference"
-                    :stroke-dashoffset="dashOffset" class="text-primary transition-all duration-500"/>
+                    :stroke-dashoffset="dashOffset" 
+                    :class="responseTimeColorClass + ' transition-all duration-500'"/>
         </svg>
         <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <!-- نمایش عدد سیگنال با جهت چپ به راست برای حفظ علامت منفی -->
             <div dir="ltr">
                 <span class="text-2xl font-bold" x-text="displaySignal"></span>
                 <span class="text-xs opacity-70" x-text="unit"></span>
@@ -130,6 +130,14 @@ function signalGauge(signalItemId, frequencyItemId, responseTimeItemId, min, max
             if (this.responseTime === null) return '—';
             const ms = this.responseTime * 1000;
             return ms >= 1 ? Math.round(ms) : ms.toFixed(1);
+        },
+
+        get responseTimeColorClass() {
+            if (this.responseTime === null) return 'text-base-content';
+            const ms = this.responseTime * 1000;
+            if (ms < 3) return 'text-success';      // سبز
+            if (ms >= 3 && ms <= 7) return 'text-warning'; // نارنجی
+            return 'text-error';                     // قرمز
         },
 
         get dashOffset() {

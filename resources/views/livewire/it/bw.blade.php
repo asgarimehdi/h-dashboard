@@ -42,20 +42,20 @@ new  class extends Component {
 <livewire:network-traffic-chart 
     out-item-id="74770" 
     in-item-id="74617" 
-    title="alghadir" 
+    title="بیمارستان الغدیر" 
     :initial-duration="7200" 
 />
 <livewire:network-traffic-chart 
     out-item-id="71639" 
     in-item-id="71648" 
-    title="cp-hi" 
+    title="وایرلس هیدج" 
     :initial-duration="7200" 
 />
 
 <livewire:network-traffic-chart 
     out-item-id="71439" 
     in-item-id="71448" 
-    title="cp-sa" 
+    title="وایرلس صائین قلعه" 
     :initial-duration="7200" 
 />
 
@@ -65,36 +65,104 @@ $signalItems = [
         'signalId' => '75297',
         'freqId'   => '71725',
         'respId'   => '70996',
-        'name'     => 'سیگنال اعلایی'
+        'name'     => 'اعلایی'
     ],
     [
         'signalId' => '75231',
         'freqId'   => '71713',
         'respId'   => '71055',
-        'name'     => 'سیگنال هفده شهریور'
+        'name'     => '17 شهریور'
+    ],
+      [
+        'signalId' => '75470',
+        'freqId'   => '69540',
+        'respId'   => '69426',
+        'name'     => 'شناط'
+    ],
+    [
+        'signalId' => '75477',
+        'freqId'   => '72019',
+        'respId'   => '71831',
+        'name'     => 'شریف آباد'
+    ],
+    [
+        'signalId' => '75440',
+        'freqId'   => '71719',
+        'respId'   => '70937',
+        'name'     => 'صائین قلعه'
+    ],
+    [
+        'signalId' => '75418',
+        'freqId'   => '71246',
+        'respId'   => '70577',
+        'name'     => 'مرکز5'
+    ],
+    [
+        'signalId' => '75425',
+        'freqId'   => '71266',
+        'respId'   => '70701',
+        'name'     => 'هیدج'
+    ],
+    [
+        'signalId' => '75447',
+        'freqId'   => '71707',
+        'respId'   => '71173',
+        'name'     => 'حسین آباد'
     ],
     [
         'signalId' => '75312',
         'freqId'   => '71261',
         'respId'   => '70760',
-        'name'     => 'سیگنال عمید آباد '
+        'name'     => 'عمید آباد'
     ],
+    [
+        'signalId' => '75335',
+        'freqId'   => '71735',
+        'respId'   => '70819',
+        'name'     => 'ارغوان'
+    ],
+    [
+        'signalId' => '75342',
+        'freqId'   => '71251',
+        'respId'   => '70518',
+        'name'     => 'بهورزی'
+    ],
+    [
+        'signalId' => '75357',
+        'freqId'   => '72009',
+        'respId'   => '71949',
+        'name'     => 'درسجین'
+    ],
+    [
+        'signalId' => '75380',
+        'freqId'   => '70165',
+        'respId'   => '70098',
+        'name'     => 'دکل قروه'
+    ],
+    [
+        'signalId' => '75395',
+        'freqId'   => '72014',
+        'respId'   => '71890',
+        'name'     => 'قروه'
+    ],
+  
 ];
 @endphp
 
 {{-- بخش گیج‌های سیگنال --}}
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
     @foreach($signalItems as $item)
-        <livewire:signal-gauge 
+        <livewire:multi-gauge 
             :signal-item-id="$item['signalId']"
             :frequency-item-id="$item['freqId']"
             :response-time-item-id="$item['respId']"
             :title="$item['name']"
-            :min="-100"
-            :max="-30"
+            :min="-85"
+            :max="-45"
             unit="dBm"
             frequency-unit="MHz"
             response-time-unit="ms"
+            x-init="init(); interval = setInterval(fetchValues, 60000)"
         />
     @endforeach
 </div>
