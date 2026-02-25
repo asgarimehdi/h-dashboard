@@ -123,8 +123,10 @@
                     @can('op-cache')
                     <x-menu-sub title=" ابزارهای مدیریتی " icon="o-cog-6-tooth">
                         <x-menu-item title="OPcache" icon="o-sparkles" link="/op" target="_blank" no-wire-navigate rel="noopener noreferrer" />
+                        <x-menu-item title="it" icon="o-sparkles" link="/it/bw" target="_blank" no-wire-navigate rel="noopener noreferrer" />
                     </x-menu-sub>
                     @endcan
+
                 </x-menu-sub>
 
             </x-menu>
