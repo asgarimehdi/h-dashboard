@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Http\Controllers\Api\TrafficController;
+use App\Http\Controllers\Api\LatestValueController;
+use App\Http\Controllers\Api\MultiLatestValueController;
+
 
 // Login route
 Route::post('/login', function (Request $request) {
@@ -37,3 +40,4 @@ Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
 });
 Route::middleware('auth:sanctum')->post('/location', [LocationController::class, 'store']);
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
+Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);

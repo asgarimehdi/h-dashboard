@@ -58,12 +58,46 @@ new  class extends Component {
     title="cp-sa" 
     :initial-duration="7200" 
 />
-<livewire:network-traffic-chart 
-    out-item-id="71610" 
-    in-item-id="71619" 
-    title="cp-amid" 
-    :initial-duration="7200" 
-/>
+
+@php
+$signalItems = [
+    [
+        'signalId' => '75297',
+        'freqId'   => '71725',
+        'respId'   => '70996',
+        'name'     => 'سیگنال اعلایی'
+    ],
+    [
+        'signalId' => '75231',
+        'freqId'   => '71713',
+        'respId'   => '71055',
+        'name'     => 'سیگنال هفده شهریور'
+    ],
+    [
+        'signalId' => '75312',
+        'freqId'   => '71261',
+        'respId'   => '70760',
+        'name'     => 'سیگنال عمید آباد '
+    ],
+];
+@endphp
+
+{{-- بخش گیج‌های سیگنال --}}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+    @foreach($signalItems as $item)
+        <livewire:signal-gauge 
+            :signal-item-id="$item['signalId']"
+            :frequency-item-id="$item['freqId']"
+            :response-time-item-id="$item['respId']"
+            :title="$item['name']"
+            :min="-100"
+            :max="-30"
+            unit="dBm"
+            frequency-unit="MHz"
+            response-time-unit="ms"
+        />
+    @endforeach
+</div>
         </div>
     </x-card>
 </div>
