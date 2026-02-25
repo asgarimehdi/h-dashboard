@@ -21,6 +21,7 @@ class AllTicketsMonitoring extends Component
     public $dateFrom = '';
     public $dateTo = '';
 
+public $showDetailsModal = false; // فقط برای باز/بسته بودن مودال
     // متدهای بروزرسانی تاریخ برای ریست کردن صفحه‌بندی
     public function updatedDateFrom() { $this->resetPage(); }
     public function updatedDateTo() { $this->resetPage(); }
@@ -88,10 +89,12 @@ class AllTicketsMonitoring extends Component
             'activities.user', 
             'activities.attachments' // بسیار مهم برای نمایش صحیح فایل‌ها در ردیف خودشان
         ])->findOrFail($id);
+        $this->showDetailsModal = true;
     }
 
     public function closeDetail()
     {
-        $this->showingTicket = null;
+            $this->showDetailsModal = false;
+    $this->showingTicket = null;
     }
 }
