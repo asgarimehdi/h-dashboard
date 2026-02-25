@@ -48,7 +48,7 @@ new class extends Component {
     @js($responseTimeUnit),
     @js($title)
 )"
-     x-init="init(); interval = setInterval(fetchValues, 30000)"
+     x-init="init(); interval = setInterval(() => fetchValues(), 30000)"
      class="flex flex-col items-center p-4 border rounded-lg shadow-sm bg-base-100 w-full">
 
     <!-- عنوان -->

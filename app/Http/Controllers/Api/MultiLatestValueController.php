@@ -24,7 +24,7 @@ class MultiLatestValueController extends Controller
         $cacheKey = 'multi_latest_' . implode('_', $itemIds);
 
         try {
-            $values = Cache::remember($cacheKey, 60, function () use ($zabbix, $itemIds) {
+            $values = Cache::remember($cacheKey, 20, function () use ($zabbix, $itemIds) {
                 return $zabbix->getLatestValues($itemIds);
             });
 

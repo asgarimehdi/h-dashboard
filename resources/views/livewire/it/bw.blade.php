@@ -162,7 +162,6 @@ $signalItems = [
             unit="dBm"
             frequency-unit="MHz"
             response-time-unit="ms"
-            x-init="init(); interval = setInterval(fetchValues, 60000)"
         />
     @endforeach
 </div>
