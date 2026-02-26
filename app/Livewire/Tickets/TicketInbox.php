@@ -33,6 +33,15 @@ class TicketInbox extends Component
     public $dateTo = '';
     public $currentTab = 'pending'; // تب پیش‌فرض: در انتظار بررسی
     public $showingTicketId;
+    public bool $showModal = false; // این خط را اضافه کنید
+    public function updateFilter($viewMode, $statusFilter = 'pending')
+    {
+        $this->viewMode = $viewMode;
+        $this->statusFilter = $statusFilter;
+
+        // همیشه وقتی فیلتر عوض می‌شود، باید به صفحه اول جدول برگردیم
+        $this->resetPage();
+    }
     public function updatedDateFrom()
     {
         $this->resetPage();
@@ -132,22 +141,30 @@ class TicketInbox extends Component
         }
 
         return view('livewire.tickets.ticket-inbox', [
-            'tickets' => $query->latest()->paginate(15),
-            'units' => $units
+            'tickets' => $query->latest()->paginate(5),
+            'units' => $units,
+
         ]);
     }
-
+    public function switchView($mode)
+    {
+        $this->viewMode = $mode;
+        $this->statusFilter = 'pending'; // همیشه وقتی بین ورودی/ارسالی جابجا می‌شوید، برود روی در انتظار
+        $this->resetPage();
+    }
     public function showTicket($id)
     {
         // لود کردن رابطه‌ها بر اساس نام‌های درست در مدل‌ها
 
         $this->showingTicket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])->findOrFail($id);
+        $this->showModal = true; // مودال را فعال کن
     }
 
     public function closeDetail()
     {
         $this->showingTicket = null;
         $this->reset(['targetUnitId', 'showingTicket', 'targetUnitName', 'unitSearch', 'forwardNote']);
+        $this->showModal = false; // مودال را ببند
     }
 
     public function selectTargetUnit($id, $name)

@@ -47,12 +47,14 @@
     src: url("/public/fonts/Vazirmatn-Regular.woff2") format("truetype");
     font-weight: normal;
     font-style: normal;
+    font-display: swap;
 }
 @font-face {
     font-family: "Vazir";
     src: url("/public/fonts/Vazirmatn-Bold.woff2") format("truetype");
     font-weight: bold;
     font-style: normal;
+    font-display: swap;
 }
 body {
     font-family: "Vazir", sans-serif;

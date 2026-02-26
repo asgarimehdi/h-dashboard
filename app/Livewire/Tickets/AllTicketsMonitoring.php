@@ -12,7 +12,7 @@ use Livewire\Attributes\Layout;
 class AllTicketsMonitoring extends Component
 {
     use WithPagination;
-
+    public bool $showModal = false; // متغیر جدید برای کنترل مودال
     public $search = '';
     public $statusFilter = 'all';
     public $selectedUnitId = null;
@@ -20,11 +20,16 @@ class AllTicketsMonitoring extends Component
     public $showingTicket = null;
     public $dateFrom = '';
     public $dateTo = '';
-
-public $showDetailsModal = false; // فقط برای باز/بسته بودن مودال
+    public bool $modalDetail = false;
     // متدهای بروزرسانی تاریخ برای ریست کردن صفحه‌بندی
-    public function updatedDateFrom() { $this->resetPage(); }
-    public function updatedDateTo() { $this->resetPage(); }
+    public function updatedDateFrom()
+    {
+        $this->resetPage();
+    }
+    public function updatedDateTo()
+    {
+        $this->resetPage();
+    }
 
     public function selectUnitForFilter($id)
     {
@@ -83,18 +88,18 @@ public $showDetailsModal = false; // فقط برای باز/بسته بودن م
     {
         // لود کردن تیکت به همراه فایل‌های متصل به فعالیت‌ها
         $this->showingTicket = Ticket::with([
-            'user', 
-            'unit', 
-            'attachments', 
-            'activities.user', 
+            'user',
+            'unit',
+            'attachments',
+            'activities.user',
             'activities.attachments' // بسیار مهم برای نمایش صحیح فایل‌ها در ردیف خودشان
         ])->findOrFail($id);
-        $this->showDetailsModal = true;
+        $this->showModal = true; // مودال را باز کن
     }
 
     public function closeDetail()
     {
-            $this->showDetailsModal = false;
-    $this->showingTicket = null;
+        $this->showModal = false; // مودال را ببند
+        $this->showingTicket = null;
     }
 }
