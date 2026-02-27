@@ -14,74 +14,84 @@
     <x-card shadow class="bg-base-100 border-none shadow-sm rounded-3xl">
         <div class="flex flex-col md:flex-row gap-4 justify-between items-center mb-4">
             {{-- Tab View Selection --}}
-            <div class="join shadow-sm border border-base-200 p-1 bg-base-200/50 rounded-2xl">
-                <button
-                    wire:click="updateFilter('received', 'pending')"
-                    class="join-item btn btn-sm {{ $viewMode === 'received' ? 'btn-primary shadow-md' : 'btn-ghost' }} rounded-xl px-6">
-                    ورودی‌ها و اقدامات من
-                </button>
+            <div class="flex gap-2 mb-4">
+                {{-- تب دریافتی --}}
+                <x-button wire:click="switchTab('received', 'pending')" label="دریافتی"
+                    class="{{ $this->viewMode === 'received' ? 'btn-primary' : 'btn-ghost' }}" />
 
-                <button
-                    wire:click="updateFilter('sent', 'pending')"
-                    class="join-item btn btn-sm {{ $viewMode === 'sent' ? 'btn-primary shadow-md' : 'btn-ghost' }} rounded-xl px-6">
-                    ارسالی‌ها و اقدامات من
-                </button>
+                {{-- تب ارسالی --}}
+                <x-button wire:click="switchTab('sent', 'pending')" label="ارسالی"
+                    class="{{ $this->viewMode === 'sent' ? 'btn-primary' : 'btn-ghost' }}" />
+
+                {{-- تب ارجاعی --}}
+                <x-button wire:click="switchTab('in_progress', 'all')" label="ارجاعی (پیگیری)"
+                    class="{{ $this->viewMode === 'in_progress' ? 'btn-primary' : 'btn-ghost' }}" />
             </div>
 
-            {{-- Date Pickers (Integration with your existing script) --}}
+            {{-- Date Pickers --}}
             <div class="flex items-center gap-2 bg-base-200/50 p-1.5 rounded-2xl border border-base-200" wire:ignore>
                 <input data-jdp id="filter_date_from" placeholder="از تاریخ"
+                    value="{{ $dateFrom }}"
                     class="input input-ghost input-xs w-24 text-center cursor-pointer focus:bg-white transition-all rounded-lg" readonly>
                 <span class="text-base-content/40 text-xs font-bold">تا</span>
                 <input data-jdp id="filter_date_to" placeholder="تا تاریخ"
+                    value="{{ $dateTo }}"
                     class="input input-ghost input-xs w-24 text-center cursor-pointer focus:bg-white transition-all rounded-lg" readonly>
             </div>
         </div>
 
         {{-- Status Filter Buttons --}}
         <div class="flex flex-wrap gap-2 pt-4 border-t border-base-200">
-            <x-button
-                wire:click="$set('statusFilter', 'all')"
-                label="همه تیکت‌ها"
+            <x-button wire:click="$set('statusFilter', 'all')" label="همه تیکت‌ها"
                 class="btn-xs {{ $statusFilter === 'all' ? 'btn-neutral' : 'btn-outline border-base-300' }} rounded-lg" />
 
-            @if($viewMode === 'received')
-            <x-button wire:click="$set('statusFilter', 'pending')" label="در انتظار بررسی" class="btn-xs {{ $statusFilter === 'pending' ? 'btn-warning text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            <x-button wire:click="$set('statusFilter', 'accepted')" label="در حال انجام" class="btn-xs {{ $statusFilter === 'accepted' ? 'btn-info text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            <x-button wire:click="$set('statusFilter', 'rejected')" label="رد شده توسط ما" class="btn-xs {{ $statusFilter === 'rejected' ? 'btn-error text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            <x-button wire:click="$set('statusFilter', 'completed')" label="انجام شده" class="btn-xs {{ $statusFilter === 'completed' ? 'btn-success text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            @else
-            <x-button wire:click="$set('statusFilter', 'pending')" label="منتظر تایید " class="btn-xs {{ $statusFilter === 'pending' ? 'btn-warning text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            <x-button wire:click="$set('statusFilter', 'accepted')" label="تایید شده مقصد" class="btn-xs {{ $statusFilter === 'accepted' ? 'btn-info text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            <x-button wire:click="$set('statusFilter', 'rejected')" label="رد شده مقصد" class="btn-xs {{ $statusFilter === 'rejected' ? 'btn-error text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
-            <x-button wire:click="$set('statusFilter', 'completed')" label="نهایی شده" class="btn-xs {{ $statusFilter === 'completed' ? 'btn-success text-white' : 'btn-ghost border-base-200' }} rounded-lg" />
+            @if($this->viewMode === 'received')
+            <x-button wire:click="$set('statusFilter', 'pending')" label="جدید / اقدام نشده"
+                class="btn-xs {{ $statusFilter === 'pending' ? 'btn-warning text-white' : 'btn-ghost' }} rounded-lg" />
+            <x-button wire:click="$set('statusFilter', 'accepted')" label="در حال اقدام"
+                class="btn-xs {{ ($statusFilter === 'accepted' || $statusFilter === 'assigned') ? 'btn-info text-white' : 'btn-ghost' }} rounded-lg" />
+            @elseif($this->viewMode === 'in_progress')
+            <x-button wire:click="$set('statusFilter', 'pending')" label="منتظر بررسی در مقصد"
+                class="btn-xs {{ $statusFilter === 'pending' ? 'btn-warning text-white' : 'btn-ghost' }} rounded-lg" />
+            <x-button wire:click="$set('statusFilter', 'assigned')" label="در حال انجام در مقصد"
+                class="btn-xs {{ $statusFilter === 'assigned' ? 'btn-info text-white' : 'btn-ghost' }} rounded-lg" />
+            @else {{-- تب ارسالی --}}
+            <x-button wire:click="$set('statusFilter', 'pending')" label="در انتظار تایید اولیه"
+                class="btn-xs {{ $statusFilter === 'pending' ? 'btn-warning text-white' : 'btn-ghost' }} rounded-lg" />
+            <x-button wire:click="$set('statusFilter', 'assigned')" label="تایید شده و در جریان"
+                class="btn-xs {{ $statusFilter === 'assigned' ? 'btn-info text-white' : 'btn-ghost' }} rounded-lg" />
             @endif
+
+            <x-button wire:click="$set('statusFilter', 'completed')"
+                label="{{ $this->viewMode === 'received' ? 'تکمیل شده توسط من' : 'نهایی شده' }}"
+                class="btn-xs {{ $statusFilter === 'completed' ? 'btn-success text-white' : 'btn-ghost' }} rounded-lg" />
+
+            <x-button wire:click="$set('statusFilter', 'rejected')"
+                label="{{ $this->viewMode === 'received' ? 'رد شده توسط ما' : 'رد شده' }}"
+                class="btn-xs {{ $statusFilter === 'rejected' ? 'btn-error text-white' : 'btn-ghost' }} rounded-lg" />
         </div>
     </x-card>
 
     <x-card class="bg-base-100 border-none shadow-sm rounded-3xl overflow-hidden mt-4">
         <x-table :headers="[
-        ['key' => 'user.person.f_name', 'label' => 'ایجاد کننده', 'class' => 'w-48'],
-        ['key' => 'priority', 'label' => 'اولویت', 'class' => 'hidden md:table-cell text-center'],
-        ['key' => 'status_name', 'label' => 'وضعیت', 'class' => 'hidden md:table-cell text-center'],
-        ['key' => 'subject', 'label' => 'موضوع'],
-        ['key' => 'unit.name', 'label' => 'نزد واحد', 'class' => 'hidden md:table-cell text-center'],
-        ['key' => 'actions', 'label' => 'عملیات', 'sortable' => false, 'class' => 'text-left'],
-    ]"
-            :rows="$tickets" with-pagination dir="rtl">
-            @scope('cell_user.person.f_name', $ticket)
-            <div class="flex items-center gap-3">
+            ['key' => 'user.person.f_name', 'label' => 'ایجاد کننده', 'class' => 'w-48'],
+            ['key' => 'priority', 'label' => 'اولویت', 'class' => 'hidden md:table-cell text-center'],
+            ['key' => 'status_name', 'label' => 'وضعیت', 'class' => 'hidden md:table-cell text-center'],
+            ['key' => 'subject', 'label' => 'موضوع'],
+            ['key' => 'current_location', 'label' => 'موقعیت فعلی تیکت', 'class' => 'hidden md:table-cell text-center'],
+            ['key' => 'actions', 'label' => 'عملیات', 'sortable' => false, 'class' => 'text-left'],
+        ]" :rows="$tickets" with-pagination dir="rtl">
 
-                <div class="flex flex-col">
-                    <span class="font-bold text-sm">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
-                    <span class="text-[10px] opacity-50 font-mono">#{{ $ticket->ticket_code }}</span>
-                </div>
+            @scope('cell_user.person.f_name', $ticket)
+            <div class="flex flex-col">
+                <span class="font-bold text-sm">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
+                <span class="text-[10px] opacity-50 font-mono">#{{ $ticket->ticket_code }}</span>
             </div>
             @endscope
 
             @scope('cell_priority', $ticket)
             @php
-            $pClasses = ['urgent' => 'badge-error', 'normal' => 'badge-info', 'low' => 'badge-ghost'];
+            $pClasses = ['urgent' => 'badge-error', 'normal' => 'badge-info', 'low' => 'badge-neutral'];
             $pLabels = ['urgent' => 'فوری', 'normal' => 'معمولی', 'low' => 'کم‌اهمیت'];
             @endphp
             <span class="badge badge-sm font-bold py-3 px-4 {{ $pClasses[$ticket->priority] ?? 'badge-ghost' }} text-white">
@@ -90,41 +100,82 @@
             @endscope
 
             @scope('cell_status_name', $ticket)
-            <div class="badge badge-outline badge-sm font-bold opacity-70">{{ $ticket->status_name }}</div>
+            @if($ticket->status === 'assigned' && is_null($ticket->read_at))
+            <div class="badge badge-warning badge-sm animate-pulse text-[10px]">مشاهده نشده</div>
+            @elseif($ticket->status === 'assigned' && !is_null($ticket->read_at))
+            <div class="badge badge-info badge-outline badge-sm text-[10px]">در حال اقدام</div>
+            @else
+            <div class="badge badge-outline badge-sm opacity-70">{{ $ticket->status_name }}</div>
+            @endif
             @endscope
 
             @scope('cell_subject', $ticket)
-            <span class="text-sm font-medium line-clamp-1 max-w-[150px]" title="{{ $ticket->subject }}">
-                {{Str::limit( $ticket->subject, 15, '...') }}
+            <span class="text-sm font-medium line-clamp-1" title="{{ $ticket->subject }}">
+                {{ Str::limit($ticket->subject, 20) }}
             </span>
             @endscope
-            @scope('cell_unit.name', $ticket)
-            <span class="text-xs font-medium" title="{{ $ticket->unit->name }}">
-                {{ Str::limit($ticket->unit->name, 15, '...') }}
-            </span>
+
+            @scope('cell_current_location', $ticket)
+            <div class="flex flex-col items-center justify-center gap-1">
+                <span class="text-[11px] font-bold text-primary">{{ $ticket->unit->name }}</span>
+                @if($ticket->assignee)
+                <span class="text-[9px] bg-base-200 px-2 py-0.5 rounded-full">👤 {{ $ticket->assignee->person?->f_name }} {{ $ticket->assignee->person?->l_name }}</span>
+                @else
+                <span class="text-[9px] text-base-content/40 italic">در انتظار تخصیص...</span>
+                @endif
+            </div>
             @endscope
+
             @scope('actions', $ticket)
             <div class="flex justify-end gap-1">
-                @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" tooltip="تایید" spinner />
-                <x-button icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
-                    wire:confirm="آیا مطمئن هستید؟" class="btn-ghost btn-sm text-error" tooltip="رد" spinner />
+                @php
+                $user = auth()->user();
+                $isManager = $user->hasAnyRole(['admin', 'unit_manager']);
+                $isMyUnit = ($ticket->unit_id == $user->person?->u_id);
+
+                // آیا من مسئول فعلی هستم؟
+                $isOwner = ($ticket->current_assignee_id == $user->id);
+
+                // آیا تیکت در واحد من است و هنوز به کسی تخصیص داده نشده؟
+                $isUnassignedInMyUnit = (is_null($ticket->current_assignee_id) && $isMyUnit);
+
+                $isRead = !is_null($ticket->read_at);
+
+                // تعریف متغیرهایی که خطا می‌دادند:
+                $isNew = in_array($ticket->status, ['created', 'forwarded']);
+                $isConfirmed = in_array($ticket->status, ['assigned', 'accepted']);
+
+                // منطق هایلایت (دکمه زرد چشمک‌زن)
+                $isActuallyReceivedByMe = ($isOwner || ($isManager && is_null($ticket->current_assignee_id)));
+                $shouldHighlight = ($this->viewMode === 'received' && !$isRead && $isActuallyReceivedByMe);
+                @endphp
+
+                {{-- دکمه مشاهده --}}
+                <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})"
+                    class="btn-sm {{ $shouldHighlight ? 'btn-warning animate-pulse' : 'btn-ghost text-info' }}" spinner />
+
+                @if($this->viewMode === 'received')
+                {{-- دکمه‌های تایید و رد برای مدیر واحد --}}
+                @if($isManager && $isNew && $isRead)
+                <x-button icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" />
+                <x-button icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-error" />
                 @endif
 
-                <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" tooltip="مشاهده" spinner />
-
-                @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" tooltip="عملیات / ارجاع" spinner />
+                {{-- دکمه ارجاع و عملیات --}}
+                @if(($isConfirmed || $isManager) && $isRead && $isActuallyReceivedByMe)
+                <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})"
+                    class="btn-ghost btn-sm text-primary" tooltip="ارجاع / عملیات" spinner />
+                @endif
                 @endif
             </div>
             @endscope
         </x-table>
     </x-card>
 
+    {{-- مودال نمایش جزئیات --}}
     <x-modal wire:model="showModal" title="جزئیات تیکت" separator class="backdrop-blur-md" box-class="max-w-4xl rounded-[2.5rem]">
         @if($showingTicket)
         <div class="space-y-6 text-right" dir="rtl">
-            {{-- Main Request --}}
             <div class="relative bg-base-200/50 p-6 rounded-3xl border border-base-300 shadow-inner">
                 <span class="absolute -top-3 right-6 badge badge-primary py-3 px-4 font-bold">شرح درخواست</span>
                 <p class="text-sm leading-8 pt-2">{{ $showingTicket->content }}</p>
@@ -140,7 +191,6 @@
                 @endif
             </div>
 
-            {{-- Timeline --}}
             <div class="space-y-4 pt-4">
                 <h4 class="text-xs font-black opacity-50 pr-2 border-r-4 border-primary uppercase tracking-widest">گردش فعالیت‌ها</h4>
                 <div class="space-y-4">
@@ -176,110 +226,105 @@
         </x-slot:actions>
     </x-modal>
 
-   <x-modal wire:model="isCompletionModalOpen" class="backdrop-blur-md" box-class="rounded-[2.5rem] p-0">
-    <div class="p-6 {{ ($targetUnitId || $selectedAssigneeId) ? 'bg-info/10' : 'bg-success/10' }} border-b border-base-200 text-center">
-        <h3 class="text-lg font-black {{ ($targetUnitId || $selectedAssigneeId) ? 'text-info' : 'text-success' }}">
-            {{ ($targetUnitId || $selectedAssigneeId) ? '🚀 عملیات ارجاع تیکت' : '✅ اعلام اتمام فعالیت' }}
-        </h3>
-    </div>
-
-    <x-form wire:submit.prevent="submitAction({{ $showingTicketId }})" class="p-6 space-y-4" dir="rtl">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {{-- ارجاع به واحد (Unit Search) --}}
-            <div class="space-y-2">
-                <x-input label="ارجاع به واحد مقصد:"
-                    wire:model.live="unitSearch"
-                    placeholder="جستجوی واحد..."
-                    icon="o-building-office"
-                    class="rounded-2xl"
-                    :disabled="$selectedAssigneeId" /> {{-- اگر شخص انتخاب شود، این قفل می‌شود --}}
-
-                @if(!empty($units) && !$selectedAssigneeId)
-                <div class="menu bg-base-100 rounded-2xl border border-base-200 shadow-xl p-2 max-h-40 overflow-y-auto">
-                    @foreach($units as $u)
-                    <button type="button" wire:click="selectTargetUnit({{ $u->id }}, '{{ $u->name }}')" class="btn btn-ghost btn-sm justify-start text-xs font-bold">
-                        {{ $u->name }}
-                    </button>
-                    @endforeach
-                </div>
-                @endif
-
-                @if($targetUnitId)
-                <div class="alert alert-info py-2 rounded-2xl shadow-sm">
-                    <span class="text-xs font-bold">مقصد: {{ $targetUnitName }}</span>
-                    <x-button label="لغو" wire:click="$set('targetUnitId', null)" class="btn-xs btn-ghost text-white underline" />
-                </div>
-                @endif
-            </div>
-
-            {{-- ارجاع به کارشناس هم‌واحدی --}}
-            <div class="space-y-2">
-                <x-select label="ارجاع به همکار (داخلی):"
-                    wire:model.live="selectedAssigneeId"
-                    :options="$this->myTeam" {{-- لیستی که در مرحله قبل توضیح دادم --}}
-                    option-label="full_name"
-                    placeholder="انتخاب همکار..."
-                    icon="o-user"
-                    class="rounded-2xl"
-                    :disabled="$targetUnitId" /> {{-- اگر واحد انتخاب شود، این قفل می‌شود --}}
-                
-                @if($selectedAssigneeId)
-                <div class="alert alert-info py-2 rounded-2xl shadow-sm">
-                    <span class="text-xs font-bold">کارشناس انتخاب شد</span>
-                    <x-button label="لغو" wire:click="$set('selectedAssigneeId', null)" class="btn-xs btn-ghost text-white underline" />
-                </div>
-                @endif
-            </div>
+    {{-- مودال ارجاع و اتمام کار --}}
+    <x-modal wire:model="isCompletionModalOpen" class="backdrop-blur-md" box-class="rounded-[2.5rem] p-0">
+        <div class="p-6 {{ ($targetUnitId || $selectedAssigneeId) ? 'bg-info/10' : 'bg-success/10' }} border-b border-base-200 text-center">
+            <h3 class="text-lg font-black {{ ($targetUnitId || $selectedAssigneeId) ? 'text-info' : 'text-success' }}">
+                {{ ($targetUnitId || $selectedAssigneeId) ? '🚀 عملیات ارجاع تیکت' : '✅ اعلام اتمام فعالیت' }}
+            </h3>
         </div>
 
-        <x-textarea
-            label="توضیحات یا گزارش نهایی:"
-            wire:model="completionNote"
-            rows="4"
-            class="rounded-2xl" />
+        <x-form wire:submit.prevent="submitAction" class="p-6 space-y-4" dir="rtl">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <x-input label="ارجاع به واحد مقصد:"
+                        wire:model.live="unitSearch"
+                        placeholder="جستجوی واحد..."
+                        icon="o-building-office"
+                        class="rounded-2xl"
+                        :disabled="$selectedAssigneeId" />
 
-        <x-file wire:model="completionFiles" label="پیوست مستندات" multiple icon="o-cloud-arrow-up" class="rounded-2xl" />
+                    @if(!empty($units) && !$selectedAssigneeId)
+                    <div class="menu bg-base-100 rounded-2xl border border-base-200 shadow-xl p-2 max-h-40 overflow-y-auto">
+                        @foreach($units as $u)
+                        <button type="button" wire:click="selectTargetUnit({{ $u->id }}, '{{ $u->name }}')" class="btn btn-ghost btn-sm justify-start text-xs font-bold">
+                            {{ $u->name }}
+                        </button>
+                        @endforeach
+                    </div>
+                    @endif
 
-        <div class="flex gap-2 pt-4">
-            <x-button label="انصراف" @click="$wire.isCompletionModalOpen = false" class="btn-ghost flex-1 rounded-2xl" />
-            <x-button
-                type="submit"
-                label="{{ ($targetUnitId || $selectedAssigneeId) ? 'تایید و ارجاع نهایی' : 'تکمیل و بستن تیکت' }}"
-                class="flex-[2] rounded-2xl {{ ($targetUnitId || $selectedAssigneeId) ? 'btn-info text-white' : 'btn-success text-white' }}"
-                spinner />
-        </div>
-    </x-form>
-</x-modal>
+                    @if($targetUnitId)
+                    <div class="alert alert-info py-2 rounded-2xl shadow-sm">
+                        <span class="text-xs font-bold">مقصد: {{ $targetUnitName }}</span>
+                        <x-button label="لغو" wire:click="$set('targetUnitId', null)" class="btn-xs btn-ghost text-white underline" />
+                    </div>
+                    @endif
+                </div>
+
+                <div class="space-y-2">
+                    <x-select label="ارجاع به همکار (داخلی):"
+                        wire:model.live="selectedAssigneeId"
+                        :options="$this->myTeam"
+                        option-label="full_name"
+                        placeholder="انتخاب همکار..."
+                        icon="o-user"
+                        class="rounded-2xl"
+                        :disabled="$targetUnitId" />
+
+                    @if($selectedAssigneeId)
+                    <div class="alert alert-info py-2 rounded-2xl shadow-sm">
+                        <span class="text-xs font-bold">کارشناس انتخاب شد</span>
+                        <x-button label="لغو" wire:click="$set('selectedAssigneeId', null)" class="btn-xs btn-ghost text-white underline" />
+                    </div>
+                    @endif
+                </div>
+            </div>
+
+            <x-textarea
+                label="توضیحات یا گزارش نهایی:"
+                wire:model="completionNote"
+                rows="4"
+                class="rounded-2xl" />
+
+            <x-file wire:model="completionFiles" label="پیوست مستندات" multiple icon="o-cloud-arrow-up" class="rounded-2xl" />
+
+            <div class="flex gap-2 pt-4">
+                <x-button label="انصراف" @click="$wire.isCompletionModalOpen = false" class="btn-ghost flex-1 rounded-2xl" />
+                <x-button
+                    type="submit"
+                    label="{{ ($targetUnitId || $selectedAssigneeId) ? 'تایید و ارجاع نهایی' : 'تکمیل و بستن تیکت' }}"
+                    class="flex-[2] rounded-2xl {{ ($targetUnitId || $selectedAssigneeId) ? 'btn-info text-white' : 'btn-success text-white' }}"
+                    spinner />
+            </div>
+        </x-form>
+    </x-modal>
 </div>
+
 @script
 <script>
-    // استفاده از ایونت خود لایووایر برای اطمینان از لود شدن DOM
-    $wire.on('init-picker', () => {
-        jalaliDatepicker.startWatch();
-    });
-
     const initJdp = () => {
-        jalaliDatepicker.startWatch();
+        if (typeof jalaliDatepicker !== 'undefined') {
+            jalaliDatepicker.startWatch();
 
-        const fromInput = document.getElementById('filter_date_from');
-        const toInput = document.getElementById('filter_date_to');
+            const fromInput = document.getElementById('filter_date_from');
+            const toInput = document.getElementById('filter_date_to');
 
-        if (fromInput) {
-            fromInput.addEventListener('jdp:change', e => {
-                $wire.set('dateFrom', e.target.value);
-            });
-        }
-        if (toInput) {
-            toInput.addEventListener('jdp:change', e => {
-                $wire.set('dateTo', e.target.value);
-            });
+            if (fromInput) {
+                fromInput.addEventListener('jdp:change', e => {
+                    $wire.set('dateFrom', e.target.value);
+                });
+            }
+            if (toInput) {
+                toInput.addEventListener('jdp:change', e => {
+                    $wire.set('dateTo', e.target.value);
+                });
+            }
         }
     };
 
-    // اجرا در حالت عادی
     initJdp();
-
-    // اجرا برای جابجایی بین صفحات با wire:navigate
     document.addEventListener('livewire:navigated', initJdp);
+    $wire.on('init-picker', initJdp);
 </script>
 @endscript

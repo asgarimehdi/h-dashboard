@@ -71,7 +71,14 @@ class User extends Authenticatable
     {
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
-
+// در مدل User.php
+public function getFullNameAttribute()
+{
+    // چک می‌کنیم که رابطه person وجود داشته باشد که خطا ندهد
+    return $this->person 
+        ? "{$this->person->f_name} {$this->person->l_name}" 
+        : $this->username; // اگر نبود نام کاربری را نشان بده
+}
 public function unit()
     {
         return $this->belongsTo(Unit::class);

@@ -21,6 +21,7 @@ class Ticket extends Model
         'task_id',
         'current_assignee_id',
         'accepted_at',
+        'read_at',
         'completed_at',
     ];
     public function canBeCompleted()
