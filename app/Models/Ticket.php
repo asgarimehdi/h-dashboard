@@ -75,7 +75,15 @@ class Ticket extends Model
     {
         return $this->hasMany(Attachment::class);
     }
+    // لیستی از همکاران در همان واحد برای ارجاع داخلی
+    public function getSubordinatesProperty()
+    {
+        if (!$this->showingTicket) return collect();
 
+        return User::where('unit_id', auth()->user()->unit_id)
+            ->where('id', '!=', auth()->id()) // خودش نباشد
+            ->get();
+    }
     // رابطه با فعالیت‌ها
     public function activities()
     {

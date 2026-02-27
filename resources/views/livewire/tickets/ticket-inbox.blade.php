@@ -176,23 +176,25 @@
         </x-slot:actions>
     </x-modal>
 
-    <x-modal wire:model="isCompletionModalOpen" class="backdrop-blur-md" box-class="rounded-[2.5rem] p-0">
-        <div class="p-6 {{ $targetUnitId ? 'bg-info/10' : 'bg-success/10' }} border-b border-base-200 text-center">
-            <h3 class="text-lg font-black {{ $targetUnitId ? 'text-info' : 'text-success' }}">
-                {{ $targetUnitId ? '🚀 عملیات ارجاع تیکت' : '✅ اعلام اتمام فعالیت' }}
-            </h3>
-        </div>
+   <x-modal wire:model="isCompletionModalOpen" class="backdrop-blur-md" box-class="rounded-[2.5rem] p-0">
+    <div class="p-6 {{ ($targetUnitId || $selectedAssigneeId) ? 'bg-info/10' : 'bg-success/10' }} border-b border-base-200 text-center">
+        <h3 class="text-lg font-black {{ ($targetUnitId || $selectedAssigneeId) ? 'text-info' : 'text-success' }}">
+            {{ ($targetUnitId || $selectedAssigneeId) ? '🚀 عملیات ارجاع تیکت' : '✅ اعلام اتمام فعالیت' }}
+        </h3>
+    </div>
 
-        <x-form wire:submit.prevent="submitAction({{ $showingTicketId }})" class="p-6 space-y-4" dir="rtl">
-            {{-- Unit Search --}}
+    <x-form wire:submit.prevent="submitAction({{ $showingTicketId }})" class="p-6 space-y-4" dir="rtl">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {{-- ارجاع به واحد (Unit Search) --}}
             <div class="space-y-2">
-                <x-input label="ارجاع به واحد مقصد (اختیاری):"
+                <x-input label="ارجاع به واحد مقصد:"
                     wire:model.live="unitSearch"
-                    placeholder="جستجوی نام واحد..."
-                    icon="o-magnifying-glass"
-                    class="rounded-2xl" />
+                    placeholder="جستجوی واحد..."
+                    icon="o-building-office"
+                    class="rounded-2xl"
+                    :disabled="$selectedAssigneeId" /> {{-- اگر شخص انتخاب شود، این قفل می‌شود --}}
 
-                @if(!empty($units))
+                @if(!empty($units) && !$selectedAssigneeId)
                 <div class="menu bg-base-100 rounded-2xl border border-base-200 shadow-xl p-2 max-h-40 overflow-y-auto">
                     @foreach($units as $u)
                     <button type="button" wire:click="selectTargetUnit({{ $u->id }}, '{{ $u->name }}')" class="btn btn-ghost btn-sm justify-start text-xs font-bold">
@@ -204,31 +206,50 @@
 
                 @if($targetUnitId)
                 <div class="alert alert-info py-2 rounded-2xl shadow-sm">
-                    <x-icon name="o-check-circle" />
                     <span class="text-xs font-bold">مقصد: {{ $targetUnitName }}</span>
                     <x-button label="لغو" wire:click="$set('targetUnitId', null)" class="btn-xs btn-ghost text-white underline" />
                 </div>
                 @endif
             </div>
 
-            <x-textarea
-                label="توضیحات یا گزارش نهایی:"
-                wire:model="completionNote"
-                rows="4"
-                class="rounded-2xl" />
-
-            <x-file wire:model="completionFiles" label="پیوست مستندات" multiple icon="o-cloud-arrow-up" class="rounded-2xl" />
-
-            <div class="flex gap-2 pt-4">
-                <x-button label="انصراف" @click="$wire.isCompletionModalOpen = false" class="btn-ghost flex-1 rounded-2xl" />
-                <x-button
-                    type="submit"
-                    label="{{ $targetUnitId ? 'تایید و ارجاع نهایی' : 'تکمیل و بستن تیکت' }}"
-                    class="flex-[2] rounded-2xl {{ $targetUnitId ? 'btn-info text-white' : 'btn-success text-white' }}"
-                    spinner />
+            {{-- ارجاع به کارشناس هم‌واحدی --}}
+            <div class="space-y-2">
+                <x-select label="ارجاع به همکار (داخلی):"
+                    wire:model.live="selectedAssigneeId"
+                    :options="$this->myTeam" {{-- لیستی که در مرحله قبل توضیح دادم --}}
+                    option-label="full_name"
+                    placeholder="انتخاب همکار..."
+                    icon="o-user"
+                    class="rounded-2xl"
+                    :disabled="$targetUnitId" /> {{-- اگر واحد انتخاب شود، این قفل می‌شود --}}
+                
+                @if($selectedAssigneeId)
+                <div class="alert alert-info py-2 rounded-2xl shadow-sm">
+                    <span class="text-xs font-bold">کارشناس انتخاب شد</span>
+                    <x-button label="لغو" wire:click="$set('selectedAssigneeId', null)" class="btn-xs btn-ghost text-white underline" />
+                </div>
+                @endif
             </div>
-        </x-form>
-    </x-modal>
+        </div>
+
+        <x-textarea
+            label="توضیحات یا گزارش نهایی:"
+            wire:model="completionNote"
+            rows="4"
+            class="rounded-2xl" />
+
+        <x-file wire:model="completionFiles" label="پیوست مستندات" multiple icon="o-cloud-arrow-up" class="rounded-2xl" />
+
+        <div class="flex gap-2 pt-4">
+            <x-button label="انصراف" @click="$wire.isCompletionModalOpen = false" class="btn-ghost flex-1 rounded-2xl" />
+            <x-button
+                type="submit"
+                label="{{ ($targetUnitId || $selectedAssigneeId) ? 'تایید و ارجاع نهایی' : 'تکمیل و بستن تیکت' }}"
+                class="flex-[2] rounded-2xl {{ ($targetUnitId || $selectedAssigneeId) ? 'btn-info text-white' : 'btn-success text-white' }}"
+                spinner />
+        </div>
+    </x-form>
+</x-modal>
 </div>
 @script
 <script>

@@ -34,6 +34,8 @@ class TicketInbox extends Component
     public $currentTab = 'pending'; // تب پیش‌فرض: در انتظار بررسی
     public $showingTicketId;
     public bool $showModal = false; // این خط را اضافه کنید
+    public $selectedAssigneeId = null;
+
     public function updateFilter($viewMode, $statusFilter = 'pending')
     {
         $this->viewMode = $viewMode;
@@ -139,13 +141,26 @@ class TicketInbox extends Component
                     ->orWhere('content', 'like', '%' . $this->search . '%');
             });
         }
-
+        if ($user->hasRole('admin')) {
+            // ادمین کل همه را می‌بیند
+        } elseif ($user->hasPermissionTo('manage_unit_tickets')) {
+            // مدیر واحد تمام تیکت‌های واحد خودش را می‌بیند
+            $query->where('unit_id', $user->person?->u_id);
+        } else {
+            // کارشناس: تیکت‌هایی که واحدش یکی است و مستقیماً به او ارجاع شده
+           
+            $query->where('unit_id', $user->person?->u_id)
+                ->where(function ($q) use ($user) {
+                    $q->where('current_assignee_id', $user->person?->u_id);
+                });
+        }
         return view('livewire.tickets.ticket-inbox', [
             'tickets' => $query->latest()->paginate(5),
             'units' => $units,
 
         ]);
     }
+
     public function switchView($mode)
     {
         $this->viewMode = $mode;
@@ -267,12 +282,16 @@ class TicketInbox extends Component
         $finalId = $id ?? $this->showingTicketId;
         $ticket = Ticket::findOrFail($finalId);
 
-        if ($ticket->status !== 'accepted' && !$this->targetUnitId) {
+        // بررسی اینکه آیا تیکت قابلیت مختومه شدن دارد یا خیر
+        // تیکت زمانی مختومه می‌شود که نه واحد مقصد انتخاب شده باشد و نه شخص مقصد
+        if ($ticket->status !== 'accepted' && !$this->targetUnitId && !$this->selectedAssigneeId) {
             $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
             return;
         }
 
-        $actionType = $this->targetUnitId ? 'forwarded' : 'completed';
+        // تعیین نوع اکشن: اگر هر نوع ارجاعی (واحد یا شخص) پر باشد، اکشن ما forwarded است
+        $isForwarding = ($this->targetUnitId || $this->selectedAssigneeId);
+        $actionType = $isForwarding ? 'forwarded' : 'completed';
 
         $this->validate([
             'completionNote' => $actionType === 'completed' ? 'required|min:5' : 'nullable|max:1000',
@@ -283,19 +302,37 @@ class TicketInbox extends Component
         try {
             DB::beginTransaction();
 
-            // ۱. تعیین توضیحات و بروزرسانی وضعیت تیکت
-            if ($actionType === 'forwarded') {
-                $ticket->update([
-                    'unit_id' => $this->targetUnitId,
-                    'status' => 'forwarded',
-                    'current_assignee_id' => null,
-                ]);
-                $description = "ارجاع تیکت به واحد: {$this->targetUnitName}";
+            if ($isForwarding) {
+                if ($this->targetUnitId) {
+                    // سناریو ۱: ارجاع بین‌واحدی
+                    $ticket->update([
+                        'unit_id' => $this->targetUnitId,
+                        'status' => 'forwarded',
+                        'current_assignee_id' => null, // تیکت به صف عمومی واحد مقصد می‌رود
+                    ]);
+                    $description = "ارجاع به واحد: {$this->targetUnitName}";
+                } else {
+                    // سناریو ۲: ارجاع درون‌واحدی (به شخص)
+                    // پیدا کردن کاربر به همراه اطلاعات شخصی‌اش
+                    $assignee = \App\Models\User::with('person')->find($this->selectedAssigneeId);
+
+                    // گرفتن نام و نام خانوادگی از مدل Person
+                    $fullName = $assignee->person
+                        ? $assignee->person->f_name . ' ' . $assignee->person->l_name
+                        : 'کارشناس نامشخص';
+                    $ticket->update([
+                        'current_assignee_id' => $this->selectedAssigneeId,
+                        'status' => 'accepted', // چون به شخص ارجاع شده، وضعیت پذیرفته شده می‌گیرد
+                    ]);
+                    $description = "ارجاع به کارشناس: {$fullName}";
+                }
+
                 if ($this->completionNote) {
                     $description .= " | توضیحات: {$this->completionNote}";
                 }
-                $message = "تیکت با موفقیت به واحد {$this->targetUnitName} ارجاع شد.";
+                $message = "تیکت با موفقیت ارجاع داده شد.";
             } else {
+                // سناریو ۳: مختومه کردن
                 $ticket->update([
                     'status' => 'completed',
                     'completed_at' => now(),
@@ -304,21 +341,21 @@ class TicketInbox extends Component
                 $message = "تیکت با موفقیت مختومه و بسته شد.";
             }
 
-            // ۲. ثبت فعالیت جدید (Activity) و دریافت آبجکت آن
+            // ۲. ثبت فعالیت جدید
             $newActivity = $ticket->activities()->create([
                 'user_id' => auth()->id(),
-                'action' => $actionType,
+                'action' => $actionType, // همان forwarded یا completed
                 'description' => $description,
                 'to_unit_id' => $this->targetUnitId ?? $ticket->unit_id,
             ]);
 
-            // ۳. آپلود و ثبت فایل‌ها (متصل به فعالیت جدید)
+            // ۳. ثبت فایل‌ها (بدون تغییر نسبت به کد خودت)
             if ($this->completionFiles) {
                 foreach ($this->completionFiles as $file) {
                     $path = $file->store('attachments', 'public');
                     $ticket->attachments()->create([
                         'user_id' => auth()->id(),
-                        'activity_id' => $newActivity->id, // متصل کردن فایل به همین اقدام (ارجاع/اتمام)
+                        'activity_id' => $newActivity->id,
                         'file_path' => $path,
                         'file_name' => $file->getClientOriginalName(),
                         'file_size' => $file->getSize(),
@@ -328,7 +365,7 @@ class TicketInbox extends Component
 
             DB::commit();
 
-            $this->reset(['isCompletionModalOpen', 'showingTicket', 'completionNote', 'completionFiles', 'targetUnitId', 'targetUnitName', 'unitSearch']);
+            $this->reset(['isCompletionModalOpen', 'showingTicket', 'completionNote', 'completionFiles', 'targetUnitId', 'targetUnitName', 'unitSearch', 'selectedAssigneeId']);
 
             $this->dispatch('swal', [
                 'title' => 'عملیات موفق',
@@ -343,5 +380,45 @@ class TicketInbox extends Component
     public function removeFile($index)
     {
         array_splice($this->completionFiles, $index, 1);
+    }
+
+    // وقتی واحد مقصد تغییر می‌کند، انتخاب کارشناس ریست شود
+    public function updatedTargetUnitId($value)
+    {
+        if ($value) {
+            $this->selectedAssigneeId = null;
+        }
+    }
+
+    // وقتی کارشناس انتخاب می‌شود، انتخاب واحد ریست شود
+    public function updatedSelectedAssigneeId($value)
+    {
+        if ($value) {
+            $this->targetUnitId = null;
+        }
+    }
+
+    // لیست کاربران هم‌واحدی برای ارجاع داخلی
+    public function getMyTeamProperty()
+    {
+        // ابتدا u_id کاربر فعلی را از رابطه person می‌گیریم
+        $myUnitId = auth()->user()->person?->u_id;
+
+        if (!$myUnitId) {
+            return collect();
+        }
+
+        // حالا کاربرانی را پیدا می‌کنیم که در جدول person، همان u_id را دارند
+        return \App\Models\User::whereHas('person', function ($query) use ($myUnitId) {
+            $query->where('u_id', $myUnitId);
+        })
+            ->where('id', '!=', auth()->id()) // خودش در لیست نباشد
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'full_name' => $user->person ? $user->person->f_name . ' ' . $user->person->l_name : $user->name
+                ];
+            });
     }
 }
