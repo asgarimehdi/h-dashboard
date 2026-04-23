@@ -63,7 +63,9 @@ Route::middleware('auth')->group(function () {
         Volt::route('/maps/location', 'maps/location'); //->can('map');
         Volt::route('/maps/point', 'maps/point');
         Volt::route('/card', 'glowingcard');
-        Volt::route('/it/bw', 'it/bw');
+
+        Volt::route('/it/wireless', 'it/wireless');
+        Volt::route('/it/networks', 'it/networks');
     });
 
     Route::get('/monitoring', \App\Livewire\Tickets\AllTicketsMonitoring::class)->name('tickets.monitoring');

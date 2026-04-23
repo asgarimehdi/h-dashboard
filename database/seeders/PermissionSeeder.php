@@ -19,6 +19,7 @@ class PermissionSeeder extends Seeder
         Permission::create(['name' => 'map','label'=>'نقشه']);
         Permission::create(['name' => 'organization','label'=>'ساختار سازمانی']);
         Permission::create(['name' => 'op-cache','label'=>'دسترسی به کش سرور']);
+        Permission::create(['name' => 'bw','label'=>'آنالیز شبکه']);
         // موارد جدید مربوط به سیستم تیکتینگ
         Permission::create(['name' => 'view_all_tickets', 'label' => 'مشاهده مانیتورینگ کل تیکت‌ها']);
         Permission::create(['name' => 'create_ticket', 'label' => 'ثبت تیکت جدید']);

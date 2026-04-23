@@ -120,10 +120,11 @@
                     </x-menu-sub>
                     @endcan
 
-                    @can('op-cache')
+                    @can('bw')
                     <x-menu-sub title=" ابزارهای مدیریتی " icon="o-cog-6-tooth">
-                        <x-menu-item title="OPcache" icon="o-sparkles" link="/op" target="_blank" no-wire-navigate rel="noopener noreferrer" />
-                        <x-menu-item title="it" icon="o-sparkles" link="/it/bw" target="_blank" no-wire-navigate rel="noopener noreferrer" />
+                        <x-menu-item title="کش سرور" icon="o-sparkles" link="/op" target="_blank" no-wire-navigate rel="noopener noreferrer" />
+                        <x-menu-item title="وایرلس ها" icon="o-sparkles" link="/it/wireless" no-wire-navigate rel="noopener noreferrer" />
+                        <x-menu-item title="شبکه ها" icon="o-sparkles" link="/it/networks" no-wire-navigate rel="noopener noreferrer" />
                     </x-menu-sub>
                     @endcan
 
