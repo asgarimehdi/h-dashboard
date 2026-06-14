@@ -1,0 +1,16 @@
+{
+    "agents": [
+        "copilot"
+    ],
+    "cloud": false,
+    "guidelines": true,
+    "mcp": true,
+    "nightwatch": false,
+    "sail": false,
+    "skills": [
+        "laravel-best-practices",
+        "livewire-development",
+        "volt-development",
+        "tailwindcss-development"
+    ]
+}
