@@ -78,11 +78,5 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true,
-    "repositories": {
-        "packagist": {
-            "type": "composer",
-            "url": "https://mirror-composer.runflare.com"
-        }
-    }
+    "prefer-stable": true
 }
