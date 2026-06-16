@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\WithFileUploads;
 use Livewire\Attributes\Locked;
 
-#[Layout('components.layouts.app')]
+#[Layout('layouts.app')]
 #[Locked]
 class TicketInbox extends Component
 {

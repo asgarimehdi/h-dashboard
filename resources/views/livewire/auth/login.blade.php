@@ -3,7 +3,7 @@
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Rule;
 use Livewire\Attributes\Title;
-use Livewire\Volt\Component;
+use Livewire\Component; // <--- ✅ تغییر اصلی: حذف Volt
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -12,12 +12,10 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 new
-#[Layout('components.layouts.auth')]       // <-- Here is the `empty` layout
+#[Layout('layouts.auth')]       // <-- Here is the `empty` layout
 #[Title('Login')]
 class extends Component {
 
-    // #[Rule('required|email')]
-    // public string $email = '';
     #[Rule('required')]
     public string $n_code = '';
 
@@ -33,6 +31,7 @@ class extends Component {
             return redirect('/');
         }
     }
+
     public function login()
     {
         $this->validate();
@@ -84,7 +83,9 @@ class extends Component {
     {
         return Str::transliterate(Str::lower($this->n_code).'|'.request()->ip());
     }
-};?>
+};
+
+?>
 
 <div>
     <x-nav sticky>

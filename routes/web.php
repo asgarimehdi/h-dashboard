@@ -6,9 +6,9 @@ use App\Livewire\Tickets\CreateTicket;
 use App\Livewire\Tickets\TicketInbox;
 
 
+//Route::view('/login', 'auth.login')->name('login');
 
-// Users will be redirected to this route if not logged in
-Volt::route('/login', 'auth.login')->name('login');
+Volt::route('/login', 'auth.login');
 Volt::route('/register', 'auth.register');
 // Define the logout
 Route::get('/logout', function () {

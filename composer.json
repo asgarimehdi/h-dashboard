@@ -14,7 +14,7 @@
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
-        "livewire/livewire": "^3.7",
+        "livewire/livewire": "^4.0",
         "livewire/volt": "^1.10.5",
         "morilog/jalali": "3.5",
         "robsontenorio/mary": "^2.8.1",

@@ -9,7 +9,7 @@ use Livewire\WithFileUploads;
 use Livewire\Attributes\Layout;
 use Mary\Traits\Toast;
 
-#[Layout('components.layouts.app')]
+#[Layout('layouts.app')]
 class CreateTicket extends Component
 {
     use WithFileUploads;

@@ -8,7 +8,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 
-#[Layout('components.layouts.app')]
+#[Layout('layouts.app')]
 class AllTicketsMonitoring extends Component
 {
     use WithPagination;
