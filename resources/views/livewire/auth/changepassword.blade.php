@@ -1,14 +1,17 @@
 <?php
 
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Mary\Traits\Toast;
-new class extends Component {
+
+return new class extends Component {
+    use Toast;
+
     public string $currentPassword = '';
     public string $newPassword = '';
     public string $newPasswordConfirmation = '';
-    use Toast;
+
     public function rules()
     {
         return [
@@ -18,7 +21,7 @@ new class extends Component {
         ];
     }
 
-    public function changePassword()
+    public function changePassword(): void
     {
         $this->validate();
 
@@ -38,33 +41,60 @@ new class extends Component {
         // ریست کردن فرم
         $this->reset(['currentPassword', 'newPassword', 'newPasswordConfirmation']);
         $this->success("رمز با موفقیت تغییر یافت.", position: 'toast-bottom');
-
-        // // نمایش پیام موفقیت
-        // session()->flash('success', 'رمز با موفقیت تغییر یافت.');
     }
 }; ?>
 
-<div class="change-password-page">
-   
- <!-- HEADER -->
-    <x-header title=" تغییر رمز ورود به سیستم" separator progress-indicator>
-       
+<div>
+    <!-- HEADER -->
+    <x-header title="تغییر رمز ورود به سیستم" separator progress-indicator>
         <x-slot:actions>
-
-            <x-theme-selector />
+            <x-theme-selector/>
         </x-slot:actions>
-
     </x-header>
 
-    
-
-    <x-form wire:submit="changePassword">
-        <x-input label="رمز فعلی" type="password" wire:model="currentPassword" icon="o-key" inline />
-        <x-input label="رمز جدید" type="password" wire:model="newPassword" icon="o-key" inline />
-        <x-input label="تأیید رمز جدید" type="password" wire:model="newPasswordConfirmation" icon="o-key" inline />
-        <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl" />
-        <x-slot:actions>
-            <x-button label="تغییر رمز" type="submit" icon="o-paper-airplane" class="btn-primary" spinner="changePassword" />
-        </x-slot:actions>
-    </x-form>
+    <x-card shadow>
+        <x-form wire:submit="changePassword" class="grid gap-4">
+            <x-input 
+                label="رمز فعلی" 
+                type="password" 
+                wire:model="currentPassword" 
+                icon="o-key" 
+                required
+            />
+            
+            <x-input 
+                label="رمز جدید" 
+                type="password" 
+                wire:model="newPassword" 
+                icon="o-key" 
+                required
+            />
+            
+            <x-input 
+                label="تأیید رمز جدید" 
+                type="password" 
+                wire:model="newPasswordConfirmation" 
+                icon="o-key" 
+                required
+            />
+            
+            <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
+            
+            <div class="flex gap-4">
+                <x-button 
+                    label="تغییر رمز" 
+                    type="submit" 
+                    icon="o-paper-airplane" 
+                    class="btn-primary pl-6" 
+                    spinner="changePassword" 
+                />
+                <x-button 
+                    label="ریست" 
+                    icon="o-x-mark" 
+                    wire:click="$refresh" 
+                    class="btn-default pl-6" 
+                />
+            </div>
+        </x-form>
+    </x-card>
 </div>

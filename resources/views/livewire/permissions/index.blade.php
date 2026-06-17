@@ -1,12 +1,12 @@
 <?php
 
 use Illuminate\Pagination\LengthAwarePaginator;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
 use Spatie\Permission\Models\Permission;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -34,33 +34,33 @@ new class extends Component {
         }
     }
 
-    public function createPermission(Permission $permission): void
+    public function createPermission(): void
     {
         $this->validate([
             'name' => [
                 'required',
                 'string',
                 'max:255',
-                'unique:permissions,name,',
-                'regex:/^[a-zA-Z0-9\s\-]+$/u', // فقط حروف، اعداد، فاصله، خط فاصله و زیرخط
+                'unique:permissions,name',
+                'regex:/^[a-zA-Z0-9\s\-]+$/u',
             ],
             'label' => [
                 'required',
                 'string',
                 'max:255',
-                'unique:permissions,label,',
-                'regex:/^[\p{L}\p{N}\s\-]+$/u', // برای پشتیبانی از فارسی هم (بر اساس نیاز شما)
+                'unique:permissions,label',
+                'regex:/^[\p{L}\p{N}\s\-]+$/u',
             ],
         ]);
 
-        $permission::create(['name' => $this->name,'label' => $this->label]);
+        Permission::create(['name' => $this->name, 'label' => $this->label]);
 
         $this->success("$this->label ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset();
         $this->modal = false;
     }
 
-    public function editPermission($id)
+    public function editPermission($id): void
     {
         $permission = Permission::findOrFail($id);
         $this->editingId = $id;
@@ -76,20 +76,20 @@ new class extends Component {
                 'string',
                 'max:255',
                 'unique:permissions,name,' . $this->editingId,
-                'regex:/^[a-zA-Z0-9\s\-]+$/u', // فقط حروف، اعداد، فاصله، خط فاصله و زیرخط
+                'regex:/^[a-zA-Z0-9\s\-]+$/u',
             ],
             'label' => [
                 'required',
                 'string',
                 'max:255',
                 'unique:permissions,label,' . $this->editingId,
-                'regex:/^[\p{L}\p{N}\s\-]+$/u', // برای پشتیبانی از فارسی هم (بر اساس نیاز شما)
+                'regex:/^[\p{L}\p{N}\s\-]+$/u',
             ],
         ]);
 
         try {
             $permission = Permission::findOrFail($this->editingId);
-            $permission->update(['name' => $this->name,'label' => $this->label]);
+            $permission->update(['name' => $this->name, 'label' => $this->label]);
 
             $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
             $this->reset();
@@ -102,7 +102,7 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'label', 'label' => 'عنوان', 'class' => 'flex-1'],
             ['key' => 'name', 'label' => 'نام', 'class' => 'flex-1'],
         ];
@@ -113,10 +113,12 @@ new class extends Component {
         $query = Permission::query();
 
         if (!empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%')->orWhere('label', 'LIKE', '%' . $this->search . '%');
+            $query->where('name', 'LIKE', '%' . $this->search . '%')
+                  ->orWhere('label', 'LIKE', '%' . $this->search . '%');
         }
+        
         $query->orderBy(...array_values($this->sortBy));
-        return $this->permissions = $query->paginate($this->perPage);
+        return $query->paginate($this->perPage);
     }
 
     public function with(): array
@@ -155,36 +157,30 @@ new class extends Component {
                  :per-page-values="[3, 5, 10]">
             @foreach($permissions as $permission)
                 <tr wire:key="{{ $permission->id }}">
-                    <td>{{ $permission->id }}</td>
-                    <td>{{ $permission->name }}</td>
-                    <td>{{ $permission->label }}</td>
-                    <td>
-                        @scope('actions', $permission)
-                        <div class="flex w-1/4">
-                            <x-button icon="o-pencil"
-                                      wire:click="editPermission({{ $permission->id }})"
-                                      class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal = true">
-                                <span class="hidden sm:inline">ویرایش</span>
-                            </x-button>
+                    @scope('actions', $permission)
+                    <div class="flex w-1/4">
+                        <x-button icon="o-pencil"
+                                  wire:click="editPermission({{ $permission->id }})"
+                                  class="btn-ghost btn-sm text-primary"
+                                  @click="$wire.modal = true">
+                            <span class="hidden sm:inline">ویرایش</span>
+                        </x-button>
 
-                            <x-button icon="o-trash"
-                                      wire:click="delete({{ $permission->id }})"
-                                      wire:confirm="Are you sure?"
-                                      spinner
-                                      class="btn-ghost btn-sm text-error">
-                                <span class="hidden sm:inline">حذف</span>
-                            </x-button>
-                        </div>
-                        @endscope
-                    </td>
+                        <x-button icon="o-trash"
+                                  wire:click="delete({{ $permission->id }})"
+                                  wire:confirm="Are you sure?"
+                                  spinner
+                                  class="btn-ghost btn-sm text-error">
+                            <span class="hidden sm:inline">حذف</span>
+                        </x-button>
+                    </div>
+                    @endscope
                 </tr>
             @endforeach
         </x-table>
     </x-card>
 
-    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش ' : 'جدید'" persistent
-             separator>
+    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش ' : 'جدید'" persistent separator>
         <x-form wire:submit.prevent="{{ $editingId ? 'updatePermission' : 'createPermission' }}" class="grid gap-4">
             <x-input
                 wire:model="name"

@@ -1,12 +1,9 @@
 <?php
 
-namespace App\Livewire\Users;
-
 use App\Models\User;
 use App\Models\Person;
-use App\Models\Unit;
 use Illuminate\Database\Eloquent\Builder;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
@@ -14,13 +11,13 @@ use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
     public array $expanded = [];
     public string $search = '';
-    public string $filterStatus = 'active'; // فیلتر پیش‌فرض: فقط کاربران فعال
+    public string $filterStatus = 'active';
 
     public bool $modal = false;
     public array $sortBy = ['column' => 'n_code', 'direction' => 'asc'];
@@ -29,16 +26,11 @@ new class extends Component {
     public $password;
     public $person_search = '';
     public $editing_user_id = null;
-    // لیست تمام نقش‌ها برای انتخاب در فرم (بارگذاری در mount)
     public array $allRoles = [];
-    // شناسه نقش‌های انتخاب‌شده برای کاربر (برای sync)
     public array $role_ids = [];
-    // لیست تمام دسترسی‌ها برای انتخاب مستقیم به کاربر
     public array $allPermissions = [];
-    // دسترسی‌های مستقیم انتخاب‌شده برای کاربر (نام‌ها برای syncPermissions)
     public array $user_permissions = [];
 
-    // بارگذاری اولیه داده‌های کمکی مانند نقش‌ها و دسترسی‌ها
     public function mount(): void
     {
         $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
@@ -48,25 +40,13 @@ new class extends Component {
     public function clear(): void
     {
         $this->reset(['search', 'filterStatus']);
-        $this->filterStatus = 'active'; // برگشت به پیش‌فرض
+        $this->filterStatus = 'active';
         $this->success('فیلترها پاک شدند.', position: 'toast-bottom');
     }
 
     public function delete(User $user): void
     {
-         // لود کردن تمام روابط مرتبط با کاربر
-        // $user->load('roles'); // اینجا می‌تونی روابط دیگه رو هم اضافه کنی
-
-        // چک کردن اینکه آیا کاربر توی روابط استفاده شده یا نه
-        // $isInUse = $user->roles()->exists(); // برای رابطه roles
-        // $isInUse = $user->roles()->exists() || $user->orders()->exists() || $user->comments()->exists();
-
-
-        // if ($isInUse) {
-        //     $this->error("نمی‌توانید $user->name را غیرفعال کنید چون در بخش‌های دیگر سیستم (مثل نقش‌ها) استفاده شده است.", position: 'toast-bottom');
-        //     return;
-        // }
-        $user->delete(); // Soft delete
+        $user->delete();
         $this->warning("$user->name غیرفعال شد", 'غیرفعال شد!', position: 'toast-bottom');
     }
 
@@ -85,23 +65,24 @@ new class extends Component {
 
     public function edit($userId): void
     {
-        $user = User::withTrashed()->findOrFail($userId); // برای ویرایش کاربران غیرفعال
+        $user = User::withTrashed()->findOrFail($userId);
         $this->editing_user_id = $user->id;
         $this->n_code = $user->n_code;
         $person = Person::where('n_code', $user->n_code)->first();
-        $this->person_search = "{$person->f_name} {$person->l_name} ({$person->n_code})";
+        $this->person_search = $person ? "{$person->f_name} {$person->l_name} ({$person->n_code})" : '';
         $this->password = null;
-        // بارگذاری نقش‌ها و دسترسی‌های مستقیم کاربر برای ویرایش
         $this->role_ids = $user->roles->pluck('id')->toArray();
         $this->user_permissions = $user->getDirectPermissions()->pluck('name')->map(fn($n) => (string)$n)->toArray();
         $this->modal = true;
     }
 
-    public function selectPerson($n_code)
+    public function selectPerson($n_code): void
     {
         $this->n_code = $n_code;
         $person = Person::where('n_code', $n_code)->first();
-        $this->person_search = "{$person->f_name} {$person->l_name} ({$person->n_code})";
+        if ($person) {
+            $this->person_search = "{$person->f_name} {$person->l_name} ({$person->n_code})";
+        }
     }
 
     public function createUser(): void
@@ -120,17 +101,15 @@ new class extends Component {
             'password.required' => 'رمز عبور الزامی است.',
             'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
         ]);
-        try {
-            $person = Person::where('n_code', $this->n_code)->first();
 
-            $user = User::create([
+        try {
+            User::create([
                 'n_code' => $this->n_code,
                 'password' => bcrypt($this->password),
             ]);
 
-            // همگام‌سازی نقش‌ها (با شناسه)
+            $user = User::where('n_code', $this->n_code)->first();
             $user->roles()->sync($this->role_ids ?? []);
-            // همگام‌سازی دسترسی‌های مستقیم کاربر (با نام دسترسی)
             $user->syncPermissions($this->user_permissions ?? []);
 
             $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions']);
@@ -159,14 +138,16 @@ new class extends Component {
             'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
             'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
         ]);
+
         try {
             $user = User::withTrashed()->findOrFail($this->editing_user_id);
             $data = ['n_code' => $this->n_code];
+            
             if ($this->password) {
                 $data['password'] = bcrypt($this->password);
             }
+            
             $user->update($data);
-            // همگام‌سازی نقش‌ها و دسترسی‌های مستقیم
             $user->roles()->sync($this->role_ids ?? []);
             $user->syncPermissions($this->user_permissions ?? []);
 
@@ -192,10 +173,9 @@ new class extends Component {
         ];
     }
 
-     public function users(): LengthAwarePaginator
+    public function users(): LengthAwarePaginator
     {
         $query = User::query()
-
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
             ->when($this->search, function (Builder $q) {
@@ -203,7 +183,7 @@ new class extends Component {
                     $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
                 });
             })
-            ->whereNot('id', auth()->id()); // حذف کاربر لاگین‌شده از نتایج
+            ->whereNot('id', auth()->id());
 
         if ($this->filterStatus === 'active') {
             $query->whereNull('deleted_at');
@@ -279,6 +259,7 @@ new class extends Component {
                     rounded
                 />
             @endscope
+            
             @scope('actions', $user)
                 <div class="flex w-1/12">
                     <x-button icon="o-pencil"
@@ -305,6 +286,7 @@ new class extends Component {
                     @endif
                 </div>
             @endscope
+            
             @scope('expansion', $user)
                 <div class="bg-base-200 p-6">
                     <div class="mb-3">
@@ -353,7 +335,6 @@ new class extends Component {
                          :required="!$editing_user_id" rounded/>
                 @error('password') <span class="text-error text-sm">{{ $message }}</span> @enderror
             </div>
-            {{-- انتخاب نقش‌ها برای کاربر: از شناسه‌ها استفاده می‌کنیم و label برای نمایش فارسی است --}}
             <div>
                 <x-choices-offline
                     label="نقش‌ها"
@@ -367,7 +348,6 @@ new class extends Component {
                 />
                 @error('role_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
             </div>
-            {{-- انتخاب دسترسی‌های مستقیم برای کاربر (این دسترسی‌ها به user->syncPermissions ارسال می‌شوند) --}}
             <div>
                 <x-choices-offline
                     label="دسترسی‌های مستقیم"

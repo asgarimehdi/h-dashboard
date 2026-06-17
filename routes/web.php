@@ -38,10 +38,10 @@ Route::middleware('auth')->group(function () {
     Route::livewire('/dashboard', 'dashboard'); 
 
 
-    Volt::route('/users', 'users.index');
-    Volt::route('/users/create', 'users.create');
-    Volt::route('/users/{user}/edit', 'users.edit');
-    Volt::route('/users/changepassword', 'auth.changepassword');
+    Route::livewire('/users', 'users.index');
+    Route::livewire('/users/create', 'users.create');
+    Route::livewire('/users/{user}/edit', 'users.edit');
+    Route::livewire('/users/changepassword', 'auth.changepassword');
     Volt::route('/units', 'units.index');
     Volt::route('/units/chart', 'units.chart');
 
@@ -76,8 +76,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/new', CreateTicket::class)->name('create');
     });
     
-    Volt::route('/permissions', 'permissions/index')->name('permissions');
-    Volt::route('/roles', 'roles/index')->name('roles');
+    Route::livewire('/permissions', 'permissions/index')->name('permissions');
+    Route::livewire('/roles', 'roles/index')->name('roles');
 
     Route::middleware('role_or_permission:op-cache')->group(function () {
         // Serve OPcache GUI from non-public resources/views/op/index.php

@@ -1,13 +1,13 @@
 <?php
 
 use Illuminate\Pagination\LengthAwarePaginator;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -25,24 +25,23 @@ new class extends Component {
     // تعریف headers به عنوان پروپرتی برای جلوگیری از خطای Method Not Found
     public array $headers = [];
 
-public function mount(): void
-{
-    // اضافه کردن label به فیلدهای انتخابی
-    $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
+    public function mount(): void
+    {
+        // اضافه کردن label به فیلدهای انتخابی
+        $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
 
-    $this->headers = [
-        ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
-        ['key' => 'label', 'label' => 'عنوان', 'class' => 'flex-1'],
-        ['key' => 'name', 'label' => 'نام', 'class' => 'flex-1'],
-    ];
-}
+        $this->headers = [
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
+            ['key' => 'label', 'label' => 'عنوان', 'class' => 'flex-1'],
+            ['key' => 'name', 'label' => 'نام', 'class' => 'flex-1'],
+        ];
+    }
 
     public function clear(): void
     {
         $this->resetValidation();
         // فقط فیلدهای مربوط به فرم را ریست کنید
         $this->reset(['name', 'label', 'permissions', 'editingId', 'modal']);
-       // $this->info('فیلدها خالی شدند', position: 'toast-bottom');
     }
 
     public function delete(Role $role): void
@@ -102,10 +101,12 @@ public function mount(): void
     public function roles(): LengthAwarePaginator
     {
         $query = Role::query();
+        
         if (!empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%')
                   ->orWhere('label', 'LIKE', '%' . $this->search . '%');
         }
+        
         $query->orderBy(...array_values($this->sortBy));
 
         return $query->paginate($this->perPage);
@@ -115,7 +116,6 @@ public function mount(): void
     {
         return [
             'roles' => $this->roles(),
-            // نیازی به پاس دادن headers و editingId نیست چون public هستند
         ];
     }
 }; ?>
@@ -160,8 +160,7 @@ public function mount(): void
         </x-table>
     </x-card>
 
-    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش ' : 'جدید'" persistent
-             separator>
+    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش ' : 'جدید'" persistent separator>
         <x-form wire:submit.prevent="{{ $editingId ? 'updateRole' : 'createRole' }}" class="grid gap-4">
             <x-input
                 wire:model="name"
@@ -177,17 +176,17 @@ public function mount(): void
                 required
                 icon="o-magnifying-glass"
             />
-{{--            <x-choices label="دسترسی" wire:model="permissions" :options="$allPermissions"  clearable />--}}
-<x-choices-offline
-    label="دسترسی ها"
-    wire:model="permissions"
-    :options="$allPermissions"
-    option-label="label"    {{-- نمایش عنوان فارسی به کاربر --}}
-    option-value="name"     {{-- ارسال نام انگلیسی به سمت سرور برای syncPermissions --}}
-    placeholder="جستجو..."
-    clearable
-    searchable
-/>
+            
+            <x-choices-offline
+                label="دسترسی ها"
+                wire:model="permissions"
+                :options="$allPermissions"
+                option-label="label"
+                option-value="name"
+                placeholder="جستجو..."
+                clearable
+                searchable
+            />
 
             <div class="flex gap-4">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner/>
