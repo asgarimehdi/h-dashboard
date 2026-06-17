@@ -5,12 +5,12 @@ use App\Models\Region;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
 use Livewire\Attributes\On;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -25,19 +25,18 @@ new class extends Component {
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     public $unitTypes, $provinces, $counties, $parentUnits;
-    public $userUnitLevel; // سطح واحد کاربر (ministry, province, county)
-    public $userRegionId; // region_id واحد کاربر
-    public $fixedRegionId; // برای کاربران سطح COUNTY (ثابت)
-    public $userUnitTypeId; // unit_type_id واحد کاربر
-    public $userUnitId; // id واحد کاربر (برای فیلتر کردن)
+    public $userUnitLevel;
+    public $userRegionId;
+    public $fixedRegionId;
+    public $userUnitTypeId;
+    public $userUnitId;
 
-    public function mount()
+    public function mount(): void
     {
         $this->determineUserLevel();
         $this->loadDropdowns();
     }
 
-    // تعیین سطح دسترسی کاربر
     public function determineUserLevel(): void
     {
         $user = auth()->user();
@@ -51,18 +50,18 @@ new class extends Component {
         }
 
         $this->userUnitTypeId = $unit->unit_type_id;
-        $this->userUnitId = $unit->id; // ذخیره id واحد کاربر
+        $this->userUnitId = $unit->id;
 
         if ($unit->id === 1) {
-            $this->userUnitLevel = 'ministry'; // سطح وزارت بهداشت
+            $this->userUnitLevel = 'ministry';
             $this->userRegionId = null;
         } elseif ($unit->region && $unit->region->type === 'province') {
-            $this->userUnitLevel = 'province'; // سطح استان
+            $this->userUnitLevel = 'province';
             $this->userRegionId = $unit->region_id;
         } elseif ($unit->region && $unit->region->type === 'county') {
-            $this->userUnitLevel = 'county'; // سطح COUNTY
+            $this->userUnitLevel = 'county';
             $this->userRegionId = $unit->region_id;
-            $this->fixedRegionId = $unit->region_id; // منطقه ثابت برای ذخیره
+            $this->fixedRegionId = $unit->region_id;
         } else {
             $this->userUnitLevel = null;
             $this->userUnitId = null;
@@ -76,7 +75,6 @@ new class extends Component {
             ->withAggregate('region', 'name')
             ->withAggregate('parent', 'name');
 
-        // حذف واحد کاربر از لیست
         if ($this->userUnitId) {
             $query->where('id', '!=', $this->userUnitId);
         }
@@ -85,7 +83,6 @@ new class extends Component {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
 
-        // محدود کردن واحدها بر اساس سطح کاربر
         if ($this->userUnitLevel === 'county') {
             $query->where('region_id', $this->userRegionId);
         } elseif ($this->userUnitLevel === 'province') {
@@ -96,10 +93,10 @@ new class extends Component {
         return $query->paginate($this->perPage);
     }
 
-    // بقیه متدها بدون تغییر باقی می‌مانند
     public function loadDropdowns(): void
     {
         $this->unitTypes = $this->getAllowedUnitTypes();
+        
         if ($this->userUnitLevel === 'ministry') {
             $this->provinces = Region::where('type', 'province')->get();
             $this->counties = $this->province_id
@@ -112,6 +109,7 @@ new class extends Component {
             $this->provinces = collect();
             $this->counties = collect();
         }
+        
         $this->parentUnits = $this->getAllowedParentUnitsProperty();
     }
 
@@ -120,11 +118,13 @@ new class extends Component {
         if ($this->userUnitLevel === 'ministry') {
             return UnitType::where('id', '!=', 1)->get();
         }
+        
         $allowedUnitTypeIds = [];
         $childUnitTypeIds = UnitTypeRelationship::where('allowed_parent_unit_type_id', $this->userUnitTypeId)
             ->pluck('child_unit_type_id')
             ->toArray();
         $allowedUnitTypeIds = array_merge($allowedUnitTypeIds, $childUnitTypeIds);
+        
         while (!empty($childUnitTypeIds)) {
             $newChildUnitTypeIds = UnitTypeRelationship::whereIn('allowed_parent_unit_type_id', $childUnitTypeIds)
                 ->pluck('child_unit_type_id')
@@ -132,10 +132,13 @@ new class extends Component {
             $allowedUnitTypeIds = array_merge($allowedUnitTypeIds, $newChildUnitTypeIds);
             $childUnitTypeIds = $newChildUnitTypeIds;
         }
+        
         $allowedUnitTypeIds = array_unique($allowedUnitTypeIds);
+        
         if (empty($allowedUnitTypeIds)) {
             return collect();
         }
+        
         return UnitType::whereIn('id', $allowedUnitTypeIds)->get();
     }
 
@@ -151,6 +154,7 @@ new class extends Component {
         $this->parent_id = null;
         $this->loadDropdowns();
     }
+
     public function updatedRegionId($value): void
     {
         $this->parent_id = null;
@@ -162,11 +166,14 @@ new class extends Component {
         if (!$this->unit_type_id) {
             return collect();
         }
+        
         if ($this->unit_type_id == 1) {
             return collect();
         }
+        
         $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
             ->pluck('allowed_parent_unit_type_id');
+        
         $parentUnits = Unit::whereIn('unit_type_id', $allowedParentTypeIds)
             ->when($this->userUnitLevel === 'county', function ($query) {
                 return $query->where('region_id', $this->userRegionId);
@@ -175,9 +182,11 @@ new class extends Component {
                 return $query->whereIn('region_id', Region::where('parent_id', $this->userRegionId)->pluck('id')->push($this->userRegionId));
             })
             ->get();
+        
         if ($parentUnits->isEmpty() && $this->userUnitLevel === 'ministry') {
             $parentUnits = Unit::where('unit_type_id', 1)->get();
         }
+        
         return $parentUnits;
     }
 
@@ -189,21 +198,23 @@ new class extends Component {
             'region_id' => 'nullable|exists:regions,id',
             'parent_id' => $this->unit_type_id == 1 ? 'nullable' : 'required|exists:units,id',
         ];
+        
         if ($this->userUnitLevel === 'ministry') {
             $rules['province_id'] = 'required|exists:regions,id';
         }
+        
         $this->validate($rules);
+        
         if ($this->parent_id) {
             $parentUnit = Unit::find($this->parent_id);
             $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
                 ->pluck('allowed_parent_unit_type_id')->toArray();
-            if ((!in_array($parentUnit->unit_type_id, $allowedParentTypeIds))
-//                or($parentUnit->region_id!=$this->region_id)
-            ) {
+            if (!in_array($parentUnit->unit_type_id, $allowedParentTypeIds)) {
                 $this->error('واحد بالادستی انتخاب‌شده مجاز نیست.');
                 return;
             }
         }
+        
         $data = [
             'name' => $this->name,
             'description' => $this->description,
@@ -211,6 +222,7 @@ new class extends Component {
             'region_id' => $this->determineRegionId(),
             'parent_id' => $this->parent_id,
         ];
+        
         try {
             if ($this->editingId) {
                 Unit::findOrFail($this->editingId)->update($data);
@@ -222,6 +234,7 @@ new class extends Component {
         } catch (\Exception $e) {
             $this->error("خطا ", position: 'toast-bottom');
         }
+        
         $this->resetForm();
         $this->modal = false;
     }
@@ -247,6 +260,7 @@ new class extends Component {
         $this->unit_type_id = $unit->unit_type_id;
         $this->region_id = $unit->region_id;
         $this->parent_id = $unit->parent_id;
+        
         if ($this->userUnitLevel === 'ministry' && $unit->region) {
             if ($unit->region->type === 'county') {
                 $this->province_id = $unit->region->parent_id;
@@ -254,6 +268,7 @@ new class extends Component {
                 $this->province_id = $unit->region_id;
             }
         }
+        
         $this->loadDropdowns();
         $this->modal = true;
     }
@@ -324,7 +339,7 @@ new class extends Component {
 }; ?>
 
 <div>
-    <!-- هدر -->
+    <!-- HEADER -->
     <x-header title="مدیریت واحدهای زیر مجموعه" separator progress-indicator>
         <x-slot:middle class="!justify-end">
         </x-slot:middle>
@@ -333,7 +348,7 @@ new class extends Component {
         </x-slot:actions>
     </x-header>
 
-    <!-- جدول -->
+    <!-- TABLE -->
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
             <x-button class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
@@ -347,79 +362,69 @@ new class extends Component {
                 />
             </div>
         </div>
+        
         <x-table :headers="$headers" :rows="$units" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[5, 10, 20]">
             @foreach($units as $unit)
-                <tr>
-                    <td>
-                        @scope('actions', $unit)
-                        <div class="flex w-1/12">
-                            <x-button icon="o-map"
-                                      class="btn-ghost btn-sm text-primary"
-                                      wire:click="mapModal({{ $unit->id }})">
-                                <span class="hidden 2xl:inline">نقشه</span>
-                            </x-button>
-                            <x-button icon="o-pencil"
-                                      wire:click="editUnit({{ $unit->id }})"
-                                      class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal = true">
-                                <span class="hidden 2xl:inline">ویرایش</span>
-                            </x-button>
-                            <x-button icon="o-trash"
-                                      wire:click="deleteUnit({{ $unit->id }})"
-                                      wire:confirm="آیا مطمئن هستید"
-                                      spinner
-                                      class="btn-ghost btn-sm text-error">
-                                <span class="hidden 2xl:inline">حذف</span>
-                            </x-button>
-                        </div>
-                        @endscope
-                    </td>
+                <tr wire:key="{{ $unit->id }}">
+                    @scope('actions', $unit)
+                    <div class="flex w-1/12">
+                        <x-button icon="o-map"
+                                  class="btn-ghost btn-sm text-primary"
+                                  wire:click="mapModal({{ $unit->id }})">
+                            <span class="hidden 2xl:inline">نقشه</span>
+                        </x-button>
+                        <x-button icon="o-pencil"
+                                  wire:click="editUnit({{ $unit->id }})"
+                                  class="btn-ghost btn-sm text-primary"
+                                  @click="$wire.modal = true">
+                            <span class="hidden 2xl:inline">ویرایش</span>
+                        </x-button>
+                        <x-button icon="o-trash"
+                                  wire:click="deleteUnit({{ $unit->id }})"
+                                  wire:confirm="آیا مطمئن هستید"
+                                  spinner
+                                  class="btn-ghost btn-sm text-error">
+                            <span class="hidden 2xl:inline">حذف</span>
+                        </x-button>
+                    </div>
+                    @endscope
                 </tr>
             @endforeach
         </x-table>
     </x-card>
 
-    <!-- مدال -->
+    <!-- MODAL -->
     <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش واحد' : 'ثبت واحد جدید' }}" separator persistent>
-        <x-form wire:submit.prevent="saveUnit">
-            <div class="grid grid-cols-2 gap-4">
-                <!-- نام -->
-                <x-input wire:model="name" label="نام واحد" placeholder="نام واحد" required/>
+        <x-form wire:submit.prevent="saveUnit" class="grid grid-cols-2 gap-4">
+            <x-input wire:model="name" label="نام واحد" placeholder="نام واحد" required/>
+            <x-input wire:model="description" label="توضیحات" placeholder="توضیحات"/>
+            
+            <x-select wire:model.live="unit_type_id" label="نوع واحد" :options="$unitTypes" option-value="id"
+                      option-label="name" required placeholder="انتخاب کنید"/>
 
-                <!-- توضیحات -->
-                <x-input wire:model="description" label="توضیحات" placeholder="توضیحات"/>
+            @if($userUnitLevel === 'ministry')
+                <x-select wire:model.live="province_id" label="استان" :options="$provinces" option-value="id"
+                          option-label="name" placeholder="انتخاب کنید" required/>
+            @endif
 
-                <!-- نوع واحد -->
-                <x-select wire:model.live="unit_type_id" label="نوع واحد" :options="$unitTypes" option-value="id"
-                          option-label="name" required placeholder="انتخاب کنید"/>
+            @if($userUnitLevel === 'ministry' || $userUnitLevel === 'province')
+                <x-select wire:model.live="region_id" label="شهرستان" :options="$counties" option-value="id"
+                          option-label="name" placeholder="انتخاب کنید"/>
+            @endif
 
-                <!-- استان (فقط برای کاربران سطح وزارت) -->
-                @if($userUnitLevel === 'ministry')
-                    <x-select wire:model.live="province_id" label="استان" :options="$provinces" option-value="id"
-                              option-label="name" placeholder="انتخاب کنید" required/>
-                @endif
+            <x-select wire:model.live="parent_id" label="واحد بالادستی" :options="$parentUnits" option-value="id"
+                      option-label="name" :required="$unit_type_id != 1" placeholder="انتخاب کنید"/>
 
-                <!-- COUNTY (برای کاربران سطح وزارت یا استان) -->
-                @if($userUnitLevel === 'ministry' || $userUnitLevel === 'province')
-                    <x-select wire:model.live="region_id" label="شهرستان" :options="$counties" option-value="id"
-                              option-label="name" placeholder="انتخاب کنید"/>
-                @endif
-
-                <!-- واحد بالادستی -->
-                <x-select wire:model.live="parent_id" label="واحد بالادستی" :options="$parentUnits" option-value="id"
-                          option-label="name" required placeholder="انتخاب کنید"/>
-
-                <!-- دکمه‌ها -->
-                <div class="col-span-2 flex justify-end space-x-2">
-                    <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check"
-                              class="btn-primary"/>
-                    <x-button label="لغو" wire:click="resetForm" @click="$wire.modal = false" icon="o-x-mark"
-                              class="btn-outline"/>
-                </div>
+            <div class="col-span-2 flex justify-end space-x-2">
+                <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check"
+                          class="btn-primary"/>
+                <x-button label="لغو" wire:click="resetForm" @click="$wire.modal = false" icon="o-x-mark"
+                          class="btn-outline"/>
             </div>
         </x-form>
     </x-modal>
+    
     <x-modal wire:model="modal2" title="ثبت مرز" separator persistent>
         <livewire:maps.polygon />
     </x-modal>

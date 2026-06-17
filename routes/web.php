@@ -42,8 +42,8 @@ Route::middleware('auth')->group(function () {
     Route::livewire('/users/create', 'users.create');
     Route::livewire('/users/{user}/edit', 'users.edit');
     Route::livewire('/users/changepassword', 'auth.changepassword');
-    Volt::route('/units', 'units.index');
-    Volt::route('/units/chart', 'units.chart');
+    Route::livewire('/units', 'units.index');
+    Route::livewire('/units/chart', 'units.chart');
 
     // ... more
 
