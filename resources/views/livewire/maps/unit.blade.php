@@ -1,33 +1,54 @@
 <?php
 
 use App\Models\Unit;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
-new class extends Component
+return new class extends Component
 {
     public $units;
 
-    public function mount()
+    public function mount(): void
     {
         $this->units = Unit::with('boundary')
             ->whereNotNull('boundary_id')
             ->get()
             ->map(function ($unit) {
-                $unit->geojson = $unit->boundary?->geojson ?? null;
                 return [
                     'id' => $unit->id,
                     'name' => $unit->name,
-                    'geojson' => $unit->geojson,
+                    'geojson' => $unit->boundary?->geojson ?? null,
                 ];
-            });
-
-
+            })
+            ->toArray();
     }
 };
-
 ?>
 
+<div>
+    <x-header title="نقشه واحد ها" separator progress-indicator>
+        <x-slot:actions>
+            <x-theme-selector/>
+        </x-slot:actions>
+    </x-header>
 
+    <x-card shadow class="p-0">
+        <div class="container">
+            <livewire:maps.map/>
+
+            <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
+                @foreach ($units as $unit)
+                    <x-toggle
+                        label="{{ $unit['name'] }}"
+                        wire:key="unit-{{ $unit['id'] }}"
+                        x-on:click="toggleGeoJson({{ $unit['id'] }})"
+                    />
+                @endforeach
+            </div>
+        </div>
+    </x-card>
+</div>
+
+@assets
 <style>
     .unit-menu {
         padding: 5px;
@@ -37,36 +58,19 @@ new class extends Component
         z-index: 1000;
     }
 </style>
+@endassets
 
-<div>
-    <x-header title="نقشه واحد ها" separator progress-indicator>
-        <x-slot:actions>
-            <x-theme-selector />
-        </x-slot:actions>
-    </x-header>
-
-    <x-card shadow class="p-0">
-        <div class="container">
-            <livewire:maps.map />
-
-            <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
-                @foreach ($units as $unit)
-                    <x-toggle
-                        label="{{ $unit['name'] }}"
-                        onclick="toggleGeoJson({{ $unit['id'] }})"
-                    ></x-toggle>
-                @endforeach
-
-            </div>
-        </div>
-    </x-card>
-</div>
-
+@script
 <script>
     var geojsonLayers = {};
-    var allUnits = @json($units);
+    var allUnits = {{ Js::from($units) }};
 
-    function toggleGeoJson(unitId) {
+    window.toggleGeoJson = function(unitId) {
+        if (!window.map) {
+            console.error('Map not initialized');
+            return;
+        }
+        
         const unit = allUnits.find(u => u.id === unitId);
         if (!unit || !unit.geojson) {
             console.warn('No geojson found for unit:', unitId);
@@ -74,20 +78,31 @@ new class extends Component
         }
 
         if (geojsonLayers[unitId]) {
-            map.removeLayer(geojsonLayers[unitId]);
+            window.map.removeLayer(geojsonLayers[unitId]);
             delete geojsonLayers[unitId];
         } else {
-            let data = JSON.parse(unit.geojson);
-            let newLayer = L.geoJSON(data, {
-                style: {
-                    color: "orange",
-                    weight: 2,
-                    opacity: 0.8,
-                    fillOpacity: 0.1,
-                }
-            }).addTo(map);
-            geojsonLayers[unitId] = newLayer;
+            try {
+                let data = typeof unit.geojson === 'string' 
+                    ? JSON.parse(unit.geojson) 
+                    : unit.geojson;
+                    
+                let newLayer = L.geoJSON(data, {
+                    style: {
+                        color: "orange",
+                        weight: 2,
+                        opacity: 0.8,
+                        fillOpacity: 0.1,
+                    }
+                }).addTo(window.map);
+                
+                geojsonLayers[unitId] = newLayer;
+                
+                // Zoom to layer bounds
+                window.map.fitBounds(newLayer.getBounds());
+            } catch (e) {
+                console.error('Error parsing GeoJSON:', e);
+            }
         }
-    }
+    };
 </script>
-
+@endscript

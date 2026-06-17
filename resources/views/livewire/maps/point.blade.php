@@ -3,9 +3,9 @@
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\Region;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
-new class extends Component
+return new class extends Component
 {
     public $location = [];
 
@@ -15,26 +15,25 @@ new class extends Component
     public array $selectedRegions = [];
     public array $selectedTypes = [];
 
-    public function mount()
+    public function mount(): void
     {
-        // آیتم‌های حذف‌شده
-        $excludedRegionIds = [1];     // سطح استان
-        $excludedTypeIds   = [1,2,3]; // وزارت، دانشگاه، معاونت
+        $excludedRegionIds = [1];
+        $excludedTypeIds   = [1, 2, 3];
 
         $this->regions = Region::whereNotIn('id', $excludedRegionIds)
-            ->select('id','name')
+            ->select('id', 'name')
             ->get()
             ->toArray();
 
         $this->types = UnitType::whereNotIn('id', $excludedTypeIds)
-            ->select('id','name')
+            ->select('id', 'name')
             ->get()
             ->toArray();
 
         $this->fetchLocation();
     }
 
-    public function fetchLocation()
+    public function fetchLocation(): void
     {
         $query = Unit::query()
             ->whereNotNull('lat')
@@ -63,41 +62,29 @@ new class extends Component
         $this->dispatch('locations-updated', locations: $this->location);
     }
 
-    public function updatedSelectedRegions() { $this->fetchLocation(); }
-    public function updatedSelectedTypes()   { $this->fetchLocation(); }
+    public function updatedSelectedRegions(): void
+    {
+        $this->fetchLocation();
+    }
+
+    public function updatedSelectedTypes(): void
+    {
+        $this->fetchLocation();
+    }
 };
 ?>
 
 <div>
-    <style>
-        .controls-panel {
-            padding: 15px;
-            background: rgba(255,255,255,.6);
-            border-radius: 12px;
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            width: 270px;
-            box-shadow: 0 0 10px rgba(0,0,0,.2);
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-        .dark .controls-panel {
-            filter: invert(100%) hue-rotate(180deg);
-        }
-    </style>
-
     <x-header title="نقاط لوکیشن" separator progress-indicator>
         <x-slot:actions>
-            <x-theme-selector />
+            <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
     <x-card shadow class="p-0">
         <div class="container relative">
             <div wire:ignore>
-                <livewire:maps.map />
+                <livewire:maps.map/>
             </div>
 
             <div class="controls-panel space-y-4">
@@ -127,11 +114,39 @@ new class extends Component
     </x-card>
 </div>
 
+@assets
+<style>
+    .controls-panel {
+        padding: 15px;
+        background: rgba(255, 255, 255, .6);
+        border-radius: 12px;
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        width: 270px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, .2);
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .dark .controls-panel {
+        filter: invert(100%) hue-rotate(180deg);
+    }
+</style>
+@endassets
+
 @script
 <script>
-    let markersLayer = L.layerGroup().addTo(map);
+    // تابع کمکی برای چک کردن آماده بودن نقشه
+    function waitForMap(callback) {
+        if (window.map && typeof window.map.getSize === 'function') {
+            callback();
+        } else {
+            setTimeout(() => waitForMap(callback), 100);
+        }
+    }
 
-    // ===== آیکن‌ها بر اساس unit_type_id =====
+    // آیکن‌ها بر اساس unit_type_id
     const typeIcons = {
         4: '/icons/4.png',
         5: '/icons/5.png',
@@ -162,23 +177,34 @@ new class extends Component
         });
     }
 
-    function renderMarkers(locations) {
-        markersLayer.clearLayers();
+    // تنظیم markers layer وقتی نقشه آماده است
+    waitForMap(function() {
+        window.markersLayer = L.layerGroup().addTo(window.map);
 
-        locations.forEach(loc => {
-            L.marker(
-                [loc.lat, loc.lng],
-                { icon: getIcon(loc.unit_type_id) }
-            )
-                .bindPopup(loc.name)
-                .addTo(markersLayer);
+        // رندر اولیه مارکرها
+        function renderMarkers(locations) {
+            if (!window.markersLayer) return;
+            
+            window.markersLayer.clearLayers();
+
+            locations.forEach(loc => {
+                L.marker(
+                    [loc.lat, loc.lng],
+                    { icon: getIcon(loc.unit_type_id) }
+                )
+                    .bindPopup(loc.name)
+                    .addTo(window.markersLayer);
+            });
+        }
+
+        // رندر مارکرهای اولیه
+        var initialLocations = {{ Js::from($location) }};
+        renderMarkers(initialLocations);
+
+        // گوش دادن به event بروزرسانی
+        Livewire.on('locations-updated', ({ locations }) => {
+            renderMarkers(locations);
         });
-    }
-
-    renderMarkers(@json($this->location));
-
-    Livewire.on('locations-updated', ({ locations }) => {
-        renderMarkers(locations);
     });
 </script>
 @endscript

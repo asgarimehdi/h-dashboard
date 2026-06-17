@@ -56,13 +56,13 @@ Route::middleware('auth')->group(function () {
 
 
     Route::middleware('role_or_permission:map')->group(function () {
-        Volt::route('/maps/draw', 'maps/draw');
-        Volt::route('/maps/route', 'maps/route');
-        Volt::route('/maps/route2', 'maps/route2');
-        Volt::route('/maps/county', 'maps/county');
-        Volt::route('/maps/unit', 'maps/unit');
-        Volt::route('/maps/location', 'maps/location'); //->can('map');
-        Volt::route('/maps/point', 'maps/point');
+        Route::livewire('/maps/draw', 'maps/draw');
+        Route::livewire('/maps/route', 'maps/route');
+        Route::livewire('/maps/route2', 'maps/route2');
+        Route::livewire('/maps/county', 'maps/county');
+        Route::livewire('/maps/unit', 'maps/unit');
+        Route::livewire('/maps/location', 'maps/location'); //->can('map');
+        Route::livewire('/maps/point', 'maps/point');
         Volt::route('/card', 'glowingcard');
 
         Volt::route('/it/wireless', 'it/wireless');

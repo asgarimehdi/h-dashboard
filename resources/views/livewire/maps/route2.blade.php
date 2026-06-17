@@ -1,19 +1,18 @@
 <?php
 
-use Livewire\Volt\Component;
+use Livewire\Component;
 
-new class extends Component {
+return new class extends Component {
     public string $map_ip;
     public string $start_point = '';
     public string $end_point = '';
 
-    public function mount()
+    public function mount(): void
     {
         $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
-
     }
 
-    public function swapPoints()
+    public function swapPoints(): void
     {
         $temp = $this->start_point;
         $this->start_point = $this->end_point;
@@ -21,8 +20,6 @@ new class extends Component {
     }
 };
 ?>
-
-
 
 <div>
     <x-header title="محاسبه فاصله جاده‌ای" separator>
@@ -34,16 +31,37 @@ new class extends Component {
     <x-card shadow>
         <div class="container">
             <div class="flex items-center gap-2 flex-wrap pb-3">
-                <input type="text" id="start-input" class="x-input" placeholder="مبدا (مختصات یا آدرس)" wire:model="start_point" />
-                <input type="text" id="end-input" class="x-input" placeholder="مقصد (مختصات یا آدرس)" wire:model="end_point" />
-                <x-button onclick="searchRoute()" class="btn btn-sm btn-primary" label="محاسبه مسیر" icon="o-arrow-turn-up-right" />
-                <x-button onclick="reverseRoute()" class="btn btn-sm btn-secondary" label="معکوس مسیر" icon="o-arrows-up-down" />
-                <x-toggle onClick="toggleRoutingContainer()" label="نمایش متنی مسیر" />
+                <input 
+                    type="text" 
+                    id="start-input" 
+                    class="input input-bordered" 
+                    placeholder="مبدا (مختصات یا آدرس)" 
+                    wire:model="start_point" 
+                />
+                <input 
+                    type="text" 
+                    id="end-input" 
+                    class="input input-bordered" 
+                    placeholder="مقصد (مختصات یا آدرس)" 
+                    wire:model="end_point" 
+                />
+                <x-button 
+                    x-on:click="searchRoute()" 
+                    class="btn btn-sm btn-primary" 
+                    label="محاسبه مسیر" 
+                    icon="o-arrow-turn-up-right" 
+                />
+                <x-button 
+                    x-on:click="reverseRoute()" 
+                    class="btn btn-sm btn-secondary" 
+                    label="معکوس مسیر" 
+                    icon="o-arrows-up-down" 
+                />
+                <x-toggle x-on:click="toggleRoutingContainer()" label="نمایش متنی مسیر"/>
             </div>
 
             <livewire:maps.map/>
-            <div id="route-info">
-                {{$this->start_point}}
+            <div id="route-info" class="bg-base-200 p-4 rounded mt-4">
                 <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>
                 <strong>⌛ زمان تقریبی سفر:</strong> <span id="duration">---</span> دقیقه
             </div>
@@ -51,24 +69,47 @@ new class extends Component {
     </x-card>
 </div>
 
+
+
+@script
 <script>
-    // تنظیم اولیه نقشه
+    // تابع کمکی برای چک کردن آماده بودن نقشه
+    function waitForMap(callback) {
+        if (window.map && typeof window.map.getSize === 'function') {
+            callback();
+        } else {
+            setTimeout(() => waitForMap(callback), 100);
+        }
+    }
 
+    // متغیرهای سراسری
+    var routingControl;
+    
+    // تنظیم routing control وقتی نقشه آماده است
+    waitForMap(function() {
+        routingControl = L.Routing.control({
+            waypoints: [],
+            router: L.Routing.osrmv1({
+                serviceUrl: 'http://{{ $map_ip }}:5000/route/v1'
+            }),
+            routeWhileDragging: true,
+            show: true
+        }).addTo(window.map);
 
-    // کنترل مسیریابی
-    var routingControl = L.Routing.control({
-        waypoints: [],
-        router: L.Routing.osrmv1({serviceUrl: 'http://{{$this->map_ip}}:5000/route/v1'}),
-        routeWhileDragging: true,
-        show: true
-    }).addTo(map);
+        // نمایش فاصله و زمان تقریبی
+        routingControl.on('routesfound', function (e) {
+            var routes = e.routes;
+            var summary = routes[0].summary;
+            document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
+            document.getElementById('duration').textContent = (summary.totalTime / 60).toFixed(0);
+        });
 
-    // نمایش فاصله و زمان تقریبی
-    routingControl.on('routesfound', function (e) {
-        var routes = e.routes;
-        var summary = routes[0].summary;
-        document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
-        document.getElementById('duration').textContent = (summary.totalTime / 60).toFixed(0);
+        // مخفی کردن پنل مسیریابی
+        setTimeout(() => {
+            if (routingControl._container) {
+                routingControl._container.style.display = 'none';
+            }
+        }, 100);
     });
 
     // تبدیل متن به مختصات
@@ -85,7 +126,7 @@ new class extends Component {
     async function geocode(query) {
         if (!query) return null;
         try {
-            var response = await axios.get('http://{{$this->map_ip}}:8088/search', {
+            var response = await axios.get('http://{{ $map_ip }}:8088/search', {
                 params: {
                     q: query,
                     format: 'json',
@@ -105,9 +146,12 @@ new class extends Component {
     }
 
     // تابع جستجوی مسیر
-    async function searchRoute() {
-        {{--var startInput = {{$start_point}};--}}
-        {{--var endInput = {{$end_point}};--}}
+    window.searchRoute = async function() {
+        if (!routingControl) {
+            console.error('Routing control not initialized');
+            return;
+        }
+        
         var startInput = document.getElementById('start-input').value;
         var endInput = document.getElementById('end-input').value;
 
@@ -116,23 +160,37 @@ new class extends Component {
 
         if (startPoint && endPoint) {
             routingControl.setWaypoints([startPoint, endPoint]);
-            map.fitBounds([startPoint, endPoint]);
+            window.map.fitBounds([startPoint, endPoint]);
         } else {
             alert('لطفاً مبدا و مقصد معتبر وارد کنید');
         }
-    }
+    };
 
     // معکوس کردن مسیر
-    function reverseRoute() {
+    window.reverseRoute = function() {
+        if (!routingControl) return;
+        
         var currentWaypoints = routingControl.getWaypoints().slice().reverse();
-        Livewire.dispatch('swap-points');
+        
+        // بروزرسانی input ها
+        var startInput = document.getElementById('start-input');
+        var endInput = document.getElementById('end-input');
+        var temp = startInput.value;
+        startInput.value = endInput.value;
+        endInput.value = temp;
+        
+        // dispatch event به Livewire
+        $wire.swapPoints();
+        
         routingControl.setWaypoints(currentWaypoints);
-    }
+    };
 
     // مخفی/نمایش کردن پنل مسیریابی
-    routingControl._container.style.display = 'none';
-    function toggleRoutingContainer() {
+    window.toggleRoutingContainer = function() {
+        if (!routingControl || !routingControl._container) return;
+        
         let container = routingControl._container;
         container.style.display = container.style.display === 'none' ? 'block' : 'none';
-    }
+    };
 </script>
+@endscript
