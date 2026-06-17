@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Livewire\Volt\Volt;
+//use Livewire\Volt\Volt;
 use Livewire\Component;
 use App\Livewire\Tickets\CreateTicket;
 use App\Livewire\Tickets\TicketInbox;
@@ -34,7 +34,7 @@ Route::middleware('auth')->group(function () {
     // Route::get('/dashboard', function () {
     //     return view('dashboard');
     // });
-    Volt::route('/', 'index'); // صفحه انتخاب نقش
+    Route::livewire('/', 'index'); // صفحه انتخاب نقش
     Route::livewire('/dashboard', 'dashboard'); 
 
 
@@ -63,10 +63,11 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/maps/unit', 'maps/unit');
         Route::livewire('/maps/location', 'maps/location'); //->can('map');
         Route::livewire('/maps/point', 'maps/point');
-        Volt::route('/card', 'glowingcard');
+        //Volt::route('/card', 'glowingcard');
 
         Route::livewire('/it/wireless', 'it/wireless');
         Route::livewire('/it/networks', 'it/networks');
+        Route::livewire('/todo', 'todo.todo');
     });
 
     Route::get('/monitoring', \App\Livewire\Tickets\AllTicketsMonitoring::class)->name('tickets.monitoring');

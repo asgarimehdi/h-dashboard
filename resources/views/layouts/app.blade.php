@@ -125,6 +125,7 @@
                         <x-menu-item title="کش سرور" icon="o-sparkles" link="/op" target="_blank" no-wire-navigate rel="noopener noreferrer" />
                         <x-menu-item title="وایرلس ها" icon="o-sparkles" link="/it/wireless" no-wire-navigate rel="noopener noreferrer" />
                         <x-menu-item title="شبکه ها" icon="o-sparkles" link="/it/networks" no-wire-navigate rel="noopener noreferrer" />
+                        <x-menu-item title="تقویم" icon="o-sparkles" link="/todo" no-wire-navigate rel="noopener noreferrer" />
                     </x-menu-sub>
                     @endcan
 
