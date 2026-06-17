@@ -1,12 +1,12 @@
 <?php
 
 use App\Models\Semat;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -37,13 +37,13 @@ new class extends Component {
     }
 
     // create action
-    public function createSemat(Semat $semat): void
+    public function createSemat(): void
     {
         $this->validate([
             'name' => 'required|string|max:255|unique:semats,name',
         ]);
 
-        $semat::create(['name' => $this->name]);
+        Semat::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name']);
@@ -51,7 +51,7 @@ new class extends Component {
     }
 
     //edit clicked
-    public function editSemat($id)
+    public function editSemat($id): void
     {
         $semat = Semat::findOrFail($id);
         $this->editingId = $id;
@@ -81,7 +81,7 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
         ];
     }
@@ -93,8 +93,9 @@ new class extends Component {
         if (!empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
+        
         $query->orderBy(...array_values($this->sortBy));
-        return $this->semats = $query->paginate($this->perPage);
+        return $query->paginate($this->perPage);
     }
 
     public function with(): array
@@ -113,7 +114,6 @@ new class extends Component {
         <x-slot:middle class="!justify-end">
         </x-slot:middle>
         <x-slot:actions>
-
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -136,28 +136,24 @@ new class extends Component {
                  :per-page-values="[3, 5, 10]">
             @foreach($semats as $semat)
                 <tr wire:key="{{ $semat->id }}">
-                    <td>{{ $semat->id }}</td>
-                    <td>{{ $semat->name }}</td>
-                    <td>
-                        @scope('actions', $semat)
-                        <div class="flex w-1/4">
-                            <x-button icon="o-pencil"
-                                      wire:click="editSemat({{ $semat->id }})"
-                                      class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal = true">
-                                <span class="hidden sm:inline">ویرایش</span>
-                            </x-button>
+                    @scope('actions', $semat)
+                    <div class="flex w-1/4">
+                        <x-button icon="o-pencil"
+                                  wire:click="editSemat({{ $semat->id }})"
+                                  class="btn-ghost btn-sm text-primary"
+                                  @click="$wire.modal = true">
+                            <span class="hidden sm:inline">ویرایش</span>
+                        </x-button>
 
-                            <x-button icon="o-trash"
-                                      wire:click="delete({{ $semat->id }})"
-                                      wire:confirm="Are you sure?"
-                                      spinner
-                                      class="btn-ghost btn-sm text-error">
-                                <span class="hidden sm:inline">حذف</span>
-                            </x-button>
-                        </div>
-                        @endscope
-                    </td>
+                        <x-button icon="o-trash"
+                                  wire:click="delete({{ $semat->id }})"
+                                  wire:confirm="Are you sure?"
+                                  spinner
+                                  class="btn-ghost btn-sm text-error">
+                            <span class="hidden sm:inline">حذف</span>
+                        </x-button>
+                    </div>
+                    @endscope
                 </tr>
             @endforeach
         </x-table>

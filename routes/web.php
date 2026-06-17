@@ -2,14 +2,15 @@
 
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
+use Livewire\Component;
 use App\Livewire\Tickets\CreateTicket;
 use App\Livewire\Tickets\TicketInbox;
 
 
-//Route::view('/login', 'auth.login')->name('login');
+Route::livewire('/login', 'auth.login')->name('login');
 
-Volt::route('/login', 'auth.login');
-Volt::route('/register', 'auth.register');
+//Volt::route('/login', 'auth.login')->name('login');
+//Volt::route('/register', 'auth.register');
 // Define the logout
 Route::get('/logout', function () {
     $userId = Auth::id();
@@ -34,7 +35,7 @@ Route::middleware('auth')->group(function () {
     //     return view('dashboard');
     // });
     Volt::route('/', 'index'); // صفحه انتخاب نقش
-    Volt::route('/dashboard', 'dashboard'); // صفحه داشبورد
+    Route::livewire('/dashboard', 'dashboard'); 
 
 
     Volt::route('/users', 'users.index');
@@ -46,11 +47,11 @@ Route::middleware('auth')->group(function () {
 
     // ... more
 
-    Volt::route('/kargozini/estekhdams', 'kargozini.estekhdam');
-    Volt::route('/kargozini/tahsils', 'kargozini.tahsil');
-    Volt::route('/kargozini/semats', 'kargozini.semat');
-    Volt::route('/kargozini/radifs', 'kargozini.radif');
-    Volt::route('/kargozini/persons', 'kargozini.person');
+    Route::livewire('/kargozini/estekhdams', 'kargozini.estekhdam');
+    Route::livewire('/kargozini/tahsils', 'kargozini.tahsil');
+    Route::livewire('/kargozini/semats', 'kargozini.semat');
+    Route::livewire('/kargozini/radifs', 'kargozini.radif');
+    Route::livewire('/kargozini/persons', 'kargozini.person');
 
 
 

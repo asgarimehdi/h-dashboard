@@ -1,13 +1,12 @@
 <?php
 
-
 use App\Models\Estekhdam;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -38,13 +37,13 @@ new class extends Component {
     }
 
     // create action
-    public function createEstekhdam(Estekhdam $estekhdam): void
+    public function createEstekhdam(): void
     {
         $this->validate([
             'name' => 'required|string|max:255|unique:estekhdams,name',
         ]);
 
-        $estekhdam::create(['name' => $this->name]);
+        Estekhdam::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name']);
@@ -52,22 +51,20 @@ new class extends Component {
     }
 
     //edit clicked
-    public function editEstekhdam($id)
+    public function editEstekhdam($id): void
     {
-        //dd($id);
         $estekhdam = Estekhdam::findOrFail($id);
         $this->editingId = $id;
         $this->name = $estekhdam->name;
-
     }
 
     //edit action
     public function updateEstekhdam(): void
     {
-
         $this->validate([
             'name' => 'required|string|max:255|unique:estekhdams,name,' . $this->editingId,
         ]);
+        
         try {
             $estekhdam = Estekhdam::findOrFail($this->editingId);
             $estekhdam->update(['name' => $this->name]);
@@ -81,16 +78,13 @@ new class extends Component {
     }
 
     // Table headers
-
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
-
         ];
     }
-
 
     public function estekhdams(): LengthAwarePaginator
     {
@@ -99,11 +93,11 @@ new class extends Component {
         if (!empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
+        
         $query->orderBy(...array_values($this->sortBy));
-        return $this->estekhdams = $query->paginate($this->perPage);
-
+        
+        return $query->paginate($this->perPage);
     }
-
 
     public function with(): array
     {
@@ -122,11 +116,8 @@ new class extends Component {
 
         </x-slot:middle>
         <x-slot:actions>
-
-
             <x-theme-selector/>
         </x-slot:actions>
-
     </x-header>
 
     <!-- TABLE  -->
@@ -143,12 +134,17 @@ new class extends Component {
                 />
             </div>
         </div>
-        <x-table :headers="$headers" :rows="$estekhdams" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[3, 5, 10]">
+        
+        <x-table 
+            :headers="$headers" 
+            :rows="$estekhdams" 
+            :sort-by="$sortBy" 
+            with-pagination 
+            per-page="perPage"
+            :per-page-values="[3, 5, 10]"
+        >
             @foreach($estekhdams as $estekhdam)
                 <tr wire:key="{{ $estekhdam->id }}">
-
-
                     @scope('actions', $estekhdam)
                     <div class="flex w-1/4">
                         <!-- دکمه ویرایش -->
@@ -173,15 +169,17 @@ new class extends Component {
                         </x-button>
                     </div>
                     @endscope
-
                 </tr>
             @endforeach
         </x-table>
-
     </x-card>
-    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان استخدامی' : 'ثبت عنوان استخدامی جدید'" persistent
-             separator>
-
+    
+    <x-modal 
+        wire:model="modal" 
+        :title="$editingId ? 'ویرایش عنوان استخدامی' : 'ثبت عنوان استخدامی جدید'" 
+        persistent
+        separator
+    >
         <x-form wire:submit.prevent="{{ $editingId ? 'updateEstekhdam' : 'createEstekhdam' }}" class="grid gap-4">
             <x-input
                 wire:model="name"
@@ -196,6 +194,5 @@ new class extends Component {
                 <x-button label="ریست" icon="o-x-mark" wire:click="clear" class="btn-default pl-6" spinner/>
             </div>
         </x-form>
-
     </x-modal>
 </div>

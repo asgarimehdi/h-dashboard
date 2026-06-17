@@ -1,12 +1,12 @@
 <?php
 
 use App\Models\Tahsil;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -34,20 +34,20 @@ new class extends Component {
         }
     }
 
-    public function createTahsil(Tahsil $tahsil): void
+    public function createTahsil(): void
     {
         $this->validate([
             'name' => 'required|string|max:255|unique:tahsils,name',
         ]);
 
-        $tahsil::create(['name' => $this->name]);
+        Tahsil::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->reset(['name']);
         $this->modal = false;
     }
 
-    public function editTahsil($id)
+    public function editTahsil($id): void
     {
         $tahsil = Tahsil::findOrFail($id);
         $this->editingId = $id;
@@ -75,7 +75,7 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell',],
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
         ];
     }
@@ -87,8 +87,9 @@ new class extends Component {
         if (!empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
+        
         $query->orderBy(...array_values($this->sortBy));
-        return $this->tahsils = $query->paginate($this->perPage);
+        return $query->paginate($this->perPage);
     }
 
     public function with(): array
@@ -127,28 +128,24 @@ new class extends Component {
                  :per-page-values="[3, 5, 10]">
             @foreach($tahsils as $tahsil)
                 <tr wire:key="{{ $tahsil->id }}">
-                    <td>{{ $tahsil->id }}</td>
-                    <td>{{ $tahsil->name }}</td>
-                    <td>
-                        @scope('actions', $tahsil)
-                        <div class="flex w-1/4">
-                            <x-button icon="o-pencil"
-                                      wire:click="editTahsil({{ $tahsil->id }})"
-                                      class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal = true">
-                                <span class="hidden sm:inline">ویرایش</span>
-                            </x-button>
+                    @scope('actions', $tahsil)
+                    <div class="flex w-1/4">
+                        <x-button icon="o-pencil"
+                                  wire:click="editTahsil({{ $tahsil->id }})"
+                                  class="btn-ghost btn-sm text-primary"
+                                  @click="$wire.modal = true">
+                            <span class="hidden sm:inline">ویرایش</span>
+                        </x-button>
 
-                            <x-button icon="o-trash"
-                                      wire:click="delete({{ $tahsil->id }})"
-                                      wire:confirm="Are you sure?"
-                                      spinner
-                                      class="btn-ghost btn-sm text-error">
-                                <span class="hidden sm:inline">حذف</span>
-                            </x-button>
-                        </div>
-                        @endscope
-                    </td>
+                        <x-button icon="o-trash"
+                                  wire:click="delete({{ $tahsil->id }})"
+                                  wire:confirm="Are you sure?"
+                                  spinner
+                                  class="btn-ghost btn-sm text-error">
+                            <span class="hidden sm:inline">حذف</span>
+                        </x-button>
+                    </div>
+                    @endscope
                 </tr>
             @endforeach
         </x-table>

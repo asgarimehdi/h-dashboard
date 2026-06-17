@@ -6,12 +6,12 @@ use App\Models\Estekhdam;
 use App\Models\Semat;
 use App\Models\Radif;
 use App\Models\Unit;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -20,7 +20,7 @@ new class extends Component {
     public int|null $editingId = null;
     public string $search = '';
     public int $perPage = 5;
-    public bool $modal = false; // متغیر برای مدال
+    public bool $modal = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     // پاک کردن فیلترها
@@ -31,7 +31,6 @@ new class extends Component {
     }
 
     // حذف رکورد
-
     public function delete(Person $person): void
     {
         try {
@@ -84,7 +83,7 @@ new class extends Component {
         }
 
         $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId']);
-        $this->modal = false; // بستن مدال
+        $this->modal = false;
     }
 
     // بارگذاری اطلاعات برای ویرایش
@@ -100,7 +99,7 @@ new class extends Component {
         $this->s_id = $person->s_id;
         $this->r_id = $person->r_id;
         $this->u_id = $person->u_id;
-        $this->modal = true; // باز کردن مدال برای ویرایش
+        $this->modal = true;
     }
 
     public function resetModal(): void
@@ -165,7 +164,6 @@ new class extends Component {
 
         </x-slot:middle>
         <x-slot:actions>
-
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>

@@ -1,14 +1,12 @@
 <?php
 
 use App\Models\Radif;
-
-// Changed from Estekhdam
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
 
-new class extends Component {
+return new class extends Component {
     use WithPagination;
     use Toast;
 
@@ -16,7 +14,7 @@ new class extends Component {
     public int|null $editingId = null;
     public string $search = '';
     public int $perPage = 5;
-    public bool $modal = false; // Changed from $drawer to $modal
+    public bool $modal = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
@@ -24,7 +22,7 @@ new class extends Component {
     public function clear(): void
     {
         $this->reset();
-        $this->info('فیلدها خالی شدند', position: 'toast-bottom'); // Changed message to Persian
+        $this->info('فیلدها خالی شدند', position: 'toast-bottom');
     }
 
     // Delete action
@@ -39,43 +37,43 @@ new class extends Component {
     }
 
     // create action
-    public function createRadif(): void // Removed Radif type hint injection, it's not needed here
+    public function createRadif(): void
     {
         $this->validate([
             'name' => 'required|string|max:255|unique:radifs,name',
         ]);
 
-        Radif::create(['name' => $this->name]); // Directly use the model
+        Radif::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
-        $this->reset(['name']); // Only reset the form field
-        $this->modal = false; // Close modal after creation
+        $this->reset(['name']);
+        $this->modal = false;
     }
 
     //edit clicked - Prepares data for the modal
-    public function editRadif($id)
+    public function editRadif($id): void
     {
         $radif = Radif::findOrFail($id);
         $this->editingId = $id;
         $this->name = $radif->name;
-        // The modal will be opened by @click in the view
     }
 
     //edit action
-    public function updateRadif(): void // Removed Radif type hint injection
+    public function updateRadif(): void
     {
         $this->validate([
             'name' => 'required|string|max:255|unique:radifs,name,' . $this->editingId,
         ]);
+        
         try {
             $radif = Radif::findOrFail($this->editingId);
             $radif->update(['name' => $this->name]);
 
             $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
-            $this->reset(['name', 'editingId']); // Reset form fields and editing state
-            $this->modal = false; // Close modal after update
+            $this->reset(['name', 'editingId']);
+            $this->modal = false;
         } catch (\Exception $e) {
-            $this->error("خطا در ویرایش", position: 'toast-bottom'); // Generic error message
+            $this->error("خطا در ویرایش", position: 'toast-bottom');
         }
     }
 
@@ -83,8 +81,8 @@ new class extends Component {
     public function headers(): array
     {
         return [
-            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'], // Matched style
-            ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'], // Matched style
+            ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
+            ['key' => 'name', 'label' => 'عنوان', 'class' => 'flex-1'],
         ];
     }
 
@@ -96,16 +94,15 @@ new class extends Component {
         if (!empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
+        
         $query->orderBy(...array_values($this->sortBy));
-        return $this->radifs = $query->paginate($this->perPage);
-        // Removed redundant assignment: return $query->paginate($this->perPage);
+        return $query->paginate($this->perPage);
     }
-
 
     public function with(): array
     {
         return [
-            'editingId' => $this->editingId, // Not strictly needed to pass if only used internally and in modal logic
+            'editingId' => $this->editingId,
             'radifs' => $this->radifs(),
             'headers' => $this->headers()
         ];
@@ -127,7 +124,7 @@ new class extends Component {
     <!-- TABLE  -->
     <x-card shadow>
         {{-- Search and Create Button Area --}}
-        <div class="flex gap-2 items-center mb-4"> {{-- Added margin-bottom --}}
+        <div class="flex gap-2 items-center mb-4">
             <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
@@ -140,24 +137,19 @@ new class extends Component {
             </div>
         </div>
 
-        {{-- Removed inline editing block --}}
-        {{-- Removed opacity class from table --}}
         <x-table :headers="$headers" :rows="$radifs" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]">
 
             @foreach($radifs as $radif)
-                {{-- Use wire:key for efficient DOM updates --}}
                 <tr wire:key="{{ $radif->id }}">
-                    {{-- Data cells are handled by :rows and :headers --}}
-                    {{-- Actions Scope --}}
                     @scope('actions', $radif)
-                    <div class="flex"> {{-- Removed w-1/4, let it auto-size --}}
+                    <div class="flex">
                         <!-- دکمه ویرایش -->
                         <x-button
                             icon="o-pencil"
                             wire:click="editRadif({{ $radif->id }})"
                             class="btn-ghost btn-sm text-primary"
-                            @click="$wire.modal = true" {{-- Open modal on click --}}
+                            @click="$wire.modal = true"
                         >
                             <span class="hidden sm:inline">ویرایش</span>
                         </x-button>
@@ -166,7 +158,7 @@ new class extends Component {
                         <x-button
                             icon="o-trash"
                             wire:click="delete({{ $radif->id }})"
-                            wire:confirm="آیا مطمئن هستید؟" {{-- Persian confirm message --}}
+                            wire:confirm="آیا مطمئن هستید؟"
                             spinner
                             class="btn-ghost btn-sm text-error"
                         >
@@ -179,20 +171,17 @@ new class extends Component {
         </x-table>
     </x-card>
 
-    {{-- Swapped Drawer for Modal --}}
     <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان ردیف' : 'ثبت عنوان ردیف جدید'" persistent separator>
-
-        {{-- Form points to dynamic method based on editingId --}}
         <x-form wire:submit.prevent="{{ $editingId ? 'updateRadif' : 'createRadif' }}" class="grid gap-4">
             <x-input
                 wire:model="name"
                 label="عنوان ردیف"
                 placeholder="عنوان"
                 required
-                icon="o-magnifying-glass" {{-- Changed icon to match file 1 --}}
+                icon="o-magnifying-glass"
             />
 
-            <div class="flex gap-4 justify-end"> {{-- Matched button layout --}}
+            <div class="flex gap-4 justify-end">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner />
                 <x-button label="ریست" icon="o-x-mark" wire:click="clear" class="btn-default pl-6" spinner/>
             </div>
