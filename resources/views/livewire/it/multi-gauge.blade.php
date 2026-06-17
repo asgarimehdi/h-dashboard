@@ -1,8 +1,8 @@
 <?php
 
-use Livewire\Volt\Component;
+use Livewire\Component;
 
-new class extends Component {
+return new class extends Component {
     public string $signalItemId;
     public string $frequencyItemId;
     public string $responseTimeItemId;
@@ -23,7 +23,7 @@ new class extends Component {
         string $unit = '%',
         string $frequencyUnit = 'MHz',
         string $responseTimeUnit = 'ms'
-    ) {
+    ): void {
         $this->signalItemId = $signalItemId;
         $this->frequencyItemId = $frequencyItemId;
         $this->responseTimeItemId = $responseTimeItemId;
@@ -37,16 +37,16 @@ new class extends Component {
 };
 ?>
 
-<div x-data="signalGauge(
-    @js($signalItemId),
-    @js($frequencyItemId),
-    @js($responseTimeItemId),
-    @js($min),
-    @js($max),
-    @js($unit),
-    @js($frequencyUnit),
-    @js($responseTimeUnit),
-    @js($title)
+<div x-data="window.signalGauge(
+    '{{ $signalItemId }}',
+    '{{ $frequencyItemId }}',
+    '{{ $responseTimeItemId }}',
+    {{ $min }},
+    {{ $max }},
+    '{{ $unit }}',
+    '{{ $frequencyUnit }}',
+    '{{ $responseTimeUnit }}',
+    '{{ $title }}'
 )"
      x-init="init(); interval = setInterval(() => fetchValues(), 30000)"
      class="flex flex-col items-center p-4 border rounded-lg shadow-sm bg-base-100 w-full">
@@ -72,9 +72,8 @@ new class extends Component {
         </div>
     </div>
 
-    <!-- مقادیر اضافی (فرکانس و زمان پاسخ) -->
+    <!-- مقادیر اضافی -->
     <div class="flex justify-around w-full mt-3 text-sm">
-        <!-- فرکانس: واحد قبل از عدد (برای RTL) -->
         <div class="text-center">
             <div class="text-xs opacity-70">فرکانس</div>
             <div class="font-medium">
@@ -82,7 +81,6 @@ new class extends Component {
                 <span dir="ltr" x-text="displayFrequency"></span>
             </div>
         </div>
-        <!-- زمان پاسخ: واحد قبل از عدد (برای RTL) -->
         <div class="text-center">
             <div class="text-xs opacity-70">زمان پاسخ</div>
             <div class="font-medium">
@@ -99,101 +97,104 @@ new class extends Component {
     </div>
 </div>
 
+@script
 <script>
-function signalGauge(signalItemId, frequencyItemId, responseTimeItemId, min, max, unit, frequencyUnit, responseTimeUnit, title) {
-    return {
-        signalItemId,
-        frequencyItemId,
-        responseTimeItemId,
-        min, max, unit, frequencyUnit, responseTimeUnit, title,
-        signal: null,
-        frequency: null,
-        responseTime: null,
-        loading: false,
-        error: null,
-        interval: null,
-        circumference: 2 * Math.PI * 45,
+    // تعریف تابع در window برای دسترسی سراسری
+    window.signalGauge = function(signalItemId, frequencyItemId, responseTimeItemId, min, max, unit, frequencyUnit, responseTimeUnit, title) {
+        return {
+            signalItemId,
+            frequencyItemId,
+            responseTimeItemId,
+            min, max, unit, frequencyUnit, responseTimeUnit, title,
+            signal: null,
+            frequency: null,
+            responseTime: null,
+            loading: false,
+            error: null,
+            interval: null,
+            circumference: 2 * Math.PI * 45,
 
-        init() {
-            this.fetchValues();
-        },
+            init() {
+                this.fetchValues();
+            },
 
-        get displaySignal() {
-            return this.signal !== null ? this.signal.toFixed(1) : '—';
-        },
+            get displaySignal() {
+                return this.signal !== null ? this.signal.toFixed(1) : '—';
+            },
 
-        get displayFrequency() {
-            return this.frequency !== null ? this.frequency.toFixed(1) : '—';
-        },
+            get displayFrequency() {
+                return this.frequency !== null ? this.frequency.toFixed(1) : '—';
+            },
 
-        get displayResponseTime() {
-            if (this.responseTime === null) return '—';
-            const ms = this.responseTime * 1000;
-            return ms >= 1 ? Math.round(ms) : ms.toFixed(1);
-        },
+            get displayResponseTime() {
+                if (this.responseTime === null) return '—';
+                const ms = this.responseTime * 1000;
+                return ms >= 1 ? Math.round(ms) : ms.toFixed(1);
+            },
 
-        get responseTimeColorClass() {
-            if (this.responseTime === null) return 'text-base-content';
-            const ms = this.responseTime * 1000;
-            if (ms < 3) return 'text-success';      // سبز
-            if (ms >= 3 && ms <= 7) return 'text-warning'; // نارنجی
-            return 'text-error';                     // قرمز
-        },
+            get responseTimeColorClass() {
+                if (this.responseTime === null) return 'text-base-content';
+                const ms = this.responseTime * 1000;
+                if (ms < 3) return 'text-success';
+                if (ms >= 3 && ms <= 7) return 'text-warning';
+                return 'text-error';
+            },
 
-        get dashOffset() {
-            if (this.signal === null) return this.circumference;
-            const percent = Math.min(100, Math.max(0, ((this.signal - this.min) / (this.max - this.min)) * 100));
-            return this.circumference - (percent / 100) * this.circumference;
-        },
+            get dashOffset() {
+                if (this.signal === null) return this.circumference;
+                const percent = Math.min(100, Math.max(0, ((this.signal - this.min) / (this.max - this.min)) * 100));
+                return this.circumference - (percent / 100) * this.circumference;
+            },
 
-        async fetchValues() {
-            if (this.loading) return;
-            this.loading = true;
-            this.error = null;
-            try {
-                const itemIds = [this.signalItemId, this.frequencyItemId, this.responseTimeItemId];
-                const params = new URLSearchParams();
-                itemIds.forEach((id, index) => params.append(`item_ids[${index}]`, id));
+            async fetchValues() {
+                if (this.loading) return;
+                this.loading = true;
+                this.error = null;
+                try {
+                    const itemIds = [this.signalItemId, this.frequencyItemId, this.responseTimeItemId];
+                    const params = new URLSearchParams();
+                    itemIds.forEach((id, index) => params.append(`item_ids[${index}]`, id));
 
-                const token = localStorage.getItem('token');
-                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+                    const token = localStorage.getItem('token');
+                    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-                const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
+                    const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
 
-                if (!response.ok) {
-                    let errorMsg = `خطای HTTP ${response.status}`;
-                    try {
-                        const text = await response.text();
+                    if (!response.ok) {
+                        let errorMsg = `خطای HTTP ${response.status}`;
                         try {
-                            const errorData = JSON.parse(text);
-                            if (errorData.message) errorMsg = errorData.message;
-                        } catch {
-                            errorMsg = text.substring(0, 100);
-                        }
-                    } catch (e) {}
-                    throw new Error(errorMsg);
+                            const text = await response.text();
+                            try {
+                                const errorData = JSON.parse(text);
+                                if (errorData.message) errorMsg = errorData.message;
+                            } catch {
+                                errorMsg = text.substring(0, 100);
+                            }
+                        } catch (e) {}
+                        throw new Error(errorMsg);
+                    }
+
+                    const data = await response.json();
+
+                    this.signal = data[this.signalItemId] ?? null;
+                    this.frequency = data[this.frequencyItemId] ?? null;
+                    this.responseTime = data[this.responseTimeItemId] ?? null;
+
+                    if (this.signal === null && this.frequency === null && this.responseTime === null) {
+                        this.error = 'داده‌ای یافت نشد';
+                    }
+                } catch (e) {
+                    console.error('Error fetching values:', e);
+                    this.error = e.message || 'خطا در دریافت';
+                } finally {
+                    this.loading = false;
                 }
+            },
 
-                const data = await response.json();
-
-                this.signal = data[this.signalItemId] ?? null;
-                this.frequency = data[this.frequencyItemId] ?? null;
-                this.responseTime = data[this.responseTimeItemId] ?? null;
-
-                if (this.signal === null && this.frequency === null && this.responseTime === null) {
-                    this.error = 'داده‌ای یافت نشد';
-                }
-            } catch (e) {
-                console.error('Error fetching values:', e);
-                this.error = e.message || 'خطا در دریافت';
-            } finally {
-                this.loading = false;
+            destroy() {
+                if (this.interval) clearInterval(this.interval);
             }
-        },
-
-        destroy() {
-            if (this.interval) clearInterval(this.interval);
-        }
+        };
     };
-}
 </script>
+@endscript

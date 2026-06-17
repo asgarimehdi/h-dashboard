@@ -1,38 +1,30 @@
 <?php
 
+use Livewire\Component;
 
-use Livewire\Volt\Component;
-
-new  class extends Component {
-
-}; ?>
-
-
+return new class extends Component {
+    //
+};
+?>
 
 <div>
     <!-- HEADER -->
-    <x-header title=" دستگاه های بی سیم" separator progress-indicator>
+    <x-header title="دستگاه های بی سیم" separator progress-indicator>
         <x-slot:middle class="!justify-end">
-            {{-- Search moved below --}}
         </x-slot:middle>
         <x-slot:actions>
-            {{-- Create button moved below --}}
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
     <!-- TABLE  -->
     <x-card shadow>
-        {{-- Search and Create Button Area --}}
-        <div class="flex gap-2 items-center mb-4"> {{-- Added margin-bottom --}}
-
+        <div class="flex gap-2 items-center mb-4">
             <div class="flex-1">
-
             </div>
         </div>
+        
         <div class="p-6">
-
-
             @php
             $signalItems = [
                 [
@@ -119,12 +111,11 @@ new  class extends Component {
                     'respId'   => '71890',
                     'name'     => 'قروه'
                 ],
-            
             ];
             @endphp
 
             {{-- بخش گیج‌های سیگنال --}}
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mt-4">
                 @foreach($signalItems as $item)
                     <livewire:it.multi-gauge 
                         :signal-item-id="$item['signalId']"
