@@ -1,16 +1,11 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-//use Livewire\Volt\Volt;
-use Livewire\Component;
-use App\Livewire\Tickets\CreateTicket;
-use App\Livewire\Tickets\TicketInbox;
-
 
 Route::livewire('/login', 'auth.login')->name('login');
 
-//Volt::route('/login', 'auth.login')->name('login');
-//Volt::route('/register', 'auth.register');
+// Volt::route('/login', 'auth.login')->name('login');
+// Volt::route('/register', 'auth.register');
 // Define the logout
 Route::get('/logout', function () {
     $userId = Auth::id();
@@ -35,8 +30,7 @@ Route::middleware('auth')->group(function () {
     //     return view('dashboard');
     // });
     Route::livewire('/', 'index'); // صفحه انتخاب نقش
-    Route::livewire('/dashboard', 'dashboard'); 
-
+    Route::livewire('/dashboard', 'dashboard');
 
     Route::livewire('/users', 'users.index');
     Route::livewire('/users/create', 'users.create');
@@ -53,30 +47,28 @@ Route::middleware('auth')->group(function () {
     Route::livewire('/kargozini/radifs', 'kargozini.radif');
     Route::livewire('/kargozini/persons', 'kargozini.person');
 
-
-
     Route::middleware('role_or_permission:map')->group(function () {
         Route::livewire('/maps/draw', 'maps/draw');
         Route::livewire('/maps/route', 'maps/route');
         Route::livewire('/maps/route2', 'maps/route2');
         Route::livewire('/maps/county', 'maps/county');
         Route::livewire('/maps/unit', 'maps/unit');
-        Route::livewire('/maps/location', 'maps/location'); //->can('map');
+        Route::livewire('/maps/location', 'maps/location'); // ->can('map');
         Route::livewire('/maps/point', 'maps/point');
-        //Volt::route('/card', 'glowingcard');
+        // Volt::route('/card', 'glowingcard');
 
         Route::livewire('/it/wireless', 'it/wireless');
         Route::livewire('/it/networks', 'it/networks');
         Route::livewire('/todo', 'todo.todo');
     });
 
-    Route::get('/monitoring', \App\Livewire\Tickets\AllTicketsMonitoring::class)->name('tickets.monitoring');
+    Route::livewire('/monitoring', 'pages::tickets.monitoring')->name('tickets.monitoring');
 
     Route::prefix('tickets')->name('tickets.')->group(function () {
-        Route::get('/inbox', TicketInbox::class)->name('inbox');
-        Route::get('/new', CreateTicket::class)->name('create');
+        Route::livewire('/inbox', 'pages::tickets.inbox')->name('inbox');
+        Route::livewire('/new', 'pages::tickets.create')->name('create');
     });
-    
+
     Route::livewire('/permissions', 'permissions/index')->name('permissions');
     Route::livewire('/roles', 'roles/index')->name('roles');
 
@@ -84,7 +76,7 @@ Route::middleware('auth')->group(function () {
         // Serve OPcache GUI from non-public resources/views/op/index.php
         Route::get('/op', function () {
             $path = resource_path('views/op/index.php');
-            if (!is_file($path)) {
+            if (! is_file($path)) {
                 abort(404, 'OPcache GUI not found.');
             }
 
