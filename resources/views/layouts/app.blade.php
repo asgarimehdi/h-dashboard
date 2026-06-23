@@ -25,6 +25,7 @@
     <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+    <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
 <style>
     @font-face {
         font-family: 'Vazirmatn';
