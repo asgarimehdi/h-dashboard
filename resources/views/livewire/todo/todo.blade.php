@@ -1,13 +1,12 @@
 <?php
 
 use App\Models\Todo;
-use Livewire\Volt\Component;
-use Livewire\Component as BaseComponent;
+use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
 use Morilog\Jalali\Jalalian;
 
-return new class extends BaseComponent {
+return new class extends Component {
     use Toast;
 
     public bool $modal = false;
