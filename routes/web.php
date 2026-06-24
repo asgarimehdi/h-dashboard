@@ -62,11 +62,11 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/todo', 'todo.todo');
     });
 
-    Route::livewire('/monitoring', 'pages::tickets.monitoring')->name('tickets.monitoring');
+    Route::livewire('/monitoring', 'tickets.monitoring')->name('tickets.monitoring');
 
     Route::prefix('tickets')->name('tickets.')->group(function () {
-        Route::livewire('/inbox', 'pages::tickets.inbox')->name('inbox');
-        Route::livewire('/new', 'pages::tickets.create')->name('create');
+        Route::livewire('/inbox', 'tickets.inbox')->name('inbox');
+        Route::livewire('/new', 'tickets.create')->name('create');
     });
 
     Route::livewire('/permissions', 'permissions/index')->name('permissions');
