@@ -9,7 +9,20 @@ return new class extends Component {
     
     public string $search = '';
     public array $expanded = [];
-    
+    public $rootUnits;
+
+    public function mount(): void
+    {
+        $this->loadData();
+    }
+
+    public function loadData(): void
+    {
+        $this->rootUnits = Unit::whereNull('parent_id')
+            ->with(['childrenRecursive', 'unitType'])
+            ->get();
+    }
+
     public function updatedSearch(): void
     {
         $this->expanded = [];
@@ -45,19 +58,14 @@ return new class extends Component {
         }
     }
 
-    public function with(): array
-    {
-        $query = Unit::whereNull('parent_id')->with(['childrenRecursive', 'unitType']);
-
-        return [
-            'rootUnits' => $query->get()
-        ];
-    }
 }; ?>
 
 <div>
     <x-header title="ساختار درختی واحدها" separator progress-indicator>
+        <x-slot:middle class="!justify-end">
+        </x-slot:middle>
         <x-slot:actions>
+            <x-theme-selector/>
             <x-input
                 placeholder="جستجو در واحدها..."
                 wire:model.live.debounce.500ms="search"
