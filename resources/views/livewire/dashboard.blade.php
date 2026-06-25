@@ -1,33 +1,89 @@
 <?php
 
+use App\Models\{User, Person, Unit, Ticket, Todo};
 use Livewire\Component;
+use Spatie\Permission\Models\Role;
 
 return new class extends Component {
-    //
+    public int $totalUsers = 0;
+    public int $totalPersons = 0;
+    public int $totalUnits = 0;
+    public int $totalTickets = 0;
+    public int $openTickets = 0;
+    public int $pendingTodos = 0;
+    public int $totalRoles = 0;
+
+    public function mount(): void
+    {
+        $this->totalUsers = User::count();
+        $this->totalPersons = Person::count();
+        $this->totalUnits = Unit::count();
+        $this->totalTickets = Ticket::count();
+        $this->openTickets = Ticket::whereIn('status', ['created', 'forwarded'])->count();
+        $this->pendingTodos = Todo::where('is_completed', false)->count();
+        $this->totalRoles = Role::count();
+    }
 }; ?>
 
 <div>
-    <!-- HEADER -->
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
-        <x-slot:middle class="!justify-end">
-            {{-- Search moved below --}}
-        </x-slot:middle>
         <x-slot:actions>
-            {{-- Create button moved below --}}
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
-    <!-- TABLE  -->
-    <x-card shadow>
-        {{-- Search and Create Button Area --}}
-        <div class="flex gap-2 items-center mb-4">
-            <div class="flex-1">
-                {{-- می‌توانید اینجا input جستجو اضافه کنید --}}
-            </div>
-        </div>
-        <div class="p-6">
-            <h1 class="text-3xl font-bold mb-4">خوش آمدید به داشبورد</h1>
-        </div>
-    </x-card>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <x-stat
+            title="کاربران"
+            value="{{ number_format($totalUsers) }}"
+            icon="o-users"
+            color="text-primary"
+            description="تعداد کل کاربران سیستم"
+        />
+        <x-stat
+            title="پرسنل"
+            value="{{ number_format($totalPersons) }}"
+            icon="o-user-group"
+            color="text-secondary"
+            description="تعداد کل پرسنل ثبت‌شده"
+        />
+        <x-stat
+            title="واحدها"
+            value="{{ number_format($totalUnits) }}"
+            icon="o-building-office-2"
+            color="text-accent"
+            description="تعداد کل واحدهای سازمانی"
+        />
+        <x-stat
+            title="نقش‌ها"
+            value="{{ number_format($totalRoles) }}"
+            icon="o-key"
+            color="text-neutral"
+            description="تعداد نقش‌های تعریف‌شده"
+        />
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <x-stat
+            title="کل تیکت‌ها"
+            value="{{ number_format($totalTickets) }}"
+            icon="o-ticket"
+            color="text-info"
+            description="تعداد کل تیکت‌های ثبت‌شده"
+        />
+        <x-stat
+            title="تیکت‌های باز"
+            value="{{ number_format($openTickets) }}"
+            icon="o-arrow-path"
+            color="text-warning"
+            description="تیکت‌های در انتظار بررسی"
+        />
+        <x-stat
+            title="وظایف انجام‌نشده"
+            value="{{ number_format($pendingTodos) }}"
+            icon="o-calendar-days"
+            color="text-success"
+            description="تعداد وظایف باقی‌مانده"
+        />
+    </div>
 </div>
