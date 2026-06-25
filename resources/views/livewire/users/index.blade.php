@@ -176,6 +176,7 @@ return new class extends Component {
     public function users(): LengthAwarePaginator
     {
         $query = User::query()
+            ->with('roles')
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
             ->when($this->search, function (Builder $q) {
@@ -258,6 +259,14 @@ return new class extends Component {
                     :class="$user->trashed() ? 'badge-error' : 'badge-success'"
                     rounded
                 />
+            @endscope
+
+            @scope('cell_roles_name', $user)
+                @forelse($user->roles as $role)
+                    <x-badge :value="$role->label ?? $role->name" class="badge-primary" rounded />
+                @empty
+                    <span class="text-muted text-sm">—</span>
+                @endforelse
             @endscope
             
             @scope('actions', $user)
