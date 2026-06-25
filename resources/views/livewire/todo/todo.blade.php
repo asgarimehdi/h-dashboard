@@ -14,7 +14,8 @@ return new class extends Component {
     public $start_at;
     public $end_at;
     public ?int $editingId = null;
-    
+    public bool $is_completed = false;
+
     public $start_date_picker;
     public $start_time_picker;
     public $end_date_picker;
@@ -29,7 +30,10 @@ return new class extends Component {
                 'start' => $todo->start_at,
                 'end' => $todo->end_at,
                 'color' => $todo->is_completed ? '#10b981' : '#3b82f6',
-                'allDay' => false
+                'allDay' => false,
+                'extendedProps' => [
+                    'is_completed' => $todo->is_completed,
+                ],
             ];
         })->toArray();
     }
@@ -37,13 +41,13 @@ return new class extends Component {
     // متد جدید برای باز کردن مدال خالی
     public function openModal()
     {
-        $this->reset(['title', 'editingId', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->modal = true;
     }
 
     public function openCreateModal($start, $end)
     {
-        $this->reset(['title', 'editingId', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->start_at = $start;
         $this->end_at = $end;
         
@@ -66,6 +70,7 @@ return new class extends Component {
         $todo = Todo::find($id);
         $this->editingId = $id;
         $this->title = $todo->title;
+        $this->is_completed = $todo->is_completed;
         $this->start_at = $todo->start_at;
         $this->end_at = $todo->end_at;
         
@@ -105,6 +110,7 @@ return new class extends Component {
                 'title' => $this->title,
                 'start_at' => $startMildadi,
                 'end_at' => $endMildadi,
+                'is_completed' => $this->is_completed,
             ]
         );
 
@@ -112,7 +118,7 @@ return new class extends Component {
         $this->modal = false;
         
         // ریست کردن فرم بعد از ذخیره
-        $this->reset(['title', 'editingId', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
@@ -143,7 +149,7 @@ return new class extends Component {
             $this->modal = false;
             
             // ریست کردن فرم بعد از حذف
-            $this->reset(['title', 'editingId', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+            $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
             
             $this->dispatch('calendar-updated', events: $this->getEvents());
         }
@@ -153,7 +159,14 @@ return new class extends Component {
     public function closeModal()
     {
         $this->modal = false;
-        $this->reset(['title', 'editingId', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+    }
+
+    public function toggleComplete(int $id): void
+    {
+        $todo = Todo::find($id);
+        $todo->update(['is_completed' => !$todo->is_completed]);
+        $this->dispatch('calendar-updated', events: $this->getEvents());
     }
 
     public function with(): array
@@ -230,6 +243,8 @@ return new class extends Component {
                 </div>
             </div>
 
+            <x-toggle label="انجام شده" wire:model="is_completed" />
+
             <x-slot:actions>
                 @if($editingId)
                     <x-button label="حذف" icon="o-trash" class="btn-error" wire:click="delete" wire:confirm="مطمئنی؟" />
@@ -293,6 +308,12 @@ return new class extends Component {
                     },
                     selectable: true,
                     editable: true,
+                    eventContent: function(arg) {
+                        const checkIcon = arg.event.extendedProps.is_completed
+                            ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + arg.event.id + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
+                            : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + arg.event.id + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
+                        return { html: '<div class="flex items-center gap-1"><span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span>' + checkIcon + '</div>' };
+                    },
                     events: @json($events),
                     select: function(info) {
                         @this.openCreateModal(info.startStr, info.endStr);
