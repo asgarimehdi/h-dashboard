@@ -173,14 +173,16 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - You can use Alpine.js for client-side interactions instead of JavaScript frameworks.
 - Keep state server-side so the UI reflects it. Validate and authorize in actions as you would in HTTP requests.
 
-=== volt/core rules ===
+=== livewire/volt rules ===
 
-# Livewire Volt
+# Livewire 4 (Single-File Components)
 
-- Single-file Livewire components: PHP logic and Blade templates in one file.
-- Always check existing Volt components to determine functional vs class-based style.
-- IMPORTANT: Always use `search-docs` tool for version-specific Volt documentation and updated code examples.
-- IMPORTANT: Activate `volt-development` every time you're working with a Volt or single-file component-related task.
+- This project uses **Livewire 4 native single-file components** (NOT Livewire Volt).
+- Single-file components: PHP logic and Blade templates in one `.blade.php` file under `resources/views/livewire/`.
+- ALL Livewire components use the anonymous class pattern: `return new class extends Component { ... };`
+- Route registration: `Route::livewire('/path', 'component.file');` — maps to `resources/views/livewire/{file}.blade.php`.
+- There is NO `app/Livewire/` directory. All component logic lives inside blade files.
+- Always check existing components to determine the correct structure and naming conventions.
 
 === pint/core rules ===
 
@@ -210,5 +212,50 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - To run all tests: `vendor/bin/pest --compact`.
 - To run all tests in a file: `vendor/bin/pest --compact tests/Feature/ExampleTest.php`.
 - To filter on a particular test name: `vendor/bin/pest --compact --filter=testName` (recommended after making a change to a related file).
+
+=== project-specific rules ===
+
+# h-dashboard Project Context
+
+## Tech Stack
+- PHP 8.4, Laravel 13, Livewire 4, MaryUI (UI components), Tailwind CSS + DaisyUI
+- Jalali dates (morilog/jalali), Persian/RTL layout
+- Highcharts (charts), Leaflet.js (maps), FullCalendar (todo calendar)
+
+## Key Model Relationships
+- User → Person: via `n_code` (User.belongsTo Person using 'n_code', 'n_code')
+- Person → Unit: via `u_id` (Person.belongsTo Unit)
+- User → Unit: through person (`auth()->user()->person?->u_id`)
+- Todo ↔ Users: many-to-many via `todo_user` pivot table
+- Todo → Unit: belongsTo via `unit_id`
+
+## Modules
+- Dashboard (`/dashboard`) — stat cards for all modules
+- Users (`/users`) — CRUD with roles/permissions
+- Units (`/units`, `/units/chart`) — organizational hierarchy
+- Todo/Calendar (`/todo`) — FullCalendar with multi-user assignment
+- Tickets (`/tickets/new`, `/tickets/inbox`, `/monitoring`) — ticketing workflow
+- Maps (`/maps/*`) — Leaflet GIS features
+- IT Monitoring (`/it/wireless`, `/it/networks`) — Zabbix integration
+- Personnel/Kargozini (`/kargozini/*`) — persons, estekhdams, tahsils, semats, radifs
+- Roles & Permissions (`/roles`, `/permissions`) — Spatie Permission
+
+## UI Component Patterns
+- MaryUI `<x-stat>` for dashboard stat cards
+- MaryUI `<x-choices-offline>` for multi-select (option-value, option-label)
+- MaryUI `<x-select>` for single select
+- MaryUI `<x-card>`, `<x-modal>`, `<x-form>`, `<x-input>`, `<x-toggle>`, `<x-badge>`
+- `<x-header>` with separator and progress-indicator on every page
+
+## Permissions (Spatie)
+- Named permissions: `kargozini`, `map`, `organization`, `op-cache`, `bw`, `calendar`, `view_all_tickets`, `create_ticket`, `manage_unit_tickets`, `view_assigned_tickets`
+- Route middleware: `role_or_permission:permission_name`
+- Seeder uses `firstOrCreate` to avoid duplicates
+
+## Conventions
+- Always run `vendor/bin/pint --dirty --format agent` after modifying PHP files
+- Use `auth()->user()->person?->u_id` to get logged-in user's unit
+- User names: `$user->person?->f_name . ' ' . $user->person?->l_name`
+- Users filtered by unit: `User::whereHas('person', fn($q) => $q->where('u_id', $unitId))`
 
 </laravel-boost-guidelines>
