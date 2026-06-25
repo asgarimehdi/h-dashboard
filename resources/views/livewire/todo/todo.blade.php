@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Todo;
+use App\Models\{Todo, User};
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
@@ -15,11 +15,19 @@ return new class extends Component {
     public $end_at;
     public ?int $editingId = null;
     public bool $is_completed = false;
+    public array $user_ids = [];
+    public ?int $unit_id = null;
 
     public $start_date_picker;
     public $start_time_picker;
     public $end_date_picker;
     public $end_time_picker;
+
+    public function mount(): void
+    {
+        $this->user_ids = [auth()->id()];
+        $this->unit_id = auth()->user()->person?->u_id;
+    }
 
     public function getEvents()
     {
@@ -41,13 +49,17 @@ return new class extends Component {
     // متد جدید برای باز کردن مدال خالی
     public function openModal()
     {
-        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'user_ids', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->user_ids = [auth()->id()];
+        $this->unit_id = auth()->user()->person?->u_id;
         $this->modal = true;
     }
 
     public function openCreateModal($start, $end)
     {
-        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'user_ids', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->user_ids = [auth()->id()];
+        $this->unit_id = auth()->user()->person?->u_id;
         $this->start_at = $start;
         $this->end_at = $end;
         
@@ -71,6 +83,8 @@ return new class extends Component {
         $this->editingId = $id;
         $this->title = $todo->title;
         $this->is_completed = $todo->is_completed;
+        $this->user_ids = $todo->users->pluck('id')->toArray();
+        $this->unit_id = $todo->unit_id;
         $this->start_at = $todo->start_at;
         $this->end_at = $todo->end_at;
         
@@ -111,14 +125,15 @@ return new class extends Component {
                 'start_at' => $startMildadi,
                 'end_at' => $endMildadi,
                 'is_completed' => $this->is_completed,
+                'unit_id' => $this->unit_id,
             ]
-        );
+        )->users()->sync($this->user_ids);
 
         $this->success('با موفقیت ذخیره شد');
         $this->modal = false;
         
         // ریست کردن فرم بعد از ذخیره
-        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'user_ids', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
@@ -149,7 +164,7 @@ return new class extends Component {
             $this->modal = false;
             
             // ریست کردن فرم بعد از حذف
-            $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+            $this->reset(['title', 'editingId', 'is_completed', 'user_ids', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
             
             $this->dispatch('calendar-updated', events: $this->getEvents());
         }
@@ -159,7 +174,7 @@ return new class extends Component {
     public function closeModal()
     {
         $this->modal = false;
-        $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+        $this->reset(['title', 'editingId', 'is_completed', 'user_ids', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
     }
 
     public function toggleComplete(int $id): void
@@ -173,6 +188,13 @@ return new class extends Component {
     {
         return [
             'events' => $this->getEvents(),
+            'users' => User::whereHas('person', fn($q) => $q->where('u_id', auth()->user()->person?->u_id))
+                ->with('person.unit')
+                ->get()
+                ->map(fn($user) => [
+                    'id' => $user->id,
+                    'label' => $user->person?->f_name . ' ' . $user->person?->l_name,
+                ]),
         ];
     }
 }; ?>
@@ -244,6 +266,17 @@ return new class extends Component {
             </div>
 
             <x-toggle label="انجام شده" wire:model="is_completed" />
+
+            <x-choices-offline
+                label="کاربران"
+                wire:model="user_ids"
+                :options="$users"
+                option-value="id"
+                option-label="label"
+                placeholder="انتخاب کاربران..."
+                clearable
+                searchable
+            />
 
             <x-slot:actions>
                 @if($editingId)

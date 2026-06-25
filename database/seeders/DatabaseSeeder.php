@@ -38,6 +38,7 @@ class DatabaseSeeder extends Seeder
             UnitCapabilitySeeder::class,
             PermissionSeeder::class,
             RoleSeeder::class,
+            TodoSeeder::class,
 
 
 

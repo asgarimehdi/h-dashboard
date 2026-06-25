@@ -2,27 +2,30 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Casts\Attribute;
-
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-
 
 class User extends Authenticatable
 {
     use HasApiTokens,HasFactory, Notifiable,SoftDeletes;
+
     // The User model requires this trait
     use HasRoles;
+
     protected $fillable = [
         'n_code',
         'password',
     ];
+
     protected $dates = ['deleted_at']; // برای مدیریت تاریخ حذف
+
     /**
      * دریافت اطلاعات Person مرتبط با این User.
      * چون کلید خارجی (n_code) در جدول users است، از belongsTo استفاده می‌کنیم.
@@ -44,11 +47,11 @@ class User extends Authenticatable
 
                 // اول از session بخوان
                 if (($cached = session($sessionKey)) !== null) {
-//                    \Log::info("[SESSION] Hit for user {$this->id}");
+                    //                    \Log::info("[SESSION] Hit for user {$this->id}");
                     return $cached;
                 }
 
-//                \Log::info("[DB] Loading person for user {$this->id}");
+                //                \Log::info("[DB] Loading person for user {$this->id}");
 
                 // دیتابیس — فقط اولین بار بعد از لاگین
                 $person = $this->relationLoaded('person')
@@ -56,7 +59,7 @@ class User extends Authenticatable
                     : $this->person()->first();
 
                 $name = $person
-                    ? ($person->f_name . ' ' . $person->l_name)
+                    ? ($person->f_name.' '.$person->l_name)
                     : 'کاربر بدون پروفایل';
 
                 // ذخیره در session — تا لاگ‌اوت
@@ -72,10 +75,16 @@ class User extends Authenticatable
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
 
-public function unit()
+    public function unit()
     {
         return $this->belongsTo(Unit::class);
     }
+
+    public function todos(): BelongsToMany
+    {
+        return $this->belongsToMany(Todo::class)->withTimestamps();
+    }
+
     protected $hidden = ['password', 'remember_token'];
 
     protected function casts(): array
