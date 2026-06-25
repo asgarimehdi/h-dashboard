@@ -258,4 +258,15 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - User names: `$user->person?->f_name . ' ' . $user->person?->l_name`
 - Users filtered by unit: `User::whereHas('person', fn($q) => $q->where('u_id', $unitId))`
 
+## API (Sanctum)
+- Token auth: `Authorization: Bearer {token}` via Laravel Sanctum
+- Login: `POST /api/login` with `n_code` + `password`, returns `{"token": "..."}`
+- No API versioning, no version prefix
+- Inline validation with `$request->validate()` (no Form Request classes)
+- Response format: `{"success": true, "data": {...}}` for resources
+- All authenticated routes use `auth:sanctum` middleware
+- User's unit: `$request->user()->person?->u_id`
+- Person name: `$user->person?->f_name . ' ' . $user->person?->l_name`
+- Todo API: `/api/todos` with filtering (`date`, `month`, `year`, `is_completed`, `user_id`), multi-user assignment via `user_ids` array
+
 </laravel-boost-guidelines>
