@@ -52,49 +52,51 @@ return new class extends Component {
         </x-slot:actions>
     </x-header>
 
-    <x-card shadow>
-        <x-form wire:submit="changePassword" class="grid gap-4">
-            <x-input 
-                label="رمز فعلی" 
-                type="password" 
-                wire:model="currentPassword" 
-                icon="o-key" 
-                required
-            />
-            
-            <x-input 
-                label="رمز جدید" 
-                type="password" 
-                wire:model="newPassword" 
-                icon="o-key" 
-                required
-            />
-            
-            <x-input 
-                label="تأیید رمز جدید" 
-                type="password" 
-                wire:model="newPasswordConfirmation" 
-                icon="o-key" 
-                required
-            />
-            
-            <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
-            
-            <div class="flex gap-4">
-                <x-button 
-                    label="تغییر رمز" 
-                    type="submit" 
-                    icon="o-paper-airplane" 
-                    class="btn-primary pl-6" 
-                    spinner="changePassword" 
+    <div class="flex justify-center">
+        <x-card shadow class="w-full max-w-xl">
+            <x-form wire:submit="changePassword" class="grid gap-4">
+                <x-input
+                    label="رمز فعلی"
+                    type="password"
+                    wire:model="currentPassword"
+                    icon="o-key"
+                    required
                 />
-                <x-button 
-                    label="ریست" 
-                    icon="o-x-mark" 
-                    wire:click="$refresh" 
-                    class="btn-default pl-6" 
+
+                <x-input
+                    label="رمز جدید"
+                    type="password"
+                    wire:model="newPassword"
+                    icon="o-key"
+                    required
                 />
-            </div>
-        </x-form>
-    </x-card>
+
+                <x-input
+                    label="تأیید رمز جدید"
+                    type="password"
+                    wire:model="newPasswordConfirmation"
+                    icon="o-key"
+                    required
+                />
+
+                <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
+
+                <div class="flex gap-4">
+                    <x-button
+                        label="تغییر رمز"
+                        type="submit"
+                        icon="o-paper-airplane"
+                        class="btn-primary pl-6"
+                        spinner="changePassword"
+                    />
+                    <x-button
+                        label="ریست"
+                        icon="o-x-mark"
+                        wire:click="$refresh"
+                        class="btn-default pl-6"
+                    />
+                </div>
+            </x-form>
+        </x-card>
+    </div>
 </div>
