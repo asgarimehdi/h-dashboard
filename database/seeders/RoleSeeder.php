@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-//use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 class RoleSeeder extends Seeder
@@ -26,26 +26,26 @@ class RoleSeeder extends Seeder
             'create_ticket',
             'manage_unit_tickets',
             'view_assigned_tickets',
-            'organization'
+            'organization',
         ]);
 
         // ۳. ایجاد نقش کارشناس واحد
         $expertRole = Role::create(['name' => 'expert', 'label' => 'کارشناس واحد']);
         $expertRole->givePermissionTo([
             'create_ticket',
-            'view_assigned_tickets'
+            'view_assigned_tickets',
         ]);
 
         // ۴. ایجاد نقش کاربر عادی
         $userRole = Role::create(['name' => 'user', 'label' => 'کاربر']);
         $userRole->givePermissionTo([
-            'create_ticket'
+            'create_ticket',
         ]);
 
         // Assign roles to demo users
-        $superadmins = User::whereIn('id', [1, 2])->get();
+        $superadmins = User::whereIn('id', [1, 2, 3])->get();
 
-        foreach($superadmins as $user){
+        foreach ($superadmins as $user) {
             $user->assignRole('admin');
         }
     }

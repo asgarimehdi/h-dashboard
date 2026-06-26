@@ -14,14 +14,12 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/prompts (PROMPTS) - v0
 - laravel/sanctum (SANCTUM) - v4
 - livewire/livewire (LIVEWIRE) - v4
-- livewire/volt (VOLT) - v1
 - laravel/boost (BOOST) - v2
 - laravel/mcp (MCP) - v0
 - laravel/pail (PAIL) - v1
 - laravel/pint (PINT) - v1
 - pestphp/pest (PEST) - v4
-- spatie/laravel-permission (PERMISSION) - v8
-- mockery/mockery (MOCKERY) - v1
+- phpunit/phpunit (PHPUNIT) - v12
 - tailwindcss (TAILWINDCSS) - v4
 
 ## Skills Activation
@@ -140,31 +138,6 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - If you receive an "Illuminate\Foundation\ViteException: Unable to locate file in Vite manifest" error, you can run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
 
-=== laravel/v12 rules ===
-
-# Laravel 12
-
-- CRITICAL: ALWAYS use `search-docs` tool for version-specific Laravel documentation and updated code examples.
-- Since Laravel 11, Laravel has a new streamlined file structure which this project uses.
-
-## Laravel 12 Structure
-
-- In Laravel 12, middleware are no longer registered in `app/Http/Kernel.php`.
-- Middleware are configured declaratively in `bootstrap/app.php` using `Application::configure()->withMiddleware()`.
-- `bootstrap/app.php` is the file to register middleware, exceptions, and routing files.
-- `bootstrap/providers.php` contains application specific service providers.
-- The `app/Console/Kernel.php` file no longer exists; use `bootstrap/app.php` or `routes/console.php` for console configuration.
-- Console commands in `app/Console/Commands/` are automatically available and do not require manual registration.
-
-## Database
-
-- When modifying a column, the migration must include all of the attributes that were previously defined on the column. Otherwise, they will be dropped and lost.
-- Laravel 12 allows limiting eagerly loaded records natively, without external packages: `$query->latest()->limit(10);`.
-
-### Models
-
-- Casts can and likely should be set in a `casts()` method on a model rather than the `$casts` property. Follow existing conventions from other models.
-
 === livewire/core rules ===
 
 # Livewire
@@ -172,17 +145,6 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Livewire allow to build dynamic, reactive interfaces in PHP without writing JavaScript.
 - You can use Alpine.js for client-side interactions instead of JavaScript frameworks.
 - Keep state server-side so the UI reflects it. Validate and authorize in actions as you would in HTTP requests.
-
-=== livewire/volt rules ===
-
-# Livewire 4 (Single-File Components)
-
-- This project uses **Livewire 4 native single-file components** (NOT Livewire Volt).
-- Single-file components: PHP logic and Blade templates in one `.blade.php` file under `resources/views/livewire/`.
-- ALL Livewire components use the anonymous class pattern: `return new class extends Component { ... };`
-- Route registration: `Route::livewire('/path', 'component.file');` — maps to `resources/views/livewire/{file}.blade.php`.
-- There is NO `app/Livewire/` directory. All component logic lives inside blade files.
-- Always check existing components to determine the correct structure and naming conventions.
 
 === pint/core rules ===
 
@@ -193,80 +155,11 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 === pest/core rules ===
 
-# Pest PHP Testing Framework
+## Pest
 
-- This application uses Pest for testing. All tests must be written as Pest functions, not PHPUnit classes.
-- PRIMARY: use `vendor/bin/pest` or `vendor/bin/pest --compact`.
-- Run `vendor/bin/pest` instead of `php artisan test`.
-- Run `vendor/bin/pest --filter=testName` when filtering.
-- Use `test()` and `expect()` syntax.
-- For Laravel-specific tests, use `$this->get()`, `$this->post()`, etc. from the TestCase.
-- Every time a test has been updated, run that singular test.
-- When the tests relating to your feature are passing, ask the user if they would like to also run the entire test suite to make sure everything is still passing.
-- Tests should cover all happy paths, failure paths, and edge cases.
-- You must not remove any tests or test files from the tests directory without approval. These are not temporary or helper files; these are core to the application.
-
-## Running Tests
-
-- Run the minimal number of tests, using an appropriate filter, before finalizing.
-- To run all tests: `vendor/bin/pest --compact`.
-- To run all tests in a file: `vendor/bin/pest --compact tests/Feature/ExampleTest.php`.
-- To filter on a particular test name: `vendor/bin/pest --compact --filter=testName` (recommended after making a change to a related file).
-
-=== project-specific rules ===
-
-# h-dashboard Project Context
-
-## Tech Stack
-- PHP 8.4, Laravel 13, Livewire 4, MaryUI (UI components), Tailwind CSS + DaisyUI
-- Jalali dates (morilog/jalali), Persian/RTL layout
-- Highcharts (charts), Leaflet.js (maps), FullCalendar (todo calendar)
-
-## Key Model Relationships
-- User → Person: via `n_code` (User.belongsTo Person using 'n_code', 'n_code')
-- Person → Unit: via `u_id` (Person.belongsTo Unit)
-- User → Unit: through person (`auth()->user()->person?->u_id`)
-- Todo ↔ Users: many-to-many via `todo_user` pivot table
-- Todo → Unit: belongsTo via `unit_id`
-
-## Modules
-- Dashboard (`/dashboard`) — stat cards for all modules
-- Users (`/users`) — CRUD with roles/permissions
-- Units (`/units`, `/units/chart`) — organizational hierarchy
-- Todo/Calendar (`/todo`) — FullCalendar with multi-user assignment
-- Tickets (`/tickets/new`, `/tickets/inbox`, `/monitoring`) — ticketing workflow
-- Maps (`/maps/*`) — Leaflet GIS features
-- IT Monitoring (`/it/wireless`, `/it/networks`) — Zabbix integration
-- Personnel/Kargozini (`/kargozini/*`) — persons, estekhdams, tahsils, semats, radifs
-- Roles & Permissions (`/roles`, `/permissions`) — Spatie Permission
-
-## UI Component Patterns
-- MaryUI `<x-stat>` for dashboard stat cards
-- MaryUI `<x-choices-offline>` for multi-select (option-value, option-label)
-- MaryUI `<x-select>` for single select
-- MaryUI `<x-card>`, `<x-modal>`, `<x-form>`, `<x-input>`, `<x-toggle>`, `<x-badge>`
-- `<x-header>` with separator and progress-indicator on every page
-
-## Permissions (Spatie)
-- Named permissions: `kargozini`, `map`, `organization`, `op-cache`, `bw`, `calendar`, `view_all_tickets`, `create_ticket`, `manage_unit_tickets`, `view_assigned_tickets`
-- Route middleware: `role_or_permission:permission_name`
-- Seeder uses `firstOrCreate` to avoid duplicates
-
-## Conventions
-- Always run `vendor/bin/pint --dirty --format agent` after modifying PHP files
-- Use `auth()->user()->person?->u_id` to get logged-in user's unit
-- User names: `$user->person?->f_name . ' ' . $user->person?->l_name`
-- Users filtered by unit: `User::whereHas('person', fn($q) => $q->where('u_id', $unitId))`
-
-## API (Sanctum)
-- Token auth: `Authorization: Bearer {token}` via Laravel Sanctum
-- Login: `POST /api/login` with `n_code` + `password`, returns `{"token": "..."}`
-- No API versioning, no version prefix
-- Inline validation with `$request->validate()` (no Form Request classes)
-- Response format: `{"success": true, "data": {...}}` for resources
-- All authenticated routes use `auth:sanctum` middleware
-- User's unit: `$request->user()->person?->u_id`
-- Person name: `$user->person?->f_name . ' ' . $user->person?->l_name`
-- Todo API: `/api/todos` with filtering (`date`, `month`, `year`, `is_completed`, `user_id`), multi-user assignment via `user_ids` array
+- This project uses Pest for testing. Create tests: `php artisan make:test --pest {name}`.
+- The `{name}` argument should not include the test suite directory. Use `php artisan make:test --pest SomeFeatureTest` instead of `php artisan make:test --pest Feature/SomeFeatureTest`.
+- Run tests: `php artisan test --compact` or filter: `php artisan test --compact --filter=testName`.
+- Do NOT delete tests without approval.
 
 </laravel-boost-guidelines>

@@ -50,5 +50,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/todos/{todo}', [TodoController::class, 'update']);
     Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
     Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
-    Route::post('/todos/{todo}/users', [TodoController::class, 'assignUsers']);
 });

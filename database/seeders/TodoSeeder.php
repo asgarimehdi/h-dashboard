@@ -19,7 +19,6 @@ class TodoSeeder extends Seeder
 
         $now = Carbon::now();
         $startOfMonth = $now->copy()->startOfMonth();
-        $endOfMonth = $now->copy()->endOfMonth();
 
         $titles = [
             'جلسه برنامه‌ریزی هفتگی',
@@ -44,8 +43,6 @@ class TodoSeeder extends Seeder
             'انجام تست‌های امنیتی',
         ];
 
-        $priorities = ['low', 'normal', 'urgent'];
-
         for ($day = 0; $day <= 30; $day++) {
             $date = $startOfMonth->copy()->addDays($day);
 
@@ -63,23 +60,13 @@ class TodoSeeder extends Seeder
                 $startAt = $date->copy()->setTime($hour, $minute);
                 $endAt = $startAt->copy()->addHours(rand(1, 3));
 
-                $todo = Todo::create([
+                Todo::create([
                     'title' => $titles[array_rand($titles)],
                     'start_at' => $startAt,
                     'end_at' => $endAt,
                     'is_completed' => $date->isPast() ? (bool) rand(0, 1) : false,
                     'unit_id' => $creator->person?->u_id,
                 ]);
-
-                $assignedUsers = [$creator->id];
-
-                $otherUsers = $users->filter(fn ($u) => $u->id !== $creator->id && $u->person?->u_id === $creator->person?->u_id);
-                if ($otherUsers->isNotEmpty()) {
-                    $assignCount = rand(0, min(2, $otherUsers->count()));
-                    $assignedUsers = array_merge($assignedUsers, $otherUsers->random($assignCount)->pluck('id')->toArray());
-                }
-
-                $todo->users()->sync($assignedUsers);
             }
         }
     }
