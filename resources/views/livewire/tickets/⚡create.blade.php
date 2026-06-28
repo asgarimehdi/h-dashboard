@@ -52,6 +52,12 @@ new class extends Component
         }
     }
 
+    public function resetForm(): void
+    {
+        $this->reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search']);
+        $this->showDropdown = false;
+    }
+
     public function saveTicket(): void
     {
         $this->validate([
@@ -215,7 +221,7 @@ new class extends Component
 
             <div class="col-span-2 flex justify-end gap-4">
                 <x-button type="submit" label="ارسال نهایی" icon="o-paper-airplane" class="btn-primary" spinner />
-                <x-button label="لغو" @click="$wire.reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search'])" icon="o-x-mark" class="btn-ghost" />
+                <x-button label="لغو" wire:click="resetForm" icon="o-x-mark" class="btn-ghost" />
             </div>
         </x-form>
     </x-card>
