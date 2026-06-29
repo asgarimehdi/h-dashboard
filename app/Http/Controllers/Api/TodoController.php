@@ -13,7 +13,7 @@ class TodoController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Todo::where('unit_id', $request->user()->person?->u_id);
+        $query = Todo::accessible();
 
         if ($request->filled('date')) {
             $query->whereDate('start_at', $request->date);

@@ -23,6 +23,9 @@ Route::get('/logout', function () {
 
 // Protected routes here
 Route::middleware('auth')->group(function () {
+    Route::livewire('/select-context', 'select-context');
+
+    Route::middleware('unit_context')->group(function () {
     // Route::get('/', function () {
     //     return view('welcome');
     // });
@@ -86,4 +89,5 @@ Route::middleware('auth')->group(function () {
             include $path;
         })->name('op');
     });
+    }); // unit_context
 });

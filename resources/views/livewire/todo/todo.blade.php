@@ -24,12 +24,12 @@ return new class extends Component {
 
     public function mount(): void
     {
-        $this->unit_id = auth()->user()->person?->u_id;
+        $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
     }
 
     public function getEvents()
     {
-        return Todo::where('unit_id', auth()->user()->person?->u_id)
+        return Todo::accessible()
             ->get()
             ->map(function ($todo) {
                 return [
@@ -49,14 +49,14 @@ return new class extends Component {
     public function openModal()
     {
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
-        $this->unit_id = auth()->user()->person?->u_id;
+        $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->modal = true;
     }
 
     public function openCreateModal($start, $end)
     {
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
-        $this->unit_id = auth()->user()->person?->u_id;
+        $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->start_at = $start;
         $this->end_at = $end;
 

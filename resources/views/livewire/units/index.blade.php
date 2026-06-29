@@ -4,6 +4,7 @@ use App\Models\Unit;
 use App\Models\Region;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
+use App\Services\AccessService;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Mary\Traits\Toast;
@@ -70,26 +71,27 @@ return new class extends Component {
 
     public function units(): LengthAwarePaginator
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         $query = Unit::query()
             ->withAggregate('unitType', 'name')
             ->withAggregate('region', 'name')
             ->withAggregate('parent', 'name');
 
+        if (! empty($accessibleIds)) {
+            $query->whereIn('id', $accessibleIds);
+        }
+
         if ($this->userUnitId) {
             $query->where('id', '!=', $this->userUnitId);
         }
 
-        if (!empty($this->search)) {
+        if (! empty($this->search)) {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
 
-        if ($this->userUnitLevel === 'county') {
-            $query->where('region_id', $this->userRegionId);
-        } elseif ($this->userUnitLevel === 'province') {
-            $query->whereIn('region_id', Region::where('parent_id', $this->userRegionId)->pluck('id')->push($this->userRegionId));
-        }
-
         $query->orderBy(...array_values($this->sortBy));
+
         return $query->paginate($this->perPage);
     }
 

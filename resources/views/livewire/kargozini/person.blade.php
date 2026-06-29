@@ -6,6 +6,7 @@ use App\Models\Estekhdam;
 use App\Models\Semat;
 use App\Models\Radif;
 use App\Models\Unit;
+use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -127,6 +128,7 @@ return new class extends Component {
     public function persons(): LengthAwarePaginator
     {
         $query = Person::query()
+            ->accessible('u_id')
             ->withAggregate('tahsil', 'name')
             ->withAggregate('estekhdam', 'name')
             ->withAggregate('semat', 'name')
@@ -134,17 +136,22 @@ return new class extends Component {
             ->withAggregate('unit', 'name');
 
         if (!empty($this->search)) {
-            $query->where('n_code', 'LIKE', '%' . $this->search . '%')
-                ->orwhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
+            $query->where(function ($q) {
+                $q->where('n_code', 'LIKE', '%' . $this->search . '%')
+                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
+            });
         }
 
         $query->orderBy(...array_values($this->sortBy));
+
         return $query->paginate($this->perPage);
     }
 
     // ارسال داده‌ها به View
     public function with(): array
     {
+        $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+
         return [
             'persons' => $this->persons(),
             'headers' => $this->headers(),
@@ -152,7 +159,7 @@ return new class extends Component {
             'estekhdams' => Estekhdam::all(),
             'semats' => Semat::all(),
             'radifs' => Radif::all(),
-            'units' => Unit::all(),
+            'units' => Unit::whereIn('id', $accessibleUnitIds)->get(),
         ];
     }
 }; ?>

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -77,6 +78,18 @@ class User extends Authenticatable
     public function unit()
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function units(): BelongsToMany
+    {
+        return $this->belongsToMany(Unit::class, 'user_units')
+            ->withPivot('role', 'is_primary')
+            ->withTimestamps();
+    }
+
+    public function primaryUnit(): ?Unit
+    {
+        return $this->units()->wherePivot('is_primary', true)->first();
     }
 
     protected $hidden = ['password', 'remember_token'];

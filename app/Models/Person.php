@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\HasOrganizationalScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-// --->>> اضافه شد
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Person extends Model
 {
+    use HasOrganizationalScope;
     protected $fillable = ['n_code','f_name','l_name','t_id', 'e_id', 'r_id', 's_id', 'u_id',];
     protected $table = 'persons';
 

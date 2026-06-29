@@ -54,7 +54,7 @@ new class extends Component
                 ->limit(10)->get();
         }
 
-        $query = Ticket::with(['user', 'unit', 'assignee']);
+        $query = Ticket::with(['user', 'unit', 'assignee'])->accessible();
 
         if ($this->selectedUnitId) {
             $query->where('unit_id', $this->selectedUnitId);

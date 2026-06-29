@@ -79,9 +79,20 @@
                 <x-menu-separator />
                 @endif
 
-
-
-
+                {{-- Context Selector: نمایش واحد فعلی و امکان تغییر --}}
+                @if(session('current_unit_name'))
+                <div class="px-4 py-2">
+                    <div class="text-xs opacity-50 mb-1">حوزه فعالیت:</div>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-sm font-bold truncate">{{ session('current_unit_name') }}</span>
+                        @if(auth()->user()->units()->count() > 1)
+                            <x-button icon="o-arrows-right-left" class="btn-ghost btn-xs"
+                                tooltip-right="تغییر حوزه" no-wire-navigate link="/select-context" />
+                        @endif
+                    </div>
+                </div>
+                <x-menu-separator />
+                @endif
                 <x-menu-item title="صفحه اول" icon="o-sparkles" link="/" wire:navigate />
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     <x-menu-item title="کاربران" icon="o-sparkles" link="/users" wire:navigate />

@@ -2,6 +2,7 @@
 
 use App\Models\Ticket;
 use App\Models\Unit;
+use App\Services\AccessService;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
@@ -95,15 +96,16 @@ new class extends Component
         $query = Ticket::with(['user', 'unit', 'assignee', 'activities']);
 
         if ($this->viewMode === 'received') {
-            $query->where('unit_id', $user->person?->u_id);
+            $query->accessible();
         } else {
-            $query->where(function ($q) use ($user) {
+            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds($user);
+            $query->where(function ($q) use ($user, $accessibleUnitIds) {
                 $q->where('user_id', $user->id)
-                    ->orWhere(function ($subQ) use ($user) {
+                    ->orWhere(function ($subQ) use ($user, $accessibleUnitIds) {
                         $subQ->whereHas('activities', function ($activityQuery) use ($user) {
                             $activityQuery->where('user_id', $user->id);
                         })
-                            ->where('unit_id', '!=', $user->person?->u_id);
+                            ->whereNotIn('unit_id', $accessibleUnitIds);
                     });
             });
         }
