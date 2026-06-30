@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\{User, Person, Unit, Ticket, Todo};
+use App\Services\AccessService;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
@@ -15,12 +16,19 @@ return new class extends Component {
 
     public function mount(): void
     {
+        $user = auth()->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         $this->totalUsers = User::count();
-        $this->totalPersons = Person::count();
-        $this->totalUnits = Unit::count();
-        $this->totalTickets = Ticket::count();
-        $this->openTickets = Ticket::whereIn('status', ['created', 'forwarded'])->count();
-        $this->pendingTodos = Todo::where('is_completed', false)->count();
+        $this->totalPersons = Person::whereIn('u_id', $accessibleIds)->count();
+        $this->totalUnits = Unit::whereIn('id', $accessibleIds)->count();
+        $this->totalTickets = Ticket::whereIn('unit_id', $accessibleIds)->count();
+        $this->openTickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->whereIn('status', ['created', 'forwarded'])
+            ->count();
+        $this->pendingTodos = Todo::whereIn('unit_id', $accessibleIds)
+            ->where('is_completed', false)
+            ->count();
         $this->totalRoles = Role::count();
     }
 }; ?>

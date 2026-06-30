@@ -18,6 +18,11 @@ return new class extends Component {
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    public function mount(): void
+    {
+        $this->authorize('manage_roles');
+    }
+
     public function clear(): void
     {
         $this->reset();

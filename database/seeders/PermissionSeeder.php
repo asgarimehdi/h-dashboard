@@ -27,6 +27,9 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view_assigned_tickets', 'label' => 'مشاهده تیکت‌های ارجاع شده به خود']);
         // مربوط به تقویم کارها
         Permission::firstOrCreate(['name' => 'calendar', 'label' => 'تقویم کارها']);
+        // مدیریت کاربران و نقش‌ها (فقط مدیر کل)
+        Permission::firstOrCreate(['name' => 'manage_users', 'label' => 'مدیریت کاربران']);
+        Permission::firstOrCreate(['name' => 'manage_roles', 'label' => 'مدیریت نقش‌ها و دسترسی‌ها']);
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 

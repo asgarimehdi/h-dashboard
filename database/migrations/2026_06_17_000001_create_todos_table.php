@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('todos', function (Blueprint $table) {
@@ -17,13 +14,15 @@ return new class extends Migration
             $table->dateTime('start_at');
             $table->dateTime('end_at')->nullable();
             $table->boolean('is_completed')->default(false);
+            $table->unsignedBigInteger('unit_id')->nullable();
             $table->timestamps();
+
+            $table->foreign('unit_id', 'todos_unit_fk')
+                ->references('id')->on('units')
+                ->onDelete('set null');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('todos');

@@ -23,7 +23,7 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
 
-        $this->call([
+$this->call([
             BoundarySeeder::class,
             EstekhdamSeeder::class,
             TahsilSeeder::class,
@@ -39,7 +39,7 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class,
             RoleSeeder::class,
             TodoSeeder::class,
-
+            TicketSeeder::class,
 
 
         ]);

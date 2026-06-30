@@ -33,6 +33,8 @@ return new class extends Component {
 
     public function mount(): void
     {
+        $this->authorize('manage_users');
+
         $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
         $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
     }

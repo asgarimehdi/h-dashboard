@@ -178,7 +178,7 @@ return new class extends Component {
     <!-- جدول -->
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" icon="o-plus"/>
+            <x-button class="btn-success" wire:click="resetModal" @click="$wire.modal = true" icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="Search..."
@@ -234,7 +234,7 @@ return new class extends Component {
             <div class="col-span-2 flex justify-end space-x-2">
                 <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check"
                           class="btn-primary"/>
-                <x-button label="لغو" @click="$wire.modal = false" icon="o-x-mark"/>
+                <x-button label="لغو" wire:click="resetModal" @click="$wire.modal = false" icon="o-x-mark"/>
             </div>
         </x-form>
     </x-modal>

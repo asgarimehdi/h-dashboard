@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('persons', function (Blueprint $table) {
@@ -20,38 +17,33 @@ return new class extends Migration
             $table->foreignId('e_id');
             $table->foreignId('s_id');
             $table->foreignId('r_id');
-            $table->foreignId('u_id');
+            $table->foreignId('u_id')->index();
             $table->timestamps();
 
-            $table->foreign('e_id')
+            $table->foreign('e_id', 'persons_e_id_fk')
                 ->references('id')->on('estekhdams')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
 
-            $table->foreign('t_id')
+            $table->foreign('t_id', 'persons_t_id_fk')
                 ->references('id')->on('tahsils')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
 
-            $table->foreign('s_id')
+            $table->foreign('s_id', 'persons_s_id_fk')
                 ->references('id')->on('semats')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
 
-            $table->foreign('r_id')
+            $table->foreign('r_id', 'persons_r_id_fk')
                 ->references('id')->on('radifs')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
-
-
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('people');
+        Schema::dropIfExists('persons');
     }
 };

@@ -27,6 +27,8 @@ return new class extends Component {
 
     public function mount(): void
     {
+        $this->authorize('manage_roles');
+
         // اضافه کردن label به فیلدهای انتخابی
         $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
 
