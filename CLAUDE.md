@@ -40,6 +40,10 @@ Organizational health/HR management dashboard with Persian (Farsi) UI. Manages p
 
 Each has `hasMany(Person)` inverse.
 
+### Migrations
+
+**Consolidated to 21 clean migrations** (was 26). Each table has a single CREATE migration with all indexes and constraints inline. Removed: 5 `todo_user` churn migrations, 1 separate `add_performance_indexes` migration. FK constraints explicitly named to avoid MySQL auto-naming collisions (e.g., `tickets_user_fk`, `ta_ticket_fk`, `att_user_fk`).
+
 ### Personnel & Auth
 
 **`persons`** — Personnel records (table name: `persons`, not `people`)
@@ -257,6 +261,16 @@ Additional indexes beyond FKs: `tickets`(status, unit_id, created_at, user_id), 
   - `manage_users` — user CRUD
   - `manage_roles` — roles & permissions management
 - Route middleware: `role_or_permission:permission_name` on all protected routes (except `/select-context`)
+  - `/users`, `/users/*` → `manage_users`
+  - `/kargozini/*` → `kargozini`
+  - `/units`, `/units/chart` → `organization`
+  - `/permissions`, `/roles` → `manage_roles`
+  - `/tickets/new` → `create_ticket`
+  - `/tickets/inbox` → `view_assigned_tickets`
+  - `/monitoring` → `view_all_tickets`
+  - `/maps/*`, `/it/*` → `map`
+  - `/todo` → `calendar`
+  - `/op` → `op-cache`
 
 ## Hierarchical Access Control
 
@@ -326,6 +340,36 @@ All components use `<x-*>` blade syntax. Icons use Heroicons: `o-` (outline), `s
 - `<x-list-item :item="" value="" ...>` — user profile item in sidebar with `<x-slot:actions>`
 - `<x-toast />` — toast notification container (required once in layout)
 - `<x-theme-toggle darkTheme="dark" lightTheme="fantasy" />` — theme switcher (wrapped as `<x-theme-selector>`)
+
+**Sidebar Menu Icons** (semantic Heroicons mapping):
+- `o-home` — صفحه اول (Home)
+- `o-cog-6-tooth` — مدیریت (Management parent)
+- `o-users` — کاربران (Users)
+- `o-user-group` — منابع انسانی (HR parent)
+- `o-briefcase` — استخدام (Employment)
+- `o-bars-3-bottom-right` — ردیف سازمانی (Org Rank)
+- `o-academic-cap` — تحصیلات (Education)
+- `o-clipboard-document-list` — سمت‌ها (Positions)
+- `o-key` — مدیریت سطح دسترسی (Access parent)
+- `o-lock-closed` — مدیریت دسترسی‌ها (Permissions)
+- `o-shield-check` — مدیریت نقش‌ها (Roles)
+- `o-ticket` — مدیریت تیکت‌ها (Tickets parent)
+- `o-plus-circle` — ایجاد تیکت (Create Ticket)
+- `o-inbox` — صندوق تیکت‌ها (Inbox)
+- `o-chart-bar` — مانیتورینگ (Monitoring)
+- `o-building-library` — ساختار سازمان (Org Structure parent)
+- `o-building-office-2` — مدیریت واحدها (Units)
+- `o-folder` — درختواره واحدها (Tree)
+- `o-map` — کار با نقشه (Maps parent), مسیر (Route)
+- `o-magnifying-glass-circle` — یافتن مسیر (Find Route)
+- `o-pencil-square` — رسم شکل (Draw)
+- `o-map-pin` — شهرستان‌ها (Counties), نقشه نقاط (Points)
+- `o-building-library` — نقشه واحدها (Unit Map)
+- `o-signal` — موقعیت کاربر (Location)
+- `o-wrench-screwdriver` — ابزارهای مدیریتی (Admin Tools parent)
+- `o-server` — کش سرور (Server Cache)
+- `o-globe-alt` — شبکه‌ها (Networks)
+- `o-calendar-days` — تقویم (Calendar)
 
 **Page Structure** (used on every page):
 - `<x-header title="" separator progress-indicator>` — page header with `<x-slot:middle>` and `<x-slot:actions>`
@@ -470,6 +514,7 @@ All todo endpoints enforce hierarchical access control via `AccessService::acces
 - Use `php artisan make:` commands. Pass `--no-interaction` to all Artisan commands.
 - When creating models, also create factories and seeders.
 - Note: only `UserFactory` exists currently. Other models lack factories but have seeders.
+- **Migration naming**: New migrations use `YYYY_MM_DD_000001_description.php` format (sequential daily counter) instead of timestamps.
 
 ## Laravel Boost Tools
 

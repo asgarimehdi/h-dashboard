@@ -40,6 +40,10 @@ Organizational health/HR management dashboard with Persian (Farsi) UI. Manages p
 
 Each has `hasMany(Person)` inverse.
 
+### Migrations
+
+**Consolidated to 21 clean migrations** (was 26). Each table has a single CREATE migration with all indexes and constraints inline. Removed: 5 `todo_user` churn migrations, 1 separate `add_performance_indexes` migration. FK constraints explicitly named to avoid MySQL auto-naming collisions (e.g., `tickets_user_fk`, `ta_ticket_fk`, `att_user_fk`).
+
 ### Personnel & Auth
 
 **`persons`** — Personnel records (table name: `persons`, not `people`)
@@ -65,8 +69,9 @@ Relationships: `belongsTo` Estekhdam(`e_id`), Tahsil(`t_id`), Semat(`s_id`), Rad
 | `password` | string | hashed cast |
 | `deleted_at` | timestamp | soft delete |
 
-Relationships: `belongsTo` Person (via `n_code` ↔ `n_code`). Traits: `HasApiTokens`, `HasRoles`, `SoftDeletes`.
+Relationships: `belongsTo` Person (via `n_code` ↔ `n_code`). `belongsToMany` Unit (via `user_units` as `units()`). Traits: `HasApiTokens`, `HasRoles`, `SoftDeletes`.
 Accessors: `name` (computed from `person.f_name + l_name`, session-cached), `unit_name` (via `person.unit.name`).
+Methods: `primaryUnit()` returns the unit where `is_primary = true`.
 
 **Key pattern**: User ↔ Person linked by `n_code` (not `id`). Person is the parent (`unique n_code`), User is the child (`FK n_code`). `Person.hasOne(User)` / `User.belongsTo(Person)`.
 
@@ -218,6 +223,10 @@ Relationships: `belongsTo` Unit.
 
 Additional indexes beyond FKs: `tickets`(status, unit_id, created_at, user_id), `persons`(u_id), `task_activities`(ticket_id, user_id), `attachments`(ticket_id, activity_id), `location_logs`(user_id).
 
+### Seeders
+
+- `TicketSeeder.php` — Seeds 10 sample tickets with realistic Persian subjects, all statuses (`created`, `forwarded`, `accepted`, `completed`, `rejected`), all priorities (`low`, `normal`, `urgent`), and associated `task_activities` showing full ticket workflow.
+
 ### FK Delete Behavior Summary
 
 | FK | onDelete |
@@ -225,6 +234,8 @@ Additional indexes beyond FKs: `tickets`(status, unit_id, created_at, user_id), 
 | `users.n_code → persons` | restrict |
 | `persons.e_id/t_id/s_id/r_id → lookups` | restrict |
 | `units.region_id, parent_id` | restrict |
+| `user_units.user_id → users` | cascade |
+| `user_units.unit_id → units` | cascade |
 | `tickets.ticket_id → task_activities, attachments` | cascade |
 | `task_activities.activity_id → attachments` | cascade |
 | `location_logs.user_id → users` | cascade |
@@ -236,7 +247,67 @@ Additional indexes beyond FKs: `tickets`(status, unit_id, created_at, user_id), 
 - Web login uses `n_code` + password (not email)
 - API: POST `/api/login` returns Sanctum token for Flutter app
 - User → Person linked via `n_code` foreign key (not `id`)
-- RBAC permissions: `map`, `calendar`, `op-cache` gate route groups
+- RBAC permissions (Spatie):
+  - `kargozini` — HR/personnel management
+  - `map` — GIS maps and network tools
+  - `organization` — organizational unit management
+  - `op-cache` — OPcache GUI access
+  - `bw` — network bandwidth analysis
+  - `view_all_tickets` — ticket monitoring dashboard
+  - `create_ticket` — create new tickets
+  - `manage_unit_tickets` — manage/assign unit tickets
+  - `view_assigned_tickets` — view tickets assigned to self
+  - `calendar` — todo/calendar access
+  - `manage_users` — user CRUD
+  - `manage_roles` — roles & permissions management
+- Route middleware: `role_or_permission:permission_name` on all protected routes (except `/select-context`)
+  - `/users`, `/users/*` → `manage_users`
+  - `/kargozini/*` → `kargozini`
+  - `/units`, `/units/chart` → `organization`
+  - `/permissions`, `/roles` → `manage_roles`
+  - `/tickets/new` → `create_ticket`
+  - `/tickets/inbox` → `view_assigned_tickets`
+  - `/monitoring` → `view_all_tickets`
+  - `/maps/*`, `/it/*` → `map`
+  - `/todo` → `calendar`
+  - `/op` → `op-cache`
+
+## Hierarchical Access Control
+
+Two-layer authorization system separating **what** a user can do from **which data** they can see:
+
+### Layer 1: Functional Permissions (Spatie)
+Controls actions: `create_ticket`, `manage_unit_tickets`, `map`, `calendar`, `op-cache`, etc.
+Roles: `admin` (all), `unit_manager`, `expert`, `user`.
+
+### Layer 2: Data Scope (AccessService + Unit hierarchy)
+Controls data visibility based on the user's unit position in the organizational tree.
+
+**Key files:**
+- `app/Services/AccessService.php` — `accessibleUnitIds()` returns all unit IDs the current user can see (current unit + all descendants). Results are cached for 30 minutes. Falls back to `Person.u_id` when `user_units` is empty.
+- `app/Traits/HasOrganizationalScope.php` — `scopeAccessible()` trait, used on `Ticket`, `Todo`, `Person` models.
+- `app/Http/Middleware/ValidateUnitContext.php` — validates `session('current_unit_id')`, auto-sets for single-unit users, redirects multi-unit users to `/select-context`.
+- `resources/views/livewire/select-context.blade.php` — context selection page for multi-unit users.
+
+**How it works:**
+1. User logs in → middleware checks `user_units`
+2. Single unit → auto-set `session('current_unit_id')`; Multiple units → redirect to `/select-context`
+3. `AccessService::accessibleUnitIds()` uses `Unit::descendantIds()` (recursive CTE) to find all child units
+4. `Model::accessible()` scope filters queries to only accessible units' data
+5. Sidebar shows current context name + switch button (if multi-unit)
+
+**Usage in queries:**
+```php
+Ticket::accessible()->where(...)->paginate()     // filters by unit_id
+Person::accessible('u_id')->paginate()            // Person uses u_id column, not unit_id
+Todo::accessible()->get()
+```
+
+**Session keys:**
+- `current_unit_id` — active unit ID for data scoping
+- `current_unit_name` — display name for sidebar
+
+**Middleware registration:** `unit_context` alias in `bootstrap/app.php`, applied to all auth routes except `/select-context`.
 
 ## Dev Environment
 
@@ -269,6 +340,36 @@ All components use `<x-*>` blade syntax. Icons use Heroicons: `o-` (outline), `s
 - `<x-list-item :item="" value="" ...>` — user profile item in sidebar with `<x-slot:actions>`
 - `<x-toast />` — toast notification container (required once in layout)
 - `<x-theme-toggle darkTheme="dark" lightTheme="fantasy" />` — theme switcher (wrapped as `<x-theme-selector>`)
+
+**Sidebar Menu Icons** (semantic Heroicons mapping):
+- `o-home` — صفحه اول (Home)
+- `o-cog-6-tooth` — مدیریت (Management parent)
+- `o-users` — کاربران (Users)
+- `o-user-group` — منابع انسانی (HR parent)
+- `o-briefcase` — استخدام (Employment)
+- `o-bars-3-bottom-right` — ردیف سازمانی (Org Rank)
+- `o-academic-cap` — تحصیلات (Education)
+- `o-clipboard-document-list` — سمت‌ها (Positions)
+- `o-key` — مدیریت سطح دسترسی (Access parent)
+- `o-lock-closed` — مدیریت دسترسی‌ها (Permissions)
+- `o-shield-check` — مدیریت نقش‌ها (Roles)
+- `o-ticket` — مدیریت تیکت‌ها (Tickets parent)
+- `o-plus-circle` — ایجاد تیکت (Create Ticket)
+- `o-inbox` — صندوق تیکت‌ها (Inbox)
+- `o-chart-bar` — مانیتورینگ (Monitoring)
+- `o-building-library` — ساختار سازمان (Org Structure parent)
+- `o-building-office-2` — مدیریت واحدها (Units)
+- `o-folder` — درختواره واحدها (Tree)
+- `o-map` — کار با نقشه (Maps parent), مسیر (Route)
+- `o-magnifying-glass-circle` — یافتن مسیر (Find Route)
+- `o-pencil-square` — رسم شکل (Draw)
+- `o-map-pin` — شهرستان‌ها (Counties), نقشه نقاط (Points)
+- `o-building-library` — نقشه واحدها (Unit Map)
+- `o-signal` — موقعیت کاربر (Location)
+- `o-wrench-screwdriver` — ابزارهای مدیریتی (Admin Tools parent)
+- `o-server` — کش سرور (Server Cache)
+- `o-globe-alt` — شبکه‌ها (Networks)
+- `o-calendar-days` — تقویم (Calendar)
 
 **Page Structure** (used on every page):
 - `<x-header title="" separator progress-indicator>` — page header with `<x-slot:middle>` and `<x-slot:actions>`
@@ -328,13 +429,14 @@ PHP class:
   - headers(): array — table columns
   - items(): LengthAwarePaginator — paginated query with withAggregate()
   - save/create/update/delete methods
+  - resetModal(): resets all form fields (MUST be called on create button AND cancel button)
   - with(): array — passes data to view
 
 Blade:
   <x-header title="..." separator progress-indicator>
   <x-card shadow>
     <div class="breadcrumbs flex gap-2 items-center">
-      <x-button class="btn-success" icon="o-plus" />  // create button
+      <x-button class="btn-success" wire:click="resetModal" @click="$wire.modal = true" icon="o-plus" />  // create — resets form first
       <x-input wire:model.live.debounce="search" />    // search
     </div>
     <x-table :headers :rows :sort-by with-pagination>
@@ -345,7 +447,7 @@ Blade:
     <x-form wire:submit.prevent="save" class="grid grid-cols-2 gap-4">
       ...inputs/selects...
       <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" />
-      <x-button label="لغو" @click="$wire.modal = false" icon="o-x-mark" />
+      <x-button label="لغو" wire:click="resetModal" @click="$wire.modal = false" icon="o-x-mark" />  // cancel — resets form
     </x-form>
   </x-modal>
 ```
@@ -378,10 +480,18 @@ Activate the relevant skill when working in that domain.
 
 - `POST /api/login` — token auth
 - `GET /api/user`, `GET /api/me` — current user
-- `GET /api/unit` — units
+- `GET /api/unit` — units list
 - `POST /api/location` — store location log
-- `GET /api/zabbix/traffic`, `GET /api/zabbix/multi-latest` — Zabbix data
-- `GET/POST/PUT/DELETE /api/todos` — todo CRUD
+- `GET /api/zabbix/traffic` — network traffic data
+- `GET /api/zabbix/multi-latest` — latest Zabbix metrics
+- `GET /api/todos` — list todos (paginated, filterable by date/month/year/is_completed)
+- `POST /api/todos` — create todo (requires `unit_id` in accessible units)
+- `GET /api/todos/{todo}` — show todo
+- `PUT /api/todos/{todo}` — update todo
+- `DELETE /api/todos/{todo}` — delete todo
+- `POST /api/todos/{todo}/toggle-complete` — toggle completion status
+
+All todo endpoints enforce hierarchical access control via `AccessService::accessibleUnitIds()`.
 
 ## Conventions
 
@@ -404,6 +514,7 @@ Activate the relevant skill when working in that domain.
 - Use `php artisan make:` commands. Pass `--no-interaction` to all Artisan commands.
 - When creating models, also create factories and seeders.
 - Note: only `UserFactory` exists currently. Other models lack factories but have seeders.
+- **Migration naming**: New migrations use `YYYY_MM_DD_000001_description.php` format (sequential daily counter) instead of timestamps.
 
 ## Laravel Boost Tools
 
