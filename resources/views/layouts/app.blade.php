@@ -52,6 +52,10 @@
         </x-slot:brand>
         <x-slot:actions>
             <livewire:notifications.bell />
+            <a href="/search" wire:navigate class="btn btn-ghost btn-sm">
+                <x-icon name="o-magnifying-glass" class="w-5 h-5" />
+                <span class="hidden md:inline text-xs">جستجو</span>
+            </a>
             <a href="/profile" wire:navigate class="btn btn-ghost btn-sm gap-2">
                 <x-icon name="o-user-circle" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">{{ Auth::user()->person?->f_name ?? 'کاربر' }}</span>

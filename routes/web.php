@@ -111,6 +111,9 @@ Route::middleware('auth')->group(function () {
                 include $path;
             })->name('op');
         });
+        // جستجوی سراسری
+        Route::livewire('/search', 'search.index')->name('search');
+
         // پروفایل کاربر (نیاز به لاگین)
         Route::livewire('/profile', 'profile.index')->name('profile');
 
