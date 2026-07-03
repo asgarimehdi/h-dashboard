@@ -30,10 +30,7 @@ return new class extends Component
         ];
         $user->save();
 
-        $this->dispatch('swal', [
-            'title' => 'تنظیمات ذخیره شد!',
-            'icon' => 'success',
-        ]);
+        $this->success('تنظیمات ذخیره شد!', position: 'toast-bottom');
     }
 
 }; ?>
