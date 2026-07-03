@@ -12,6 +12,8 @@ new class extends Component
     public string $search = '';
     public string $typeFilter = 'all';
     public ?int $userId = null;
+    public ?string $dateFrom = null;
+    public ?string $dateTo = null;
     public bool $showModal = false;
     public ?ActivityLog $selectedLog = null;
 
@@ -37,6 +39,14 @@ new class extends Component
 
         if ($this->userId) {
             $query->where('user_id', $this->userId);
+        }
+
+        if ($this->dateFrom) {
+            $query->where('created_at', '>=', $this->dateFrom);
+        }
+
+        if ($this->dateTo) {
+            $query->where('created_at', '<=', $this->dateTo . ' 23:59:59');
         }
 
         return $this->view([
@@ -105,8 +115,8 @@ new class extends Component
     </div>
 
     <x-card shadow>
-        <div class="flex gap-2 items-center mb-4">
-            <div class="flex-1">
+        <div class="flex gap-2 items-center mb-4 flex-wrap">
+            <div class="flex-1 min-w-[200px]">
                 <x-input
                     placeholder="جستجوی فعالیت..."
                     wire:model.live.debounce="search"
@@ -121,6 +131,10 @@ new class extends Component
                     wire:click="$set('typeFilter', '{{ $key }}')"
                     class="btn-xs {{ $this->typeFilter === $key ? 'btn-primary' : 'btn-outline' }}" />
                 @endforeach
+            </div>
+            <div class="flex gap-1">
+                <x-input label="از تاریخ" type="date" wire:model.live="dateFrom" class="w-40" />
+                <x-input label="تا تاریخ" type="date" wire:model.live="dateTo" class="w-40" />
             </div>
         </div>
 
