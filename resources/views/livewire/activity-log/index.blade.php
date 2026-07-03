@@ -90,7 +90,8 @@ return new class extends Component
             ->pluck('count', 'type')
             ->toArray();
     }
-}; ?>\n<div>
+}; ?>
+<div>
     <x-header title="گزارش فعالیت سیستم" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector />
