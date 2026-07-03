@@ -2,6 +2,7 @@
 
 use App\Models\{User, Person, Unit, Ticket, Todo, ActivityLog};
 use App\Services\AccessService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
@@ -21,6 +22,12 @@ return new class extends Component {
     public int $todayTickets = 0;
     public int $todayTodos = 0;
     public int $todayActivities = 0;
+    // آمار تفصیلی تیکت‌ها
+    public int $urgentTickets = 0;
+    public int $normalTickets = 0;
+    public int $lowTickets = 0;
+    public int $overdueTickets = 0;
+    public float $avgResolutionDays = 0;
 
     public function mount(): void
     {
@@ -62,6 +69,28 @@ return new class extends Component {
             ->where('created_at', '>=', $today)
             ->count();
         $this->todayActivities = ActivityLog::count();
+
+        // آمار تفصیلی تیکت‌ها
+        $this->urgentTickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->where('priority', 'urgent')
+            ->whereIn('status', ['created', 'forwarded'])
+            ->count();
+        $this->normalTickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->where('priority', 'normal')
+            ->whereIn('status', ['created', 'forwarded'])
+            ->count();
+        $this->lowTickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->where('priority', 'low')
+            ->whereIn('status', ['created', 'forwarded'])
+            ->count();
+        $this->overdueTickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->whereIn('status', ['created', 'forwarded'])
+            ->where('deadline', '<', now())
+            ->count();
+        $this->avgResolutionDays = Ticket::whereIn('unit_id', $accessibleIds)
+            ->where('status', 'completed')
+            ->whereNotNull('completed_at')
+            ->avg(DB::raw('DATEDIFF(completed_at, created_at)')) ?? 0;
     }
 
     // داده‌های نمودار تیکت‌ها
@@ -281,6 +310,36 @@ return new class extends Component {
             <div class="text-center p-3 bg-warning/10 rounded-xl">
                 <div class="text-2xl font-bold text-warning">{{ $todayActivities }}</div>
                 <div class="text-xs text-base-content/50">فعالیت کل</div>
+            </div>
+        </div>
+    </x-card>
+
+    {{-- آمار تفصیلی تیکت‌ها --}}
+    <x-card shadow>
+        <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+            <x-icon name="o-chart-bar" class="w-5 h-5 text-primary" />
+            آمار تفصیلی تیکت‌ها
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div class="stat bg-error/10 rounded-xl p-4">
+                <div class="stat-title text-xs text-error">فوری</div>
+                <div class="stat-value text-lg font-bold text-error">{{ $urgentTickets }}</div>
+            </div>
+            <div class="stat bg-warning/10 rounded-xl p-4">
+                <div class="stat-title text-xs text-warning">عادی</div>
+                <div class="stat-value text-lg font-bold text-warning">{{ $normalTickets }}</div>
+            </div>
+            <div class="stat bg-success/10 rounded-xl p-4">
+                <div class="stat-title text-xs text-success">کم‌اهمیت</div>
+                <div class="stat-value text-lg font-bold text-success">{{ $lowTickets }}</div>
+            </div>
+            <div class="stat bg-error/10 rounded-xl p-4">
+                <div class="stat-title text-xs text-error">سررسید گذشته</div>
+                <div class="stat-value text-lg font-bold text-error">{{ $overdueTickets }}</div>
+            </div>
+            <div class="stat bg-info/10 rounded-xl p-4">
+                <div class="stat-title text-xs text-info">میانگین حل (روز)</div>
+                <div class="stat-value text-lg font-bold text-info">{{ number_format($avgResolutionDays, 1) }}</div>
             </div>
         </div>
     </x-card>
