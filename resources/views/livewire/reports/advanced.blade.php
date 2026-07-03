@@ -17,17 +17,13 @@ return new class extends Component
     public ?int $parentUnitId = null;
     public ?int $rootUnitId = null;
     public string $statusFilter = 'all';
+    public $units = [];
 
     public function mount(): void
     {
         $this->dateFrom = now()->subDays(30)->format('Y-m-d');
         $this->dateTo = now()->format('Y-m-d');
-    }
-
-    public function getUnitsProperty()
-    {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return Unit::whereIn('id', $accessibleIds)->whereNull('parent_id')->get();
+        $this->units = \App\Models\Unit::all();
     }
 
     public function getChildUnitsProperty()
@@ -134,11 +130,12 @@ return new class extends Component
     }
 
 }; ?>
-    <div class="p-6" dir="rtl">
-        <h1 class="text-2xl font-bold mb-6 flex items-center gap-2">
-            <x-icon name="o-chart-bar" class="w-7 h-7 text-primary" />
-            گزارش پیشرفته
-        </h1>
+    <div>
+        <x-header title="گزارش پیشرفته" separator progress-indicator>
+            <x-slot:actions>
+                <x-theme-selector/>
+            </x-slot:actions>
+        </x-header>
 
         {{-- فیلترها --}}
         <x-card shadow class="mb-6">

@@ -70,10 +70,11 @@ return new class extends Component
 }; ?>
 
     <div class="p-6" dir="rtl">
-        <h1 class="text-2xl font-bold mb-6 flex items-center gap-2">
-            <x-icon name="o-chart-bar" class="w-7 h-7 text-primary" />
-            گزارش‌ها
-        </h1>
+        <x-header title="گزارش‌ها" separator progress-indicator>
+            <x-slot:actions>
+                <x-theme-selector/>
+            </x-slot:actions>
+        </x-header>
 
         {{-- فیلترها --}}
         <x-card shadow class="mb-6">

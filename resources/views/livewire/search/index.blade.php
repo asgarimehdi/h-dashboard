@@ -66,3 +66,11 @@ return new class extends Component
     }
 
 }; ?>
+
+    <div dir="rtl">
+        <x-header title="جستجو" separator progress-indicator>
+            <x-slot:actions>
+                <x-theme-selector/>
+            </x-slot:actions>
+        </x-header>
+    </div>

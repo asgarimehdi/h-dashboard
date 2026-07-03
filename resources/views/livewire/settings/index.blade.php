@@ -40,7 +40,11 @@ return new class extends Component
 
     {{-- Settings HTML --}}
     <div class="max-w-2xl mx-auto p-6" dir="rtl">
-        <h1 class="text-2xl font-bold mb-6">تنظیمات</h1>
+        <x-header title="تنظیمات" separator progress-indicator>
+            <x-slot:actions>
+                <x-theme-selector/>
+            </x-slot:actions>
+        </x-header>
 
         <x-card shadow>
             <h2 class="font-bold mb-4">اعلان‌ها</h2>
