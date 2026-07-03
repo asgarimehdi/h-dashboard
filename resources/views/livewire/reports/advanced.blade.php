@@ -26,12 +26,14 @@ return new class extends Component
         $this->units = \App\Models\Unit::all();
     }
 
+    #[\Livewire\Attributes\Computed]
     public function getChildUnitsProperty()
     {
         if (!$this->rootUnitId) return collect();
         return Unit::where('parent_id', $this->rootUnitId)->get();
     }
 
+    #[\Livewire\Attributes\Computed]
     public function getGrandChildUnitsProperty()
     {
         if (!$this->parentUnitId) return collect();
@@ -49,6 +51,7 @@ return new class extends Component
         $this->unitId = null;
     }
 
+    #[\Livewire\Attributes\Computed]
     public function getReportDataProperty(): array
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
