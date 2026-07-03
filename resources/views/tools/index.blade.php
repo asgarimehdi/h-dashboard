@@ -9,9 +9,10 @@
 </head>
 <body class="bg-base-200">
     <div class="max-w-4xl mx-auto p-6" dir="rtl">
-        <h1 class="text-2xl font-bold mb-6 flex items-center gap-2">
-            🔧 ابزارهای مدیریتی
-        </h1>
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold flex items-center gap-2">🔧 ابزارهای مدیریتی</h1>
+            <x-theme-selector/>
+        </div>
 
         @if(session('success'))
         <div class="alert alert-success mb-4">
