@@ -14,11 +14,13 @@ return new class extends Component
     public ?string $dateFrom = null;
     public ?string $dateTo = null;
     public ?int $selectedUnitId = null;
+    public array $units = [];
 
     public function mount(): void
     {
         $this->dateFrom = now()->subDays(30)->format('Y-m-d');
         $this->dateTo = now()->format('Y-m-d');
+        $this->units = Unit::all()->toArray();
     }
 
     public function getReportDataProperty(): array
