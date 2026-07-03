@@ -17,6 +17,10 @@ return new class extends Component {
     public int $completedTodos = 0;
     public int $linkedTodos = 0;
     public int $totalRoles = 0;
+    // آمار امروز
+    public int $todayTickets = 0;
+    public int $todayTodos = 0;
+    public int $todayActivities = 0;
 
     public function mount(): void
     {
@@ -48,6 +52,16 @@ return new class extends Component {
         $this->linkedTodos = Todo::whereIn('unit_id', $accessibleIds)
             ->has('tickets')
             ->count();
+
+        // آمار امروز
+        $today = now()->startOfDay();
+        $this->todayTickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->where('created_at', '>=', $today)
+            ->count();
+        $this->todayTodos = Todo::whereIn('unit_id', $accessibleIds)
+            ->where('created_at', '>=', $today)
+            ->count();
+        $this->todayActivities = ActivityLog::count();
     }
 
     // داده‌های نمودار تیکت‌ها
@@ -248,6 +262,28 @@ return new class extends Component {
             </div>
         </x-card>
     </div>
+
+    {{-- خلاصه امروز --}}
+    <x-card shadow>
+        <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+            <x-icon name="o-sun" class="w-5 h-5 text-warning" />
+            خلاصه امروز
+        </h3>
+        <div class="grid grid-cols-3 gap-4">
+            <div class="text-center p-3 bg-info/10 rounded-xl">
+                <div class="text-2xl font-bold text-info">{{ $todayTickets }}</div>
+                <div class="text-xs text-base-content/50">تیکت جدید</div>
+            </div>
+            <div class="text-center p-3 bg-success/10 rounded-xl">
+                <div class="text-2xl font-bold text-success">{{ $todayTodos }}</div>
+                <div class="text-xs text-base-content/50">وظیفه جدید</div>
+            </div>
+            <div class="text-center p-3 bg-warning/10 rounded-xl">
+                <div class="text-2xl font-bold text-warning">{{ $todayActivities }}</div>
+                <div class="text-xs text-base-content/50">فعالیت کل</div>
+            </div>
+        </div>
+    </x-card>
 
     {{-- آخرین فعالیت‌ها --}}
     <x-card shadow>
