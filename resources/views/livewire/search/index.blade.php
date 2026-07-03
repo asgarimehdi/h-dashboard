@@ -4,7 +4,7 @@ use Livewire\Component;
 use App\Models\{Ticket, Todo, User, Unit};
 use Livewire\Attributes\Layout;
 
-new #[Layout('components.layouts.app', ['title' => 'جستجو'])]
+return new #[Layout('components.layouts.app', ['title' => 'جستجو'])]
 class extends Component
 {
     public string $query = '';

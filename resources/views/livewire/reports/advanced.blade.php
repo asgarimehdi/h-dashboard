@@ -6,7 +6,7 @@ use Livewire\WithPagination;
 use App\Models\{Ticket, Todo, Unit};
 use App\Services\AccessService;
 
-new #[Layout('components.layouts.app', ['title' => 'گزارش پیشرفته'])]
+return new #[Layout('components.layouts.app', ['title' => 'گزارش پیشرفته'])]
 class extends Component
 {
     use WithPagination;

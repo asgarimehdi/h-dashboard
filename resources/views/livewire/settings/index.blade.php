@@ -3,7 +3,7 @@
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 
-new #[Layout('components.layouts.app', ['title' => 'تنظیمات'])]
+return new #[Layout('components.layouts.app', ['title' => 'تنظیمات'])]
 class extends Component
 {
     public bool $emailNotifications = true;
@@ -37,10 +37,6 @@ class extends Component
         ]);
     }
 
-    public function render()
-    {
-        return view('livewire.settings.index');
-    }
 };
 
     {{-- Settings HTML --}}

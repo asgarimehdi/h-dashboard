@@ -5,7 +5,7 @@ use Livewire\Attributes\Layout;
 use App\Models\{Unit, User};
 use App\Services\AccessService;
 
-new #[Layout('components.layouts.app', ['title' => 'ساختار سازمانی'])]
+return new #[Layout('components.layouts.app', ['title' => 'ساختار سازمانی'])]
 class extends Component
 {
     public $units = [];
