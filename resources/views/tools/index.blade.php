@@ -1,13 +1,4 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>ابزارهای مدیریتی</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-</head>
-<body class="bg-base-200">
+<x-layouts.app title="ابزارهای مدیریتی">
     <div class="max-w-4xl mx-auto p-6" dir="rtl">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold flex items-center gap-2">🔧 ابزارهای مدیریتی</h1>
@@ -82,7 +73,4 @@
             <a href="/" class="btn btn-ghost btn-sm">← بازگشت به داشبورد</a>
         </div>
     </div>
-
-    <script src="{{ asset('js/app.js') }}"></script>
-</body>
-</html>
+</x-layouts.app>
