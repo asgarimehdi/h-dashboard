@@ -129,3 +129,9 @@ Route::middleware('auth')->group(function () {
 
         // تغییر رمز عبور
         Route::livewire('/change-password', 'auth.change-password')->name('change-password');
+
+        // ابزارهای مدیریتی
+        Route::get('/tools', 'App\Http\Controllers\ToolsController@index')->name('tools');
+        Route::post('/tools/archive-tickets', 'App\Http\Controllers\ToolsController@archiveTickets')->name('tools.archive-tickets');
+        Route::post('/tools/clean-activities', 'App\Http\Controllers\ToolsController@cleanActivities')->name('tools.clean-activities');
+        Route::post('/tools/clean-notifications', 'App\Http\Controllers\ToolsController@cleanNotifications')->name('tools.clean-notifications');
