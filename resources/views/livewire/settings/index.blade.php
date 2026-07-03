@@ -2,9 +2,11 @@
 
 use Livewire\Component;
 use Livewire\Attributes\Layout;
+use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use Toast;
     public bool $emailNotifications = true;
     public bool $browserNotifications = false;
     public int $dashboardRefresh = 0; // 0 = off
