@@ -93,7 +93,7 @@ new class extends Component
                 ->get();
         }
 
-        $query = Ticket::with(['user', 'unit', 'assignee', 'activities']);
+        $query = Ticket::with(['user', 'unit', 'assignee', 'task']);
 
         if ($this->viewMode === 'received') {
             $query->accessible();
@@ -287,6 +287,18 @@ new class extends Component
                 ]);
                 $description = "تیکت مختومه شد. گزارش نهایی: {$this->completionNote}";
                 $message = "تیکت با موفقیت مختومه و بسته شد.";
+
+                // اگر وظیفه مرتبطی دارد و تمام تیکت‌های آن وظیفه بسته شده‌اند، وظیفه را تکمیل کن
+                if ($ticket->task_id) {
+                    $relatedTicket = \App\Models\Ticket::where('task_id', $ticket->task_id)
+                        ->where('status', '!=', 'completed')
+                        ->where('id', '!=', $ticket->id)
+                        ->count();
+                    if ($relatedTicket === 0) {
+                        $ticket->task->update(['is_completed' => true]);
+                        $message .= " وظیفه مرتبط نیز تکمیل شد.";
+                    }
+                }
             }
 
             $newActivity = $ticket->activities()->create([
@@ -454,6 +466,28 @@ new class extends Component
             <div>
                 <h4 class="font-bold text-sm mb-2">شرح درخواست</h4>
                 <p class="text-sm leading-8">{{ $this->showingTicket->content }}</p>
+
+                {{-- نمایش وظیفه مرتبط --}}
+                @if($this->showingTicket->task)
+                <div class="mt-4 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                    <div class="flex items-center gap-2">
+                        <x-icon name="o-calendar-days" class="w-4 h-4 text-primary" />
+                        <span class="text-sm font-bold text-primary">وظیفه مرتبط:</span>
+                    </div>
+                    <p class="text-sm mt-1">{{ $this->showingTicket->task->title }}</p>
+                    <p class="text-xs text-base-content/50 mt-1">
+                        تاریخ شروع: {{ jdate($this->showingTicket->task->start_at)->format('Y/m/d') }}
+                        @if($this->showingTicket->task->end_at)
+                        — پایان: {{ jdate($this->showingTicket->task->end_at)->format('Y/m/d') }}
+                        @endif
+                        @if($this->showingTicket->task->is_completed)
+                        <span class="badge badge-success badge-sm">انجام شده</span>
+                        @else
+                        <span class="badge badge-warning badge-sm">در انتظار</span>
+                        @endif
+                    </p>
+                </div>
+                @endif
 
                 @php $initialFiles = $this->showingTicket->attachments->where('activity_id', null); @endphp
                 @if($initialFiles->count() > 0)

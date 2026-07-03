@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Todo;
+use App\Models\{Todo, Ticket};
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
@@ -29,21 +29,50 @@ return new class extends Component {
 
     public function getEvents()
     {
-        return Todo::accessible()
+        // وظایف
+        $todoEvents = Todo::accessible()
             ->get()
             ->map(function ($todo) {
                 return [
-                    'id' => $todo->id,
+                    'id' => 'todo-' . $todo->id,
                     'title' => $todo->title,
                     'start' => $todo->start_at,
                     'end' => $todo->end_at,
                     'color' => $todo->is_completed ? '#10b981' : '#3b82f6',
                     'allDay' => false,
                     'extendedProps' => [
+                        'type' => 'todo',
                         'is_completed' => $todo->is_completed,
                     ],
                 ];
             })->toArray();
+
+        // تیکت‌ها
+        $ticketEvents = Ticket::accessible()
+            ->with('task')
+            ->whereIn('status', ['created', 'forwarded', 'accepted'])
+            ->get()
+            ->map(function ($ticket) {
+                $priorityColors = ['urgent' => '#ef4444', 'normal' => '#f59e0b', 'low' => '#6b7280'];
+                $priorityLabels = ['urgent' => 'فوری', 'normal' => 'عادی', 'low' => 'کم‌اهمیت'];
+                return [
+                    'id' => 'ticket-' . $ticket->id,
+                    'title' => '🎫 ' . $ticket->subject,
+                    'start' => $ticket->created_at,
+                    'color' => $priorityColors[$ticket->priority] ?? '#f59e0b',
+                    'allDay' => false,
+                    'extendedProps' => [
+                        'type' => 'ticket',
+                        'ticket_code' => $ticket->ticket_code,
+                        'status' => $ticket->status_name,
+                        'priority' => $priorityLabels[$ticket->priority] ?? 'عادی',
+                        'task_id' => $ticket->task_id,
+                        'task_title' => $ticket->task?->title,
+                    ],
+                ];
+            })->toArray();
+
+        return array_merge($todoEvents, $ticketEvents);
     }
 
     public function openModal()
@@ -186,12 +215,36 @@ return new class extends Component {
 }; ?>
 
 <div>
-    <x-header title="تقویم کارها (Todo)" separator progress-indicator>
+    <x-header title="تقویم سازمانی" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector />
             <x-button icon="o-plus" label="تسک جدید" class="btn-primary" wire:click="openModal" />
         </x-slot:actions>
     </x-header>
+
+    {{-- لگند رنگ‌ها --}}
+    <div class="flex flex-wrap gap-3 mb-4 px-2">
+        <div class="flex items-center gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-[#3b82f6]"></div>
+            <span class="text-xs">وظیفه در انتظار</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-[#10b981]"></div>
+            <span class="text-xs">وظیفه انجام شده</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-[#ef4444]"></div>
+            <span class="text-xs">تیکت فوری</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-[#f59e0b]"></div>
+            <span class="text-xs">تیکت عادی</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-[#6b7280]"></div>
+            <span class="text-xs">تیکت کم‌اهمیت</span>
+        </div>
+    </div>
 
     <x-card shadow>
         <div wire:ignore>
@@ -317,9 +370,15 @@ return new class extends Component {
                     selectable: true,
                     editable: true,
                     eventContent: function(arg) {
+                        const type = arg.event.extendedProps.type || 'todo';
+                        if (type === 'ticket') {
+                            const status = arg.event.extendedProps.status || '';
+                            return { html: '<div class="flex items-center gap-1"><span class="text-sm">🎫</span><span class="fc-event-title text-xs">' + arg.event.title.replace('🎫 ', '') + ' <span class="badge badge-xs badge-ghost">' + status + '</span></span></div>' };
+                        }
+                        const todoId = arg.event.id.replace('todo-', '');
                         const checkIcon = arg.event.extendedProps.is_completed
-                            ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + arg.event.id + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
-                            : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + arg.event.id + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
+                            ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
+                            : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
                         return { html: '<div class="flex items-center gap-1">' + checkIcon + '<span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span></div>' };
                     },
                     events: @json($events),
@@ -327,10 +386,20 @@ return new class extends Component {
                         @this.openCreateModal(info.startStr, info.endStr);
                     },
                     eventClick: function(info) {
-                        @this.editEvent(info.event.id);
+                        const type = info.event.extendedProps.type;
+                        if (type === 'ticket') {
+                            // باز کردن جزئیات تیکت در صفحه تیکت‌ها
+                            const ticketId = info.event.id.replace('ticket-', '');
+                            window.location.href = '/tickets/inbox';
+                        } else {
+                            @this.editEvent(info.event.id.replace('todo-', ''));
+                        }
                     },
                     eventDrop: function(info) {
-                        @this.openCreateModal(info.event.startStr, info.event.endStr);
+                        const type = info.event.extendedProps.type;
+                        if (type === 'todo') {
+                            @this.openCreateModal(info.event.startStr, info.event.endStr);
+                        }
                     }
                 });
 

@@ -63,6 +63,12 @@ class Ticket extends Model
         return $this->belongsTo(Unit::class);
     }
 
+    // رابطه با وظیفه مرتبط
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Todo::class, 'task_id');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');

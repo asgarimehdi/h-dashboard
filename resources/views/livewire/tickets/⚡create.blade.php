@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Unit;
+use App\Models\{Unit, Todo};
 use App\Models\Ticket;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -19,6 +19,8 @@ new class extends Component
     public string $content = '';
     public string $priority = 'normal';
     public array $files = [];
+    public ?int $task_id = null;
+    public $todos = [];
 
     public function selectUnit($id, $name): void
     {
@@ -54,7 +56,7 @@ new class extends Component
 
     public function resetForm(): void
     {
-        $this->reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search']);
+        $this->reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search', 'task_id']);
         $this->showDropdown = false;
     }
 
@@ -85,6 +87,7 @@ new class extends Component
             'priority' => $this->priority,
             'status' => 'created',
             'current_assignee_id' => null,
+            'task_id' => $this->task_id,
         ]);
 
         $initialActivity = $ticket->activities()->create([
@@ -118,13 +121,14 @@ new class extends Component
             redirectTo: null
         );
 
-        $this->reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search']);
+        $this->reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search', 'task_id']);
         $this->showDropdown = false;
     }
 
     public function render()
     {
         $units = [];
+        $todos = [];
 
         if (strlen($this->search) >= 2) {
             $userUnitId = auth()->user()->person?->u_id;
@@ -138,7 +142,13 @@ new class extends Component
             $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get();
         }
 
-        return $this->view(compact('units'));
+        // لود وظایف انجام‌نشده واحد فعلی
+        $currentUnitId = session('current_unit_id', auth()->user()->person?->u_id);
+        $todos = Todo::where('unit_id', $currentUnitId)
+            ->where('is_completed', false)
+            ->get();
+
+        return $this->view(compact('units', 'todos'));
     }
 };
 ?>
@@ -195,6 +205,20 @@ new class extends Component
                     placeholder="جزئیات مشکل خود را اینجا بنویسید..."
                     rows="4" />
             </div>
+
+            @if($todos->count() > 0)
+            <div class="col-span-2">
+                <x-select
+                    label="وظیفه مرتبط (اختیاری)"
+                    wire:model="task_id"
+                    placeholder="انتخاب کنید..."
+                    icon="o-calendar-days"
+                    :options="$todos->map(fn($t) => ['id' => $t->id, 'name' => $t->title . ' (' . jdate($t->start_at)->format('Y/m/d') . ')'])->toArray()"
+                    :clearable="true"
+                />
+                <p class="text-xs text-base-content/50 mt-1">در صورت انتخاب، این تیکت به وظیفه مرتبط می‌شود.</p>
+            </div>
+            @endif
 
             <div class="col-span-2">
                 <x-file

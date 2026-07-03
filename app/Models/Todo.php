@@ -21,4 +21,10 @@ class Todo extends Model
     {
         return $this->belongsTo(Unit::class);
     }
+
+    // تیکت‌های مرتبط با این وظیفه
+    public function tickets()
+    {
+        return $this->hasMany(Ticket::class, 'task_id');
+    }
 }
