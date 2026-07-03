@@ -22,6 +22,7 @@ class User extends Authenticatable
     protected $fillable = [
         'n_code',
         'password',
+        'settings',
     ];
 
     protected $dates = ['deleted_at']; // برای مدیریت تاریخ حذف
@@ -92,13 +93,15 @@ class User extends Authenticatable
         return $this->units()->wherePivot('is_primary', true)->first();
     }
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password',
+        'settings', 'remember_token'];
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'settings' => 'array',
         ];
     }
 }
