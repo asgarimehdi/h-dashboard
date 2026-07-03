@@ -90,6 +90,12 @@ new class extends Component
             'task_id' => $this->task_id,
         ]);
 
+        // ثبت فعالیت
+        \App\Services\ActivityLogService::created(
+            $ticket,
+            "ایجاد تیکت {$ticketCode} به واحد " . $ticket->unit->name
+        );
+
         $initialActivity = $ticket->activities()->create([
             'user_id' => auth()->id(),
             'action' => 'created',

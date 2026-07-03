@@ -211,6 +211,14 @@ new class extends Component
             ]);
         });
 
+        // ثبت فعالیت
+        \App\Services\ActivityLogService::updated(
+            $ticket,
+            ['status' => 'created'],
+            ['status' => 'accepted'],
+            "پذیرش تیکت {$ticket->ticket_code}"
+        );
+
         $this->dispatch('swal', ['title' => 'تیکت پذیرفته شد', 'icon' => 'success']);
         $this->closeDetail();
     }

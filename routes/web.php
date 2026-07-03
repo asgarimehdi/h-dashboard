@@ -9,11 +9,14 @@ Route::livewire('/login', 'auth.login')->name('login');
 // Define the logout
 Route::get('/logout', function () {
     $userId = Auth::id();
+    $userName = Auth::user()?->name ?? 'نامشخص';
 
-    // ✅ پاک کردن نام کش‌شده در session
+    // ثبت فعالیت خروج
     if ($userId) {
+        \App\Services\ActivityLogService::logout('خروج از سیستم - کاربر: ' . $userName);
         Session::forget("user_{$userId}_display_name");
     }
+
     auth()->logout();
     request()->session()->invalidate();
     request()->session()->regenerateToken();
@@ -86,6 +89,10 @@ Route::middleware('auth')->group(function () {
             Route::middleware('role_or_permission:view_assigned_tickets')->group(function () {
                 Route::livewire('/inbox', 'tickets.inbox')->name('inbox');
             });
+        });
+
+        Route::middleware('role_or_permission:manage_users')->group(function () {
+            Route::livewire('/activity-log', 'activity-log.index')->name('activity-log');
         });
 
         Route::middleware('role_or_permission:manage_roles')->group(function () {

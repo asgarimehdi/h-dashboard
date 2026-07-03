@@ -52,6 +52,9 @@ class extends Component {
         // اطمینان از ذخیره remember me
         Auth::login(auth()->user(), $this->remember);
 
+        // ثبت فعالیت ورود
+        \App\Services\ActivityLogService::login('ورود موفق به سیستم با کد ملی: ' . $this->n_code);
+
         return redirect()->intended('/');
     }
 

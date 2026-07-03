@@ -97,6 +97,7 @@
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     @can('manage_users')
                     <x-menu-item title="کاربران" icon="o-users" link="/users" wire:navigate />
+                    <x-menu-item title="گزارش فعالیت" icon="o-clock" link="/activity-log" wire:navigate />
                     @endcan
 
                     @can('kargozini')
