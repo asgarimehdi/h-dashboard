@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'unit_context' => \App\Http\Middleware\ValidateUnitContext::class,
+            'last.activity' => \App\Http\Middleware\LastUserActivity::class,
+        ]);
+        $middleware->web(append: [
+            \App\Http\Middleware\LastUserActivity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
