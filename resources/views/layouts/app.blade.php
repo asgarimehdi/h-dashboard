@@ -142,6 +142,7 @@
                     <x-menu-sub title="ساختار سازمان" icon="o-building-library">
                         <x-menu-item title="مدیریت واحدها" icon="o-building-office-2" link="/units" wire:navigate />
                         <x-menu-item title="درختواره واحدها" icon="o-folder" link="/units/chart" wire:navigate />
+                        <x-menu-item title="نمای درختی" icon="o-list-bullet" link="/units/tree" wire:navigate />
                     </x-menu-sub>
                     @endcan
 
