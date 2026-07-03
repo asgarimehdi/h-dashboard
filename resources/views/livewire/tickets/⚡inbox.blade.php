@@ -50,6 +50,94 @@ new class extends Component
     public string $bulkAction = '';
     public string $bulkNote = '';
 
+    // Data properties
+    public $tickets;
+    public array $units = [];
+
+    public function mount(): void
+    {
+        $this->loadData();
+    }
+
+    public function loadData(): void
+    {
+        $user = auth()->user();
+        $units = [];
+
+        if (strlen($this->unitSearch) > 1) {
+            $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
+                ->where('can_receive_tickets', true)
+                ->where('id', '!=', auth()->user()->person?->u_id)
+                ->limit(5)
+                ->get();
+        }
+
+        $query = Ticket::with(['user', 'unit', 'assignee', 'task']);
+
+        if ($this->viewMode === 'received') {
+            $query->accessible();
+        } else {
+            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds($user);
+            $query->where(function ($q) use ($user, $accessibleUnitIds) {
+                $q->where('user_id', $user->id)
+                    ->orWhere(function ($subQ) use ($user, $accessibleUnitIds) {
+                        $subQ->whereHas('activities', function ($activityQuery) use ($user) {
+                            $activityQuery->where('user_id', $user->id);
+                        })
+                            ->whereNotIn('unit_id', $accessibleUnitIds);
+                    });
+            });
+        }
+
+        if ($this->statusFilter === 'pending') {
+            $query->whereIn('status', ['created', 'forwarded']);
+        } elseif ($this->statusFilter !== 'all') {
+            $query->where('status', $this->statusFilter);
+        }
+
+        if ($this->dateFrom) {
+            $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
+            $query->where('created_at', '>=', $miladiFrom);
+        }
+        if ($this->dateTo) {
+            $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
+            $query->where('created_at', '<=', $miladiTo);
+        }
+        if (!empty($this->search)) {
+            $query->where(function ($q) {
+                $q->where('subject', 'like', '%' . $this->search . '%')
+                    ->orWhere('ticket_code', 'like', '%' . $this->search . '%')
+                    ->orWhere('content', 'like', '%' . $this->search . '%');
+            });
+        }
+
+        $this->tickets = $query->latest()->paginate(5);
+        $this->units = $units;
+    }
+
+    public function updatedViewMode(): void
+    {
+        $this->resetPage();
+        $this->loadData();
+    }
+
+    public function updatedStatusFilter(): void
+    {
+        $this->resetPage();
+        $this->loadData();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+        $this->loadData();
+    }
+
+    public function updatedUnitSearch(): void
+    {
+        $this->loadData();
+    }
+
     public function updateFilter($viewMode, $statusFilter = 'pending'): void
     {
         $this->viewMode = $viewMode;
@@ -60,11 +148,13 @@ new class extends Component
     public function updatedDateFrom(): void
     {
         $this->resetPage();
+        $this->loadData();
     }
 
     public function updatedDateTo(): void
     {
         $this->resetPage();
+        $this->loadData();
     }
 
     public function setTab($tab): void
@@ -172,64 +262,6 @@ new class extends Component
     private function getAccessibleUnitIds(): array
     {
         return app(AccessService::class)->accessibleUnitIds();
-    }
-
-    public function render()
-    {
-        $user = auth()->user();
-        $units = [];
-
-        if (strlen($this->unitSearch) > 1) {
-            $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
-                ->where('can_receive_tickets', true)
-                ->where('id', '!=', auth()->user()->person?->u_id)
-                ->limit(5)
-                ->get();
-        }
-
-        $query = Ticket::with(['user', 'unit', 'assignee', 'task']);
-
-        if ($this->viewMode === 'received') {
-            $query->accessible();
-        } else {
-            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds($user);
-            $query->where(function ($q) use ($user, $accessibleUnitIds) {
-                $q->where('user_id', $user->id)
-                    ->orWhere(function ($subQ) use ($user, $accessibleUnitIds) {
-                        $subQ->whereHas('activities', function ($activityQuery) use ($user) {
-                            $activityQuery->where('user_id', $user->id);
-                        })
-                            ->whereNotIn('unit_id', $accessibleUnitIds);
-                    });
-            });
-        }
-
-        if ($this->statusFilter === 'pending') {
-            $query->whereIn('status', ['created', 'forwarded']);
-        } elseif ($this->statusFilter !== 'all') {
-            $query->where('status', $this->statusFilter);
-        }
-
-        if ($this->dateFrom) {
-            $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-            $query->where('created_at', '>=', $miladiFrom);
-        }
-        if ($this->dateTo) {
-            $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-            $query->where('created_at', '<=', $miladiTo);
-        }
-        if (!empty($this->search)) {
-            $query->where(function ($q) {
-                $q->where('subject', 'like', '%' . $this->search . '%')
-                    ->orWhere('ticket_code', 'like', '%' . $this->search . '%')
-                    ->orWhere('content', 'like', '%' . $this->search . '%');
-            });
-        }
-
-        return $this->view([
-            'tickets' => $query->latest()->paginate(5),
-            'units' => $units,
-        ]);
     }
 
     public function switchView($mode): void

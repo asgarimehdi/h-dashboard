@@ -28,24 +28,24 @@ new class extends Component
     public ?Ticket $showingTicket = null;
     public bool $modalDetail = false;
 
-    public function updatedDateFrom(): void
+    public $tickets;
+    public array $filterUnits = [];
+    public ?Unit $currentUnit = null;
+
+    public function mount(): void
     {
-        $this->resetPage();
+        $this->loadData();
     }
 
-    public function updatedDateTo(): void
+    public function updated(string $property): void
     {
-        $this->resetPage();
+        if (in_array($property, ['search', 'statusFilter', 'selectedUnitId', 'dateFrom', 'dateTo'])) {
+            $this->resetPage();
+        }
+        $this->loadData();
     }
 
-    public function selectUnitForFilter($id): void
-    {
-        $this->selectedUnitId = $id;
-        $this->unitSearch = '';
-        $this->resetPage();
-    }
-
-    public function render()
+    public function loadData(): void
     {
         $units = [];
         if (strlen($this->unitSearch) > 1) {
@@ -53,6 +53,9 @@ new class extends Component
                 ->where('can_receive_tickets', true)
                 ->limit(10)->get();
         }
+        $this->filterUnits = $units;
+
+        $this->currentUnit = $this->selectedUnitId ? Unit::find($this->selectedUnitId) : null;
 
         $query = Ticket::with(['user', 'unit', 'assignee', 'activities', 'task'])->accessible();
 
@@ -83,11 +86,15 @@ new class extends Component
             $query->where('created_at', '<=', $miladiTo);
         }
 
-        return $this->view([
-            'tickets' => $query->latest()->paginate(15),
-            'filterUnits' => $units,
-            'currentUnit' => $this->selectedUnitId ? Unit::find($this->selectedUnitId) : null,
-        ]);
+        $this->tickets = $query->latest()->paginate(15);
+    }
+
+    public function selectUnitForFilter($id): void
+    {
+        $this->selectedUnitId = $id;
+        $this->unitSearch = '';
+        $this->resetPage();
+        $this->loadData();
     }
 
     public function showTicket($id): void

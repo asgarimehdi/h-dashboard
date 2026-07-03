@@ -16,13 +16,26 @@ new class extends Component
     public ?string $dateTo = null;
     public bool $showModal = false;
     public ?ActivityLog $selectedLog = null;
+    public $logs = null;
+    public array $typeStats = [];
 
-    public function updatedSearch(): void
+    public function mount(): void
     {
-        $this->resetPage();
+        $this->loadData();
     }
 
-    public function render()
+    public function updated(string $property): void
+    {
+        if ($property === 'search') {
+            $this->resetPage();
+        }
+
+        if (in_array($property, ['search', 'typeFilter', 'userId', 'dateFrom', 'dateTo'])) {
+            $this->loadData();
+        }
+    }
+
+    public function loadData(): void
     {
         $query = ActivityLog::with('user');
 
@@ -49,10 +62,8 @@ new class extends Component
             $query->where('created_at', '<=', $this->dateTo . ' 23:59:59');
         }
 
-        return $this->view([
-            'logs' => $query->latest()->paginate(20),
-            'typeStats' => $this->getTypeStats(),
-        ]);
+        $this->logs = $query->latest()->paginate(20);
+        $this->typeStats = $this->getTypeStats();
     }
 
     public function showDetail($id): void

@@ -21,6 +21,39 @@ new class extends Component
     public array $files = [];
     public ?int $task_id = null;
     public $todos = [];
+    public array $units = [];
+
+    public function mount(): void
+    {
+        $this->loadData();
+    }
+
+    public function loadData(): void
+    {
+        $units = [];
+        $todos = [];
+
+        if (strlen($this->search) >= 2) {
+            $userUnitId = auth()->user()->person?->u_id;
+
+            $query = Unit::where('can_receive_tickets', true)->where('is_active', true);
+
+            if ($userUnitId) {
+                $query->where('id', '!=', $userUnitId);
+            }
+
+            $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get();
+        }
+
+        // لود وظایف انجام‌نشده واحد فعلی
+        $currentUnitId = session('current_unit_id', auth()->user()->person?->u_id);
+        $todos = Todo::where('unit_id', $currentUnitId)
+            ->where('is_completed', false)
+            ->get();
+
+        $this->units = $units;
+        $this->todos = $todos;
+    }
 
     public function selectUnit($id, $name): void
     {
@@ -33,6 +66,7 @@ new class extends Component
     {
         $this->unit_id = null;
         $this->showDropdown = true;
+        $this->loadData();
     }
 
     public function updatedFiles(): void
@@ -140,31 +174,6 @@ new class extends Component
         $this->showDropdown = false;
     }
 
-    public function render()
-    {
-        $units = [];
-        $todos = [];
-
-        if (strlen($this->search) >= 2) {
-            $userUnitId = auth()->user()->person?->u_id;
-
-            $query = Unit::where('can_receive_tickets', true)->where('is_active', true);
-
-            if ($userUnitId) {
-                $query->where('id', '!=', $userUnitId);
-            }
-
-            $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get();
-        }
-
-        // لود وظایف انجام‌نشده واحد فعلی
-        $currentUnitId = session('current_unit_id', auth()->user()->person?->u_id);
-        $todos = Todo::where('unit_id', $currentUnitId)
-            ->where('is_completed', false)
-            ->get();
-
-        return $this->view(compact('units', 'todos'));
-    }
 };
 ?>
 
