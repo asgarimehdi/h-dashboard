@@ -34,20 +34,20 @@ return new class extends Component
         return Ticket::where('user_id', auth()->id())
             ->with('unit')
             ->latest()
-            ->paginate(10, ['page' => 'tickets_page']);
+            ->paginate(10, pageName: 'tickets_page');
     }
 
     public function getUserTodosProperty()
     {
         return Todo::latest()
-            ->paginate(10, ['page' => 'todos_page']);
+            ->paginate(10, pageName: 'todos_page');
     }
 
     public function getUserActivitiesProperty()
     {
         return ActivityLog::where('user_id', auth()->id())
             ->latest()
-            ->paginate(15, ['page' => 'activities_page']);
+            ->paginate(15, pageName: 'activities_page');
     }
 
 }; ?>
