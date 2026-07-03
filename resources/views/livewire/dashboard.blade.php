@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\{User, Person, Unit, Ticket, Todo};
+use App\Models\{User, Person, Unit, Ticket, Todo, ActivityLog};
 use App\Services\AccessService;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
@@ -76,6 +76,12 @@ return new class extends Component {
             ->groupBy('status')
             ->pluck('count', 'status')
             ->toArray();
+    }
+
+    // آخرین فعالیت‌ها
+    public function getRecentActivitiesProperty()
+    {
+        return ActivityLog::with('user')->latest()->take(10)->get();
     }
 }; ?>
 
@@ -242,6 +248,42 @@ return new class extends Component {
             </div>
         </x-card>
     </div>
+
+    {{-- آخرین فعالیت‌ها --}}
+    <x-card shadow>
+        <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+            <x-icon name="o-clock" class="w-5 h-5 text-primary" />
+            آخرین فعالیت‌ها
+            <a href="/activity-log" class="text-xs text-primary hover:underline mr-auto" wire:navigate>مشاهده همه →</a>
+        </h3>
+        <div class="space-y-2">
+            @forelse($this->recentActivities as $activity)
+            @php
+                $icon = match($activity->type) {
+                    'created' => ['o-plus-circle', 'text-success'],
+                    'updated' => ['o-pencil-square', 'text-info'],
+                    'deleted' => ['o-trash', 'text-error'],
+                    'login' => ['o-arrow-right-on-rectangle', 'text-primary'],
+                    'logout' => ['o-arrow-left-on-rectangle', 'text-warning'],
+                    default => ['o-document-text', 'text-base-content'],
+                };
+            @endphp
+            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition">
+                <x-icon name="{{ $icon[0] }}" class="w-5 h-5 {{ $icon[1] }}" />
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm truncate">{{ $activity->description }}</p>
+                    <p class="text-[10px] text-base-content/50">{{ $activity->user->name ?? 'سیستم' }}</p>
+                </div>
+                <span class="text-[10px] text-base-content/40 whitespace-nowrap">{{ jdate($activity->created_at)->diffForHumans() }}</span>
+            </div>
+            @empty
+            <div class="text-center py-8 text-base-content/30">
+                <x-icon name="o-clock" class="w-10 h-10 mx-auto mb-2" />
+                <p class="text-sm">هنوز فعالیتی ثبت نشده</p>
+            </div>
+            @endforelse
+        </div>
+    </x-card>
 
     @script
     <script>
