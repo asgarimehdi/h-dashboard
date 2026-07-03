@@ -115,6 +115,9 @@ Route::middleware('auth')->group(function () {
         // جستجوی سراسری
         Route::livewire('/search', 'search.index')->name('search');
 
+        // گزارش‌ها
+        Route::livewire('/reports', 'reports.index')->name('reports');
+
         // تنظیمات کاربر
         Route::livewire('/settings', 'settings.index')->name('settings');
 

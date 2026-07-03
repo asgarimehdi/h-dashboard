@@ -170,6 +170,7 @@
                 </x-menu-sub>
 
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
+                <x-menu-item title="گزارش‌ها" icon="o-chart-bar" link="/reports" wire:navigate />
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
             </x-menu>
         </x-slot:sidebar>
