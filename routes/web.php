@@ -111,5 +111,8 @@ Route::middleware('auth')->group(function () {
                 include $path;
             })->name('op');
         });
+        // پروفایل کاربر (نیاز به لاگین)
+        Route::livewire('/profile', 'profile.index')->name('profile');
+
     }); // unit_context
 });

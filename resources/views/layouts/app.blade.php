@@ -52,6 +52,10 @@
         </x-slot:brand>
         <x-slot:actions>
             <livewire:notifications.bell />
+            <a href="/profile" wire:navigate class="btn btn-ghost btn-sm gap-2">
+                <x-icon name="o-user-circle" class="w-5 h-5" />
+                <span class="hidden md:inline text-xs">{{ Auth::user()->person?->f_name ?? 'کاربر' }}</span>
+            </a>
             <label for="main-drawer" class="lg:hidden me-3">
                 <x-icon name="o-bars-3" class="cursor-pointer" />
             </label>
