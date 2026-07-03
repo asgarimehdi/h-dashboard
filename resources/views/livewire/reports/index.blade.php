@@ -14,7 +14,7 @@ return new class extends Component
     public ?string $dateFrom = null;
     public ?string $dateTo = null;
     public ?int $selectedUnitId = null;
-    public array $units = [];
+    public $units = [];
 
     public function mount(): void
     {
