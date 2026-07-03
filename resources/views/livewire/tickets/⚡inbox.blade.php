@@ -43,6 +43,13 @@ new class extends Component
     public ?int $showingTicketId = null;
     public bool $showModal = false;
 
+    // Bulk Actions
+    public array $selectedTickets = [];
+    public bool $selectAll = false;
+    public bool $showBulkModal = false;
+    public string $bulkAction = '';
+    public string $bulkNote = '';
+
     public function updateFilter($viewMode, $statusFilter = 'pending'): void
     {
         $this->viewMode = $viewMode;
@@ -72,12 +79,99 @@ new class extends Component
         $this->showingTicket = null;
         $this->showingTicketId = null;
         $this->reset([
-            'completionNote',
-            'completionFiles',
-            'targetUnitId',
-            'targetUnitName',
-            'unitSearch',
+            'completionNote', 'completionFiles', 'targetUnitId',
+            'targetUnitName', 'unitSearch', 'selectedTickets',
+            'selectAll', 'showBulkModal', 'bulkAction', 'bulkNote',
         ]);
+    }
+
+    // ===== Bulk Actions =====
+    public function toggleTicketSelection($ticketId): void
+    {
+        if (in_array($ticketId, $this->selectedTickets)) {
+            $this->selectedTickets = array_values(array_diff($this->selectedTickets, [$ticketId]));
+        } else {
+            $this->selectedTickets[] = $ticketId;
+        }
+    }
+
+    public function toggleSelectAll(): void
+    {
+        if ($this->selectAll) {
+            $this->selectedTickets = [];
+            $this->selectAll = false;
+        } else {
+            $this->selectedTickets = Ticket::whereIn('unit_id', $this->getAccessibleUnitIds())
+                ->whereIn('status', ['created', 'forwarded', 'accepted'])
+                ->pluck('id')->toArray();
+            $this->selectAll = true;
+        }
+    }
+
+    public function openBulkModal($action): void
+    {
+        if (empty($this->selectedTickets)) {
+            $this->dispatch('swal', ['title' => 'هیچ تیکتی انتخاب نشده', 'icon' => 'warning']);
+            return;
+        }
+        $this->bulkAction = $action;
+        $this->showBulkModal = true;
+    }
+
+    public function executeBulkAction(): void
+    {
+        if (empty($this->selectedTickets)) return;
+
+        $count = count($this->selectedTickets);
+
+        DB::transaction(function () use ($count) {
+            foreach ($this->selectedTickets as $ticketId) {
+                $ticket = Ticket::find($ticketId);
+                if (!$ticket) continue;
+
+                match($this->bulkAction) {
+                    'complete' => $this->bulkCompleteTicket($ticket),
+                    'forward' => $this->bulkForwardTicket($ticket),
+                    default => null,
+                };
+            }
+        });
+
+        $this->dispatch('swal', ['title' => "{$count} تیکت با موفقیت پردازش شد", 'icon' => 'success']);
+        $this->closeAllModals();
+        $this->resetPage();
+    }
+
+    private function bulkCompleteTicket(Ticket $ticket): void
+    {
+        $ticket->update(['status' => 'completed', 'completed_at' => now()]);
+        $ticket->activities()->create([
+            'user_id' => auth()->id(),
+            'action' => 'completed',
+            'description' => 'تکمیل دسته‌ای تیکت' . ($this->bulkNote ? ": {$this->bulkNote}" : ''),
+        ]);
+
+        \App\Services\ActivityLogService::updated($ticket, ['status' => $ticket->status], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
+    }
+
+    private function bulkForwardTicket(Ticket $ticket): void
+    {
+        $ticket->update([
+            'status' => 'forwarded',
+            'current_assignee_id' => null,
+        ]);
+        $ticket->activities()->create([
+            'user_id' => auth()->id(),
+            'action' => 'forwarded',
+            'description' => 'ارجاع دسته‌ای تیکت' . ($this->bulkNote ? ": {$this->bulkNote}" : ''),
+        ]);
+
+        \App\Services\ActivityLogService::updated($ticket, ['status' => 'accepted'], ['status' => 'forwarded'], "ارجاع دسته‌ای تیکت {$ticket->ticket_code}");
+    }
+
+    private function getAccessibleUnitIds(): array
+    {
+        return app(AccessService::class)->accessibleUnitIds();
     }
 
     public function render()
@@ -408,15 +502,34 @@ new class extends Component
             </div>
         </div>
 
+        {{-- نوار Bulk Actions --}}
+        @if(count($selectedTickets) > 0)
+        <div class="flex items-center gap-3 p-3 mb-4 bg-primary/10 rounded-xl border border-primary/20">
+            <span class="text-sm font-bold text-primary">{{ count($selectedTickets) }} تیکت انتخاب شده</span>
+            <div class="flex gap-2 mr-auto">
+                <x-button icon="o-check-circle" label="تکمیل دسته‌ای" wire:click="openBulkModal('complete')" class="btn-success btn-sm" spinner />
+                <x-button icon="o-arrow-right" label="ارجاع دسته‌ای" wire:click="openBulkModal('forward')" class="btn-warning btn-sm" spinner />
+                <x-button icon="o-x-mark" label="لغو انتخاب" wire:click="$set('selectedTickets', [])" class="btn-ghost btn-sm" />
+            </div>
+        </div>
+        @endif
+
         <x-table :headers="[
+            ['key' => 'checkbox', 'label' => '', 'class' => 'w-10', 'sortable' => false],
             ['key' => 'user.person.f_name', 'label' => 'ایجاد کننده', 'class' => 'w-40'],
             ['key' => 'priority', 'label' => 'اولویت', 'class' => 'hidden md:table-cell text-center'],
             ['key' => 'status_name', 'label' => 'وضعیت', 'class' => 'hidden md:table-cell text-center'],
             ['key' => 'subject', 'label' => 'موضوع'],
             ['key' => 'unit.name', 'label' => 'نزد واحد', 'class' => 'hidden md:table-cell text-center'],
             ['key' => 'actions', 'label' => 'عملیات', 'sortable' => false, 'class' => 'text-left'],
-        ]"
-            :rows="$tickets" with-pagination>
+        ]" :rows="$tickets" with-pagination>
+
+            @scope('cell_checkbox', $ticket)
+            <input type="checkbox"
+                class="checkbox checkbox-sm checkbox-primary"
+                wire:click="toggleTicketSelection({{ $ticket->id }})"
+                @if(in_array($ticket->id, $selectedTickets)) checked @endif />
+            @endscope
 
             @scope('cell_user.person.f_name', $ticket)
             <div class="flex flex-col">
