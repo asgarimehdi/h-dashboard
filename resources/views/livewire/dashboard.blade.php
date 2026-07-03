@@ -79,7 +79,7 @@ return new class extends Component {
     }
 
     // آخرین فعالیت‌ها
-    public function getRecentActivitiesProperty()
+    public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
         return ActivityLog::with('user')->latest()->take(10)->get();
     }

@@ -661,7 +661,7 @@ new class extends Component
         </div>
         @endif
         <x-slot:actions>
-            <x-button label="بستن" @click="$wire.showModal = false" class="btn-ghost" />
+            <x-button label="بستن" wire:click="closeDetail" class="btn-ghost" />
         </x-slot:actions>
     </x-modal>
 

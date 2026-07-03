@@ -166,7 +166,7 @@ new class extends Component
 
         @if($this->selectedUnitId)
         <div class="mb-4">
-            <x-badge value="فیلتر: {{ $currentUnit->name }}" class="badge-warning" icon-right="o-x-mark" wire:click="$set('selectedUnitId', null)" />
+            <x-badge value="فیلتر: {{ $currentUnit?->name ?? 'نامشخص' }}" class="badge-warning" icon-right="o-x-mark" wire:click="$set('selectedUnitId', null)" />
         </div>
         @endif
 
@@ -264,7 +264,7 @@ new class extends Component
                         </div>
                         <div class="bg-base-200/50 p-3 rounded-lg w-full">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-xs">{{ $activity->user->full_name }}</span>
+                                <span class="font-bold text-xs">{{ $activity->user->person?->f_name }} {{ $activity->user->person?->l_name }}</span>
                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($activity->created_at)->format('H:i - Y/m/d') }}</span>
                             </div>
                             <p class="text-xs opacity-70">{{ $activity->description }}</p>

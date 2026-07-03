@@ -406,12 +406,10 @@ return new class extends Component {
                 calendarInstance.render();
             }
 
-            Livewire.on('calendar-updated', (data) => {
-                if (calendarInstance && data.events) {
+            Livewire.on('calendar-updated', (events) => {
+                if (calendarInstance && events) {
                     calendarInstance.removeAllEvents();
-                    data.events.forEach(event => {
-                        calendarInstance.addEvent(event);
-                    });
+                    events.forEach(event => calendarInstance.addEvent(event));
                     console.log('تقویم با موفقیت به‌روزرسانی شد');
                 }
             });

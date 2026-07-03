@@ -16,7 +16,7 @@
         </div>
         <div class="overflow-y-auto max-h-72">
             @forelse($notifications as $notif)
-            <div wire:click="markAsRead({{ $notif['id'] }})"
+            <div wire:click="markAsRead('{{ $notif['id'] }}')"
                 class="flex items-start gap-3 p-3 hover:bg-base-200 transition cursor-pointer border-b border-base-100 {{ !$notif['is_read'] ? 'bg-primary/5' : '' }}">
                 <x-icon name="{{ $notif['icon'] }}" class="w-5 h-5 {{ $notif['color'] }} mt-0.5" />
                 <div class="flex-1 min-w-0">

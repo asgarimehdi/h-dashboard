@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Notification extends Model
 {
+    public $incrementing = false;
+    protected $keyType = 'string';
+
     protected $fillable = [
         'user_id',
         'type',
@@ -36,7 +39,7 @@ class Notification extends Model
         $this->update(['is_read' => true, 'read_at' => now()]);
     }
 
-    public function markAllAsRead(): void
+    public static function markAllAsRead(): void
     {
         static::where('user_id', auth()->id())->where('is_read', false)->update([
             'is_read' => true,
