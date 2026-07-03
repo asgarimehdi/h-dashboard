@@ -50,11 +50,11 @@ return new class extends Component
             <div class="space-y-4">
                 <label class="flex items-center justify-between cursor-pointer">
                     <span>اعلان ایمیلی</span>
-                    <input type="checkbox" class="toggle toggle-primary" wire:model="emailNotifications" />
+                    <input type="checkbox" class="toggle toggle-primary" wire:model.live="emailNotifications" />
                 </label>
                 <label class="flex items-center justify-between cursor-pointer">
                     <span>اعلان مرورگر</span>
-                    <input type="checkbox" class="toggle toggle-primary" wire:model="browserNotifications" />
+                    <input type="checkbox" class="toggle toggle-primary" wire:model.live="browserNotifications" />
                 </label>
             </div>
         </x-card>
@@ -64,7 +64,7 @@ return new class extends Component
             <div class="space-y-4">
                 <div>
                     <label class="font-bold text-sm">بروزرسانی خودکار</label>
-                    <select class="select select-bordered w-full" wire:model="dashboardRefresh">
+                    <select class="select select-bordered w-full" wire:model.live="dashboardRefresh">
                         <option value="0">غیرفعال</option>
                         <option value="15">هر ۱۵ ثانیه</option>
                         <option value="30">هر ۳۰ ثانیه</option>
@@ -73,7 +73,7 @@ return new class extends Component
                 </div>
                 <label class="flex items-center justify-between cursor-pointer">
                     <span>حالت فشرده</span>
-                    <input type="checkbox" class="toggle toggle-primary" wire:model="compactMode" />
+                    <input type="checkbox" class="toggle toggle-primary" wire:model.live="compactMode" />
                 </label>
             </div>
         </x-card>
