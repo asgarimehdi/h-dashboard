@@ -36,9 +36,11 @@ $this->call([
             UnitTypeRelationshipSeeder::class,
             UnitSeeder::class,
             UnitCapabilitySeeder::class,
+            UserUnitSeeder::class,
             PermissionSeeder::class,
             RoleSeeder::class,
             TodoSeeder::class,
+            ActivityLogSeeder::class,
             TicketSeeder::class,
 
 
