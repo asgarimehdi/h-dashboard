@@ -130,7 +130,6 @@ Route::middleware('auth')->group(function () {
 });
 
         // تغییر رمز عبور
-        Route::livewire('/change-password', 'auth.change-password')->name('change-password');
 
         // ابزارهای مدیریتی
         Route::get('/tools', 'App\Http\Controllers\ToolsController@index')->name('tools');
