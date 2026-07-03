@@ -189,7 +189,7 @@ new class extends Component
             ['key' => 'duration', 'label' => 'انتظار', 'class' => 'hidden md:table-cell'],
             ['key' => 'subject', 'label' => 'موضوع'],
             ['key' => 'actions', 'label' => 'جزئیات', 'sortable' => false],
-        ]" :rows="$tickets" with-pagination>
+        ]" :rows="$this->tickets" with-pagination>
 
             @scope('cell_ticket_code', $ticket)
             <span class="font-mono text-xs">#{{ $ticket->ticket_code }}</span>

@@ -160,7 +160,7 @@ return new class extends Component
             ['key' => 'description', 'label' => 'توضیحات'],
             ['key' => 'created_at_jalali', 'label' => 'تاریخ'],
             ['key' => 'actions', 'label' => 'عملیات', 'sortable' => false],
-        ]" :rows="$logs" with-pagination>
+        ]" :rows="$this->logs" with-pagination>
 
             @scope('cell_type', $log)
             @php

@@ -570,7 +570,7 @@ new class extends Component
             ['key' => 'subject', 'label' => 'موضوع'],
             ['key' => 'unit.name', 'label' => 'نزد واحد', 'class' => 'hidden md:table-cell text-center'],
             ['key' => 'actions', 'label' => 'عملیات', 'sortable' => false, 'class' => 'text-left'],
-        ]" :rows="$tickets" with-pagination>
+        ]" :rows="$this->tickets" with-pagination>
 
             @scope('cell_checkbox', $ticket)
             <input type="checkbox"
