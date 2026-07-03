@@ -49,6 +49,34 @@ return new class extends Component {
             ->has('tickets')
             ->count();
     }
+
+    // داده‌های نمودار تیکت‌ها
+    public function getTicketChartDataProperty(): array
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $tickets = Ticket::whereIn('unit_id', $accessibleIds)
+            ->selectRaw("date(created_at) as day, count(*) as count")
+            ->groupBy('day')
+            ->orderBy('day')
+            ->limit(30)
+            ->get();
+
+        return [
+            'categories' => $tickets->pluck('day')->map(fn($d) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($d))->format('m/d'))->toArray(),
+            'series' => $tickets->pluck('count')->toArray(),
+        ];
+    }
+
+    // داده‌های نمودار وضعیت تیکت‌ها
+    public function getTicketStatusDataProperty(): array
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return Ticket::whereIn('unit_id', $accessibleIds)
+            ->selectRaw("status, count(*) as count")
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+    }
 }; ?>
 
 <div>
@@ -111,6 +139,27 @@ return new class extends Component {
             color="text-success"
             description="تعداد تیکت‌های بسته شده"
         />
+    </div>
+
+    {{-- نمودارهای تعاملی --}}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {{-- نمودار روند تیکت‌ها --}}
+        <x-card shadow>
+            <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+                <x-icon name="o-chart-bar" class="w-5 h-5 text-info" />
+                روند ایجاد تیکت‌ها (۳۰ روز اخیر)
+            </h3>
+            <div id="ticketTrendChart" wire:ignore style="height: 250px;"></div>
+        </x-card>
+
+        {{-- نمودار وضعیت تیکت‌ها --}}
+        <x-card shadow>
+            <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+                <x-icon name="o-chart-pie" class="w-5 h-5 text-warning" />
+                وضعیت تیکت‌ها
+            </h3>
+            <div id="ticketStatusChart" wire:ignore style="height: 250px;"></div>
+        </x-card>
     </div>
 
     {{-- نمودار پیشرفت وظایف --}}
@@ -193,4 +242,53 @@ return new class extends Component {
             </div>
         </x-card>
     </div>
+
+    @script
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // نمودار روند تیکت‌ها
+            const trendData = @json($this->ticketChartData);
+            Highcharts.chart('ticketTrendChart', {
+                chart: { type: 'areaspline', backgroundColor: 'transparent' },
+                title: { text: null },
+                credits: { enabled: false },
+                xAxis: {
+                    categories: trendData.categories,
+                    labels: { style: { fontSize: '10px' } }
+                },
+                yAxis: { title: { text: 'تعداد' }, min: 0 },
+                plotOptions: {
+                    areaspline: {
+                        fillColor: {
+                            linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                            stops: [[0, Highcharts.color('#0ea5e9').setOpacity(0.3).get('rgba')], [1, Highcharts.color('#0ea5e9').setOpacity(0.05).get('rgba')]]
+                        },
+                        lineColor: '#0ea5e9',
+                        marker: { enabled: false }
+                    }
+                },
+                series: [{ name: 'تیکت‌ها', data: trendData.series, color: '#0ea5e9' }],
+                legend: { enabled: false }
+            });
+
+            // نمودار وضعیت تیکت‌ها
+            const statusData = @json($this->ticketStatusData);
+            const statusLabels = { 'created': 'جدید', 'accepted': 'پذیرفته شده', 'completed': 'تکمیل شده', 'forwarded': 'ارجاع شده', 'rejected': 'رد شده' };
+            const statusColors = { 'created': '#3b82f6', 'accepted': '#f59e0b', 'completed': '#22c55e', 'forwarded': '#8b5cf6', 'rejected': '#ef4444' };
+            const pieData = Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: statusColors[key] || '#6b7280' }));
+            Highcharts.chart('ticketStatusChart', {
+                chart: { type: 'pie', backgroundColor: 'transparent' },
+                title: { text: null },
+                credits: { enabled: false },
+                plotOptions: {
+                    pie: {
+                        innerSize: '55%',
+                        dataLabels: { enabled: true, format: '<b>{point.name}</b>: {point.y}' }
+                    }
+                },
+                series: [{ name: 'تیکت‌ها', data: pieData }]
+            });
+        });
+    </script>
+    @endscript
 </div>
