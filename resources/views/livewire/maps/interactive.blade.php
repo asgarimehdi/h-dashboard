@@ -5,8 +5,7 @@ use Livewire\Attributes\Layout;
 use App\Models\Unit;
 use App\Services\AccessService;
 
-return new #[Layout('components.layouts.app', ['title' => 'نقشه واحدها'])]
-class extends Component
+return new class extends Component
 {
     public $units = [];
 

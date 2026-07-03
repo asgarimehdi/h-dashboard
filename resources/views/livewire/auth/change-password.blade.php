@@ -5,8 +5,7 @@ use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\{Auth, Hash};
 use Illuminate\Validation\Rules\Password;
 
-return new #[Layout('components.layouts.app', ['title' => 'تغییر رمز عبور'])]
-class extends Component
+return new class extends Component
 {
     public string $currentPassword = '';
     public string $password = '';

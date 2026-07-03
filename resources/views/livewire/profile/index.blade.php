@@ -5,8 +5,7 @@ use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
 use App\Models\{User, Ticket, Todo, ActivityLog};
 
-return new #[Layout('components.layouts.app', ['title' => 'پروفایل من'])]
-class extends Component
+return new class extends Component
 {
     use WithPagination;
 

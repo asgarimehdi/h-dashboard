@@ -3,8 +3,7 @@
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 
-return new #[Layout('components.layouts.app', ['title' => 'تنظیمات'])]
-class extends Component
+return new class extends Component
 {
     public bool $emailNotifications = true;
     public bool $browserNotifications = false;
