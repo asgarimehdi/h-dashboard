@@ -125,10 +125,9 @@ return new class extends Component
 
     @script
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        function renderCharts() {
             const reportData = @json($this->reportData);
 
-            // نمودار روند
             if (reportData.byDay && reportData.byDay.length > 0) {
                 Highcharts.chart('reportChart', {
                     chart: { type: 'areaspline' },
@@ -145,7 +144,6 @@ return new class extends Component
                 });
             }
 
-            // نمودار واحدها
             const unitLabels = Object.keys(reportData.byUnit || {});
             const unitValues = Object.values(reportData.byUnit || {});
             if (unitLabels.length > 0) {
@@ -156,6 +154,9 @@ return new class extends Component
                     credits: { enabled: false }
                 });
             }
-        });
+        }
+
+        renderCharts();
+        $wire.$on('updated', () => renderCharts());
     </script>
     @endscript
