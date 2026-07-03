@@ -4,8 +4,9 @@ use App\Models\ActivityLog;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Computed;
 
-new class extends Component
+return new class extends Component
 {
     use WithPagination;
 
@@ -16,7 +17,6 @@ new class extends Component
     public ?string $dateTo = null;
     public bool $showModal = false;
     public ?ActivityLog $selectedLog = null;
-    public $logs = null;
     public array $typeStats = [];
 
     public function mount(): void
@@ -37,33 +37,38 @@ new class extends Component
 
     public function loadData(): void
     {
-        $query = ActivityLog::with('user');
+        $this->typeStats = $this->getTypeStats();
+    }
+
+    #[Computed]
+    public function logs()
+    {
+        $query = ActivityLog::with("user");
 
         if (!empty($this->search)) {
             $query->where(function ($q) {
-                $q->where('description', 'like', '%' . $this->search . '%')
-                    ->orWhere('type', 'like', '%' . $this->search . '%');
+                $q->where("description", "like", "%" . $this->search . "%")
+                    ->orWhere("type", "like", "%" . $this->search . "%");
             });
         }
 
-        if ($this->typeFilter !== 'all') {
-            $query->where('type', $this->typeFilter);
+        if ($this->typeFilter !== "all") {
+            $query->where("type", $this->typeFilter);
         }
 
         if ($this->userId) {
-            $query->where('user_id', $this->userId);
+            $query->where("user_id", $this->userId);
         }
 
         if ($this->dateFrom) {
-            $query->where('created_at', '>=', $this->dateFrom);
+            $query->where("created_at", ">=", $this->dateFrom);
         }
 
         if ($this->dateTo) {
-            $query->where('created_at', '<=', $this->dateTo . ' 23:59:59');
+            $query->where("created_at", "<=", $this->dateTo . " 23:59:59");
         }
 
-        $this->logs = $query->latest()->paginate(20);
-        $this->typeStats = $this->getTypeStats();
+        return $query->latest()->paginate(20);
     }
 
     public function showDetail($id): void
