@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
+use Livewire\Attributes\Computed;
 
 new class extends Component
 {
@@ -28,7 +29,6 @@ new class extends Component
     public ?Ticket $showingTicket = null;
     public bool $modalDetail = false;
 
-    public $tickets;
     public array $filterUnits = [];
     public ?Unit $currentUnit = null;
 
@@ -56,7 +56,11 @@ new class extends Component
         $this->filterUnits = $units;
 
         $this->currentUnit = $this->selectedUnitId ? Unit::find($this->selectedUnitId) : null;
+    }
 
+    #[Computed]
+    public function tickets()
+    {
         $query = Ticket::with(['user', 'unit', 'assignee', 'activities', 'task'])->accessible();
 
         if ($this->selectedUnitId) {
@@ -86,7 +90,7 @@ new class extends Component
             $query->where('created_at', '<=', $miladiTo);
         }
 
-        $this->tickets = $query->latest()->paginate(15);
+        return $query->latest()->paginate(15);
     }
 
     public function selectUnitForFilter($id): void

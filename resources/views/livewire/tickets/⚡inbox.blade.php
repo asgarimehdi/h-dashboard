@@ -8,6 +8,7 @@ use Livewire\WithPagination;
 use Livewire\WithFileUploads;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
+use Livewire\Attributes\Computed;
 use Illuminate\Support\Facades\DB;
 
 new class extends Component
@@ -51,7 +52,6 @@ new class extends Component
     public string $bulkNote = '';
 
     // Data properties
-    public $tickets;
     public array $units = [];
 
     public function mount(): void
@@ -71,6 +71,14 @@ new class extends Component
                 ->limit(5)
                 ->get();
         }
+
+        $this->units = $units;
+    }
+
+    #[Computed]
+    public function tickets()
+    {
+        $user = auth()->user();
 
         $query = Ticket::with(['user', 'unit', 'assignee', 'task']);
 
@@ -111,8 +119,7 @@ new class extends Component
             });
         }
 
-        $this->tickets = $query->latest()->paginate(5);
-        $this->units = $units;
+        return $query->latest()->paginate(5);
     }
 
     public function updatedViewMode(): void
