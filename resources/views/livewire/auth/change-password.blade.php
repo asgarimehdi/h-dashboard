@@ -30,10 +30,6 @@ return new class extends Component
         ]);
     }
 
-    public function render()
-    {
-        return view('livewire.auth.change-password');
-    }
 }; ?>
     {{-- Change Password Form --}}
     <div class="max-w-md mx-auto p-6" dir="rtl">

@@ -37,10 +37,6 @@ return new class extends Component
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
     }
 
-    public function render()
-    {
-        return view('livewire.units.tree');
-    }
 }; ?>
 
     {{-- Unit Tree --}}

@@ -50,8 +50,4 @@ return new class extends Component
             ->paginate(15, ['page' => 'activities_page']);
     }
 
-    public function render()
-    {
-        return view('livewire.profile.index');
-    }
 }; ?>

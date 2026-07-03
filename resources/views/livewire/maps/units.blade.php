@@ -21,10 +21,6 @@ return new class extends Component
             ->toArray();
     }
 
-    public function render()
-    {
-        return view('livewire.maps.units');
-    }
 }; ?>
     {{-- Units Map --}}
     <div class="p-6" dir="rtl">

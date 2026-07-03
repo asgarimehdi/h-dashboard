@@ -65,8 +65,4 @@ return new class extends Component
         $this->hasSearched = true;
     }
 
-    public function render()
-    {
-        return view('livewire.search.index');
-    }
 }; ?>

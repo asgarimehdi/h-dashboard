@@ -65,10 +65,6 @@ return new class extends Component
         return Unit::whereIn('id', $accessibleIds)->get();
     }
 
-    public function render()
-    {
-        return view('livewire.reports.index');
-    }
 }; ?>
 
     <div class="p-6" dir="rtl">
