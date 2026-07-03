@@ -25,7 +25,7 @@ return new class extends Component
     {
         return view('livewire.maps.units');
     }
-};
+}; ?>
     {{-- Units Map --}}
     <div class="p-6" dir="rtl">
         <h1 class="text-2xl font-bold mb-6 flex items-center gap-2">

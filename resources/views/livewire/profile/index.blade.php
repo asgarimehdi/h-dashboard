@@ -54,4 +54,4 @@ return new class extends Component
     {
         return view('livewire.profile.index');
     }
-};
+}; ?>

@@ -41,7 +41,7 @@ return new class extends Component
     {
         return view('livewire.units.tree');
     }
-};
+}; ?>
 
     {{-- Unit Tree --}}
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" dir="rtl">

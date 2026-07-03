@@ -69,4 +69,4 @@ return new class extends Component
     {
         return view('livewire.search.index');
     }
-};
+}; ?>

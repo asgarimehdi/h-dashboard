@@ -36,7 +36,7 @@ return new class extends Component
         ]);
     }
 
-};
+}; ?>
 
     {{-- Settings HTML --}}
     <div class="max-w-2xl mx-auto p-6" dir="rtl">
