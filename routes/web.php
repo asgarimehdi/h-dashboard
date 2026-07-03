@@ -118,6 +118,7 @@ Route::middleware('auth')->group(function () {
 
         // گزارش‌ها
         Route::livewire('/reports', 'reports.index')->name('reports');
+        Route::livewire('/reports/advanced', 'reports.advanced')->name('reports.advanced');
 
         // تنظیمات کاربر
         Route::livewire('/settings', 'settings.index')->name('settings');
