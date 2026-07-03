@@ -163,7 +163,7 @@ return new class extends Component
                     <label class="font-bold text-xs">واحد فرعی</label>
                     <select class="select select-bordered select-sm w-full" wire:model.live="parentUnitId">
                         <option value="">همه</option>
-                        @foreach($childUnits as $u)
+                        @foreach($this->childUnits as $u)
                         <option value="{{ $u->id }}">{{ $u->name }}</option>
                         @endforeach
                     </select>
@@ -172,7 +172,7 @@ return new class extends Component
                     <label class="font-bold text-xs">واحد</label>
                     <select class="select select-bordered select-sm w-full" wire:model.live="unitId">
                         <option value="">همه</option>
-                        @foreach($grandChildUnits as $u)
+                        @foreach($this->grandChildUnits as $u)
                         <option value="{{ $u->id }}">{{ $u->name }}</option>
                         @endforeach
                     </select>
