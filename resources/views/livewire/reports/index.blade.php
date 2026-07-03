@@ -23,7 +23,8 @@ return new class extends Component
         $this->units = Unit::all();
     }
 
-    public function getReportDataProperty(): array
+    #[\Livewire\Attributes\Computed]
+    public function reportData(): array
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $query = match($this->reportType) {

@@ -27,14 +27,14 @@ return new class extends Component
     }
 
     #[\Livewire\Attributes\Computed]
-    public function getChildUnitsProperty()
+    public function childUnits()
     {
         if (!$this->rootUnitId) return collect();
         return Unit::where('parent_id', $this->rootUnitId)->get();
     }
 
     #[\Livewire\Attributes\Computed]
-    public function getGrandChildUnitsProperty()
+    public function grandChildUnits()
     {
         if (!$this->parentUnitId) return collect();
         return Unit::where('parent_id', $this->parentUnitId)->get();
@@ -52,7 +52,7 @@ return new class extends Component
     }
 
     #[\Livewire\Attributes\Computed]
-    public function getReportDataProperty(): array
+    public function reportData(): array
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         
