@@ -126,3 +126,6 @@ Route::middleware('auth')->group(function () {
 
     }); // unit_context
 });
+
+        // تغییر رمز عبور
+        Route::livewire('/change-password', 'auth.change-password')->name('change-password');
