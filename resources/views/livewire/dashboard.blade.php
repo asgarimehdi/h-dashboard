@@ -369,7 +369,7 @@ return new class extends Component {
                     <p class="text-sm truncate">{{ $activity->description }}</p>
                     <p class="text-[10px] text-base-content/50">{{ $activity->user->name ?? 'سیستم' }}</p>
                 </div>
-                <span class="text-[10px] text-base-content/40 whitespace-nowrap">{{ jdate($activity->created_at)->diffForHumans() }}</span>
+                <span class="text-[10px] text-base-content/40 whitespace-nowrap">{{ \Carbon\Carbon::parse($activity->created_at)->diffForHumans() }}</span>
             </div>
             @empty
             <div class="text-center py-8 text-base-content/30">

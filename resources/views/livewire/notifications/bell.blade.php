@@ -24,7 +24,7 @@
                     @if($notif['body'])
                     <p class="text-xs text-base-content/60 line-clamp-2">{{ $notif['body'] }}</p>
                     @endif
-                    <p class="text-[10px] text-base-content/40 mt-1">{{ \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($notif['created_at']))->diffForHumans() }}</p>
+                    <p class="text-[10px] text-base-content/40 mt-1">{{ \Carbon\Carbon::parse($notif['created_at'])->diffForHumans() }}</p>
                 </div>
                 @if(!$notif['is_read'])
                 <span class="w-2 h-2 bg-primary rounded-full mt-2 shrink-0"></span>
