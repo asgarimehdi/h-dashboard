@@ -96,6 +96,15 @@ new class extends Component
             "ایجاد تیکت {$ticketCode} به واحد " . $ticket->unit->name
         );
 
+        // ارسال اعلان به کاربران واحد مقصد
+        \App\Services\NotificationService::notifyUnit(
+            $this->unit_id,
+            'ticket_created',
+            'تیکت جدید دریافت شد',
+            "تیکت #{$ticketCode} با موضوع: {$this->subject}",
+            '/tickets/inbox'
+        );
+
         $initialActivity = $ticket->activities()->create([
             'user_id' => auth()->id(),
             'action' => 'created',

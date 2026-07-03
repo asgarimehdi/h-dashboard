@@ -382,6 +382,15 @@ new class extends Component
                     $description .= " | توضیحات: {$this->completionNote}";
                 }
                 $message = "تیکت با موفقیت به واحد {$this->targetUnitName} ارجاع شد.";
+
+                // ارسال اعلان به واحد مقصد
+                \App\Services\NotificationService::notifyUnit(
+                    $this->targetUnitId,
+                    'ticket_forwarded',
+                    'تیکت ارجاع شد',
+                    "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
+                    '/tickets/inbox'
+                );
             } else {
                 $ticket->update([
                     'status' => 'completed',

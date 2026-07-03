@@ -51,6 +51,7 @@
             <x-app-brand />
         </x-slot:brand>
         <x-slot:actions>
+            <livewire:notifications.bell />
             <label for="main-drawer" class="lg:hidden me-3">
                 <x-icon name="o-bars-3" class="cursor-pointer" />
             </label>
