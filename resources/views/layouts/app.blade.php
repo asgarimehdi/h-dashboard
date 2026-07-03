@@ -168,8 +168,8 @@
                 </x-menu-sub>
 
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
-                <x-menu-item title="گزارش‌ها" icon="o-chart-bar" link="/reports" wire:navigate active='{{ request()->is('reports') }}' />
-                <x-menu-item title="گزارش پیشرفته" icon="o-adjustments-vertical" link="/reports/advanced" wire:navigate active='{{ request()->is('reports/advanced') }}' />
+                <x-menu-item title="گزارش‌ها" icon="o-chart-bar" link="/reports" wire:navigate active="{{ request()->is('reports') ? 'active' : '' }}" />
+                <x-menu-item title="گزارش پیشرفته" icon="o-adjustments-vertical" link="/reports/advanced" wire:navigate active="{{ request()->is('reports/advanced') ? 'active' : '' }}" />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />
                 <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
