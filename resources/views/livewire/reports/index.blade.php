@@ -20,7 +20,7 @@ return new class extends Component
     {
         $this->dateFrom = now()->subDays(30)->format('Y-m-d');
         $this->dateTo = now()->format('Y-m-d');
-        $this->units = Unit::all()->toArray();
+        $this->units = Unit::all();
     }
 
     public function getReportDataProperty(): array
