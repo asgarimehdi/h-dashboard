@@ -8,7 +8,7 @@ use Livewire\Volt\Component;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Person;
 new
-#[Layout('layouts.auth')]       // <-- The same `empty` layout
+#[Layout('components.layouts.auth')]
 #[Title('Login')]
 class extends Component {
 

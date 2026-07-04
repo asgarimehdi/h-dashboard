@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 new
-#[Layout('layouts.auth')]       // <-- Here is the `empty` layout
+#[Layout('components.layouts.auth')]
 #[Title('Login')]
 class extends Component {
 
