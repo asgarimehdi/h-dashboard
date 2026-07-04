@@ -88,7 +88,7 @@ class Unit extends Model
                 UNION ALL
                 SELECT u.id FROM units u
                 INNER JOIN unit_tree ut ON u.parent_id = ut.id
-                WHERE u.is_active = 1
+                WHERE u.is_active = true
             )
             SELECT id FROM unit_tree
         ", $ids);

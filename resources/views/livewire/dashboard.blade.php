@@ -87,10 +87,14 @@ return new class extends Component {
             ->whereIn('status', ['created', 'forwarded'])
             ->where('deadline', '<', now())
             ->count();
+        $diffExpr = match (DB::getDriverName()) {
+            'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
+            default => 'DATEDIFF(completed_at, created_at)',
+        };
         $this->avgResolutionDays = Ticket::whereIn('unit_id', $accessibleIds)
             ->where('status', 'completed')
             ->whereNotNull('completed_at')
-            ->avg(DB::raw('DATEDIFF(completed_at, created_at)')) ?? 0;
+            ->avg(DB::raw($diffExpr)) ?? 0;
     }
 
     // داده‌های نمودار تیکت‌ها
