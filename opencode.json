@@ -12,5 +12,21 @@
             ]
         }
     },
-    "lsp": true
+    "lsp": true,
+    "provider": {
+        "hong": {
+        "npm": "@ai-sdk/openai-compatible",
+        "name": "hong",
+        "options": {
+            "baseURL": "http://45.38.60.250:20128/v1"
+        },
+        "models": {
+            "code-lite": {
+            "name": "code-lite"
+            }
+        }
+        }
+  },
+  "model": "hong/code-lite"
 }
+
