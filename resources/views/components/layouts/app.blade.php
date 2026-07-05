@@ -14,11 +14,11 @@
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 
 
-    <script src="{{ asset('js/chart/highcharts.js') }}" defer></script>
-    <script src="{{ asset('js/chart/treemap.js') }}" defer></script>
-    <script src="{{ asset('js/chart/treegraph.js') }}" defer></script>
-    <script src="{{ asset('js/chart/exporting.js') }}" defer></script>
-    <script src="{{ asset('js/chart/accessibility.js') }}" defer></script>
+    <script src="{{ asset('js/chart/highcharts.js') }}"></script>
+    <script src="{{ asset('js/chart/treemap.js') }}"></script>
+    <script src="{{ asset('js/chart/treegraph.js') }}"></script>
+    <script src="{{ asset('js/chart/exporting.js') }}"></script>
+    <script src="{{ asset('js/chart/accessibility.js') }}"></script>
 
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>

@@ -42,6 +42,7 @@ $this->call([
             TodoSeeder::class,
             ActivityLogSeeder::class,
             TicketSeeder::class,
+            PersonUserSeeder::class,
 
 
         ]);

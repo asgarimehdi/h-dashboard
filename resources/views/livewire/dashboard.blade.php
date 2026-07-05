@@ -386,18 +386,33 @@ return new class extends Component {
 
     @script
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // نمودار روند تیکت‌ها
+        const statusLabels = { 'created': 'جدید', 'accepted': 'پذیرفته شده', 'completed': 'تکمیل شده', 'forwarded': 'ارجاع شده', 'rejected': 'رد شده' };
+        const statusColors = { 'created': '#3b82f6', 'accepted': '#f59e0b', 'completed': '#22c55e', 'forwarded': '#8b5cf6', 'rejected': '#ef4444' };
+
+        function renderTicketCharts() {
             const trendData = @json($this->ticketChartData);
-            Highcharts.chart('ticketTrendChart', {
+            const statusData = @json($this->ticketStatusData);
+            console.log('Ticket trend data:', trendData);
+            console.log('Ticket status data:', statusData);
+
+            const trendContainer = document.getElementById('ticketTrendChart');
+            const statusContainer = document.getElementById('ticketStatusChart');
+
+            if (!trendContainer || !statusContainer) {
+                console.warn('Chart containers not found in DOM');
+                return;
+            }
+
+            // نمودار روند تیکت‌ها
+            Highcharts.chart(trendContainer, {
                 chart: { type: 'areaspline', backgroundColor: 'transparent' },
                 title: { text: null },
                 credits: { enabled: false },
                 xAxis: {
-                    categories: trendData.categories,
+                    categories: trendData.categories.length ? trendData.categories : ['بدون داده'],
                     labels: { style: { fontSize: '10px' } }
                 },
-                yAxis: { title: { text: 'تعداد' }, min: 0 },
+                yAxis: { title: { text: 'تعداد' }, min: 0, allowDecimals: false },
                 plotOptions: {
                     areaspline: {
                         fillColor: {
@@ -408,16 +423,16 @@ return new class extends Component {
                         marker: { enabled: false }
                     }
                 },
-                series: [{ name: 'تیکت‌ها', data: trendData.series, color: '#0ea5e9' }],
+                series: [{ name: 'تیکت‌ها', data: trendData.series.length ? trendData.series : [0], color: '#0ea5e9' }],
                 legend: { enabled: false }
             });
 
             // نمودار وضعیت تیکت‌ها
-            const statusData = @json($this->ticketStatusData);
-            const statusLabels = { 'created': 'جدید', 'accepted': 'پذیرفته شده', 'completed': 'تکمیل شده', 'forwarded': 'ارجاع شده', 'rejected': 'رد شده' };
-            const statusColors = { 'created': '#3b82f6', 'accepted': '#f59e0b', 'completed': '#22c55e', 'forwarded': '#8b5cf6', 'rejected': '#ef4444' };
-            const pieData = Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: statusColors[key] || '#6b7280' }));
-            Highcharts.chart('ticketStatusChart', {
+            const pieData = Object.keys(statusData).length
+                ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: statusColors[key] || '#6b7280' }))
+                : [{ name: 'بدون داده', y: 0, color: '#6b7280' }];
+
+            Highcharts.chart(statusContainer, {
                 chart: { type: 'pie', backgroundColor: 'transparent' },
                 title: { text: null },
                 credits: { enabled: false },
@@ -429,7 +444,16 @@ return new class extends Component {
                 },
                 series: [{ name: 'تیکت‌ها', data: pieData }]
             });
-        });
+        }
+
+        // Livewire lifecycle hooks
+        document.addEventListener('livewire:loaded', renderTicketCharts);
+        document.addEventListener('livewire:updated', renderTicketCharts);
+
+        // Fallback: if Livewire is already loaded, run immediately
+        if (window.Livewire) {
+            renderTicketCharts();
+        }
     </script>
     @endscript
 </div>
