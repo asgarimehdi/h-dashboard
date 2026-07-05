@@ -24,7 +24,7 @@ class Unit extends Model
 
     public function person(): HasMany
     {
-        return $this->hasMany(Person::class);
+        return $this->hasMany(Person::class, 'u_id');
     }
 
     public function unitType(): BelongsTo

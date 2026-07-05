@@ -1,7 +1,6 @@
 <?php
 
 use Livewire\Component;
-use Livewire\Attributes\Layout;
 use App\Models\{Unit, User};
 use App\Services\AccessService;
 
@@ -10,7 +9,7 @@ return new class extends Component
     public $units = [];
     public $unitTypes = [];
     public $selectedUnit = null;
-    public ?int $expandedUnitId = null;
+    public array $expandedUnitIds = [];
 
     public function mount(): void
     {
@@ -29,7 +28,34 @@ return new class extends Component
 
     public function toggleExpand(int $id): void
     {
-        $this->expandedUnitId = $this->expandedUnitId === $id ? null : $id;
+        if (in_array($id, $this->expandedUnitIds)) {
+            $this->expandedUnitIds = array_values(array_diff($this->expandedUnitIds, [$id]));
+        } else {
+            $this->expandedUnitIds[] = $id;
+        }
+    }
+
+    public function expandAll(): void
+    {
+        $this->expandedUnitIds = $this->collectAllIds($this->units);
+    }
+
+    public function collapseAll(): void
+    {
+        $this->expandedUnitIds = [];
+    }
+
+    private function collectAllIds(array $units): array
+    {
+        $ids = [];
+        foreach ($units as $unit) {
+            $ids[] = $unit['id'];
+            $children = $unit['children_recursive'] ?? $unit['children'] ?? [];
+            if ($children) {
+                $ids = array_merge($ids, $this->collectAllIds($children));
+            }
+        }
+        return $ids;
     }
 
     public function selectUnit(int $id): void
@@ -39,14 +65,18 @@ return new class extends Component
 
 }; ?>
 
-    {{-- Unit Tree --}}
+<div>
+    <x-header title="درختواره واحدها" separator progress-indicator>
+        <x-slot:actions>
+            <x-theme-selector />
+            <x-button label="باز کردن همه" icon="o-chevron-double-down" class="btn-ghost btn-sm" wire:click="expandAll" />
+            <x-button label="بستن همه" icon="o-chevron-double-up" class="btn-ghost btn-sm" wire:click="collapseAll" />
+        </x-slot:actions>
+    </x-header>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" dir="rtl">
         <div class="lg:col-span-2">
             <x-card shadow>
-                <h2 class="font-bold text-lg mb-4 flex items-center gap-2">
-                    <x-icon name="o-building-office" class="w-6 h-6 text-primary" />
-                    ساختار سازمانی
-                </h2>
                 <div class="space-y-1">
                     @foreach($units as $unit)
                         @include('livewire.units._tree-node', ['unit' => $unit, 'level' => 0])

@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-    "instructions": ["opencode.md"],
+    "instructions": ["AGENTS.md"],
     "mcp": {
         "laravel-boost": {
             "type": "local",

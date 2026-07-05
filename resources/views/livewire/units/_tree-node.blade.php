@@ -1,6 +1,6 @@
 @php
     $hasChildren = !empty($unit['children_recursive']) || !empty($unit['children']);
-    $isExpanded = $expandedUnitId === $unit['id'];
+    $isExpanded = in_array($unit['id'], $expandedUnitIds);
 @endphp
 
 <div class="border border-base-200 rounded-lg mb-1" style="margin-right: {{ $level * 20 }}px">

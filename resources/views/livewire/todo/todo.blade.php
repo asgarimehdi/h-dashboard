@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\{Todo, Ticket};
+use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
@@ -22,15 +23,49 @@ return new class extends Component {
     public $end_date_picker;
     public $end_time_picker;
 
+    private ?string $calendarStart = null;
+    private ?string $calendarEnd = null;
+
     public function mount(): void
     {
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
     }
 
-    public function getEvents()
+    public function fetchEvents(string $start, string $end): void
     {
+        $this->calendarStart = $start;
+        $this->calendarEnd = $end;
+        $this->dispatch('calendar-updated', events: $this->getEvents());
+    }
+
+    public function getEvents(): array
+    {
+        $accessService = app(AccessService::class);
+        $accessibleIds = $accessService->accessibleUnitIds(auth()->user());
+
+        // Base query with date range filtering for performance
+        $todoQuery = Todo::query()
+            ->where(function ($q) use ($accessibleIds) {
+                $q->whereIn('unit_id', $accessibleIds)
+                  ->orWhereNull('unit_id');
+            });
+
+        $ticketQuery = Ticket::accessible()
+            ->with('task')
+            ->whereIn('status', ['created', 'forwarded', 'accepted']);
+
+        // Apply date range filter when available
+        if ($this->calendarStart) {
+            $todoQuery->where('start_at', '>=', $this->calendarStart);
+            $ticketQuery->where('created_at', '>=', $this->calendarStart);
+        }
+        if ($this->calendarEnd) {
+            $todoQuery->where('start_at', '<=', $this->calendarEnd);
+            $ticketQuery->where('created_at', '<=', $this->calendarEnd);
+        }
+
         // وظایف
-        $todoEvents = Todo::accessible()
+        $todoEvents = $todoQuery
             ->get()
             ->map(function ($todo) {
                 return [
@@ -48,9 +83,7 @@ return new class extends Component {
             })->toArray();
 
         // تیکت‌ها
-        $ticketEvents = Ticket::accessible()
-            ->with('task')
-            ->whereIn('status', ['created', 'forwarded', 'accepted'])
+        $ticketEvents = $ticketQuery
             ->get()
             ->map(function ($ticket) {
                 $priorityColors = ['urgent' => '#ef4444', 'normal' => '#f59e0b', 'low' => '#6b7280'];
@@ -103,9 +136,15 @@ return new class extends Component {
         $this->modal = true;
     }
 
-    public function editEvent($id)
+    public function editEvent($id): void
     {
         $todo = Todo::find($id);
+
+        if (! $this->isTodoAccessible($todo)) {
+            $this->error('شما دسترسی به این تسک را ندارید');
+            return;
+        }
+
         $this->editingId = $id;
         $this->title = $todo->title;
         $this->is_completed = $todo->is_completed;
@@ -133,6 +172,13 @@ return new class extends Component {
             'title' => 'required|min:3',
             'start_date_picker' => 'required',
         ]);
+
+        // Validate unit_id is accessible
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
+        if ($this->unit_id && ! in_array($this->unit_id, $accessibleIds)) {
+            $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
+            return;
+        }
 
         $startDateTime = $this->start_date_picker . ' ' . ($this->start_time_picker ?: '00:00');
         $startMildadi = $this->convertToMiladi($startDateTime);
@@ -183,7 +229,14 @@ return new class extends Component {
     public function delete(): void
     {
         if ($this->editingId) {
-            Todo::find($this->editingId)->delete();
+            $todo = Todo::find($this->editingId);
+
+            if (! $this->isTodoAccessible($todo)) {
+                $this->error('شما دسترسی به این تسک را ندارید');
+                return;
+            }
+
+            $todo->delete();
             $this->success('تسک حذف شد');
             $this->modal = false;
 
@@ -202,6 +255,12 @@ return new class extends Component {
     public function toggleComplete(int $id): void
     {
         $todo = Todo::find($id);
+
+        if (! $this->isTodoAccessible($todo)) {
+            $this->error('شما دسترسی به این تسک را ندارید');
+            return;
+        }
+
         $todo->update(['is_completed' => !$todo->is_completed]);
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
@@ -211,6 +270,15 @@ return new class extends Component {
         return [
             'events' => $this->getEvents(),
         ];
+    }
+
+    private function isTodoAccessible(?Todo $todo): bool
+    {
+        if (! $todo) {
+            return false;
+        }
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
+        return $todo->unit_id === null || in_array($todo->unit_id, $accessibleIds);
     }
 }; ?>
 
@@ -319,6 +387,8 @@ return new class extends Component {
 
     <script>
         let calendarInstance = null;
+        let firstDatesSet = true;
+
 
         document.addEventListener('DOMContentLoaded', function() {
             jalaliDatepicker.startWatch({
@@ -382,14 +452,17 @@ return new class extends Component {
                         return { html: '<div class="flex items-center gap-1">' + checkIcon + '<span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span></div>' };
                     },
                     events: @json($events),
+                    datesSet: function(info) {
+                        if (calendarInstance.hasPubliclyVisibleDates) {
+                            @this.fetchEvents(info.startStr, info.endStr);
+                        }
+                    },
                     select: function(info) {
                         @this.openCreateModal(info.startStr, info.endStr);
                     },
                     eventClick: function(info) {
                         const type = info.event.extendedProps.type;
                         if (type === 'ticket') {
-                            // باز کردن جزئیات تیکت در صفحه تیکت‌ها
-                            const ticketId = info.event.id.replace('ticket-', '');
                             window.location.href = '/tickets/inbox';
                         } else {
                             @this.editEvent(info.event.id.replace('todo-', ''));
@@ -406,11 +479,11 @@ return new class extends Component {
                 calendarInstance.render();
             }
 
-            Livewire.on('calendar-updated', (events) => {
-                if (calendarInstance && events) {
+            Livewire.on('calendar-updated', (...args) => {
+                const events = Array.isArray(args[0]) ? args[0] : (args[0]?.events || []);
+                if (calendarInstance && events.length) {
                     calendarInstance.removeAllEvents();
                     events.forEach(event => calendarInstance.addEvent(event));
-                    console.log('تقویم با موفقیت به‌روزرسانی شد');
                 }
             });
 

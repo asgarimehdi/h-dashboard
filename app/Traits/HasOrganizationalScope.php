@@ -11,6 +11,6 @@ trait HasOrganizationalScope
     {
         $unitIds = app(AccessService::class)->accessibleUnitIds();
 
-        return $query->whereIn($unitColumn, $unitIds);
+        return $query->whereIn($unitColumn ?? 'unit_id', $unitIds);
     }
 }
