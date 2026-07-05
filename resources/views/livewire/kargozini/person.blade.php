@@ -191,30 +191,24 @@ return new class extends Component {
         </div>
         <x-table :headers="$headers" :rows="$persons" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[5, 10, 20]">
-            @foreach($persons as $person)
-                <tr wire:key="{{ $person->id }}">
-                    <td>
-                        @scope('actions', $person)
-                        <div class="flex w-1/12">
-                            <x-button icon="o-pencil"
-                                      wire:click="editPerson({{ $person->id }})"
-                                      class="btn-ghost btn-sm text-primary"
-                                      @click="$wire.modal = true">
-                                <span class="hidden 2xl:inline">ویرایش</span>
-                            </x-button>
+            @scope('actions', $person)
+                <div class="flex w-1/12">
+                    <x-button icon="o-pencil"
+                              wire:click="editPerson({{ $person->id }})"
+                              class="btn-ghost btn-sm text-primary"
+                              @click="$wire.modal = true">
+                        <span class="hidden 2xl:inline">ویرایش</span>
+                    </x-button>
 
-                            <x-button icon="o-trash"
-                                      wire:click="delete({{ $person->id }})"
-                                      wire:confirm="آیا مطمئن هستید"
-                                      spinner
-                                      class="btn-ghost btn-sm text-error">
-                                <span class="hidden 2xl:inline">حذف</span>
-                            </x-button>
-                        </div>
-                        @endscope
-                    </td>
-                </tr>
-            @endforeach
+                    <x-button icon="o-trash"
+                              wire:click="delete({{ $person->id }})"
+                              wire:confirm="آیا مطمئن هستید"
+                              spinner
+                              class="btn-ghost btn-sm text-error">
+                        <span class="hidden 2xl:inline">حذف</span>
+                    </x-button>
+                </div>
+            @endscope
         </x-table>
     </x-card>
 

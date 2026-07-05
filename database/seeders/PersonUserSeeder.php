@@ -8,6 +8,7 @@ use App\Models\Person;
 use App\Models\User;
 use App\Models\Unit;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Faker\Factory as FakerFactory;
 
 class PersonUserSeeder extends Seeder
@@ -22,6 +23,8 @@ class PersonUserSeeder extends Seeder
         $unitIds = Unit::pluck('id')->toArray();
         // Get all permission names for random assignment
         $permissionNames = Permission::pluck('name')->toArray();
+        // Get all roles for random assignment (skip admin to avoid giving full access)
+        $roles = Role::whereNotIn('name', ['admin', 'super-admin'])->pluck('name')->toArray();
 
         // Get lookup IDs for personnel
         $estekhdamIds = \App\Models\Estekhdam::pluck('id')->toArray();
@@ -63,6 +66,12 @@ class PersonUserSeeder extends Seeder
                 // array_rand returns a single value when $numPermissions == 1, normalize to array
                 $randomPermissions = (array) $randomPermissions;
                 $user->givePermissionTo($randomPermissions);
+            }
+
+            // Assign 1 random role to the user (if any roles exist)
+            if (!empty($roles)) {
+                $randomRole = $roles[array_rand($roles)];
+                $user->assignRole($randomRole);
             }
 
             // Attach the user to the unit via pivot (staff role, primary)

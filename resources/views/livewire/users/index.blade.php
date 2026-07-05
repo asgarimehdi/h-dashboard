@@ -20,6 +20,8 @@ return new class extends Component {
     public string $filterStatus = 'active';
 
     public bool $modal = false;
+    public int $perPage = 5;
+
     public array $sortBy = ['column' => 'n_code', 'direction' => 'asc'];
 
     public $n_code;
@@ -197,7 +199,7 @@ return new class extends Component {
         }
 
         return $query->orderBy('n_code', $this->sortBy['direction'])
-            ->paginate(5);
+            ->paginate($this->perPage);
     }
 
     public function getFilteredPersonsProperty()
@@ -253,7 +255,7 @@ return new class extends Component {
                 </select>
             </div>
         </div>
-        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable>
+        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable with-pagination per-page="perPage" :per-page-values="[5, 10, 20, 50]">
 
             @scope('cell_status', $user)
                 <x-badge
