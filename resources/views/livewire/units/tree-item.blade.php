@@ -25,13 +25,13 @@
 
         {{-- باکس واحد --}}
         <div @class([
-            "flex items-center gap-3 p-3 my-2 rounded-xl transition-all border-2 flex-1 shadow-sm",
+            "flex items-center gap-3 p-3 my-2 rounded-xl transition-all border-2 flex-1 shadow-sm cursor-pointer",
             "border-primary bg-primary/10 scale-[1.02]" => $isMatch,
             "border-base-300 bg-base-100 hover:border-gray-400" => !$isMatch
-        ])>
+        ]) wire:click="selectUnit({{ $unit->id }})">
             
             {{-- آیکون وضعیت --}}
-            <div wire:click="toggle({{ $unit->id }})" class="cursor-pointer">
+            <div wire:click.stop="toggle({{ $unit->id }})" class="cursor-pointer">
                 @if($hasChildren)
                     <div @class([
                         "w-7 h-7 flex items-center justify-center rounded-lg transition-colors",

@@ -48,7 +48,6 @@ Route::middleware('auth')->group(function () {
         Route::middleware('role_or_permission:organization')->group(function () {
             Route::livewire('/units', 'units.index');
             Route::livewire('/units/chart', 'units.chart');
-            Route::livewire('/units/tree', 'units.tree')->name('units.tree');
         });
 
         // ... more

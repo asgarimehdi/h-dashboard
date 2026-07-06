@@ -10,6 +10,7 @@ return new class extends Component {
     public string $search = '';
     public array $expanded = [];
     public $rootUnits;
+    public $selectedUnit = null;
 
     public function mount(): void
     {
@@ -58,6 +59,11 @@ return new class extends Component {
         }
     }
 
+    public function selectUnit(int $id): void
+    {
+        $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
+    }
+    
 }; ?>
 
 <div>
@@ -75,15 +81,48 @@ return new class extends Component {
         </x-slot:actions>
     </x-header>
 
-    <x-card shadow>
-        <div class="tree-container text-right" dir="rtl">
-            @forelse($rootUnits as $unit)
-                @include('livewire.units.tree-item', ['unit' => $unit, 'level' => 0, 'isLast' => $loop->last])
-            @empty
-                <div class="text-center p-10 text-gray-400">موردی یافت نشد.</div>
-            @endforelse
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6" dir="rtl">
+        <div class="lg:col-span-3">
+            <x-card shadow>
+                <div class="tree-container text-right" dir="rtl">
+                    @forelse($rootUnits as $unit)
+                        @include('livewire.units.tree-item', ['unit' => $unit, 'level' => 0, 'isLast' => $loop->last])
+                    @empty
+                        <div class="text-center p-10 text-gray-400">موردی یافت نشد.</div>
+                    @endforelse
+                </div>
+            </x-card>
         </div>
-    </x-card>
+
+        {{-- جزئیات واحد انتخاب شده --}}
+        <div class="lg:col-span-1 sticky top-4">
+            @if($selectedUnit)
+            <x-card shadow>
+                <h3 class="font-bold mb-3">{{ $selectedUnit->name }}</h3>
+                <div class="space-y-2 text-sm">
+                    <div><span class="font-bold">نوع:</span> {{ $selectedUnit->unitType?->name ?? '---' }}</div>
+                    <div><span class="font-bold">والد:</span> {{ $selectedUnit->parent?->name ?? '---' }}</div>
+                    <div><span class="font-bold">کاربران:</span> {{ count($selectedUnit->assignedUsers) }}</div>
+                </div>
+                <div class="mt-4">
+                    <h4 class="font-bold text-xs mb-2">کاربران این واحد:</h4>
+                    @forelse($selectedUnit->assignedUsers as $u)
+                    <div class="flex items-center gap-2 p-2 bg-base-200/50 rounded mb-1">
+                        <x-icon name="o-user" class="w-4 h-4" />
+                        <span class="text-xs">{{ $u->person?->f_name }} {{ $u->person?->l_name }}</span>
+                    </div>
+                    @empty
+                    <p class="text-xs opacity-50">کاربری ندارد</p>
+                    @endforelse
+                </div>
+            </x-card>
+            @else
+            <x-card shadow>
+                <p class="text-sm opacity-50 text-center py-8">یک واحد را انتخاب کنید</p>
+            </x-card>
+            @endif
+        </div>
+    </div>
 
     <style>
         .tree-line-branch {
