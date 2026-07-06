@@ -146,32 +146,32 @@ return new class extends Component
         }
     }
 
-    // آیکن‌ها بر اساس unit_type_id
+    // آیکن‌ها بر اساس unit_type_id و نام واحدها
     const typeIcons = {
-        4: '/icons/4.png',
-        5: '/icons/5.png',
-        6: '/icons/6.png',
-        7: '/icons/7.png',
-        8: '/icons/8.png',
-        9: '/icons/9.png',
-        10: '/icons/10.png',
-        11: '/icons/11.png',
-        12: '/icons/12.png',
-        13: '/icons/13.png',
-        14: '/icons/14.png',
-        15: '/icons/15.png',
-        16: '/icons/16.png',
-        17: '/icons/17.png',
-        18: '/icons/18.png',
-        19: '/icons/19.png',
+        4: '/icons/network.svg',      // شبکه بهداشت
+        5: '/icons/urban-health.svg',  // مرکز خدمات جامع سلامت شهری
+        6: '/icons/urban-rural.svg',   // مرکز خدمات جامع سلامت شهری روستایی
+        7: '/icons/rural-health.svg',  // مرکز خدمات جامع سلامت روستایی
+        8: '/icons/attached-base.svg',// پایگاه سلامت ضمیمه
+        9: '/icons/health-house.svg',  // خانه بهداشت
+        10: '/icons/base.svg',         // پایگاه سلامت غیر ضمیمه
+        11: '/icons/block.svg',        // بلوک
+        12: '/icons/satellite.svg',    // قمر
+        13: '/icons/rabies.svg',       // مرکز هاری
+        14: '/icons/dental.svg',       // تجمیع دندانپزشکی
+        15: '/icons/lab.svg',           // آزمایشگاه
+        16: '/icons/school.svg',       // آموزشگاه
+        17: '/icons/emergency.svg',    // فوریت
+        18: '/icons/worker-house.svg',  // خانه بهداشت کارگری
+        19: '/icons/hospital.svg',     // بیمارستان
     };
 
-    const defaultIcon = '/icons/default.png';
+    const defaultIcon = '/icons/default.svg';
 
     function getIcon(typeId) {
         return L.icon({
             iconUrl: typeIcons[typeId] ?? defaultIcon,
-            iconSize: [10, 20],
+            iconSize: [32, 32],
             iconAnchor: [16, 32],
             popupAnchor: [0, -32],
         });
