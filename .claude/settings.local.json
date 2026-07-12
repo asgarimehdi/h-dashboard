@@ -3,7 +3,9 @@
     "allow": [
       "Bash(php artisan *)",
       "Bash(vendor/bin/pint --dirty --format agent)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(Get-ChildItem -Path \"C:\\\\laragon\\\\www\\\\h-dashboard\\\\storage\\\\framework\\\\views\\\\livewire\" -Recurse -Filter \"*.blade.php\")",
+      "Bash(Select-Object Name, FullName)"
     ]
   }
 }

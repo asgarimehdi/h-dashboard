@@ -551,9 +551,9 @@ new class extends Component
         </div>
 
         {{-- نوار Bulk Actions --}}
-        @if(count($selectedTickets) > 0)
+        @if(count($this->selectedTickets) > 0)
         <div class="flex items-center gap-3 p-3 mb-4 bg-primary/10 rounded-xl border border-primary/20">
-            <span class="text-sm font-bold text-primary">{{ count($selectedTickets) }} تیکت انتخاب شده</span>
+            <span class="text-sm font-bold text-primary">{{ count($this->selectedTickets) }} تیکت انتخاب شده</span>
             <div class="flex gap-2 mr-auto">
                 <x-button icon="o-check-circle" label="تکمیل دسته‌ای" wire:click="openBulkModal('complete')" class="btn-success btn-sm" spinner />
                 <x-button icon="o-arrow-right" label="ارجاع دسته‌ای" wire:click="openBulkModal('forward')" class="btn-warning btn-sm" spinner />
@@ -576,7 +576,7 @@ new class extends Component
             <input type="checkbox"
                 class="checkbox checkbox-sm checkbox-primary"
                 wire:click="toggleTicketSelection({{ $ticket->id }})"
-                @if(in_array($ticket->id, $selectedTickets)) checked @endif />
+                @if(in_array($ticket->id, $this->selectedTickets)) checked @endif />
             @endscope
 
             @scope('cell_user.person.f_name', $ticket)
