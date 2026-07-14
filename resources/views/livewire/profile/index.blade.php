@@ -4,6 +4,7 @@ use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
 use App\Models\{User, Ticket, Todo, ActivityLog};
+use App\Services\AccessService;
 
 return new class extends Component
 {
@@ -20,18 +21,20 @@ return new class extends Component
     {
         $this->user = auth()->user()->load(['person', 'units']);
         $userId = auth()->id();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $this->totalTickets = Ticket::where('user_id', $userId)->count();
-        $this->completedTickets = Ticket::where('user_id', $userId)->where('status', 'completed')->count();
+        $this->totalTickets = Ticket::where('user_id', $userId)->accessible()->count();
+        $this->completedTickets = Ticket::where('user_id', $userId)->accessible()->where('status', 'completed')->count();
         $this->pendingTickets = $this->totalTickets - $this->completedTickets;
 
-        $this->totalTodos = Todo::count();
-        $this->completedTodos = Todo::where('is_completed', true)->count();
+        $this->totalTodos = Todo::accessible()->count();
+        $this->completedTodos = Todo::accessible()->where('is_completed', true)->count();
     }
 
     public function getUserTicketsProperty()
     {
         return Ticket::where('user_id', auth()->id())
+            ->accessible()
             ->with('unit')
             ->latest()
             ->paginate(10, pageName: 'tickets_page');
@@ -39,7 +42,8 @@ return new class extends Component
 
     public function getUserTodosProperty()
     {
-        return Todo::latest()
+        return Todo::accessible()
+            ->latest()
             ->paginate(10, pageName: 'todos_page');
     }
 
