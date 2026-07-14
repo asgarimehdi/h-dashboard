@@ -457,3 +457,11 @@ return new class extends Component {
     </script>
     @endscript
 </div>
+
+@push('scripts')
+<script src="{{ asset('js/chart/highcharts.js') }}"></script>
+<script src="{{ asset('js/chart/treemap.js') }}"></script>
+<script src="{{ asset('js/chart/treegraph.js') }}"></script>
+<script src="{{ asset('js/chart/exporting.js') }}"></script>
+<script src="{{ asset('js/chart/accessibility.js') }}"></script>
+@endpush

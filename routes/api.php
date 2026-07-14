@@ -26,7 +26,7 @@ Route::post('/login', function (Request $request) {
     $token = $user->createToken('flutter-app')->plainTextToken;
 
     return response()->json(['token' => $token]);
-});
+})->middleware('throttle:5,1');
 
 // Authenticated routes
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {

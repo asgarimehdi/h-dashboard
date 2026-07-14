@@ -40,7 +40,8 @@ class AccessService
             return [];
         }
 
-        $cacheKey = "accessible_units:{$user->id}:".md5(json_encode($baseUnitIds));
+        $sessionUnitId = session('current_unit_id', 'none');
+        $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
 
         return Cache::remember(
             $cacheKey,
@@ -58,11 +59,12 @@ class AccessService
 
         if ($user) {
             $currentUnitId = session('current_unit_id');
+            $sessionUnitId = session('current_unit_id', 'none');
             $baseUnitIds = $currentUnitId
                 ? [$currentUnitId]
                 : $user->units()->pluck('units.id')->toArray();
 
-            $cacheKey = "accessible_units:{$user->id}:".md5(json_encode($baseUnitIds));
+            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
             Cache::forget($cacheKey);
         }
     }
