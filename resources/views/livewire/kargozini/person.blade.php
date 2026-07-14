@@ -192,7 +192,11 @@ return new class extends Component
             'estekhdams' => Estekhdam::all(),
             'semats' => Semat::all(),
             'radifs' => Radif::all(),
-            'units' => Unit::whereIn('id', $accessibleUnitIds)->get(),
+            'units' => Unit::with('unitType')
+                ->whereIn('id', $accessibleUnitIds)
+                ->get()
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'parent_id' => $u->parent_id, 'unit_type_name' => $u->unitType?->name])
+                ->all(),
         ];
     }
 }; ?>
@@ -257,7 +261,13 @@ return new class extends Component
             <x-select wire:model="s_id" label="سمت" :options="$semats" required placeholder="انتخاب سمت"/>
             <x-select wire:model="r_id" label="ردیف سازمانی" :options="$radifs" required
                       placeholder="انتخاب ردیف سازمانی"/>
-            <x-select wire:model="u_id" label="واحد" :options="$units" required placeholder="انتخاب واحد"/>
+            <div class="col-span-2">
+                @include('livewire.partials.unit-tree-picker', [
+                    'units' => $units,
+                    'model' => 'u_id',
+                    'multiple' => false,
+                ])
+            </div>
             <div class="col-span-2 flex justify-end space-x-2">
                 <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check"
                           class="btn-primary"/>

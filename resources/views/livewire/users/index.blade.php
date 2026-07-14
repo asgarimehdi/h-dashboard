@@ -48,6 +48,8 @@ return new class extends Component
 
     public array $allUnits = [];
 
+    public array $allUnitsTree = [];
+
     public array $unit_ids = [];
 
     public function mount(): void
@@ -56,7 +58,14 @@ return new class extends Component
 
         $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
         $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
-        $this->allUnits = Unit::where('is_active', true)->orderBy('name')->get(['id', 'name'])->toArray();
+        $units = Unit::with('unitType')->where('is_active', true)->orderBy('name')->get();
+        $this->allUnits = $units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->all();
+        $this->allUnitsTree = $units->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'parent_id' => $u->parent_id,
+            'unit_type_name' => $u->unitType?->name,
+        ])->all();
     }
 
     public function clear(): void
@@ -399,18 +408,11 @@ return new class extends Component
                 @error('user_permissions') <span class="text-error text-sm">{{ $message }}</span> @enderror
             </div>
             <div class="col-span-2">
-                <x-choices-offline
-                    label="واحدهای سازمانی"
-                    wire:model="unit_ids"
-                    :options="$allUnits"
-                    option-label="name"
-                    option-value="id"
-                    placeholder="انتخاب واحدها..."
-                    multiple
-                    searchable
-                    clearable
-                />
-                @error('unit_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
+                @include('livewire.partials.unit-tree-picker', [
+                    'units' => $allUnitsTree,
+                    'model' => 'unit_ids',
+                    'multiple' => true,
+                ])
             </div>
             <div class="col-span-2 flex justify-end space-x-2">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" rounded />
