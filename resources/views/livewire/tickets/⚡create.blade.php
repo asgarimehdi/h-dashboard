@@ -198,9 +198,9 @@ new class extends Component
                 <div class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl max-h-52 overflow-auto">
                     @foreach($units as $unit)
                     <div
-                        wire:click="selectUnit({{ $unit->id }}, '{{ $unit->name }}')"
+                        wire:click="selectUnit({{ $unit['id'] }}, '{{ $unit['name'] }}')"
                         class="p-3 text-sm hover:bg-primary hover:text-white cursor-pointer transition-colors border-b border-base-200 last:border-0">
-                        {{ $unit->name }}
+                        {{ $unit['name'] }}
                     </div>
                     @endforeach
                 </div>
