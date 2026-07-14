@@ -195,7 +195,7 @@ return new class extends Component {
     public function saveUnit(): void
     {
         $rules = [
-            'name' => 'required|string|max:255|unique:units,name,' . $this->editingId,
+            'name' => 'required|string|max:255',
             'unit_type_id' => 'required|exists:unit_types,id',
             'region_id' => 'nullable|exists:regions,id',
             'parent_id' => $this->unit_type_id == 1 ? 'nullable' : 'required|exists:units,id',
