@@ -63,12 +63,14 @@ return new class extends Component {
 
     public function openModalForCreate(): void
     {
+        $this->resetValidation();
         $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions']);
         $this->modal = true;
     }
 
     public function edit($userId): void
     {
+        $this->resetValidation();
         $user = User::withTrashed()->findOrFail($userId);
         $this->editing_user_id = $user->id;
         $this->n_code = $user->n_code;
