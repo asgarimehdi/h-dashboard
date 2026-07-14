@@ -69,7 +69,8 @@ new class extends Component
                 ->where('can_receive_tickets', true)
                 ->where('id', '!=', auth()->user()->person?->u_id)
                 ->limit(5)
-                ->get();
+                ->get()
+                ->toArray();
         }
 
         $this->units = $units;

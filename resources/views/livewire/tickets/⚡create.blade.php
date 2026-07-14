@@ -42,14 +42,15 @@ new class extends Component
                 $query->where('id', '!=', $userUnitId);
             }
 
-            $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get();
+            $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get()->toArray();
         }
 
         // لود وظایف انجام‌نشده واحد فعلی
         $currentUnitId = session('current_unit_id', auth()->user()->person?->u_id);
         $todos = Todo::where('unit_id', $currentUnitId)
             ->where('is_completed', false)
-            ->get();
+            ->get()
+            ->toArray();
 
         $this->units = $units;
         $this->todos = $todos;

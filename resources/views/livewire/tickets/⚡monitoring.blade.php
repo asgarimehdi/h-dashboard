@@ -51,7 +51,7 @@ new class extends Component
         if (strlen($this->unitSearch) > 1) {
             $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
                 ->where('can_receive_tickets', true)
-                ->limit(10)->get();
+                ->limit(10)->get()->toArray();
         }
         $this->filterUnits = $units;
 
