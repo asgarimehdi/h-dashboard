@@ -4,11 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class Notification extends Model
 {
     public $incrementing = false;
+
     protected $keyType = 'string';
+
+    protected static function boot(): void
+    {
+        parent::boot();
+        static::creating(function (self $model): void {
+            if (! $model->id) {
+                $model->id = Str::uuid();
+            }
+        });
+    }
 
     protected $fillable = [
         'user_id',
