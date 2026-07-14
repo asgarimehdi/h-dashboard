@@ -4,48 +4,23 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Unit;
-use Illuminate\Http\Request;
+use App\Services\AccessService;
 
 class UnitController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function __invoke(): string
+    public function __invoke(): array
     {
-        $data=Unit::paginate();
-        return $data->toJson(JSON_UNESCAPED_UNICODE);
-    }
+        $ids = app(AccessService::class)->accessibleUnitIds();
+        $units = Unit::whereIn('id', $ids)->paginate();
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        return [
+            'data' => $units->items(),
+            'meta' => [
+                'current_page' => $units->currentPage(),
+                'last_page' => $units->lastPage(),
+                'per_page' => $units->perPage(),
+                'total' => $units->total(),
+            ],
+        ];
     }
 }
