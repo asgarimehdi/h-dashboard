@@ -68,9 +68,16 @@ return new class extends Component {
                 'r_id' => $this->r_id,
                 'u_id' => $this->u_id,
             ]);
+
+            // Sync user_units pivot to match person.u_id
+            if ($user = $person->user) {
+                app(\App\Services\AccessService::class)->clearCache($user);
+                $user->units()->sync([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
+            }
+
             $this->success("شخص به‌روزرسانی شد");
         } else {
-            Person::create([
+            $person = Person::create([
                 'n_code' => $this->n_code,
                 'f_name' => $this->f_name,
                 'l_name' => $this->l_name,
@@ -80,6 +87,12 @@ return new class extends Component {
                 'r_id' => $this->r_id,
                 'u_id' => $this->u_id,
             ]);
+
+            if ($user = $person->user) {
+                app(\App\Services\AccessService::class)->clearCache($user);
+                $user->units()->sync([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
+            }
+
             $this->success("شخص جدید ثبت شد");
         }
 
