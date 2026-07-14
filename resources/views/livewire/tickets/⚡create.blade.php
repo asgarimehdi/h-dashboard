@@ -231,14 +231,14 @@ new class extends Component
                     rows="4" />
             </div>
 
-            @if($todos->count() > 0)
+            @if(count($todos) > 0)
             <div class="col-span-2">
                 <x-select
                     label="وظیفه مرتبط (اختیاری)"
                     wire:model="task_id"
                     placeholder="انتخاب کنید..."
                     icon="o-calendar-days"
-                    :options="$todos->map(fn($t) => ['id' => $t->id, 'name' => $t->title . ' (' . jdate($t->start_at)->format('Y/m/d') . ')'])->toArray()"
+                    :options="array_map(fn($t) => ['id' => $t['id'], 'name' => $t['title'] . ' (' . jdate($t['start_at'])->format('Y/m/d') . ')'], $todos)"
                     :clearable="true"
                 />
                 <p class="text-xs text-base-content/50 mt-1">در صورت انتخاب، این تیکت به وظیفه مرتبط می‌شود.</p>
