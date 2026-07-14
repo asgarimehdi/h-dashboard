@@ -1,37 +1,54 @@
 <?php
 
-use App\Models\User;
 use App\Models\Person;
+use App\Models\Unit;
+use App\Models\User;
+use App\Services\AccessService;
 use Illuminate\Database\Eloquent\Builder;
-use Livewire\Component;
-use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Livewire\WithPagination;
 use Illuminate\Validation\ValidationException;
-use Spatie\Permission\Models\Role;
+use Livewire\Component;
+use Livewire\WithPagination;
+use Mary\Traits\Toast;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
-return new class extends Component {
-    use WithPagination;
+return new class extends Component
+{
     use Toast;
+    use WithPagination;
 
     public array $expanded = [];
+
     public string $search = '';
+
     public string $filterStatus = 'active';
 
     public bool $modal = false;
+
     public int $perPage = 5;
 
     public array $sortBy = ['column' => 'n_code', 'direction' => 'asc'];
 
     public $n_code;
+
     public $password;
+
     public $person_search = '';
+
     public $editing_user_id = null;
+
     public array $allRoles = [];
+
     public array $role_ids = [];
+
     public array $allPermissions = [];
+
     public array $user_permissions = [];
+
+    public array $allUnits = [];
+
+    public array $unit_ids = [];
 
     public function mount(): void
     {
@@ -39,6 +56,7 @@ return new class extends Component {
 
         $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
         $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
+        $this->allUnits = Unit::where('is_active', true)->orderBy('name')->get(['id', 'name'])->toArray();
     }
 
     public function clear(): void
@@ -64,7 +82,7 @@ return new class extends Component {
     public function openModalForCreate(): void
     {
         $this->resetValidation();
-        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions']);
+        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions', 'unit_ids']);
         $this->modal = true;
     }
 
@@ -78,7 +96,8 @@ return new class extends Component {
         $this->person_search = $person ? "{$person->f_name} {$person->l_name} ({$person->n_code})" : '';
         $this->password = null;
         $this->role_ids = $user->roles->pluck('id')->toArray();
-        $this->user_permissions = $user->getDirectPermissions()->pluck('name')->map(fn($n) => (string)$n)->toArray();
+        $this->user_permissions = $user->getDirectPermissions()->pluck('name')->map(fn ($n) => (string) $n)->toArray();
+        $this->unit_ids = $user->units()->pluck('units.id')->map(fn ($id) => (int) $id)->toArray();
         $this->modal = true;
     }
 
@@ -117,8 +136,9 @@ return new class extends Component {
             $user = User::where('n_code', $this->n_code)->first();
             $user->roles()->sync($this->role_ids ?? []);
             $user->syncPermissions($this->user_permissions ?? []);
+            $user->units()->sync($this->unit_ids ?? []);
 
-            $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions']);
+            $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions', 'unit_ids']);
             $this->success('کاربر با موفقیت ایجاد شد.');
             $this->modal = false;
         } catch (ValidationException $e) {
@@ -131,7 +151,7 @@ return new class extends Component {
     public function updateUser(): void
     {
         $this->validate([
-            'n_code' => 'required|exists:persons,n_code|unique:users,n_code,' . $this->editing_user_id,
+            'n_code' => 'required|exists:persons,n_code|unique:users,n_code,'.$this->editing_user_id,
             'password' => 'nullable|string|min:6',
             'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'exists:roles,id',
@@ -148,16 +168,18 @@ return new class extends Component {
         try {
             $user = User::withTrashed()->findOrFail($this->editing_user_id);
             $data = ['n_code' => $this->n_code];
-            
+
             if ($this->password) {
                 $data['password'] = bcrypt($this->password);
             }
-            
+
             $user->update($data);
             $user->roles()->sync($this->role_ids ?? []);
             $user->syncPermissions($this->user_permissions ?? []);
+            $user->units()->sync($this->unit_ids ?? []);
+            app(AccessService::class)->clearCache($user);
 
-            $this->reset(['n_code', 'password', 'role_ids', 'person_search', 'editing_user_id']);
+            $this->reset(['n_code', 'password', 'role_ids', 'person_search', 'editing_user_id', 'unit_ids']);
             $this->success('کاربر با موفقیت ویرایش شد.');
             $this->modal = false;
         } catch (ValidationException $e) {
@@ -212,9 +234,9 @@ return new class extends Component {
                     ->orWhere('n_code', 'like', "%{$this->person_search}%");
             })
             ->get()
-            ->map(fn($person) => [
+            ->map(fn ($person) => [
                 'value' => $person->n_code,
-                'label' => "{$person->f_name} {$person->l_name} ({$person->n_code})"
+                'label' => "{$person->f_name} {$person->l_name} ({$person->n_code})",
             ])->toArray();
     }
 
@@ -375,6 +397,20 @@ return new class extends Component {
                     searchable
                 />
                 @error('user_permissions') <span class="text-error text-sm">{{ $message }}</span> @enderror
+            </div>
+            <div class="col-span-2">
+                <x-choices-offline
+                    label="واحدهای سازمانی"
+                    wire:model="unit_ids"
+                    :options="$allUnits"
+                    option-label="name"
+                    option-value="id"
+                    placeholder="انتخاب واحدها..."
+                    multiple
+                    searchable
+                    clearable
+                />
+                @error('unit_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
             </div>
             <div class="col-span-2 flex justify-end space-x-2">
                 <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" rounded />
