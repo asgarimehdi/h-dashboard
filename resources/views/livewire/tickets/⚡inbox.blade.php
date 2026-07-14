@@ -86,17 +86,14 @@ new class extends Component
         if ($this->viewMode === 'received') {
             $query->accessible();
         } else {
-            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds($user);
-            $query->where(function ($q) use ($user, $accessibleUnitIds) {
+            $query->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
-                    ->orWhere(function ($subQ) use ($user, $accessibleUnitIds) {
-                        $subQ->whereHas('activities', function ($activityQuery) use ($user) {
-                            $activityQuery->where('user_id', $user->id);
-                        })
-                            ->whereNotIn('unit_id', $accessibleUnitIds);
-                    });
+                    ->orWhere('current_assignee_id', $user->id)
+                    ->orWhereHas('activities', fn ($q) => $q->where('user_id', $user->id));
             });
         }
+
+        $query->accessible();
 
         if ($this->statusFilter === 'pending') {
             $query->whereIn('status', ['created', 'forwarded']);
