@@ -1,27 +1,47 @@
 <?php
 
-use App\Models\Person;
-use App\Models\Tahsil;
 use App\Models\Estekhdam;
-use App\Models\Semat;
+use App\Models\Person;
 use App\Models\Radif;
+use App\Models\Semat;
+use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
-use Livewire\Component;
-use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Livewire\Component;
 use Livewire\WithPagination;
+use Mary\Traits\Toast;
 
-return new class extends Component {
-    use WithPagination;
+return new class extends Component
+{
     use Toast;
+    use WithPagination;
 
     // ویژگی‌های فرم
-    public $n_code, $f_name, $l_name, $t_id, $e_id, $s_id, $r_id, $u_id;
-    public int|null $editingId = null;
+    public $n_code;
+
+    public $f_name;
+
+    public $l_name;
+
+    public $t_id;
+
+    public $e_id;
+
+    public $s_id;
+
+    public $r_id;
+
+    public $u_id;
+
+    public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 5;
+
     public bool $modal = false;
+
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     // پاک کردن فیلترها
@@ -37,8 +57,8 @@ return new class extends Component {
         try {
             $person->delete();
             $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
-        } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+        } catch (Exception $e) {
+            $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
     }
 
@@ -46,7 +66,7 @@ return new class extends Component {
     public function savePerson(): void
     {
         $this->validate([
-            'n_code' => 'required|string|size:10|unique:persons,n_code,' . $this->editingId,
+            'n_code' => 'required|string|size:10|unique:persons,n_code,'.$this->editingId,
             'f_name' => 'required|string|max:255',
             'l_name' => 'required|string|max:255',
             't_id' => 'required|exists:tahsils,id',
@@ -69,13 +89,13 @@ return new class extends Component {
                 'u_id' => $this->u_id,
             ]);
 
-            // Sync user_units pivot to match person.u_id
+            // Sync user_units pivot to include person.u_id as primary (preserves admin-assigned units)
             if ($user = $person->user) {
-                app(\App\Services\AccessService::class)->clearCache($user);
-                $user->units()->sync([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
+                app(AccessService::class)->clearCache($user);
+                $user->units()->syncWithoutDetaching([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
             }
 
-            $this->success("شخص به‌روزرسانی شد");
+            $this->success('شخص به‌روزرسانی شد');
         } else {
             $person = Person::create([
                 'n_code' => $this->n_code,
@@ -89,11 +109,11 @@ return new class extends Component {
             ]);
 
             if ($user = $person->user) {
-                app(\App\Services\AccessService::class)->clearCache($user);
-                $user->units()->sync([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
+                app(AccessService::class)->clearCache($user);
+                $user->units()->syncWithoutDetaching([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
             }
 
-            $this->success("شخص جدید ثبت شد");
+            $this->success('شخص جدید ثبت شد');
         }
 
         $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId']);
@@ -148,9 +168,9 @@ return new class extends Component {
             ->withAggregate('radif', 'name')
             ->withAggregate('unit', 'name');
 
-        if (!empty($this->search)) {
+        if (! empty($this->search)) {
             $query->where(function ($q) {
-                $q->where('n_code', 'LIKE', '%' . $this->search . '%')
+                $q->where('n_code', 'LIKE', '%'.$this->search.'%')
                     ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
             });
         }
