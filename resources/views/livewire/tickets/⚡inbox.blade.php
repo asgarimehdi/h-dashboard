@@ -717,9 +717,9 @@ new class extends Component
                 @if(!empty($units))
                 <div class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl max-h-40 overflow-y-auto">
                     @foreach($units as $u)
-                    <button type="button" wire:click="selectTargetUnit({{ $u->id }}, '{{ $u->name }}')"
+                    <button type="button" wire:click="selectTargetUnit({{ $u['id'] }}, '{{ $u['name'] }}')"
                         class="w-full text-right px-4 py-2 hover:bg-primary hover:text-white text-sm transition-colors border-b last:border-0">
-                        {{ $u->name }}
+                        {{ $u['name'] }}
                     </button>
                     @endforeach
                 </div>

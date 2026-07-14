@@ -140,9 +140,9 @@ new class extends Component
                 @if(!empty($this->unitSearch) && !empty($filterUnits))
                 <div class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl overflow-hidden">
                     @foreach($filterUnits as $u)
-                    <button wire:click="selectUnitForFilter({{ $u->id }})"
+                    <button wire:click="selectUnitForFilter({{ $u['id'] }})"
                         class="w-full text-right px-4 py-2 hover:bg-primary hover:text-white text-sm transition-colors border-b last:border-0">
-                        {{ $u->name }}
+                        {{ $u['name'] }}
                     </button>
                     @endforeach
                 </div>
