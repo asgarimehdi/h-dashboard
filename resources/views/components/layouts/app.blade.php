@@ -139,7 +139,7 @@
                     <x-menu-item title="رسم شکل" icon="o-pencil-square" link="/maps/draw" wire:navigate />
                     <x-menu-item title="شهرستان‌ها" icon="o-map-pin" link="/maps/county" wire:navigate />
                     <x-menu-item title="موقعیت کاربر" icon="o-signal" link="/maps/location" wire:navigate />
-                    <x-menu-item title="نقشه نقاط" icon="o-plus-square-on-square" link="/maps/point" wire:navigate />
+                    <x-menu-item title="نقشه نقاط" icon="o-map" link="/maps/point" wire:navigate />
                 </x-menu-sub>
                 @endcan
 
