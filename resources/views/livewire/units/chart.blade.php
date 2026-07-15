@@ -11,6 +11,8 @@ return new class extends Component {
     public array $expanded = [];
     public $rootUnits;
     public $selectedUnit = null;
+    public int $descendantUserCount = 0;
+    public int $directUserCount = 0;
 
     public function mount(): void
     {
@@ -62,28 +64,29 @@ return new class extends Component {
     public function selectUnit(int $id): void
     {
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
+        $descendantIds = Unit::descendantIds($id);
+        $this->descendantUserCount = \App\Models\User::whereHas('units', fn($q) => $q->whereIn('unit_id', $descendantIds))->count();
+        $this->directUserCount = $this->selectedUnit->assignedUsers->count();
     }
     
 }; ?>
 
 <div>
     <x-header title="ساختار درختی واحدها" separator progress-indicator>
-        <x-slot:middle class="!justify-end">
-        </x-slot:middle>
         <x-slot:actions>
             <x-theme-selector/>
-            <x-input
-                placeholder="جستجو در واحدها..."
-                wire:model.live.debounce.500ms="search"
-                icon="o-magnifying-glass"
-                class="input-sm"
-                clearable />
         </x-slot:actions>
     </x-header>
 
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6" dir="rtl">
         <div class="lg:col-span-3">
             <x-card shadow>
+                <x-input
+                    placeholder="جستجو در واحدها..."
+                    wire:model.live.debounce.500ms="search"
+                    icon="o-magnifying-glass"
+                    clearable
+                    class="w-full mb-4" />
                 <div class="tree-container text-right" dir="rtl">
                     @forelse($rootUnits as $unit)
                         @include('livewire.units.tree-item', ['unit' => $unit, 'level' => 0, 'isLast' => $loop->last])
@@ -102,7 +105,7 @@ return new class extends Component {
                 <div class="space-y-2 text-sm">
                     <div><span class="font-bold">نوع:</span> {{ $selectedUnit->unitType?->name ?? '---' }}</div>
                     <div><span class="font-bold">والد:</span> {{ $selectedUnit->parent?->name ?? '---' }}</div>
-                    <div><span class="font-bold">کاربران:</span> {{ count($selectedUnit->assignedUsers) }}</div>
+                    <div><span class="font-bold">کاربران:</span> {{ $directUserCount }} نفر <span class="text-xs opacity-60">(زیرمجموعه: {{ $descendantUserCount }} نفر)</span></div>
                 </div>
                 <div class="mt-4">
                     <h4 class="font-bold text-xs mb-2">کاربران این واحد:</h4>
