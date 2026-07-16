@@ -132,6 +132,16 @@ return new class extends Component
         return $ids;
     }
 
+    /**
+     * Fresh chart data for JS (wire:navigate + filter updates).
+     *
+     * @return array{total: int, byDay: array, byUnit: array, details: array}
+     */
+    public function chartPayload(): array
+    {
+        return $this->reportData;
+    }
+
 }; ?>
     <div>
         <x-header title="گزارش پیشرفته" separator progress-indicator>
@@ -219,58 +229,96 @@ return new class extends Component
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <x-card shadow>
                 <h3 class="font-bold mb-4">روند روزانه</h3>
-                <div id="trendChart" style="height: 300px;"></div>
+                <div id="trendChart" wire:ignore style="height: 300px;"></div>
             </x-card>
 
             <x-card shadow>
                 <h3 class="font-bold mb-4">توزیع بر اساس واحد</h3>
-                <div id="unitChart" style="height: 300px;"></div>
+                <div id="unitChart" wire:ignore style="height: 300px;"></div>
             </x-card>
         </div>
     </div>
 
+    @assets
+    <script src="{{ asset('js/chart/highcharts.js') }}"></script>
+    <script src="{{ asset('js/chart/treemap.js') }}"></script>
+    <script src="{{ asset('js/chart/treegraph.js') }}"></script>
+    <script src="{{ asset('js/chart/exporting.js') }}"></script>
+    <script src="{{ asset('js/chart/accessibility.js') }}"></script>
+    @endassets
+
     @script
     <script>
-        function renderCharts() {
-            const reportData = @json($this->reportData);
-
-            if (reportData.byDay && reportData.byDay.length > 0) {
-                Highcharts.chart('trendChart', {
-                    chart: { type: 'areaspline' },
-                    title: { text: '' },
-                    xAxis: { categories: reportData.byDay.map(d => d.day) },
-                    yAxis: { title: { text: 'تعداد' } },
-                    series: [{
-                        name: 'تعداد',
-                        data: reportData.byDay.map(d => d.count),
-                        color: '#6366f1',
-                        fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 }, stops: [[0, 'rgba(99,102,241,0.3)'], [1, 'rgba(99,102,241,0)']] }
-                    }],
-                    credits: { enabled: false }
-                });
+        function waitForHighcharts(callback, attempts = 0) {
+            if (typeof window.Highcharts !== 'undefined') {
+                callback();
+                return;
             }
-
-            const unitLabels = Object.keys(reportData.byUnit || {});
-            const unitValues = Object.values(reportData.byUnit || {});
-            if (unitLabels.length > 0) {
-                Highcharts.chart('unitChart', {
-                    chart: { type: 'pie' },
-                    title: { text: '' },
-                    series: [{ name: 'تعداد', data: unitLabels.map((label, i) => ({ name: label, y: unitValues[i] })) }],
-                    credits: { enabled: false }
-                });
+            if (attempts > 100) {
+                console.error('Highcharts failed to load');
+                return;
             }
+            setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
         }
 
+        function destroyChartById(id) {
+            const container = document.getElementById(id);
+            if (!container || typeof Highcharts === 'undefined') {
+                return;
+            }
+            const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
+            if (existing) {
+                existing.destroy();
+            }
+            container.innerHTML = '';
+        }
+
+        async function renderCharts() {
+            waitForHighcharts(async () => {
+                const reportData = await $wire.chartPayload();
+
+                destroyChartById('trendChart');
+                destroyChartById('unitChart');
+
+                if (reportData.byDay && reportData.byDay.length > 0) {
+                    Highcharts.chart('trendChart', {
+                        chart: { type: 'areaspline' },
+                        title: { text: '' },
+                        xAxis: { categories: reportData.byDay.map(d => d.day) },
+                        yAxis: { title: { text: 'تعداد' } },
+                        series: [{
+                            name: 'تعداد',
+                            data: reportData.byDay.map(d => d.count),
+                            color: '#6366f1',
+                            fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 }, stops: [[0, 'rgba(99,102,241,0.3)'], [1, 'rgba(99,102,241,0)']] }
+                        }],
+                        credits: { enabled: false }
+                    });
+                }
+
+                const unitLabels = Object.keys(reportData.byUnit || {});
+                const unitValues = Object.values(reportData.byUnit || {});
+                if (unitLabels.length > 0) {
+                    Highcharts.chart('unitChart', {
+                        chart: { type: 'pie' },
+                        title: { text: '' },
+                        series: [{ name: 'تعداد', data: unitLabels.map((label, i) => ({ name: label, y: unitValues[i] })) }],
+                        credits: { enabled: false }
+                    });
+                }
+            });
+        }
+
+        // Full page load + wire:navigate
         renderCharts();
-        $wire.$on('updated', () => renderCharts());
+
+        // Re-render after filter updates
+        $wire.$watch('reportType', () => renderCharts());
+        $wire.$watch('rootUnitId', () => renderCharts());
+        $wire.$watch('parentUnitId', () => renderCharts());
+        $wire.$watch('unitId', () => renderCharts());
+        $wire.$watch('statusFilter', () => renderCharts());
+        $wire.$watch('dateFrom', () => renderCharts());
+        $wire.$watch('dateTo', () => renderCharts());
     </script>
     @endscript
-
-@push('scripts')
-<script src="{{ asset('js/chart/highcharts.js') }}"></script>
-<script src="{{ asset('js/chart/treemap.js') }}"></script>
-<script src="{{ asset('js/chart/treegraph.js') }}"></script>
-<script src="{{ asset('js/chart/exporting.js') }}"></script>
-<script src="{{ asset('js/chart/accessibility.js') }}"></script>
-@endpush
