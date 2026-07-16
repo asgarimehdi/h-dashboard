@@ -3,7 +3,7 @@
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
-use App\Models\{Ticket, Todo, ActivityLog, User, Unit};
+use App\Models\{Ticket, Todo, ActivityLog, User, Unit, Person};
 use App\Services\AccessService;
 use Carbon\Carbon;
 use Morilog\Jalali\Jalalian;
@@ -48,6 +48,7 @@ return new class extends Component
             'tickets' => Ticket::whereIn('unit_id', $accessibleIds),
             'todos' => Todo::whereIn('unit_id', $accessibleIds),
             'users' => User::query(),
+            'persons' => Person::whereIn('u_id', $accessibleIds),
             default => Ticket::whereIn('unit_id', $accessibleIds),
         };
 
@@ -57,7 +58,10 @@ return new class extends Component
         if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
             $query->where('created_at', '<=', $to);
         }
-        if ($this->selectedUnitId) $query->where('unit_id', $this->selectedUnitId);
+        if ($this->selectedUnitId) {
+            $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
+            $query->where($unitColumn, $this->selectedUnitId);
+        }
 
         $total = $query->count();
 
@@ -75,15 +79,30 @@ return new class extends Component
         $byUnit = $query->clone()
             ->when($this->reportType === 'tickets' || $this->reportType === 'todos', fn($q) => $q->select('unit_id')->groupBy('unit_id'))
             ->when($this->reportType === 'tickets' || $this->reportType === 'todos', fn($q) => $q->with('unit'))
+            ->when($this->reportType === 'persons', fn($q) => $q->select('u_id')->groupBy('u_id')->with('unit:id,name'))
             ->get()
             ->groupBy(fn($item) => $item->unit?->name ?? 'نامشخص')
             ->map(fn($items) => $items->count())
             ->toArray();
 
+        $details = [];
+        if ($this->reportType === 'persons') {
+            $persons = $query->clone()->with(['estekhdam', 'tahsil', 'semat'])->get();
+            $details = [
+                'byEstekhdam' => $persons->groupBy(fn($p) => $p->estekhdam?->name ?? 'نامشخص')
+                    ->map(fn($items) => $items->count())->toArray(),
+                'byTahsil' => $persons->groupBy(fn($p) => $p->tahsil?->name ?? 'نامشخص')
+                    ->map(fn($items) => $items->count())->toArray(),
+                'bySemat' => $persons->groupBy(fn($p) => $p->semat?->name ?? 'نامشخص')
+                    ->map(fn($items) => $items->count())->toArray(),
+            ];
+        }
+
         return [
             'total' => $total,
             'byDay' => $byDay,
             'byUnit' => $byUnit,
+            'details' => $details,
         ];
     }
 
@@ -121,6 +140,7 @@ return new class extends Component
                         <option value="tickets">تیکت‌ها</option>
                         <option value="todos">وظایف</option>
                         <option value="users">کاربران</option>
+                        <option value="persons">پرسنل</option>
                     </select>
                 </div>
                 <div>
@@ -166,6 +186,24 @@ return new class extends Component
             <h3 class="font-bold mb-4">توزیع بر اساس واحد</h3>
             <div id="unitChart" wire:ignore style="height: 300px;"></div>
         </x-card>
+
+        {{-- نمودارهای توزیع پرسنل --}}
+        @if($reportType === 'persons')
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            <x-card shadow>
+                <h3 class="font-bold mb-4">توزيع بر اساس استخدام</h3>
+                <div id="estekhdamChart" wire:ignore style="height: 300px;"></div>
+            </x-card>
+            <x-card shadow>
+                <h3 class="font-bold mb-4">توزيع بر اساس تحصیلات</h3>
+                <div id="tahsilChart" wire:ignore style="height: 300px;"></div>
+            </x-card>
+            <x-card shadow>
+                <h3 class="font-bold mb-4">توزيع بر اساس سمت</h3>
+                <div id="sematChart" wire:ignore style="height: 300px;"></div>
+            </x-card>
+        </div>
+        @endif
     </div>
 
     @assets
@@ -208,6 +246,9 @@ return new class extends Component
 
                 destroyChartById('reportChart');
                 destroyChartById('unitChart');
+                destroyChartById('estekhdamChart');
+                destroyChartById('tahsilChart');
+                destroyChartById('sematChart');
 
                 if (reportData.byDay && reportData.byDay.length > 0) {
                     Highcharts.chart('reportChart', {
@@ -235,6 +276,29 @@ return new class extends Component
                         credits: { enabled: false }
                     });
                 }
+
+                const details = reportData.details || {};
+                const pieColors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+
+                function renderPieChart(containerId, data) {
+                    const labels = Object.keys(data || {});
+                    const values = Object.values(data || {});
+                    if (labels.length > 0) {
+                        Highcharts.chart(containerId, {
+                            chart: { type: 'pie' },
+                            title: { text: '' },
+                            series: [{
+                                name: 'تعداد',
+                                data: labels.map((label, i) => ({ name: label, y: values[i], color: pieColors[i % pieColors.length] }))
+                            }],
+                            credits: { enabled: false }
+                        });
+                    }
+                }
+
+                renderPieChart('estekhdamChart', details.byEstekhdam);
+                renderPieChart('tahsilChart', details.byTahsil);
+                renderPieChart('sematChart', details.bySemat);
             });
         }
 

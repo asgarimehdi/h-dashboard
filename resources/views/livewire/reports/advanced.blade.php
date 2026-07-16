@@ -3,7 +3,7 @@
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
-use App\Models\{Ticket, Todo, Unit};
+use App\Models\{Ticket, Todo, Unit, Person};
 use App\Services\AccessService;
 use Carbon\Carbon;
 use Morilog\Jalali\Jalalian;
@@ -76,6 +76,7 @@ return new class extends Component
         $query = match($this->reportType) {
             'tickets' => Ticket::whereIn('unit_id', $accessibleIds),
             'todos' => Todo::whereIn('unit_id', $accessibleIds),
+            'persons' => Person::whereIn('u_id', $accessibleIds),
             default => Ticket::whereIn('unit_id', $accessibleIds),
         };
 
@@ -90,20 +91,19 @@ return new class extends Component
         // فیلتر واحد (سلسله‌مراتبی)
         $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
         if ($unitId) {
-            // شامل فرزندان هم می‌شه
             $descendantIds = $this->getDescendantIds($unitId);
             $descendantIds[] = $unitId;
-            $query->whereIn('unit_id', $descendantIds);
+            $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
+            $query->whereIn($unitColumn, $descendantIds);
         }
 
         // فیلتر وضعیت
-        if ($this->statusFilter !== 'all') {
+        if ($this->statusFilter !== 'all' && $this->reportType !== 'persons') {
             $query->where('status', $this->statusFilter);
         }
 
         $total = $query->count();
 
-        // روند روزانه (برچسب‌های محور شمسی)
         $byDay = $query->clone()
             ->selectRaw("date(created_at) as day, count(*) as count")
             ->groupBy('day')
@@ -115,16 +115,14 @@ return new class extends Component
             ])
             ->toArray();
 
-        // توزیع بر اساس واحد
         $byUnit = $query->clone()
-            ->selectRaw('unit_id, count(*) as count')
-            ->groupBy('unit_id')
-            ->with('unit:id,name')
+            ->when($this->reportType === 'tickets' || $this->reportType === 'todos', fn($q) => $q->select('unit_id')->groupBy('unit_id'))
+            ->when($this->reportType === 'tickets' || $this->reportType === 'todos', fn($q) => $q->with('unit:id,name'))
+            ->when($this->reportType === 'persons', fn($q) => $q->select('u_id')->groupBy('u_id')->with('unit:id,name'))
             ->get()
             ->mapWithKeys(fn($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
             ->toArray();
 
-        // آمار تفصیلی (برای تیکت‌ها)
         $details = [];
         if ($this->reportType === 'tickets') {
             $details = [
@@ -135,6 +133,16 @@ return new class extends Component
                     ->whereIn('status', ['created', 'forwarded'])
                     ->where('deadline', '<', now())
                     ->count(),
+            ];
+        } elseif ($this->reportType === 'persons') {
+            $persons = $query->clone()->with(['estekhdam', 'tahsil', 'semat'])->get();
+            $details = [
+                'byEstekhdam' => $persons->groupBy(fn($p) => $p->estekhdam?->name ?? 'نامشخص')
+                    ->map(fn($items) => $items->count())->toArray(),
+                'byTahsil' => $persons->groupBy(fn($p) => $p->tahsil?->name ?? 'نامشخص')
+                    ->map(fn($items) => $items->count())->toArray(),
+                'bySemat' => $persons->groupBy(fn($p) => $p->semat?->name ?? 'نامشخص')
+                    ->map(fn($items) => $items->count())->toArray(),
             ];
         }
 
@@ -183,6 +191,7 @@ return new class extends Component
                     <select class="select select-bordered select-sm w-full" wire:model.live="reportType">
                         <option value="tickets">تیکت‌ها</option>
                         <option value="todos">وظایف</option>
+                        <option value="persons">پرسنل</option>
                     </select>
                 </div>
                 <div>
@@ -258,6 +267,20 @@ return new class extends Component
                 <div class="stat-value text-lg text-error">{{ $this->reportData['details']['overdue'] }}</div>
             </div>
             @endif
+            @if($this->reportType === 'persons' && count($this->reportData['details']) > 0)
+            <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
+                <div class="stat-title text-xs">تعداد استخدام</div>
+                <div class="stat-value text-lg text-info">{{ count($this->reportData['details']['byEstekhdam'] ?? []) }}</div>
+            </div>
+            <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
+                <div class="stat-title text-xs">تعداد تحصیلات</div>
+                <div class="stat-value text-lg text-success">{{ count($this->reportData['details']['byTahsil'] ?? []) }}</div>
+            </div>
+            <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
+                <div class="stat-title text-xs">تعداد سمت</div>
+                <div class="stat-value text-lg text-warning">{{ count($this->reportData['details']['bySemat'] ?? []) }}</div>
+            </div>
+            @endif
         </div>
 
         {{-- نمودارها --}}
@@ -272,6 +295,24 @@ return new class extends Component
                 <div id="unitChart" wire:ignore style="height: 300px;"></div>
             </x-card>
         </div>
+
+        {{-- نمودارهای توزیع پرسنل --}}
+        @if($reportType === 'persons')
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            <x-card shadow>
+                <h3 class="font-bold mb-4">توزيع بر اساس استخدام</h3>
+                <div id="estekhdamChart" wire:ignore style="height: 300px;"></div>
+            </x-card>
+            <x-card shadow>
+                <h3 class="font-bold mb-4">توزيع بر اساس تحصیلات</h3>
+                <div id="tahsilChart" wire:ignore style="height: 300px;"></div>
+            </x-card>
+            <x-card shadow>
+                <h3 class="font-bold mb-4">توزيع بر اساس سمت</h3>
+                <div id="sematChart" wire:ignore style="height: 300px;"></div>
+            </x-card>
+        </div>
+        @endif
     </div>
 
     @assets
@@ -314,6 +355,9 @@ return new class extends Component
 
                 destroyChartById('trendChart');
                 destroyChartById('unitChart');
+                destroyChartById('estekhdamChart');
+                destroyChartById('tahsilChart');
+                destroyChartById('sematChart');
 
                 if (reportData.byDay && reportData.byDay.length > 0) {
                     Highcharts.chart('trendChart', {
@@ -341,6 +385,29 @@ return new class extends Component
                         credits: { enabled: false }
                     });
                 }
+
+                const details = reportData.details || {};
+                const pieColors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+
+                function renderPieChart(containerId, data) {
+                    const labels = Object.keys(data || {});
+                    const values = Object.values(data || {});
+                    if (labels.length > 0) {
+                        Highcharts.chart(containerId, {
+                            chart: { type: 'pie' },
+                            title: { text: '' },
+                            series: [{
+                                name: 'تعداد',
+                                data: labels.map((label, i) => ({ name: label, y: values[i], color: pieColors[i % pieColors.length] }))
+                            }],
+                            credits: { enabled: false }
+                        });
+                    }
+                }
+
+                renderPieChart('estekhdamChart', details.byEstekhdam);
+                renderPieChart('tahsilChart', details.byTahsil);
+                renderPieChart('sematChart', details.bySemat);
             });
         }
 
