@@ -5,6 +5,8 @@ use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
 use App\Models\{Ticket, Todo, ActivityLog, User, Unit};
 use App\Services\AccessService;
+use Carbon\Carbon;
+use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
@@ -18,9 +20,24 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->dateFrom = now()->subDays(30)->format('Y-m-d');
-        $this->dateTo = now()->format('Y-m-d');
+        $this->dateFrom = Jalalian::fromCarbon(now()->subDays(30))->format('Y/m/d');
+        $this->dateTo = Jalalian::fromCarbon(now())->format('Y/m/d');
         $this->units = Unit::all();
+    }
+
+    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
+    {
+        if (empty($date)) {
+            return null;
+        }
+
+        try {
+            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
+
+            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     #[\Livewire\Attributes\Computed]
@@ -34,8 +51,12 @@ return new class extends Component
             default => Ticket::whereIn('unit_id', $accessibleIds),
         };
 
-        if ($this->dateFrom) $query->where('created_at', '>=', $this->dateFrom);
-        if ($this->dateTo) $query->where('created_at', '<=', $this->dateTo . ' 23:59:59');
+        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+            $query->where('created_at', '>=', $from);
+        }
+        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+            $query->where('created_at', '<=', $to);
+        }
         if ($this->selectedUnitId) $query->where('unit_id', $this->selectedUnitId);
 
         $total = $query->count();
@@ -45,6 +66,10 @@ return new class extends Component
             ->groupBy('day')
             ->orderBy('day')
             ->get()
+            ->map(fn ($row) => [
+                'day' => Jalalian::fromCarbon(Carbon::parse($row->day))->format('Y/m/d'),
+                'count' => (int) $row->count,
+            ])
             ->toArray();
 
         $byUnit = $query->clone()
@@ -107,8 +132,18 @@ return new class extends Component
                         @endforeach
                     </select>
                 </div>
-                <x-input label="از تاریخ" type="date" wire:model.live="dateFrom" class="w-40" />
-                <x-input label="تا تاریخ" type="date" wire:model.live="dateTo" class="w-40" />
+                <div class="flex flex-col gap-1" wire:ignore>
+                    <label class="font-bold text-xs">از تاریخ</label>
+                    <input data-jdp id="report_date_from" placeholder="از تاریخ"
+                        value="{{ $dateFrom }}"
+                        class="input input-bordered input-sm w-40 text-center cursor-pointer" readonly>
+                </div>
+                <div class="flex flex-col gap-1" wire:ignore>
+                    <label class="font-bold text-xs">تا تاریخ</label>
+                    <input data-jdp id="report_date_to" placeholder="تا تاریخ"
+                        value="{{ $dateTo }}"
+                        class="input input-bordered input-sm w-40 text-center cursor-pointer" readonly>
+                </div>
             </div>
         </x-card>
 
@@ -211,5 +246,37 @@ return new class extends Component
         $wire.$watch('selectedUnitId', () => renderCharts());
         $wire.$watch('dateFrom', () => renderCharts());
         $wire.$watch('dateTo', () => renderCharts());
+
+        const initReportJdp = () => {
+            if (typeof jalaliDatepicker === 'undefined') {
+                return;
+            }
+
+            jalaliDatepicker.startWatch({
+                time: false,
+                hasSecond: false,
+                format: 'YYYY/MM/DD',
+                separatorChars: { date: '/', between: ' ', time: ':' },
+            });
+
+            const fromInput = document.getElementById('report_date_from');
+            const toInput = document.getElementById('report_date_to');
+
+            if (fromInput && !fromInput.dataset.jdpBound) {
+                fromInput.dataset.jdpBound = '1';
+                fromInput.addEventListener('jdp:change', e => {
+                    $wire.set('dateFrom', e.target.value);
+                });
+            }
+            if (toInput && !toInput.dataset.jdpBound) {
+                toInput.dataset.jdpBound = '1';
+                toInput.addEventListener('jdp:change', e => {
+                    $wire.set('dateTo', e.target.value);
+                });
+            }
+        };
+
+        initReportJdp();
+        document.addEventListener('livewire:navigated', initReportJdp);
     </script>
     @endscript

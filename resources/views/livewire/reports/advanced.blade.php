@@ -5,6 +5,8 @@ use Livewire\Attributes\Layout;
 use Livewire\WithPagination;
 use App\Models\{Ticket, Todo, Unit};
 use App\Services\AccessService;
+use Carbon\Carbon;
+use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
@@ -21,9 +23,24 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->dateFrom = now()->subDays(30)->format('Y-m-d');
-        $this->dateTo = now()->format('Y-m-d');
+        $this->dateFrom = Jalalian::fromCarbon(now()->subDays(30))->format('Y/m/d');
+        $this->dateTo = Jalalian::fromCarbon(now())->format('Y/m/d');
         $this->units = \App\Models\Unit::all();
+    }
+
+    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
+    {
+        if (empty($date)) {
+            return null;
+        }
+
+        try {
+            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
+
+            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     #[\Livewire\Attributes\Computed]
@@ -62,9 +79,13 @@ return new class extends Component
             default => Ticket::whereIn('unit_id', $accessibleIds),
         };
 
-        // فیلتر تاریخ
-        if ($this->dateFrom) $query->where('created_at', '>=', $this->dateFrom);
-        if ($this->dateTo) $query->where('created_at', '<=', $this->dateTo . ' 23:59:59');
+        // فیلتر تاریخ (ورودی شمسی)
+        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+            $query->where('created_at', '>=', $from);
+        }
+        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+            $query->where('created_at', '<=', $to);
+        }
 
         // فیلتر واحد (سلسله‌مراتبی)
         $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
@@ -82,12 +103,16 @@ return new class extends Component
 
         $total = $query->count();
 
-        // روند روزانه
+        // روند روزانه (برچسب‌های محور شمسی)
         $byDay = $query->clone()
             ->selectRaw("date(created_at) as day, count(*) as count")
             ->groupBy('day')
             ->orderBy('day')
             ->get()
+            ->map(fn ($row) => [
+                'day' => Jalalian::fromCarbon(Carbon::parse($row->day))->format('Y/m/d'),
+                'count' => (int) $row->count,
+            ])
             ->toArray();
 
         // توزیع بر اساس واحد
@@ -198,8 +223,18 @@ return new class extends Component
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-3 mt-3">
-                <x-input label="از تاریخ" type="date" wire:model.live="dateFrom" class="w-full" />
-                <x-input label="تا تاریخ" type="date" wire:model.live="dateTo" class="w-full" />
+                <div class="flex flex-col gap-1" wire:ignore>
+                    <label class="font-bold text-xs">از تاریخ</label>
+                    <input data-jdp id="advanced_report_date_from" placeholder="از تاریخ"
+                        value="{{ $dateFrom }}"
+                        class="input input-bordered input-sm w-full text-center cursor-pointer" readonly>
+                </div>
+                <div class="flex flex-col gap-1" wire:ignore>
+                    <label class="font-bold text-xs">تا تاریخ</label>
+                    <input data-jdp id="advanced_report_date_to" placeholder="تا تاریخ"
+                        value="{{ $dateTo }}"
+                        class="input input-bordered input-sm w-full text-center cursor-pointer" readonly>
+                </div>
             </div>
         </x-card>
 
@@ -320,5 +355,37 @@ return new class extends Component
         $wire.$watch('statusFilter', () => renderCharts());
         $wire.$watch('dateFrom', () => renderCharts());
         $wire.$watch('dateTo', () => renderCharts());
+
+        const initAdvancedReportJdp = () => {
+            if (typeof jalaliDatepicker === 'undefined') {
+                return;
+            }
+
+            jalaliDatepicker.startWatch({
+                time: false,
+                hasSecond: false,
+                format: 'YYYY/MM/DD',
+                separatorChars: { date: '/', between: ' ', time: ':' },
+            });
+
+            const fromInput = document.getElementById('advanced_report_date_from');
+            const toInput = document.getElementById('advanced_report_date_to');
+
+            if (fromInput && !fromInput.dataset.jdpBound) {
+                fromInput.dataset.jdpBound = '1';
+                fromInput.addEventListener('jdp:change', e => {
+                    $wire.set('dateFrom', e.target.value);
+                });
+            }
+            if (toInput && !toInput.dataset.jdpBound) {
+                toInput.dataset.jdpBound = '1';
+                toInput.addEventListener('jdp:change', e => {
+                    $wire.set('dateTo', e.target.value);
+                });
+            }
+        };
+
+        initAdvancedReportJdp();
+        document.addEventListener('livewire:navigated', initAdvancedReportJdp);
     </script>
     @endscript

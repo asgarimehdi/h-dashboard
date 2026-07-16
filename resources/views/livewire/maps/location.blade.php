@@ -2,7 +2,9 @@
 
 use App\Models\User;
 use App\Models\LocationLog;
+use Carbon\Carbon;
 use Livewire\Component;
+use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
@@ -20,6 +22,26 @@ return new class extends Component
             ->map(fn($user) => ['id' => $user->id, 'name' => $user->person->f_name]);
     }
 
+    private function parseJalaliDateTime(?string $date, string $time, bool $endOfMinute = false): ?Carbon
+    {
+        if (empty($date)) {
+            return null;
+        }
+
+        try {
+            $timeParts = explode(':', $time ?: '00:00');
+            $hour = (int) ($timeParts[0] ?? 0);
+            $minute = (int) ($timeParts[1] ?? 0);
+            $second = $endOfMinute ? 59 : 0;
+
+            return Jalalian::fromFormat('Y/m/d', $date)
+                ->toCarbon()
+                ->setTime($hour, $minute, $second);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public function fetchLocationLogs(): void
     {
         if (!$this->selectedUser) {
@@ -29,12 +51,12 @@ return new class extends Component
 
         $query = LocationLog::where('user_id', $this->selectedUser);
 
-        if ($this->startDate) {
-            $query->where('created_at', '>=', "{$this->startDate} {$this->startTime}:00");
+        if ($from = $this->parseJalaliDateTime($this->startDate, $this->startTime)) {
+            $query->where('created_at', '>=', $from);
         }
 
-        if ($this->endDate) {
-            $query->where('created_at', '<=', "{$this->endDate} {$this->endTime}:59");
+        if ($to = $this->parseJalaliDateTime($this->endDate, $this->endTime, endOfMinute: true)) {
+            $query->where('created_at', '<=', $to);
         }
 
         $this->locationLogs = $query->limit(20)->orderBy('created_at')->get()
@@ -42,7 +64,7 @@ return new class extends Component
                 return [
                     'lat' => $log->latitude,
                     'lng' => $log->longitude,
-                    'timestamp' => $log->created_at->format('Y-m-d H:i:s'),
+                    'timestamp' => Jalalian::fromCarbon($log->created_at)->format('Y/m/d H:i:s'),
                 ];
             })->toArray();
         
@@ -78,13 +100,19 @@ return new class extends Component
 
                     <div>
                         <label class="font-bold block mb-2">از تاریخ و ساعت:</label>
-                        <input type="date" wire:model.live="startDate" class="input input-bordered w-full mb-1">
+                        <div wire:ignore>
+                            <input data-jdp id="location_start_date" placeholder="از تاریخ"
+                                class="input input-bordered w-full mb-1 text-center cursor-pointer" readonly>
+                        </div>
                         <input type="time" wire:model.live="startTime" class="input input-bordered w-full">
                     </div>
 
                     <div>
                         <label class="font-bold block mb-2">تا تاریخ و ساعت:</label>
-                        <input type="date" wire:model.live="endDate" class="input input-bordered w-full mb-1">
+                        <div wire:ignore>
+                            <input data-jdp id="location_end_date" placeholder="تا تاریخ"
+                                class="input input-bordered w-full mb-1 text-center cursor-pointer" readonly>
+                        </div>
                         <input type="time" wire:model.live="endTime" class="input input-bordered w-full">
                     </div>
 
@@ -129,6 +157,38 @@ return new class extends Component
 
     let locationMarkers = [];
     let locationPolyline = null;
+
+    const initLocationJdp = () => {
+        if (typeof jalaliDatepicker === 'undefined') {
+            return;
+        }
+
+        jalaliDatepicker.startWatch({
+            time: false,
+            hasSecond: false,
+            format: 'YYYY/MM/DD',
+            separatorChars: { date: '/', between: ' ', time: ':' },
+        });
+
+        const startInput = document.getElementById('location_start_date');
+        const endInput = document.getElementById('location_end_date');
+
+        if (startInput && !startInput.dataset.jdpBound) {
+            startInput.dataset.jdpBound = '1';
+            startInput.addEventListener('jdp:change', e => {
+                $wire.set('startDate', e.target.value);
+            });
+        }
+        if (endInput && !endInput.dataset.jdpBound) {
+            endInput.dataset.jdpBound = '1';
+            endInput.addEventListener('jdp:change', e => {
+                $wire.set('endDate', e.target.value);
+            });
+        }
+    };
+
+    initLocationJdp();
+    document.addEventListener('livewire:navigated', initLocationJdp);
 
     // تنظیم اولیه وقتی نقشه آماده است
     waitForMap(function() {
