@@ -61,6 +61,15 @@
     </x-nav>
 
     <x-main>
+        <!-- Mobile-only Search & Notifications row -->
+        <div class="lg:hidden flex items-center gap-3 p-3 border-b border-base-200">
+            <a href="/search" wire:navigate class="btn btn-ghost btn-sm flex-1 justify-start">
+                <x-icon name="o-magnifying-glass" class="w-5 h-5" />
+                <span class="text-sm">جستجو</span>
+            </a>
+            <livewire:notifications.bell />
+        </div>
+
         {{-- SIDEBAR --}}
         <x-slot:sidebar drawer="main-drawer" collapsible collapse-text="بستن منو" class="bg-base-100 lg:bg-inherit 2xl:collapse ">
 
@@ -94,6 +103,7 @@
                 </div>
                 <x-menu-separator />
                 @endif
+                <x-menu-item title="جستجوی کلی" icon="o-magnifying-glass" link="/search" wire:navigate />
                 <x-menu-item title="صفحه اول" icon="o-home" link="/" wire:navigate />
 
                 {{-- منابع انسانی --}}
