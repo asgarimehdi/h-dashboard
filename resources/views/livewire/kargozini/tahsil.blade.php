@@ -1,27 +1,39 @@
 <?php
 
 use App\Models\Tahsil;
-use Livewire\Component;
-use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Livewire\Component;
 use Livewire\WithPagination;
+use Mary\Traits\Toast;
 
-return new class extends Component {
-    use WithPagination;
+return new class extends Component
+{
     use Toast;
+    use WithPagination;
 
     public $name;
-    public int|null $editingId = null;
+
+    public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 5;
-    public bool $modal = false;
+
+    public bool $showForm = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
-    public function clear(): void
+    public function cancelEdit(): void
     {
-        $this->reset();
-        $this->info('فیلدها خالی شدند', position: 'toast-bottom');
+        $this->resetValidation();
+        $this->reset(['name', 'editingId', 'showForm']);
+    }
+
+    public function startCreate(): void
+    {
+        $this->resetValidation();
+        $this->reset(['name', 'editingId']);
+        $this->showForm = true;
     }
 
     public function delete(Tahsil $tahsil): void
@@ -30,7 +42,7 @@ return new class extends Component {
             $tahsil->delete();
             $this->warning("$tahsil->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+            $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
     }
 
@@ -43,21 +55,22 @@ return new class extends Component {
         Tahsil::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
-        $this->reset(['name']);
-        $this->modal = false;
+        $this->cancelEdit();
     }
 
     public function editTahsil($id): void
     {
+        $this->resetValidation();
         $tahsil = Tahsil::findOrFail($id);
-        $this->editingId = $id;
+        $this->editingId = (int) $id;
         $this->name = $tahsil->name;
+        $this->showForm = false;
     }
 
     public function updateTahsil(): void
     {
         $this->validate([
-            'name' => 'required|string|max:255|unique:tahsils,name,' . $this->editingId,
+            'name' => 'required|string|max:255|unique:tahsils,name,'.$this->editingId,
         ]);
 
         try {
@@ -65,10 +78,9 @@ return new class extends Component {
             $tahsil->update(['name' => $this->name]);
 
             $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
-            $this->reset(['name', 'editingId']);
-            $this->modal = false;
+            $this->cancelEdit();
         } catch (\Exception $e) {
-            $this->error("خطا در ویرایش", position: 'toast-bottom');
+            $this->error('خطا در ویرایش', position: 'toast-bottom');
         }
     }
 
@@ -84,38 +96,37 @@ return new class extends Component {
     {
         $query = Tahsil::query();
 
-        if (!empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%');
+        if (! empty($this->search)) {
+            $query->where('name', 'LIKE', '%'.$this->search.'%');
         }
-        
+
         $query->orderBy(...array_values($this->sortBy));
+
         return $query->paginate($this->perPage);
     }
 
     public function with(): array
     {
         return [
-            'editingId' => $this->editingId,
             'tahsils' => $this->tahsils(),
-            'headers' => $this->headers()
+            'headers' => $this->headers(),
         ];
     }
 }; ?>
 
 <div>
     <x-header title="مدیریت وضعیت های تحصیلی" separator progress-indicator>
-        <x-slot:middle class="!justify-end"></x-slot:middle>
         <x-slot:actions>
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
     <x-card shadow>
-        <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+        <div class="flex gap-2 items-center mb-4">
+            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
-                    placeholder="Search..."
+                    placeholder="جستجو..."
                     wire:model.live.debounce="search"
                     clearable
                     icon="o-magnifying-glass"
@@ -124,44 +135,48 @@ return new class extends Component {
             </div>
         </div>
 
+        @if($showForm && ! $editingId)
+            <div class="flex flex-col sm:flex-row gap-2 mb-4 p-3 bg-base-200 rounded-lg items-end">
+                <div class="flex-1 w-full">
+                    <x-input wire:model="name" label="عنوان تحصیلی جدید" placeholder="عنوان" required />
+                    @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                </div>
+                <div class="flex gap-2">
+                    <x-button wire:click="createTahsil" label="ذخیره" icon="o-check" class="btn-primary" spinner />
+                    <x-button wire:click="cancelEdit" label="لغو" icon="o-x-mark" class="btn-ghost" />
+                </div>
+            </div>
+        @endif
+
         <x-table :headers="$headers" :rows="$tahsils" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]">
-            @foreach($tahsils as $tahsil)
-                <tr wire:key="{{ $tahsil->id }}">
-                    @scope('actions', $tahsil)
-                    <div class="flex w-1/4">
-                        <x-button icon="o-pencil"
-                                  wire:click="editTahsil({{ $tahsil->id }})"
-                                  class="btn-ghost btn-sm text-primary"
-                                  @click="$wire.modal = true" />
-
-                        <x-button icon="o-trash"
-                                  wire:click="delete({{ $tahsil->id }})"
-                                  wire:confirm="Are you sure?"
-                                  spinner
-                                  class="btn-ghost btn-sm text-error" />
+            @scope('cell_name', $tahsil)
+                @if($editingId === $tahsil->id)
+                    <div class="flex gap-2 items-center">
+                        <input
+                            type="text"
+                            wire:model="name"
+                            wire:keydown.enter="updateTahsil"
+                            class="input input-bordered input-sm flex-1"
+                            autofocus
+                        />
+                        <x-button icon="o-check" wire:click="updateTahsil" class="btn-ghost btn-sm text-success" spinner />
+                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
-                    @endscope
-                </tr>
-            @endforeach
+                    @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                @else
+                    {{ $tahsil->name }}
+                @endif
+            @endscope
+
+            @scope('actions', $tahsil)
+                <div class="flex gap-1">
+                    @if($editingId !== $tahsil->id)
+                        <x-button icon="o-pencil" wire:click="editTahsil({{ $tahsil->id }})" class="btn-ghost btn-sm text-primary" />
+                        <x-button icon="o-trash" wire:click="delete({{ $tahsil->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+                    @endif
+                </div>
+            @endscope
         </x-table>
     </x-card>
-
-    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان تحصیلی' : 'ثبت عنوان تحصیلی جدید'" persistent
-             separator>
-        <x-form wire:submit.prevent="{{ $editingId ? 'updateTahsil' : 'createTahsil' }}" class="grid gap-4">
-            <x-input
-                wire:model="name"
-                label="عنوان تحصیلی"
-                placeholder="عنوان"
-                required
-                icon="o-magnifying-glass"
-            />
-
-            <div class="flex gap-4">
-                <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner/>
-                <x-button label="ریست" icon="o-x-mark" wire:click="clear" class="btn-default pl-6" spinner/>
-            </div>
-        </x-form>
-    </x-modal>
 </div>

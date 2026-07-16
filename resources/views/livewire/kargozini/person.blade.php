@@ -17,7 +17,6 @@ return new class extends Component
     use Toast;
     use WithPagination;
 
-    // ویژگی‌های فرم
     public $n_code;
 
     public $f_name;
@@ -40,29 +39,34 @@ return new class extends Component
 
     public int $perPage = 5;
 
-    public bool $modal = false;
+    public bool $formOpen = false;
+
+    public bool $unitModal = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
-    // پاک کردن فیلترها
-    public function clear(): void
+    public function resetForm(): void
     {
-        $this->reset();
-        $this->success('فیلترها پاک شدند.', position: 'toast-bottom');
+        $this->resetValidation();
+        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId', 'formOpen', 'unitModal']);
     }
 
-    // حذف رکورد
+    public function startCreate(): void
+    {
+        $this->resetForm();
+        $this->formOpen = true;
+    }
+
     public function delete(Person $person): void
     {
         try {
             $person->delete();
             $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
     }
 
-    // ذخیره یا به‌روزرسانی رکورد
     public function savePerson(): void
     {
         $this->validate([
@@ -89,7 +93,6 @@ return new class extends Component
                 'u_id' => $this->u_id,
             ]);
 
-            // Sync user_units pivot to include person.u_id as primary (preserves admin-assigned units)
             if ($user = $person->user) {
                 app(AccessService::class)->clearCache($user);
                 $user->units()->syncWithoutDetaching([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
@@ -116,15 +119,14 @@ return new class extends Component
             $this->success('شخص جدید ثبت شد');
         }
 
-        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId']);
-        $this->modal = false;
+        $this->resetForm();
     }
 
-    // بارگذاری اطلاعات برای ویرایش
     public function editPerson($id): void
     {
+        $this->resetValidation();
         $person = Person::findOrFail($id);
-        $this->editingId = $id;
+        $this->editingId = (int) $id;
         $this->n_code = $person->n_code;
         $this->f_name = $person->f_name;
         $this->l_name = $person->l_name;
@@ -133,15 +135,10 @@ return new class extends Component
         $this->s_id = $person->s_id;
         $this->r_id = $person->r_id;
         $this->u_id = $person->u_id;
-        $this->modal = true;
+        $this->formOpen = true;
+        $this->unitModal = false;
     }
 
-    public function resetModal(): void
-    {
-        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId']);
-    }
-
-    // تعریف سرستون‌های جدول
     public function headers(): array
     {
         return [
@@ -157,7 +154,6 @@ return new class extends Component
         ];
     }
 
-    // دریافت لیست افراد با جستجو و مرتب‌سازی
     public function persons(): LengthAwarePaginator
     {
         $query = Person::query()
@@ -180,10 +176,24 @@ return new class extends Component
         return $query->paginate($this->perPage);
     }
 
-    // ارسال داده‌ها به View
     public function with(): array
     {
         $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+        $units = Unit::with('unitType')
+            ->whereIn('id', $accessibleUnitIds)
+            ->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'parent_id' => $u->parent_id,
+                'unit_type_name' => $u->unitType?->name,
+            ])
+            ->all();
+
+        $selectedUnitName = null;
+        if ($this->u_id) {
+            $selectedUnitName = collect($units)->firstWhere('id', (int) $this->u_id)['name'] ?? Unit::find($this->u_id)?->name;
+        }
 
         return [
             'persons' => $this->persons(),
@@ -192,33 +202,25 @@ return new class extends Component
             'estekhdams' => Estekhdam::all(),
             'semats' => Semat::all(),
             'radifs' => Radif::all(),
-            'units' => Unit::with('unitType')
-                ->whereIn('id', $accessibleUnitIds)
-                ->get()
-                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'parent_id' => $u->parent_id, 'unit_type_name' => $u->unitType?->name])
-                ->all(),
+            'units' => $units,
+            'selectedUnitName' => $selectedUnitName,
         ];
     }
 }; ?>
 
 <div>
-    <!-- هدر -->
     <x-header title="مدیریت پرسنل" separator progress-indicator>
-        <x-slot:middle class="!justify-end">
-
-        </x-slot:middle>
         <x-slot:actions>
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
-    <!-- جدول -->
     <x-card shadow>
-        <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" wire:click="resetModal" @click="$wire.modal = true" icon="o-plus"/>
+        <div class="flex gap-2 items-center mb-4">
+            <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
             <div class="flex-1">
                 <x-input
-                    placeholder="Search..."
+                    placeholder="جستجو..."
                     wire:model.live.debounce="search"
                     clearable
                     icon="o-magnifying-glass"
@@ -226,15 +228,59 @@ return new class extends Component
                 />
             </div>
         </div>
+
+        @if($formOpen)
+            <div class="mb-6 p-4 bg-base-200 rounded-xl border border-base-300">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-sm">
+                        {{ $editingId ? 'ویرایش پرسنل' : 'ثبت پرسنل جدید' }}
+                    </h3>
+                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
+                </div>
+
+                <x-form wire:submit.prevent="savePerson" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
+                    <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
+                    <x-input wire:model="l_name" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
+                    <x-select wire:model="t_id" label="تحصیلات" :options="$tahsils" required placeholder="انتخاب سطح تحصیلات"/>
+                    <x-select wire:model="e_id" label="استخدام" :options="$estekhdams" required placeholder="انتخاب نوع استخدام"/>
+                    <x-select wire:model="s_id" label="سمت" :options="$semats" required placeholder="انتخاب سمت"/>
+                    <x-select wire:model="r_id" label="ردیف سازمانی" :options="$radifs" required placeholder="انتخاب ردیف سازمانی"/>
+
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium block mb-1">واحد</label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="flex-1 min-w-[12rem] input input-bordered flex items-center">
+                                <span class="{{ $selectedUnitName ? '' : 'text-base-content/40' }} text-sm">
+                                    {{ $selectedUnitName ?: 'واحدی انتخاب نشده' }}
+                                </span>
+                            </div>
+                            <x-button
+                                type="button"
+                                label="انتخاب واحد"
+                                icon="o-building-office-2"
+                                class="btn-outline btn-sm"
+                                wire:click="$set('unitModal', true)"
+                            />
+                        </div>
+                        @error('u_id') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="sm:col-span-2 flex justify-end gap-2">
+                        <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check" class="btn-primary" spinner />
+                        <x-button type="button" label="لغو" wire:click="resetForm" icon="o-x-mark" class="btn-ghost" />
+                    </div>
+                </x-form>
+            </div>
+        @endif
+
         <x-table :headers="$headers" :rows="$persons" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[5, 10, 20]">
             @scope('actions', $person)
                 <div class="flex w-1/12">
                     <x-button icon="o-pencil"
                               wire:click="editPerson({{ $person->id }})"
-                              class="btn-ghost btn-sm text-primary"
-                              @click="$wire.modal = true" />
-
+                              class="btn-ghost btn-sm text-primary" />
                     <x-button icon="o-trash"
                               wire:click="delete({{ $person->id }})"
                               wire:confirm="آیا مطمئن هستید"
@@ -245,30 +291,17 @@ return new class extends Component
         </x-table>
     </x-card>
 
-    <!-- مدال برای ایجاد و ویرایش -->
-    <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش پرسنل' : 'ثبت پرسنل جدید' }}" persistent separator>
-        <x-form wire:submit.prevent="savePerson" class="grid grid-cols-2 gap-4">
-            <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
-            <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
-            <x-input wire:model="l_name" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
-            <x-select wire:model="t_id" label="تحصیلات" :options="$tahsils" required placeholder="انتخاب سطح تحصیلات"/>
-            <x-select wire:model="e_id" label="استخدام" :options="$estekhdams" required
-                      placeholder="انتخاب نوع استخدام"/>
-            <x-select wire:model="s_id" label="سمت" :options="$semats" required placeholder="انتخاب سمت"/>
-            <x-select wire:model="r_id" label="ردیف سازمانی" :options="$radifs" required
-                      placeholder="انتخاب ردیف سازمانی"/>
-            <div class="col-span-2">
-                @include('livewire.partials.unit-tree-picker', [
-                    'units' => $units,
-                    'model' => 'u_id',
-                    'multiple' => false,
-                ])
-            </div>
-            <div class="col-span-2 flex justify-end space-x-2">
-                <x-button type="submit" label="{{ $editingId ? 'به‌روزرسانی' : 'ذخیره' }}" icon="o-check"
-                          class="btn-primary"/>
-                <x-button label="لغو" wire:click="resetModal" @click="$wire.modal = false" icon="o-x-mark"/>
-            </div>
-        </x-form>
+    <x-modal wire:model="unitModal" title="انتخاب واحد" persistent separator>
+        @include('livewire.partials.unit-tree-picker', [
+            'units' => $units,
+            'model' => 'u_id',
+            'multiple' => false,
+            'alwaysOpen' => true,
+            'label' => 'واحد سازمانی',
+        ])
+        <x-slot:actions>
+            <x-button label="تأیید" icon="o-check" class="btn-primary" wire:click="$set('unitModal', false)" />
+            <x-button label="بستن" icon="o-x-mark" class="btn-ghost" wire:click="$set('unitModal', false)" />
+        </x-slot:actions>
     </x-modal>
 </div>

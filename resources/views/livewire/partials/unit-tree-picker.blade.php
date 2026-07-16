@@ -35,20 +35,27 @@
             }
             $out .= '</div>';
         }
+
         return $out;
     };
 
-    $modelAttr = $attributes->wire('model')->value();
-    $modelEsc = htmlspecialchars($modelAttr, ENT_QUOTES, 'UTF-8');
+    $modelAttr = $model ?? null;
+    if (! $modelAttr && isset($attributes) && $attributes->wire('model')) {
+        $modelAttr = $attributes->wire('model')->value();
+    }
+    $modelEsc = htmlspecialchars((string) $modelAttr, ENT_QUOTES, 'UTF-8');
+    $alwaysOpen = $alwaysOpen ?? false;
+    $label = $label ?? null;
 @endphp
 
 <div
     x-data="{
         search: '',
-        open: false,
+        open: {{ $alwaysOpen ? 'true' : 'false' }},
         expanded: {},
         flat: {{ \Illuminate\Support\Js::from(collect($units)->map(fn ($u) => ['id' => $u['id'], 'name' => $u['name']])->values()->all()) }},
-        multiple: {{ $multiple ? 'true' : 'false' }},
+        multiple: {{ ($multiple ?? false) ? 'true' : 'false' }},
+        alwaysOpen: {{ $alwaysOpen ? 'true' : 'false' }},
         selected: $wire.{{ $modelEsc }},
         isSelected(id) {
             if (this.multiple) return Array.isArray(this.selected) && this.selected.map(Number).includes(Number(id));
@@ -62,7 +69,7 @@
                 else this.$wire.{{ $modelEsc }} = arr.filter((x) => String(x) !== String(id));
             } else {
                 this.$wire.{{ $modelEsc }} = Number(id);
-                this.open = false;
+                if (!this.alwaysOpen) this.open = false;
             }
         },
         toggleExpanded(id) {
@@ -70,10 +77,10 @@
         },
         remove(id) {
             if (this.multiple) {
-                this.$wire.{{ $modelEsc }} = (this.selected ?? []).filter((x) => String(x) !==String(id));
+                this.$wire.{{ $modelEsc }} = (this.selected ?? []).filter((x) => String(x) !== String(id));
             } else {
                 this.$wire.{{ $modelEsc }} = null;
-                this.open = false;
+                if (!this.alwaysOpen) this.open = false;
             }
         },
         nameOf(id) { return this.flat.find((u) => String(u.id) === String(id))?.name ?? '-'; },
@@ -88,38 +95,67 @@
             });
         }
     }"
-    x-init="$watch('search', () => expandForSearch())"
-    @click.outside="open = false"
+    x-init="$watch('search', () => expandForSearch()); $watch('$wire.{{ $modelEsc }}', value => selected = value)"
+    @if(! $alwaysOpen)
+        @click.outside="open = false"
+    @endif
     class="relative"
 >
-    <label class="text-sm font-medium block mb-1">{{ $slot }}</label>
+    @if(! empty($label))
+        <label class="text-sm font-medium block mb-1">{{ $label }}</label>
+    @endif
 
-    @if($multiple)
-        <div class="flex flex-wrap gap-1 p-2 border border-base-300 rounded-lg min-h-[42px] bg-base-100 cursor-pointer hover:border-primary focus-within:ring-2 focus-within:ring-primary" @click="open = !open">
-            <template x-if="!selected || selected.length === 0">
-                <span class="text-base-content/40 text-sm">انتخاب واحدها...</span>
-            </template>
-            <template x-for="id in (selected ?? [])" :key="id">
-                <span class="badge badge-primary gap-1">
-                    <span x-text="nameOf(id)"></span>
-                    <button type="button" @click.stop="remove(id)" class="text-white hover:text-error">×</button>
-                </span>
-            </template>
-        </div>
+    @if(! $alwaysOpen)
+        @if($multiple ?? false)
+            <div class="flex flex-wrap gap-1 p-2 border border-base-300 rounded-lg min-h-[42px] bg-base-100 cursor-pointer hover:border-primary focus-within:ring-2 focus-within:ring-primary" @click="open = !open">
+                <template x-if="!selected || selected.length === 0">
+                    <span class="text-base-content/40 text-sm">انتخاب واحدها...</span>
+                </template>
+                <template x-for="id in (selected ?? [])" :key="id">
+                    <span class="badge badge-primary gap-1">
+                        <span x-text="nameOf(id)"></span>
+                        <button type="button" @click.stop="remove(id)" class="text-white hover:text-error">×</button>
+                    </span>
+                </template>
+            </div>
+        @else
+            <div class="flex items-center p-2 border border-base-300 rounded-lg min-h-[42px] bg-base-100 cursor-pointer hover:border-primary focus-within:ring-2 focus-within:ring-primary" @click="open = !open">
+                <span x-show="!selected" class="text-base-content/40 text-sm">انتخاب واحد...</span>
+                <span x-show="selected" x-text="nameOf(selected)" class="text-sm"></span>
+            </div>
+        @endif
     @else
-        <div class="flex items-center p-2 border border-base-300 rounded-lg min-h-[42px] bg-base-100 cursor-pointer hover:border-primary focus-within:ring-2 focus-within:ring-primary" @click="open = !open">
-            <span x-show="!selected" class="text-base-content/40 text-sm">انتخاب واحد...</span>
-            <span x-show="selected" x-text="nameOf(selected)" class="text-sm"></span>
-        </div>
+        @if($multiple ?? false)
+            <div class="flex flex-wrap gap-1 p-2 border border-base-300 rounded-lg min-h-[42px] bg-base-100 mb-2">
+                <template x-if="!selected || selected.length === 0">
+                    <span class="text-base-content/40 text-sm">هنوز واحدی انتخاب نشده</span>
+                </template>
+                <template x-for="id in (selected ?? [])" :key="id">
+                    <span class="badge badge-primary gap-1">
+                        <span x-text="nameOf(id)"></span>
+                        <button type="button" @click.stop="remove(id)" class="text-white hover:text-error">×</button>
+                    </span>
+                </template>
+            </div>
+        @else
+            <div class="flex items-center p-2 border border-base-300 rounded-lg min-h-[42px] bg-base-100 mb-2">
+                <span x-show="!selected" class="text-base-content/40 text-sm">هنوز واحدی انتخاب نشده</span>
+                <span x-show="selected" x-text="nameOf(selected)" class="text-sm font-medium text-primary"></span>
+            </div>
+        @endif
     @endif
 
     <div
         x-show="open"
         x-transition
         @click.stop
-        class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-2xl max-h-80 overflow-auto"
+        @class([
+            'bg-base-100 border border-base-300 rounded-lg shadow-2xl overflow-auto',
+            'absolute z-50 w-full mt-1 max-h-80' => ! $alwaysOpen,
+            'relative w-full max-h-96' => $alwaysOpen,
+        ])
     >
-        <div class="p-2 sticky top-0 bg-base-100 border-b border-base-300">
+        <div class="p-2 sticky top-0 bg-base-100 border-b border-base-300 z-10">
             <input
                 type="text"
                 placeholder="جستجوی واحد..."

@@ -1,42 +1,51 @@
 <?php
 
 use App\Models\Radif;
-use Livewire\Component;
-use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Livewire\Component;
 use Livewire\WithPagination;
+use Mary\Traits\Toast;
 
-return new class extends Component {
-    use WithPagination;
+return new class extends Component
+{
     use Toast;
+    use WithPagination;
 
     public $name;
-    public int|null $editingId = null;
+
+    public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 5;
-    public bool $modal = false;
+
+    public bool $showForm = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
-    // Clear filters - Resets form fields and closes modal if called from modal button
-    public function clear(): void
+    public function cancelEdit(): void
     {
-        $this->reset();
-        $this->info('فیلدها خالی شدند', position: 'toast-bottom');
+        $this->resetValidation();
+        $this->reset(['name', 'editingId', 'showForm']);
     }
 
-    // Delete action
+    public function startCreate(): void
+    {
+        $this->resetValidation();
+        $this->reset(['name', 'editingId']);
+        $this->showForm = true;
+    }
+
     public function delete(Radif $radif): void
     {
         try {
             $radif->delete();
             $this->warning("$radif->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+            $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
     }
 
-    // create action
     public function createRadif(): void
     {
         $this->validate([
@@ -46,38 +55,35 @@ return new class extends Component {
         Radif::create(['name' => $this->name]);
 
         $this->success("$this->name ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
-        $this->reset(['name']);
-        $this->modal = false;
+        $this->cancelEdit();
     }
 
-    //edit clicked - Prepares data for the modal
     public function editRadif($id): void
     {
+        $this->resetValidation();
         $radif = Radif::findOrFail($id);
-        $this->editingId = $id;
+        $this->editingId = (int) $id;
         $this->name = $radif->name;
+        $this->showForm = false;
     }
 
-    //edit action
     public function updateRadif(): void
     {
         $this->validate([
-            'name' => 'required|string|max:255|unique:radifs,name,' . $this->editingId,
+            'name' => 'required|string|max:255|unique:radifs,name,'.$this->editingId,
         ]);
-        
+
         try {
             $radif = Radif::findOrFail($this->editingId);
             $radif->update(['name' => $this->name]);
 
             $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
-            $this->reset(['name', 'editingId']);
-            $this->modal = false;
+            $this->cancelEdit();
         } catch (\Exception $e) {
-            $this->error("خطا در ویرایش", position: 'toast-bottom');
+            $this->error('خطا در ویرایش', position: 'toast-bottom');
         }
     }
 
-    // Table headers
     public function headers(): array
     {
         return [
@@ -86,49 +92,41 @@ return new class extends Component {
         ];
     }
 
-    // Data retrieval
     public function radifs(): LengthAwarePaginator
     {
         $query = Radif::query();
 
-        if (!empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%');
+        if (! empty($this->search)) {
+            $query->where('name', 'LIKE', '%'.$this->search.'%');
         }
-        
+
         $query->orderBy(...array_values($this->sortBy));
+
         return $query->paginate($this->perPage);
     }
 
     public function with(): array
     {
         return [
-            'editingId' => $this->editingId,
             'radifs' => $this->radifs(),
-            'headers' => $this->headers()
+            'headers' => $this->headers(),
         ];
     }
 }; ?>
 
 <div>
-    <!-- HEADER -->
     <x-header title="مدیریت وضعیت های ردیف سازمانی" separator progress-indicator>
-        <x-slot:middle class="!justify-end">
-            {{-- Search moved below --}}
-        </x-slot:middle>
         <x-slot:actions>
-            {{-- Create button moved below --}}
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
-    <!-- TABLE  -->
     <x-card shadow>
-        {{-- Search and Create Button Area --}}
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
-                    placeholder="Search..."
+                    placeholder="جستجو..."
                     wire:model.live.debounce="search"
                     clearable
                     icon="o-magnifying-glass"
@@ -137,48 +135,48 @@ return new class extends Component {
             </div>
         </div>
 
+        @if($showForm && ! $editingId)
+            <div class="flex flex-col sm:flex-row gap-2 mb-4 p-3 bg-base-200 rounded-lg items-end">
+                <div class="flex-1 w-full">
+                    <x-input wire:model="name" label="عنوان ردیف جدید" placeholder="عنوان" required />
+                    @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                </div>
+                <div class="flex gap-2">
+                    <x-button wire:click="createRadif" label="ذخیره" icon="o-check" class="btn-primary" spinner />
+                    <x-button wire:click="cancelEdit" label="لغو" icon="o-x-mark" class="btn-ghost" />
+                </div>
+            </div>
+        @endif
+
         <x-table :headers="$headers" :rows="$radifs" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]">
-
-            @foreach($radifs as $radif)
-                <tr wire:key="{{ $radif->id }}">
-                    @scope('actions', $radif)
-                    <div class="flex">
-                        <x-button
-                            icon="o-pencil"
-                            wire:click="editRadif({{ $radif->id }})"
-                            class="btn-ghost btn-sm text-primary"
-                            @click="$wire.modal = true"
+            @scope('cell_name', $radif)
+                @if($editingId === $radif->id)
+                    <div class="flex gap-2 items-center">
+                        <input
+                            type="text"
+                            wire:model="name"
+                            wire:keydown.enter="updateRadif"
+                            class="input input-bordered input-sm flex-1"
+                            autofocus
                         />
-
-                        <x-button
-                            icon="o-trash"
-                            wire:click="delete({{ $radif->id }})"
-                            wire:confirm="آیا مطمئن هستید؟"
-                            spinner
-                            class="btn-ghost btn-sm text-error"
-                        />
+                        <x-button icon="o-check" wire:click="updateRadif" class="btn-ghost btn-sm text-success" spinner />
+                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
-                    @endscope
-                </tr>
-            @endforeach
+                    @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                @else
+                    {{ $radif->name }}
+                @endif
+            @endscope
+
+            @scope('actions', $radif)
+                <div class="flex gap-1">
+                    @if($editingId !== $radif->id)
+                        <x-button icon="o-pencil" wire:click="editRadif({{ $radif->id }})" class="btn-ghost btn-sm text-primary" />
+                        <x-button icon="o-trash" wire:click="delete({{ $radif->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+                    @endif
+                </div>
+            @endscope
         </x-table>
     </x-card>
-
-    <x-modal wire:model="modal" :title="$editingId ? 'ویرایش عنوان ردیف' : 'ثبت عنوان ردیف جدید'" persistent separator>
-        <x-form wire:submit.prevent="{{ $editingId ? 'updateRadif' : 'createRadif' }}" class="grid gap-4">
-            <x-input
-                wire:model="name"
-                label="عنوان ردیف"
-                placeholder="عنوان"
-                required
-                icon="o-magnifying-glass"
-            />
-
-            <div class="flex gap-4 justify-end">
-                <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary pl-6" spinner />
-                <x-button label="ریست" icon="o-x-mark" wire:click="clear" class="btn-default pl-6" spinner/>
-            </div>
-        </x-form>
-    </x-modal>
 </div>

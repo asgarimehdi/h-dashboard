@@ -24,7 +24,9 @@ return new class extends Component
 
     public string $filterStatus = 'active';
 
-    public bool $modal = false;
+    public bool $formOpen = false;
+
+    public bool $unitModal = false;
 
     public int $perPage = 5;
 
@@ -88,11 +90,16 @@ return new class extends Component
         $this->success("$user->name فعال شد", 'کاربر برگشت!', position: 'toast-bottom');
     }
 
-    public function openModalForCreate(): void
+    public function resetForm(): void
     {
         $this->resetValidation();
-        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions', 'unit_ids']);
-        $this->modal = true;
+        $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions', 'unit_ids', 'formOpen', 'unitModal']);
+    }
+
+    public function openFormForCreate(): void
+    {
+        $this->resetForm();
+        $this->formOpen = true;
     }
 
     public function edit($userId): void
@@ -107,7 +114,8 @@ return new class extends Component
         $this->role_ids = $user->roles->pluck('id')->toArray();
         $this->user_permissions = $user->getDirectPermissions()->pluck('name')->map(fn ($n) => (string) $n)->toArray();
         $this->unit_ids = $user->units()->pluck('units.id')->map(fn ($id) => (int) $id)->toArray();
-        $this->modal = true;
+        $this->formOpen = true;
+        $this->unitModal = false;
     }
 
     public function selectPerson($n_code): void
@@ -147,9 +155,8 @@ return new class extends Component
             $user->syncPermissions($this->user_permissions ?? []);
             $user->units()->sync($this->unit_ids ?? []);
 
-            $this->reset(['n_code', 'password', 'person_search', 'editing_user_id', 'role_ids', 'user_permissions', 'unit_ids']);
+            $this->resetForm();
             $this->success('کاربر با موفقیت ایجاد شد.');
-            $this->modal = false;
         } catch (ValidationException $e) {
             foreach ($e->validator->errors()->all() as $error) {
                 $this->error($error, position: 'toast-bottom');
@@ -188,9 +195,8 @@ return new class extends Component
             $user->units()->sync($this->unit_ids ?? []);
             app(AccessService::class)->clearCache($user);
 
-            $this->reset(['n_code', 'password', 'role_ids', 'person_search', 'editing_user_id', 'unit_ids']);
+            $this->resetForm();
             $this->success('کاربر با موفقیت ویرایش شد.');
-            $this->modal = false;
         } catch (ValidationException $e) {
             foreach ($e->validator->errors()->all() as $error) {
                 $this->error($error, position: 'toast-bottom');
@@ -251,27 +257,32 @@ return new class extends Component
 
     public function with(): array
     {
+        $selectedUnitNames = collect($this->allUnits)
+            ->whereIn('id', $this->unit_ids ?? [])
+            ->pluck('name')
+            ->values()
+            ->all();
+
         return [
             'users' => $this->users(),
             'headers' => $this->headers(),
             'persons' => $this->getFilteredPersonsProperty(),
+            'selectedUnitNames' => $selectedUnitNames,
         ];
     }
 }; ?>
 
 <div>
     <x-header title="کاربران" separator progress-indicator>
-        <x-slot:middle class="!justify-end">
-        </x-slot:middle>
         <x-slot:actions>
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
 
     <x-card shadow>
-        <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
-            <div class="flex-1">
+        <div class="flex gap-2 items-center mb-4 flex-wrap">
+            <x-button class="btn-success" wire:click="openFormForCreate" responsive icon="o-plus"/>
+            <div class="flex-1 min-w-[12rem]">
                 <x-input
                     placeholder="جستجو..."
                     wire:model.live.debounce="search"
@@ -288,6 +299,96 @@ return new class extends Component
                 </select>
             </div>
         </div>
+
+        @if($formOpen)
+            <div class="mb-6 p-4 bg-base-200 rounded-xl border border-base-300">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-sm">
+                        {{ $editing_user_id ? 'ویرایش کاربر' : 'ثبت کاربر جدید' }}
+                    </h3>
+                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
+                </div>
+
+                <x-form wire:submit.prevent="{{ $editing_user_id ? 'updateUser' : 'createUser' }}"
+                        class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="relative">
+                        <x-input wire:model.live="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
+                                 placeholder="جستجوی نام یا کد ملی"/>
+                        @error('n_code') <span class="text-error text-sm">{{ $message }}</span> @enderror
+                        @if($person_search)
+                            <div class="max-h-40 overflow-auto border border-base-300 rounded-lg mt-1 bg-base-100">
+                                @forelse($persons as $person)
+                                    <div wire:click="selectPerson('{{ $person['value'] }}')"
+                                         class="p-2 hover:bg-base-200 cursor-pointer text-sm">
+                                        {{ $person['label'] }}
+                                    </div>
+                                @empty
+                                    <div class="p-2 text-sm text-base-content/50">موردی یافت نشد</div>
+                                @endforelse
+                            </div>
+                        @endif
+                    </div>
+                    <div>
+                        <x-input wire:model="password" label="رمز عبور" type="password"
+                                 :placeholder="$editing_user_id ? 'در صورت نیاز وارد کنید' : 'رمز عبور'"
+                                 :required="!$editing_user_id" rounded/>
+                        @error('password') <span class="text-error text-sm">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <x-choices-offline
+                            label="نقش‌ها"
+                            wire:model="role_ids"
+                            :options="$allRoles"
+                            option-label="label"
+                            option-value="id"
+                            placeholder="انتخاب نقش..."
+                            clearable
+                            searchable
+                        />
+                        @error('role_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <x-choices-offline
+                            label="دسترسی‌های مستقیم"
+                            wire:model="user_permissions"
+                            :options="$allPermissions"
+                            option-label="label"
+                            option-value="name"
+                            placeholder="جستجو در دسترسی‌ها..."
+                            clearable
+                            searchable
+                        />
+                        @error('user_permissions') <span class="text-error text-sm">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium block mb-1">واحدها</label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="flex-1 min-w-[12rem] input input-bordered flex flex-wrap items-center gap-1 min-h-[2.75rem] py-1">
+                                @forelse($selectedUnitNames as $unitName)
+                                    <span class="badge badge-primary">{{ $unitName }}</span>
+                                @empty
+                                    <span class="text-base-content/40 text-sm">واحدی انتخاب نشده</span>
+                                @endforelse
+                            </div>
+                            <x-button
+                                type="button"
+                                label="انتخاب واحد"
+                                icon="o-building-office-2"
+                                class="btn-outline btn-sm"
+                                wire:click="$set('unitModal', true)"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-2 flex justify-end gap-2">
+                        <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" spinner />
+                        <x-button type="button" label="لغو" wire:click="resetForm" icon="o-x-mark" class="btn-ghost" />
+                    </div>
+                </x-form>
+            </div>
+        @endif
+
         <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable with-pagination per-page="perPage" :per-page-values="[5, 10, 20, 50]">
 
             @scope('cell_status', $user)
@@ -305,7 +406,7 @@ return new class extends Component
                     <span class="text-muted text-sm">—</span>
                 @endforelse
             @endscope
-            
+
             @scope('actions', $user)
                 <div class="flex w-1/12">
                     <x-button icon="o-pencil"
@@ -326,7 +427,7 @@ return new class extends Component
                     @endif
                 </div>
             @endscope
-            
+
             @scope('expansion', $user)
                 <div class="bg-base-200 p-6">
                     <div class="mb-3">
@@ -350,68 +451,17 @@ return new class extends Component
         </x-table>
     </x-card>
 
-    <x-modal wire:model="modal" :title="$editing_user_id ? 'ویرایش کاربر' : 'ثبت کاربر جدید'" persistent separator>
-        <x-form wire:submit.prevent="{{ $editing_user_id ? 'updateUser' : 'createUser' }}"
-                class="grid grid-cols-2 gap-4">
-            <div class="relative">
-                <x-input wire:model.live="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
-                         placeholder="جستجوی نام یا کد ملی"/>
-                @error('n_code') <span class="text-error text-sm">{{ $message }}</span> @enderror
-                @if($person_search)
-                    <div>
-                        @forelse($persons as $person)
-                            <div wire:click="selectPerson('{{ $person['value'] }}')"
-                                 class="p-2 hover:bg-base-200 cursor-pointer">
-                                {{ $person['label'] }}
-                            </div>
-                        @empty
-                        @endforelse
-                    </div>
-                @endif
-            </div>
-            <div>
-                <x-input wire:model="password" label="رمز عبور" type="password"
-                         :placeholder="$editing_user_id ? 'در صورت نیاز وارد کنید' : 'رمز عبور'"
-                         :required="!$editing_user_id" rounded/>
-                @error('password') <span class="text-error text-sm">{{ $message }}</span> @enderror
-            </div>
-            <div>
-                <x-choices-offline
-                    label="نقش‌ها"
-                    wire:model="role_ids"
-                    :options="$allRoles"
-                    option-label="label"
-                    option-value="id"
-                    placeholder="انتخاب نقش..."
-                    clearable
-                    searchable
-                />
-                @error('role_ids') <span class="text-error text-sm">{{ $message }}</span> @enderror
-            </div>
-            <div>
-                <x-choices-offline
-                    label="دسترسی‌های مستقیم"
-                    wire:model="user_permissions"
-                    :options="$allPermissions"
-                    option-label="label"
-                    option-value="name"
-                    placeholder="جستجو در دسترسی‌ها..."
-                    clearable
-                    searchable
-                />
-                @error('user_permissions') <span class="text-error text-sm">{{ $message }}</span> @enderror
-            </div>
-            <div class="col-span-2">
-                @include('livewire.partials.unit-tree-picker', [
-                    'units' => $allUnitsTree,
-                    'model' => 'unit_ids',
-                    'multiple' => true,
-                ])
-            </div>
-            <div class="col-span-2 flex justify-end space-x-2">
-                <x-button type="submit" label="ذخیره" icon="o-check" class="btn-primary" rounded />
-                <x-button label="لغو" @click="$wire.modal = false" icon="o-x-mark" class="btn-outline" rounded />
-            </div>
-        </x-form>
+    <x-modal wire:model="unitModal" title="انتخاب واحدها" persistent separator>
+        @include('livewire.partials.unit-tree-picker', [
+            'units' => $allUnitsTree,
+            'model' => 'unit_ids',
+            'multiple' => true,
+            'alwaysOpen' => true,
+            'label' => 'واحدهای سازمانی',
+        ])
+        <x-slot:actions>
+            <x-button label="تأیید" icon="o-check" class="btn-primary" wire:click="$set('unitModal', false)" />
+            <x-button label="بستن" icon="o-x-mark" class="btn-ghost" wire:click="$set('unitModal', false)" />
+        </x-slot:actions>
     </x-modal>
 </div>
