@@ -84,6 +84,11 @@ return new class extends Component
         }
     }
 
+    public function nameError(): ?string
+    {
+        return $this->getErrorBag()->first('name');
+    }
+
     public function headers(): array
     {
         return [
@@ -157,7 +162,7 @@ return new class extends Component
             :per-page-values="[3, 5, 10]"
         >
             @scope('cell_name', $estekhdam)
-                @if($editingId === $estekhdam->id)
+                @if($this->editingId === $estekhdam->id)
                     <div class="flex gap-2 items-center">
                         <input
                             type="text"
@@ -169,7 +174,7 @@ return new class extends Component
                         <x-button icon="o-check" wire:click="updateEstekhdam" class="btn-ghost btn-sm text-success" spinner />
                         <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
-                    @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                    @if($this->nameError()) <span class="text-error text-xs">{{ $this->nameError() }}</span> @endif
                 @else
                     {{ $estekhdam->name }}
                 @endif
@@ -177,7 +182,7 @@ return new class extends Component
 
             @scope('actions', $estekhdam)
                 <div class="flex gap-1">
-                    @if($editingId !== $estekhdam->id)
+                    @if($this->editingId !== $estekhdam->id)
                         <x-button
                             icon="o-pencil"
                             wire:click="editEstekhdam({{ $estekhdam->id }})"

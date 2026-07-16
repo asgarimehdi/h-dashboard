@@ -84,6 +84,11 @@ return new class extends Component
         }
     }
 
+    public function nameError(): ?string
+    {
+        return $this->getErrorBag()->first('name');
+    }
+
     public function headers(): array
     {
         return [
@@ -151,7 +156,7 @@ return new class extends Component
         <x-table :headers="$headers" :rows="$semats" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[3, 5, 10]">
             @scope('cell_name', $semat)
-                @if($editingId === $semat->id)
+                @if($this->editingId === $semat->id)
                     <div class="flex gap-2 items-center">
                         <input
                             type="text"
@@ -163,7 +168,7 @@ return new class extends Component
                         <x-button icon="o-check" wire:click="updateSemat" class="btn-ghost btn-sm text-success" spinner />
                         <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
-                    @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                    @if($this->nameError()) <span class="text-error text-xs">{{ $this->nameError() }}</span> @endif
                 @else
                     {{ $semat->name }}
                 @endif
@@ -171,7 +176,7 @@ return new class extends Component
 
             @scope('actions', $semat)
                 <div class="flex gap-1">
-                    @if($editingId !== $semat->id)
+                    @if($this->editingId !== $semat->id)
                         <x-button icon="o-pencil" wire:click="editSemat({{ $semat->id }})" class="btn-ghost btn-sm text-primary" />
                         <x-button icon="o-trash" wire:click="delete({{ $semat->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
                     @endif
