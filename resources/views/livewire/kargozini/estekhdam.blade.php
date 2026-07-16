@@ -147,26 +147,20 @@ return new class extends Component {
                 <tr wire:key="{{ $estekhdam->id }}">
                     @scope('actions', $estekhdam)
                     <div class="flex w-1/4">
-                        <!-- دکمه ویرایش -->
                         <x-button
                             icon="o-pencil"
                             wire:click="editEstekhdam({{ $estekhdam->id }})"
                             class="btn-ghost btn-sm text-primary"
                             @click="$wire.modal = true"
-                        >
-                            <span class="hidden sm:inline">ویرایش</span>
-                        </x-button>
+                        />
 
-                        <!-- دکمه حذف -->
                         <x-button
                             icon="o-trash"
                             wire:click="delete({{ $estekhdam->id }})"
                             wire:confirm="Are you sure?"
                             spinner
                             class="btn-ghost btn-sm text-error"
-                        >
-                            <span class="hidden sm:inline">حذف</span>
-                        </x-button>
+                        />
                     </div>
                     @endscope
                 </tr>

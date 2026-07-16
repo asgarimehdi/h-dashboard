@@ -133,17 +133,13 @@ return new class extends Component {
                         <x-button icon="o-pencil"
                                   wire:click="editTahsil({{ $tahsil->id }})"
                                   class="btn-ghost btn-sm text-primary"
-                                  @click="$wire.modal = true">
-                            <span class="hidden sm:inline">ویرایش</span>
-                        </x-button>
+                                  @click="$wire.modal = true" />
 
                         <x-button icon="o-trash"
                                   wire:click="delete({{ $tahsil->id }})"
                                   wire:confirm="Are you sure?"
                                   spinner
-                                  class="btn-ghost btn-sm text-error">
-                            <span class="hidden sm:inline">حذف</span>
-                        </x-button>
+                                  class="btn-ghost btn-sm text-error" />
                     </div>
                     @endscope
                 </tr>

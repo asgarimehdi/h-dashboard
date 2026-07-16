@@ -144,26 +144,20 @@ return new class extends Component {
                 <tr wire:key="{{ $radif->id }}">
                     @scope('actions', $radif)
                     <div class="flex">
-                        <!-- دکمه ویرایش -->
                         <x-button
                             icon="o-pencil"
                             wire:click="editRadif({{ $radif->id }})"
                             class="btn-ghost btn-sm text-primary"
                             @click="$wire.modal = true"
-                        >
-                            <span class="hidden sm:inline">ویرایش</span>
-                        </x-button>
+                        />
 
-                        <!-- دکمه حذف -->
                         <x-button
                             icon="o-trash"
                             wire:click="delete({{ $radif->id }})"
                             wire:confirm="آیا مطمئن هستید؟"
                             spinner
                             class="btn-ghost btn-sm text-error"
-                        >
-                            <span class="hidden sm:inline">حذف</span>
-                        </x-button>
+                        />
                     </div>
                     @endscope
                 </tr>

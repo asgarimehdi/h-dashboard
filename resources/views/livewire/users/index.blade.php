@@ -310,25 +310,19 @@ return new class extends Component
                 <div class="flex w-1/12">
                     <x-button icon="o-pencil"
                               wire:click="edit({{ $user->id }})"
-                              class="btn-ghost btn-sm text-primary">
-                        <span class="hidden 2xl:inline">ویرایش</span>
-                    </x-button>
+                              class="btn-ghost btn-sm text-primary" />
                     @if($user->trashed())
                         <x-button icon="o-arrow-path"
                                   wire:click="restore({{ $user->id }})"
                                   wire:confirm="آیا مطمئن هستید که می‌خواهید این کاربر را فعال کنید؟"
                                   spinner
-                                  class="btn-ghost btn-sm text-success">
-                            <span class="hidden 2xl:inline">فعال‌سازی</span>
-                        </x-button>
+                                  class="btn-ghost btn-sm text-success" />
                     @else
                         <x-button icon="o-trash"
                                   wire:click="delete({{ $user->id }})"
                                   wire:confirm="آیا مطمئن هستید که می‌خواهید این کاربر را غیرفعال کنید؟"
                                   spinner
-                                  class="btn-ghost btn-sm text-error">
-                            <span class="hidden 2xl:inline">غیرفعال</span>
-                        </x-button>
+                                  class="btn-ghost btn-sm text-error" />
                     @endif
                 </div>
             @endscope

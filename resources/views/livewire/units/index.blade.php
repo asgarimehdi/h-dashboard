@@ -379,16 +379,12 @@ return new class extends Component {
                         <x-button icon="o-pencil"
                                   wire:click="editUnit({{ $unit->id }})"
                                   class="btn-ghost btn-sm text-primary"
-                                  @click="$wire.modal = true">
-                            <span class="hidden 2xl:inline">ویرایش</span>
-                        </x-button>
+                                  @click="$wire.modal = true" />
                         <x-button icon="o-trash"
                                   wire:click="deleteUnit({{ $unit->id }})"
                                   wire:confirm="آیا مطمئن هستید"
                                   spinner
-                                  class="btn-ghost btn-sm text-error">
-                            <span class="hidden 2xl:inline">حذف</span>
-                        </x-button>
+                                  class="btn-ghost btn-sm text-error" />
                     </div>
                     @endscope
                 </tr>
