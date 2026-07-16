@@ -149,7 +149,7 @@ return new class extends Component {
             <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
-                    placeholder="Search..."
+                    placeholder="جستجو..."
                     wire:model.live.debounce="search"
                     clearable
                     icon="o-magnifying-glass"
