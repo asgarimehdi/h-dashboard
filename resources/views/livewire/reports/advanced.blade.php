@@ -115,10 +115,11 @@ return new class extends Component
             ])
             ->toArray();
 
+        $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
         $byUnit = $query->clone()
-            ->when($this->reportType === 'tickets' || $this->reportType === 'todos', fn($q) => $q->select('unit_id')->groupBy('unit_id'))
-            ->when($this->reportType === 'tickets' || $this->reportType === 'todos', fn($q) => $q->with('unit:id,name'))
-            ->when($this->reportType === 'persons', fn($q) => $q->select('u_id')->groupBy('u_id')->with('unit:id,name'))
+            ->selectRaw("$unitColumn, count(*) as count")
+            ->groupBy($unitColumn)
+            ->with('unit:id,name')
             ->get()
             ->mapWithKeys(fn($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
             ->toArray();
