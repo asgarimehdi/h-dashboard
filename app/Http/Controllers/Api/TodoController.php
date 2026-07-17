@@ -14,7 +14,7 @@ class TodoController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Todo::accessible();
+        $query = Todo::accessible(withRelated: true);
 
         if ($request->filled('date')) {
             $query->whereDate('start_at', $request->date);
@@ -76,7 +76,7 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ]);
     }
 

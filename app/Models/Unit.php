@@ -23,17 +23,6 @@ class Unit extends Model
         'lng',
     ];
 
-    protected static function booted(): void
-    {
-        static::saved(function () {
-            Cache::forget('unit_tree_full');
-        });
-
-        static::deleted(function () {
-            Cache::forget('unit_tree_full');
-        });
-    }
-
     public function person(): HasMany
     {
         return $this->hasMany(Person::class, 'u_id');
