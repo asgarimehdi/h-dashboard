@@ -7,10 +7,16 @@ use Illuminate\Database\Eloquent\Builder;
 
 trait HasOrganizationalScope
 {
-    public function scopeAccessible(Builder $query, string $unitColumn = 'unit_id'): Builder
+    public function scopeAccessible(Builder $query, string $unitColumn = 'unit_id', bool $withRelated = false): Builder
     {
         $unitIds = app(AccessService::class)->accessibleUnitIds();
 
-        return $query->whereIn($unitColumn ?? 'unit_id', $unitIds);
+        $query = $query->whereIn($unitColumn ?? 'unit_id', $unitIds);
+
+        if ($withRelated) {
+            $query->with(['unit']);
+        }
+
+        return $query;
     }
 }
