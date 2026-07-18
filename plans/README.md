@@ -8,17 +8,33 @@ honor its STOP conditions, and update your row when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Add missing database indexes | P1 | M | — | TODO |
-| 002  | Optimize HasOrganizationalScope for eager loading | P2 | S | — | TODO |
-| 003  | Batch insert in NotificationService::notifyUnit | P3 | S | — | TODO |
-| 004  | Optimize Unit descendantIds (investigate first) | P3 | M | — | TODO |
+| 001  | Add missing database indexes | P1 | M | — | SUPERSEDED — code implemented directly on `optimized` branch (commit `6924f04`) |
+| 002  | Optimize HasOrganizationalScope for eager loading | P2 | S | — | SUPERSEDED — code implemented directly on `optimized` branch (commit `6924f04`) |
+| 003  | Batch insert in NotificationService::notifyUnit | P3 | S | — | SUPERSEDED — code implemented directly on `optimized` branch (commit `6924f04`) |
+| 004  | Optimize Unit descendantIds (investigate first) | P3 | M | — | SUPERSEDED — code implemented directly on `optimized` branch (commits `6924f04`, `b585f88`) |
+| 005  | Fix ZabbixService correctness issues | P1 | S | — | TODO |
+| 006  | Secure OPcache GUI route | P2 | S | — | TODO |
+| 007  | Add missing feature tests for API controllers | P2 | M | — | TODO |
+| 008  | Reduce validate-unit-context middleware overhead | P3 | S | — | TODO |
+| 009  | Batch user-activity cache writes in LastUserActivity middleware | P3 | S | — | TODO |
+| 010  | Align PHP version requirement in composer.json with AGENTS.md | P3 | S | — | TODO |
+| 011  | Add intent documentation (ADR/PRD/CONTEXT.md) | P3 | M | — | TODO |
 
-Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale — finding fixed independently or approach abandoned)
+Status values: TODO | IN PROGRESS | DONE | BLOCKED | SUPERSEDED (code implemented directly) | REJECTED
 
 ## Dependency notes
 
-- 002, 003, 004 are independent of 001. They can be executed in any order.
-- 004 requires investigation first — the Recursive CTE approach may be correct for the data size; benchmark before changing.
+- 005, 006, 007, 008, 009, 010 are independent and can be executed in any order.
+- 007 depends on having a working test environment (MySQL for RefreshDatabase).
+- 010 (PHP version constraint) should be coordinated with CI/infrastructure if PHP 8.3 is used elsewhere.
+- 011 (intent docs) has no dependencies and can be done first.
+- 002, 003, 004 were implemented directly on the `optimized` branch as part of the performance optimization spike.
+
+## Issues publication
+
+`--issues` flag was provided but `gh auth status` reports an invalid token and GitHub is unreachable from this host. No issues were created. To publish manually:
+1. `gh auth login -h github.com`
+2. For each plan file: `gh issue create --title "<title>" --body-file plans/<file> --label improve`
 
 ## Findings considered and rejected
 
