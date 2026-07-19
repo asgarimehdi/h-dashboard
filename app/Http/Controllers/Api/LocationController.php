@@ -4,14 +4,46 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\LocationLog;
+use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LocationController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(['message' => 'Not implemented'], 501);
+        $query = LocationLog::with('user.person');
+
+        if ($request->filled('unit_id')) {
+            $unitIds = Unit::descendantIds($request->unit_id);
+            $userIds = User::join('user_units', 'users.id', '=', 'user_units.user_id')
+                ->whereIn('user_units.unit_id', $unitIds)
+                ->pluck('users.id');
+            $query->whereIn('user_id', $userIds);
+        }
+
+        if ($request->filled('live')) {
+            $query->where('created_at', '>=', now()->subMinutes((int) $request->get('live', 30)));
+        } else {
+            if ($request->filled('from')) {
+                $query->where('created_at', '>=', $request->from);
+            }
+
+            if ($request->filled('to')) {
+                $query->where('created_at', '<=', $request->to);
+            }
+        }
+
+        $logs = $query->latest()->limit(5000)->get(['user_id', 'latitude', 'longitude', 'created_at']);
+
+        return response()->json($logs->map(fn($l) => [
+            'lat' => $l->latitude,
+            'lng' => $l->longitude,
+            'userId' => $l->user_id,
+            'userName' => $l->user?->person?->f_name ?? 'نامشخص',
+            'time' => $l->created_at->toISOString(),
+        ]));
     }
 
     public function store(Request $request): JsonResponse
@@ -37,7 +69,17 @@ class LocationController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        return response()->json(['message' => 'Not implemented'], 501);
+        $log = LocationLog::where('user_id', $id)->latest()->first();
+
+        if (! $log) {
+            return response()->json(['message' => 'No location found'], 404);
+        }
+
+        return response()->json([
+            'latitude' => $log->latitude,
+            'longitude' => $log->longitude,
+            'logged_at' => $log->created_at->toISOString(),
+        ]);
     }
 
     public function update(Request $request, string $id): JsonResponse
