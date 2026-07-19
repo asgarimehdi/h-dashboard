@@ -31,8 +31,24 @@ class NotificationService
     public static function notifyUnit(int $unitId, string $type, string $title, ?string $body = null, ?string $url = null): void
     {
         $users = \App\Models\User::whereHas('units', fn($q) => $q->where('units.id', $unitId))->get();
-        foreach ($users as $user) {
-            self::send($user->id, $type, $title, $body, 'o-ticket', 'text-info', $url);
+
+        if ($users->isEmpty()) {
+            return;
         }
+
+        // Batch insert for better performance
+        $notifications = $users->map(fn($user) => [
+            'user_id' => $user->id,
+            'type' => $type,
+            'title' => $title,
+            'body' => $body,
+            'icon' => 'o-ticket',
+            'color' => 'text-info',
+            'url' => $url,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->toArray();
+
+        \App\Models\Notification::insert($notifications);
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class Unit extends Model
@@ -80,6 +81,21 @@ class Unit extends Model
             return collect();
         }
 
+        // Cache by sorted IDs to get consistent results regardless of input order
+        $cacheKey = 'unit_descendants:' . md5(implode(',', array_map('strval', $ids)));
+
+        return Cache::remember(
+            $cacheKey,
+            now()->addMinutes(15), // Shorter TTL to catch changes faster
+            fn () => self::recursiveDescendantQuery($ids)
+        );
+    }
+
+    /**
+     * Run the recursive CTE query for descendant IDs.
+     */
+    protected static function recursiveDescendantQuery(array $ids): Collection
+    {
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
 
         $results = DB::select("
