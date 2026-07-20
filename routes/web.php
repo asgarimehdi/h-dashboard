@@ -67,9 +67,7 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/maps/county', 'maps/county');
             Route::livewire('/maps/unit', 'maps/unit');
             Route::livewire('/maps/interactive', 'maps/interactive');
-            Route::livewire('/maps/location', 'maps/location'); // ->can('map');
             Route::livewire('/maps/point', 'maps/point');
-            // Volt::route('/card', 'glowingcard');
 
             Route::livewire('/it/wireless', 'it/wireless');
             Route::livewire('/it/networks', 'it/networks');

@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrafficController;
@@ -38,9 +37,6 @@ Route::middleware('auth:sanctum')->get('/unit', UnitController::class);
 Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
     return $request->user();
 });
-Route::middleware('auth:sanctum')->post('/location', [LocationController::class, 'store']);
-Route::middleware('auth:sanctum')->get('/location', [LocationController::class, 'index']);
-Route::middleware('auth:sanctum')->get('/location/{id}', [LocationController::class, 'show']);
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
 Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
 
