@@ -7,7 +7,8 @@
       "Bash(Get-ChildItem -Path \"C:\\\\laragon\\\\www\\\\h-dashboard\\\\storage\\\\framework\\\\views\\\\livewire\" -Recurse -Filter \"*.blade.php\")",
       "Bash(Select-Object Name, FullName)",
       "Bash(gh issue *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(Select-String \"Route::\")"
     ]
   }
 }
