@@ -73,20 +73,26 @@ return new class extends Component {
 
 @script
 <script>
-    // تابع کمکی برای چک کردن آماده بودن نقشه
-    function waitForMap(callback) {
-        if (window.map && typeof window.map.getSize === 'function') {
-            callback();
-        } else {
-            setTimeout(() => waitForMap(callback), 100);
-        }
+    // Destroy any existing routing control to avoid duplicates on re-navigation
+    if (window.routingControl) {
+        window.map.removeControl(window.routingControl);
+        delete window.routingControl;
     }
 
-    // متغیرهای سراسری
+    // Guard: only init if map exists
+    if (!window.map || typeof window.map.getSize !== 'function') {
+        setTimeout(() => {
+            if (window.map && typeof window.map.getSize === 'function') {
+                initRouting();
+            }
+        }, 200);
+        return;
+    }
+    initRouting();
+
     var routingControl;
-    
-    // تنظیم routing control وقتی نقشه آماده است
-    waitForMap(function() {
+
+    function initRouting() {
         routingControl = L.Routing.control({
             waypoints: [],
             router: L.Routing.osrmv1({
@@ -96,23 +102,21 @@ return new class extends Component {
             show: true
         }).addTo(window.map);
 
-        // نمایش فاصله و زمان تقریبی
         routingControl.on('routesfound', function (e) {
-            var routes = e.routes;
-            var summary = routes[0].summary;
+            var summary = e.routes[0].summary;
             document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
-            document.getElementById('duration').textContent = (summary.totalTime / 60).toFixed(0);
+            document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
         });
 
-        // مخفی کردن پنل مسیریابی
         setTimeout(() => {
             if (routingControl._container) {
                 routingControl._container.style.display = 'none';
             }
-        }, 100);
-    });
+        }, 200);
 
-    // تبدیل متن به مختصات
+        window.routingControl = routingControl;
+    }
+
     function parseCoordinates(input) {
         if (!input) return null;
         var coords = input.split(',').map(Number);
@@ -122,42 +126,29 @@ return new class extends Component {
         return null;
     }
 
-    // جستجوی آدرس با nominatim
     async function geocode(query) {
         if (!query) return null;
         try {
             var response = await axios.get('http://{{ $map_ip }}:8088/search', {
-                params: {
-                    q: query,
-                    format: 'json',
-                    limit: 1
-                }
+                params: { q: query, format: 'json', limit: 1 }
             });
-
             if (response.data.length > 0) {
                 var result = response.data[0];
                 return L.latLng(result.lat, result.lon);
             }
-            return null;
         } catch (error) {
             console.error('Geocoding error:', error);
-            return null;
         }
+        return null;
     }
 
-    // تابع جستجوی مسیر
     window.searchRoute = async function() {
         if (!routingControl) {
             console.error('Routing control not initialized');
             return;
         }
-        
-        var startInput = document.getElementById('start-input').value;
-        var endInput = document.getElementById('end-input').value;
-
-        var startPoint = parseCoordinates(startInput) || await geocode(startInput);
-        var endPoint = parseCoordinates(endInput) || await geocode(endInput);
-
+        var startPoint = parseCoordinates(document.getElementById('start-input').value) || await geocode(document.getElementById('start-input').value);
+        var endPoint = parseCoordinates(document.getElementById('end-input').value) || await geocode(document.getElementById('end-input').value);
         if (startPoint && endPoint) {
             routingControl.setWaypoints([startPoint, endPoint]);
             window.map.fitBounds([startPoint, endPoint]);
@@ -166,31 +157,22 @@ return new class extends Component {
         }
     };
 
-    // معکوس کردن مسیر
     window.reverseRoute = function() {
         if (!routingControl) return;
-        
         var currentWaypoints = routingControl.getWaypoints().slice().reverse();
-        
-        // بروزرسانی input ها
         var startInput = document.getElementById('start-input');
         var endInput = document.getElementById('end-input');
         var temp = startInput.value;
         startInput.value = endInput.value;
         endInput.value = temp;
-        
-        // dispatch event به Livewire
         $wire.swapPoints();
-        
         routingControl.setWaypoints(currentWaypoints);
     };
 
-    // مخفی/نمایش کردن پنل مسیریابی
     window.toggleRoutingContainer = function() {
         if (!routingControl || !routingControl._container) return;
-        
-        let container = routingControl._container;
-        container.style.display = container.style.display === 'none' ? 'block' : 'none';
+        var container = routingControl._container;
+        container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
     };
 </script>
 @endscript
