@@ -6,13 +6,17 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        [x-cloak] { display: none !important; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        .auth-layout { min-height: 100vh; }
+    </style>
 </head>
 <body class="auth-layout">
-{{-- You could elaborate the layout here --}}
-{{-- The important part is to have a different layout from the main app layout --}}
-
         {{ $slot }}
-
 </body>
 </html>
 
