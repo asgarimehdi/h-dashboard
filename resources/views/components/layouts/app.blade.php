@@ -16,7 +16,6 @@
 
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
-    <script src="{{ asset('js/leaflet/leaflet.geometryutil.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
     <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
@@ -146,7 +145,6 @@
                     <x-menu-item title="نقشه واحدها" icon="o-building-library" link="/maps/unit" wire:navigate />
                     <x-menu-item title="مسیر" icon="o-map" link="/maps/route" wire:navigate />
                     <x-menu-item title="یافتن مسیر" icon="o-magnifying-glass-circle" link="/maps/route2" wire:navigate />
-                    <x-menu-item title="رسم شکل" icon="o-pencil-square" link="/maps/draw" wire:navigate />
                     <x-menu-item title="شهرستان‌ها" icon="o-map-pin" link="/maps/county" wire:navigate />
                     <x-menu-item title="نقشه نقاط" icon="o-map" link="/maps/point" wire:navigate />
                 </x-menu-sub>

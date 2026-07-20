@@ -61,7 +61,6 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::middleware('role_or_permission:map')->group(function () {
-            Route::livewire('/maps/draw', 'maps/draw');
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');
             Route::livewire('/maps/county', 'maps/county');
