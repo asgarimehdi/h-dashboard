@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" width="200" height="56">
+  <defs>
+    <style>
+      .logo-icon { fill: currentColor; }
+      .logo-text { font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 600; fill: currentColor; }
+    </style>
+  </defs>
+  <!-- Icon container -->
+  <g>
+    <!-- Outer circle -->
+    <circle cx="28" cy="28" r="24" class="logo-icon" opacity="0.1"/>
+    <!-- Heart -->
+    <path d="M28 42 C28 42, 16 33, 16 25 C16 20, 19.5 17, 23 17 C25.5 17, 27 18.5, 28 20 C29 18.5, 30.5 17, 33 17 C36.5 17, 40 20, 40 25 C40 33, 28 42, 28 42 Z" class="logo-icon" opacity="0.95"/>
+    <!-- Pulse line -->
+    <path d="M 8 28 Q 14 26.5, 17 28 L 20 25 L 23 32 L 26 28 L 29 28 Q 32 26.5, 40 28" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </g>
+  <!-- Text -->
+  <text x="58" y="24" class="logo-text" letter-spacing="0.5">Health</text>
+  <text x="58" y="40" class="logo-text" font-size="12" opacity="0.7">Dashboard</text>
+</svg>

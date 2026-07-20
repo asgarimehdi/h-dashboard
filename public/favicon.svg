@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <style>
+      .health-icon { fill: currentColor; }
+    </style>
+  </defs>
+  <!-- Outer circle background -->
+  <circle cx="32" cy="32" r="30" class="health-icon" opacity="0.1"/>
+  <!-- Heart shape -->
+  <path d="M32 50 C32 50, 16 38, 16 28 C16 22, 20 18, 25 18 C28 18, 30 20, 32 22 C34 20, 36 18, 39 18 C44 18, 48 22, 48 28 C48 38, 32 50, 32 50 Z" class="health-icon" opacity="0.9"/>
+  <!-- Pulse line -->
+  <path d="M 10 32 Q 18 30, 22 32 L 26 28 L 30 36 L 34 32 L 38 32 Q 42 30, 50 32" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
