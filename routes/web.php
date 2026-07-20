@@ -118,6 +118,7 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/reports/units', 'reports.units')->name('reports.units');
         Route::livewire('/reports/todos', 'reports.todos')->name('reports.todos');
         Route::livewire('/reports/persons', 'reports.persons')->name('reports.persons');
+        Route::livewire('/reports/map-no-boundary', 'reports.map-no-boundary')->name('reports.map-no-boundary');
 
         // تنظیمات کاربر
         Route::livewire('/settings', 'settings.index')->name('settings');
