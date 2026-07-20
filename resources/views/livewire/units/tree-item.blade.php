@@ -57,11 +57,7 @@
                 @endif
             </div>
 
-            {{-- دکمه‌ها --}}
-            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <x-button icon="o-plus" class="btn-xs btn-outline btn-success" tooltip="افزودن فرزند" />
-                <x-button icon="o-pencil" class="btn-xs btn-outline btn-info" tooltip="ویرایش" />
-            </div>
+            
         </div>
     </div>
 
