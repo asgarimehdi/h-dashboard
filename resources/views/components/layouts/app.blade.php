@@ -157,7 +157,10 @@
                     <x-menu-item title="تقویم" icon="o-calendar-days" link="/todo" wire:navigate />
                     <x-menu-item title="شبکه‌ها" icon="o-globe-alt" link="/it/networks" wire:navigate />
                     <x-menu-item title="وایرلس‌ها" icon="o-signal" link="/it/wireless" wire:navigate />
-                    <x-menu-item title="کش سرور" icon="o-server" link="/op" wire:navigate />
+                    <a href="/op" class="flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-base-200 transition-colors">
+                        <x-icon name="o-server" class="w-5 h-5" />
+                        <span>کش سرور</span>
+                    </a>
                 </x-menu-sub>
                 @endcan
 

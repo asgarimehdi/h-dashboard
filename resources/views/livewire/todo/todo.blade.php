@@ -386,27 +386,33 @@ return new class extends Component {
 
 
     <script>
-        let calendarInstance = null;
-        let firstDatesSet = true;
+        if (!window.__todoCalendarInitialized) {
+            window.__todoCalendarInitialized = true;
+            window.calendarInstance = null;
+        }
 
+        function initTodoJdp() {
+            if (typeof jalaliDatepicker !== 'undefined') {
+                jalaliDatepicker.startWatch({
+                    time: false,
+                    hasSecond: false,
+                    format: 'YYYY/MM/DD',
+                    separatorChars: {
+                        date: '/',
+                        between: ' ',
+                        time: ':'
+                    }
+                });
+            }
+        }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            jalaliDatepicker.startWatch({
-                time: false,
-                hasSecond: false,
-                format: 'YYYY/MM/DD',
-                separatorChars: {
-                    date: '/',
-                    between: ' ',
-                    time: ':'
-                }
-            });
-        });
+        document.addEventListener('DOMContentLoaded', initTodoJdp);
+        document.addEventListener('livewire:navigated', initTodoJdp);
 
-        document.addEventListener('livewire:init', () => {
+        function initTodoCalendar() {
             const calendarEl = document.getElementById('calendar');
-            if (calendarEl) {
-                calendarInstance = new FullCalendar.Calendar(calendarEl, {
+            if (calendarEl && !window.calendarInstance) {
+                window.calendarInstance = new FullCalendar.Calendar(calendarEl, {
                     initialView: 'dayGridMonth',
                     locale: 'fa',
                     direction: 'rtl',
@@ -453,7 +459,7 @@ return new class extends Component {
                     },
                     events: @json($events),
                     datesSet: function(info) {
-                        if (calendarInstance.hasPubliclyVisibleDates) {
+                        if (window.calendarInstance.hasPubliclyVisibleDates) {
                             @this.fetchEvents(info.startStr, info.endStr);
                         }
                     },
@@ -476,14 +482,22 @@ return new class extends Component {
                     }
                 });
 
-                calendarInstance.render();
+                window.calendarInstance.render();
             }
+        }
+
+        document.addEventListener('livewire:init', initTodoCalendar);
+        document.addEventListener('livewire:navigated', () => {
+            if (!window.calendarInstance) {
+                initTodoCalendar();
+            }
+        });
 
             Livewire.on('calendar-updated', (...args) => {
                 const events = Array.isArray(args[0]) ? args[0] : (args[0]?.events || []);
-                if (calendarInstance && events.length) {
-                    calendarInstance.removeAllEvents();
-                    events.forEach(event => calendarInstance.addEvent(event));
+                if (window.calendarInstance && events.length) {
+                    window.calendarInstance.removeAllEvents();
+                    events.forEach(event => window.calendarInstance.addEvent(event));
                 }
             });
 
@@ -500,7 +514,6 @@ return new class extends Component {
                     }, 200);
                 }
             });
-        });
     </script>
 
 
