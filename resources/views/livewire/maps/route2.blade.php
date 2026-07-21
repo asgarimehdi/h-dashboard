@@ -45,19 +45,19 @@ return new class extends Component {
                     placeholder="مقصد (مختصات یا آدرس)" 
                     wire:model="end_point" 
                 />
-                <x-button 
-                    x-on:click="searchRoute()" 
-                    class="btn btn-sm btn-primary" 
-                    label="محاسبه مسیر" 
-                    icon="o-arrow-turn-up-right" 
+                <x-button
+                    x-on:click="window.searchRoute()"
+                    class="btn btn-sm btn-primary"
+                    label="محاسبه مسیر"
+                    icon="o-arrow-turn-up-right"
                 />
-                <x-button 
-                    x-on:click="reverseRoute()" 
-                    class="btn btn-sm btn-secondary" 
-                    label="معکوس مسیر" 
-                    icon="o-arrows-up-down" 
+                <x-button
+                    x-on:click="window.reverseRoute()"
+                    class="btn btn-sm btn-secondary"
+                    label="معکوس مسیر"
+                    icon="o-arrows-up-down"
                 />
-                <x-toggle x-on:click="toggleRoutingContainer()" label="نمایش متنی مسیر"/>
+                <x-toggle x-on:click="window.toggleRoutingContainer()" label="نمایش متنی مسیر"/>
             </div>
 
             <livewire:maps.map/>
@@ -73,49 +73,7 @@ return new class extends Component {
 
 @script
 <script>
-    // Destroy any existing routing control to avoid duplicates on re-navigation
-    if (window.routingControl) {
-        window.map.removeControl(window.routingControl);
-        delete window.routingControl;
-    }
-
-    // Guard: only init if map exists
-    if (!window.map || typeof window.map.getSize !== 'function') {
-        setTimeout(() => {
-            if (window.map && typeof window.map.getSize === 'function') {
-                initRouting();
-            }
-        }, 200);
-        return;
-    }
-    initRouting();
-
     var routingControl;
-
-    function initRouting() {
-        routingControl = L.Routing.control({
-            waypoints: [],
-            router: L.Routing.osrmv1({
-                serviceUrl: 'http://{{ $map_ip }}:5000/route/v1'
-            }),
-            routeWhileDragging: true,
-            show: true
-        }).addTo(window.map);
-
-        routingControl.on('routesfound', function (e) {
-            var summary = e.routes[0].summary;
-            document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
-            document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
-        });
-
-        setTimeout(() => {
-            if (routingControl._container) {
-                routingControl._container.style.display = 'none';
-            }
-        }, 200);
-
-        window.routingControl = routingControl;
-    }
 
     function parseCoordinates(input) {
         if (!input) return null;
@@ -174,5 +132,48 @@ return new class extends Component {
         var container = routingControl._container;
         container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
     };
+
+    function initRouting() {
+        routingControl = L.Routing.control({
+            waypoints: [],
+            router: L.Routing.osrmv1({
+                serviceUrl: 'http://{{ $map_ip }}:5000/route/v1'
+            }),
+            routeWhileDragging: true,
+            show: true
+        }).addTo(window.map);
+
+        routingControl.on('routesfound', function (e) {
+            var summary = e.routes[0].summary;
+            document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
+            document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
+        });
+
+        setTimeout(() => {
+            if (routingControl._container) {
+                routingControl._container.style.display = 'none';
+            }
+        }, 200);
+
+        window.routingControl = routingControl;
+    }
+
+    // Destroy any existing routing control to avoid duplicates on re-navigation
+    if (window.routingControl) {
+        window.map.removeControl(window.routingControl);
+        delete window.routingControl;
+    }
+
+    // Init routing when map is ready
+    if (window.map && typeof window.map.getSize === 'function') {
+        initRouting();
+    } else {
+        var waitForMap = setInterval(() => {
+            if (window.map && typeof window.map.getSize === 'function') {
+                clearInterval(waitForMap);
+                initRouting();
+            }
+        }, 200);
+    }
 </script>
 @endscript
