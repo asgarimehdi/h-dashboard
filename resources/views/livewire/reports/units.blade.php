@@ -97,6 +97,7 @@ return new class extends Component
 }; ?>
 
 <div class="p-6" dir="rtl">
+    @php $chart = $this->chartPayload(); @endphp
     <x-header title="گزارش واحدها و مراکز" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector/>
@@ -130,19 +131,19 @@ return new class extends Component
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">کل واحدها</div>
-            <div class="stat-value text-lg text-primary">{{ $this->chartPayload['total'] }}</div>
+            <div class="stat-value text-lg text-primary">{{ $chart['total'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">دارای مرز</div>
-            <div class="stat-value text-lg text-success">{{ $this->chartPayload['with_boundary'] }}</div>
+            <div class="stat-value text-lg text-success">{{ $chart['with_boundary'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs text-error">فاقد مرز</div>
-            <div class="stat-value text-lg text-error">{{ $this->chartPayload['no_boundary'] }}</div>
+            <div class="stat-value text-lg text-error">{{ $chart['no_boundary'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">نوع واحد</div>
-            <div class="stat-value text-lg text-info">{{ count($this->chartPayload['byType']) }}</div>
+            <div class="stat-value text-lg text-info">{{ count($chart['byType']) }}</div>
         </div>
     </div>
 
@@ -167,7 +168,7 @@ return new class extends Component
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($this->chartPayload['units'] as $u)
+                    @foreach($chart['units'] as $u)
                     <tr class="{{ !$u['has_boundary'] ? 'text-error' : '' }}">
                         <td>{{ $u['id'] }}</td>
                         <td>{{ $u['name'] }}</td>

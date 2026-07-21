@@ -95,6 +95,7 @@ return new class extends Component
 }; ?>
 
 <div class="p-6" dir="rtl">
+    @php $chart = $this->chartPayload(); @endphp
     <x-header title="گزارش پرسنل" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector/>
@@ -147,19 +148,19 @@ return new class extends Component
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">کل پرسنل</div>
-            <div class="stat-value text-lg text-primary">{{ $this->chartPayload['total'] }}</div>
+            <div class="stat-value text-lg text-primary">{{ $chart['total'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">تحصیلات</div>
-            <div class="stat-value text-lg text-info">{{ count($this->chartPayload['byTahsil']) }}</div>
+            <div class="stat-value text-lg text-info">{{ count($chart['byTahsil']) }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">سمت</div>
-            <div class="stat-value text-lg text-success">{{ count($this->chartPayload['bySemat']) }}</div>
+            <div class="stat-value text-lg text-success">{{ count($chart['bySemat']) }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">نوع استخدام</div>
-            <div class="stat-value text-lg text-warning">{{ count($this->chartPayload['byEstekhdam']) }}</div>
+            <div class="stat-value text-lg text-warning">{{ count($chart['byEstekhdam']) }}</div>
         </div>
     </div>
 
@@ -196,7 +197,7 @@ return new class extends Component
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($this->chartPayload['persons'] as $p)
+                    @foreach($chart['persons'] as $p)
                     <tr>
                         <td>{{ $p['id'] }}</td>
                         <td>{{ $p['n_code'] }}</td>
@@ -207,7 +208,7 @@ return new class extends Component
                         <td>{{ $p['estekhdam'] }}</td>
                     </tr>
                     @endforeach
-                    @if(empty($this->chartPayload['persons']))
+                    @if(empty($chart['persons']))
                     <tr>
                         <td colspan="7" class="text-center text-base-content/40">موردی یافت نشد</td>
                     </tr>

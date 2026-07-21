@@ -88,8 +88,8 @@ return new class extends Component
                 'id' => $t->id,
                 'title' => $t->title,
                 'unit' => $t->unit?->name ?? '—',
-                'start' => $t->start_at ? Jalalian::fromCarbon($t->start_at)->format('Y/m/d') : '—',
-                'end' => $t->end_at ? Jalalian::fromCarbon($t->end_at)->format('Y/m/d') : '—',
+                'start' => $t->start_at ? Jalalian::fromCarbon(Carbon::parse($t->start_at))->format('Y/m/d') : '—',
+                'end' => $t->end_at ? Jalalian::fromCarbon(Carbon::parse($t->end_at))->format('Y/m/d') : '—',
                 'completed' => $t->is_completed,
                 'is_overdue' => !$t->is_completed && $t->end_at && $t->end_at < $now,
             ])
@@ -114,6 +114,7 @@ return new class extends Component
 }; ?>
 
 <div class="p-6" dir="rtl">
+    @php $chart = $this->chartPayload(); @endphp
     <x-header title="گزارش وظایف" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector/>
@@ -160,20 +161,20 @@ return new class extends Component
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">تکمیل شده</div>
-            <div class="stat-value text-lg text-success">{{ $this->chartPayload['completed'] }}</div>
+            <div class="stat-value text-lg text-success">{{ $chart['completed'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">در انتظار</div>
-            <div class="stat-value text-lg text-warning">{{ $this->chartPayload['pending'] }}</div>
+            <div class="stat-value text-lg text-warning">{{ $chart['pending'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs text-error">سررسید گذشته</div>
-            <div class="stat-value text-lg text-error">{{ $this->chartPayload['overdue'] }}</div>
+            <div class="stat-value text-lg text-error">{{ $chart['overdue'] }}</div>
         </div>
         <div class="stat bg-base-100 rounded-xl shadow-sm border border-base-200 p-4">
             <div class="stat-title text-xs">نسبت تکمیل</div>
-            @php $total = $this->chartPayload['completed'] + $this->chartPayload['pending']; @endphp
-            <div class="stat-value text-lg text-primary">{{ $total > 0 ? round($this->chartPayload['completed'] / $total * 100) : 0 }}%</div>
+            @php $total = $chart['completed'] + $chart['pending']; @endphp
+            <div class="stat-value text-lg text-primary">{{ $total > 0 ? round($chart['completed'] / $total * 100) : 0 }}%</div>
         </div>
     </div>
 
@@ -205,7 +206,7 @@ return new class extends Component
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($this->chartPayload['items'] as $t)
+                    @foreach($chart['items'] as $t)
                     <tr class="{{ $t['is_overdue'] ? 'text-error' : '' }}">
                         <td>{{ $t['id'] }}</td>
                         <td>{{ $t['title'] }}</td>
@@ -223,7 +224,7 @@ return new class extends Component
                         </td>
                     </tr>
                     @endforeach
-                    @if(empty($this->chartPayload['items']))
+                    @if(empty($chart['items']))
                     <tr>
                         <td colspan="6" class="text-center text-base-content/40">موردی یافت نشد</td>
                     </tr>
