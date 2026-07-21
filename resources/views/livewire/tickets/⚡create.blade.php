@@ -125,6 +125,18 @@ new class extends Component
             'task_id' => $this->task_id,
         ]);
 
+        // اگر وظیفه‌ای انتخاب نشده، وظیفه جدید ایجاد کن
+        if (! $this->task_id) {
+            $todo = Todo::create([
+                'title' => $this->subject,
+                'start_at' => now(),
+                'end_at' => now()->addWeek(),
+                'is_completed' => false,
+                'unit_id' => $this->unit_id,
+            ]);
+            $ticket->update(['task_id' => $todo->id]);
+        }
+
         // ثبت فعالیت
         \App\Services\ActivityLogService::created(
             $ticket,
