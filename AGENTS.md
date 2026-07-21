@@ -1,6 +1,6 @@
-# Health Dashboard (داشبورد مدیریت اطلاعات سلامت)
+# Health Dashboard (داشبورد سلامت)
 
-Organizational health/HR management dashboard with Persian UI. Handles personnel, units, maps/GIS, IT monitoring (Zabbix), tickets, and todos. Provides a Flutter mobile app via Sanctum API.
+Organizational health/HR management dashboard with Persian UI. Handles personnel, units, maps/GIS, IT monitoring (Zabbix), tickets, todos, and reports. Provides a Flutter mobile app via Sanctum API.
 
 ## Tech Stack
 - PHP 8.3+, Laravel v13, Livewire v4, Tailwind CSS v4
@@ -10,6 +10,51 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 - Jalali dates: hekmatinasser/verta v9, morilog/jalali v3.5
 - Testing: Pest v4, Laravel Pint v1
 - Dev tools: Laravel Boost v2 (MCP), Debugbar, Pail
+- Locales: `fa` (primary), `en` (fallback). Pagination and UI strings in `lang/fa.json`.
+
+## Branding & Theme
+- **Logo**: Inline SVG in `app/View/Components/AppBrand.php` (class component, overrides blade). Gradient cross+heart icon with "داشبورد سلامت" text. Theme-aware via CSS (`data-theme="synthwave"` for dark mode).
+- **Favicon**: `public/favicon.svg` — gradient cross+heart design. Referenced in `app.blade.php` and `auth.blade.php` layouts.
+- **Sidebar SVG**: `public/logo-sidebar.svg` — uses `currentColor` for theme adaptability.
+- **Theme selector**: DaisyUI themes via `data-theme` attribute. Dark mode: `synthwave`. Light mode: `fantasy`.
+
+## App Structure
+
+### Livewire Components (`resources/views/livewire/`)
+| Directory | Purpose |
+|-----------|---------|
+| `activity-log/` | Activity logging and audit trail |
+| `auth/` | Login, register, password reset |
+| `it/` | IT monitoring (Zabbix integration) |
+| `kargozini/` | Administrative: estekhdam, radif, tahsil, semat, person |
+| `maps/` | GIS map views with Leaflet |
+| `notifications/` | User notifications |
+| `permissions/` | Permission management (Spatie) |
+| `profile/` | User profile settings |
+| `reports/` | Reports: units, persons, todos, map-no-boundary, tickets |
+| `roles/` | Role management (Spatie) |
+| `search/` | Global search |
+| `settings/` | App settings |
+| `tickets/` | Ticket system (inbox, monitoring) |
+| `todo/` | Todo management |
+| `tools/` | Utility tools |
+| `units/` | Unit/organization management |
+| `users/` | User management |
+
+### API Controllers (`app/Http/Controllers/Api/`)
+- `UnitController` — Unit CRUD for Flutter app
+- `TodoController` — Todo API
+- `TrafficController` — Traffic data
+- `MultiLatestValueController` — Zabbix multi-latest values
+
+### Services (`app/Services/`)
+- `AccessService` — Data scope control (recursive CTE for unit hierarchy)
+- `ActivityLogService` — Activity logging
+- `NotificationService` — Notification management
+- `ZabbixService` — Zabbix API integration
+
+### View Components
+- `AppBrand` (`app/View/Components/AppBrand.php`) — Class component with inline SVG logo. Takes precedence over blade files.
 
 ## Database Structure & Relationships
 
