@@ -129,6 +129,9 @@
                     @can('view_all_tickets')
                     <x-menu-item title="مانیتورینگ" icon="o-chart-bar" link="/monitoring" wire:navigate />
                     @endcan
+                    @can('calendar')
+                    <x-menu-item title="تقویم" icon="o-calendar-days" link="/todo" wire:navigate />
+                    @endcan
                 </x-menu-sub>
                 @endcanany
 
@@ -154,13 +157,13 @@
                 {{-- ابزارهای مدیریتی --}}
                 @can('bw')
                 <x-menu-sub title="ابزارهای مدیریتی" icon="o-wrench-screwdriver">
-                    <x-menu-item title="تقویم" icon="o-calendar-days" link="/todo" wire:navigate />
                     <x-menu-item title="شبکه‌ها" icon="o-globe-alt" link="/it/networks" wire:navigate />
                     <x-menu-item title="وایرلس‌ها" icon="o-signal" link="/it/wireless" wire:navigate />
                     <a href="/op" class="flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-base-200 transition-colors">
                         <x-icon name="o-server" class="w-5 h-5" />
                         <span>کش سرور</span>
                     </a>
+                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
                 </x-menu-sub>
                 @endcan
 
@@ -196,7 +199,6 @@
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
-                <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
             </x-menu>
         </x-slot:sidebar>
         <x-slot:content>
