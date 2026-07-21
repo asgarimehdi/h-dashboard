@@ -173,7 +173,7 @@
                     <x-menu-item title="گزارش پرسنل" icon="o-users" link="/reports/persons" wire:navigate />
                     <x-menu-item title="گزارش وظایف" icon="o-check-circle" link="/reports/todos" wire:navigate />
                     <x-menu-item title="نقاط فاقد مرز" icon="o-no-symbol" link="/reports/map-no-boundary" wire:navigate />
-                    <x-menu-item title="گزارش تیکت‌ها" icon="o-ticket" link="/reports/advanced" wire:navigate />
+                    <x-menu-item title="گزارش تیکت‌ها" icon="o-ticket" link="/reports/tickets" wire:navigate />
                     @can('manage_users')
                     <x-menu-item title="گزارش فعالیت" icon="o-clock" link="/activity-log" wire:navigate />
                     @endcan

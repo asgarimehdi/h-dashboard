@@ -113,7 +113,7 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/search', 'search.index')->name('search');
 
         // گزارش‌ها
-        Route::livewire('/reports/advanced', 'reports.advanced')->name('reports.advanced');
+        Route::livewire('/reports/tickets', 'reports.advanced')->name('reports.tickets');
         Route::livewire('/reports/units', 'reports.units')->name('reports.units');
         Route::livewire('/reports/todos', 'reports.todos')->name('reports.todos');
         Route::livewire('/reports/persons', 'reports.persons')->name('reports.persons');

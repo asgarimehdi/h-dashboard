@@ -178,7 +178,7 @@ return new class extends Component
 
 }; ?>
     <div>
-        <x-header title="گزارش پیشرفته" separator progress-indicator>
+        <x-header title="گزارش تیکت‌ها" separator progress-indicator>
             <x-slot:actions>
                 <x-theme-selector/>
             </x-slot:actions>
