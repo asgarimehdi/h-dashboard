@@ -34,16 +34,23 @@ return new class extends Component
         $query = Unit::query()
             ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($this->showOnlyNoBoundary === true, fn($q) => $q->whereNull('boundary_id'))
-            ->when($this->showOnlyNoBoundary === false, fn($q) => $q->whereNotNull('boundary_id'));
+            ->when($this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '', function ($q) {
+                if ($this->showOnlyNoBoundary == '1') {
+                    $q->whereNull('boundary_id');
+                } else {
+                    $q->whereNotNull('boundary_id');
+                }
+            });
 
         $total = $query->count();
+
+        $hasBoundaryFilter = $this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '';
 
         $byType = Unit::query()
             ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($this->showOnlyNoBoundary === true, fn($q) => $q->whereNull('boundary_id'))
-            ->when($this->showOnlyNoBoundary === false, fn($q) => $q->whereNotNull('boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('boundary_id'))
             ->with('unitType:id,name')
             ->get()
             ->groupBy(fn($u) => $u->unitType?->name ?? 'نامشخص')
@@ -65,8 +72,8 @@ return new class extends Component
         $units = Unit::query()
             ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($this->showOnlyNoBoundary === true, fn($q) => $q->whereNull('boundary_id'))
-            ->when($this->showOnlyNoBoundary === false, fn($q) => $q->whereNotNull('boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('boundary_id'))
             ->with('unitType:id,name', 'region:id,name')
             ->orderBy('name')
             ->get()
