@@ -43,7 +43,7 @@ $this->call([
             ActivityLogSeeder::class,
             TicketSeeder::class,
             PersonUserSeeder::class,
-
+            AbharCenterBoundarySeeder::class,
 
         ]);
     }
