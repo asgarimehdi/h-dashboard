@@ -43,14 +43,32 @@ return new class extends Component {
         window.map = null;
     }
 
-    var map = L.map('map').setView({{ $setview }}, {{ $zoom }});
+    function initMap() {
+        var map = L.map('map').setView({{ $setview }}, {{ $zoom }});
 
-    L.tileLayer('http://{{ $map_ip }}:8080/tile/{z}/{x}/{y}.png', {
-        attribution: '&copy; Health-Dashboard',
-        className: 'map-tiles'
-    }).addTo(map);
+        L.tileLayer('http://{{ $map_ip }}:8080/tile/{z}/{x}/{y}.png', {
+            attribution: '&copy; Health-Dashboard',
+            className: 'map-tiles'
+        }).addTo(map);
 
-    // ذخیره map در window برای دسترسی از کامپوننت‌های دیگر
-    window.map = map;
+        window.map = map;
+    }
+
+    // Wait for the #map DOM element to exist (SPA navigation may not have it yet)
+    if (document.getElementById('map')) {
+        initMap();
+    } else {
+        var tries = 0;
+        var waitForEl = setInterval(() => {
+            tries++;
+            if (document.getElementById('map')) {
+                clearInterval(waitForEl);
+                initMap();
+            } else if (tries > 50) {
+                clearInterval(waitForEl);
+                console.error('Map container #map not found within 10s');
+            }
+        }, 200);
+    }
 </script>
 @endscript

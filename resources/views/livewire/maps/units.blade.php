@@ -56,10 +56,9 @@ return new class extends Component
 
     @script
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize map
+        function initUnitsMap() {
             const map = L.map('unitsMap').setView([35.6892, 51.3890], 7);
-            
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors',
                 maxZoom: 19,
@@ -68,12 +67,11 @@ return new class extends Component
             const units = @json($units);
             const markers = {};
 
-            // Add markers
             units.forEach(unit => {
                 if (unit.lat && unit.lng) {
-                    const color = unit.unit_type?.name === 'مرکز' ? '#ef4444' : 
+                    const color = unit.unit_type?.name === 'مرکز' ? '#ef4444' :
                                   unit.unit_type?.name === 'شعبه' ? '#3b82f6' : '#22c55e';
-                    
+
                     const marker = L.circleMarker([parseFloat(unit.lat), parseFloat(unit.lng)], {
                         radius: 8,
                         fillColor: color,
@@ -85,9 +83,8 @@ return new class extends Component
 
                     marker.bindPopup(`
                         <div dir="rtl" style="font-family: Vazirmatn, sans-serif;">
-                            <strong>{{ $unit['name'] }}</strong><br>
-                            نوع: {{ $unit['unit_type'] ? $unit['unit_type']['name'] : 'نامشخص' }}<br>
-                            مختصات: {{ parseFloat(unit.lat).toFixed(4) }}, {{ parseFloat(unit.lng).toFixed(4) }}
+                            <strong>${unit.name}</strong><br>
+                            نوع: ${unit.unit_type?.name || 'نامشخص'}
                         </div>
                     `);
 
@@ -95,19 +92,16 @@ return new class extends Component
                 }
             });
 
-            // Fit bounds to show all markers
             const group = L.featureGroup(Object.values(markers));
             if (Object.keys(markers).length > 0) {
                 map.fitBounds(group.getBounds().pad(0.1));
             }
 
-            // Click on list item -> highlight marker
             document.querySelectorAll('[data-id]').forEach(item => {
                 item.addEventListener('click', function() {
                     const id = this.dataset.id;
                     const lat = parseFloat(this.dataset.lat);
                     const lng = parseFloat(this.dataset.lng);
-                    
                     if (markers[id]) {
                         map.setView([lat, lng], 15);
                         markers[id].openPopup();
@@ -115,12 +109,27 @@ return new class extends Component
                 });
             });
 
-            // Fit bounds button
             document.getElementById('fitBoundsBtn').addEventListener('click', () => {
                 if (Object.keys(markers).length > 0) {
                     map.fitBounds(group.getBounds().pad(0.1));
                 }
             });
-        });
+        }
+
+        if (document.getElementById('unitsMap')) {
+            initUnitsMap();
+        } else {
+            var tries = 0;
+            var waitForEl = setInterval(() => {
+                tries++;
+                if (document.getElementById('unitsMap')) {
+                    clearInterval(waitForEl);
+                    initUnitsMap();
+                } else if (tries > 50) {
+                    clearInterval(waitForEl);
+                    console.error('Map container #unitsMap not found within 10s');
+                }
+            }, 200);
+        }
     </script>
     @endscript

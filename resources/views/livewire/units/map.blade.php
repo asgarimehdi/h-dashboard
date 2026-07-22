@@ -128,64 +128,69 @@ return new class extends Component {
 
 @script
 <script>
-    var unitMap = L.map('unitMap').setView([36.558188, 48.716125], 8);
     var mapIp = @js(config('map.tile_server_ip', '10.100.252.137'));
 
-    L.tileLayer('http://' + mapIp + ':8080/tile/{z}/{x}/{y}.png', {
-        attribution: '&copy; Health-Dashboard',
-        className: 'map-tiles'
-    }).addTo(unitMap);
+    function initUnitMap() {
+        var unitMap = L.map('unitMap').setView([36.558188, 48.716125], 8);
 
-    var drawnItems = new L.FeatureGroup();
-    unitMap.addLayer(drawnItems);
+        L.tileLayer('http://' + mapIp + ':8080/tile/{z}/{x}/{y}.png', {
+            attribution: '&copy; Health-Dashboard',
+            className: 'map-tiles'
+        }).addTo(unitMap);
 
-    var existingLayer = null;
-    var initialGeojson = @js($geojson);
+        var drawnItems = new L.FeatureGroup();
+        window._drawnItems = drawnItems;
+        unitMap.addLayer(drawnItems);
 
-    if (initialGeojson) {
-        try {
-            var data = typeof initialGeojson === 'string' ? JSON.parse(initialGeojson) : initialGeojson;
-            existingLayer = L.geoJSON(data, {
-                style: { color: '#f59e0b', weight: 3, opacity: 0.8, fillOpacity: 0.15 }
-            }).addTo(unitMap);
-            unitMap.fitBounds(existingLayer.getBounds());
-        } catch (e) {
-            console.error('Error loading existing boundary:', e);
+        var existingLayer = null;
+        var initialGeojson = @js($geojson);
+
+        if (initialGeojson) {
+            try {
+                var data = typeof initialGeojson === 'string' ? JSON.parse(initialGeojson) : initialGeojson;
+                existingLayer = L.geoJSON(data, {
+                    style: { color: '#f59e0b', weight: 3, opacity: 0.8, fillOpacity: 0.15 }
+                }).addTo(unitMap);
+                unitMap.fitBounds(existingLayer.getBounds());
+            } catch (e) {
+                console.error('Error loading existing boundary:', e);
+            }
         }
+
+        var drawControl = new L.Control.Draw({
+            edit: { featureGroup: drawnItems, remove: true },
+            draw: {
+                polygon: true,
+                polyline: false,
+                rectangle: false,
+                circle: false,
+                marker: false,
+                circlemarker: false
+            }
+        });
+        unitMap.addControl(drawControl);
+
+        unitMap.on('draw:created', function(event) {
+            if (existingLayer) {
+                unitMap.removeLayer(existingLayer);
+                existingLayer = null;
+            }
+            drawnItems.addLayer(event.layer);
+            updateGeojson();
+        });
+
+        unitMap.on('draw:edited', function() {
+            updateGeojson();
+        });
+
+        unitMap.on('draw:deleted', function() {
+            updateGeojson();
+        });
     }
 
-    var drawControl = new L.Control.Draw({
-        edit: { featureGroup: drawnItems, remove: true },
-        draw: {
-            polygon: true,
-            polyline: false,
-            rectangle: false,
-            circle: false,
-            marker: false,
-            circlemarker: false
-        }
-    });
-    unitMap.addControl(drawControl);
-
-    unitMap.on('draw:created', function(event) {
-        if (existingLayer) {
-            unitMap.removeLayer(existingLayer);
-            existingLayer = null;
-        }
-        drawnItems.addLayer(event.layer);
-        updateGeojson();
-    });
-
-    unitMap.on('draw:edited', function() {
-        updateGeojson();
-    });
-
-    unitMap.on('draw:deleted', function() {
-        updateGeojson();
-    });
-
     function updateGeojson() {
-        var layers = drawnItems.getLayers();
+        // Access drawnItems from the closure - use global reference
+        var layers = window._drawnItems ? window._drawnItems.getLayers() : [];
         if (layers.length === 0) {
             window._mapGeojson = null;
             return;
@@ -217,15 +222,29 @@ return new class extends Component {
         if (window._mapGeojson) {
             $wire.saveBoundary(window._mapGeojson);
         } else {
-            // No drawn polygons — if existing boundary was removed, just save empty
             $wire.deleteBoundary();
         }
     };
 
-    // Handle boundaryUpdated event to refresh map
     $wire.on('boundaryUpdated', function() {
-        // Reload page to refresh the map state cleanly
         window.location.reload();
     });
+
+    // Wait for the #unitMap DOM element to exist
+    if (document.getElementById('unitMap')) {
+        initUnitMap();
+    } else {
+        var tries = 0;
+        var waitForEl = setInterval(() => {
+            tries++;
+            if (document.getElementById('unitMap')) {
+                clearInterval(waitForEl);
+                initUnitMap();
+            } else if (tries > 50) {
+                clearInterval(waitForEl);
+                console.error('Map container #unitMap not found within 10s');
+            }
+        }, 200);
+    }
 </script>
 @endscript
