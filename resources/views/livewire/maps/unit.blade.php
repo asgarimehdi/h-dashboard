@@ -8,12 +8,15 @@ use Livewire\Component;
 return new class extends Component
 {
     public $units = [];
+    public $centers = [];
+    public $healthHouses = [];
 
     public $regions = [];
-    public $types = [];
+    public $centerTypes = [];
 
     public array $selectedRegions = [];
     public array $selectedTypes = [5, 6, 7];
+    public array $selectedCenters = [];
     public string $search = '';
 
     public function mount(): void
@@ -23,60 +26,123 @@ return new class extends Component
             ->get()
             ->toArray();
 
-        $this->types = UnitType::whereIn('id', [5, 6, 7])
+        $this->centerTypes = UnitType::whereIn('id', [5, 6, 7])
             ->select('id', 'name')
             ->get()
             ->toArray();
 
-        $this->fetchUnits();
+        $this->fetchCenters();
     }
 
-    public function fetchUnits(): void
+    public function fetchCenters(): void
     {
         if (empty($this->selectedRegions)) {
+            $this->centers = [];
+            $this->healthHouses = [];
             $this->units = [];
+            $this->selectedCenters = [];
             $this->dispatch('units-updated', units: []);
             return;
         }
 
-        $query = Unit::with('boundary')
-            ->whereNotNull('boundary_id')
-            ->whereIn('region_id', $this->selectedRegions);
-
-        if ($this->selectedTypes) {
-            $query->whereIn('unit_type_id', $this->selectedTypes);
-        }
-
-        if ($this->search !== '') {
-            $query->where('name', 'like', '%' . $this->search . '%');
-        }
-
-        $this->units = $query->get()
-            ->map(function ($unit) {
-                return [
-                    'id' => $unit->id,
-                    'name' => $unit->name,
-                    'geojson' => $unit->boundary?->geojson ?? null,
-                ];
-            })
+        $this->centers = Unit::whereNotNull('boundary_id')
+            ->whereIn('region_id', $this->selectedRegions)
+            ->whereIn('unit_type_id', $this->selectedTypes)
+            ->select('id', 'name')
+            ->get()
             ->toArray();
+
+        $this->selectedCenters = array_filter(
+            $this->selectedCenters,
+            fn($id) => collect($this->centers)->contains('id', $id)
+        );
+
+        $this->fetchHealthHouses();
+    }
+
+    public function fetchHealthHouses(): void
+    {
+        if (empty($this->selectedCenters)) {
+            $this->healthHouses = [];
+            $this->units = collect($this->centers)
+                ->map(fn($c) => [
+                    'id' => $c['id'],
+                    'name' => $c['name'],
+                    'geojson' => null,
+                ])
+                ->toArray();
+            $this->loadBoundaries();
+            return;
+        }
+
+        $this->healthHouses = Unit::where('unit_type_id', 9)
+            ->whereIn('parent_id', $this->selectedCenters)
+            ->select('id', 'name', 'parent_id')
+            ->get()
+            ->toArray();
+
+        $centerItems = collect($this->centers)
+            ->filter(fn($c) => in_array($c['id'], $this->selectedCenters))
+            ->map(fn($c) => [
+                'id' => $c['id'],
+                'name' => $c['name'],
+                'geojson' => null,
+            ])
+            ->toArray();
+
+        $houseItems = collect($this->healthHouses)
+            ->map(fn($h) => [
+                'id' => $h['id'],
+                'name' => $h['name'],
+                'geojson' => null,
+            ])
+            ->toArray();
+
+        $this->units = array_merge($centerItems, $houseItems);
+        $this->loadBoundaries();
+    }
+
+    private function loadBoundaries(): void
+    {
+        if (empty($this->units)) {
+            $this->dispatch('units-updated', units: []);
+            return;
+        }
+
+        $ids = array_column($this->units, 'id');
+        $boundaries = Unit::whereIn('id', $ids)
+            ->whereNotNull('boundary_id')
+            ->with('boundary')
+            ->get()
+            ->pluck('boundary.geojson', 'id')
+            ->toArray();
+
+        $this->units = array_map(function ($unit) use ($boundaries) {
+            $unit['geojson'] = $boundaries[$unit['id']] ?? null;
+            return $unit;
+        }, $this->units);
 
         $this->dispatch('units-updated', units: $this->units);
     }
 
     public function updatedSelectedRegions(): void
     {
-        $this->fetchUnits();
+        $this->fetchCenters();
     }
 
     public function updatedSelectedTypes(): void
     {
-        $this->fetchUnits();
+        $this->fetchCenters();
+    }
+
+    public function updatedSelectedCenters(): void
+    {
+        $this->fetchHealthHouses();
     }
 
     public function updatedSearch(): void
     {
-        $this->fetchUnits();
+        $this->fetchCenters();
     }
 };
 ?>
@@ -94,19 +160,18 @@ return new class extends Component
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
                 {{-- Search --}}
-                <div class="mb-4">
-                    <label class="font-bold block mb-2">جستجو</label>
+                <div class="mb-3">
                     <input
                         type="text"
                         wire:model.live.debounce.300ms="search"
-                        placeholder="جستجوی نام..."
-                        class="input input-bordered w-full"
+                        placeholder="جستجو..."
+                        class="input input-bordered input-sm w-full"
                     />
                 </div>
 
-                {{-- County toggles --}}
-                <div class="mb-4">
-                    <label class="font-bold block mb-2">شهرستان</label>
+                {{-- Step 1: County --}}
+                <div class="mb-3">
+                    <label class="font-bold text-sm block mb-1">۱. شهرستان</label>
                     @foreach ($regions as $region)
                         <x-toggle
                             right
@@ -117,20 +182,37 @@ return new class extends Component
                     @endforeach
                 </div>
 
-                {{-- Type toggles --}}
-                <div class="mb-4">
-                    <label class="font-bold block mb-2">نوع</label>
-                    @foreach ($types as $type)
-                        <x-toggle
-                            right
-                            wire:model.live="selectedTypes"
-                            value="{{ $type['id'] }}"
-                            label="{{ $type['name'] }}"
-                        />
-                    @endforeach
-                </div>
+                {{-- Step 2: Center type --}}
+                @if (!empty($selectedRegions))
+                    <div class="mb-3">
+                        <label class="font-bold text-sm block mb-1">۲. نوع مرکز</label>
+                        @foreach ($centerTypes as $type)
+                            <x-toggle
+                                right
+                                wire:model.live="selectedTypes"
+                                value="{{ $type['id'] }}"
+                                label="{{ $type['name'] }}"
+                            />
+                        @endforeach
+                    </div>
+                @endif
 
-                <hr class="border-base-300 my-4" />
+                {{-- Step 3: Select centers --}}
+                @if (!empty($centers))
+                    <div class="mb-3">
+                        <label class="font-bold text-sm block mb-1">۳. مرکز</label>
+                        @foreach ($centers as $center)
+                            <x-toggle
+                                right
+                                wire:model.live="selectedCenters"
+                                value="{{ $center['id'] }}"
+                                label="{{ $center['name'] }}"
+                            />
+                        @endforeach
+                    </div>
+                @endif
+
+                <hr class="border-base-300 my-3" />
 
                 {{-- Unit list --}}
                 @foreach ($units as $unit)
