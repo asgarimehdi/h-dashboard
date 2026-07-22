@@ -44,6 +44,7 @@ $this->call([
             TicketSeeder::class,
             PersonUserSeeder::class,
             CenterBoundarySeeder::class,
+            HealthHouseBoundarySeeder::class,
 
         ]);
     }
