@@ -49,15 +49,13 @@ return new class extends Component {
 <style>
     [x-cloak] { display: none !important; }
 </style>
-@endassets
 
-@script
 <script>
     // پاکسازی همه chartهای قبلی
     Highcharts.charts.forEach(chart => {
         if (chart) chart.destroy();
     });
-    
+
     // غیرفعال کردن accessibility
     Highcharts.setOptions({
         accessibility: { enabled: false }
@@ -75,10 +73,9 @@ return new class extends Component {
                 this.$nextTick(() => {
                     const container = el.querySelector('[x-ref="container"]');
                     if (!container) return;
-                    
-                    // پاکسازی container
+
                     container.innerHTML = '';
-                    
+
                     this.chart = Highcharts.chart(container, {
                         chart: {
                             type: 'spline',
@@ -104,7 +101,7 @@ return new class extends Component {
                             color: "var(--color-primary)"
                         }]
                     });
-                    
+
                     this.load();
                     this.timer = setInterval(() => this.load(), 10000);
                 });
@@ -117,12 +114,12 @@ return new class extends Component {
             async load(show = false) {
                 if (!this.chart) return;
                 if (show) this.loading = true;
-                
+
                 try {
                     const url = `/api/zabbix/traffic?out_item_id=${this.outItemId}&in_item_id=${this.inItemId}&duration=${this.duration}`;
                     const res = await fetch(url);
                     const data = await res.json();
-                    
+
                     if (this.chart && this.chart.series) {
                         this.chart.series[0].setData(data.out || [], false);
                         this.chart.series[1].setData(data.in || [], false);
@@ -145,4 +142,4 @@ return new class extends Component {
         };
     };
 </script>
-@endscript
+@endassets
