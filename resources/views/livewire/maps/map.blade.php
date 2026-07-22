@@ -37,13 +37,21 @@ return new class extends Component {
 
 @script
 <script>
-    // Destroy any existing map instance (SPA navigation)
-    if (window.map && typeof window.map.remove === 'function') {
-        try { window.map.remove(); } catch(e) {}
-        window.map = null;
-    }
-
     function initMap() {
+        var container = document.getElementById('map');
+        if (!container) return;
+
+        // Reuse existing Leaflet instance on this container (SPA navigation)
+        if (container._leaflet_id && window.map && window.map.getContainer() === container) {
+            return;
+        }
+
+        // Remove old Leaflet content from container if any
+        if (container._leaflet_id) {
+            container.innerHTML = '';
+            delete container._leaflet_id;
+        }
+
         var map = L.map('map').setView({{ $setview }}, {{ $zoom }});
 
         L.tileLayer('http://{{ $map_ip }}:8080/tile/{z}/{x}/{y}.png', {
