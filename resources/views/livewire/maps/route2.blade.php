@@ -172,11 +172,6 @@ return new class extends Component {
         try { if (window.map) window.map.removeControl(window.routingControl); } catch(e) {}
         window.routingControl = null;
     }
-    // Clear stale map reference from previous SPA navigation
-    if (window.map && typeof window.map.remove === 'function') {
-        try { window.map.remove(); } catch(e) {}
-        window.map = null;
-    }
 
     // Init routing when map is ready
     if (window.map && typeof window.map.getSize === 'function') {
