@@ -57,7 +57,7 @@ class AbharCenterBoundarySeeder extends Seeder
         $voronoiQuery = "
             WITH points AS (
                 SELECT
-                    unnest(ARRAY[" . implode(',', array_map(fn($c) => $c->id, $centers->toArray())) . "]) AS unit_id,
+                    unnest(ARRAY[" . $centers->pluck('id')->implode(',') . "]) AS unit_id,
                     unnest(ARRAY[" . implode(',', $pointInserts) . "]) AS geom
             ),
             voronoi AS (
