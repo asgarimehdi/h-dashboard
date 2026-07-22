@@ -38,7 +38,7 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 | `tickets/` | Ticket system (inbox, monitoring) |
 | `todo/` | Todo management |
 | `tools/` | Utility tools |
-| `units/` | Unit/organization management |
+| `units/` | Unit/organization management, dedicated unit map page (`map.blade.php`) |
 | `users/` | User management |
 
 ### API Controllers (`app/Http/Controllers/Api/`)
@@ -106,3 +106,27 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 - `regions.boundary_id`, `units.boundary_id`: **cascade**
 
 *Keep this file synchronized with any future schema changes.*
+
+## Maps & GIS
+
+### Architecture
+- **Base map**: `maps/map.blade.php` — reusable Leaflet map component. Uses private tile server at `config('map.tile_server_ip')`. Stores instance in `window.map` for child components.
+- **SPA navigation**: All map pages use DOM polling (wait for `#map`/`#unitsMap`/`#unitMap` elements) before calling `L.map()`. Never call `map.remove()` during SPA navigation — it deletes the DOM element and breaks Livewire's `wire:ignore` morphing.
+- **Leaflet plugins** loaded in `app.blade.php`: Leaflet.Draw (polygon drawing), Leaflet.RoutingMachine (route calculation), Leaflet.GeometryUtil.
+
+### Map Pages
+| Route | Component | Description |
+|-------|-----------|-------------|
+| `/maps/route` | `maps/route` | Road distance calculator with hardcoded waypoints |
+| `/maps/route2` | `maps/route2` | Road distance calculator with geocoding input |
+| `/maps/unit` | `maps/unit` | Toggle unit boundary polygons (GeoJSON) |
+| `/maps/units` | `maps/units` | Unit circle markers with list sidebar |
+| `/maps/interactive` | `maps/interactive` | Interactive unit markers with list sidebar |
+| `/maps/point` | `maps/point` | Custom icons per unit type with region/type filters |
+| `/maps/county` | `maps/county` | County/region boundary polygons |
+
+### Unit Map Page
+- **Route**: `/units/{id}/map` — dedicated full-page map for editing a unit's boundary polygon
+- **Component**: `units/map.blade.php` — Livewire Volt component
+- **Features**: Draw new polygon, edit existing, delete boundary. Uses PostGIS `ST_GeomFromGeoJSON` for save. Upserts boundary (creates new if none, updates if exists).
+- **Navigation**: Map button in units table links to this page (replaced previous modal approach).
