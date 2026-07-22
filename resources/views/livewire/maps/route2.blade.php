@@ -31,19 +31,19 @@ return new class extends Component {
     <x-card shadow>
         <div class="container">
             <div class="flex items-center gap-2 flex-wrap pb-3">
-                <input 
-                    type="text" 
-                    id="start-input" 
-                    class="input input-bordered" 
-                    placeholder="مبدا (مختصات یا آدرس)" 
-                    wire:model="start_point" 
+                <input
+                    type="text"
+                    id="start-input"
+                    class="input input-bordered"
+                    placeholder="مبدا (مختصات یا آدرس)"
+                    wire:model="start_point"
                 />
-                <input 
-                    type="text" 
-                    id="end-input" 
-                    class="input input-bordered" 
-                    placeholder="مقصد (مختصات یا آدرس)" 
-                    wire:model="end_point" 
+                <input
+                    type="text"
+                    id="end-input"
+                    class="input input-bordered"
+                    placeholder="مقصد (مختصات یا آدرس)"
+                    wire:model="end_point"
                 />
                 <x-button
                     x-on:click="window.searchRoute()"
@@ -68,8 +68,6 @@ return new class extends Component {
         </div>
     </x-card>
 </div>
-
-
 
 @script
 <script>
@@ -134,6 +132,12 @@ return new class extends Component {
     };
 
     function initRouting() {
+        if (typeof L.Routing === 'undefined' || typeof L.Routing.control !== 'function') {
+            console.error('L.Routing not available. Make sure leaflet-routing-machine.js is loaded.');
+            return;
+        }
+        console.log('initRouting: creating routing control...');
+
         routingControl = L.Routing.control({
             waypoints: [],
             router: L.Routing.osrmv1({
@@ -144,9 +148,14 @@ return new class extends Component {
         }).addTo(window.map);
 
         routingControl.on('routesfound', function (e) {
+            console.log('Route found:', e.routes[0].summary);
             var summary = e.routes[0].summary;
             document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
             document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
+        });
+
+        routingControl.on('routingerror', function (e) {
+            console.error('Routing error:', e.error);
         });
 
         setTimeout(() => {
@@ -156,22 +165,28 @@ return new class extends Component {
         }, 200);
 
         window.routingControl = routingControl;
+        console.log('initRouting: routing control added to map');
     }
 
     // Destroy any existing routing control to avoid duplicates on re-navigation
-    if (window.routingControl) {
-        window.map.removeControl(window.routingControl);
-        delete window.routingControl;
+    if (window.routingControl && window.map) {
+        try { window.map.removeControl(window.routingControl); } catch(e) {}
+        window.routingControl = null;
     }
 
     // Init routing when map is ready
     if (window.map && typeof window.map.getSize === 'function') {
         initRouting();
     } else {
+        var tries = 0;
         var waitForMap = setInterval(() => {
+            tries++;
             if (window.map && typeof window.map.getSize === 'function') {
                 clearInterval(waitForMap);
                 initRouting();
+            } else if (tries > 50) {
+                clearInterval(waitForMap);
+                console.error('Map did not initialize within 10s');
             }
         }, 200);
     }
