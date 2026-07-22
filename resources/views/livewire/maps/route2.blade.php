@@ -121,7 +121,6 @@ return new class extends Component {
         var temp = startInput.value;
         startInput.value = endInput.value;
         endInput.value = temp;
-        $wire.swapPoints();
         routingControl.setWaypoints(currentWaypoints);
     };
 
