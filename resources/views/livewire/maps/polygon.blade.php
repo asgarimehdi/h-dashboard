@@ -57,14 +57,20 @@ return new class extends Component {
 <script>
     // تابع کمکی برای چک کردن آماده بودن همه چیز
     function waitForMapAndDraw(callback) {
-        if (window.map && 
-            typeof window.map.getSize === 'function' && 
-            typeof L.FeatureGroup === 'function' &&
-            typeof L.Control.Draw === 'function') {
-            callback();
-        } else {
-            setTimeout(() => waitForMapAndDraw(callback), 100);
+        var tries = 0;
+        function check() {
+            if (window.map &&
+                typeof window.map.getSize === 'function' &&
+                typeof L.FeatureGroup === 'function' &&
+                typeof L.Control.Draw === 'function') {
+                callback();
+            } else if (++tries > 50) {
+                console.error('Map or draw controls not ready within 10s');
+            } else {
+                setTimeout(check, 200);
+            }
         }
+        check();
     }
 
     var geojson = '';

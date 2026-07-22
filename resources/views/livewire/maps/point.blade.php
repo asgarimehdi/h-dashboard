@@ -139,11 +139,17 @@ return new class extends Component
 <script>
     // تابع کمکی برای چک کردن آماده بودن نقشه
     function waitForMap(callback) {
-        if (window.map && typeof window.map.getSize === 'function') {
-            callback();
-        } else {
-            setTimeout(() => waitForMap(callback), 100);
+        var tries = 0;
+        function check() {
+            if (window.map && typeof window.map.getSize === 'function') {
+                callback();
+            } else if (++tries > 50) {
+                console.error('Map not ready within 10s');
+            } else {
+                setTimeout(check, 200);
+            }
         }
+        check();
     }
 
     // آیکن‌ها بر اساس unit_type_id و نام واحدها
