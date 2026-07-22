@@ -47,21 +47,32 @@ return new class extends Component {
 <script>
     // Destroy any existing routing control to avoid duplicates on re-navigation
     if (window.routingControl) {
-        window.map.removeControl(window.routingControl);
-        delete window.routingControl;
+        try { if (window.map) window.map.removeControl(window.routingControl); } catch(e) {}
+        window.routingControl = null;
+    }
+    // Clear stale map reference from previous SPA navigation
+    if (window.map && typeof window.map.remove === 'function') {
+        try { window.map.remove(); } catch(e) {}
+        window.map = null;
     }
 
     // Guard: only init if map exists and has no stale container
     if (!window.map || typeof window.map.getSize !== 'function') {
         console.warn('Map not ready, retrying...');
-        setTimeout(() => {
+        var tries = 0;
+        var waitForMap = setInterval(() => {
+            tries++;
             if (window.map && typeof window.map.getSize === 'function') {
+                clearInterval(waitForMap);
                 initRouting();
+            } else if (tries > 50) {
+                clearInterval(waitForMap);
+                console.error('Map did not initialize within 10s');
             }
         }, 200);
-        return;
+    } else {
+        initRouting();
     }
-    initRouting();
 
     function initRouting() {
         var routingControl = L.Routing.control({

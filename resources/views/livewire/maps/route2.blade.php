@@ -168,9 +168,14 @@ return new class extends Component {
     }
 
     // Destroy any existing routing control to avoid duplicates on re-navigation
-    if (window.routingControl && window.map) {
-        try { window.map.removeControl(window.routingControl); } catch(e) {}
+    if (window.routingControl) {
+        try { if (window.map) window.map.removeControl(window.routingControl); } catch(e) {}
         window.routingControl = null;
+    }
+    // Clear stale map reference from previous SPA navigation
+    if (window.map && typeof window.map.remove === 'function') {
+        try { window.map.remove(); } catch(e) {}
+        window.map = null;
     }
 
     // Init routing when map is ready

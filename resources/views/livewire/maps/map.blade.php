@@ -37,13 +37,19 @@ return new class extends Component {
 
 @script
 <script>
+    // Destroy any existing map instance (SPA navigation)
+    if (window.map && typeof window.map.remove === 'function') {
+        try { window.map.remove(); } catch(e) {}
+        window.map = null;
+    }
+
     var map = L.map('map').setView({{ $setview }}, {{ $zoom }});
-    
+
     L.tileLayer('http://{{ $map_ip }}:8080/tile/{z}/{x}/{y}.png', {
         attribution: '&copy; Health-Dashboard',
         className: 'map-tiles'
     }).addTo(map);
-    
+
     // ذخیره map در window برای دسترسی از کامپوننت‌های دیگر
     window.map = map;
 </script>
