@@ -47,7 +47,7 @@ return new class extends Component
             $query->whereIn('unit_type_id', $this->selectedTypes);
         }
 
-        $this->location = $query
+        $baseUnits = $query
             ->limit(2000)
             ->select([
                 'id',
@@ -57,6 +57,20 @@ return new class extends Component
                 'unit_type_id',
                 'parent_id',
             ])
+            ->get();
+
+        // Include ancestor units so parent markers exist for connection lines
+        $baseIds = $baseUnits->pluck('id')->toArray();
+        $ancestorIds = Unit::whereIn('id', $baseIds)
+            ->whereNotNull('parent_id')
+            ->pluck('parent_id')
+            ->toArray();
+        $allIds = array_unique(array_merge($baseIds, $ancestorIds));
+
+        $this->location = Unit::whereIn('id', $allIds)
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->select(['id', 'name', 'lat', 'lng', 'unit_type_id', 'parent_id'])
             ->get()
             ->toArray();
 

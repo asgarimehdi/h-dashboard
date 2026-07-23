@@ -12,7 +12,15 @@ return new class extends Component
     public function mount(): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $this->units = Unit::whereIn('id', $accessibleIds)
+
+        // Include ancestor units so parent markers exist for connection lines
+        $ancestorIds = Unit::whereIn('id', $accessibleIds)
+            ->whereNotNull('parent_id')
+            ->pluck('parent_id')
+            ->toArray();
+        $allIds = array_unique(array_merge($accessibleIds, $ancestorIds));
+
+        $this->units = Unit::whereIn('id', $allIds)
             ->whereNotNull('lat')
             ->whereNotNull('lng')
             ->select('id', 'name', 'lat', 'lng', 'unit_type_id', 'parent_id')
