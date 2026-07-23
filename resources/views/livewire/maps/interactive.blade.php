@@ -56,6 +56,16 @@ return new class extends Component
 
     @script
     <script>
+        function getDepth(unit, allUnits) {
+            let depth = 0;
+            let current = unit;
+            while (current && current.parent_id) {
+                current = allUnits.find(u => u.id === current.parent_id);
+                depth++;
+            }
+            return depth;
+        }
+
         function initInteractiveMap() {
             const map = L.map('unitsMap').setView([35.6892, 51.3890], 7);
 
@@ -92,7 +102,25 @@ return new class extends Component
                 }
             });
 
-            const group = L.featureGroup(Object.values(markers));
+            // Draw connection lines between parent and child units
+            const lineColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
+            const linesLayer = L.layerGroup().addTo(map);
+            units.forEach(unit => {
+                if (unit.parent_id && markers[unit.parent_id] && markers[unit.id]) {
+                    const parent = units.find(u => u.id === unit.parent_id);
+                    const depth = getDepth(parent, units);
+                    const color = lineColors[Math.min(depth, lineColors.length - 1)];
+                    L.polyline(
+                        [[parseFloat(unit.lat), parseFloat(unit.lng)],
+                         [parseFloat(parent.lat), parseFloat(parent.lng)]],
+                        { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
+                    ).addTo(linesLayer);
+                }
+            });
+
+            const allLayers = [...Object.values(markers)];
+            linesLayer.eachLayer(l => allLayers.push(l));
+            const group = L.featureGroup(allLayers);
             if (Object.keys(markers).length > 0) {
                 map.fitBounds(group.getBounds().pad(0.1));
             }

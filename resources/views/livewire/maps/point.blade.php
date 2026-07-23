@@ -55,6 +55,7 @@ return new class extends Component
                 'lat',
                 'lng',
                 'unit_type_id',
+                'parent_id',
             ])
             ->get()
             ->toArray();
@@ -183,16 +184,48 @@ return new class extends Component
         });
     }
 
+    // عمق سلسله‌مراتبی واحد را محاسبه می‌کند
+    function getDepth(loc, allLocations) {
+        let depth = 0;
+        let current = loc;
+        while (current && current.parent_id) {
+            current = allLocations.find(u => u.id === current.parent_id);
+            depth++;
+        }
+        return depth;
+    }
+
+    // رنگ خطوط اتصال بر اساس عمق سلسله‌مراتبی
+    const lineColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
+
     // تنظیم markers layer وقتی نقشه آماده است
     waitForMap(function() {
         window.markersLayer = L.layerGroup().addTo(window.map);
+        window.linesLayer = L.layerGroup().addTo(window.map);
 
-        // رندر اولیه مارکرها
+        // رندر اولیه مارکرها و خطوط اتصال
         function renderMarkers(locations) {
             if (!window.markersLayer) return;
-            
-            window.markersLayer.clearLayers();
 
+            window.markersLayer.clearLayers();
+            window.linesLayer.clearLayers();
+
+            // رسم خطوط اتصال بین والد و فرزند
+            locations.forEach(loc => {
+                if (loc.parent_id && loc.lat && loc.lng) {
+                    const parent = locations.find(u => u.id === loc.parent_id);
+                    if (parent && parent.lat && parent.lng) {
+                        const depth = getDepth(parent, locations);
+                        const color = lineColors[Math.min(depth, lineColors.length - 1)];
+                        L.polyline(
+                            [[loc.lat, loc.lng], [parent.lat, parent.lng]],
+                            { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
+                        ).addTo(window.linesLayer);
+                    }
+                }
+            });
+
+            // رسم مارکرها
             locations.forEach(loc => {
                 L.marker(
                     [loc.lat, loc.lng],
