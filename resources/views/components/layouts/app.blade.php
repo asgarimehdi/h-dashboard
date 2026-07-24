@@ -60,7 +60,7 @@
         </x-slot:actions>
     </x-nav>
 
-    <x-main>
+    <x-main full-width>
         <!-- Mobile-only Search & Notifications row -->
         <div class="lg:hidden flex items-center gap-3 p-3 border-b border-base-200">
             <a href="/search" wire:navigate class="btn btn-ghost btn-sm flex-1 justify-start">
