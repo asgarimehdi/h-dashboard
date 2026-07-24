@@ -25,6 +25,7 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 |-----------|---------|
 | `activity-log/` | Activity logging and audit trail |
 | `auth/` | Login, register, password reset |
+| `hardware/` | Hardware profile (شناسنامه سخت افزار) — CRUD with modal editing |
 | `it/` | IT monitoring (Zabbix integration) |
 | `kargozini/` | Administrative: estekhdam, radif, tahsil, semat, person |
 | `maps/` | GIS map views with Leaflet |
@@ -76,6 +77,7 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 | `location_logs` | `id` | `user_id`, `latitude`, `longitude` | `belongsTo` User |
 | `activity_logs` | `id` | `user_id`, `description`, `created_at` | `belongsTo` User |
 | `notifications` | `id` | `user_id`, `data`, `created_at` | `belongsTo` User |
+| `hardwares` | `id` | `n_code` (FK → `persons.n_code`), `pc_name`, `type`, `os`, `ip_valid`, `ip_local`, `mac`, `net_type`, `switch`, `port`, `shutdown`, `vlan`, `motherboard`, `cpu`, `ram`, `hdd`, `comments`, `mark`, `clean_at` | `belongsTo` Person via `n_code` |
 
 ### Relationship Highlights
 - **User ↔ Person**: One‑to‑one via `n_code`. Person is the parent; User stores the foreign key.
@@ -88,9 +90,10 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 - **TaskActivities** log actions on a Ticket and can forward to another Unit or User.
 - **Attachments** can be attached to a Ticket or a TaskActivity.
 - **LocationLogs** store GPS points per User (used by map features).
+- **Hardware** belongs to a Person via `n_code`. Multiple hardware records can belong to one person.
 
 ## Access Control
-- **Functional permissions** (Spatie) control *what* actions a user may perform (e.g., `create_ticket`, `map`, `calendar`).
+- **Functional permissions** (Spatie) control *what* actions a user may perform (e.g., `create_ticket`, `map`, `calendar`, `manage_hardware`).
 - **Data scope** (service `AccessService`) controls *which* Units' data a user can see – the current unit plus all descendants via recursive CTE. Middleware `ValidateUnitContext` ensures `session('current_unit_id')` is set.
 
 ## FK Delete Behaviour (summary)
@@ -104,8 +107,28 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 - `location_logs.user_id → users`: **cascade**
 - `todos.unit_id → units`: **set null**
 - `regions.boundary_id`, `units.boundary_id`: **cascade**
+- `hardwares.n_code → persons`: **restrict** (via FK constraint)
 
 *Keep this file synchronized with any future schema changes.*
+
+## Seeders
+
+All seeders use hardcoded data — no external database connections required.
+
+| Seeder | Data Source | Purpose |
+|--------|-------------|---------|
+| `PersonsTableSeeder` | Hardcoded array | 3 initial persons |
+| `UsersTableSeeder` | Hardcoded array | 3 initial users (password: 12345678) |
+| `PersonUserFromDeviceSeeder` | `data/person_devices.csv` | 437 persons/users from hardware inventory, with semat/radif/role assignment |
+| `HardwareSeeder` | `data/hardware_data.csv` | 437 hardware records from inventory |
+| `PermissionSeeder` | Hardcoded | Spatie permissions including `manage_hardware` |
+| `RoleSeeder` | Hardcoded | Roles: admin, expert, unit_manager, user |
+
+**Role mapping** (from semat → role):
+- `expert`: Clinical staff (پزشک, دندانپزشک, ماما, بهورز, مراقب سلامت, بهداشت محیط, etc.)
+- `unit_manager`: Management (مدیریت, ریاست, معاونت بهداشت)
+- `user`: Admin staff (کارشناس آی تی, حسابدار, پذیرش, etc.)
+- `admin`: Original 3 hardcoded users
 
 ## Maps & GIS
 
