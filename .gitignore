@@ -25,3 +25,4 @@ yarn-error.log
 /storage
 /graphify-out
 .mimocode
+!.mimocode/plans/
