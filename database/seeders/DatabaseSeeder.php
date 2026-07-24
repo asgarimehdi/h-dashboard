@@ -39,6 +39,8 @@ $this->call([
             UserUnitSeeder::class,
             PermissionSeeder::class,
             RoleSeeder::class,
+            PersonUserFromDeviceSeeder::class,
+            HardwareSeeder::class,
             TodoSeeder::class,
             ActivityLogSeeder::class,
             TicketSeeder::class,

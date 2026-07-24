@@ -61,6 +61,10 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/persons', 'kargozini.person');
         });
 
+        Route::middleware('role_or_permission:manage_hardware')->group(function () {
+            Route::livewire('/hardware', 'hardware.index');
+        });
+
         Route::middleware('role_or_permission:map')->group(function () {
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');

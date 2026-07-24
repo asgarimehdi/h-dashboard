@@ -30,6 +30,8 @@ class PermissionSeeder extends Seeder
         // مدیریت کاربران و نقش‌ها (فقط مدیر کل)
         Permission::firstOrCreate(['name' => 'manage_users', 'label' => 'مدیریت کاربران']);
         Permission::firstOrCreate(['name' => 'manage_roles', 'label' => 'مدیریت نقش‌ها و دسترسی‌ها']);
+        // شناسنامه سخت افزار
+        Permission::firstOrCreate(['name' => 'manage_hardware', 'label' => 'شناسنامه سخت افزار']);
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 

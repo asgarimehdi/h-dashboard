@@ -117,6 +117,11 @@
                 </x-menu-sub>
                 @endcan
 
+                {{-- شناسنامه سخت افزار --}}
+                @can('manage_hardware')
+                <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
+                @endcan
+
                 {{-- مدیریت تیکت‌ها --}}
                 @canany(['create_ticket', 'view_assigned_tickets', 'view_all_tickets'])
                 <x-menu-sub title="مدیریت تیکت‌ها" icon="o-ticket">
