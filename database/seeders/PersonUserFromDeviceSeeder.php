@@ -17,12 +17,69 @@ class PersonUserFromDeviceSeeder extends Seeder
     private array $radifCache = [];
 
     private array $roleMap = [
+        // Clinical / Expert
         'پزشک' => 'expert',
         'دندانپزشک' => 'expert',
         'ماما' => 'expert',
+        'آزمایشگاه' => 'expert',
+        'ژنتیک' => 'expert',
+        'پرستاری' => 'expert',
+        'داروخانه' => 'expert',
+        // Health workers
+        'بهورز' => 'expert',
+        'مراقب سلامت' => 'expert',
+        'مراقب ناظر' => 'expert',
+        'بهداشت محیط' => 'expert',
+        'بهداشت حرفه ای' => 'expert',
+        'بهداشت خانواده' => 'expert',
+        'بهداشت مدارس' => 'expert',
+        'بهداشت روان' => 'expert',
+        'سلامت روان' => 'expert',
+        'تغذیه' => 'expert',
+        'واکسیناسیون' => 'expert',
+        'مشاوره' => 'expert',
+        'فوریت' => 'expert',
+        'ناظر' => 'expert',
+        'نظارت بر درمان' => 'expert',
+        'بیماری واگیر' => 'expert',
+        'بیماریهای واگیر' => 'expert',
+        'بیماریهای غیر واگیر' => 'expert',
+        // Management
         'مدیریت' => 'unit_manager',
         'ریاست' => 'unit_manager',
         'معاونت بهداشت' => 'unit_manager',
+        // Admin / Staff
+        'کارشناس آی تی' => 'user',
+        'آی تی' => 'user',
+        'حسابدار' => 'user',
+        'اسناد' => 'user',
+        'بایگانی' => 'user',
+        'امور حقوقی' => 'user',
+        'امور عمومی' => 'user',
+        'اموال' => 'user',
+        'انبار' => 'user',
+        'انبار دارویی' => 'user',
+        'تدارکات' => 'user',
+        'تجهیزات پزشکی' => 'user',
+        'حراست' => 'user',
+        'دبیرخانه' => 'user',
+        'دفتر فنی' => 'user',
+        'دفتر مدیریت' => 'user',
+        'روابط عمومی' => 'user',
+        'گزینش' => 'user',
+        'گسترش' => 'user',
+        'نگهبانی' => 'user',
+        'کارگزینی' => 'user',
+        'غذا و دارو' => 'user',
+        'آموزش سلامت' => 'user',
+        'مربی' => 'user',
+        'خدمات' => 'user',
+        'شخصی' => 'user',
+        'دیده وری' => 'user',
+        'کلاس' => 'user',
+        'پذیرش' => 'user',
+        'تایمکس' => 'user',
+        'بحران' => 'user',
     ];
 
     // Map raw devices.unit values to proper semat names
@@ -103,12 +160,29 @@ class PersonUserFromDeviceSeeder extends Seeder
 
     public function run(): void
     {
-        $devices = DB::connection('hwinfo')
-            ->table('devices')
-            ->whereNotNull('n_code')
-            ->where('n_code', '!=', '')
-            ->get();
+        $csvFile = __DIR__ . '/data/person_devices.csv';
+        $handle = fopen($csvFile, 'r');
+        if ($handle === false) {
+            $this->command->error('Cannot open person_devices.csv');
+            return;
+        }
 
+        // Skip header (tab-delimited)
+        fgetcsv($handle, 0, "\t");
+
+        $rows = [];
+        while (($row = fgetcsv($handle, 0, "\t")) !== false) {
+            $rows[] = (object) [
+                'n_code' => $row[0],
+                'operator_name' => $row[1] ?: null,
+                'unit' => $row[2] ?: null,
+                'location' => $row[3] ?: null,
+                'location_type' => $row[4] ?: null,
+            ];
+        }
+        fclose($handle);
+
+        $devices = collect($rows)->filter(fn($d) => $d->n_code && trim($d->n_code) !== '');
         $grouped = $devices->groupBy('n_code');
         $existingUnits = Unit::pluck('id', 'name')->toArray();
 
@@ -145,8 +219,8 @@ class PersonUserFromDeviceSeeder extends Seeder
             $primaryUnitType = $records->pluck('unit')
                 ->filter(fn($u) => $u && trim($u) !== '')
                 ->countBy()->sortDesc()->keys()->first() ?? '';
-            $roleName = $this->mapRole($primaryUnitType);
             $sematName = $this->mapSemat($primaryUnitType);
+            $roleName = $this->mapRole($sematName);
             $sematId = $this->findOrCreateSemat($sematName);
 
             // radif = semat (same value for now)

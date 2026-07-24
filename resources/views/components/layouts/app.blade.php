@@ -117,11 +117,6 @@
                 </x-menu-sub>
                 @endcan
 
-                {{-- شناسنامه سخت افزار --}}
-                @can('manage_hardware')
-                <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
-                @endcan
-
                 {{-- مدیریت تیکت‌ها --}}
                 @canany(['create_ticket', 'view_assigned_tickets', 'view_all_tickets'])
                 <x-menu-sub title="مدیریت تیکت‌ها" icon="o-ticket">
@@ -168,6 +163,9 @@
                         <x-icon name="o-server" class="w-5 h-5" />
                         <span>کش سرور</span>
                     </a>
+                    @can('manage_hardware')
+                    <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
+                    @endcan
                     <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
                 </x-menu-sub>
                 @endcan

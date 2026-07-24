@@ -15,6 +15,7 @@ return new class extends Component
     public string $search = '';
     public int $perPage = 10;
     public bool $showForm = false;
+    public bool $showEditModal = false;
     public ?int $editingId = null;
     public array $sortBy = ['column' => 'id', 'direction' => 'desc'];
 
@@ -70,26 +71,31 @@ return new class extends Component
         $this->personResults = [];
     }
 
-    public function cancelEdit(): void
+    private function resetForm(): void
     {
-        $this->resetValidation();
         $this->reset([
-            'editingId', 'showForm', 'n_code', 'pc_name', 'type', 'os',
+            'n_code', 'pc_name', 'type', 'os',
             'ip_valid', 'ip_local', 'mac', 'net_type', 'switch', 'port',
             'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd',
             'comments', 'mark', 'clean_at', 'personSearch', 'personResults', 'selectedPersonName',
         ]);
     }
 
+    public function cancelEdit(): void
+    {
+        $this->resetValidation();
+        $this->resetForm();
+        $this->editingId = null;
+        $this->showForm = false;
+        $this->showEditModal = false;
+    }
+
     public function startCreate(): void
     {
         $this->resetValidation();
-        $this->reset([
-            'editingId', 'n_code', 'pc_name', 'type', 'os',
-            'ip_valid', 'ip_local', 'mac', 'net_type', 'switch', 'port',
-            'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd',
-            'comments', 'mark', 'clean_at', 'personSearch', 'personResults', 'selectedPersonName',
-        ]);
+        $this->resetForm();
+        $this->editingId = null;
+        $this->showEditModal = false;
         $this->showForm = true;
     }
 
@@ -119,6 +125,7 @@ return new class extends Component
         $this->clean_at = $hw->clean_at?->format('Y-m-d');
         $this->selectedPersonName = $hw->person ? trim($hw->person->f_name . ' ' . $hw->person->l_name) : null;
         $this->showForm = false;
+        $this->showEditModal = true;
     }
 
     public function updateHardware(): void
@@ -154,7 +161,7 @@ return new class extends Component
         return [
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
-            ['key' => 'person_name', 'label' => '-operator', 'class' => ''],
+            ['key' => 'person_name', 'label' => 'operators', 'class' => ''],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell'],
             ['key' => 'os', 'label' => 'سیستم عامل', 'class' => 'hidden lg:table-cell'],
             ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell'],
@@ -169,12 +176,28 @@ return new class extends Component
         $query = Hardware::with('person');
 
         if (!empty($this->search)) {
-            $query->where(function ($q) {
-                $q->where('pc_name', 'LIKE', "%{$this->search}%")
-                  ->orWhere('n_code', 'LIKE', "%{$this->search}%")
-                  ->orWhere('ip_local', 'LIKE', "%{$this->search}%")
-                  ->orWhere('mac', 'LIKE', "%{$this->search}%")
-                  ->orWhere('cpu', 'LIKE', "%{$this->search}%");
+            $s = $this->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('pc_name', 'LIKE', "%{$s}%")
+                  ->orWhere('n_code', 'LIKE', "%{$s}%")
+                  ->orWhere('type', 'LIKE', "%{$s}%")
+                  ->orWhere('os', 'LIKE', "%{$s}%")
+                  ->orWhere('ip_valid', 'LIKE', "%{$s}%")
+                  ->orWhere('ip_local', 'LIKE', "%{$s}%")
+                  ->orWhere('mac', 'LIKE', "%{$s}%")
+                  ->orWhere('net_type', 'LIKE', "%{$s}%")
+                  ->orWhere('switch', 'LIKE', "%{$s}%")
+                  ->orWhere('port', 'LIKE', "%{$s}%")
+                  ->orWhere('vlan', 'LIKE', "%{$s}%")
+                  ->orWhere('motherboard', 'LIKE', "%{$s}%")
+                  ->orWhere('cpu', 'LIKE', "%{$s}%")
+                  ->orWhere('ram', 'LIKE', "%{$s}%")
+                  ->orWhere('hdd', 'LIKE', "%{$s}%")
+                  ->orWhere('comments', 'LIKE', "%{$s}%")
+                  ->orWhereHas('person', function ($pq) use ($s) {
+                      $pq->where('f_name', 'LIKE', "%{$s}%")
+                        ->orWhere('l_name', 'LIKE', "%{$s}%");
+                  });
             });
         }
 
@@ -207,7 +230,7 @@ return new class extends Component
             <x-button class="btn-success" wire:click="startCreate" label="افزودن" icon="o-plus" responsive />
             <div class="flex-1">
                 <x-input
-                    placeholder="جستجو..."
+                    placeholder="جستجو در تمام فیلدها..."
                     wire:model.live.debounce="search"
                     clearable
                     icon="o-magnifying-glass"
@@ -220,7 +243,6 @@ return new class extends Component
         @if($showForm && !$editingId)
             <div class="mb-4 p-4 bg-base-200 rounded-lg">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {{-- Person Search --}}
                     <div class="relative">
                         <x-input wire:model="personSearch" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
                         @if(count($personResults) > 0)
@@ -238,7 +260,6 @@ return new class extends Component
                         @endif
                         @error('n_code') <span class="text-error text-xs">{{ $message }}</span> @enderror
                     </div>
-
                     <x-input wire:model="pc_name" label="نام دستگاه" placeholder="PC-NAME" required />
                     <x-input wire:model="type" label="نوع" placeholder="pc, laptop, ..." />
                     <x-input wire:model="os" label="سیستم عامل" placeholder="Windows 10, ..." />
@@ -277,23 +298,72 @@ return new class extends Component
             </div>
         @endif
 
+        {{-- Edit Modal --}}
+        @if($showEditModal && $editingId)
+            <x-modal wire:model="showEditModal" title="ویرایش سخت افزار" close-on-backdrop>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="relative">
+                        <x-input wire:model="personSearch" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
+                        @if(count($personResults) > 0)
+                            <div class="absolute z-10 bg-base-100 border rounded-lg shadow-lg w-full mt-1 max-h-48 overflow-auto">
+                                @foreach($personResults as $pr)
+                                    <div class="px-3 py-2 hover:bg-base-200 cursor-pointer text-sm"
+                                         wire:click="selectPerson('{{ $pr['n_code'] }}', '{{ $pr['name'] }}')">
+                                        {{ $pr['name'] }} ({{ $pr['n_code'] }})
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                        @if($selectedPersonName)
+                            <div class="text-xs text-success mt-1">✓ {{ $selectedPersonName }} ({{ $n_code }})</div>
+                        @endif
+                        @error('n_code') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                    </div>
+                    <x-input wire:model="pc_name" label="نام دستگاه" required />
+                    <x-input wire:model="type" label="نوع" />
+                    <x-input wire:model="os" label="سیستم عامل" />
+                    <x-input wire:model="ip_valid" label="IP عمومی" />
+                    <x-input wire:model="ip_local" label="IP محلی" />
+                    <x-input wire:model="mac" label="MAC Address" />
+                    <x-input wire:model="net_type" label="نوع شبکه" />
+                    <x-input wire:model="switch" label="سوئیچ" />
+                    <x-input wire:model="port" label="پورت" />
+                    <x-input wire:model="vlan" label="VLAN" />
+                    <x-input wire:model="motherboard" label="مادربورد" />
+                    <x-input wire:model="cpu" label="CPU" />
+                    <x-input wire:model="ram" label="RAM" />
+                    <x-input wire:model="hdd" label="HDD/SSD" />
+                    <x-input wire:model="clean_at" label="تاریخ نظافت" type="date" />
+                    <div class="form-control">
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" wire:model="shutdown" class="checkbox checkbox-sm" />
+                            <span class="label-text">فعال</span>
+                        </label>
+                    </div>
+                    <div class="form-control">
+                        <label class="label cursor-pointer gap-2">
+                            <input type="checkbox" wire:model="mark" class="checkbox checkbox-sm" />
+                            <span class="label-text">علامت</span>
+                        </label>
+                    </div>
+                    <div class="md:col-span-2">
+                        <x-input wire:model="comments" label="توضیحات" />
+                    </div>
+                </div>
+                <x-slot:actions>
+                    <x-button wire:click="updateHardware" label="ذخیره" icon="o-check" class="btn-primary" spinner />
+                    <x-button @click="$wire.set('showEditModal', false); $wire.cancelEdit()" label="لغو" icon="o-x-mark" class="btn-ghost" />
+                </x-slot:actions>
+            </x-modal>
+        @endif
+
         {{-- Table --}}
         <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[5, 10, 25, 50]">
-            @scope('cell_pc_name', $hw)
-                @if($this->editingId === $hw['id'])
-                    <input type="text" wire:model="pc_name" class="input input-bordered input-sm w-full" autofocus />
-                @else
-                    {{ $hw['pc_name'] }}
-                @endif
-            @endscope
-
             @scope('actions', $hw)
                 <div class="flex gap-1">
-                    @if($this->editingId !== $hw['id'])
-                        <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
-                        <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
-                    @endif
+                    <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
+                    <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
                 </div>
             @endscope
         </x-table>
