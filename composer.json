@@ -9,7 +9,7 @@
     ],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
+        "php": "^8.4",
         "hekmatinasser/verta": "^9.0",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
