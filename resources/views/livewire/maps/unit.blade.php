@@ -52,6 +52,9 @@ return new class extends Component
             ->get()
             ->toArray();
 
+        // Auto-select all centers
+        $this->selectedCenters = array_column($this->centers, 'id');
+
         $this->selectedCenters = array_filter(
             $this->selectedCenters,
             fn($id) => collect($this->centers)->contains('id', $id)
@@ -142,7 +145,8 @@ return new class extends Component
 
     public function updatedSearch(): void
     {
-        $this->fetchCenters();
+        // Don't reset filters — search just re-dispatches current units
+        $this->loadBoundaries();
     }
 };
 ?>
@@ -155,7 +159,7 @@ return new class extends Component
     </x-header>
 
     <x-card shadow class="p-0">
-        <div class="container">
+        <div class="relative">
             <livewire:maps.map/>
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
@@ -247,6 +251,7 @@ return new class extends Component
 <script>
     var geojsonLayers = {};
     var allUnits = {{ Js::from($units) }};
+    var activeToggles = {};
 
     function waitForMap(callback) {
         var tries = 0;
@@ -275,6 +280,8 @@ return new class extends Component
         const unit = allUnits.find(u => u.id === unitId);
         if (!unit || !unit.geojson || geojsonLayers[unitId]) return;
 
+        activeToggles[unitId] = true;
+
         try {
             let data = typeof unit.geojson === 'string'
                 ? JSON.parse(unit.geojson)
@@ -288,22 +295,64 @@ return new class extends Component
                     fillOpacity: 0.1,
                 }
             }).addTo(window.map);
+
+            // Zoom to the boundary
+            if (geojsonLayers[unitId].getBounds) {
+                map.fitBounds(geojsonLayers[unitId].getBounds().pad(0.1));
+            }
         } catch (e) {
             console.error('Error parsing GeoJSON:', e);
         }
     };
 
     window.toggleGeoJsonOff = function(unitId) {
+        delete activeToggles[unitId];
         if (geojsonLayers[unitId]) {
             window.map.removeLayer(geojsonLayers[unitId]);
             delete geojsonLayers[unitId];
         }
     };
 
+    // Sync checkbox states after Livewire morphs the DOM
+    function syncToggleStates() {
+        document.querySelectorAll('[wire\\:key^="unit-"]').forEach(el => {
+            const input = el.querySelector('input[type="checkbox"]');
+            if (!input) return;
+            const key = el.getAttribute('wire:key');
+            const unitId = parseInt(key.replace('unit-', ''));
+            if (activeToggles[unitId]) {
+                input.checked = true;
+            }
+        });
+    }
+
     waitForMap(function() {
         Livewire.on('units-updated', ({ units }) => {
             clearAllLayers();
             allUnits = units;
+
+            // Re-apply active toggles to new units
+            Object.keys(activeToggles).forEach(id => {
+                const uid = parseInt(id);
+                const unit = allUnits.find(u => u.id === uid);
+                if (unit && unit.geojson && !geojsonLayers[uid]) {
+                    try {
+                        let data = typeof unit.geojson === 'string'
+                            ? JSON.parse(unit.geojson)
+                            : unit.geojson;
+                        geojsonLayers[uid] = L.geoJSON(data, {
+                            style: { color: "orange", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
+                        }).addTo(window.map);
+                    } catch (e) {
+                        console.error('Error re-applying GeoJSON:', e);
+                    }
+                } else if (!unit) {
+                    delete activeToggles[id];
+                }
+            });
+
+            // Sync checkbox states after DOM update
+            requestAnimationFrame(syncToggleStates);
         });
     });
 </script>
