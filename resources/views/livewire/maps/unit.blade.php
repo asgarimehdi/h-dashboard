@@ -8,16 +8,21 @@ use Livewire\Component;
 return new class extends Component
 {
     public $units = [];
-    public $centers = [];
-    public $healthHouses = [];
 
     public $regions = [];
     public $centerTypes = [];
+    public $subTypes = [];
 
     public array $selectedRegions = [];
-    public array $selectedTypes = [5, 6, 7];
-    public array $selectedCenters = [];
+    public array $selectedCenterTypes = [];
+    public array $selectedSubTypes = [];
     public string $search = '';
+
+    private const SUB_TYPE_MAP = [
+        'خانه بهداشت' => [9, 18],
+        'پایگاه'      => [8, 10],
+        'قمر'         => [12],
+    ];
 
     public function mount(): void
     {
@@ -31,78 +36,108 @@ return new class extends Component
             ->get()
             ->toArray();
 
-        $this->fetchCenters();
+        $this->subTypes = [
+            ['name' => 'خانه بهداشت'],
+            ['name' => 'پایگاه'],
+            ['name' => 'قمر'],
+        ];
     }
 
-    public function fetchCenters(): void
+    public function updatedSelectedRegions(): void
+    {
+        $this->showSelectedCounties();
+        $this->loadUnits();
+    }
+
+    private function showSelectedCounties(): void
     {
         if (empty($this->selectedRegions)) {
-            $this->centers = [];
-            $this->healthHouses = [];
+            $this->dispatch('county-boundaries-loaded', counties: []);
+            return;
+        }
+
+        $counties = Region::whereIn('id', $this->selectedRegions)
+            ->whereNotNull('boundary_id')
+            ->with('boundary')
+            ->get()
+            ->map(fn($r) => [
+                'id' => $r->id,
+                'name' => $r->name,
+                'geojson' => $r->boundary?->geojson,
+            ])
+            ->filter(fn($r) => $r['geojson'])
+            ->values()
+            ->toArray();
+
+        $this->dispatch('county-boundaries-loaded', counties: $counties);
+    }
+
+    public function updatedSelectedSubTypes(): void
+    {
+        $this->loadUnits();
+    }
+
+    public function updatedSelectedCenterTypes(): void
+    {
+        $this->loadUnits();
+    }
+
+    public function loadUnits(): void
+    {
+        if (empty($this->selectedRegions)) {
             $this->units = [];
-            $this->selectedCenters = [];
             $this->dispatch('units-updated', units: []);
             return;
         }
 
-        $this->centers = Unit::whereNotNull('boundary_id')
-            ->whereIn('region_id', $this->selectedRegions)
-            ->whereIn('unit_type_id', $this->selectedTypes)
-            ->select('id', 'name')
-            ->get()
-            ->toArray();
+        $units = collect();
 
-        // Auto-select all centers
-        $this->selectedCenters = array_column($this->centers, 'id');
-
-        $this->selectedCenters = array_filter(
-            $this->selectedCenters,
-            fn($id) => collect($this->centers)->contains('id', $id)
-        );
-
-        $this->fetchHealthHouses();
-    }
-
-    public function fetchHealthHouses(): void
-    {
-        if (empty($this->selectedCenters)) {
-            $this->healthHouses = [];
-            $this->units = collect($this->centers)
-                ->map(fn($c) => [
-                    'id' => $c['id'],
-                    'name' => $c['name'],
-                    'geojson' => null,
-                ])
-                ->toArray();
-            $this->loadBoundaries();
-            return;
+        // Centers (types 5, 6, 7) — filtered by selected center types
+        if (!empty($this->selectedCenterTypes)) {
+            $centers = Unit::whereNotNull('boundary_id')
+                ->whereIn('region_id', $this->selectedRegions)
+                ->whereIn('unit_type_id', $this->selectedCenterTypes)
+                ->select('id', 'name', 'unit_type_id')
+                ->get();
+            $units = $units->merge($centers);
         }
 
-        $this->healthHouses = Unit::where('unit_type_id', 9)
-            ->whereIn('parent_id', $this->selectedCenters)
-            ->select('id', 'name', 'parent_id')
-            ->get()
-            ->toArray();
+        // Sub-types (خانه بهداشت, پایگاه, قمر) — only if their parent center type is selected
+        if (!empty($this->selectedSubTypes) && !empty($this->selectedCenterTypes)) {
+            $subTypeIds = $this->resolveSubTypeIds();
 
-        $centerItems = collect($this->centers)
-            ->filter(fn($c) => in_array($c['id'], $this->selectedCenters))
-            ->map(fn($c) => [
-                'id' => $c['id'],
-                'name' => $c['name'],
-                'geojson' => null,
-            ])
-            ->toArray();
+            // Get IDs of selected centers to use as parent filter
+            $parentIds = Unit::whereNotNull('boundary_id')
+                ->whereIn('region_id', $this->selectedRegions)
+                ->whereIn('unit_type_id', $this->selectedCenterTypes)
+                ->pluck('id');
 
-        $houseItems = collect($this->healthHouses)
-            ->map(fn($h) => [
-                'id' => $h['id'],
-                'name' => $h['name'],
-                'geojson' => null,
-            ])
-            ->toArray();
+            $subUnits = Unit::whereNotNull('boundary_id')
+                ->whereIn('region_id', $this->selectedRegions)
+                ->whereIn('unit_type_id', $subTypeIds)
+                ->whereIn('parent_id', $parentIds)
+                ->select('id', 'name', 'unit_type_id')
+                ->get();
+            $units = $units->merge($subUnits);
+        }
 
-        $this->units = array_merge($centerItems, $houseItems);
+        $this->units = $units->map(fn($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'type_id' => $u->unit_type_id,
+            'geojson' => null,
+        ])->toArray();
+
         $this->loadBoundaries();
+    }
+
+    private function resolveSubTypeIds(): array
+    {
+        $typeIds = [];
+        foreach ($this->selectedSubTypes as $name) {
+            $typeIds = array_merge($typeIds, self::SUB_TYPE_MAP[$name] ?? []);
+        }
+        return array_unique($typeIds);
     }
 
     private function loadBoundaries(): void
@@ -127,27 +162,6 @@ return new class extends Component
 
         $this->dispatch('units-updated', units: $this->units);
     }
-
-    public function updatedSelectedRegions(): void
-    {
-        $this->fetchCenters();
-    }
-
-    public function updatedSelectedTypes(): void
-    {
-        $this->fetchCenters();
-    }
-
-    public function updatedSelectedCenters(): void
-    {
-        $this->fetchHealthHouses();
-    }
-
-    public function updatedSearch(): void
-    {
-        // Don't reset filters — search just re-dispatches current units
-        $this->loadBoundaries();
-    }
 };
 ?>
 
@@ -158,6 +172,57 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
+    {{-- Filter bar above the map --}}
+    <x-card shadow class="mb-4 p-3">
+        <div class="flex flex-wrap items-center gap-4">
+            {{-- Counties --}}
+            <div class="flex flex-wrap items-center gap-1">
+                <label class="font-bold text-sm ml-1">شهرستان:</label>
+                @foreach ($regions as $region)
+                    <x-toggle
+                        right
+                        wire:model.live="selectedRegions"
+                        value="{{ $region['id'] }}"
+                        label="{{ $region['name'] }}"
+                    />
+                @endforeach
+            </div>
+
+            @if (!empty($selectedRegions))
+                <hr class="border-base-300" />
+
+                {{-- Center types --}}
+                <div class="flex flex-wrap items-center gap-1">
+                    <label class="font-bold text-sm ml-1">مرکز:</label>
+                    @foreach ($centerTypes as $type)
+                        <x-toggle
+                            right
+                            wire:model.live="selectedCenterTypes"
+                            value="{{ $type['id'] }}"
+                            label="{{ $type['name'] }}"
+                        />
+                    @endforeach
+                </div>
+
+                <hr class="border-base-300" />
+
+                {{-- Sub-types --}}
+                <div class="flex flex-wrap items-center gap-1">
+                    <label class="font-bold text-sm ml-1">نوع مرکز:</label>
+                    @foreach ($subTypes as $type)
+                        <x-toggle
+                            right
+                            wire:model.live="selectedSubTypes"
+                            value="{{ $type['name'] }}"
+                            label="{{ $type['name'] }}"
+                        />
+                    @endforeach
+                </div>
+            @endif
+        </div>
+    </x-card>
+
+    {{-- Map + right-side unit list --}}
     <x-card shadow class="p-0">
         <div class="relative">
             <livewire:maps.map/>
@@ -173,51 +238,6 @@ return new class extends Component
                     />
                 </div>
 
-                {{-- Step 1: County --}}
-                <div class="mb-3">
-                    <label class="font-bold text-sm block mb-1">۱. شهرستان</label>
-                    @foreach ($regions as $region)
-                        <x-toggle
-                            right
-                            wire:model.live="selectedRegions"
-                            value="{{ $region['id'] }}"
-                            label="{{ $region['name'] }}"
-                        />
-                    @endforeach
-                </div>
-
-                {{-- Step 2: Center type --}}
-                @if (!empty($selectedRegions))
-                    <div class="mb-3">
-                        <label class="font-bold text-sm block mb-1">۲. نوع مرکز</label>
-                        @foreach ($centerTypes as $type)
-                            <x-toggle
-                                right
-                                wire:model.live="selectedTypes"
-                                value="{{ $type['id'] }}"
-                                label="{{ $type['name'] }}"
-                            />
-                        @endforeach
-                    </div>
-                @endif
-
-                {{-- Step 3: Select centers --}}
-                @if (!empty($centers))
-                    <div class="mb-3">
-                        <label class="font-bold text-sm block mb-1">۳. مرکز</label>
-                        @foreach ($centers as $center)
-                            <x-toggle
-                                right
-                                wire:model.live="selectedCenters"
-                                value="{{ $center['id'] }}"
-                                label="{{ $center['name'] }}"
-                            />
-                        @endforeach
-                    </div>
-                @endif
-
-                <hr class="border-base-300 my-3" />
-
                 {{-- Unit list --}}
                 @foreach ($units as $unit)
                     <x-toggle
@@ -227,6 +247,10 @@ return new class extends Component
                         x-on:change="$event.target.checked ? toggleGeoJsonOn({{ $unit['id'] }}) : toggleGeoJsonOff({{ $unit['id'] }})"
                     />
                 @endforeach
+
+                @if (!empty($selectedRegions) && (!empty($selectedCenterTypes) || !empty($selectedSubTypes)) && empty($units))
+                    <p class="text-sm text-base-content/50 text-center">واحدی یافت نشد</p>
+                @endif
             </div>
         </div>
     </x-card>
@@ -251,6 +275,7 @@ return new class extends Component
 <script>
     var geojsonLayers = {};
     var allUnits = {{ Js::from($units) }};
+    var countyLayers = {};
     var activeToggles = {};
 
     function waitForMap(callback) {
@@ -274,29 +299,55 @@ return new class extends Component
         });
     }
 
+    function clearCountyLayers() {
+        Object.keys(countyLayers).forEach(function(id) {
+            window.map.removeLayer(countyLayers[id]);
+            delete countyLayers[id];
+        });
+    }
+
+    function showCountyBoundaries(counties) {
+        clearCountyLayers();
+        counties.forEach(function(c) {
+            if (c.geojson && !countyLayers[c.id]) {
+                try {
+                    let data = typeof c.geojson === 'string' ? JSON.parse(c.geojson) : c.geojson;
+                    countyLayers[c.id] = L.geoJSON(data, {
+                        style: { color: "#3b82f6", weight: 2, opacity: 0.7, fillOpacity: 0.05 }
+                    }).addTo(window.map);
+                } catch (e) {
+                    console.error('Error adding county boundary:', e);
+                }
+            }
+        });
+    }
+
+    function showUnits(units) {
+        units.forEach(function(unit) {
+            if (unit.geojson && !geojsonLayers[unit.id]) {
+                try {
+                    let data = typeof unit.geojson === 'string' ? JSON.parse(unit.geojson) : unit.geojson;
+                    geojsonLayers[unit.id] = L.geoJSON(data, {
+                        style: { color: "orange", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
+                    }).addTo(window.map);
+                    activeToggles[unit.id] = true;
+                } catch (e) {
+                    console.error('Error adding GeoJSON:', e);
+                }
+            }
+        });
+    }
+
     window.toggleGeoJsonOn = function(unitId) {
         if (!window.map) return;
-
         const unit = allUnits.find(u => u.id === unitId);
         if (!unit || !unit.geojson || geojsonLayers[unitId]) return;
-
         activeToggles[unitId] = true;
-
         try {
-            let data = typeof unit.geojson === 'string'
-                ? JSON.parse(unit.geojson)
-                : unit.geojson;
-
+            let data = typeof unit.geojson === 'string' ? JSON.parse(unit.geojson) : unit.geojson;
             geojsonLayers[unitId] = L.geoJSON(data, {
-                style: {
-                    color: "orange",
-                    weight: 2,
-                    opacity: 0.8,
-                    fillOpacity: 0.1,
-                }
+                style: { color: "orange", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
             }).addTo(window.map);
-
-            // Zoom to the boundary
             if (geojsonLayers[unitId].getBounds) {
                 map.fitBounds(geojsonLayers[unitId].getBounds().pad(0.1));
             }
@@ -313,13 +364,12 @@ return new class extends Component
         }
     };
 
-    // Sync checkbox states after Livewire morphs the DOM
     function syncToggleStates() {
-        document.querySelectorAll('[wire\\:key^="unit-"]').forEach(el => {
-            const input = el.querySelector('input[type="checkbox"]');
+        document.querySelectorAll('[wire\\:key^="unit-"]').forEach(function(el) {
+            var input = el.querySelector('input[type="checkbox"]');
             if (!input) return;
-            const key = el.getAttribute('wire:key');
-            const unitId = parseInt(key.replace('unit-', ''));
+            var key = el.getAttribute('wire:key');
+            var unitId = parseInt(key.replace('unit-', ''));
             if (activeToggles[unitId]) {
                 input.checked = true;
             }
@@ -327,31 +377,14 @@ return new class extends Component
     }
 
     waitForMap(function() {
-        Livewire.on('units-updated', ({ units }) => {
+        Livewire.on('county-boundaries-loaded', function({ counties }) {
+            showCountyBoundaries(counties);
+        });
+
+        Livewire.on('units-updated', function({ units }) {
             clearAllLayers();
             allUnits = units;
-
-            // Re-apply active toggles to new units
-            Object.keys(activeToggles).forEach(id => {
-                const uid = parseInt(id);
-                const unit = allUnits.find(u => u.id === uid);
-                if (unit && unit.geojson && !geojsonLayers[uid]) {
-                    try {
-                        let data = typeof unit.geojson === 'string'
-                            ? JSON.parse(unit.geojson)
-                            : unit.geojson;
-                        geojsonLayers[uid] = L.geoJSON(data, {
-                            style: { color: "orange", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
-                        }).addTo(window.map);
-                    } catch (e) {
-                        console.error('Error re-applying GeoJSON:', e);
-                    }
-                } else if (!unit) {
-                    delete activeToggles[id];
-                }
-            });
-
-            // Sync checkbox states after DOM update
+            showUnits(allUnits);
             requestAnimationFrame(syncToggleStates);
         });
     });
