@@ -40,8 +40,15 @@ class LastUserActivity
      */
     protected function updateLastActivity(int $userId): void
     {
+        $key = self::CACHE_KEY_PREFIX . $userId;
+
+        // Skip write if key already exists — reduces cache writes to once per ONLINE_DURATION
+        if (Cache::has($key)) {
+            return;
+        }
+
         Cache::put(
-            self::CACHE_KEY_PREFIX . $userId,
+            $key,
             now()->toDateTimeString(),
             now()->addMinutes(self::ONLINE_DURATION)
         );
