@@ -2,28 +2,34 @@
 
 namespace App\Ai\Tools\Hardware;
 
+use App\Ai\Tools\Tool;
 use App\Models\Hardware;
-use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Request;
-use Stringable;
 
-class SearchHardware implements Tool
+class SearchHardwareTool extends Tool
 {
-    /**
-     * Describe what this tool does for the LLM.
-     */
-    public function description(): Stringable|string
+    public function name(): string
     {
-        return 'Search hardware inventory by PC name, IP address, MAC address, owner national code (n_code), or any keyword. Returns matching hardware records with specs and owner info.';
+        return 'search_hardware';
     }
 
-    /**
-     * Execute the search query.
-     */
-    public function handle(Request $request): Stringable|string
+    public function description(): string
     {
-        $query = $request['query'];
+        return 'Search hardware inventory by PC name, IP address, MAC address, owner national code (n_code), CPU, RAM, HDD, OS, or any keyword. Returns matching hardware records with full specs and owner name.';
+    }
+
+    public function parameters(): array
+    {
+        return [
+            'query' => [
+                'type' => 'string',
+                'description' => 'Search term — matches pc_name, ip_valid, ip_local, mac, n_code, cpu, ram, hdd, os, type, or comments',
+            ],
+        ];
+    }
+
+    public function execute(array $arguments): mixed
+    {
+        $query = $arguments['query'] ?? '';
 
         $results = Hardware::query()
             ->with(['person'])
@@ -45,7 +51,7 @@ class SearchHardware implements Tool
             return "No hardware records found matching \"{$query}\".";
         }
 
-        $formatted = $results->map(fn (Hardware $h) => [
+        return $results->map(fn (Hardware $h) => [
             'id' => $h->id,
             'pc_name' => $h->pc_name,
             'type' => $h->type,
@@ -70,17 +76,5 @@ class SearchHardware implements Tool
                 : null,
             'owner_n_code' => $h->n_code,
         ]);
-
-        return $formatted->toJson(JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    }
-
-    /**
-     * Schema definition for the tool's input parameters.
-     */
-    public function schema(JsonSchema $schema): array
-    {
-        return [
-            'query' => $schema->string()->required(),
-        ];
     }
 }

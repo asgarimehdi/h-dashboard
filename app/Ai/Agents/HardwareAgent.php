@@ -2,25 +2,18 @@
 
 namespace App\Ai\Agents;
 
-use App\Ai\Tools\Hardware\HardwareStats;
-use App\Ai\Tools\Hardware\PersonHardware;
-use App\Ai\Tools\Hardware\SearchHardware;
-use App\Ai\Tools\Hardware\UpdateHardware;
-use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Promptable;
+use App\Ai\Tools\Hardware\HardwareStatsTool;
+use App\Ai\Tools\Hardware\PersonHardwareTool;
+use App\Ai\Tools\Hardware\SearchHardwareTool;
+use App\Ai\Tools\Hardware\UpdateHardwareTool;
+use App\Ai\Agent;
 
-class HardwareAgent implements Agent, HasTools
+class HardwareAgent extends Agent
 {
-    use Promptable;
-
-    /**
-     * System instructions for the hardware agent.
-     */
-    public function instructions(): string
+    public function __construct()
     {
-        return <<<'PROMPT'
-            You are a hardware inventory assistant (شناسنامه سخت‌افزار) for a health dashboard application.
+        $this->withInstructions(<<<'PROMPT'
+            You are a helpful hardware inventory assistant (شناسنامه سخت‌افزار) for a health dashboard application.
             You manage and query hardware records including PCs, laptops, and network equipment.
 
             Each hardware record has these fields:
@@ -51,21 +44,11 @@ class HardwareAgent implements Agent, HasTools
             - When updating hardware, confirm the changes clearly before and after.
             - If no results are found, suggest broader search terms.
             - When showing owner info, include the person's full name from the persons table.
-        PROMPT;
-    }
+        PROMPT);
 
-    /**
-     * Tools available to this agent.
-     *
-     * @return \Laravel\Ai\Contracts\Tool[]
-     */
-    public function tools(): iterable
-    {
-        return [
-            new SearchHardware,
-            new HardwareStats,
-            new PersonHardware,
-            new UpdateHardware,
-        ];
+        $this->withTool(new SearchHardwareTool)
+            ->withTool(new HardwareStatsTool)
+            ->withTool(new PersonHardwareTool)
+            ->withTool(new UpdateHardwareTool);
     }
 }

@@ -9,12 +9,6 @@ use Illuminate\Http\Request;
 
 class HardwareAgentController extends Controller
 {
-    /**
-     * Prompt the hardware AI agent.
-     *
-     * The agent can search hardware, get stats, look up person devices,
-     * and update records (with human approval).
-     */
     public function __invoke(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -22,12 +16,12 @@ class HardwareAgentController extends Controller
         ]);
 
         try {
-            $response = HardwareAgent::make()
-                ->prompt($validated['message']);
+            $agent = new HardwareAgent();
+            $response = $agent->prompt($validated['message']);
 
             return response()->json([
                 'status' => 'ok',
-                'response' => (string) $response,
+                'response' => $response,
             ]);
         } catch (\Throwable $e) {
             return response()->json([
