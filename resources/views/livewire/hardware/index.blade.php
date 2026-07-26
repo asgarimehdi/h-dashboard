@@ -30,6 +30,11 @@ return new class extends Component
     public ?string $filterNetType = null;
     public ?string $filterMark = null;
 
+    // Related filters (Person/Unit/Semat)
+    public ?string $filterPerson = null;
+    public ?string $filterUnit = null;
+    public ?string $filterSemat = null;
+
     // Form fields
     public ?string $n_code = null;
     public ?string $pc_name = null;
@@ -97,6 +102,7 @@ return new class extends Component
         $this->reset([
             'filterType', 'filterOs', 'filterCpu', 'filterRam',
             'filterHdd', 'filterShutdown', 'filterNetType', 'filterMark',
+            'filterPerson', 'filterUnit', 'filterSemat',
         ]);
     }
 
@@ -106,6 +112,7 @@ return new class extends Component
             $this->filterType, $this->filterOs, $this->filterCpu,
             $this->filterRam, $this->filterHdd, $this->filterShutdown,
             $this->filterNetType, $this->filterMark,
+            $this->filterPerson, $this->filterUnit, $this->filterSemat,
         ])->filter()->isNotEmpty();
     }
 
@@ -246,6 +253,25 @@ return new class extends Component
             $query->where('mark', $this->filterMark === '1');
         }
 
+        // Related filters (AND logic)
+        if ($this->filterPerson) {
+            $query->whereHas('person', function ($q) {
+                $q->where('f_name', 'LIKE', "%{$this->filterPerson}%")
+                  ->orWhere('l_name', 'LIKE', "%{$this->filterPerson}%")
+                  ->orWhere('n_code', 'LIKE', "%{$this->filterPerson}%");
+            });
+        }
+        if ($this->filterUnit) {
+            $query->whereHas('person.unit', function ($q) {
+                $q->where('name', 'LIKE', "%{$this->filterUnit}%");
+            });
+        }
+        if ($this->filterSemat) {
+            $query->whereHas('person.semat', function ($q) {
+                $q->where('name', 'LIKE', "%{$this->filterSemat}%");
+            });
+        }
+
         $query->orderBy(...array_values($this->sortBy));
 
         return $query->paginate($this->perPage);
@@ -303,6 +329,9 @@ return new class extends Component
                         :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'روشن'], ['id' => '0', 'name' => 'خاموش']])" />
                     <x-select wire:model.live="filterMark" label="علامت‌دار"
                         :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'علامت‌دار'], ['id' => '0', 'name' => 'بدون علامت']])" />
+                    <x-input wire:model.live.debounce="filterPerson" label="پرسنل (نام/کد ملی)" placeholder="جستجو..." clearable />
+                    <x-input wire:model.live.debounce="filterUnit" label="مرکز/واحد" placeholder="نام واحد..." clearable />
+                    <x-input wire:model.live.debounce="filterSemat" label="سمت" placeholder="پزشک، ممرض..." clearable />
                 </div>
                 @if($this->hasActiveFilters())
                     <div class="mt-3 flex items-center gap-2">
