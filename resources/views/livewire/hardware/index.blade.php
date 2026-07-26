@@ -28,6 +28,7 @@ return new class extends Component
     public ?string $filterHdd = null;
     public ?string $filterShutdown = null;
     public ?string $filterNetType = null;
+    public ?string $filterMark = null;
 
     // Form fields
     public ?string $n_code = null;
@@ -95,7 +96,7 @@ return new class extends Component
     {
         $this->reset([
             'filterType', 'filterOs', 'filterCpu', 'filterRam',
-            'filterHdd', 'filterShutdown', 'filterNetType',
+            'filterHdd', 'filterShutdown', 'filterNetType', 'filterMark',
         ]);
     }
 
@@ -104,7 +105,7 @@ return new class extends Component
         return collect([
             $this->filterType, $this->filterOs, $this->filterCpu,
             $this->filterRam, $this->filterHdd, $this->filterShutdown,
-            $this->filterNetType,
+            $this->filterNetType, $this->filterMark,
         ])->filter()->isNotEmpty();
     }
 
@@ -241,6 +242,9 @@ return new class extends Component
         if ($this->filterNetType) {
             $query->where('net_type', 'LIKE', "%{$this->filterNetType}%");
         }
+        if ($this->filterMark !== null && $this->filterMark !== '') {
+            $query->where('mark', $this->filterMark === '1');
+        }
 
         $query->orderBy(...array_values($this->sortBy));
 
@@ -253,6 +257,7 @@ return new class extends Component
             'hardwares' => $this->hardwares()->through(fn($hw) => [
                 ...$hw->toArray(),
                 'person_name' => $hw->person ? trim($hw->person->f_name . ' ' . $hw->person->l_name) : '-',
+                '_class' => $hw->mark ? 'bg-warning/20 border-r-4 border-r-warning' : '',
             ]),
             'headers' => $this->headers(),
         ];
@@ -297,6 +302,8 @@ return new class extends Component
                     <x-input wire:model.live.debounce="filterNetType" label="نوع شبکه" placeholder="wired, wireless..." clearable />
                     <x-select wire:model.live="filterShutdown" label="وضعیت روشن/خاموش"
                         :options="['' => 'همه', '1' => 'روشن', '0' => 'خاموش']" />
+                    <x-select wire:model.live="filterMark" label="علامت‌دار"
+                        :options="['' => 'همه', '1' => 'علامت‌دار', '0' => 'بدون علامت']" />
                 </div>
                 @if($this->hasActiveFilters())
                     <div class="mt-3 flex items-center gap-2">
@@ -427,7 +434,7 @@ return new class extends Component
 
         {{-- Table --}}
         <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[5, 10, 25, 50]">
+                 :per-page-values="[5, 10, 25, 50]" :row-class="fn($row) => $row['_class'] ?? ''">
             @scope('actions', $hw)
                 <div class="flex gap-1">
                     <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
