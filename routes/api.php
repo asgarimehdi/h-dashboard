@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\MultiLatestValueController;
+use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
@@ -43,6 +44,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
 Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
+
+// Ticket API routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/tickets', [TicketController::class, 'index']);
+    Route::post('/tickets', [TicketController::class, 'store']);
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
+    Route::put('/tickets/{ticket}', [TicketController::class, 'update']);
+    Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy']);
+    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign']);
+    Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept']);
+    Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete']);
+});
 
 // Todo API routes
 Route::middleware('auth:sanctum')->group(function () {
