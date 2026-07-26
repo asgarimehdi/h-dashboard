@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/login', 'auth.login')->name('login');
@@ -13,7 +14,7 @@ Route::get('/logout', function () {
 
     // ثبت فعالیت خروج
     if ($userId) {
-        \App\Services\ActivityLogService::logout('خروج از سیستم - کاربر: ' . $userName);
+        ActivityLogService::logout('خروج از سیستم - کاربر: '.$userName);
         Session::forget("user_{$userId}_display_name");
     }
 
@@ -133,5 +134,8 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/profile', 'profile.index')->name('profile');
         // ابزارهای مدیریتی
         Route::livewire('/tools', 'tools.tools')->name('tools');
+
+        // گفتگوی هوش مصنوعی
+        Route::livewire('/chat', 'chat.index')->name('chat');
     }); // unit_context
 });

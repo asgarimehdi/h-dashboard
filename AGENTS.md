@@ -9,6 +9,7 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 - Laravel Sanctum v4 (API tokens)
 - Jalali dates: hekmatinasser/verta v9, morilog/jalali v3.5
 - Testing: Pest v4, Laravel Pint v1
+- AI: laravel/ai v0.10 (multi-provider via `AiService`)
 - Dev tools: Laravel Boost v2 (MCP), Debugbar, Pail
 - Locales: `fa` (primary), `en` (fallback). Pagination and UI strings in `lang/fa.json`.
 
@@ -43,12 +44,14 @@ Organizational health/HR management dashboard with Persian UI. Handles personnel
 | `users/` | User management |
 
 ### API Controllers (`app/Http/Controllers/Api/`)
+- `AiController` — AI chat smoke test endpoint
 - `UnitController` — Unit CRUD for Flutter app
 - `TodoController` — Todo API
 - `TrafficController` — Traffic data
 - `MultiLatestValueController` — Zabbix multi-latest values
 
 ### Services (`app/Services/`)
+- `AiService` — Multi-provider AI wrapper (OpenAI + Anthropic)
 - `AccessService` — Data scope control (recursive CTE for unit hierarchy)
 - `ActivityLogService` — Activity logging
 - `NotificationService` — Notification management

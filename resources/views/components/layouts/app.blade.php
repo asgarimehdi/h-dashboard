@@ -201,6 +201,7 @@
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
+                <x-menu-item title="گفتگوی هوش مصنوعی" icon="o-chat-bubble-left" link="/chat" wire:navigate />
             </x-menu>
         </x-slot:sidebar>
         <x-slot:content>
