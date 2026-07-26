@@ -14,7 +14,7 @@ class PersonHardwareTool extends Tool
 
     public function description(): string
     {
-        return 'Get all hardware devices assigned to a specific person by their national code (n_code). Returns full hardware specs for each device.';
+        return 'Get all hardware for a person by n_code.';
     }
 
     public function parameters(): array
@@ -22,7 +22,7 @@ class PersonHardwareTool extends Tool
         return [
             'n_code' => [
                 'type' => 'string',
-                'description' => 'Person national code (کد ملی)',
+                'description' => 'National code',
                 'required' => true,
             ],
         ];
@@ -38,7 +38,7 @@ class PersonHardwareTool extends Tool
             ->get();
 
         if ($devices->isEmpty()) {
-            return "No hardware records found for national code \"{$nCode}\".";
+            return "No hardware for n_code {$nCode}.";
         }
 
         $owner = $devices->first()->person
@@ -46,28 +46,16 @@ class PersonHardwareTool extends Tool
             : 'Unknown';
 
         return [
-            'owner_name' => $owner,
-            'n_code' => $nCode,
-            'total_devices' => $devices->count(),
-            'devices' => $devices->map(fn (Hardware $h, int $index) => [
-                'device' => $index + 1,
+            'owner' => $owner,
+            'devices' => $devices->map(fn (Hardware $h) => [
                 'pc_name' => $h->pc_name,
                 'type' => $h->type,
                 'os' => $h->os,
                 'ip_valid' => $h->ip_valid,
                 'ip_local' => $h->ip_local,
-                'mac' => $h->mac,
-                'net_type' => $h->net_type,
-                'switch' => $h->switch,
-                'port' => $h->port,
-                'vlan' => $h->vlan,
-                'motherboard' => $h->motherboard,
                 'cpu' => $h->cpu,
                 'ram' => $h->ram,
                 'hdd' => $h->hdd,
-                'shutdown' => $h->shutdown,
-                'clean_at' => $h->clean_at?->toDateString(),
-                'comments' => $h->comments,
             ])->values(),
         ];
     }

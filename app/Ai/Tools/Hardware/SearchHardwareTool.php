@@ -14,7 +14,7 @@ class SearchHardwareTool extends Tool
 
     public function description(): string
     {
-        return 'Search hardware inventory by PC name, IP address, MAC address, owner national code (n_code), CPU, RAM, HDD, OS, or any keyword. Returns matching hardware records with full specs and owner name.';
+        return 'Search hardware by pc_name, ip, mac, n_code, cpu, ram, hdd, os, or type.';
     }
 
     public function parameters(): array
@@ -22,7 +22,7 @@ class SearchHardwareTool extends Tool
         return [
             'query' => [
                 'type' => 'string',
-                'description' => 'Search term — matches pc_name, ip_valid, ip_local, mac, n_code, cpu, ram, hdd, os, type, or comments',
+                'description' => 'Search term',
             ],
         ];
     }
@@ -43,12 +43,11 @@ class SearchHardwareTool extends Tool
             ->orWhere('hdd', 'like', "%{$query}%")
             ->orWhere('os', 'like', "%{$query}%")
             ->orWhere('type', 'like', "%{$query}%")
-            ->orWhere('comments', 'like', "%{$query}%")
             ->limit(20)
             ->get();
 
         if ($results->isEmpty()) {
-            return "No hardware records found matching \"{$query}\".";
+            return "No results for \"{$query}\".";
         }
 
         return $results->map(fn (Hardware $h) => [
@@ -59,22 +58,11 @@ class SearchHardwareTool extends Tool
             'ip_valid' => $h->ip_valid,
             'ip_local' => $h->ip_local,
             'mac' => $h->mac,
-            'net_type' => $h->net_type,
-            'switch' => $h->switch,
-            'port' => $h->port,
-            'vlan' => $h->vlan,
-            'motherboard' => $h->motherboard,
             'cpu' => $h->cpu,
             'ram' => $h->ram,
             'hdd' => $h->hdd,
             'shutdown' => $h->shutdown,
-            'mark' => $h->mark,
-            'clean_at' => $h->clean_at?->toDateString(),
-            'comments' => $h->comments,
-            'owner' => $h->person
-                ? trim($h->person->f_name . ' ' . $h->person->l_name)
-                : null,
-            'owner_n_code' => $h->n_code,
+            'owner' => $h->person ? trim($h->person->f_name . ' ' . $h->person->l_name) : null,
         ]);
     }
 }
