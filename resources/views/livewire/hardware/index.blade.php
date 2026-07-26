@@ -378,8 +378,8 @@ return new class extends Component
                     <x-input wire:model="type" label="نوع" placeholder="pc, laptop, ..." />
                     <x-input wire:model="os" label="سیستم عامل" placeholder="Windows 10, ..." />
                     <x-input wire:model="ip_valid" label="IP عمومی" />
-                    <x-input wire:model="ip_local" label="IP محلی" />
-                    <x-input wire:model="mac" label="MAC Address" />
+                    <x-input wire:model="ip_local" label="IP محلی" x-mask="099.099.099.099" />
+                    <x-input wire:model="mac" label="MAC Address" x-mask="**:**:**:**:**:**" />
                     <x-input wire:model="net_type" label="نوع شبکه" placeholder="wireless, wired, ..." />
                     <x-input wire:model="switch" label="سوئیچ" />
                     <x-input wire:model="port" label="پورت" />
@@ -437,8 +437,8 @@ return new class extends Component
                     <x-input wire:model="type" label="نوع" />
                     <x-input wire:model="os" label="سیستم عامل" />
                     <x-input wire:model="ip_valid" label="IP عمومی" />
-                    <x-input wire:model="ip_local" label="IP محلی" />
-                    <x-input wire:model="mac" label="MAC Address" />
+                    <x-input wire:model="ip_local" label="IP محلی" x-mask="099.099.099.099" />
+                    <x-input wire:model="mac" label="MAC Address" x-mask="**:**:**:**:**:**" />
                     <x-input wire:model="net_type" label="نوع شبکه" />
                     <x-input wire:model="switch" label="سوئیچ" />
                     <x-input wire:model="port" label="پورت" />
