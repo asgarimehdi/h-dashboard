@@ -1,158 +1,68 @@
-# Health Dashboard (داشبورد سلامت)
+# Health Dashboard (داشبورد سلامت) - Documentation
 
-Organizational health/HR management dashboard with Persian UI. Handles personnel, units, maps/GIS, IT monitoring (Zabbix), tickets, todos, and reports. Provides a Flutter mobile app via Sanctum API.
+This document serves as the authoritative reference for the Health Dashboard project. It describes the system architecture, domain models, and the AI integration layer.
 
-## Tech Stack
-- PHP 8.3+, Laravel v13, Livewire v4, Tailwind CSS v4
-- maryUI v2.8, DaisyUI v5, Vite v8
-- Spatie Laravel Permission v8 (roles & permissions)
-- Laravel Sanctum v4 (API tokens)
-- Jalali dates: hekmatinasser/verta v9, morilog/jalali v3.5
-- Testing: Pest v4, Laravel Pint v1
-- AI: laravel/ai v0.10 (multi-provider via `AiService`)
-- Dev tools: Laravel Boost v2 (MCP), Debugbar, Pail
-- Locales: `fa` (primary), `en` (fallback). Pagination and UI strings in `lang/fa.json`.
+## 🏗️ Project Overview
+A comprehensive organizational health and HR management system with a Persian (Farsi) interface. The system integrates personnel records, organizational hierarchy, IT infrastructure monitoring, and a ticket-based task management system.
 
-## Branding & Theme
-- **Logo**: Inline SVG in `app/View/Components/AppBrand.php` (class component, overrides blade). Gradient cross+heart icon with "داشبورد سلامت" text. Theme-aware via CSS (`data-theme="synthwave"` for dark mode).
-- **Favicon**: `public/favicon.svg` — gradient cross+heart design. Referenced in `app.blade.php` and `auth.blade.php` layouts.
-- **Sidebar SVG**: `public/logo-sidebar.svg` — uses `currentColor` for theme adaptability.
-- **Theme selector**: DaisyUI themes via `data-theme` attribute. Dark mode: `synthwave`. Light mode: `fantasy`.
+### Tech Stack
+- **Backend:** Laravel 13 (PHP 8.4)
+- **Frontend:** Livewire 4, Tailwind CSS 4, maryUI 2.8, DaisyUI 5
+- **Auth & Access:** Laravel Sanctum (API), Spatie Laravel Permission (Roles/Permissions)
+- **GIS:** Leaflet.js for interactive mapping of units and boundaries.
+- **Monitoring:** Zabbix API integration for network traffic and hardware health.
+- **AI:** Custom Agent framework using `openai-php/client` (compatible with OpenAI and other providers).
 
-## App Structure
+## 🗄️ Data Model & Domain
 
-### Livewire Components (`resources/views/livewire/`)
-| Directory | Purpose |
-|-----------|---------|
-| `activity-log/` | Activity logging and audit trail |
-| `auth/` | Login, register, password reset |
-| `hardware/` | Hardware profile (شناسنامه سخت افزار) — CRUD with modal editing |
-| `it/` | IT monitoring (Zabbix integration) |
-| `kargozini/` | Administrative: estekhdam, radif, tahsil, semat, person |
-| `maps/` | GIS map views with Leaflet |
-| `notifications/` | User notifications |
-| `permissions/` | Permission management (Spatie) |
-| `profile/` | User profile settings |
-| `reports/` | Reports: units, persons, todos, map-no-boundary, tickets |
-| `roles/` | Role management (Spatie) |
-| `search/` | Global search |
-| `settings/` | App settings |
-| `tickets/` | Ticket system (inbox, monitoring) |
-| `todo/` | Todo management |
-| `tools/` | Utility tools |
-| `units/` | Unit/organization management, dedicated unit map page (`map.blade.php`) |
-| `users/` | User management |
+### Core Entities
+- **Person (پرسنل):** The central entity. Linked to:
+  - `Semat` (Job Title/Position)
+  - `Tahsil` (Education)
+  - `Radif` (Rank/Grade)
+  - `Estekhdam` (Employment Type)
+  - `Unit` (Current organizational unit)
+- **Unit (واحد سازمانی):** Hierarchical structure (parent/child) with GIS boundaries.
+- **Hardware (سخت‌افزار):** Devices (PC, Laptop, etc.) linked to a `Person` via `n_code`.
+- **Ticket (تیکت):** Support and task requests. Workflow: `created` → `forwarded` → `accepted` → `completed/rejected`.
+- **Todo (وظیفه):** Simple task tracking for units.
 
-### API Controllers (`app/Http/Controllers/Api/`)
-- `AiController` — AI chat smoke test endpoint
-- `UnitController` — Unit CRUD for Flutter app
-- `TodoController` — Todo API
-- `TrafficController` — Traffic data
-- `MultiLatestValueController` — Zabbix multi-latest values
+### Key Relationships
+- `Hardware` $\rightarrow$ `Person` (via `n_code`)
+- `Person` $\rightarrow$ `Unit` (via `u_id`)
+- `User` $\rightarrow$ `Person` (via `n_code`)
+- `Unit` $\rightarrow$ `Unit` (Self-referential hierarchy via `parent_id`)
 
-### Services (`app/Services/`)
-- `AiService` — Multi-provider AI wrapper (OpenAI + Anthropic)
-- `AccessService` — Data scope control (recursive CTE for unit hierarchy)
-- `ActivityLogService` — Activity logging
-- `NotificationService` — Notification management
-- `ZabbixService` — Zabbix API integration
+## 🤖 AI Integration (Agentic Layer)
 
-### View Components
-- `AppBrand` (`app/View/Components/AppBrand.php`) — Class component with inline SVG logo. Takes precedence over blade files.
+The system implements a custom Agent pattern instead of a generic chat, allowing the AI to interact with the database through specialized tools.
 
-## Database Structure & Relationships
+### Agent Architecture
+- **`App\Ai\Agent`**: Base class handling the LLM loop, tool registration, and function calling.
+- **`App\Ai\Tools\Tool`**: Abstract base class for all functional capabilities.
+- **`HardwareAgent`**: A specialized agent for hardware inventory management.
 
-### Core Tables
-| Table | Primary Key | Important Columns | Relations |
-|-------|-------------|-------------------|----------|
-| `persons` | `id` | `n_code` (unique), `e_id`, `t_id`, `s_id`, `r_id`, `u_id` | `belongsTo` Estekhdam, Tahsil, Semat, Radif; `hasOne` User via `n_code`; optional `unit_id` (FK to `units.id` for default unit) |
-| `users` | `id` | `n_code` (FK → `persons.n_code`), `password`, `deleted_at` | `belongsTo` Person; `belongsToMany` Unit via `user_units`; Spatie `HasRoles` |
-| `user_units` | `id` | `user_id`, `unit_id`, `role`, `is_primary` | Pivot linking Users ↔ Units (many‑to‑many). Unique (`user_id`,`unit_id`). |
-| `units` | `id` | `name`, `parent_id`, `unit_type_id`, `region_id`, `boundary_id`, `lat`, `lng`, `is_active`, `can_receive_tickets` | `belongsTo` parent Unit, Region, UnitType, Boundary; `hasMany` child Units; `belongsToMany` Users via `user_units`; `hasMany` Persons, Todos |
-| `unit_types` | `id` | `name` (unique), `description` | `belongsToMany` self via `unit_type_relationships` (allowed parent types) |
-| `unit_type_relationships` | — | `child_unit_type_id`, `allowed_parent_unit_type_id` | Defines which unit types may be parents of others |
-| `regions` | `id` | `name`, `type` (`province`/`county`), `parent_id`, `boundary_id` | Self‑referential hierarchy; `hasMany` Units |
-| `boundaries` | `id` | `boundary` (MULTIPOLYGON, SRID 4326) | Used by Regions and Units for GIS polygons |
-| `todos` | `id` | `title`, `start_at`, `end_at`, `is_completed`, `unit_id` (nullable) | `belongsTo` Unit (null‑on‑delete) |
-| `tickets` | `id` | `ticket_code` (unique), `user_id`, `unit_id`, `subject`, `content`, `priority`, `status`, `current_assignee_id`, `accepted_at`, `completed_at` | `belongsTo` creator User, Unit, optional assignee User; `hasMany` TaskActivities, Attachments |
-| `task_activities` | `id` | `ticket_id`, `user_id`, `action`, `description`, `to_unit_id`, `to_user_id`, `is_internal` | `belongsTo` Ticket, User; `hasMany` Attachments |
-| `attachments` | `id` | `ticket_id`, `user_id`, `file_path`, `file_name`, `file_size`, `activity_id` (nullable) | `belongsTo` Ticket, User, optional TaskActivity |
-| `location_logs` | `id` | `user_id`, `latitude`, `longitude` | `belongsTo` User |
-| `activity_logs` | `id` | `user_id`, `description`, `created_at` | `belongsTo` User |
-| `notifications` | `id` | `user_id`, `data`, `created_at` | `belongsTo` User |
-| `hardwares` | `id` | `n_code` (FK → `persons.n_code`), `pc_name`, `type`, `os`, `ip_valid`, `ip_local`, `mac`, `net_type`, `switch`, `port`, `shutdown`, `vlan`, `motherboard`, `cpu`, `ram`, `hdd`, `comments`, `mark`, `clean_at` | `belongsTo` Person via `n_code` |
+### Hardware Agent Capabilities
+The `HardwareAgent` uses the following tools to provide a natural language interface to the hardware database:
+- `search_hardware`: Deep search across all hardware specs and owner names.
+- `hardware_stats`: Generates aggregate reports (total count, distribution by OS/Type).
+- `person_hardware`: Lists all devices belonging to a specific person.
+- `update_hardware`: Allows updating device specs via chat.
 
-### Relationship Highlights
-- **User ↔ Person**: One‑to‑one via `n_code`. Person is the parent; User stores the foreign key.
-- **User ↔ Unit**: Many‑to‑many via `user_units`. Each assignment carries a `role` (`responsible`/`staff`) and an `is_primary` flag.
-- **Unit Hierarchy**: Self‑referential `parent_id` builds a tree; `Unit::descendantIds()` (recursive CTE) provides all child IDs for hierarchical access control.
-- **Unit Types**: `unit_type_relationships` restrict which unit types may contain which child types.
-- **Geography**: `regions` and `units` can reference a `boundary` polygon for GIS mapping.
-- **Todos** belong to a Unit; deleting a Unit sets `unit_id` to `NULL`.
-- **Tickets** belong to a Unit and a creator User; may be assigned to another User.
-- **TaskActivities** log actions on a Ticket and can forward to another Unit or User.
-- **Attachments** can be attached to a Ticket or a TaskActivity.
-- **LocationLogs** store GPS points per User (used by map features).
-- **Hardware** belongs to a Person via `n_code`. Multiple hardware records can belong to one person.
+### AI Workflow
+`User Input` $\rightarrow$ `Agent` $\rightarrow$ `Tool Execution (Eloquent Query)` $\rightarrow$ `LLM Synthesis` $\rightarrow$ `Final Response`
 
-## Access Control
-- **Functional permissions** (Spatie) control *what* actions a user may perform (e.g., `create_ticket`, `map`, `calendar`, `manage_hardware`).
-- **Data scope** (service `AccessService`) controls *which* Units' data a user can see – the current unit plus all descendants via recursive CTE. Middleware `ValidateUnitContext` ensures `session('current_unit_id')` is set.
+## 🛠️ Implementation Details
 
-## FK Delete Behaviour (summary)
-- `users.n_code → persons`: **restrict**
-- Lookup FK columns (`e_id`, `t_id`, `s_id`, `r_id`): **restrict**
-- `units.region_id`, `units.parent_id`: **restrict**
-- `user_units.user_id → users`: **cascade**
-- `user_units.unit_id → units`: **cascade**
-- `tickets.ticket_id → task_activities, attachments`: **cascade**
-- `task_activities.activity_id → attachments`: **cascade**
-- `location_logs.user_id → users`: **cascade**
-- `todos.unit_id → units`: **set null**
-- `regions.boundary_id`, `units.boundary_id`: **cascade**
-- `hardwares.n_code → persons`: **restrict** (via FK constraint)
+### Access Control
+- **Functional:** Spatie Permissions (e.g., `manage_hardware`, `organization`).
+- **Data Scope:** `HasOrganizationalScope` trait and `AccessService` use recursive CTEs to ensure users only see data from their own unit and descendants.
 
-*Keep this file synchronized with any future schema changes.*
+### Infrastructure
+- **API:** Sanctum-protected endpoints for a Flutter mobile application.
+- **Monitoring:** `ZabbixService` handles real-time network traffic data fetching.
 
-## Seeders
-
-All seeders use hardcoded data — no external database connections required.
-
-| Seeder | Data Source | Purpose |
-|--------|-------------|---------|
-| `PersonsTableSeeder` | Hardcoded array | 3 initial persons |
-| `UsersTableSeeder` | Hardcoded array | 3 initial users (password: 12345678) |
-| `PersonUserFromDeviceSeeder` | `data/person_devices.csv` | 437 persons/users from hardware inventory, with semat/radif/role assignment |
-| `HardwareSeeder` | `data/hardware_data.csv` | 437 hardware records from inventory |
-| `PermissionSeeder` | Hardcoded | Spatie permissions including `manage_hardware` |
-| `RoleSeeder` | Hardcoded | Roles: admin, expert, unit_manager, user |
-
-**Role mapping** (from semat → role):
-- `expert`: Clinical staff (پزشک, دندانپزشک, ماما, بهورز, مراقب سلامت, بهداشت محیط, etc.)
-- `unit_manager`: Management (مدیریت, ریاست, معاونت بهداشت)
-- `user`: Admin staff (کارشناس آی تی, حسابدار, پذیرش, etc.)
-- `admin`: Original 3 hardcoded users
-
-## Maps & GIS
-
-### Architecture
-- **Base map**: `maps/map.blade.php` — reusable Leaflet map component. Uses private tile server at `config('map.tile_server_ip')`. Stores instance in `window.map` for child components.
-- **SPA navigation**: All map pages use DOM polling (wait for `#map`/`#unitsMap`/`#unitMap` elements) before calling `L.map()`. Never call `map.remove()` during SPA navigation — it deletes the DOM element and breaks Livewire's `wire:ignore` morphing.
-- **Leaflet plugins** loaded in `app.blade.php`: Leaflet.Draw (polygon drawing), Leaflet.RoutingMachine (route calculation), Leaflet.GeometryUtil.
-
-### Map Pages
-| Route | Component | Description |
-|-------|-----------|-------------|
-| `/maps/route` | `maps/route` | Road distance calculator with hardcoded waypoints |
-| `/maps/route2` | `maps/route2` | Road distance calculator with geocoding input |
-| `/maps/unit` | `maps/unit` | Toggle unit boundary polygons (GeoJSON) |
-| `/maps/units` | `maps/units` | Unit circle markers with list sidebar |
-| `/maps/interactive` | `maps/interactive` | Interactive unit markers with list sidebar |
-| `/maps/point` | `maps/point` | Custom icons per unit type with region/type filters |
-| `/maps/county` | `maps/county` | County/region boundary polygons |
-
-### Unit Map Page
-- **Route**: `/units/{id}/map` — dedicated full-page map for editing a unit's boundary polygon
-- **Component**: `units/map.blade.php` — Livewire Volt component
-- **Features**: Draw new polygon, edit existing, delete boundary. Uses PostGIS `ST_GeomFromGeoJSON` for save. Upserts boundary (creates new if none, updates if exists).
-- **Navigation**: Map button in units table links to this page (replaced previous modal approach).
+## 🚀 Development Guidelines
+- **UI Components:** Use `maryUI` for consistent layout and form elements.
+- **Bidi Support:** Always ensure `dir="rtl"` and Persian labels in views.
+- **Performance:** Use `Spatie` roles for quick access checks and `AccessService` for data-level security.
