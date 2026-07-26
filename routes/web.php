@@ -64,6 +64,7 @@ Route::middleware('auth')->group(function () {
 
         Route::middleware('role_or_permission:manage_hardware')->group(function () {
             Route::livewire('/hardware', 'hardware.index');
+            Route::livewire('/hardware/ai', 'hardware.ai-chat')->name('hardware.ai');
         });
 
         Route::middleware('role_or_permission:map')->group(function () {
