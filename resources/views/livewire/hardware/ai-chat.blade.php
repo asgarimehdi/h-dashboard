@@ -31,6 +31,9 @@ return new class extends Component
             $agent = new HardwareAgent();
             $response = $agent->prompt($message);
 
+            // Strip thinking blocks from response
+            $response = $this->stripThinking($response);
+
             $this->chatHistory[] = [
                 'role' => 'assistant',
                 'content' => $response,
@@ -49,6 +52,15 @@ return new class extends Component
     {
         $this->chatHistory = [];
         $this->success('گفتگو پاک شد', position: 'toast-bottom');
+    }
+
+    private function stripThinking(string $text): string
+    {
+        // Remove <thinking>...</thinking> blocks
+        $text = preg_replace('/<thinking>.*?<\/thinking>/is', '', $text);
+        // Also handle <think>...</think> format
+        $text = preg_replace('/<think>.*?<\/think>/is', '', $text);
+        return trim($text);
     }
 }; ?>
 
