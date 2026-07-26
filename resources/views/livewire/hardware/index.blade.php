@@ -37,6 +37,9 @@ return new class extends Component
 
     // Form fields
     public ?string $n_code = null;
+    public ?string $n_code_status = null; // 'valid', 'invalid', or null
+    public ?string $n_code_name = null;
+    public ?string $n_code_unit = null;
     public ?string $pc_name = null;
     public ?string $type = null;
     public ?string $os = null;
@@ -79,10 +82,33 @@ return new class extends Component
             ->toArray();
     }
 
+    public function updatedNCode($value): void
+    {
+        if (strlen($value) < 10) {
+            $this->n_code_status = null;
+            $this->n_code_name = null;
+            $this->n_code_unit = null;
+            return;
+        }
+
+        $person = Person::where('n_code', $value)->first();
+
+        if ($person) {
+            $this->n_code_status = 'valid';
+            $this->n_code_name = trim($person->f_name . ' ' . $person->l_name);
+            $this->n_code_unit = $person->unit?->name;
+        } else {
+            $this->n_code_status = 'invalid';
+            $this->n_code_name = null;
+            $this->n_code_unit = null;
+        }
+    }
+
     public function selectPerson(string $nCode, string $name): void
     {
         $this->n_code = $nCode;
-        $this->selectedPersonName = $name;
+        $this->n_code_status = 'valid';
+        $this->n_code_name = $name;
         $this->personSearch = '';
         $this->personResults = [];
     }
@@ -90,7 +116,8 @@ return new class extends Component
     private function resetForm(): void
     {
         $this->reset([
-            'n_code', 'pc_name', 'type', 'os',
+            'n_code', 'n_code_status', 'n_code_name', 'n_code_unit',
+            'pc_name', 'type', 'os',
             'ip_valid', 'ip_local', 'mac', 'net_type', 'switch', 'port',
             'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd',
             'comments', 'mark', 'clean_at', 'personSearch', 'personResults', 'selectedPersonName',
@@ -358,7 +385,12 @@ return new class extends Component
             <div class="mb-4 p-4 bg-base-200 rounded-lg">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative">
-                        <x-input wire:model="personSearch" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
+                        <x-input wire:model.live="n_code" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
+                        @if($n_code_status === 'valid')
+                            <div class="text-xs text-success mt-1">✓ {{ $n_code_name }} @if($n_code_unit)({{ $n_code_unit }})@endif</div>
+                        @elseif($n_code_status === 'invalid')
+                            <div class="text-xs text-error mt-1">✗ کد ملی یافت نشد</div>
+                        @endif
                         @if(count($personResults) > 0)
                             <div class="absolute z-10 bg-base-100 border rounded-lg shadow-lg w-full mt-1 max-h-48 overflow-auto">
                                 @foreach($personResults as $pr)
