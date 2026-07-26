@@ -32,7 +32,14 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::middleware('auth:sanctum')->get('/unit', UnitController::class);
+// Unit API routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/units', [UnitController::class, 'index']);
+    Route::post('/units', [UnitController::class, 'store']);
+    Route::get('/units/{unit}', [UnitController::class, 'show']);
+    Route::put('/units/{unit}', [UnitController::class, 'update']);
+    Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+});
 
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
 Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
