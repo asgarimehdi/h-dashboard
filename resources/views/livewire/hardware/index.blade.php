@@ -16,8 +16,18 @@ return new class extends Component
     public int $perPage = 10;
     public bool $showForm = false;
     public bool $showEditModal = false;
+    public bool $showFilters = false;
     public ?int $editingId = null;
     public array $sortBy = ['column' => 'id', 'direction' => 'desc'];
+
+    // Filter fields
+    public ?string $filterType = null;
+    public ?string $filterOs = null;
+    public ?string $filterCpu = null;
+    public ?string $filterRam = null;
+    public ?string $filterHdd = null;
+    public ?string $filterShutdown = null;
+    public ?string $filterNetType = null;
 
     // Form fields
     public ?string $n_code = null;
@@ -79,6 +89,23 @@ return new class extends Component
             'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd',
             'comments', 'mark', 'clean_at', 'personSearch', 'personResults', 'selectedPersonName',
         ]);
+    }
+
+    public function clearFilters(): void
+    {
+        $this->reset([
+            'filterType', 'filterOs', 'filterCpu', 'filterRam',
+            'filterHdd', 'filterShutdown', 'filterNetType',
+        ]);
+    }
+
+    public function hasActiveFilters(): bool
+    {
+        return collect([
+            $this->filterType, $this->filterOs, $this->filterCpu,
+            $this->filterRam, $this->filterHdd, $this->filterShutdown,
+            $this->filterNetType,
+        ])->filter()->isNotEmpty();
     }
 
     public function cancelEdit(): void
@@ -175,30 +202,44 @@ return new class extends Component
     {
         $query = Hardware::with('person');
 
+        // General search
         if (!empty($this->search)) {
             $s = $this->search;
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                   ->orWhere('n_code', 'LIKE', "%{$s}%")
-                  ->orWhere('type', 'LIKE', "%{$s}%")
-                  ->orWhere('os', 'LIKE', "%{$s}%")
                   ->orWhere('ip_valid', 'LIKE', "%{$s}%")
                   ->orWhere('ip_local', 'LIKE', "%{$s}%")
                   ->orWhere('mac', 'LIKE', "%{$s}%")
-                  ->orWhere('net_type', 'LIKE', "%{$s}%")
-                  ->orWhere('switch', 'LIKE', "%{$s}%")
-                  ->orWhere('port', 'LIKE', "%{$s}%")
-                  ->orWhere('vlan', 'LIKE', "%{$s}%")
-                  ->orWhere('motherboard', 'LIKE', "%{$s}%")
-                  ->orWhere('cpu', 'LIKE', "%{$s}%")
-                  ->orWhere('ram', 'LIKE', "%{$s}%")
-                  ->orWhere('hdd', 'LIKE', "%{$s}%")
                   ->orWhere('comments', 'LIKE', "%{$s}%")
                   ->orWhereHas('person', function ($pq) use ($s) {
                       $pq->where('f_name', 'LIKE', "%{$s}%")
                         ->orWhere('l_name', 'LIKE', "%{$s}%");
                   });
             });
+        }
+
+        // Separate filters (AND logic)
+        if ($this->filterType) {
+            $query->where('type', 'LIKE', "%{$this->filterType}%");
+        }
+        if ($this->filterOs) {
+            $query->where('os', 'LIKE', "%{$this->filterOs}%");
+        }
+        if ($this->filterCpu) {
+            $query->where('cpu', 'LIKE', "%{$this->filterCpu}%");
+        }
+        if ($this->filterRam) {
+            $query->where('ram', 'LIKE', "%{$this->filterRam}%");
+        }
+        if ($this->filterHdd) {
+            $query->where('hdd', 'LIKE', "%{$this->filterHdd}%");
+        }
+        if ($this->filterShutdown !== null && $this->filterShutdown !== '') {
+            $query->where('shutdown', $this->filterShutdown === '1');
+        }
+        if ($this->filterNetType) {
+            $query->where('net_type', 'LIKE', "%{$this->filterNetType}%");
         }
 
         $query->orderBy(...array_values($this->sortBy));
@@ -237,7 +278,34 @@ return new class extends Component
                     class="w-full"
                 />
             </div>
+            <x-button icon="o-funnel"
+                class="{{ $showFilters ? 'btn-primary' : 'btn-ghost' }}"
+                wire:click="$set('showFilters', !$showFilters)"
+                badge="{{ $showFilters ? '' : '' }}"
+            />
         </div>
+
+        {{-- Filters --}}
+        @if($showFilters)
+            <div class="mb-4 p-4 bg-base-200 rounded-lg">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <x-input wire:model.live.debounce="filterType" label="نوع دستگاه" placeholder="pc, laptop..." clearable />
+                    <x-input wire:model.live.debounce="filterOs" label="سیستم عامل" placeholder="Windows 10..." clearable />
+                    <x-input wire:model.live.debounce="filterCpu" label="CPU" placeholder="Intel, AMD..." clearable />
+                    <x-input wire:model.live.debounce="filterRam" label="RAM" placeholder="4096, 8192..." clearable />
+                    <x-input wire:model.live.debounce="filterHdd" label="HDD/SSD" placeholder="SSD, 500GB..." clearable />
+                    <x-input wire:model.live.debounce="filterNetType" label="نوع شبکه" placeholder="wired, wireless..." clearable />
+                    <x-select wire:model.live="filterShutdown" label="وضعیت روشن/خاموش"
+                        :options="['' => 'همه', '1' => 'روشن', '0' => 'خاموش']" />
+                </div>
+                @if($this->hasActiveFilters())
+                    <div class="mt-3 flex items-center gap-2">
+                        <x-button icon="o-x-mark" label="پاک کردن فیلترها" class="btn-ghost btn-sm" wire:click="clearFilters" />
+                        <span class="text-xs text-base-content/50">فیلترهای فعال اعمال شده</span>
+                    </div>
+                @endif
+            </div>
+        @endif
 
         {{-- Create Form --}}
         @if($showForm && !$editingId)
