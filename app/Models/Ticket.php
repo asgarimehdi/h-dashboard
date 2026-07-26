@@ -21,6 +21,7 @@ class Ticket extends Model
         'priority',
         'status',
         'task_id',
+        'deadline',
         'current_assignee_id',
         'accepted_at',
         'completed_at',

@@ -34,9 +34,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::middleware('auth:sanctum')->get('/unit', UnitController::class);
 
-Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
-    return $request->user();
-});
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
 Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
 
