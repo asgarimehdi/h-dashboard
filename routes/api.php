@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\MultiLatestValueController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrafficController;
@@ -55,6 +56,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign']);
     Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept']);
     Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete']);
+});
+
+// Report API routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/reports/units', [ReportController::class, 'units']);
+    Route::get('/reports/todos', [ReportController::class, 'todos']);
+    Route::get('/reports/tickets', [ReportController::class, 'tickets']);
 });
 
 // Todo API routes
