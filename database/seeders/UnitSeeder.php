@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Unit;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class UnitSeeder extends Seeder
@@ -14,7 +14,7 @@ class UnitSeeder extends Seeder
     public function run(): void
     {
         // پاک کردن جدول قبل از وارد کردن داده‌ها (اختیاری)
-      //  DB::table('units')->truncate();
+        //  DB::table('units')->truncate();
 
         // داده‌های ثابت از جدول units
         $units = [
@@ -156,7 +156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.423907,
                 'lng' => 48.293624,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 13,
@@ -166,7 +166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.440653,
                 'lng' => 48.294096,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 14,
@@ -176,7 +176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.197142,
                 'lng' => 49.201906,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 15,
@@ -186,7 +186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.206326,
                 'lng' => 49.189431,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 16,
@@ -196,7 +196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.206107,
                 'lng' => 49.198835,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 17,
@@ -206,7 +206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.219662,
                 'lng' => 49.194912,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 18,
@@ -216,7 +216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.194044,
                 'lng' => 49.186922,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 19,
@@ -226,7 +226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.197763,
                 'lng' => 49.205291,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 20,
@@ -236,7 +236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.205235,
                 'lng' => 49.1881,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 21,
@@ -246,7 +246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.877279,
                 'lng' => 47.416427,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 22,
@@ -256,7 +256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.92441,
                 'lng' => 47.38318,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 23,
@@ -266,7 +266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.776633,
                 'lng' => 47.518426,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 24,
@@ -276,7 +276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.602529,
                 'lng' => 47.834637,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 25,
@@ -286,7 +286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.421439,
                 'lng' => 47.852651,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 26,
@@ -296,7 +296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.975818,
                 'lng' => 48.370335,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 27,
@@ -306,7 +306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.509475,
                 'lng' => 47.898306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 28,
@@ -316,7 +316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.681321,
                 'lng' => 47.476019,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 29,
@@ -326,7 +326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 37.059028,
                 'lng' => 48.249545,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 30,
@@ -336,7 +336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.742489,
                 'lng' => 47.670155,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 31,
@@ -346,7 +346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.551787,
                 'lng' => 47.619592,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 32,
@@ -356,7 +356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.574232,
                 'lng' => 48.146648,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 33,
@@ -366,7 +366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.313619,
                 'lng' => 49.068231,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 34,
@@ -376,7 +376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.792266,
                 'lng' => 48.567854,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 35,
@@ -386,7 +386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.52921,
                 'lng' => 47.481632,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 36,
@@ -396,7 +396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.737443,
                 'lng' => 47.680682,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 37,
@@ -406,7 +406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.742604,
                 'lng' => 47.670023,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 38,
@@ -416,7 +416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.684039,
                 'lng' => 48.160234,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 39,
@@ -426,7 +426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.98707,
                 'lng' => 47.717884,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 40,
@@ -436,7 +436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.630528,
                 'lng' => 48.600056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 41,
@@ -446,7 +446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.361166,
                 'lng' => 48.953716,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 42,
@@ -456,7 +456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.258809,
                 'lng' => 49.135988,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 43,
@@ -466,7 +466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.625275,
                 'lng' => 48.412778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 44,
@@ -476,7 +476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 37.079901,
                 'lng' => 47.937643,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 45,
@@ -486,7 +486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.866043,
                 'lng' => 48.412006,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 46,
@@ -496,7 +496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 37.056403,
                 'lng' => 47.767709,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 47,
@@ -506,7 +506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.139722,
                 'lng' => 49.205611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 48,
@@ -516,7 +516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.149778,
                 'lng' => 49.217056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 49,
@@ -526,7 +526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.140139,
                 'lng' => 49.217639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 50,
@@ -536,7 +536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.497216,
                 'lng' => 48.074217,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 51,
@@ -546,7 +546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.744621,
                 'lng' => 47.862239,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 52,
@@ -556,7 +556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.850182,
                 'lng' => 48.178544,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 53,
@@ -566,7 +566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.728347,
                 'lng' => 48.303784,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 54,
@@ -576,7 +576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.776987,
                 'lng' => 48.209717,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 55,
@@ -586,7 +586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.807423,
                 'lng' => 47.989972,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 56,
@@ -596,7 +596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.677287,
                 'lng' => 48.509893,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 57,
@@ -606,7 +606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.666023,
                 'lng' => 48.547055,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 58,
@@ -616,7 +616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.683401,
                 'lng' => 48.49439,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 59,
@@ -626,7 +626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.664516,
                 'lng' => 48.468134,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 60,
@@ -636,7 +636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.691349,
                 'lng' => 48.509548,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 61,
@@ -646,7 +646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.696642,
                 'lng' => 48.451873,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 62,
@@ -656,7 +656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.701394,
                 'lng' => 48.480901,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 63,
@@ -666,7 +666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.683778,
                 'lng' => 48.530388,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 64,
@@ -676,7 +676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.670712,
                 'lng' => 48.553828,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 65,
@@ -686,7 +686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.674137,
                 'lng' => 48.461949,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 66,
@@ -696,7 +696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.676045,
                 'lng' => 48.485217,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 67,
@@ -706,7 +706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.664125,
                 'lng' => 48.495166,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 68,
@@ -716,7 +716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.690783,
                 'lng' => 48.46932,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 69,
@@ -726,7 +726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.671247,
                 'lng' => 48.499471,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 70,
@@ -736,7 +736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.938806,
                 'lng' => 48.1485,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 71,
@@ -746,7 +746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.679163,
                 'lng' => 48.469566,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 72,
@@ -756,7 +756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.661286,
                 'lng' => 48.514365,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 73,
@@ -766,7 +766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.669332,
                 'lng' => 48.471336,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 74,
@@ -776,7 +776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.672932,
                 'lng' => 48.481604,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 75,
@@ -786,7 +786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.160667,
                 'lng' => 48.371806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 76,
@@ -796,7 +796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.04625,
                 'lng' => 48.080194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 77,
@@ -806,7 +806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.352694,
                 'lng' => 48.586222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 78,
@@ -816,7 +816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.352694,
                 'lng' => 48.616028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 79,
@@ -826,7 +826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.873985,
                 'lng' => 48.4078,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 80,
@@ -836,7 +836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.064583,
                 'lng' => 48.576611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 81,
@@ -846,7 +846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.1305,
                 'lng' => 48.829028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 82,
@@ -856,7 +856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.813861,
                 'lng' => 48.584889,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 83,
@@ -866,7 +866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.698583,
                 'lng' => 48.435472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 84,
@@ -876,7 +876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.201722,
                 'lng' => 48.602778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 85,
@@ -886,7 +886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.009417,
                 'lng' => 48.678417,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 86,
@@ -896,7 +896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.126361,
                 'lng' => 48.66225,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 87,
@@ -906,7 +906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 35.934778,
                 'lng' => 48.791944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 88,
@@ -916,7 +916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.297444,
                 'lng' => 48.432917,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 89,
@@ -926,7 +926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.044278,
                 'lng' => 48.512861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 90,
@@ -936,7 +936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.663806,
                 'lng' => 48.681611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 91,
@@ -946,7 +946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.651111,
                 'lng' => 48.582667,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 92,
@@ -956,7 +956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.649897,
                 'lng' => 48.554978,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 93,
@@ -966,7 +966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.598371,
                 'lng' => 48.687115,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 94,
@@ -976,7 +976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.607846,
                 'lng' => 48.690419,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 95,
@@ -986,7 +986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.623,
                 'lng' => 48.6337,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 96,
@@ -996,7 +996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.603109,
                 'lng' => 48.681386,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 97,
@@ -1006,7 +1006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.582073,
                 'lng' => 48.684797,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 98,
@@ -1016,7 +1016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.582418,
                 'lng' => 48.684325,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 99,
@@ -1026,7 +1026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.581091,
                 'lng' => 48.685634,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 100,
@@ -1036,7 +1036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.6303,
                 'lng' => 48.4267,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 101,
@@ -1046,7 +1046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.6305,
                 'lng' => 48.4291,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 102,
@@ -1056,7 +1056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.6305,
                 'lng' => 48.4296,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 103,
@@ -1066,7 +1066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.631251,
                 'lng' => 48.429172,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 104,
@@ -1076,7 +1076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.6311,
                 'lng' => 48.4277,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 105,
@@ -1086,7 +1086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.164583,
                 'lng' => 48.522444,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 106,
@@ -1096,7 +1096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.6278,
                 'lng' => 48.4281,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 107,
@@ -1106,7 +1106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.627927,
                 'lng' => 48.429408,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 108,
@@ -1116,7 +1116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.624276,
                 'lng' => 48.427563,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 109,
@@ -1126,7 +1126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.6383,
                 'lng' => 48.321,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 110,
@@ -1136,7 +1136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.709268,
                 'lng' => 48.435223,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 111,
@@ -1146,7 +1146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.7092,
                 'lng' => 48.4207,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 112,
@@ -1156,7 +1156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.709956,
                 'lng' => 48.433614,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 113,
@@ -1166,7 +1166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.7077,
                 'lng' => 48.4178,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 114,
@@ -1176,7 +1176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.7071,
                 'lng' => 48.4185,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 115,
@@ -1186,7 +1186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.7075,
                 'lng' => 48.4187,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 116,
@@ -1196,7 +1196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.714,
                 'lng' => 48.4104,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 117,
@@ -1206,7 +1206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.716011,
                 'lng' => 48.429365,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 118,
@@ -1216,7 +1216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 35.752861,
                 'lng' => 48.483222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 119,
@@ -1226,7 +1226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.069433,
                 'lng' => 49.386055,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 120,
@@ -1236,7 +1236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.23875,
                 'lng' => 48.559583,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 121,
@@ -1246,7 +1246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.0765,
                 'lng' => 48.437806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 122,
@@ -1256,7 +1256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.123975,
                 'lng' => 49.295225,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 123,
@@ -1266,7 +1266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.094886,
                 'lng' => 49.33445,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 124,
@@ -1276,7 +1276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.129903,
                 'lng' => 49.338956,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 125,
@@ -1286,7 +1286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.129972,
                 'lng' => 49.339085,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 126,
@@ -1296,7 +1296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.103763,
                 'lng' => 49.321661,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 127,
@@ -1306,7 +1306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.071302,
                 'lng' => 49.395905,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 128,
@@ -1316,7 +1316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.125349,
                 'lng' => 49.29942,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 129,
@@ -1326,7 +1326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.321055,
                 'lng' => 49.05756,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 130,
@@ -1336,7 +1336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.321799,
                 'lng' => 49.054942,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 131,
@@ -1346,7 +1346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.322127,
                 'lng' => 49.054899,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 132,
@@ -1356,7 +1356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.107491,
                 'lng' => 49.319687,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 133,
@@ -1366,7 +1366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.26141,
                 'lng' => 49.203883,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 134,
@@ -1376,7 +1376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.198781,
                 'lng' => 49.20785,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 135,
@@ -1386,7 +1386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.251507,
                 'lng' => 49.229221,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 136,
@@ -1396,7 +1396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.253722,
                 'lng' => 49.23068,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 137,
@@ -1406,7 +1406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.252251,
                 'lng' => 49.224586,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 138,
@@ -1416,7 +1416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.4127,
                 'lng' => 48.2439,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 139,
@@ -1426,7 +1426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.388469,
                 'lng' => 48.185434,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 140,
@@ -1436,7 +1436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.27,
                 'lng' => 48.67,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 141,
@@ -1446,7 +1446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.517845,
                 'lng' => 48.794446,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 142,
@@ -1456,7 +1456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.424528,
                 'lng' => 48.881199,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 143,
@@ -1466,7 +1466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.455359,
                 'lng' => 48.83543,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 144,
@@ -1476,7 +1476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.568115,
                 'lng' => 47.617407,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 145,
@@ -1486,7 +1486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.61,
                 'lng' => 47.43,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 146,
@@ -1496,7 +1496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.385012,
                 'lng' => 48.11901,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 147,
@@ -1506,7 +1506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.249776,
                 'lng' => 48.22041,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 148,
@@ -1516,7 +1516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.435371,
                 'lng' => 48.482323,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 149,
@@ -1526,7 +1526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.248429,
                 'lng' => 48.327752,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 150,
@@ -1536,7 +1536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.377137,
                 'lng' => 48.316412,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 151,
@@ -1546,7 +1546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.453236,
                 'lng' => 48.261282,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 152,
@@ -1556,7 +1556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.435413,
                 'lng' => 48.78854,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 153,
@@ -1566,7 +1566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.432629,
                 'lng' => 48.878565,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 154,
@@ -1576,7 +1576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.357383,
                 'lng' => 48.847484,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 155,
@@ -1586,7 +1586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.48496,
                 'lng' => 48.633471,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 156,
@@ -1596,7 +1596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.515784,
                 'lng' => 48.780726,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 157,
@@ -1606,7 +1606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.495943,
                 'lng' => 48.798147,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 158,
@@ -1616,7 +1616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.149953,
                 'lng' => 49.198257,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 159,
@@ -1626,7 +1626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 35.848306,
                 'lng' => 48.205,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 160,
@@ -1636,7 +1636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.159001,
                 'lng' => 49.237861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 161,
@@ -1646,7 +1646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.130751,
                 'lng' => 49.277639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 162,
@@ -1656,7 +1656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.120222,
                 'lng' => 48.596222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 163,
@@ -1666,7 +1666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.065582,
                 'lng' => 49.387361,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 164,
@@ -1676,7 +1676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.483141,
                 'lng' => 48.34362,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 165,
@@ -1686,7 +1686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.021269,
                 'lng' => 49.238854,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 166,
@@ -1696,7 +1696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.978111,
                 'lng' => 49.131806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 167,
@@ -1706,7 +1706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.077501,
                 'lng' => 48.996222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 168,
@@ -1716,7 +1716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 37.01375,
                 'lng' => 48.737333,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 169,
@@ -1726,7 +1726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.784014,
                 'lng' => 49.009756,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 170,
@@ -1736,7 +1736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 37.024707,
                 'lng' => 48.775311,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 171,
@@ -1746,7 +1746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.912472,
                 'lng' => 48.856781,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 172,
@@ -1756,7 +1756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.7896,
                 'lng' => 49.122392,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 173,
@@ -1766,7 +1766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.850397,
                 'lng' => 48.946247,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 174,
@@ -1776,7 +1776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.71288,
                 'lng' => 48.413959,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 175,
@@ -1786,7 +1786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 18,
                 'lat' => 36.642839,
                 'lng' => 48.57296,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 176,
@@ -1796,7 +1796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.922465,
                 'lng' => 48.964327,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 177,
@@ -1806,7 +1806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.992513,
                 'lng' => 48.779501,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 178,
@@ -1816,7 +1816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.930124,
                 'lng' => 48.944534,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 179,
@@ -1826,7 +1826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 14,
                 'lat' => 36.676298,
                 'lng' => 48.488745,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 180,
@@ -1836,7 +1836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 14,
                 'lat' => 36.122017,
                 'lng' => 48.589761,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 181,
@@ -1846,7 +1846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.701189,
                 'lng' => 48.509502,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 182,
@@ -1856,7 +1856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.701024,
                 'lng' => 48.509365,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 183,
@@ -1866,7 +1866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.130667,
                 'lng' => 48.594167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 184,
@@ -1876,7 +1876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.11152,
                 'lng' => 48.58505,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 185,
@@ -1886,7 +1886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.132372,
                 'lng' => 48.593001,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 186,
@@ -1896,7 +1896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.676482,
                 'lng' => 48.483406,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 187,
@@ -1906,7 +1906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.687297,
                 'lng' => 48.459363,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 188,
@@ -1916,7 +1916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.677799,
                 'lng' => 48.515518,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 189,
@@ -1926,7 +1926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.922276,
                 'lng' => 48.964424,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 190,
@@ -1936,7 +1936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.435462,
                 'lng' => 48.788454,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 191,
@@ -1946,7 +1946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.120222,
                 'lng' => 48.59622,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 192,
@@ -1956,7 +1956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 13,
                 'lat' => 36.15335,
                 'lng' => 49.234414,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 193,
@@ -1966,7 +1966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.660777,
                 'lng' => 48.549829,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 194,
@@ -1976,7 +1976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.681972,
                 'lng' => 48.486754,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 195,
@@ -1986,7 +1986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.138291,
                 'lng' => 49.195061,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 196,
@@ -1996,7 +1996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 19,
                 'lat' => 36.12441,
                 'lng' => 49.222409,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 197,
@@ -2006,7 +2006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 35.927129,
                 'lng' => 48.568944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 198,
@@ -2016,7 +2016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.777453,
                 'lng' => 47.542933,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 199,
@@ -2026,7 +2026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.427783,
                 'lng' => 48.27623,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 200,
@@ -2036,7 +2036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.294201,
                 'lng' => 48.06011,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 201,
@@ -2046,7 +2046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 14,
                 'lat' => 36.427852,
                 'lng' => 48.27636,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 202,
@@ -2056,7 +2056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.300259,
                 'lng' => 48.942711,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 203,
@@ -2066,7 +2066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.206488,
                 'lng' => 49.189388,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 204,
@@ -2076,7 +2076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.209368,
                 'lng' => 49.082242,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 205,
@@ -2086,7 +2086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 7,
                 'lat' => 36.239996,
                 'lng' => 49.087329,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 206,
@@ -2096,7 +2096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 6,
                 'lat' => 36.172678,
                 'lng' => 49.113446,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 207,
@@ -2106,7 +2106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 5,
                 'lat' => 36.40125,
                 'lng' => 48.028497,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 208,
@@ -2116,7 +2116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.391613,
                 'lng' => 48.042698,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 209,
@@ -2126,7 +2126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.449456,
                 'lng' => 48.095098,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 210,
@@ -2136,7 +2136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.364282,
                 'lng' => 48.156917,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 211,
@@ -2146,7 +2146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.126844,
                 'lng' => 48.256212,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 212,
@@ -2156,7 +2156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.214709,
                 'lng' => 48.252929,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 213,
@@ -2166,7 +2166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.202897,
                 'lng' => 48.174931,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 214,
@@ -2176,7 +2176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.445223,
                 'lng' => 48.398885,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 215,
@@ -2186,7 +2186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.480346,
                 'lng' => 48.469303,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 216,
@@ -2196,7 +2196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.422802,
                 'lng' => 48.551137,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 217,
@@ -2206,7 +2206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.457654,
                 'lng' => 48.430331,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 218,
@@ -2216,7 +2216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.402253,
                 'lng' => 48.454986,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 219,
@@ -2226,7 +2226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.403107,
                 'lng' => 48.523446,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 220,
@@ -2236,7 +2236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.473151,
                 'lng' => 48.396631,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 221,
@@ -2246,7 +2246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.437518,
                 'lng' => 48.446191,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 222,
@@ -2256,7 +2256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.252095,
                 'lng' => 48.345594,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 223,
@@ -2266,7 +2266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.285917,
                 'lng' => 48.226891,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 224,
@@ -2276,7 +2276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.337474,
                 'lng' => 48.389011,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 225,
@@ -2286,7 +2286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.33982,
                 'lng' => 48.292669,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 226,
@@ -2296,7 +2296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.453685,
                 'lng' => 48.213995,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 227,
@@ -2306,7 +2306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.505204,
                 'lng' => 48.201141,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 228,
@@ -2316,7 +2316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.471468,
                 'lng' => 48.233135,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 229,
@@ -2326,7 +2326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.500978,
                 'lng' => 48.220968,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 230,
@@ -2336,7 +2336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.523482,
                 'lng' => 48.216999,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 231,
@@ -2346,7 +2346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.246144,
                 'lng' => 48.000035,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 232,
@@ -2356,7 +2356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.152397,
                 'lng' => 48.042575,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 233,
@@ -2366,7 +2366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.384807,
                 'lng' => 47.96103,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 234,
@@ -2376,7 +2376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.298464,
                 'lng' => 47.962403,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 235,
@@ -2386,7 +2386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.314364,
                 'lng' => 48.140899,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 236,
@@ -2396,7 +2396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.452339,
                 'lng' => 47.960708,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 237,
@@ -2406,7 +2406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.392978,
                 'lng' => 48.109936,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 238,
@@ -2416,7 +2416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.242082,
                 'lng' => 48.198569,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 239,
@@ -2426,7 +2426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.435172,
                 'lng' => 48.469234,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 240,
@@ -2436,7 +2436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.371816,
                 'lng' => 48.337097,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 241,
@@ -2446,7 +2446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.449801,
                 'lng' => 48.249421,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 242,
@@ -2456,7 +2456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.209368,
                 'lng' => 49.082242,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 243,
@@ -2466,7 +2466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.195555,
                 'lng' => 49.04306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 244,
@@ -2476,7 +2476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.224393,
                 'lng' => 49.017228,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 245,
@@ -2486,7 +2486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.239996,
                 'lng' => 49.087329,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 246,
@@ -2496,7 +2496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.245022,
                 'lng' => 49.169548,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 247,
@@ -2506,7 +2506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.31967,
                 'lng' => 49.16716,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 248,
@@ -2516,7 +2516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.27889,
                 'lng' => 49.119291,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 249,
@@ -2526,7 +2526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.172678,
                 'lng' => 49.113446,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 250,
@@ -2536,7 +2536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.878714,
                 'lng' => 47.415218,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 251,
@@ -2546,7 +2546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.820748,
                 'lng' => 47.259893,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 252,
@@ -2556,7 +2556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.791731,
                 'lng' => 47.350101,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 253,
@@ -2566,7 +2566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.805133,
                 'lng' => 47.282295,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 254,
@@ -2576,7 +2576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.771841,
                 'lng' => 47.300863,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 255,
@@ -2586,7 +2586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.924388,
                 'lng' => 47.38324,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 256,
@@ -2596,7 +2596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.776019,
                 'lng' => 47.520867,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 257,
@@ -2606,7 +2606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.800912,
                 'lng' => 47.442352,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 258,
@@ -2616,7 +2616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.829388,
                 'lng' => 47.501807,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 259,
@@ -2626,7 +2626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.794961,
                 'lng' => 47.419324,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 260,
@@ -2636,7 +2636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.601874,
                 'lng' => 47.831998,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 261,
@@ -2646,7 +2646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.636066,
                 'lng' => 47.786779,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 262,
@@ -2656,7 +2656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.638669,
                 'lng' => 47.911456,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 263,
@@ -2666,7 +2666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.665998,
                 'lng' => 47.748334,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 264,
@@ -2676,7 +2676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.44357,
                 'lng' => 47.884476,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 265,
@@ -2686,7 +2686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.400181,
                 'lng' => 47.80178,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 266,
@@ -2696,7 +2696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.979337,
                 'lng' => 48.373054,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 267,
@@ -2706,7 +2706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.420887,
                 'lng' => 47.85286,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 268,
@@ -2716,7 +2716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.511752,
                 'lng' => 47.900269,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 269,
@@ -2726,7 +2726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.485337,
                 'lng' => 47.780929,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 270,
@@ -2736,7 +2736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.49919,
                 'lng' => 47.81996,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 271,
@@ -2746,7 +2746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.554855,
                 'lng' => 47.895216,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 272,
@@ -2756,7 +2756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.502294,
                 'lng' => 47.943985,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 273,
@@ -2766,7 +2766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.681475,
                 'lng' => 47.474967,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 274,
@@ -2776,7 +2776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.987026,
                 'lng' => 48.321821,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 275,
@@ -2786,7 +2786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.690225,
                 'lng' => 47.401679,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 276,
@@ -2796,7 +2796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.95864,
                 'lng' => 48.305324,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 277,
@@ -2806,7 +2806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.629047,
                 'lng' => 47.593753,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 278,
@@ -2816,7 +2816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.018774,
                 'lng' => 48.378315,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 279,
@@ -2826,7 +2826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.010565,
                 'lng' => 48.308241,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 280,
@@ -2836,7 +2836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.617919,
                 'lng' => 47.56206,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 281,
@@ -2846,7 +2846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.714463,
                 'lng' => 47.534981,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 282,
@@ -2856,7 +2856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.720316,
                 'lng' => 47.704926,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 283,
@@ -2866,7 +2866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.718052,
                 'lng' => 47.715744,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 284,
@@ -2876,7 +2876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.707215,
                 'lng' => 47.57672,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 285,
@@ -2886,7 +2886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.663829,
                 'lng' => 47.633042,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 286,
@@ -2896,7 +2896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.867817,
                 'lng' => 47.57736,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 287,
@@ -2906,7 +2906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.632252,
                 'lng' => 47.764807,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 288,
@@ -2916,7 +2916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.856586,
                 'lng' => 47.616062,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 289,
@@ -2926,7 +2926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.699413,
                 'lng' => 47.649568,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 290,
@@ -2936,7 +2936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.698263,
                 'lng' => 47.83026,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 291,
@@ -2946,7 +2946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.710134,
                 'lng' => 47.815754,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 292,
@@ -2956,7 +2956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.112636,
                 'lng' => 48.183526,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 293,
@@ -2966,7 +2966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.059028,
                 'lng' => 48.249545,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 294,
@@ -2976,7 +2976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.164498,
                 'lng' => 48.14527,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 295,
@@ -2986,7 +2986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.059224,
                 'lng' => 48.205807,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 296,
@@ -2996,7 +2996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.182561,
                 'lng' => 48.222715,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 297,
@@ -3006,7 +3006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.115899,
                 'lng' => 48.277096,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 298,
@@ -3016,7 +3016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.579259,
                 'lng' => 47.64812,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 299,
@@ -3026,7 +3026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.13546,
                 'lng' => 48.300292,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 300,
@@ -3036,7 +3036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.474396,
                 'lng' => 47.732567,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 301,
@@ -3046,7 +3046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.444871,
                 'lng' => 47.598431,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 302,
@@ -3056,7 +3056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.479736,
                 'lng' => 47.680736,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 303,
@@ -3066,7 +3066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.508182,
                 'lng' => 47.715797,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 304,
@@ -3076,7 +3076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.585783,
                 'lng' => 47.564185,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 305,
@@ -3086,7 +3086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.158135,
                 'lng' => 48.259666,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 306,
@@ -3096,7 +3096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.574232,
                 'lng' => 48.146648,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 307,
@@ -3106,7 +3106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.752237,
                 'lng' => 48.096839,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 308,
@@ -3116,7 +3116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.567109,
                 'lng' => 48.083926,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 309,
@@ -3126,7 +3126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.50317,
                 'lng' => 47.992827,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 310,
@@ -3136,7 +3136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.607372,
                 'lng' => 48.024142,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 311,
@@ -3146,7 +3146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.532874,
                 'lng' => 48.004389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 312,
@@ -3156,7 +3156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.609782,
                 'lng' => 48.150582,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 313,
@@ -3166,7 +3166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.586331,
                 'lng' => 48.107245,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 314,
@@ -3176,7 +3176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.792266,
                 'lng' => 48.567854,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 315,
@@ -3186,7 +3186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.52921,
                 'lng' => 47.481632,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 316,
@@ -3196,7 +3196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.488707,
                 'lng' => 47.472296,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 317,
@@ -3206,7 +3206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.487994,
                 'lng' => 47.50524,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 318,
@@ -3216,7 +3216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.59786,
                 'lng' => 47.485156,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 319,
@@ -3226,7 +3226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.784126,
                 'lng' => 48.663031,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 320,
@@ -3236,7 +3236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.815673,
                 'lng' => 48.504045,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 321,
@@ -3246,7 +3246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.696941,
                 'lng' => 48.06149,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 322,
@@ -3256,7 +3256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.684039,
                 'lng' => 48.160234,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 323,
@@ -3266,7 +3266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.701612,
                 'lng' => 48.226331,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 324,
@@ -3276,7 +3276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.742755,
                 'lng' => 48.001077,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 325,
@@ -3286,7 +3286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.444557,
                 'lng' => 47.598993,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 326,
@@ -3296,7 +3296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.000701,
                 'lng' => 47.573806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 327,
@@ -3306,7 +3306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.99026,
                 'lng' => 47.718679,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 328,
@@ -3316,7 +3316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.873186,
                 'lng' => 47.801607,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 329,
@@ -3326,7 +3326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.342251,
                 'lng' => 49.141278,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 330,
@@ -3336,7 +3336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.976172,
                 'lng' => 47.542725,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 331,
@@ -3346,7 +3346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.958419,
                 'lng' => 47.513116,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 332,
@@ -3356,7 +3356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.943241,
                 'lng' => 47.674917,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 333,
@@ -3366,7 +3366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.894848,
                 'lng' => 47.928757,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 334,
@@ -3376,7 +3376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.877905,
                 'lng' => 47.871307,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 335,
@@ -3386,7 +3386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.332097,
                 'lng' => 49.014453,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 336,
@@ -3396,7 +3396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.366121,
                 'lng' => 49.092148,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 337,
@@ -3406,7 +3406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.385005,
                 'lng' => 49.075374,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 338,
@@ -3416,7 +3416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.284722,
                 'lng' => 49.009528,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 339,
@@ -3426,7 +3426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.702343,
                 'lng' => 48.806826,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 340,
@@ -3436,7 +3436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.58429,
                 'lng' => 48.681941,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 341,
@@ -3446,7 +3446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.562131,
                 'lng' => 48.626847,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 342,
@@ -3456,7 +3456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.630528,
                 'lng' => 48.600056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 343,
@@ -3466,7 +3466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.263934,
                 'lng' => 48.972281,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 344,
@@ -3476,7 +3476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.255001,
                 'lng' => 49.033389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 345,
@@ -3486,7 +3486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.630528,
                 'lng' => 48.600056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 346,
@@ -3496,7 +3496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.645739,
                 'lng' => 48.719904,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 347,
@@ -3506,7 +3506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.682755,
                 'lng' => 48.621481,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 348,
@@ -3516,7 +3516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.730927,
                 'lng' => 48.788226,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 349,
@@ -3526,7 +3526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.314833,
                 'lng' => 48.912722,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 350,
@@ -3536,7 +3536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.611591,
                 'lng' => 48.793596,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 351,
@@ -3546,7 +3546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.554277,
                 'lng' => 48.679098,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 352,
@@ -3556,7 +3556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.300728,
                 'lng' => 48.942905,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 353,
@@ -3566,7 +3566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.369281,
                 'lng' => 48.960961,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 354,
@@ -3576,7 +3576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.447001,
                 'lng' => 48.996251,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 355,
@@ -3586,7 +3586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.421944,
                 'lng' => 49.048528,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 356,
@@ -3596,7 +3596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.572168,
                 'lng' => 48.270711,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 357,
@@ -3606,7 +3606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.602523,
                 'lng' => 48.411637,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 358,
@@ -3616,7 +3616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.566891,
                 'lng' => 48.32564,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 359,
@@ -3626,7 +3626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.625881,
                 'lng' => 48.406405,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 360,
@@ -3636,7 +3636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.540665,
                 'lng' => 48.394379,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 361,
@@ -3646,7 +3646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.53548,
                 'lng' => 48.363673,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 362,
@@ -3656,7 +3656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.601142,
                 'lng' => 48.335212,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 363,
@@ -3666,7 +3666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.135331,
                 'lng' => 47.827616,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 364,
@@ -3676,7 +3676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.122142,
                 'lng' => 47.910491,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 365,
@@ -3686,7 +3686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.079901,
                 'lng' => 47.937643,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 366,
@@ -3696,7 +3696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.072012,
                 'lng' => 47.952754,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 367,
@@ -3706,7 +3706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.119228,
                 'lng' => 47.874819,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 368,
@@ -3716,7 +3716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.016999,
                 'lng' => 47.952754,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 369,
@@ -3726,7 +3726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.999815,
                 'lng' => 47.986821,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 370,
@@ -3736,7 +3736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.866606,
                 'lng' => 48.418616,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 371,
@@ -3746,7 +3746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.86369,
                 'lng' => 48.413218,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 372,
@@ -3756,7 +3756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.919054,
                 'lng' => 48.322078,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 373,
@@ -3766,7 +3766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.934702,
                 'lng' => 48.409332,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 374,
@@ -3776,7 +3776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.060769,
                 'lng' => 47.768352,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 375,
@@ -3786,7 +3786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.109681,
                 'lng' => 47.791665,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 376,
@@ -3796,7 +3796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.006215,
                 'lng' => 47.834242,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 377,
@@ -3806,7 +3806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.341678,
                 'lng' => 47.985535,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 378,
@@ -3816,7 +3816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.740994,
                 'lng' => 48.042196,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 379,
@@ -3826,7 +3826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.495777,
                 'lng' => 48.070562,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 380,
@@ -3836,7 +3836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.516311,
                 'lng' => 48.108566,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 381,
@@ -3846,7 +3846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.769279,
                 'lng' => 47.78319,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 382,
@@ -3856,7 +3856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.725243,
                 'lng' => 48.334648,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 383,
@@ -3866,7 +3866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.744621,
                 'lng' => 47.862239,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 384,
@@ -3876,7 +3876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.731158,
                 'lng' => 47.848042,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 385,
@@ -3886,7 +3886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.807523,
                 'lng' => 47.738242,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 386,
@@ -3896,7 +3896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.838604,
                 'lng' => 48.154696,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 387,
@@ -3906,7 +3906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.89629,
                 'lng' => 48.131995,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 388,
@@ -3916,7 +3916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.96466,
                 'lng' => 48.035899,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 389,
@@ -3926,7 +3926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.013089,
                 'lng' => 48.096416,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 390,
@@ -3936,7 +3936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.960803,
                 'lng' => 48.130719,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 391,
@@ -3946,7 +3946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.849508,
                 'lng' => 48.175863,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 392,
@@ -3956,7 +3956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.82432,
                 'lng' => 48.224604,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 393,
@@ -3966,7 +3966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.804208,
                 'lng' => 48.234111,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 394,
@@ -3976,7 +3976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.744863,
                 'lng' => 48.247967,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 395,
@@ -3986,7 +3986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.732416,
                 'lng' => 48.281089,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 396,
@@ -3996,7 +3996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.77784,
                 'lng' => 48.277353,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 397,
@@ -4006,7 +4006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.727063,
                 'lng' => 48.307556,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 398,
@@ -4016,7 +4016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.815641,
                 'lng' => 48.180276,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 399,
@@ -4026,7 +4026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.769818,
                 'lng' => 48.095994,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 400,
@@ -4036,7 +4036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.725173,
                 'lng' => 48.138158,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 401,
@@ -4046,7 +4046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.779324,
                 'lng' => 48.215523,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 402,
@@ -4056,7 +4056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.807289,
                 'lng' => 47.989782,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 403,
@@ -4066,7 +4066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.847084,
                 'lng' => 47.982659,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 404,
@@ -4076,7 +4076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.791563,
                 'lng' => 48.067685,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 405,
@@ -4086,7 +4086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.778344,
                 'lng' => 48.033609,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 406,
@@ -4096,7 +4096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.759691,
                 'lng' => 47.934285,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 407,
@@ -4106,7 +4106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.536671,
                 'lng' => 47.804119,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 408,
@@ -4116,7 +4116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.956306,
                 'lng' => 48.104944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 409,
@@ -4126,7 +4126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.887639,
                 'lng' => 48.115472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 410,
@@ -4136,7 +4136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.907972,
                 'lng' => 48.075389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 411,
@@ -4146,7 +4146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.940167,
                 'lng' => 48.143556,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 412,
@@ -4156,7 +4156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.931694,
                 'lng' => 47.889722,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 413,
@@ -4166,7 +4166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.954778,
                 'lng' => 47.989944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 414,
@@ -4176,7 +4176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.162361,
                 'lng' => 48.371556,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 415,
@@ -4186,7 +4186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.209139,
                 'lng' => 48.380028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 416,
@@ -4196,7 +4196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.187417,
                 'lng' => 48.359389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 417,
@@ -4206,7 +4206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.188306,
                 'lng' => 48.315222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 418,
@@ -4216,7 +4216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.046306,
                 'lng' => 48.079778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 419,
@@ -4226,7 +4226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.007833,
                 'lng' => 48.003139,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 420,
@@ -4236,7 +4236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.064111,
                 'lng' => 48.039306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 421,
@@ -4246,7 +4246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.994083,
                 'lng' => 47.992889,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 422,
@@ -4256,7 +4256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.057278,
                 'lng' => 48.1815,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 423,
@@ -4266,7 +4266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.115667,
                 'lng' => 48.004861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 424,
@@ -4276,7 +4276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.350492,
                 'lng' => 48.587605,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 425,
@@ -4286,7 +4286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.346778,
                 'lng' => 48.641694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 426,
@@ -4296,7 +4296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.390528,
                 'lng' => 48.595806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 427,
@@ -4306,7 +4306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.383028,
                 'lng' => 48.573028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 428,
@@ -4316,7 +4316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.396833,
                 'lng' => 48.564556,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 429,
@@ -4326,7 +4326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.930167,
                 'lng' => 48.365833,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 430,
@@ -4336,7 +4336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.861333,
                 'lng' => 48.47825,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 431,
@@ -4346,7 +4346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.874385,
                 'lng' => 48.41162,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 432,
@@ -4356,7 +4356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.029944,
                 'lng' => 48.605028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 433,
@@ -4366,7 +4366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.045528,
                 'lng' => 48.624167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 434,
@@ -4376,7 +4376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.970306,
                 'lng' => 48.601778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 435,
@@ -4386,7 +4386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.062139,
                 'lng' => 48.58225,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 436,
@@ -4396,7 +4396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.019778,
                 'lng' => 48.532194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 437,
@@ -4406,7 +4406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.065444,
                 'lng' => 48.556222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 438,
@@ -4416,7 +4416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.129556,
                 'lng' => 48.83275,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 439,
@@ -4426,7 +4426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.13,
                 'lng' => 48.829139,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 440,
@@ -4436,7 +4436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.0865,
                 'lng' => 48.834694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 441,
@@ -4446,7 +4446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.059806,
                 'lng' => 48.835278,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 442,
@@ -4456,7 +4456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.191056,
                 'lng' => 48.898944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 443,
@@ -4466,7 +4466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.058944,
                 'lng' => 48.923583,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 444,
@@ -4476,7 +4476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.856083,
                 'lng' => 48.612083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 445,
@@ -4486,7 +4486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.909417,
                 'lng' => 48.635222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 446,
@@ -4496,7 +4496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.807389,
                 'lng' => 48.564306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 447,
@@ -4506,7 +4506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.757889,
                 'lng' => 48.606194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 448,
@@ -4516,7 +4516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.814083,
                 'lng' => 48.585583,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 449,
@@ -4526,7 +4526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.654417,
                 'lng' => 48.389056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 450,
@@ -4536,7 +4536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.765778,
                 'lng' => 48.370278,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 451,
@@ -4546,7 +4546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.684583,
                 'lng' => 48.483944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 452,
@@ -4556,7 +4556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.704278,
                 'lng' => 48.320056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 453,
@@ -4566,7 +4566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.698139,
                 'lng' => 48.432472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 454,
@@ -4576,7 +4576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.737833,
                 'lng' => 48.405694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 455,
@@ -4586,7 +4586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.267167,
                 'lng' => 48.773833,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 456,
@@ -4596,7 +4596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.319833,
                 'lng' => 48.702222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 457,
@@ -4606,7 +4606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.222694,
                 'lng' => 48.826222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 458,
@@ -4616,7 +4616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.202528,
                 'lng' => 48.603028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 459,
@@ -4626,7 +4626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.293833,
                 'lng' => 48.755361,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 460,
@@ -4636,7 +4636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.007778,
                 'lng' => 48.681639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 461,
@@ -4646,7 +4646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.045028,
                 'lng' => 48.704417,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 462,
@@ -4656,7 +4656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.014722,
                 'lng' => 48.652,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 463,
@@ -4666,7 +4666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.073278,
                 'lng' => 48.702111,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 464,
@@ -4676,7 +4676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.06775,
                 'lng' => 48.726944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 465,
@@ -4686,7 +4686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.000222,
                 'lng' => 48.726667,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 466,
@@ -4696,7 +4696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.018417,
                 'lng' => 48.730444,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 467,
@@ -4706,7 +4706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.959472,
                 'lng' => 48.707972,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 468,
@@ -4716,7 +4716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.000639,
                 'lng' => 48.696194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 469,
@@ -4726,7 +4726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.130833,
                 'lng' => 48.665083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 470,
@@ -4736,7 +4736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.102,
                 'lng' => 48.704306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 471,
@@ -4746,7 +4746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.110722,
                 'lng' => 48.704083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 472,
@@ -4756,7 +4756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.134167,
                 'lng' => 48.753944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 473,
@@ -4766,7 +4766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.120333,
                 'lng' => 48.765417,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 474,
@@ -4776,7 +4776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.131028,
                 'lng' => 48.707889,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 475,
@@ -4786,7 +4786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.936722,
                 'lng' => 48.790583,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 476,
@@ -4796,7 +4796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.970861,
                 'lng' => 48.806111,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 477,
@@ -4806,7 +4806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.940194,
                 'lng' => 48.745083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 478,
@@ -4816,7 +4816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.939083,
                 'lng' => 48.795222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 479,
@@ -4826,7 +4826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.301556,
                 'lng' => 48.434778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 480,
@@ -4836,7 +4836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.289278,
                 'lng' => 48.444528,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 481,
@@ -4846,7 +4846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.311,
                 'lng' => 48.416472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 482,
@@ -4856,7 +4856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.240639,
                 'lng' => 48.394722,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 483,
@@ -4866,7 +4866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.277056,
                 'lng' => 48.42125,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 484,
@@ -4876,7 +4876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.999222,
                 'lng' => 48.421611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 485,
@@ -4886,7 +4886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.985417,
                 'lng' => 48.462833,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 486,
@@ -4896,7 +4896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.953171,
                 'lng' => 48.386943,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 487,
@@ -4906,7 +4906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.043583,
                 'lng' => 48.512444,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 488,
@@ -4916,7 +4916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.043361,
                 'lng' => 48.512306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 489,
@@ -4926,7 +4926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.025361,
                 'lng' => 48.347944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 490,
@@ -4936,7 +4936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.9955,
                 'lng' => 48.309194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 491,
@@ -4946,7 +4946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.054972,
                 'lng' => 48.240611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 492,
@@ -4956,7 +4956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.102083,
                 'lng' => 48.357083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 493,
@@ -4966,7 +4966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.693389,
                 'lng' => 48.643694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 494,
@@ -4976,7 +4976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.666222,
                 'lng' => 48.68175,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 495,
@@ -4986,7 +4986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.655222,
                 'lng' => 48.712194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 496,
@@ -4996,7 +4996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.711889,
                 'lng' => 48.594944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 497,
@@ -5006,7 +5006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.667778,
                 'lng' => 48.679056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 498,
@@ -5016,7 +5016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.865222,
                 'lng' => 48.527389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 499,
@@ -5026,7 +5026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.912306,
                 'lng' => 48.485694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 500,
@@ -5036,7 +5036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.859833,
                 'lng' => 48.552944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 501,
@@ -5046,7 +5046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.909417,
                 'lng' => 48.635222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 502,
@@ -5056,7 +5056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.913111,
                 'lng' => 48.669167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 503,
@@ -5066,7 +5066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.880833,
                 'lng' => 48.675306,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 504,
@@ -5076,7 +5076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.928694,
                 'lng' => 48.566583,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 505,
@@ -5086,7 +5086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.943306,
                 'lng' => 48.550472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 506,
@@ -5096,7 +5096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.278965,
                 'lng' => 47.939115,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 507,
@@ -5106,7 +5106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.530805,
                 'lng' => 48.539382,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 508,
@@ -5116,7 +5116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.702111,
                 'lng' => 48.558472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 509,
@@ -5126,7 +5126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.626528,
                 'lng' => 48.52675,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 510,
@@ -5136,7 +5136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.703763,
                 'lng' => 48.558965,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 511,
@@ -5146,7 +5146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.599188,
                 'lng' => 48.445406,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 512,
@@ -5156,7 +5156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.557217,
                 'lng' => 48.556534,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 513,
@@ -5166,7 +5166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.757436,
                 'lng' => 48.371554,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 514,
@@ -5176,7 +5176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.589286,
                 'lng' => 48.516212,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 515,
@@ -5186,7 +5186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.504413,
                 'lng' => 48.531262,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 516,
@@ -5196,7 +5196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.676532,
                 'lng' => 48.258181,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 517,
@@ -5206,7 +5206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.752298,
                 'lng' => 48.485369,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 518,
@@ -5216,7 +5216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.709805,
                 'lng' => 48.367217,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 519,
@@ -5226,7 +5226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.709805,
                 'lng' => 48.367217,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 520,
@@ -5236,7 +5236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.516311,
                 'lng' => 48.108566,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 521,
@@ -5246,7 +5246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.155528,
                 'lng' => 48.588167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 522,
@@ -5256,7 +5256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.162583,
                 'lng' => 48.517167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 523,
@@ -5266,7 +5266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.166722,
                 'lng' => 48.545444,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 524,
@@ -5276,7 +5276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.194167,
                 'lng' => 48.527833,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 525,
@@ -5286,7 +5286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.179167,
                 'lng' => 48.454417,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 526,
@@ -5296,7 +5296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.807028,
                 'lng' => 48.389167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 527,
@@ -5306,7 +5306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.356469,
                 'lng' => 48.333925,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 528,
@@ -5316,7 +5316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.816611,
                 'lng' => 48.363472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 529,
@@ -5326,7 +5326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.780222,
                 'lng' => 48.49825,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 530,
@@ -5336,7 +5336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.723972,
                 'lng' => 48.497222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 531,
@@ -5346,7 +5346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.838611,
                 'lng' => 48.313694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 532,
@@ -5356,7 +5356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.790194,
                 'lng' => 48.43575,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 533,
@@ -5366,7 +5366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.758694,
                 'lng' => 48.48025,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 534,
@@ -5376,7 +5376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.258833,
                 'lng' => 48.456639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 535,
@@ -5386,7 +5386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.269833,
                 'lng' => 48.468833,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 536,
@@ -5396,7 +5396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.2315,
                 'lng' => 48.504694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 537,
@@ -5406,7 +5406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.2285,
                 'lng' => 48.475861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 538,
@@ -5416,7 +5416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.2315,
                 'lng' => 48.600611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 539,
@@ -5426,7 +5426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.263792,
                 'lng' => 48.493824,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 540,
@@ -5436,7 +5436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.072,
                 'lng' => 48.443,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 541,
@@ -5446,7 +5446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.13175,
                 'lng' => 48.457139,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 542,
@@ -5456,7 +5456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.498684,
                 'lng' => 48.359027,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 543,
@@ -5466,7 +5466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.499391,
                 'lng' => 48.331325,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 544,
@@ -5476,7 +5476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.524527,
                 'lng' => 48.296944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 545,
@@ -5486,7 +5486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.479828,
                 'lng' => 48.371429,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 546,
@@ -5496,7 +5496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.41833,
                 'lng' => 48.250644,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 547,
@@ -5506,7 +5506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.378666,
                 'lng' => 48.234116,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 548,
@@ -5516,7 +5516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.371833,
                 'lng' => 48.202005,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 549,
@@ -5526,7 +5526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.449581,
                 'lng' => 48.782768,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 550,
@@ -5536,7 +5536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.259466,
                 'lng' => 48.828263,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 551,
@@ -5546,7 +5546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.385278,
                 'lng' => 48.738028,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 552,
@@ -5556,7 +5556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.359902,
                 'lng' => 48.731634,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 553,
@@ -5566,7 +5566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.379487,
                 'lng' => 48.701432,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 554,
@@ -5576,7 +5576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.436856,
                 'lng' => 48.8801,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 555,
@@ -5586,7 +5586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.348873,
                 'lng' => 48.843702,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 556,
@@ -5596,7 +5596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.515292,
                 'lng' => 48.900919,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 557,
@@ -5606,7 +5606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.408845,
                 'lng' => 48.879158,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 558,
@@ -5616,7 +5616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.327858,
                 'lng' => 48.807068,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 559,
@@ -5626,7 +5626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.493897,
                 'lng' => 48.937241,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 560,
@@ -5636,7 +5636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.369427,
                 'lng' => 48.809794,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 561,
@@ -5646,7 +5646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.462245,
                 'lng' => 48.98436,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 562,
@@ -5656,7 +5656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.488602,
                 'lng' => 48.630545,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 563,
@@ -5666,7 +5666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.443574,
                 'lng' => 48.610151,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 564,
@@ -5676,7 +5676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.47942,
                 'lng' => 48.569189,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 565,
@@ -5686,7 +5686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.489933,
                 'lng' => 48.691438,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 566,
@@ -5696,7 +5696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.512597,
                 'lng' => 48.781569,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 567,
@@ -5706,7 +5706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.443613,
                 'lng' => 48.680138,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 568,
@@ -5716,7 +5716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.451393,
                 'lng' => 48.663667,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 569,
@@ -5726,7 +5726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.541614,
                 'lng' => 48.739788,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 570,
@@ -5736,7 +5736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.492836,
                 'lng' => 48.800717,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 571,
@@ -5746,7 +5746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.591011,
                 'lng' => 48.854865,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 572,
@@ -5756,7 +5756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.50961,
                 'lng' => 48.751045,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 573,
@@ -5766,7 +5766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.48101,
                 'lng' => 48.760999,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 574,
@@ -5776,7 +5776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.547893,
                 'lng' => 48.861507,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 575,
@@ -5786,7 +5786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.611946,
                 'lng' => 48.933353,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 576,
@@ -5796,7 +5796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.580142,
                 'lng' => 48.939637,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 577,
@@ -5806,7 +5806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.622814,
                 'lng' => 47.850114,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 578,
@@ -5816,7 +5816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.169802,
                 'lng' => 49.192211,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 579,
@@ -5826,7 +5826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.160694,
                 'lng' => 49.106056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 580,
@@ -5836,7 +5836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.156667,
                 'lng' => 49.057389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 581,
@@ -5846,7 +5846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.133751,
                 'lng' => 49.135944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 582,
@@ -5856,7 +5856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.092251,
                 'lng' => 49.165667,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 583,
@@ -5866,7 +5866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.113255,
                 'lng' => 49.080733,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 584,
@@ -5876,7 +5876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.7985,
                 'lng' => 48.219194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 585,
@@ -5886,7 +5886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.812806,
                 'lng' => 48.168861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 586,
@@ -5896,7 +5896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.845583,
                 'lng' => 48.287639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 587,
@@ -5906,7 +5906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.867167,
                 'lng' => 48.195722,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 588,
@@ -5916,7 +5916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.303445,
                 'lng' => 49.389587,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 589,
@@ -5926,7 +5926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.227932,
                 'lng' => 49.308817,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 590,
@@ -5936,7 +5936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.110639,
                 'lng' => 49.282083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 591,
@@ -5946,7 +5946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.896833,
                 'lng' => 48.280639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 592,
@@ -5956,7 +5956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.870194,
                 'lng' => 48.164361,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 593,
@@ -5966,7 +5966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.830083,
                 'lng' => 48.110778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 594,
@@ -5976,7 +5976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.847389,
                 'lng' => 48.197389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 595,
@@ -5986,7 +5986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.105472,
                 'lng' => 48.622972,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 596,
@@ -5996,7 +5996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.159278,
                 'lng' => 48.668528,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 597,
@@ -6006,7 +6006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.077611,
                 'lng' => 48.539639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 598,
@@ -6016,7 +6016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.149806,
                 'lng' => 48.630111,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 599,
@@ -6026,7 +6026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.080251,
                 'lng' => 49.329639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 600,
@@ -6036,7 +6036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.066663,
                 'lng' => 49.341462,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 601,
@@ -6046,7 +6046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.994472,
                 'lng' => 49.304472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 602,
@@ -6056,7 +6056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.835479,
                 'lng' => 47.408674,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 603,
@@ -6066,7 +6066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.056905,
                 'lng' => 49.214056,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 604,
@@ -6076,7 +6076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.021206,
                 'lng' => 49.238231,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 605,
@@ -6086,7 +6086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.018472,
                 'lng' => 49.210556,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 606,
@@ -6096,7 +6096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.005667,
                 'lng' => 49.092444,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 607,
@@ -6106,7 +6106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.017194,
                 'lng' => 49.083806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 608,
@@ -6116,7 +6116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.925944,
                 'lng' => 49.046194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 609,
@@ -6126,7 +6126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.978111,
                 'lng' => 49.131806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 610,
@@ -6136,7 +6136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.143544,
                 'lng' => 48.944256,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 611,
@@ -6146,7 +6146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.154389,
                 'lng' => 48.993806,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 612,
@@ -6156,7 +6156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.097417,
                 'lng' => 48.994167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 613,
@@ -6166,7 +6166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.077501,
                 'lng' => 48.996222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 614,
@@ -6176,7 +6176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.058778,
                 'lng' => 49.023861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 615,
@@ -6186,7 +6186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.048306,
                 'lng' => 49.063472,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 616,
@@ -6196,7 +6196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.985501,
                 'lng' => 48.958749,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 617,
@@ -6206,7 +6206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.950944,
                 'lng' => 48.967556,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 618,
@@ -6216,7 +6216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.012228,
                 'lng' => 48.737603,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 619,
@@ -6226,7 +6226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.045325,
                 'lng' => 48.626844,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 620,
@@ -6236,7 +6236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.036703,
                 'lng' => 48.670117,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 621,
@@ -6246,7 +6246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.078316,
                 'lng' => 48.650917,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 622,
@@ -6256,7 +6256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.077529,
                 'lng' => 48.635195,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 623,
@@ -6266,7 +6266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.026489,
                 'lng' => 48.713358,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 624,
@@ -6276,7 +6276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.819272,
                 'lng' => 48.984947,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 625,
@@ -6286,7 +6286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.818264,
                 'lng' => 49.010864,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 626,
@@ -6296,7 +6296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.788089,
                 'lng' => 49.003506,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 627,
@@ -6306,7 +6306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.762561,
                 'lng' => 48.977595,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 628,
@@ -6316,7 +6316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.801224,
                 'lng' => 49.060578,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 629,
@@ -6326,7 +6326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.775272,
                 'lng' => 49.056847,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 630,
@@ -6336,7 +6336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.753644,
                 'lng' => 49.072328,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 631,
@@ -6346,7 +6346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.015086,
                 'lng' => 48.786969,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 632,
@@ -6356,7 +6356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.02122,
                 'lng' => 48.775038,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 633,
@@ -6366,7 +6366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.118508,
                 'lng' => 48.872275,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 634,
@@ -6376,7 +6376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.060851,
                 'lng' => 48.713062,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 635,
@@ -6386,7 +6386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.950053,
                 'lng' => 48.831064,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 636,
@@ -6396,7 +6396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.929083,
                 'lng' => 48.801025,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 637,
@@ -6406,7 +6406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.878453,
                 'lng' => 48.878911,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 638,
@@ -6416,7 +6416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.912625,
                 'lng' => 48.859375,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 639,
@@ -6426,7 +6426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.911261,
                 'lng' => 48.82281,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 640,
@@ -6436,7 +6436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.839297,
                 'lng' => 49.104225,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 641,
@@ -6446,7 +6446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.846808,
                 'lng' => 49.037136,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 642,
@@ -6456,7 +6456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.784783,
                 'lng' => 49.133086,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 643,
@@ -6466,7 +6466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.850398,
                 'lng' => 48.944006,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 644,
@@ -6476,7 +6476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.813653,
                 'lng' => 48.94595,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 645,
@@ -6486,7 +6486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.844636,
                 'lng' => 48.922669,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 646,
@@ -6496,7 +6496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.880418,
                 'lng' => 48.89461,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 647,
@@ -6506,7 +6506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.938654,
                 'lng' => 48.88827,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 648,
@@ -6516,7 +6516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.895411,
                 'lng' => 49.027708,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 649,
@@ -6526,7 +6526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.869875,
                 'lng' => 48.976625,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 650,
@@ -6536,7 +6536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.874856,
                 'lng' => 49.00721,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 651,
@@ -6546,7 +6546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.900261,
                 'lng' => 48.946208,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 652,
@@ -6556,7 +6556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.915791,
                 'lng' => 48.90664,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 653,
@@ -6566,7 +6566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.966359,
                 'lng' => 48.919257,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 654,
@@ -6576,7 +6576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.928333,
                 'lng' => 48.780385,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 655,
@@ -6586,7 +6586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.987795,
                 'lng' => 48.741019,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 656,
@@ -6596,7 +6596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.950872,
                 'lng' => 48.704867,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 657,
@@ -6606,7 +6606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.977756,
                 'lng' => 48.702383,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 658,
@@ -6616,7 +6616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.970264,
                 'lng' => 48.630607,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 659,
@@ -6626,7 +6626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.362266,
                 'lng' => 48.307429,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 660,
@@ -6636,7 +6636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 5,
                 'lng' => 5,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 661,
@@ -6646,7 +6646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.060625,
                 'lng' => 48.27048,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 662,
@@ -6656,7 +6656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.064472,
                 'lng' => 49.388111,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 663,
@@ -6666,7 +6666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.216941,
                 'lng' => 48.98863,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 664,
@@ -6676,7 +6676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.383916,
                 'lng' => 49.204487,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 665,
@@ -6686,7 +6686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 37.010949,
                 'lng' => 48.652042,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 666,
@@ -6696,7 +6696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.238,
                 'lng' => 48.552778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 667,
@@ -6706,7 +6706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.238,
                 'lng' => 48.552778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 668,
@@ -6716,7 +6716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.121717,
                 'lng' => 48.589771,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 669,
@@ -6726,7 +6726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.774899,
                 'lng' => 47.541243,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 670,
@@ -6736,7 +6736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.665998,
                 'lng' => 47.748334,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 671,
@@ -6746,7 +6746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.59786,
                 'lng' => 47.485156,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 672,
@@ -6756,7 +6756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.536671,
                 'lng' => 47.804119,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 673,
@@ -6766,7 +6766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.632058,
                 'lng' => 48.091398,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 674,
@@ -6776,7 +6776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.955015,
                 'lng' => 48.402077,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 676,
@@ -6786,7 +6786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.567326,
                 'lng' => 48.491765,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 678,
@@ -6796,7 +6796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.806013,
                 'lng' => 48.786158,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 679,
@@ -6806,7 +6806,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 35.838611,
                 'lng' => 48.313611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 680,
@@ -6816,7 +6816,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.889288,
                 'lng' => 48.263177,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 681,
@@ -6826,7 +6826,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 9,
                 'lat' => 36.102083,
                 'lng' => 48.357083,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 682,
@@ -6836,7 +6836,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.258683,
                 'lng' => 49.135911,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 683,
@@ -6846,7 +6846,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.139722,
                 'lng' => 49.205611,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 684,
@@ -6856,7 +6856,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.149809,
                 'lng' => 49.216738,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 685,
@@ -6866,7 +6866,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.149953,
                 'lng' => 49.198257,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 686,
@@ -6876,7 +6876,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.159001,
                 'lng' => 49.237861,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 687,
@@ -6886,7 +6886,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.168833,
                 'lng' => 49.245167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 688,
@@ -6896,7 +6896,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.154972,
                 'lng' => 49.234139,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 689,
@@ -6906,7 +6906,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.135051,
                 'lng' => 49.268392,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 690,
@@ -6916,7 +6916,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.435535,
                 'lng' => 48.788475,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 691,
@@ -6926,7 +6926,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.21409,
                 'lng' => 49.192014,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 692,
@@ -6936,7 +6936,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.140139,
                 'lng' => 49.217639,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 693,
@@ -6946,7 +6946,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.110389,
                 'lng' => 48.58675,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 694,
@@ -6956,7 +6956,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 36.121444,
                 'lng' => 48.589778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 695,
@@ -6966,7 +6966,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 8,
                 'lat' => 35.847389,
                 'lng' => 48.197389,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 696,
@@ -6976,7 +6976,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 35.758694,
                 'lng' => 48.48025,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 697,
@@ -6986,7 +6986,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.296242,
                 'lng' => 48.063898,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 698,
@@ -6996,7 +6996,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.196557,
                 'lng' => 49.21361,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 699,
@@ -7006,7 +7006,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.208983,
                 'lng' => 49.204809,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 700,
@@ -7016,7 +7016,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.201984,
                 'lng' => 49.177035,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 701,
@@ -7026,7 +7026,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.742472,
                 'lng' => 47.668891,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 702,
@@ -7036,7 +7036,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.551856,
                 'lng' => 47.619683,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 703,
@@ -7046,7 +7046,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.302562,
                 'lng' => 49.073208,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 704,
@@ -7056,7 +7056,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.250385,
                 'lng' => 49.123781,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 705,
@@ -7066,7 +7066,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.151728,
                 'lng' => 49.230779,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 706,
@@ -7076,7 +7076,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.145904,
                 'lng' => 49.223411,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 707,
@@ -7086,7 +7086,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.67953,
                 'lng' => 48.50572,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 708,
@@ -7096,7 +7096,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.67814,
                 'lng' => 48.50843,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 709,
@@ -7106,7 +7106,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.67707,
                 'lng' => 48.501445,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 710,
@@ -7116,7 +7116,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.667054,
                 'lng' => 48.536944,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 711,
@@ -7126,7 +7126,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.666023,
                 'lng' => 48.547055,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 712,
@@ -7136,7 +7136,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.700259,
                 'lng' => 48.494291,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 713,
@@ -7146,7 +7146,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.683401,
                 'lng' => 48.49439,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 714,
@@ -7156,7 +7156,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.664443,
                 'lng' => 48.468547,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 715,
@@ -7166,7 +7166,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.684583,
                 'lng' => 48.508185,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 716,
@@ -7176,7 +7176,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.691349,
                 'lng' => 48.509548,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 717,
@@ -7186,7 +7186,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.687788,
                 'lng' => 48.454937,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 718,
@@ -7196,7 +7196,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.696642,
                 'lng' => 48.451873,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 719,
@@ -7206,7 +7206,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.69844,
                 'lng' => 48.462222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 720,
@@ -7216,7 +7216,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.701371,
                 'lng' => 48.480452,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 721,
@@ -7226,7 +7226,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.682677,
                 'lng' => 48.5265,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 722,
@@ -7236,7 +7236,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.683899,
                 'lng' => 48.530393,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 723,
@@ -7246,7 +7246,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.675015,
                 'lng' => 48.546717,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 724,
@@ -7256,7 +7256,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.670712,
                 'lng' => 48.553828,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 725,
@@ -7266,7 +7266,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.67186,
                 'lng' => 48.45953,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 726,
@@ -7276,7 +7276,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.674129,
                 'lng' => 48.461686,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 727,
@@ -7286,7 +7286,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.682559,
                 'lng' => 48.441006,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 728,
@@ -7296,7 +7296,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.675922,
                 'lng' => 48.485179,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 729,
@@ -7306,7 +7306,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.65944,
                 'lng' => 48.505937,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 730,
@@ -7316,7 +7316,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.645139,
                 'lng' => 48.548434,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 731,
@@ -7326,7 +7326,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.663887,
                 'lng' => 48.481865,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 732,
@@ -7336,7 +7336,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.68802,
                 'lng' => 48.4744,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 733,
@@ -7346,7 +7346,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.68686,
                 'lng' => 48.46701,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 734,
@@ -7356,7 +7356,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 4.872048,
                 'lng' => -13.31543,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 735,
@@ -7366,7 +7366,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.690783,
                 'lng' => 48.46932,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 736,
@@ -7376,7 +7376,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.671247,
                 'lng' => 48.499471,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 737,
@@ -7386,7 +7386,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.680948,
                 'lng' => 48.482175,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 738,
@@ -7396,7 +7396,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.679158,
                 'lng' => 48.469555,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 739,
@@ -7406,7 +7406,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.668134,
                 'lng' => 48.534689,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 740,
@@ -7416,7 +7416,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.670773,
                 'lng' => 48.511785,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 741,
@@ -7426,7 +7426,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.661286,
                 'lng' => 48.514365,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 742,
@@ -7436,7 +7436,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.669237,
                 'lng' => 48.471369,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 743,
@@ -7446,7 +7446,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.672787,
                 'lng' => 48.481576,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 744,
@@ -7456,7 +7456,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.238,
                 'lng' => 48.552778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 745,
@@ -7466,7 +7466,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.42149,
                 'lng' => 48.271694,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 746,
@@ -7476,7 +7476,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.120222,
                 'lng' => 48.596222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 747,
@@ -7486,7 +7486,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.927389,
                 'lng' => 48.952778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 748,
@@ -7496,7 +7496,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.130667,
                 'lng' => 48.594167,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 749,
@@ -7506,7 +7506,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.110417,
                 'lng' => 48.577917,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 751,
@@ -7516,7 +7516,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.989927,
                 'lng' => 48.781998,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 752,
@@ -7526,7 +7526,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.92085,
                 'lng' => 48.966717,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 753,
@@ -7536,7 +7536,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.206488,
                 'lng' => 49.189388,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 754,
@@ -7546,7 +7546,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.670838,
                 'lng' => 48.480808,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 755,
@@ -7556,7 +7556,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 35.936722,
                 'lng' => 48.790183,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 756,
@@ -7566,7 +7566,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 35.939083,
                 'lng' => 48.795222,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 757,
@@ -7576,7 +7576,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.672583,
                 'lng' => 48.513154,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 760,
@@ -7586,7 +7586,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 10,
                 'lat' => 36.193967,
                 'lng' => 49.186564,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 761,
@@ -7596,7 +7596,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.209539,
                 'lng' => 49.324264,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 762,
@@ -7606,7 +7606,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.190849,
                 'lng' => 49.36303,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 763,
@@ -7616,7 +7616,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.124349,
                 'lng' => 49.382747,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 764,
@@ -7626,7 +7626,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.152833,
                 'lng' => 49.377182,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 765,
@@ -7636,7 +7636,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.140353,
                 'lng' => 49.35555,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 766,
@@ -7646,7 +7646,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.18317,
                 'lng' => 49.41304,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 767,
@@ -7656,7 +7656,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.314248,
                 'lng' => 49.308403,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 768,
@@ -7666,7 +7666,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.290263,
                 'lng' => 49.325213,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 769,
@@ -7676,7 +7676,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.331598,
                 'lng' => 49.280599,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 770,
@@ -7686,7 +7686,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.310586,
                 'lng' => 49.344504,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 771,
@@ -7696,7 +7696,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.034281,
                 'lng' => 49.177873,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 772,
@@ -7706,7 +7706,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.034281,
                 'lng' => 49.177873,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 773,
@@ -7716,7 +7716,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.001549,
                 'lng' => 49.18289,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 774,
@@ -7726,7 +7726,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.001753,
                 'lng' => 49.225818,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 775,
@@ -7736,7 +7736,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.003299,
                 'lng' => 49.261148,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 776,
@@ -7746,7 +7746,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 35.979272,
                 'lng' => 49.163778,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 777,
@@ -7756,7 +7756,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 35.952652,
                 'lng' => 49.039511,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 778,
@@ -7766,7 +7766,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 35.886098,
                 'lng' => 49.058194,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 779,
@@ -7776,7 +7776,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.037742,
                 'lng' => 48.994363,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 780,
@@ -7786,7 +7786,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.013429,
                 'lng' => 48.931098,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 781,
@@ -7796,7 +7796,7 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.081967,
                 'lng' => 48.977498,
-                'boundary_id' => null
+                'boundary_id' => null,
             ],
             [
                 'id' => 782,
@@ -7806,8 +7806,8 @@ class UnitSeeder extends Seeder
                 'unit_type_id' => 12,
                 'lat' => 36.121362,
                 'lng' => 49.01546,
-                'boundary_id' => null
-            ]
+                'boundary_id' => null,
+            ],
         ];
 
         // وارد کردن داده‌ها
@@ -7815,8 +7815,14 @@ class UnitSeeder extends Seeder
             Unit::create($unit);
         }
 
-        // Reset PostgreSQL sequence to avoid collisions with auto-increment
         $maxId = DB::table('units')->max('id');
-        DB::statement("SELECT setval('units_id_seq', {$maxId})");
+        if ($maxId) {
+            $driver = DB::getDriverName();
+            if ($driver === 'pgsql') {
+                DB::statement("SELECT setval('units_id_seq', {$maxId})");
+            } else {
+                DB::statement('ALTER TABLE units AUTO_INCREMENT = '.($maxId + 1));
+            }
+        }
     }
 }
