@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AiController;
+use App\Http\Controllers\Api\HardwareAgentController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
@@ -49,6 +50,9 @@ Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValue
 
 // AI smoke test endpoint
 Route::middleware('auth:sanctum')->post('/ai/chat', AiController::class);
+
+// Hardware AI Agent endpoint
+Route::middleware('auth:sanctum')->post('/ai/hardware', HardwareAgentController::class);
 
 // Ticket API routes
 Route::middleware('auth:sanctum')->group(function () {
