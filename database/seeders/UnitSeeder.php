@@ -7814,5 +7814,9 @@ class UnitSeeder extends Seeder
         foreach ($units as $unit) {
             Unit::create($unit);
         }
+
+        // Reset PostgreSQL sequence to avoid collisions with auto-increment
+        $maxId = DB::table('units')->max('id');
+        DB::statement("SELECT setval('units_id_seq', {$maxId})");
     }
 }
