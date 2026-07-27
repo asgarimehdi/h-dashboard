@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AiController;
 use App\Http\Controllers\Api\HardwareAgentController;
+use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
@@ -51,8 +52,16 @@ Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValue
 // AI smoke test endpoint
 Route::middleware('auth:sanctum')->post('/ai/chat', AiController::class);
 
-// Hardware AI Agent endpoint
-Route::middleware('auth:sanctum')->post('/ai/hardware', HardwareAgentController::class);
+// Hardware API routes
+Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
+    Route::get('/', [HardwareController::class, 'index']);
+    Route::post('/', [HardwareController::class, 'store']);
+    Route::get('/{hardware}', [HardwareController::class, 'show']);
+    Route::put('/{hardware}', [HardwareController::class, 'update']);
+    Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
+    Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
+    Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
+});
 
 // Ticket API routes
 Route::middleware('auth:sanctum')->group(function () {

@@ -35,6 +35,9 @@ return new class extends Component
     public ?string $filterUnit = null;
     public ?string $filterSemat = null;
 
+    // Bulk selection
+    public array $selected = [];
+
     // Form fields
     public ?string $n_code = null;
     public ?string $n_code_status = null; // 'valid', 'invalid', or null
@@ -218,6 +221,26 @@ return new class extends Component
         }
     }
 
+    public function bulkMark(bool $value): void
+    {
+        if (empty($this->selected)) {
+            $this->error('هیچ ردیفی انتخاب نشده است.', position: 'toast-bottom');
+            return;
+        }
+
+        Hardware::whereIn('id', $this->selected)->update(['mark' => $value]);
+        $this->selected = [];
+        $this->success('وضعیت علامت‌گذاری تغییر کرد.', position: 'toast-bottom');
+    }
+
+    public function bulkDelete(): void
+    {
+        if (empty($this->selected)) return;
+        Hardware::whereIn('id', $this->selected)->delete();
+        $this->selected = [];
+        $this->warning('دستگاه‌های انتخاب شده حذف شدند.', position: 'toast-bottom');
+    }
+
     public function headers(): array
     {
         return [
@@ -338,11 +361,15 @@ return new class extends Component
             <x-button icon="o-funnel"
                 :class="$showFilters ? 'btn-primary' : 'btn-ghost'"
                 wire:click="$toggle('showFilters')"
-                :badge="(! $showFilters && $this->hasActiveFilters()) ? '!' : false"
-            />
-        </div>
+                />
+                    <div class="flex gap-1">
+                        <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف دسته‌جمعی" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا از حذف تمام ردیف‌های انتخاب شده مطمئن هستید؟" />
+                        <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت‌دار کردن" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
+                        <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن علامت" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
+                    </div>
+                </div>
 
-        {{-- Quick Presets --}}
+                {{-- Quick Presets --}}
         <div class="flex flex-wrap gap-2 mb-4">
             <x-button icon="o-cpu-chip" class="btn-outline btn-xs" label="لپ‌تاپ‌ها" wire:click="$set('filterType', 'laptop')" />
             <x-button icon="o-server" class="btn-outline btn-xs" label="سرورها" wire:click="$set('filterType', 'server')" />
