@@ -2,6 +2,7 @@
 
 use App\Models\Hardware;
 use App\Models\Person;
+use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -11,6 +12,7 @@ return new class extends Component
 {
     use Toast;
     use WithPagination;
+    use PersianNormalizer;
 
     public string $search = '';
     public int $perPage = 10;
@@ -69,15 +71,16 @@ return new class extends Component
 
     public function updatedPersonSearch(): void
     {
-        if (strlen($this->personSearch) < 2) {
+        $normalized = self::normalizeForSearch($this->personSearch);
+        if (strlen($normalized) < 2) {
             $this->personResults = [];
             return;
         }
 
-        $this->personResults = Person::where('n_code', 'LIKE', "%{$this->personSearch}%")
-            ->orWhere(function ($q) {
-                $q->where('f_name', 'LIKE', "%{$this->personSearch}%")
-                  ->orWhere('l_name', 'LIKE', "%{$this->personSearch}%");
+        $this->personResults = Person::where('n_code', 'LIKE', "%{$normalized}%")
+            ->orWhere(function ($q) use ($normalized) {
+                $q->where('f_name', 'LIKE', "%{$normalized}%")
+                  ->orWhere('l_name', 'LIKE', "%{$normalized}%");
             })
             ->limit(10)
             ->get()
@@ -262,7 +265,7 @@ return new class extends Component
 
         // General search
         if (!empty($this->search)) {
-            $s = $this->search;
+            $s = self::normalizeForSearch($this->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                   ->orWhere('n_code', 'LIKE', "%{$s}%")
@@ -305,20 +308,23 @@ return new class extends Component
 
         // Related filters (AND logic)
         if ($this->filterPerson) {
-            $query->whereHas('person', function ($q) {
-                $q->where('f_name', 'LIKE', "%{$this->filterPerson}%")
-                  ->orWhere('l_name', 'LIKE', "%{$this->filterPerson}%")
-                  ->orWhere('n_code', 'LIKE', "%{$this->filterPerson}%");
+            $normalized = self::normalizeForSearch($this->filterPerson);
+            $query->whereHas('person', function ($q) use ($normalized) {
+                $q->where('f_name', 'LIKE', "%{$normalized}%")
+                  ->orWhere('l_name', 'LIKE', "%{$normalized}%")
+                  ->orWhere('n_code', 'LIKE', "%{$normalized}%");
             });
         }
         if ($this->filterUnit) {
-            $query->whereHas('person.unit', function ($q) {
-                $q->where('name', 'LIKE', "%{$this->filterUnit}%");
+            $normalized = self::normalizeForSearch($this->filterUnit);
+            $query->whereHas('person.unit', function ($q) use ($normalized) {
+                $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
         if ($this->filterSemat) {
-            $query->whereHas('person.semat', function ($q) {
-                $q->where('name', 'LIKE', "%{$this->filterSemat}%");
+            $normalized = self::normalizeForSearch($this->filterSemat);
+            $query->whereHas('person.semat', function ($q) use ($normalized) {
+                $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
 

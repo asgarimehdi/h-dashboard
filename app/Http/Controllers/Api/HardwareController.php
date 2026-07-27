@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\HardwareResource;
 use App\Models\Hardware;
 use App\Services\AccessService;
+use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class HardwareController extends Controller
 {
+    use PersianNormalizer;
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $user = $request->user();
@@ -24,7 +27,7 @@ class HardwareController extends Controller
 
         // Filters
         if ($request->filled('search')) {
-            $s = $request->search;
+            $s = self::normalizeForSearch($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                   ->orWhere('n_code', 'LIKE', "%{$s}%")
@@ -64,20 +67,23 @@ class HardwareController extends Controller
             $query->where('mark', $request->mark === 'true' || $request->mark === '1');
         }
         if ($request->filled('person')) {
-            $query->whereHas('person', function ($q) use ($request) {
-                $q->where('f_name', 'LIKE', "%{$request->person}%")
-                  ->orWhere('l_name', 'LIKE', "%{$request->person}%")
-                  ->orWhere('n_code', 'LIKE', "%{$request->person}%");
+            $normalized = self::normalizeForSearch($request->person);
+            $query->whereHas('person', function ($q) use ($normalized) {
+                $q->where('f_name', 'LIKE', "%{$normalized}%")
+                  ->orWhere('l_name', 'LIKE', "%{$normalized}%")
+                  ->orWhere('n_code', 'LIKE', "%{$normalized}%");
             });
         }
         if ($request->filled('unit')) {
-            $query->whereHas('person.unit', function ($q) use ($request) {
-                $q->where('name', 'LIKE', "%{$request->unit}%");
+            $normalized = self::normalizeForSearch($request->unit);
+            $query->whereHas('person.unit', function ($q) use ($normalized) {
+                $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
         if ($request->filled('semat')) {
-            $query->whereHas('person.semat', function ($q) use ($request) {
-                $q->where('name', 'LIKE', "%{$request->semat}%");
+            $normalized = self::normalizeForSearch($request->semat);
+            $query->whereHas('person.semat', function ($q) use ($normalized) {
+                $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
 
