@@ -52,6 +52,9 @@ Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValue
 // AI smoke test endpoint
 Route::middleware('auth:sanctum')->post('/ai/chat', AiController::class);
 
+// Hardware AI Agent endpoint
+Route::middleware('auth:sanctum')->post('/ai/hardware', HardwareAgentController::class);
+
 // Hardware API routes
 Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::get('/', [HardwareController::class, 'index']);

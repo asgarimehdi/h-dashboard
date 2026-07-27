@@ -11,6 +11,12 @@ return new class extends Component
     public string $message = '';
     public array $chatHistory = [];
     public bool $isLoading = false;
+    public string $sessionId = 'hw-chat-default';
+
+    public function mount(): void
+    {
+        $this->loadHistory();
+    }
 
     public function send(): void
     {
@@ -38,6 +44,12 @@ return new class extends Component
                 'role' => 'assistant',
                 'content' => $response,
             ];
+
+            // Save to session storage
+            $this->saveHistory();
+
+            // Check if AI returned a filter action
+            $this->handleAIAction($response);
         } catch (\Throwable $e) {
             $this->chatHistory[] = [
                 'role' => 'error',
@@ -46,21 +58,85 @@ return new class extends Component
         }
 
         $this->isLoading = false;
+        $this->dispatch('scrollToBottom');
     }
 
     public function clear(): void
     {
         $this->chatHistory = [];
+        session()->forget("hardware_chat_history_{$this->sessionId}");
         $this->success('گفتگو پاک شد', position: 'toast-bottom');
+    }
+
+    public function saveHistory(): void
+    {
+        session(["hardware_chat_history_{$this->sessionId}" => $this->chatHistory]);
+    }
+
+    public function loadHistory(): void
+    {
+        $this->chatHistory = session("hardware_chat_history_{$this->sessionId}", []);
     }
 
     private function stripThinking(string $text): string
     {
         // Remove <thinking>...</thinking> blocks
         $text = preg_replace('/<thinking>.*?<\/thinking>/is', '', $text);
-        // Also handle <think>...</think> format
-        $text = preg_replace('/<think>.*?<\/think>/is', '', $text);
+        // Also handle 思考.../思考 format
+        $text = preg_replace('/\u591c\u8003.*?<\/think>/is', '', $text);
         return trim($text);
+    }
+
+    private function handleAIAction(string $response): void
+    {
+        // Parse JSON action from AI response (if any)
+        if (preg_match('/\{"action":\s*"filter_table",\s*"filters":\s*(\{.*?\})\s*\}/', $response, $matches)) {
+            $filters = json_decode($matches[1] ?? '{}', true);
+            if ($filters) {
+                $this->dispatch('apply-hardware-filters', filters: $filters);
+            }
+        }
+    }
+
+    public function renderMarkdown(string $text): string
+    {
+        // Convert **bold** to <strong>
+        $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
+        // Convert *italic* to <em>
+        $text = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $text);
+
+        // Simple table conversion
+        $lines = explode("\n", $text);
+        $inTable = false;
+        $processedLines = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (preg_match('/^\|.+\|$/', $line)) {
+                if (!$inTable) {
+                    $processedLines[] = '<div class="overflow-x-auto"><table class="table table-sm table-bordered">';
+                    $inTable = true;
+                }
+                if (str_contains($line, '---')) continue;
+
+                $cells = array_map('trim', explode('|', $line));
+                array_shift($cells);
+                array_pop($cells);
+                $processedLines[] = '<tr>' . implode('', array_map(fn($c) => "<td>{$c}</td>", $cells)) . '</tr>';
+            } else {
+                if ($inTable) {
+                    $processedLines[] = '</table></div>';
+                    $inTable = false;
+                }
+                $processedLines[] = $line;
+            }
+        }
+        if ($inTable) $processedLines[] = '</table></div>';
+
+        $text = implode("\n", $processedLines);
+        // Convert inline code `code`
+        $text = preg_replace('/`(.+?)`/', '<code class="bg-base-200 px-1 rounded text-xs">$1</code>', $text);
+        return nl2br(e($text));
     }
 }; ?>
 
@@ -79,8 +155,8 @@ return new class extends Component
                     <div class="chat-header text-xs opacity-60 mb-1">
                         {{ $msg['role'] === 'user' ? 'شما' : ($msg['role'] === 'error' ? 'خطا' : 'دستیار سخت‌افزار') }}
                     </div>
-                    <div class="chat-bubble {{ $msg['role'] === 'user' ? 'chat-bubble-primary' : ($msg['role'] === 'error' ? 'chat-bubble-error' : '') }}">
-                        {!! nl2br(e($msg['content'])) !!}
+                    <div class="chat-bubble {{ $msg['role'] === 'user' ? 'chat-bubble-primary' : ($msg['role'] === 'error' ? 'chat-bubble-error' : '') }} prose prose-sm max-w-none">
+                        {!! $this->renderMarkdown($msg['content']) !!}
                     </div>
                 </div>
             @empty
@@ -93,6 +169,7 @@ return new class extends Component
                             <button wire:click="$set('message', 'لیست کامپیوترها')" class="btn btn-outline btn-xs">لیست کامپیوترها</button>
                             <button wire:click="$set('message', 'آمار کلی سخت‌افزار')" class="btn btn-outline btn-xs">آمار کلی</button>
                             <button wire:click="$set('message', 'کامپیوترهای خاموش')" class="btn btn-outline btn-xs">خاموش‌ها</button>
+                            <button wire:click="$set('message', 'فیلتر روی لپ‌تاپ‌ها و رم بالای ۱۶')" class="btn btn-outline btn-xs">فیلتر لپ‌تاپ ۱۶GB+</button>
                         </div>
                     </div>
                 </div>
@@ -137,5 +214,12 @@ return new class extends Component
             const el = document.getElementById('hw-chat-messages');
             if (el) el.scrollTop = el.scrollHeight;
         });
+    });
+
+    // Listen for filter actions from AI
+    window.Livewire.on('apply-hardware-filters', (e) => {
+        if (e.detail && e.detail.filters) {
+            window.Livewire.dispatch('apply-hardware-filters', e.detail.filters);
+        }
     });
 </script>
