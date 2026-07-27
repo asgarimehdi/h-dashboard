@@ -19,6 +19,7 @@ return new class extends Component
     public bool $showForm = false;
     public bool $showEditModal = false;
     public bool $showFilters = false;
+    public bool $showColPanel = false;
     public ?int $editingId = null;
     public array $sortBy = ['column' => 'id', 'direction' => 'desc'];
 
@@ -39,6 +40,17 @@ return new class extends Component
 
     // Bulk selection
     public array $selected = [];
+
+    // Column visibility
+    public array $visibleCols = [
+        'type' => true,
+        'os' => true,
+        'ip_local' => true,
+        'cpu' => true,
+        'ram' => true,
+        'hdd' => true,
+        'status' => true,
+    ];
 
     // Form fields
     public ?string $n_code = null;
@@ -251,13 +263,13 @@ return new class extends Component
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
             ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
-            ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell'],
-            ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell'],
-            ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell'],
-            ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell'],
-            ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell'],
-            ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell'],
-            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24'],
+            ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell ' . ($this->visibleCols['type'] ? '' : 'hidden')],
+            ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell ' . ($this->visibleCols['os'] ? '' : 'hidden')],
+            ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell ' . ($this->visibleCols['ip_local'] ? '' : 'hidden')],
+            ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell ' . ($this->visibleCols['cpu'] ? '' : 'hidden')],
+            ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell ' . ($this->visibleCols['ram'] ? '' : 'hidden')],
+            ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell ' . ($this->visibleCols['hdd'] ? '' : 'hidden')],
+            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24 ' . ($this->visibleCols['status'] ? '' : 'hidden')],
         ];
     }
 
@@ -372,9 +384,10 @@ return new class extends Component
                 wire:click="$toggle('showFilters')"
                 />
                     <div class="flex gap-1">
-                        <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف دسته‌جمعی" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا از حذف تمام ردیف‌های انتخاب شده مطمئن هستید؟" />
-                        <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت‌دار کردن" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
-                        <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن علامت" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
+                        <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="$toggle('showColPanel')" />
+                        <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
+                        <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
+                        <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
                     </div>
                 </div>
 
@@ -410,10 +423,27 @@ return new class extends Component
                 @if($this->hasActiveFilters())
                     <div class="mt-3 flex items-center gap-2">
                         <x-button icon="o-x-mark" label="پاک کردن فیلترها" class="btn-ghost btn-sm" wire:click="clearFilters" />
-                        <span class="text-xs text-base-content/50">فیلترهای فعال اعمال شده</span>
-                    </div>
+                        <span class="text-xs text-base-content/50">فیلترهای فعال اعمال شده</span
+                    </div
                 @endif
-            </div>
+            </div
+        @endif
+
+        @if($showColPanel)
+            <div class="mb-4 p-4 bg-base-200 rounded-lg border-l-4 border-primary">
+                <div class="flex items-center gap-2 mb-2 font-bold text-sm">
+                    <x-icon name="o-columns-3" class="w-4 h-4" />
+                    مدیریت نمایش ستون‌ها
+                </div
+                <div class="flex flex-wrap gap-3">
+                    @foreach($visibleCols as $key => $visible)
+                        <label class="flex items-center gap-2 cursor-pointer text-xs">
+                            <input type="checkbox" wire:model.live="visibleCols.{{ $key }}" class="checkbox checkbox-xs" />
+                            {{ $headers()->collect()->firstWhere('key', $key)['label'] ?? $key }}
+                        </label>
+                    @endforeach
+                </div
+            </div
         @endif
 
         {{-- Create Form --}}
@@ -539,27 +569,70 @@ return new class extends Component
             </x-modal>
         @endif
 
-        {{-- Table --}}
-        <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[5, 10, 25, 50]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
-            @scope('cell_checkbox', $hw)
-                <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
-            @endscope
-            @scope('cell_status', $hw)
-                @if($hw['status'] === 'mark')
-                    <x-badge value="⚑ علامت" class="badge-warning" />
-                @elseif($hw['status'] === 'off')
-                    <x-badge value="⬛ خاموش" class="badge-neutral" />
-                @else
-                    <x-badge value="🟢 فعال" class="badge-success" />
-                @endif
-            @endscope
-            @scope('actions', $hw)
-                <div class="flex gap-1">
-                    <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
-                    <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+        {{-- Mobile Card Layout --}}
+        <div class="grid grid-cols-1 gap-4 md:hidden">
+            @foreach($hardwares as $hw)
+                <div class="p-4 bg-base-100 border rounded-xl shadow-sm {{ $hw['mark'] ? 'border-r-4 border-r-warning bg-warning/10' : '' }}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="font-bold text-lg">{{ $hw['pc_name'] }}</div>
+                            <div class="text-xs text-base-content/60">{{ $hw['person_name'] }}</div>
+                        </div>
+                        <div class="flex gap-2">
+                             @if($hw['status'] === 'mark')
+                                <x-badge value="⚑ علامت" class="badge-warning" />
+                            @elseif($hw['status'] === 'off')
+                                <x-badge value="⬛ خاموش" class="badge-neutral" />
+                            @else
+                                <x-badge value="🟢 فعال" class="badge-success" />
+                            @endif
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs mb-4">
+                        <div class="flex justify-between">
+                            <span class="opacity-50">نوع:</span> <span>{{ $hw['type'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="opacity-50">OS:</span> <span>{{ $hw['os'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="opacity-50">IP:</span> <span>{{ $hw['ip_local'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="opacity-50">RAM:</span> <span>{{ $hw['ram'] }}</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-xs text-primary flex-1" label="ویرایش" />
+                        <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-xs text-error flex-1" label="حذف" />
+                    </div>
                 </div>
-            @endscope
-        </x-table>
+            @endforeach
+        </div>
+
+        {{-- Desktop Table --}}
+        <div class="hidden md:block">
+            <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
+                    :per-page-values="[5, 10, 25, 50]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
+                @scope('cell_checkbox', $hw)
+                    <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
+                @endscope
+                @scope('cell_status', $hw)
+                    @if($hw['status'] === 'mark')
+                        <x-badge value="⚑ علامت" class="badge-warning" />
+                    @elseif($hw['status'] === 'off')
+                        <x-badge value="⬛ خاموش" class="badge-neutral" />
+                    @else
+                        <x-badge value="🟢 فعال" class="badge-success" />
+                    @endif
+                @endscope
+                @scope('actions', $hw)
+                    <div class="flex gap-1">
+                        <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
+                        <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+                    </div>
+                @endscope
+            </x-table>
+        </div>
     </x-card>
 </div>
