@@ -346,8 +346,8 @@ return new class extends Component
         <div class="flex flex-wrap gap-2 mb-4">
             <x-button icon="o-cpu-chip" class="btn-outline btn-xs" label="لپ‌تاپ‌ها" wire:click="$set('filterType', 'laptop')" />
             <x-button icon="o-server" class="btn-outline btn-xs" label="سرورها" wire:click="$set('filterType', 'server')" />
-            <x-button icon="o-memory-stick" class="btn-outline btn-xs" label="رم 16GB+" wire:click="$set('filterRam', '16384')" />
-            <x-button icon="o-hard-drive" class="btn-outline btn-xs" label="فقط SSD" wire:click="$set('filterHdd', 'SSD')" />
+            <x-button icon="o-server-stack" class="btn-outline btn-xs" label="رم 16GB+" wire:click="$set('filterRam', '16384')" />
+            <x-button icon="o-computer-desktop" class="btn-outline btn-xs" label="فقط SSD" wire:click="$set('filterHdd', 'SSD')" />
             <x-button icon="o-power" class="btn-outline btn-xs text-error" label="خاموش‌ها" wire:click="$set('filterShutdown', '0')" />
             <x-button icon="o-check-circle" class="btn-outline btn-xs text-success" label="علامت‌دارها" wire:click="$set('filterMark', '1')" />
             <x-button icon="o-x-mark" class="btn-ghost btn-xs" label="پاکسازی" wire:click="clearFilters" />
