@@ -247,15 +247,17 @@ return new class extends Component
     public function headers(): array
     {
         return [
+            ['key' => 'checkbox', 'label' => '', 'class' => 'w-10'],
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
-            ['key' => 'person_name', 'label' => 'operators', 'class' => ''],
+            ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell'],
-            ['key' => 'os', 'label' => 'سیستم عامل', 'class' => 'hidden lg:table-cell'],
+            ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell'],
             ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell'],
             ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell'],
             ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell'],
             ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell'],
+            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24'],
         ];
     }
 
@@ -339,6 +341,7 @@ return new class extends Component
             'hardwares' => $this->hardwares()->through(fn($hw) => [
                 ...$hw->toArray(),
                 'person_name' => $hw->person ? trim($hw->person->f_name . ' ' . $hw->person->l_name) : '-',
+                'status' => $hw->mark ? 'mark' : ($hw->shutdown ? 'on' : 'off'),
             ]),
             'headers' => $this->headers(),
         ];
@@ -539,6 +542,18 @@ return new class extends Component
         {{-- Table --}}
         <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[5, 10, 25, 50]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
+            @scope('cell_checkbox', $hw)
+                <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
+            @endscope
+            @scope('cell_status', $hw)
+                @if($hw['status'] === 'mark')
+                    <x-badge value="⚑ علامت" class="badge-warning" />
+                @elseif($hw['status'] === 'off')
+                    <x-badge value="⬛ خاموش" class="badge-neutral" />
+                @else
+                    <x-badge value="🟢 فعال" class="badge-success" />
+                @endif
+            @endscope
             @scope('actions', $hw)
                 <div class="flex gap-1">
                     <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
