@@ -30,8 +30,14 @@ class Agent
     {
         $model ??= config('ai.model', 'code');
 
+        $apiKey = config('ai.providers.openai.key');
+
+        if (empty($apiKey)) {
+            throw new \RuntimeException('AI service is not configured. Please set OPENAI_API_KEY in the environment.');
+        }
+
         $client = (new Factory())
-            ->withApiKey(config('ai.providers.openai.key'))
+            ->withApiKey($apiKey)
             ->withBaseUri(config('ai.providers.openai.url'))
             ->make();
 
