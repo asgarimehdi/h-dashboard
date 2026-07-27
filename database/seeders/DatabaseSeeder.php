@@ -61,13 +61,19 @@ class DatabaseSeeder extends Seeder
     protected function resetPostgresSequences(): void
     {
         $tables = DB::select("
-            SELECT tablename, attname
+            SELECT c.relname AS tablename, a.attname
             FROM pg_index i
             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
             JOIN pg_class c ON c.oid = i.indrelid
             WHERE i.indisprimary
               AND c.relkind = 'r'
               AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+              AND c.relname NOT IN ('spatial_ref_sys')
+              AND EXISTS (
+                  SELECT 1 FROM pg_class sc
+                  WHERE sc.relname = c.relname || '_' || a.attname || '_seq'
+                  AND sc.relkind = 'S'
+              )
         ");
 
         foreach ($tables as $row) {
@@ -77,7 +83,9 @@ class DatabaseSeeder extends Seeder
             $seqName = "{$table}_{$column}_seq";
             $maxId = DB::table($table)->max($column);
 
-            DB::statement("SELECT setval('\"{$seqName}\"', {$maxId}, true)");
+            if ($maxId !== null) {
+                DB::statement("SELECT setval('\"{$seqName}\"', {$maxId}, true)");
+            }
         }
     }
 }
