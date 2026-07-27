@@ -43,7 +43,11 @@ class HardwareController extends Controller
         }
 
         if ($request->filled('type')) {
-            $query->where('type', 'LIKE', "%{$request->type}%");
+            $type = $request->type;
+            // Map common aliases to actual database values
+            $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
+            $type = $typeAliases[$type] ?? $type;
+            $query->where('type', 'LIKE', "%{$type}%");
         }
         if ($request->filled('os')) {
             $query->where('os', 'LIKE', "%{$request->os}%");

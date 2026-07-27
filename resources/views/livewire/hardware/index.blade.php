@@ -296,7 +296,11 @@ return new class extends Component
 
         // Separate filters (AND logic)
         if ($this->filterType) {
-            $query->where('type', 'LIKE', "%{$this->filterType}%");
+            $type = $this->filterType;
+            // Map common aliases to actual database values
+            $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
+            $type = $typeAliases[$type] ?? $type;
+            $query->where('type', 'LIKE', "%{$type}%");
         }
         if ($this->filterOs) {
             $query->where('os', 'LIKE', "%{$this->filterOs}%");
