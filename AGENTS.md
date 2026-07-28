@@ -8,9 +8,10 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 - **Framework:** Laravel 13.x (PHP 8.4+)
 - **Frontend:** Livewire 4 + Volt, Alpine.js, MaryUI (DaisyUI)
-- **Database:** MySQL/MariaDB
+- **Database:** MySQL/MariaDB (with spatial/GIS indexes)
 - **Auth:** Laravel Sanctum
 - **AI Agent:** Custom Agent/Tool pattern (no external AI SDK)
+- **Import:** maatwebsite/excel (Laravel Excel) — `.xlsx`, `.xls`, `.csv`
 - **Package Manager:** pnpm (frontend), Composer (backend)
 
 ---
@@ -37,8 +38,20 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `comments`, `mark` (boolean)
 - `clean_at` (nullable date)
 
+**Boundary** (`boundaries` table)
+- `id`, `unit_id` (FK to `units.id`), `boundary` (geometry/POLYGON)
+
 **Unit** (`units` table)
-- `id`, `name`, `parent_id` (self-referencing for hierarchy)
+- `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
+- Indexes: `parent_id` (B-tree), composite `lat`+`lng` (B-tree)
+- Relationships: `boundary` (hasOne), `children` (recursive), `parent`, `type`, `region`
+
+**Region** (`regions` table)
+- `id`, `name`, `parent_id` (self-referencing), `unit_type_id`
+- Indexes: `parent_id` (B-tree)
+
+**UnitType** (`unit_types` table)
+- `id`, `name`
 
 **Semat** (`semats` table)
 - `id`, `name` (job titles)
@@ -281,8 +294,18 @@ All routes require `auth:sanctum`.
 - **Livewire Chat UI** with markdown rendering (bold, italic, tables, code)
 - **Session Persistence:** Chat history survives page refreshes
 - **Quick Action Buttons:** Common queries ready to use
-- **Thinking Block Removal:** Strips `<thinking>` and `<think>` tags
+- **Thinking Block Removal:** Strips `<thinking>` and `vous` tags
 - **Table Navigation:** AI can trigger filter events on the hardware table
+
+### Hardware Excel Import (`/hardware/import`)
+
+- **File Upload:** Accepts `.xlsx`, `.xls`, `.csv` up to 10 MB
+- **Two-Phase Import:** Preview → Confirm (prevents accidental full import)
+- **Compare Keys:** Choose match strategy — `pc_name`, `mac`, or `both`
+- **Preview Table:** Row-by-row status badges (`create`, `update`, `unchanged`, `errors`)
+- **Persian Validation:** Column validation with Persian error messages
+- **Organizational Scope:** Only imports hardware into user's accessible units
+- **Requires:** `manage_hardware` permission (via `safe_role_or_permission` middleware)
 
 ---
 
@@ -462,3 +485,41 @@ php artisan db:seed --force
 
 ### Bootstrap & Exception Handling
 - `bootstrap/app.php` enhanced with custom `NotFoundHttpException` rendering for API routes — returns clean 404 JSON in production, detailed errors in debug mode.
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-29 Evening)
+
+### GIS / Spatial Database Indexes (#149 — `d540e54`)
+- **Spatial index** added on `boundaries.boundary` column (SPATIAL index, MySQL/MariaDB only — skipped on SQLite for testing)
+- **Composite B-tree index** on `units.lat` + `units.lng` for fast coordinate-based bounding box queries
+- **New spatial query scopes** on `Unit` model:
+  - `scopeWithinBounds($query, $minLat, $maxLat, $minLng, $maxLng)` — bounding box filter
+  - `scopeNearby($query, $lat, $lng, $radiusKm = 10)` — radius filter with approximate degree-per-km
+  - `scopeContainingPoint($query, $lat, $lng)` — ST_Contains via spatial index
+  - `scopeIntersectsBoundary($query, $wktPolygon)` — ST_Intersects via spatial index
+  - `scopeWithinDistance($query, $lat, $lng, $radiusMeters)` — ST_Distance_Sphere
+
+### Hardware Excel Import Feature (#150 — `85537688a5a`)
+- **New route:** `/hardware/import` (`hardware.import` named route) — protected by `safe_role_or_permission:manage_hardware`
+- **New import class** `App\Imports\HardwareImport` implements `ToCollection`, `WithHeadingRow`, `WithValidation`, `SkipsOnFailure`
+  - Supports `.xlsx`, `.xls`, `.csv` files up to 10 MB
+  - Compare key options: `pc_name`, `mac`, or `both`
+  - Two-phase import: preview → confirm (avoids accidental full import)
+  - Respects organizational scope — only imports to accessible units
+  - Returns preview with status per row: `create`, `update`, `unchanged`, `errors`
+  - Validation with Persian error messages
+- **New Livewire component** `App\Livewire\Hardware\ImportHardware\ImportHardware`:
+  - `importPreview()`: first pass, builds preview
+  - `confirmImport()`: second pass, executes actual import
+  - `compareKey` toggle: re-processes preview on change
+  - Dispatches `hardware-imported` event on success
+- **New UI** `resources/views/livewire/hardware/import-hardware/import-hardware.blade.php`: file upload → preview table → confirm flow with stats badges
+
+### Database Indexes
+- **Index on `parent_id`** for `units` and `regions` tables — speeds up hierarchical recursive CTE queries
+
+### New Dependencies
+- **maatwebsite/excel** (Laravel Excel) — added to `composer.json`; `config/excel.php` config file generated
+- **Livewire Login** (`app/Livewire/Auth/Login.php`): new Livewire login component with rate limiting, lockout support (part of import commit)
+- **New test:** `HardwareImportTest.php` covers the full import workflow
