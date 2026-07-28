@@ -161,4 +161,105 @@ class HardwareApiTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['n_code']);
     }
+
+    public function test_stats_endpoint_returns_aggregated_data(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $person = Person::first();
+        $person2 = Person::create([
+            'n_code' => '2222222222',
+            'f_name' => 'Test2',
+            'l_name' => 'User2',
+            't_id' => 1,
+            'e_id' => 1,
+            's_id' => 1,
+            'r_id' => 1,
+            'u_id' => $unit->id,
+        ]);
+
+        Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001', 'type' => 'desktop', 'shutdown' => false]);
+        Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-002', 'type' => 'laptop', 'shutdown' => true]);
+        Hardware::create(['n_code' => $person2->n_code, 'pc_name' => 'PC-003', 'type' => 'desktop', 'shutdown' => false]);
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'total' => 3,
+                    'shutdown' => 1,
+                    'by_type' => ['desktop' => 2, 'laptop' => 1],
+                ],
+            ]);
+    }
+
+    public function test_stats_endpoint_respects_organizational_scope(): void
+    {
+        // User A in Unit A
+        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit();
+        $personA = Person::first();
+        $personA2 = Person::create([
+            'n_code' => '3333333333',
+            'f_name' => 'Test3',
+            'l_name' => 'User3',
+            't_id' => 1,
+            'e_id' => 1,
+            's_id' => 1,
+            'r_id' => 1,
+            'u_id' => $unitA->id,
+        ]);
+
+        // User B in Unit B (different unit)
+        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
+        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
+        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
+        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+
+        $unitB = Unit::create(['name' => 'Unit B']);
+        $nCodeB = (string) rand(1000000000, 9999999999);
+        $personB = Person::create([
+            'n_code' => $nCodeB,
+            'f_name' => 'TestB',
+            'l_name' => 'UserB',
+            't_id' => $tId,
+            'e_id' => $eId,
+            's_id' => $sId,
+            'r_id' => $rId,
+            'u_id' => $unitB->id,
+        ]);
+        $userB = User::create(['n_code' => $nCodeB, 'password' => Hash::make('password')]);
+        $userB->units()->attach($unitB->id, ['role' => 'staff', 'is_primary' => true]);
+
+        // Create hardware for both units
+        Hardware::create(['n_code' => $personA->n_code, 'pc_name' => 'PC-A1', 'type' => 'desktop', 'shutdown' => false]);
+        Hardware::create(['n_code' => $personA2->n_code, 'pc_name' => 'PC-A2', 'type' => 'laptop', 'shutdown' => true]);
+        Hardware::create(['n_code' => $personB->n_code, 'pc_name' => 'PC-B1', 'type' => 'server', 'shutdown' => false]);
+
+        // User A should only see their unit's hardware (2 items) - set session to Unit A
+        Session::put('current_unit_id', $unitA->id);
+        $responseA = $this->actingAs($userA, 'sanctum')->getJson('/api/hardware/stats');
+        $responseA->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'total' => 2,
+                    'shutdown' => 1,
+                    'by_type' => ['desktop' => 1, 'laptop' => 1],
+                ],
+            ]);
+
+        // User B should only see their unit's hardware (1 item) - set session to Unit B
+        Session::put('current_unit_id', $unitB->id);
+        $responseB = $this->actingAs($userB, 'sanctum')->getJson('/api/hardware/stats');
+        $responseB->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'total' => 1,
+                    'shutdown' => 0,
+                    'by_type' => ['server' => 1],
+                ],
+            ]);
+    }
 }

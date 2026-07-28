@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -12,7 +13,6 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
         $middleware->statefulApi();
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
@@ -28,5 +28,23 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->shouldRenderJsonWhen(function ($request) {
             return $request->is('api/*') || $request->expectsJson();
+        });
+
+        // Custom handling for NotFoundHttpException to return clean 404 responses
+        $exceptions->render(function (NotFoundHttpException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                // In debug mode, return the full exception details
+                if (config('app.debug')) {
+                    return response()->json([
+                        'message' => $e->getMessage(),
+                        'exception' => get_class($e),
+                    ], 404);
+                }
+
+                // In production, return a clean 404 message
+                return response()->json([
+                    'message' => 'Not Found',
+                ], 404);
+            }
         });
     })->create();

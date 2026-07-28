@@ -179,17 +179,24 @@ class HardwareController extends Controller
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
 
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+
+        $baseQuery = Hardware::whereHas('person', function ($q) use ($accessibleIds) {
+            $q->whereIn('u_id', $accessibleIds);
+        });
+
         return response()->json([
             'success' => true,
             'data' => [
-                'total' => Hardware::count(),
-                'by_type' => Hardware::selectRaw('type, count(*) as count')
+                'total' => $baseQuery->count(),
+                'by_type' => (clone $baseQuery)->selectRaw('type, count(*) as count')
                     ->groupBy('type')
                     ->pluck('count', 'type')
                     ->toArray(),
-                'shutdown' => Hardware::where('shutdown', true)->count(),
+                'shutdown' => (clone $baseQuery)->where('shutdown', true)->count(),
             ],
         ]);
     }
