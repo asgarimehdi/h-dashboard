@@ -62,7 +62,7 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::post('/', [HardwareController::class, 'store']);
     Route::get('/stats', [HardwareController::class, 'stats']);
     Route::get('/{hardware}', [HardwareController::class, 'show']);
-    Route::put('/{hardware}', [HardwareController::class, 'update']);
+    Route::match(['put', 'patch'], '/{hardware}', [HardwareController::class, 'update']);
     Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
     Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
     Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
