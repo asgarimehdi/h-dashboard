@@ -2,6 +2,7 @@
 
 use App\Models\Hardware;
 use App\Models\Person;
+use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
@@ -16,6 +17,30 @@ return new class extends Component
 
     public string $search = '';
     public int $perPage = 10;
+
+    /**
+     * Get accessible unit IDs for the current user.
+     *
+     * @return array<int>
+     */
+    private function accessibleUnitIds(): array
+    {
+        return app(AccessService::class)->accessibleUnitIds();
+    }
+
+    /**
+     * Apply organizational scope to a hardware query.
+     */
+    private function applyOrgScope($query)
+    {
+        $accessibleIds = $this->accessibleUnitIds();
+
+        if (empty($accessibleIds)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds));
+    }
     public bool $showForm = false;
     public bool $showEditModal = false;
     public bool $showFilters = false;
@@ -186,6 +211,14 @@ return new class extends Component
             'pc_name' => 'required|string|max:255',
         ]);
 
+        $person = Person::where('n_code', $this->n_code)->firstOrFail();
+        $accessibleIds = $this->accessibleUnitIds();
+
+        if (! in_array($person->u_id, $accessibleIds)) {
+            $this->error('شما به این پرسنل دسترسی ندارید.', position: 'toast-bottom');
+            return;
+        }
+
         Hardware::create($this->only([
             'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
             'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard',
@@ -199,7 +232,14 @@ return new class extends Component
     public function editHardware($id): void
     {
         $this->resetValidation();
-        $hw = Hardware::findOrFail($id);
+        $hw = Hardware::with('person')->findOrFail($id);
+
+        $accessibleIds = $this->accessibleUnitIds();
+        if (! in_array($hw->person?->u_id, $accessibleIds)) {
+            $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
+            return;
+        }
+
         $this->editingId = (int) $id;
         $this->fill($hw->toArray());
         $this->clean_at = $hw->clean_at?->format('Y-m-d');
@@ -215,7 +255,14 @@ return new class extends Component
             'pc_name' => 'required|string|max:255',
         ]);
 
-        $hw = Hardware::findOrFail($this->editingId);
+        $hw = Hardware::with('person')->findOrFail($this->editingId);
+
+        $accessibleIds = $this->accessibleUnitIds();
+        if (! in_array($hw->person?->u_id, $accessibleIds)) {
+            $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
+            return;
+        }
+
         $hw->update($this->only([
             'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
             'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard',
@@ -228,6 +275,14 @@ return new class extends Component
 
     public function delete(Hardware $hardware): void
     {
+        $hardware->load('person');
+
+        $accessibleIds = $this->accessibleUnitIds();
+        if (! in_array($hardware->person?->u_id, $accessibleIds)) {
+            $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
+            return;
+        }
+
         try {
             $hardware->delete();
             $this->warning("سخت افزار {$hardware->pc_name} حذف شد", 'با موفقیت', position: 'toast-bottom');
@@ -243,7 +298,18 @@ return new class extends Component
             return;
         }
 
-        Hardware::whereIn('id', $this->selected)->update(['mark' => $value]);
+        $accessibleIds = $this->accessibleUnitIds();
+        $scopedIds = Hardware::whereIn('id', $this->selected)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($scopedIds)) {
+            $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
+            return;
+        }
+
+        Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
         $this->selected = [];
         $this->success('وضعیت علامت‌گذاری تغییر کرد.', position: 'toast-bottom');
     }
@@ -251,7 +317,19 @@ return new class extends Component
     public function bulkDelete(): void
     {
         if (empty($this->selected)) return;
-        Hardware::whereIn('id', $this->selected)->delete();
+
+        $accessibleIds = $this->accessibleUnitIds();
+        $scopedIds = Hardware::whereIn('id', $this->selected)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($scopedIds)) {
+            $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
+            return;
+        }
+
+        Hardware::whereIn('id', $scopedIds)->delete();
         $this->selected = [];
         $this->warning('دستگاه‌های انتخاب شده حذف شدند.', position: 'toast-bottom');
     }
@@ -275,7 +353,7 @@ return new class extends Component
 
     public function hardwares(): LengthAwarePaginator
     {
-        $query = Hardware::with('person');
+        $query = $this->applyOrgScope(Hardware::with('person'));
 
         // General search
         if (!empty($this->search)) {
