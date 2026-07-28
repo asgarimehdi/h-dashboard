@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\HardwareResource;
 use App\Models\Hardware;
+use App\Models\Person;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,23 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class HardwareController extends Controller
 {
     use PersianNormalizer;
+
+    /**
+     * Check if the given hardware record is within the user's accessible organizational scope.
+     */
+    private function assertAccessible(Request $request, Hardware $hardware): void
+    {
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+
+        $unitId = $hardware->relationLoaded('person')
+            ? $hardware->person?->u_id
+            : $hardware->person()->value('u_id');
+
+        if ($unitId && ! in_array($unitId, $accessibleIds)) {
+            abort(403, 'Hardware record not accessible.');
+        }
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -122,6 +140,13 @@ class HardwareController extends Controller
             'clean_at' => 'nullable|date',
         ]);
 
+        // Verify the person's unit is within the user's accessible scope
+        $person = Person::where('n_code', $validated['n_code'])->firstOrFail();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        if (! in_array($person->u_id, $accessibleIds)) {
+            return response()->json(['message' => 'Person not accessible.'], 403);
+        }
+
         $hardware = Hardware::create($validated);
         $hardware->load('person');
 
@@ -131,8 +156,9 @@ class HardwareController extends Controller
         ], 201);
     }
 
-    public function show(Hardware $hardware): JsonResponse
+    public function show(Request $request, Hardware $hardware): JsonResponse
     {
+        $this->assertAccessible($request, $hardware);
         $hardware->load('person');
         return response()->json([
             'success' => true,
@@ -142,6 +168,8 @@ class HardwareController extends Controller
 
     public function update(Request $request, Hardware $hardware): JsonResponse
     {
+        $this->assertAccessible($request, $hardware);
+
         $validated = $request->validate([
             'n_code' => 'sometimes|required|string|exists:persons,n_code',
             'pc_name' => 'sometimes|required|string|max:255',
@@ -173,8 +201,9 @@ class HardwareController extends Controller
         ]);
     }
 
-    public function destroy(Hardware $hardware): JsonResponse
+    public function destroy(Request $request, Hardware $hardware): JsonResponse
     {
+        $this->assertAccessible($request, $hardware);
         $hardware->delete();
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
@@ -209,9 +238,14 @@ class HardwareController extends Controller
             'mark' => 'required|boolean',
         ]);
 
-        Hardware::whereIn('id', $request->ids)->update(['mark' => $request->mark]);
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        return response()->json(['success' => true, 'message' => 'بروزرسانی شد']);
+        $count = Hardware::whereIn('id', $request->ids)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->update(['mark' => $request->mark]);
+
+        return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
     }
 
     public function bulkDelete(Request $request): JsonResponse
@@ -221,8 +255,13 @@ class HardwareController extends Controller
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
 
-        Hardware::whereIn('id', $request->ids)->delete();
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        return response()->json(['success' => true, 'message' => 'حذف شدند']);
+        $count = Hardware::whereIn('id', $request->ids)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->delete();
+
+        return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
     }
 }

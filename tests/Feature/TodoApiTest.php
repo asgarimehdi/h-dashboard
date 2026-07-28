@@ -29,11 +29,11 @@ class TodoApiTest extends TestCase
         $sId = \DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = \DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
+        $nCode = (string) random_int(1000000000, 2147483647);
+        $unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
 
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $unit = Unit::create(['name' => 'Test Unit']);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 
@@ -161,7 +161,7 @@ class TodoApiTest extends TestCase
                 ],
             ]);
 
-        $this->assertTrue($todo->fresh()->is_completed);
+        $this->assertTrue((bool) $todo->fresh()->is_completed);
     }
 
     public function test_todo_list_respects_jalali_date_filtering(): void
@@ -279,16 +279,16 @@ class TodoApiTest extends TestCase
 
     public function test_user_can_create_todo_without_unit_id_using_person_unit(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
-        $person = Person::factory()->create(['n_code' => $user->n_code]);
-        $person->update(['u_id' => null]);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
-            'title' => 'No Unit Todo',
+            'title' => 'Person Unit Todo',
             'start_at' => '2026-07-15 10:00:00',
         ]);
 
         $response->assertStatus(201);
+        // Should have used the person's unit automatically
+        $this->assertEquals($unit->id, $response->json('data')['unit_id'], 'falls back to person.u_id when no unit_id provided');
     }
 
     public function test_delete_non_existent_todo_returns_404(): void

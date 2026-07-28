@@ -81,6 +81,12 @@ class PersonController extends Controller
             'u_id' => 'required|exists:units,id',
         ]);
 
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! in_array($validated['u_id'], $ids)) {
+            return response()->json(['message' => 'Unit not accessible.'], 403);
+        }
+
         $person = Person::create($validated);
 
         return response()->json([

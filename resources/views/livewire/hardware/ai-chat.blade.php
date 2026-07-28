@@ -82,8 +82,8 @@ return new class extends Component
     {
         // Remove <thinking>...</thinking> blocks
         $text = preg_replace('/<thinking>.*?<\/thinking>/is', '', $text);
-        // Also handle 思考.../思考 format
-        $text = preg_replace('/\u591c\u8003.*?<\/think>/is', '', $text);
+        // Also handle 思考...思考 (Chinese think tags) and  thinking prefix
+        $text = preg_replace('/\x{601d}\x{8003}.*?\x{601d}\x{8003}/u', '', $text);
         return trim($text);
     }
 
@@ -136,7 +136,7 @@ return new class extends Component
         $text = implode("\n", $processedLines);
         // Convert inline code `code`
         $text = preg_replace('/`(.+?)`/', '<code class="bg-base-200 px-1 rounded text-xs">$1</code>', $text);
-        return nl2br(e($text));
+        return nl2br($text);
     }
 }; ?>
 
@@ -223,3 +223,4 @@ return new class extends Component
         }
     });
 </script>
+

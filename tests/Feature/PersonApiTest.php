@@ -28,14 +28,14 @@ class PersonApiTest extends TestCase
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $nCode = (string) random_int(1000000000, 2147483647);
         $unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 
-        return ['user' => $user, 'unit' => $unit];
+        return ['user' => $user, 'unit' => $unit, 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId];
     }
 
     public function test_unauthenticated_user_cannot_access_persons(): void
@@ -67,16 +67,16 @@ class PersonApiTest extends TestCase
 
     public function test_user_can_create_person(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit, 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId] = $this->createUserWithUnit();
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/persons', [
             'n_code' => '1111111111',
             'f_name' => 'John',
             'l_name' => 'Doe',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
+            't_id' => $tId,
+            'e_id' => $eId,
+            's_id' => $sId,
+            'r_id' => $rId,
             'u_id' => $unit->id,
         ]);
 
@@ -101,16 +101,16 @@ class PersonApiTest extends TestCase
 
     public function test_user_can_delete_person(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        // Create a person not linked to any user account to avoid FK constraint
+        ['user' => $user, 'unit' => $unit, 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId] = $this->createUserWithUnit();
+        // Create a person not linked to any user account to avoid FK constraint, using same ref IDs
         $person = Person::create([
             'n_code' => '2222222222',
             'f_name' => 'Delete',
             'l_name' => 'Me',
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'Del']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'Del']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'Del']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'Del']),
+            't_id' => $tId,
+            'e_id' => $eId,
+            's_id' => $sId,
+            'r_id' => $rId,
             'u_id' => $unit->id,
         ]);
 

@@ -5,6 +5,7 @@ namespace App\Ai\Agents;
 use App\Ai\Agent;
 use App\Ai\Tools\Hardware\CreateHardwareTool;
 use App\Ai\Tools\Hardware\DeleteHardwareTool;
+use App\Ai\Tools\Hardware\ExportHardwareTool;
 use App\Ai\Tools\Hardware\HardwareStatsTool;
 use App\Ai\Tools\Hardware\PersonHardwareTool;
 use App\Ai\Tools\Hardware\SearchHardwareTool;
@@ -27,6 +28,7 @@ class HardwareAgent extends Agent
             ->withTool(new PersonHardwareTool)
             ->withTool(new UpdateHardwareTool)
             ->withTool(new CreateHardwareTool)
-            ->withTool(new DeleteHardwareTool);
+            ->withTool(new DeleteHardwareTool)->withTool(new ExportHardwareTool);
     }
 }
+
