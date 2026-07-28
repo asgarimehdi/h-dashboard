@@ -3,6 +3,7 @@
 namespace App\Ai\Tools;
 
 use App\Models\Unit;
+use App\Traits\PersianNormalizer;
 
 class SearchUnitsTool extends Tool
 {
@@ -29,6 +30,7 @@ class SearchUnitsTool extends Tool
     public function execute(array $arguments): mixed
     {
         $query = $arguments['query'] ?? '';
+        $query = PersianNormalizer::normalizeForSearch($query);
 
         return Unit::query()
             ->with(['unitType', 'region', 'parent'])

@@ -3,6 +3,7 @@
 namespace App\Ai\Tools;
 
 use App\Models\Person;
+use App\Traits\PersianNormalizer;
 
 class SearchPersonsTool extends Tool
 {
@@ -29,6 +30,7 @@ class SearchPersonsTool extends Tool
     public function execute(array $arguments): mixed
     {
         $query = $arguments['query'] ?? '';
+        $query = PersianNormalizer::normalizeForSearch($query);
 
         return Person::query()
             ->with(['unit', 'semat', 'tahsil', 'radif'])

@@ -4,6 +4,7 @@ namespace App\Ai\Tools\Hardware;
 
 use App\Ai\Tools\Tool;
 use App\Models\Hardware;
+use App\Traits\PersianNormalizer;
 
 class SearchHardwareTool extends Tool
 {
@@ -30,6 +31,7 @@ class SearchHardwareTool extends Tool
     public function execute(array $arguments): mixed
     {
         $query = $arguments['query'] ?? '';
+        $query = PersianNormalizer::normalizeForSearch($query);
 
         $results = Hardware::query()
             ->with(['person'])
