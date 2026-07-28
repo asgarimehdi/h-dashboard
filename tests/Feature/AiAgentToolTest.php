@@ -8,6 +8,8 @@ use App\Ai\Tools\Hardware\HardwareStatsTool;
 use App\Ai\Tools\Hardware\PersonHardwareTool;
 use App\Ai\Tools\Hardware\SearchHardwareTool;
 use App\Ai\Tools\Hardware\UpdateHardwareTool;
+use App\Ai\Tools\SearchPersonsTool;
+use App\Ai\Tools\SearchUnitsTool;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
@@ -227,5 +229,90 @@ class AiAgentToolTest extends TestCase
         $resultB = $tool->execute(['n_code' => $personB->n_code, 'pc_name' => 'NEW-PC-B']);
         $this->assertStringNotContainsString('Successfully created', $resultB);
         $this->assertStringContainsString('not found or not within your organizational scope', $resultB);
+    }
+
+    public function test_search_persons_tool_respects_organizational_scope(): void
+    {
+        // User A in Unit A
+        ['user' => $userA, 'unit' => $unitA, 'person' => $personA] = $this->createUserWithUnit('Unit A');
+
+        // User B in Unit B
+        ['user' => $userB, 'unit' => $unitB, 'person' => $personB] = $this->createUserWithUnit('Unit B');
+
+        // Create additional persons in Unit A
+        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
+        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
+        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
+        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        
+        $personA2 = Person::create([
+            'n_code' => (string) rand(1000000000, 9999999999),
+            'f_name' => 'Ahmed',
+            'l_name' => 'Rezaei',
+            't_id' => $tId,
+            'e_id' => $eId,
+            's_id' => $sId,
+            'r_id' => $rId,
+            'u_id' => $unitA->id,
+        ]);
+
+        // Create person in Unit B
+        $personB2 = Person::create([
+            'n_code' => (string) rand(1000000000, 9999999999),
+            'f_name' => 'Mohammad',
+            'l_name' => 'Hosseini',
+            't_id' => $tId,
+            'e_id' => $eId,
+            's_id' => $sId,
+            'r_id' => $rId,
+            'u_id' => $unitB->id,
+        ]);
+
+        Session::put('current_unit_id', $unitA->id);
+        $this->actingAs($userA, 'sanctum');
+
+        $tool = new SearchPersonsTool();
+
+        // Should find persons in Unit A
+        $resultsA = $tool->execute(['query' => 'Ahmed']);
+        $this->assertIsArray($resultsA);
+        $this->assertNotEmpty($resultsA);
+        $this->assertEquals('Ahmed Rezaei', $resultsA[0]['name']);
+
+        // Should NOT find persons in Unit B
+        $resultsB = $tool->execute(['query' => 'Mohammad']);
+        $this->assertEquals('No results for "Mohammad" within your access scope.', $resultsB);
+    }
+
+    public function test_search_units_tool_respects_organizational_scope(): void
+    {
+        // User A in Unit A
+        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit('Unit A');
+
+        // User B in Unit B
+        ['user' => $userB, 'unit' => $unitB] = $this->createUserWithUnit('Unit B');
+
+        // Create sub-unit under Unit A
+        $subUnitA = Unit::create(['name' => 'Unit A Sub', 'parent_id' => $unitA->id]);
+
+        // Create sub-unit under Unit B
+        $subUnitB = Unit::create(['name' => 'Unit B Sub', 'parent_id' => $unitB->id]);
+
+        Session::put('current_unit_id', $unitA->id);
+        $this->actingAs($userA, 'sanctum');
+
+        $tool = new SearchUnitsTool();
+
+        // Should find Unit A and its sub-unit
+        $resultsA = $tool->execute(['query' => 'Unit A']);
+        $this->assertIsArray($resultsA);
+        $this->assertNotEmpty($resultsA);
+        $names = array_column($resultsA, 'name');
+        $this->assertContains('Unit A', $names);
+        $this->assertContains('Unit A Sub', $names);
+
+        // Should NOT find Unit B or its sub-unit
+        $resultsB = $tool->execute(['query' => 'Unit B']);
+        $this->assertEquals('No results for "Unit B" within your access scope.', $resultsB);
     }
 }

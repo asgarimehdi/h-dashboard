@@ -3,6 +3,7 @@
 namespace App\Ai\Tools;
 
 use App\Models\Unit;
+use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 
 class SearchUnitsTool extends Tool
@@ -14,7 +15,7 @@ class SearchUnitsTool extends Tool
 
     public function description(): string
     {
-        return 'Search for organizational units by name. Returns unit hierarchy info including type, region, and parent unit.';
+        return 'Search for organizational units by name. Returns unit hierarchy info including type, region, and parent unit. Respects organizational access scope.';
     }
 
     public function parameters(): array
@@ -32,8 +33,16 @@ class SearchUnitsTool extends Tool
         $query = $arguments['query'] ?? '';
         $query = PersianNormalizer::normalizeForSearch($query);
 
-        return Unit::query()
+        $user = auth()->user();
+        $unitIds = app(AccessService::class)->accessibleUnitIds($user);
+
+        if (empty($unitIds)) {
+            return 'No accessible units found for your account.';
+        }
+
+        $results = Unit::query()
             ->with(['unitType', 'region', 'parent'])
+            ->whereIn('id', $unitIds)
             ->where('name', 'like', "%{$query}%")
             ->limit(20)
             ->get()
@@ -43,7 +52,13 @@ class SearchUnitsTool extends Tool
                 'type' => $u->unitType?->name,
                 'region' => $u->region?->name,
                 'parent' => $u->parent?->name,
-                'persons_count' => $u->persons()->count(),
+                'persons_count' => $u->person()->count(),
             ]);
+
+        if ($results->isEmpty()) {
+            return "No results for \"{$query}\" within your access scope.";
+        }
+
+        return $results->toArray();
     }
 }

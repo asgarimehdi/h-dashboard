@@ -10,6 +10,8 @@ use App\Ai\Tools\Hardware\HardwareStatsTool;
 use App\Ai\Tools\Hardware\PersonHardwareTool;
 use App\Ai\Tools\Hardware\SearchHardwareTool;
 use App\Ai\Tools\Hardware\UpdateHardwareTool;
+use App\Ai\Tools\SearchPersonsTool;
+use App\Ai\Tools\SearchUnitsTool;
 
 class HardwareAgent extends Agent
 {
@@ -28,7 +30,10 @@ class HardwareAgent extends Agent
             ->withTool(new PersonHardwareTool)
             ->withTool(new UpdateHardwareTool)
             ->withTool(new CreateHardwareTool)
-            ->withTool(new DeleteHardwareTool)->withTool(new ExportHardwareTool);
+            ->withTool(new DeleteHardwareTool)
+            ->withTool(new ExportHardwareTool)
+            ->withTool(new SearchPersonsTool)
+            ->withTool(new SearchUnitsTool);
     }
 }
 
