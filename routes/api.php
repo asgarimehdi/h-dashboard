@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TodoController;
+use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
 use App\Models\User;
@@ -84,6 +85,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/units', [ReportController::class, 'units']);
     Route::get('/reports/todos', [ReportController::class, 'todos']);
     Route::get('/reports/tickets', [ReportController::class, 'tickets']);
+});
+
+// Person API routes
+Route::middleware('auth:sanctum')->prefix('persons')->group(function () {
+    Route::get('/', [PersonController::class, 'index']);
+    Route::post('/', [PersonController::class, 'store']);
+    Route::get('/{person}', [PersonController::class, 'show']);
+    Route::put('/{person}', [PersonController::class, 'update']);
+    Route::delete('/{person}', [PersonController::class, 'destroy']);
 });
 
 // Todo API routes

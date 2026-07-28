@@ -10,6 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Person extends Model
 {
     use HasOrganizationalScope;
+
+    public function getRouteKeyName(): string
+    {
+        return 'n_code';
+    }
+
     protected $fillable = ['n_code','f_name','l_name','t_id', 'e_id', 'r_id', 's_id', 'u_id',];
     protected $table = 'persons';
 
