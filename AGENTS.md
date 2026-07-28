@@ -108,6 +108,20 @@ Hardware inventory assistant with 6 tools:
 
 ---
 
+## Authentication
+
+The application uses **Laravel Sanctum** with two authentication modes:
+
+| Mode | Routes | Auth Method | Usage |
+|---|---|---|---|
+| **Web (Session)** | All Livewire UI pages (`/hardware`, `/hardware/ai`, `/units`, `/tickets`, etc.) | Cookie-based session via `web` guard | Browser access, requires login form |
+| **API (Token)** | `/api/*` routes | Bearer token in `Authorization` header via `sanctum` guard | Programmatic access, cURL, external tools |
+
+- Livewire components expect session-based authentication (web middleware group). **API tokens are NOT accepted** for Livewire pages — this is by design. To access Livewire UI, use a browser session.
+- API routes accept Sanctum tokens generated via `PersonalAccessTokenFactory`.
+- The login form is at `/login` (web session).
+- Token generation (for testing/automation): `POST /api/sanctum/token` with valid credentials.
+
 ## API Reference
 
 ### Hardware CRUD (`/api/hardware`)
