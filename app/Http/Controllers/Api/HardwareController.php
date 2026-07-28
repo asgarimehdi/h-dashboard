@@ -159,6 +159,7 @@ class HardwareController extends Controller
     public function show(Request $request, Hardware $hardware): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
+
         $hardware->load('person');
         return response()->json([
             'success' => true,
@@ -204,6 +205,7 @@ class HardwareController extends Controller
     public function destroy(Request $request, Hardware $hardware): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
+
         $hardware->delete();
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
@@ -232,6 +234,15 @@ class HardwareController extends Controller
 
     public function bulkMark(Request $request): JsonResponse
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        $count = Hardware::whereIn('id', $request->ids)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->count();
+        if ($count !== count($request->ids)) {
+            return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
+        }
+
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
@@ -250,6 +261,15 @@ class HardwareController extends Controller
 
     public function bulkDelete(Request $request): JsonResponse
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        $count = Hardware::whereIn('id', $request->ids)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->count();
+        if ($count !== count($request->ids)) {
+            return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
+        }
+
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',

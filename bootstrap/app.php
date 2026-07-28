@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -33,6 +34,24 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Custom handling for NotFoundHttpException to return clean 404 responses
         $exceptions->render(function (NotFoundHttpException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                // In debug mode, return the full exception details
+                if (config('app.debug')) {
+                    return response()->json([
+                        'message' => $e->getMessage(),
+                        'exception' => get_class($e),
+                    ], 404);
+                }
+
+                // In production, return a clean 404 message
+                return response()->json([
+                    'message' => 'Not Found',
+                ], 404);
+            }
+        });
+
+        // Custom handling for ModelNotFoundException (route model binding 404s)
+        $exceptions->render(function (ModelNotFoundException $e, $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 // In debug mode, return the full exception details
                 if (config('app.debug')) {
