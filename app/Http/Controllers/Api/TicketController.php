@@ -132,11 +132,11 @@ class TicketController extends Controller
         }
 
         $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
+            'assignee_id' => 'required|exists:users,id',
         ]);
 
         $ticket->update([
-            'current_assignee_id' => $validated['user_id'],
+            'current_assignee_id' => $validated['assignee_id'],
             'status' => 'forwarded',
         ]);
 

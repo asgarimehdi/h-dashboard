@@ -114,7 +114,7 @@ class TicketApiTest extends TestCase
         $ticket = Ticket::create(['ticket_code' => 'T-005', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Assign', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
         $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/assign", [
-            'user_id' => $user->id,
+            'assignee_id' => $user->id,
         ]);
 
         $response->assertStatus(200)
