@@ -69,7 +69,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
             'content' => 'required|string',
-            'priority' => 'required|in:urgent,normal,low',
+            'priority' => 'required|in:urgent,high,normal,medium,low',
             'unit_id' => 'required|exists:units,id',
             'deadline' => 'nullable|date',
         ]);
@@ -98,7 +98,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'sometimes|required|string|max:255',
             'content' => 'sometimes|required|string',
-            'priority' => 'sometimes|required|in:urgent,normal,low',
+            'priority' => 'sometimes|required|in:urgent,high,normal,medium,low',
             'deadline' => 'nullable|date',
         ]);
 
