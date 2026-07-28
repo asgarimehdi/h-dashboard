@@ -155,7 +155,7 @@ All routes require `auth:sanctum` and filter by user's organizational scope.
 | POST | `/api/hardware` | Create (requires `n_code`, `pc_name`) |
 | GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) |
 | GET | `/api/hardware/{id}` | Show details |
-| PUT | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
+| PUT/PATCH | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
 | DELETE | `/api/hardware/{id}` | Delete |
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
@@ -229,6 +229,8 @@ All routes require `auth:sanctum`.
 | POST | `/api/ai/chat` | General AI smoke test |
 | POST | `/api/ai/hardware` | Hardware AI Agent endpoint |
 
+**Note:** All `/api/*` routes now return JSON for all exceptions (including validation errors, 404s, 500s) via `shouldRenderJsonWhen()` in `bootstrap/app.php`. This ensures consistent API responses for clients.
+
 ---
 
 ### Response Format (Hardware)
@@ -279,7 +281,7 @@ The `PersianNormalizer` trait normalizes:
 - `ك` → `ک`
 - ZWNJ (zero-width non-joiner) → space
 
-Applied to all search and filter operations in both Livewire components and API controllers.
+Applied to all search and filter operations in both Livewire components, API controllers, and AI tools. The `Person` model auto-normalizes `f_name` and `l_name` on `saving` via the trait's boot method, ensuring Arabic characters are converted to Persian before persistence.
 
 ---
 
@@ -328,7 +330,7 @@ php artisan db:seed --force
 
 ---
 
-## Recent Changes (July 2026 Sync)
+## Recent Changes (July 2026 Sync — Updated 2026-07-28)
 
 ### New API Endpoints
 - **Person CRUD** (`/api/persons`): Full CRUD for personnel management with organizational scope filtering
@@ -341,10 +343,14 @@ php artisan db:seed --force
 - Config restructured with nested providers format
 - `Agent::prompt()` now validates `OPENAI_API_KEY` presence and throws clear exception
 - Uses OpenAI PHP SDK via `OpenAI\Factory` for HTTP calls
+- **New AI Tools:** `SearchPersonsTool` (`search_persons`), `SearchUnitsTool` (`search_units`) — added for personnel and unit search with Persian normalization
 
 ### Bug Fixes & Improvements
+- **#119**: Persian normalization on Person model — auto-normalizes Arabic ي/ك to Persian ی/ک on save via `PersianNormalizer` trait boot method
 - **#121**: Hardware filter maps 'desktop' → 'pc' type alias
-- **#123**: AI endpoints handle missing `OPENAI_API_KEY` gracefully
+- **#123**: AI endpoints handle missing `OPENAI_API_KEY` gracefully with clear exception
+- **#126**: API routes return JSON for all exceptions via `shouldRenderJsonWhen()` in `bootstrap/app.php`
+- **#127**: Hardware API now supports PATCH method for partial updates (PUT + PATCH both allowed)
 - **#130**: Ticket priority now accepts 'medium' (added to ENUM via migration)
 - **#132**: Documented auth modes (web session vs API token) for Livewire pages
 - **#133**: Hardware PUT update allows partial updates (no longer requires n_code + pc_name)
@@ -356,6 +362,8 @@ php artisan db:seed --force
 - New migration: `2026_07_28_000001_add_medium_priority_to_tickets_table.php` (adds 'medium' to priority ENUM)
 - New console command: `normalize:persian-text` — normalizes Arabic ي/ك to Persian ی/ک across hardware and person tables
 - New models: `Tahsil`, `Estekhdam`, `Radif` with relationships on Person
+- New models: `UnitType`, `Region` with relationships on Unit
+- `Person` model now uses `PersianNormalizer` trait with boot method for auto-normalization on save
 
 ### Testing
 - Added `PersonApiTest.php` with full CRUD test coverage
