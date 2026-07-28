@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->post('/ai/hardware', HardwareAgentController:
 Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::get('/', [HardwareController::class, 'index']);
     Route::post('/', [HardwareController::class, 'store']);
+    Route::get('/stats', [HardwareController::class, 'stats']);
     Route::get('/{hardware}', [HardwareController::class, 'show']);
     Route::put('/{hardware}', [HardwareController::class, 'update']);
     Route::delete('/{hardware}', [HardwareController::class, 'destroy']);

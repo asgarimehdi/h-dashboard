@@ -179,6 +179,21 @@ class HardwareController extends Controller
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
 
+    public function stats(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total' => Hardware::count(),
+                'by_type' => Hardware::selectRaw('type, count(*) as count')
+                    ->groupBy('type')
+                    ->pluck('count', 'type')
+                    ->toArray(),
+                'shutdown' => Hardware::where('shutdown', true)->count(),
+            ],
+        ]);
+    }
+
     public function bulkMark(Request $request): JsonResponse
     {
         $request->validate([
