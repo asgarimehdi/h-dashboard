@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
+use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Person extends Model
 {
     use HasOrganizationalScope;
+    use PersianNormalizer;
 
     public function getRouteKeyName(): string
     {
@@ -18,6 +20,20 @@ class Person extends Model
 
     protected $fillable = ['n_code','f_name','l_name','t_id', 'e_id', 'r_id', 's_id', 'u_id',];
     protected $table = 'persons';
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::saving(function (self $model) {
+            $fields = ['f_name', 'l_name'];
+            foreach ($fields as $field) {
+                if ($model->isDirty($field) && !empty($model->$field) && is_string($model->$field)) {
+                    $model->$field = self::normalizeForSearch($model->$field);
+                }
+            }
+        });
+    }
 
     /**
      * دریافت اطلاعات User مرتبط با این Person.
