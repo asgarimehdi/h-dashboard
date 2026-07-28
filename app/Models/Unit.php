@@ -113,4 +113,61 @@ class Unit extends Model
 
         return collect($results)->pluck('id');
     }
+
+    /**
+     * Scope for spatial queries: find units within a bounding box
+     * Uses the composite lat/lng index for fast filtering
+     */
+    public function scopeWithinBounds($query, float $minLat, float $maxLat, float $minLng, float $maxLng)
+    {
+        return $query->whereBetween('lat', [$minLat, $maxLat])
+                    ->whereBetween('lng', [$minLng, $maxLng]);
+    }
+
+    /**
+     * Scope for spatial queries: find units within a radius of a point
+     * Uses the composite lat/lng index for fast filtering
+     */
+    public function scopeNearby($query, float $lat, float $lng, float $radiusKm = 10)
+    {
+        // Approximate degrees per km (rough estimate for Iran region)
+        $degPerKm = 0.009;
+        $delta = $radiusKm * $degPerKm;
+
+        return $query->whereBetween('lat', [$lat - $delta, $lat + $delta])
+                    ->whereBetween('lng', [$lng - $delta, $lng + $delta]);
+    }
+
+    /**
+     * Scope for spatial queries: find units whose boundary contains a point
+     * Uses the spatial index on boundaries.boundary
+     */
+    public function scopeContainingPoint($query, float $lat, float $lng)
+    {
+        return $query->whereHas('boundary', function ($q) use ($lat, $lng) {
+            $q->whereRaw('ST_Contains(boundary, ST_GeomFromText(?, 4326))', ["POINT($lng $lat)"]);
+        });
+    }
+
+    /**
+     * Scope for spatial queries: find units whose boundary intersects with a polygon
+     * Uses the spatial index on boundaries.boundary
+     */
+    public function scopeIntersectsBoundary($query, string $wktPolygon)
+    {
+        return $query->whereHas('boundary', function ($q) use ($wktPolygon) {
+            $q->whereRaw('ST_Intersects(boundary, ST_GeomFromText(?, 4326))', [$wktPolygon]);
+        });
+    }
+
+    /**
+     * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
+     * More accurate than bounding box but may be slower without proper spatial index
+     */
+    public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
+    {
+        return $query->whereHas('boundary', function ($q) use ($lat, $lng, $radiusMeters) {
+            $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', ["POINT($lng $lat)", $radiusMeters]);
+        })->orWhereRaw('ST_Distance_Sphere(ST_Point(?, ?), ST_Point(?, ?)) <= ?', [$lng, $lat, $lng, $lat, $radiusMeters]);
+    }
 }
