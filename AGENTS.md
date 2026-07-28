@@ -369,3 +369,20 @@ php artisan db:seed --force
 - Added `PersonApiTest.php` with full CRUD test coverage
 - Expanded `HardwareApiTest.php` and `TicketApiTest.php`
 - Added `AiAgentTest.php` for AI integration testing
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-28 Later)
+
+### Bug Fixes & Improvements
+- **#140**: Hardware stats endpoint (`/api/hardware/stats`) now respects organizational scope — filters by user's accessible units instead of returning global counts
+- **#115**: PersianNormalizer trait fixed — now correctly handles ZWNJ (U+200C) and ZWJ (U+200D) using proper Unicode escape sequences (`\u{200C}`, `\u{200D}`) instead of invisible characters in source code
+- **Bootstrap Exception Handling**: `bootstrap/app.php` enhanced with custom `NotFoundHttpException` rendering for API routes — returns clean 404 JSON in production, detailed errors in debug mode
+
+### Model Updates
+- **Todo model** (`app/Models/Todo.php`): Added `HasFactory` trait for factory support
+- **Unit model** (`app/Models/Unit.php`): Added `HasFactory` trait for factory support
+
+### Testing
+- Expanded `HardwareApiTest.php` with `test_stats_endpoint_returns_aggregated_data` and `test_stats_endpoint_respects_organizational_scope`
+- Refactored `TodoApiTest.php` with shared `createUserWithUnit()` helper and added `test_delete_non_existent_todo_returns_404`
