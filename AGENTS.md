@@ -109,16 +109,17 @@ The `Agent::prompt()` method now checks for empty `OPENAI_API_KEY` and throws a 
 
 ### HardwareAgent (`app/Ai/Agents/HardwareAgent.php`)
 
-Hardware inventory assistant with 6 tools:
+Hardware inventory assistant with 7 tools:
 
 | Tool | Method | Description |
 |---|---|---|
-| `SearchHardwareTool` | `search_hardware` | Search hardware by any field (name, IP, MAC, CPU, etc.) |
-| `HardwareStatsTool` | `hardware_stats` | Aggregate stats: total, by type, by OS, shutdown count |
-| `PersonHardwareTool` | `person_hardware` | List all devices owned by a person (by n_code) |
-| `UpdateHardwareTool` | `update_hardware` | Update fields (name, OS, CPU, RAM, IP, etc.) by ID |
-| `CreateHardwareTool` | `create_hardware` | Create new hardware record (requires n_code + pc_name) |
-| `DeleteHardwareTool` | `delete_hardware` | Delete a record by ID (requires `confirm=true`) |
+| `SearchHardwareTool` | `search_hardware` | Search hardware by any field (name, IP, MAC, CPU, etc.) — respects organizational scope |
+| `HardwareStatsTool` | `hardware_stats` | Aggregate stats: total, by type, by OS, shutdown count — respects organizational scope |
+| `PersonHardwareTool` | `person_hardware` | List all devices owned by a person (by n_code) — respects organizational scope |
+| `UpdateHardwareTool` | `update_hardware` | Update fields (name, OS, CPU, RAM, IP, etc.) by ID — respects organizational scope |
+| `CreateHardwareTool` | `create_hardware` | Create new hardware record (requires n_code + pc_name) — respects organizational scope |
+| `DeleteHardwareTool` | `delete_hardware` | Delete a record by ID (requires `confirm=true`) — respects organizational scope |
+| `ExportHardwareTool` | `export_hardware` | Export hardware inventory as CSV with optional filters (type, os, cpu, shutdown, person, unit) — respects organizational scope |
 
 ### Endpoints
 
@@ -140,6 +141,17 @@ The application uses **Laravel Sanctum** with two authentication modes:
 - API routes accept Sanctum tokens generated via `PersonalAccessTokenFactory`.
 - The login form is at `/login` (web session).
 - Token generation (for testing/automation): `POST /api/sanctum/token` with valid credentials.
+
+### Safe Role/Permission Middleware
+
+A new middleware `SafeRoleOrPermission` (alias: `safe_role_or_permission`) allows routes to be accessible to unauthenticated guests while still enforcing Spatie permissions for authenticated users. This is used on hardware Livewire routes to support both web sessions and API token authentication patterns.
+
+```php
+Route::middleware('safe_role_or_permission:manage_hardware')->group(function () {
+    Route::livewire('/hardware', 'hardware.index');
+    Route::livewire('/hardware/ai', 'hardware.ai-chat')->name('hardware.ai');
+});
+```
 
 ---
 
@@ -277,11 +289,14 @@ All routes require `auth:sanctum`.
 ## Persian Text Handling
 
 The `PersianNormalizer` trait normalizes:
-- `ي` → `ی`
-- `ك` → `ک`
-- ZWNJ (zero-width non-joiner) → space
+- `ي` (Arabic Yeh, U+064A) → `ی` (Persian Yeh, U+06CC)
+- `ك` (Arabic Kaf, U+0643) → `ک` (Persian Kaf, U+06A9)
+- ZWNJ (Zero Width Non-Joiner, U+200C) → space
+- ZWJ (Zero Width Joiner, U+200D) → space
 
 Applied to all search and filter operations in both Livewire components, API controllers, and AI tools. The `Person` model auto-normalizes `f_name` and `l_name` on `saving` via the trait's boot method, ensuring Arabic characters are converted to Persian before persistence.
+
+Unicode escape sequences (`\u{200C}`, `\u{200D}`) are used in the trait for ZWNJ/ZWJ to avoid invisible characters in source code.
 
 ---
 
@@ -386,3 +401,64 @@ php artisan db:seed --force
 ### Testing
 - Expanded `HardwareApiTest.php` with `test_stats_endpoint_returns_aggregated_data` and `test_stats_endpoint_respects_organizational_scope`
 - Refactored `TodoApiTest.php` with shared `createUserWithUnit()` helper and added `test_delete_non_existent_todo_returns_404`
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-28 Later)
+
+### Security & Access Control
+- **#138** (`fe3a1e4`): AI Agent tools now enforce organizational access control — all AI tools use the `AiAccessScope` trait to filter by user accessible units (same as REST API scope). Previously AI tools bypassed unit restrictions.
+- **#124** (`ca47576`): Hardware Livewire pages (`/hardware`, `/hardware/ai`) now require `manage_hardware` permission via `safe_role_or_permission` middleware. Guests still pass through; authenticated users are checked.
+- **`SafeRoleOrPermission` middleware** (`app/Http/Middleware/SafeRoleOrPermission.php`): Wraps Spatie's `RoleOrPermissionMiddleware` to skip permission checks for unauthenticated guests — enables hardware pages to work with both session auth and API tokens.
+
+### Hardware API Enhancements (`HardwareController`)
+- **`assertAccessible()` method**: Private helper checks if a hardware record belongs to the user's accessible units. Applied to `show`, `update`, `destroy` endpoints.
+- **`store()` now validates scope**: Creates check that the target person's unit is within the user's accessible scope (returns 403 if not).
+- **`bulkMark()` / `bulkDelete()` scope enforcement**: Bulk operations now only affect records in the user's organizational scope, returning affected `count`.
+- **Response improvements**: Bulk operations return `count` of affected records in the JSON response.
+
+### AI Tool: Export
+- **New `ExportHardwareTool`** (`app/Ai/Tools/Hardware/ExportHardwareTool.php`): 7th AI tool. Exports hardware inventory as CSV with optional filters (type, os, cpu, shutdown, person, unit). Uses `AiAccessScope` trait for organizational filtering. CSV fields: ID, PC Name, Type, OS, IP Valid, IP Local, MAC, CPU, RAM, HDD, Net Type, Shutdown, Marked, Owner Name, Owner Unit. Persian normalization applied to person/unit filters.
+- **`HardwareAgent`** updated to register `ExportHardwareTool`.
+
+### New Trait: `AiAccessScope`
+- **`App\Ai\Traits\AiAccessScope`** (`app/Ai/Traits/AiAccessScope.php`): Trait providing `scopedHardwareQuery()` method that returns a `Hardware` query filtered to the current user's accessible units (via `AccessService::accessibleUnitIds()`). Used by all AI hardware tools to enforce the same organizational scope as the REST API.
+
+### Bootstrap & Middleware
+- **`SafeRoleOrPermission`** registered in `bootstrap/app.php` under `$middleware->alias` as `safe_role_or_permission`.
+
+### Testing
+- **New `AiAgentToolTest.php`**: Comprehensive test suite for all 7 AI tool classes (231 lines), verifying scope enforcement, parameter handling, and edge cases.
+- **`AiAgentTest.php`**: Updated with test data setup and new test cases.
+- **`HardwareApiTest.php`**: Expanded with 76 lines of new tests covering scope enforcement on bulk operations and CRUD endpoints.
+- **`PersonApiTest.php`**, **`TodoApiTest.php`**: Minor refinements.
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-29)
+
+### Security & Access Control — Scope Enforcement Sweep
+- **#148** (`152e2d5`): `SearchPersonsTool` and `SearchUnitsTool` now enforce organizational access scope — both tools filter by `u_id` using `AccessService`. Previously these tools were bypassable (not in HardwareAgent or not scoped).
+- **#146, #147** (`7146657`): Hardware Livewire component (`resources/views/livewire/hardware/index.blade.php`) now applies full organizational scope:
+  - Added `accessibleUnitIds()` and `applyOrgScope()` helper methods to the Blade component
+  - Scoped `hardwares()` query, `createHardware()`, `editHardware()`, `updateHardware()`, `delete()`, `bulkMark()`, `bulkDelete()`
+  - Matches API controller pattern using `AccessService::accessibleUnitIds()`
+- **#141** (`9dc2eab`): `PersonController::store()` now validates that the target unit is within the user's accessible scope before creating a person (returns 403 if not).
+- **#144/#145** (`9dc2eab`): `HardwareController` CRUD (`store`/`show`/`update`/`destroy`) and bulk operations now enforce organizational access scope via `assertAccessible()` helper. `bulkMark`/`bulkDelete` only affect records in the user's accessible units, returning affected `count`.
+
+### AI Chat Fixes
+- **#143** (`9dc2eab`): Fixed double HTML escaping in `ai-chat.blade.php` — removed erroneous `e()` call inside `renderMarkdown()` that was escaping all markdown-generated HTML tags.
+- **#139** (`9dc2eab`): Fixed broken think-tag regex in AI chat — replaced wrong Unicode characters with correct pattern using `\x{XXXX}` Unicode syntax for `<thinking>` tag removal.
+
+### Test Infrastructure Fixes
+- `rand()` replaced with `random_int()` across all test files (`HardwareApiTest`, `TodoApiTest`, `PersonApiTest`, `AiAgentTest`) to avoid int32 overflow on Windows.
+- FK reference bugs fixed (hardcoded `u_id=1` before unit creation) in all API test files.
+- MySQL `tinyint` boolean assertion fixed in `TodoApiTest` toggle test.
+- `DeleteAlreadyDeletedTodoTest.php` added for 404 edge case.
+- `createUserWithUnit()` helper in `HardwareApiTest` now uses `random_int()` and stores unit reference properly.
+
+### Merge Conflict Resolution
+- **#116–#145 sweep** (`9dc2eab`): Merged and resolved all outstanding issues from upstream. Frontend build works (npm registry fixed).
+
+### Bootstrap & Exception Handling
+- `bootstrap/app.php` enhanced with custom `NotFoundHttpException` rendering for API routes — returns clean 404 JSON in production, detailed errors in debug mode.
