@@ -5,6 +5,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
+// Hardware routes — accessible without auth (API tokens work separately via Sanctum)
+// safe_role_or_permission: guests pass through, authenticated users need manage_hardware permission
+Route::middleware('safe_role_or_permission:manage_hardware')->group(function () {
+    Route::livewire('/hardware', 'hardware.index');
+    Route::livewire('/hardware/ai', 'hardware.ai-chat')->name('hardware.ai');
+});
+
 // Volt::route('/login', 'auth.login')->name('login');
 // Volt::route('/register', 'auth.register');
 // Define the logout
@@ -60,11 +67,6 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/semats', 'kargozini.semat');
             Route::livewire('/kargozini/radifs', 'kargozini.radif');
             Route::livewire('/kargozini/persons', 'kargozini.person');
-        });
-
-        Route::middleware('role_or_permission:manage_hardware')->group(function () {
-            Route::livewire('/hardware', 'hardware.index');
-            Route::livewire('/hardware/ai', 'hardware.ai-chat')->name('hardware.ai');
         });
 
         Route::middleware('role_or_permission:map')->group(function () {

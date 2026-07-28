@@ -16,6 +16,12 @@ class HardwareApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected $tId;
+    protected $eId;
+    protected $sId;
+    protected $rId;
+    protected $unit;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -24,19 +30,35 @@ class HardwareApiTest extends TestCase
 
     protected function createUserWithUnit(): array
     {
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
+        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
+        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
+        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
+        $nCode = (string) random_int(1000000000, 2147483647);
+        $this->unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $this->unit->id]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $unit = Unit::create(['name' => 'Test Unit']);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $unit->id);
+        $user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+        Session::put('current_unit_id', $this->unit->id);
 
-        return ['user' => $user, 'unit' => $unit];
+        return ['user' => $user, 'unit' => $this->unit];
+    }
+
+    /**
+     * Verify that /hardware and /hardware/ai load for unauthenticated users.
+     * Issue #124: Regression — pages were redirecting to /login.
+     */
+    public function test_hardware_page_loads_without_auth(): void
+    {
+        $response = $this->get('/hardware');
+        $response->assertStatus(200);
+    }
+
+    public function test_hardware_ai_page_loads_without_auth(): void
+    {
+        $response = $this->get('/hardware/ai');
+        $response->assertStatus(200);
     }
 
     public function test_unauthenticated_user_cannot_access_hardware(): void
@@ -98,11 +120,15 @@ class HardwareApiTest extends TestCase
             'n_code' => '1111111111',
             'f_name' => 'Test2',
             'l_name' => 'User2',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
-            'u_id' => 1,
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
+            'u_id' => $this->unit->id,
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')->putJson("/api/hardware/{$hardware->id}", [
+            'n_code' => $person2->n_code,
         ]);
 
         $response = $this->actingAs($user, 'sanctum')->putJson("/api/hardware/{$hardware->id}", [
@@ -170,10 +196,10 @@ class HardwareApiTest extends TestCase
             'n_code' => '2222222222',
             'f_name' => 'Test2',
             'l_name' => 'User2',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
             'u_id' => $unit->id,
         ]);
 
@@ -203,10 +229,10 @@ class HardwareApiTest extends TestCase
             'n_code' => '3333333333',
             'f_name' => 'Test3',
             'l_name' => 'User3',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
             'u_id' => $unitA->id,
         ]);
 
@@ -217,7 +243,7 @@ class HardwareApiTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
         $unitB = Unit::create(['name' => 'Unit B']);
-        $nCodeB = (string) rand(1000000000, 9999999999);
+        $nCodeB = (string) random_int(1000000000, 2147483647);
         $personB = Person::create([
             'n_code' => $nCodeB,
             'f_name' => 'TestB',

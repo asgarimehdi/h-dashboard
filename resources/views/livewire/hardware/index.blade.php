@@ -427,10 +427,10 @@ return new class extends Component
                 @if($this->hasActiveFilters())
                     <div class="mt-3 flex items-center gap-2">
                         <x-button icon="o-x-mark" label="پاک کردن فیلترها" class="btn-ghost btn-sm" wire:click="clearFilters" />
-                        <span class="text-xs text-base-content/50">فیلترهای فعال اعمال شده</span
-                    </div
+                        <span class="text-xs text-base-content/50">فیلترهای فعال اعمال شده</span>
+                    </div>
                 @endif
-            </div
+            </div>
         @endif
 
         @if($showColPanel)
@@ -438,7 +438,7 @@ return new class extends Component
                 <div class="flex items-center gap-2 mb-2 font-bold text-sm">
                     <x-icon name="o-columns-3" class="w-4 h-4" />
                     مدیریت نمایش ستون‌ها
-                </div
+                </div>
                 <div class="flex flex-wrap gap-3">
                     @foreach($visibleCols as $key => $visible)
                         <label class="flex items-center gap-2 cursor-pointer text-xs">
@@ -446,8 +446,8 @@ return new class extends Component
                             {{ $headers()->collect()->firstWhere('key', $key)['label'] ?? $key }}
                         </label>
                     @endforeach
-                </div
-            </div
+                </div>
+            </div>
         @endif
 
         {{-- Create Form --}}
