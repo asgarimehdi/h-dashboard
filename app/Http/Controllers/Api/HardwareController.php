@@ -143,8 +143,8 @@ class HardwareController extends Controller
     public function update(Request $request, Hardware $hardware): JsonResponse
     {
         $validated = $request->validate([
-            'n_code' => 'required|string|exists:persons,n_code',
-            'pc_name' => 'required|string|max:255',
+            'n_code' => 'sometimes|required|string|exists:persons,n_code',
+            'pc_name' => 'sometimes|required|string|max:255',
             'type' => 'nullable|string|max:50',
             'os' => 'nullable|string|max:100',
             'ip_valid' => 'nullable|string|max:45',
