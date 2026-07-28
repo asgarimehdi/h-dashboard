@@ -3,11 +3,14 @@
 namespace App\Ai\Tools\Hardware;
 
 use App\Ai\Tools\Tool;
+use App\Ai\Traits\AiAccessScope;
 use App\Models\Hardware;
 use App\Traits\PersianNormalizer;
 
 class SearchHardwareTool extends Tool
 {
+    use AiAccessScope;
+
     public function name(): string
     {
         return 'search_hardware';
@@ -15,7 +18,7 @@ class SearchHardwareTool extends Tool
 
     public function description(): string
     {
-        return 'Search hardware by pc_name, ip, mac, n_code, cpu, ram, hdd, os, or type.';
+        return 'Search hardware by pc_name, ip, mac, n_code, cpu, ram, hdd, os, or type. Respects organizational access scope.';
     }
 
     public function parameters(): array
@@ -33,23 +36,24 @@ class SearchHardwareTool extends Tool
         $query = $arguments['query'] ?? '';
         $query = PersianNormalizer::normalizeForSearch($query);
 
-        $results = Hardware::query()
-            ->with(['person'])
-            ->where('pc_name', 'like', "%{$query}%")
-            ->orWhere('ip_valid', 'like', "%{$query}%")
-            ->orWhere('ip_local', 'like', "%{$query}%")
-            ->orWhere('mac', 'like', "%{$query}%")
-            ->orWhere('n_code', 'like', "%{$query}%")
-            ->orWhere('cpu', 'like', "%{$query}%")
-            ->orWhere('ram', 'like', "%{$query}%")
-            ->orWhere('hdd', 'like', "%{$query}%")
-            ->orWhere('os', 'like', "%{$query}%")
-            ->orWhere('type', 'like', "%{$query}%")
+        $results = $this->scopedHardwareQuery()
+            ->where(function ($q) use ($query) {
+                $q->where('pc_name', 'like', "%{$query}%")
+                  ->orWhere('ip_valid', 'like', "%{$query}%")
+                  ->orWhere('ip_local', 'like', "%{$query}%")
+                  ->orWhere('mac', 'like', "%{$query}%")
+                  ->orWhere('n_code', 'like', "%{$query}%")
+                  ->orWhere('cpu', 'like', "%{$query}%")
+                  ->orWhere('ram', 'like', "%{$query}%")
+                  ->orWhere('hdd', 'like', "%{$query}%")
+                  ->orWhere('os', 'like', "%{$query}%")
+                  ->orWhere('type', 'like', "%{$query}%");
+            })
             ->limit(20)
             ->get();
 
         if ($results->isEmpty()) {
-            return "No results for \"{$query}\".";
+            return "No results for \"{$query}\" within your access scope.";
         }
 
         return $results->map(fn (Hardware $h) => [

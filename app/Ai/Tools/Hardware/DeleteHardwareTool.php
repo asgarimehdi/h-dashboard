@@ -3,10 +3,13 @@
 namespace App\Ai\Tools\Hardware;
 
 use App\Ai\Tools\Tool;
+use App\Ai\Traits\AiAccessScope;
 use App\Models\Hardware;
 
 class DeleteHardwareTool extends Tool
 {
+    use AiAccessScope;
+
     public function name(): string
     {
         return 'delete_hardware';
@@ -14,7 +17,7 @@ class DeleteHardwareTool extends Tool
 
     public function description(): string
     {
-        return 'Delete a hardware record by ID. Use with caution.';
+        return 'Delete a hardware record by ID. Use with caution. Respects organizational access scope.';
     }
 
     public function parameters(): array
@@ -45,10 +48,10 @@ class DeleteHardwareTool extends Tool
             return 'Deletion requires confirmation (confirm=true).';
         }
 
-        $hardware = Hardware::find($id);
+        $hardware = $this->scopedHardwareQuery()->find($id);
 
         if (!$hardware) {
-            return "Hardware #{$id} not found.";
+            return "Hardware #{$id} not found or access denied.";
         }
 
         $name = $hardware->pc_name;

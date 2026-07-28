@@ -3,10 +3,13 @@
 namespace App\Ai\Tools\Hardware;
 
 use App\Ai\Tools\Tool;
+use App\Ai\Traits\AiAccessScope;
 use App\Models\Hardware;
 
 class UpdateHardwareTool extends Tool
 {
+    use AiAccessScope;
+
     public function name(): string
     {
         return 'update_hardware';
@@ -14,7 +17,7 @@ class UpdateHardwareTool extends Tool
 
     public function description(): string
     {
-        return 'Update hardware record fields by id.';
+        return 'Update hardware record fields by id. Respects organizational access scope.';
     }
 
     public function parameters(): array
@@ -39,9 +42,9 @@ class UpdateHardwareTool extends Tool
 
     public function execute(array $arguments): mixed
     {
-        $hardware = Hardware::find($arguments['id'] ?? null);
+        $hardware = $this->scopedHardwareQuery()->find($arguments['id'] ?? null);
         if (!$hardware) {
-            return "Hardware #{$arguments['id']} not found.";
+            return "Hardware #{$arguments['id']} not found or access denied.";
         }
 
         $updatable = ['pc_name', 'os', 'ip_valid', 'ip_local', 'cpu', 'ram', 'hdd', 'comments', 'shutdown'];

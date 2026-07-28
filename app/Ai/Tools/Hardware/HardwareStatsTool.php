@@ -3,10 +3,13 @@
 namespace App\Ai\Tools\Hardware;
 
 use App\Ai\Tools\Tool;
+use App\Ai\Traits\AiAccessScope;
 use App\Models\Hardware;
 
 class HardwareStatsTool extends Tool
 {
+    use AiAccessScope;
+
     public function name(): string
     {
         return 'hardware_stats';
@@ -14,7 +17,7 @@ class HardwareStatsTool extends Tool
 
     public function description(): string
     {
-        return 'Get hardware stats: total count, by type, by OS, shutdown count.';
+        return 'Get hardware stats: total count, by type, by OS, shutdown count. Respects organizational access scope.';
     }
 
     public function parameters(): array
@@ -31,8 +34,10 @@ class HardwareStatsTool extends Tool
     {
         $category = $arguments['category'] ?? 'overview';
 
+        $baseQuery = $this->scopedHardwareQuery();
+
         if ($category === 'type') {
-            return Hardware::selectRaw('type, count(*) as count')
+            return (clone $baseQuery)->selectRaw('type, count(*) as count')
                 ->groupBy('type')
                 ->orderByDesc('count')
                 ->pluck('count', 'type')
@@ -40,7 +45,7 @@ class HardwareStatsTool extends Tool
         }
 
         if ($category === 'os') {
-            return Hardware::selectRaw('os, count(*) as count')
+            return (clone $baseQuery)->selectRaw('os, count(*) as count')
                 ->groupBy('os')
                 ->orderByDesc('count')
                 ->pluck('count', 'os')
@@ -48,12 +53,12 @@ class HardwareStatsTool extends Tool
         }
 
         return [
-            'total' => Hardware::count(),
-            'by_type' => Hardware::selectRaw('type, count(*) as count')
+            'total' => (clone $baseQuery)->count(),
+            'by_type' => (clone $baseQuery)->selectRaw('type, count(*) as count')
                 ->groupBy('type')
                 ->pluck('count', 'type')
                 ->toArray(),
-            'shutdown' => Hardware::where('shutdown', true)->count(),
+            'shutdown' => (clone $baseQuery)->where('shutdown', true)->count(),
         ];
     }
 }

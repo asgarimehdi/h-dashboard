@@ -3,10 +3,13 @@
 namespace App\Ai\Tools\Hardware;
 
 use App\Ai\Tools\Tool;
+use App\Ai\Traits\AiAccessScope;
 use App\Models\Hardware;
 
 class PersonHardwareTool extends Tool
 {
+    use AiAccessScope;
+
     public function name(): string
     {
         return 'person_hardware';
@@ -14,7 +17,7 @@ class PersonHardwareTool extends Tool
 
     public function description(): string
     {
-        return 'Get all hardware for a person by n_code.';
+        return 'Get all hardware for a person by n_code. Respects organizational access scope.';
     }
 
     public function parameters(): array
@@ -32,13 +35,12 @@ class PersonHardwareTool extends Tool
     {
         $nCode = $arguments['n_code'] ?? '';
 
-        $devices = Hardware::query()
-            ->with(['person'])
+        $devices = $this->scopedHardwareQuery()
             ->where('n_code', $nCode)
             ->get();
 
         if ($devices->isEmpty()) {
-            return "No hardware for n_code {$nCode}.";
+            return "No hardware found for n_code {$nCode} within your access scope.";
         }
 
         $owner = $devices->first()->person
