@@ -10,6 +10,7 @@ Route::livewire('/login', 'auth.login')->name('login');
 Route::middleware('safe_role_or_permission:manage_hardware')->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/ai', 'hardware.ai-chat')->name('hardware.ai');
+    Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
 });
 
 // Volt::route('/login', 'auth.login')->name('login');
