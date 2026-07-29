@@ -659,3 +659,31 @@ php artisan db:seed --force
 
 ### Hardware Import Minor Fix
 - **`ImportHardware.php`** (line 35): Added `public bool $showHelpModal = false;` property to support help modal integration
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Later)
+
+### Performance Optimizations
+
+#### #161 (`9e9ffad`): Dashboard Stats Caching
+- **`dashboard.blade.php`** (`resources/views/livewire/dashboard.blade.php`): Major refactor of `mount()` — reduced 20+ individual DB queries per page load to cached batch queries with TTL tiers:
+  - Scope-less global stats (users, roles) — cached **5 minutes**
+  - Scope-dependent stats (persons, units, tickets, todos) — cached **5 minutes** per scope
+  - Today-only stats (today's tickets, todos, activities) — cached **2 minutes** (more time-sensitive)
+  - Ticket detail stats (urgent/normal/low/overdue counts, avg resolution days) — cached **3 minutes**
+  - Dashboard chart data (`ticketChartData`, `ticketStatusData`) — cached **5 minutes**
+  - Recent activities — cached **2 minutes**
+- Cache keys scoped via `md5(implode(',', $accessibleIds))` for per-user-org isolation
+- **Benefit**: Dashboard page load went from 20+ queries to ~1–3 cache lookups + a few missed stats
+
+#### #162 (`64b717b`): Duplicate Query Reduction in map-no-boundary
+- **`map-no-boundary.blade.php`** (`resources/views/livewire/reports/map-no-boundary.blade.php`): Extracted shared `getUnitsWithoutBoundary()` private method used by both `chartPayload()` and `getAllUnitsProperty`:
+  - Before: both properties independently called `accessibleUnitIds()` + query → 2 CTEs + 2 queries per request
+  - After: single cached call (5-min TTL, per-scope) shared between both properties
+  - Early return when `$accessibleIds` is empty (avoids unnecessary query)
+  - Also integrated help modal (`x-help:button` + `x-help:modal`) into this page
+- **Benefit**: Eliminated 1 CTE + 1 query per request for this report page
+
+### Help System Integration
+- **Map/No-Boundary report** now includes help button and modal (consistent with other pages)
