@@ -488,7 +488,7 @@ php artisan db:seed --force
 
 ---
 
-## Recent Changes (July 2026 Sync — Updated 2026-07-29 Evening)
+## Recent Changes (July 2026 Sync — Updated 2026-07-30)
 
 ### GIS / Spatial Database Indexes (#149 — `d540e54`)
 - **Spatial index** added on `boundaries.boundary` column (SPATIAL index, MySQL/MariaDB only — skipped on SQLite for testing)
@@ -635,3 +635,27 @@ php artisan db:seed --force
 | #158 | `2a42a11` | Tickets composite indexes |
 | — | `c5708e5` | Test files restoration |
 | — | `269936e` | SearchUnitsTool attribute fix + HardwareImport test fix |
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30)
+
+### Database Performance Indexes (#159 — `774c694`, #160 — `3e39a6b`)
+- **New migration** `2026_07_30_000001_add_composite_indexes_to_todos_table.php`: Adds 4 composite indexes on `todos` table for frequent query patterns:
+  - `todos_completed_created_idx` on `(is_completed, created_at)` — covers completion status filtering + created_at ordering (reports, listing)
+  - `todos_completed_end_at_idx` on `(is_completed, end_at)` — covers overdue queries (WHERE is_completed=false AND end_at < now)
+  - `todos_start_at_idx` on `(start_at)` — covers GROUP BY date(start_at) in reports
+  - `todos_unit_completed_idx` on `(unit_id, is_completed)` — covers filtered listing in TodoController::index
+- **New migration** `2026_07_29_173757_add_composite_index_to_units_table.php`: Adds composite index `units_is_active_parent_id_index` on `(is_active, parent_id)` for Recursive CTE optimization
+  - Optimizes `Unit::descendantIds()` CTE used by `AccessService::accessibleUnitIds()` across all API controllers (Hardware, Person, Ticket, Todo, Report, Unit) and Livewire components
+  - Column order: `is_active` (equality filter) first, then `parent_id` (join) — enables MySQL index condition pushdown for both conditions
+
+### Help System UI (Part of #160 — `3e39a6b`)
+- **New Help System Components** added for contextual help across all major pages:
+  - **`x-help-content:button`** (`resources/views/components/help/button.blade.php`): Reusable help button component with section parameter, dispatches `help-open` event
+  - **`x-help-content:modal`** (`resources/views/components/help/modal.blade.php`): Modal with tabbed help content, supports 14 sections (dashboard, hardware, hardware-import, hardware-ai, persons, units, tickets, todos, reports, maps, settings, roles, permissions, users, activity-log)
+  - **14 Help Content Components** in `resources/views/components/help/content/` — each provides contextual Persian documentation for its section
+  - Integrated into: Dashboard, Hardware (index + AI + Import), Personnel, Units, Tickets, Todos, Reports, Maps, Settings, Roles, Permissions, Users, Activity Log
+
+### Hardware Import Minor Fix
+- **`ImportHardware.php`** (line 35): Added `public bool $showHelpModal = false;` property to support help modal integration
