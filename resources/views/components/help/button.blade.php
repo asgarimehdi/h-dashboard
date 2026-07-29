@@ -1,4 +1,4 @@
-<@props(['section' => 'default', 'wireModel' => 'showHelpModal'])>
+@props(['section' => 'default', 'wireModel' => 'showHelpModal'])
 
 <button
     type="button"
@@ -9,4 +9,3 @@
 >
     <x-icon name="o-question-mark-circle" class="w-5 h-5" />
 </button>
-</@props>

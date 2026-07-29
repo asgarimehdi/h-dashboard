@@ -6,8 +6,8 @@ use Livewire\WithPagination;
 use Mary\Traits\Toast;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-
-return new class extends Component {
+return new class extends Component
+{
     use WithPagination;
     use Toast;
 
@@ -21,6 +21,7 @@ return new class extends Component {
     public array $allPermissions = [];
     public array $permissions = [];
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
+    public bool $showHelpModal = false;
 
     // تعریف headers به عنوان پروپرتی برای جلوگیری از خطای Method Not Found
     public array $headers = [];
@@ -126,9 +127,12 @@ return new class extends Component {
     <x-header title="مدیریت نقش ها" separator progress-indicator>
         <x-slot:middle class="!justify-end"></x-slot:middle>
         <x-slot:actions>
+            <x-help:button section="roles" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">

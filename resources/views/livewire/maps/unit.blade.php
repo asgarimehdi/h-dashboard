@@ -7,6 +7,8 @@ use Livewire\Component;
 
 return new class extends Component
 {
+    public bool $showHelpModal = false;
+
     public $units = [];
 
     public $regions = [];
@@ -168,9 +170,12 @@ return new class extends Component
 <div>
     <x-header title="نقشه واحد ها" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="maps" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     {{-- Filter bar above the map --}}
     <x-card shadow class="mb-4 p-3">

@@ -11,6 +11,7 @@ return new class extends Component
     public bool $browserNotifications = false;
     public int $dashboardRefresh = 0; // 0 = off
     public bool $compactMode = false;
+    public bool $showHelpModal = false;
 
     public function mount(): void
     {
@@ -37,13 +38,15 @@ return new class extends Component
 
 }; ?>
 
-    {{-- Settings HTML --}}
     <div class="max-w-2xl mx-auto p-6" dir="rtl">
         <x-header title="تنظیمات" separator progress-indicator>
             <x-slot:actions>
+                <x-help:button section="settings" wireModel="showHelpModal" />
                 <x-theme-selector/>
             </x-slot:actions>
         </x-header>
+
+        <x-help:modal wireModel="showHelpModal" />
 
         <x-card shadow>
             <h2 class="font-bold mb-4">اعلان‌ها</h2>

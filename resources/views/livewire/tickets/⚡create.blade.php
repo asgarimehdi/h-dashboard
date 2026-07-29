@@ -12,6 +12,8 @@ new class extends Component
     use WithFileUploads;
     use Toast;
 
+    public bool $showHelpModal = false;
+
     public string $search = '';
     public ?int $unit_id = null;
     public bool $showDropdown = false;
@@ -191,11 +193,14 @@ new class extends Component
 ?>
 
 <div>
-    <x-header title="ثبت تیکت جدید" separator progress-indicator>
-        <x-slot:actions>
-            <x-theme-selector />
-        </x-slot:actions>
-    </x-header>
+    <x-header title="ایجاد تیکت جدید" separator progress-indicator>
+            <x-slot:actions>
+                <x-help:button section="tickets" wireModel="showHelpModal" />
+                <x-theme-selector />
+            </x-slot:actions>
+        </x-header>
+
+        <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">

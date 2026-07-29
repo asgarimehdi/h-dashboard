@@ -54,6 +54,8 @@ new class extends Component
     // Data properties
     public array $units = [];
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
         $this->loadData();
@@ -508,9 +510,12 @@ new class extends Component
             </div>
         </x-slot:middle>
         <x-slot:actions>
+            <x-help:button section="tickets" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">

@@ -12,6 +12,8 @@ new class extends Component
 {
     use WithPagination;
 
+    public bool $showHelpModal = false;
+
     #[Url]
     public string $search = '';
     #[Url]
@@ -124,9 +126,12 @@ new class extends Component
 <div>
     <x-header title="مانیتورینگ تیکت‌ها" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="tickets" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">

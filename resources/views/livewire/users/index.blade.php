@@ -32,6 +32,8 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'n_code', 'direction' => 'asc'];
 
+    public bool $showHelpModal = false;
+
     public $n_code;
 
     public $password;
@@ -275,9 +277,12 @@ return new class extends Component
 <div>
     <x-header title="کاربران" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="users" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4 flex-wrap">

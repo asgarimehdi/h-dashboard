@@ -19,6 +19,7 @@ return new class extends Component {
     public string $search = '';
     public int $perPage = 10;
     public bool $modal = false;
+    public bool $showHelpModal = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     public $unitTypes, $provinces, $counties, $parentUnits;
@@ -325,9 +326,12 @@ return new class extends Component {
         <x-slot:middle class="!justify-end">
         </x-slot:middle>
         <x-slot:actions>
+            <x-help:button section="units" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <!-- TABLE -->
     <x-card shadow>

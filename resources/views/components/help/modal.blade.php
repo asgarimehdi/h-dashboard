@@ -1,4 +1,4 @@
-<@props(['wireModel' => 'showHelpModal'])>
+@props(['wireModel' => 'showHelpModal'])
 
 <x-modal wire:model="{{ $wireModel }}" title="راهنما" separator>
     <div class="space-y-6 text-right" dir="rtl">
@@ -15,8 +15,8 @@
             @case('hardware-ai')
                 <x-help-content:hardware-ai />
                 @break
-            @case('persons')
-                <x-help-content:persons />
+            @case('personnel')
+                <x-help-content:personnel />
                 @break
             @case('units')
                 <x-help-content:units />
@@ -48,6 +48,12 @@
             @case('activity-log')
                 <x-help-content:activity-log />
                 @break
+            @case('networks')
+                <x-help-content:networks />
+                @break
+            @case('wireless')
+                <x-help-content:wireless />
+                @break
             @default
                 <div class="text-center py-8 text-base-content/50">
                     <x-icon name="o-information-circle" class="w-12 h-12 mx-auto mb-4" />
@@ -61,4 +67,3 @@
         <x-button wire:click="$set('{{ $wireModel }}', false)" label="بستن" class="btn-primary" />
     </x-slot:actions>
 </x-modal>
-</@props>

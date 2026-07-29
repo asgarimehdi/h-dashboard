@@ -5,8 +5,8 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
 use Spatie\Permission\Models\Permission;
-
-return new class extends Component {
+return new class extends Component
+{
     use WithPagination;
     use Toast;
 
@@ -15,6 +15,7 @@ return new class extends Component {
     public string $search = '';
     public int $perPage = 5;
     public bool $modal = false;
+    public bool $showHelpModal = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
@@ -140,9 +141,12 @@ return new class extends Component {
     <x-header title="مدیریت دسترسی ها" separator progress-indicator>
         <x-slot:middle class="!justify-end"></x-slot:middle>
         <x-slot:actions>
+            <x-help:button section="permissions" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">

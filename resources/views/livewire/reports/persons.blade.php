@@ -44,26 +44,56 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = Person::query()
+        $baseQuery = Person::query()
             ->when($accessibleIds, fn($q) => $q->whereIn('u_id', $accessibleIds))
             ->when($this->selectedUnitId, fn($q) => $q->where('u_id', $this->selectedUnitId))
             ->when($this->selectedTahsilId, fn($q) => $q->where('t_id', $this->selectedTahsilId))
             ->when($this->selectedSematId, fn($q) => $q->where('s_id', $this->selectedSematId))
-            ->when($this->selectedEstekhdamId, fn($q) => $q->where('e_id', $this->selectedEstekhdamId))
-            ->with(['tahsil', 'semat', 'estekhdam', 'unit:id,name']);
+            ->when($this->selectedEstekhdamId, fn($q) => $q->where('e_id', $this->selectedEstekhdamId));
 
-        $total = $query->count();
+        $total = $baseQuery->count();
 
-        $byTahsil = (clone $query)->get()->groupBy(fn($p) => $p->tahsil?->name ?? 'نامشخص')
-            ->map(fn($items) => $items->count())->toArray();
-        $bySemat = (clone $query)->get()->groupBy(fn($p) => $p->semat?->name ?? 'نامشخص')
-            ->map(fn($items) => $items->count())->toArray();
-        $byEstekhdam = (clone $query)->get()->groupBy(fn($p) => $p->estekhdam?->name ?? 'نامشخص')
-            ->map(fn($items) => $items->count())->toArray();
-        $byUnit = (clone $query)->get()->groupBy(fn($p) => $p->unit?->name ?? 'نامشخص')
-            ->map(fn($items) => $items->count())->toArray();
+        $byTahsil = Person::selectRaw('COALESCE(tahsils.name, ?) as tahsil_name, COUNT(*) as count', ['نامشخص'])
+            ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
+            ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
+            ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
+            ->groupBy('tahsil_name')
+            ->pluck('count', 'tahsil_name')
+            ->toArray();
 
-        $persons = (clone $query)
+        $bySemat = Person::selectRaw('COALESCE(semats.name, ?) as semat_name, COUNT(*) as count', ['نامشخص'])
+            ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
+            ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
+            ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
+            ->groupBy('semat_name')
+            ->pluck('count', 'semat_name')
+            ->toArray();
+
+        $byEstekhdam = Person::selectRaw('COALESCE(estekhdams.name, ?) as estekhdam_name, COUNT(*) as count', ['نامشخص'])
+            ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
+            ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
+            ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
+            ->groupBy('estekhdam_name')
+            ->pluck('count', 'estekhdam_name')
+            ->toArray();
+
+        $byUnit = Person::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
+            ->leftJoin('units', 'persons.u_id', '=', 'units.id')
+            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
+            ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
+            ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
+            ->groupBy('unit_name')
+            ->pluck('count', 'unit_name')
+            ->toArray();
+
+        $persons = (clone $baseQuery)
             ->orderBy('n_code')
             ->get()
             ->map(fn($p) => [

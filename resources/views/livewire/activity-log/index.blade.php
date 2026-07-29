@@ -18,6 +18,7 @@ return new class extends Component
     public ?string $dateFrom = null;
     public ?string $dateTo = null;
     public bool $showModal = false;
+    public bool $showHelpModal = false;
     public ?ActivityLog $selectedLog = null;
     public array $typeStats = [];
 
@@ -111,9 +112,12 @@ return new class extends Component
 <div>
     <x-header title="گزارش فعالیت سیستم" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="activity-log" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     {{-- آمار انواع --}}
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">

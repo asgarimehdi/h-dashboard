@@ -136,14 +136,28 @@ return new class extends Component
                     ->count(),
             ];
         } elseif ($this->reportType === 'persons') {
-            $persons = $query->clone()->with(['estekhdam', 'tahsil', 'semat'])->get();
             $details = [
-                'byEstekhdam' => $persons->groupBy(fn($p) => $p->estekhdam?->name ?? 'نامشخص')
-                    ->map(fn($items) => $items->count())->toArray(),
-                'byTahsil' => $persons->groupBy(fn($p) => $p->tahsil?->name ?? 'نامشخص')
-                    ->map(fn($items) => $items->count())->toArray(),
-                'bySemat' => $persons->groupBy(fn($p) => $p->semat?->name ?? 'نامشخص')
-                    ->map(fn($items) => $items->count())->toArray(),
+                'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+                    ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->when($unitId, fn($q) => $q->whereIn('persons.u_id', $descendantIds))
+                    ->groupBy('name')
+                    ->pluck('count', 'name')
+                    ->toArray(),
+                'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+                    ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->when($unitId, fn($q) => $q->whereIn('persons.u_id', $descendantIds))
+                    ->groupBy('name')
+                    ->pluck('count', 'name')
+                    ->toArray(),
+                'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+                    ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->when($unitId, fn($q) => $q->whereIn('persons.u_id', $descendantIds))
+                    ->groupBy('name')
+                    ->pluck('count', 'name')
+                    ->toArray(),
             ];
         }
 

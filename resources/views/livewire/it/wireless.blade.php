@@ -91,6 +91,8 @@ return new class extends Component {
         ],
     ];
 
+    public bool $showHelpModal = false;
+
     // متد mount برای پردازش اولیه
     public function mount()
     {
@@ -106,9 +108,12 @@ return new class extends Component {
         <x-slot:middle class="!justify-end">
         </x-slot:middle>
         <x-slot:actions>
+            <x-help:button section="wireless" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <!-- TABLE  -->
     <x-card shadow>

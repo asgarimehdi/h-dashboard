@@ -7,6 +7,8 @@ use App\Services\AccessService;
 
 return new class extends Component
 {
+    public bool $showHelpModal = false;
+
     public string $dateFrom = '';
     public string $dateTo = '';
     public ?int $selectedUnitTypeId = null;
@@ -100,9 +102,12 @@ return new class extends Component
     @php $chart = $this->chartPayload(); @endphp
     <x-header title="گزارش واحدها و مراکز" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="reports" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     {{-- فیلترها --}}
     <x-card shadow class="mb-6">

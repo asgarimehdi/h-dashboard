@@ -13,6 +13,7 @@ return new class extends Component
     public ?int $selectedUnitId = null;
     public ?string $statusFilter = null; // completed, pending, overdue, null=all
     public $units = [];
+    public bool $showHelpModal = false;
 
     public function mount(): void
     {
@@ -53,11 +54,12 @@ return new class extends Component
         $overdue = (clone $query)->where('is_completed', false)
             ->whereNotNull('end_at')->where('end_at', '<', $now)->count();
 
-        $byUnit = (clone $query)
-            ->with('unit:id,name')
-            ->get()
-            ->groupBy(fn($t) => $t->unit?->name ?? 'نامشخص')
-            ->map(fn($items) => $items->count())
+        $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
+            ->whereIn('todos.unit_id', $accessibleIds)
+            ->when($this->selectedUnitId, fn($q) => $q->where('todos.unit_id', $this->selectedUnitId))
+            ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
+            ->groupBy('unit_name')
+            ->pluck('count', 'unit_name')
             ->toArray();
 
         $byDay = (clone $query)
@@ -117,9 +119,12 @@ return new class extends Component
     @php $chart = $this->chartPayload(); @endphp
     <x-header title="گزارش وظایف" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="reports" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     {{-- فیلترها --}}
     <x-card shadow class="mb-6">
