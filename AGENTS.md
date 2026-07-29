@@ -523,3 +523,24 @@ php artisan db:seed --force
 - **maatwebsite/excel** (Laravel Excel) — added to `composer.json`; `config/excel.php` config file generated
 - **Livewire Login** (`app/Livewire/Auth/Login.php`): new Livewire login component with rate limiting, lockout support (part of import commit)
 - **New test:** `HardwareImportTest.php` covers the full import workflow
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-29 Late)
+
+### Database Performance Indexes (#151 — `3d57bd9`)
+- **New migration** `2026_07_29_041643_add_indexes_to_hardwares_table.php` adds indexes on filter-heavy columns:
+  - Composite index `hardwares_type_os_shutdown_index` on `(type, os, shutdown)`
+  - Single-column indexes on: `cpu`, `ram`, `hdd`, `shutdown`, `mark`, `net_type`, `ip_local`, `mac`
+- **`HardwareImport`** updated: CSV delimiter changed to tab (`\t`), proper UTF-8 encoding, improved `clean()` for `'\\N'` NULL markers, boolean `parseBoolean()` now handles Persian `بله`/`تایید`
+
+### GIS Performance Optimization (#152 — `7289904`)
+- **`Boundary` model** (`app/Models/Boundary.php`): Fixed N+1 query in `geojson` accessor — now uses already-loaded `boundary` attribute when available instead of always querying the DB. Also added `$casts['multipolygon'] = 'multipolygon'` and `province()`/`county()` relationships.
+- **`Unit` model** (`app/Models/Unit.php`): Refactored spatial query scopes:
+  - `scopeContainingPoint()`: Uses `WHERE EXISTS` with `ST_GeomFromText` for better spatial index utilization (PostgreSQL → MySQL compatible)
+  - `scopeIntersectsBoundary()`: Same optimization — `WHERE EXISTS` with `ST_GeomFromText`
+  - `scopeWithinDistance()`: Fixed PostGIS-specific `ST_Point` → `ST_GeomFromText('POINT($lng $lat)', 4326)` for MySQL/MariaDB compatibility
+- **`Unit` model** fillable updated: now includes `boundary_id` (FK to `boundaries.id`), `description`, and `is_active` (used in recursive CTE to filter active units only)
+- **`Unit::descendantIds()`**: Added 15-minute cache with `md5`-based cache key for repeated hierarchical lookups
+- **`Unit::boundary()`**: New `BelongsTo` relationship to `Boundary` model
+- **`Unit::assignedUsers()`**: New `BelongsToMany` relationship to `User` via `user_units` pivot table
