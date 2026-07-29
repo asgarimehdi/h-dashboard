@@ -62,11 +62,11 @@ class ReportController extends Controller
             ])
             ->toArray();
 
-        $byUnit = (clone $query)
-            ->with('unit:id,name')
-            ->get()
-            ->groupBy(fn ($t) => $t->unit?->name ?? 'نامشخص')
-            ->map(fn ($items) => $items->count())
+        $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
+            ->whereIn('todos.unit_id', $accessibleIds)
+            ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
+            ->groupBy('unit_name')
+            ->pluck('count', 'unit_name')
             ->toArray();
 
         return response()->json([
