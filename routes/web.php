@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/semats', 'kargozini.semat');
             Route::livewire('/kargozini/radifs', 'kargozini.radif');
             Route::livewire('/kargozini/persons', 'kargozini.person');
+            Route::livewire('/kargozini/persons/import', 'kargozini.import-persons.import-persons')->name('kargozini.persons.import');
         });
 
         Route::middleware('role_or_permission:map')->group(function () {
