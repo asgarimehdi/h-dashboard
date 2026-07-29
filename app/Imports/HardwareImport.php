@@ -11,9 +11,10 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Concerns\SkipsFailures;
+use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
 use Maatwebsite\Excel\Validators\Failure;
 
-class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, SkipsOnFailure
+class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, SkipsOnFailure, WithCustomCsvSettings
 {
     use SkipsFailures;
 
@@ -121,6 +122,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
                 'message' => 'فیلدهای اجباری n_code و pc_name خالی هستند',
                 'data' => $data,
             ];
+            $this->importResults['skipped']++;
             return;
         }
 
@@ -133,6 +135,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
                 'message' => "پرسنل با کد ملی {$data['n_code']} یافت نشد",
                 'data' => $data,
             ];
+            $this->importResults['skipped']++;
             return;
         }
 
@@ -143,6 +146,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
                 'message' => "پرسنل {$data['n_code']} در واحدهای قابل دسترس شما نیست",
                 'data' => $data,
             ];
+            $this->importResults['skipped']++;
             return;
         }
 
@@ -164,6 +168,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
                     'person' => $person->f_name . ' ' . $person->l_name,
                     'data' => $data,
                 ];
+                $this->importResults['updated']++;
             } else {
                 $this->importResults['preview'][] = [
                     'row' => $rowNumber,
@@ -175,6 +180,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
                     'person' => $person->f_name . ' ' . $person->l_name,
                     'data' => $data,
                 ];
+                $this->importResults['skipped']++;
             }
         } else {
             $this->importResults['preview'][] = [
@@ -184,6 +190,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
                 'person' => $person->f_name . ' ' . $person->l_name,
                 'data' => $data,
             ];
+            $this->importResults['created']++;
         }
     }
 
@@ -364,17 +371,17 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
     }
 
     private function clean($value): ?string
-    {
-        if ($value === null || $value === '' || $value === '\\N' || trim($value) === '') {
-            return null;
+        {
+            if ($value === null || $value === '' || $value === '\\N' || trim((string)$value) === '') {
+                return null;
+            }
+            return trim((string)$value);
         }
-        return trim((string)$value);
-    }
 
     public function rules(): array
     {
         return [
-            'n_code' => 'required|string',
+            'n_code' => 'required',
             'pc_name' => 'required|string|max:255',
             'type' => 'nullable|string|max:50',
             'os' => 'nullable|string|max:100',
@@ -399,6 +406,17 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
     public function getImportResults(): array
     {
         return $this->importResults;
+    }
+
+    public function getCsvSettings(): array
+    {
+        return [
+            'delimiter' => "\t",
+            'enclosure' => '"',
+            'escape_character' => '\\',
+            'contiguous' => false,
+            'input_encoding' => 'UTF-8',
+        ];
     }
 
     public function onFailure(Failure ...$failures): void
