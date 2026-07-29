@@ -74,6 +74,12 @@ class TicketController extends Controller
             'deadline' => 'nullable|date',
         ]);
 
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! in_array($validated['unit_id'], $accessibleIds)) {
+            return response()->json(['message' => 'Unit not accessible.'], 403);
+        }
+
         $ticket = Ticket::create([
             ...$validated,
             'ticket_code' => 'T-' . strtoupper(Str::random(8)),
