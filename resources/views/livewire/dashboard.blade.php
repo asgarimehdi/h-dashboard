@@ -2,6 +2,7 @@
 
 use App\Models\{User, Person, Unit, Ticket, Todo, ActivityLog};
 use App\Services\AccessService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
@@ -33,104 +34,134 @@ return new class extends Component {
 
     public function mount(): void
     {
-        $user = auth()->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $scopeKey = md5(implode(',', $accessibleIds));
 
-        $this->totalUsers = User::count();
-        $this->totalPersons = Person::whereIn('u_id', $accessibleIds)->count();
-        $this->totalUnits = Unit::whereIn('id', $accessibleIds)->count();
-        $this->totalRoles = Role::count();
+        // آمارهای سراسری (به واحد کاربر وابسته نیست) — TTL 5 دقیقه
+        $this->totalUsers = Cache::remember('dashboard:total_users', 300, fn() => User::count());
+        $this->totalRoles = Cache::remember('dashboard:total_roles', 300, fn() => Role::count());
 
-        // آمار تیکت‌ها
-        $this->totalTickets = Ticket::whereIn('unit_id', $accessibleIds)->count();
-        $this->openTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->whereIn('status', ['created', 'forwarded'])
-            ->count();
-        $this->completedTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('status', 'completed')
-            ->count();
+        // آمار واحد (وابسته به scope کاربر) — TTL 5 دقیقه
+        $stats = Cache::remember("dashboard:stats:{$scopeKey}", 300, function () use ($accessibleIds) {
+            return [
+                'totalPersons' => Person::whereIn('u_id', $accessibleIds)->count(),
+                'totalUnits' => Unit::whereIn('id', $accessibleIds)->count(),
+                'totalTickets' => Ticket::whereIn('unit_id', $accessibleIds)->count(),
+                'openTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->whereIn('status', ['created', 'forwarded'])->count(),
+                'completedTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('status', 'completed')->count(),
+                'totalTodos' => Todo::whereIn('unit_id', $accessibleIds)->count(),
+                'pendingTodos' => Todo::whereIn('unit_id', $accessibleIds)
+                    ->where('is_completed', false)->count(),
+                'completedTodos' => Todo::whereIn('unit_id', $accessibleIds)
+                    ->where('is_completed', true)->count(),
+                'linkedTodos' => Todo::whereIn('unit_id', $accessibleIds)
+                    ->has('tickets')->count(),
+            ];
+        });
 
-        // آمار وظایف
-        $this->totalTodos = Todo::whereIn('unit_id', $accessibleIds)->count();
-        $this->pendingTodos = Todo::whereIn('unit_id', $accessibleIds)
-            ->where('is_completed', false)
-            ->count();
-        $this->completedTodos = Todo::whereIn('unit_id', $accessibleIds)
-            ->where('is_completed', true)
-            ->count();
-        $this->linkedTodos = Todo::whereIn('unit_id', $accessibleIds)
-            ->has('tickets')
-            ->count();
+        // آمار امروز (حساس‌تر به زمان) — TTL 2 دقیقه
+        $todayStats = Cache::remember("dashboard:today:{$scopeKey}", 120, function () use ($accessibleIds) {
+            $today = now()->startOfDay();
+            return [
+                'todayTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('created_at', '>=', $today)->count(),
+                'todayTodos' => Todo::whereIn('unit_id', $accessibleIds)
+                    ->where('created_at', '>=', $today)->count(),
+                'todayActivities' => ActivityLog::count(),
+            ];
+        });
 
-        // آمار امروز
-        $today = now()->startOfDay();
-        $this->todayTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('created_at', '>=', $today)
-            ->count();
-        $this->todayTodos = Todo::whereIn('unit_id', $accessibleIds)
-            ->where('created_at', '>=', $today)
-            ->count();
-        $this->todayActivities = ActivityLog::count();
+        // آمار تفصیلی تیکت‌ها — TTL 3 دقیقه
+        $details = Cache::remember("dashboard:ticket_details:{$scopeKey}", 180, function () use ($accessibleIds) {
+            $diffExpr = match (DB::getDriverName()) {
+                'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
+                default => 'DATEDIFF(completed_at, created_at)',
+            };
+            return [
+                'urgentTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('priority', 'urgent')
+                    ->whereIn('status', ['created', 'forwarded'])->count(),
+                'normalTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('priority', 'normal')
+                    ->whereIn('status', ['created', 'forwarded'])->count(),
+                'lowTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('priority', 'low')
+                    ->whereIn('status', ['created', 'forwarded'])->count(),
+                'overdueTickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->whereIn('status', ['created', 'forwarded'])
+                    ->where('deadline', '<', now())->count(),
+                'avgResolutionDays' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('status', 'completed')
+                    ->whereNotNull('completed_at')
+                    ->avg(DB::raw($diffExpr)) ?? 0,
+            ];
+        });
 
-        // آمار تفصیلی تیکت‌ها
-        $this->urgentTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('priority', 'urgent')
-            ->whereIn('status', ['created', 'forwarded'])
-            ->count();
-        $this->normalTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('priority', 'normal')
-            ->whereIn('status', ['created', 'forwarded'])
-            ->count();
-        $this->lowTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('priority', 'low')
-            ->whereIn('status', ['created', 'forwarded'])
-            ->count();
-        $this->overdueTickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->whereIn('status', ['created', 'forwarded'])
-            ->where('deadline', '<', now())
-            ->count();
-        $diffExpr = match (DB::getDriverName()) {
-            'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
-            default => 'DATEDIFF(completed_at, created_at)',
-        };
-        $this->avgResolutionDays = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('status', 'completed')
-            ->whereNotNull('completed_at')
-            ->avg(DB::raw($diffExpr)) ?? 0;
+        $this->totalPersons = $stats['totalPersons'];
+        $this->totalUnits = $stats['totalUnits'];
+        $this->totalTickets = $stats['totalTickets'];
+        $this->openTickets = $stats['openTickets'];
+        $this->completedTickets = $stats['completedTickets'];
+        $this->totalTodos = $stats['totalTodos'];
+        $this->pendingTodos = $stats['pendingTodos'];
+        $this->completedTodos = $stats['completedTodos'];
+        $this->linkedTodos = $stats['linkedTodos'];
+
+        $this->todayTickets = $todayStats['todayTickets'];
+        $this->todayTodos = $todayStats['todayTodos'];
+        $this->todayActivities = $todayStats['todayActivities'];
+
+        $this->urgentTickets = $details['urgentTickets'];
+        $this->normalTickets = $details['normalTickets'];
+        $this->lowTickets = $details['lowTickets'];
+        $this->overdueTickets = $details['overdueTickets'];
+        $this->avgResolutionDays = $details['avgResolutionDays'];
     }
 
-    // داده‌های نمودار تیکت‌ها
+    // داده‌های نمودار تیکت‌ها — TTL 5 دقیقه
     public function getTicketChartDataProperty(): array
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $tickets = Ticket::whereIn('unit_id', $accessibleIds)
-            ->selectRaw("date(created_at) as day, count(*) as count")
-            ->groupBy('day')
-            ->orderBy('day')
-            ->limit(30)
-            ->get();
+        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
 
-        return [
-            'categories' => $tickets->pluck('day')->map(fn($d) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($d))->format('m/d'))->toArray(),
-            'series' => $tickets->pluck('count')->toArray(),
-        ];
+        return Cache::remember("dashboard:ticket_chart:{$scopeKey}", 300, function () {
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+            $tickets = Ticket::whereIn('unit_id', $accessibleIds)
+                ->selectRaw("date(created_at) as day, count(*) as count")
+                ->groupBy('day')
+                ->orderBy('day')
+                ->limit(30)
+                ->get();
+
+            return [
+                'categories' => $tickets->pluck('day')->map(fn($d) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($d))->format('m/d'))->toArray(),
+                'series' => $tickets->pluck('count')->toArray(),
+            ];
+        });
     }
 
-    // داده‌های نمودار وضعیت تیکت‌ها
+    // داده‌های نمودار وضعیت تیکت‌ها — TTL 5 دقیقه
     public function getTicketStatusDataProperty(): array
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return Ticket::whereIn('unit_id', $accessibleIds)
-            ->selectRaw("status, count(*) as count")
-            ->groupBy('status')
-            ->pluck('count', 'status')
-            ->toArray();
+        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+
+        return Cache::remember("dashboard:ticket_status:{$scopeKey}", 300, function () {
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+            return Ticket::whereIn('unit_id', $accessibleIds)
+                ->selectRaw("status, count(*) as count")
+                ->groupBy('status')
+                ->pluck('count', 'status')
+                ->toArray();
+        });
     }
 
-    // آخرین فعالیت‌ها
+    // آخرین فعالیت‌ها — TTL 2 دقیقه
     public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
-        return ActivityLog::with('user')->latest()->take(10)->get();
+        return Cache::remember('dashboard:recent_activities', 120, function () {
+            return ActivityLog::with('user')->latest()->take(10)->get();
+        });
     }
 }; ?>
 }; ?>
