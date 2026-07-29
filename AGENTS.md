@@ -557,3 +557,81 @@ php artisan db:seed --force
 - **`ReportController`**: Clone base query instead of calling `accessibleUnitIds()` multiple times
 - **`TodoController`**: Call `accessibleUnitIds()` once in `index()` method
 - **Benefit**: Reduces redundant recursive CTE queries for unit hierarchy, improves API response times
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-29 Night)
+
+### Performance Optimizations
+
+#### #154 (`31ed4cd`): N+1 Query Fix in SearchUnitsTool
+- **`SearchUnitsTool`** (`app/Ai/Tools/SearchUnitsTool.php`): Fixed N+1 query for `persons_count`
+  - Changed from `$u->person()->count()` (fires separate query per result) to `withCount('person')` (single aggregated query)
+  - Now uses pre-loaded `$u->persons_count` attribute instead of runtime relationship count
+- **Benefit**: 20 units → 1 query instead of 21 queries (95%+ reduction)
+
+#### #156 (`b34c417`): SQL GROUP BY for Unit Type Aggregation
+- **`ReportController::units()`** (`app/Http/Controllers/Api/ReportController.php`): Moved unit type aggregation from PHP to SQL
+  - Before: Eloquent `->with('unitType:...')->get()->groupBy(...)->map(..., count())` (loads all records into PHP memory)
+  - After: Raw SQL `selectRaw('...COALESCE...').leftJoin('unit_types').groupBy('type_name').pluck(...)` (database-side aggregation)
+- **`units.blade.php`** (`resources/views/livewire/reports/units.blade.php`): Same optimization applied to Livewire view's `chartPayload()` method
+- **Benefit**: No PHP memory overhead for large datasets; single aggregated DB query instead of loading all unit records
+
+#### Test Files Restoration (`c5708e5`)
+- Restored missing test files that were absent from the working tree
+
+### Changelog Summary
+| Commit | Issue | Change |
+|---|---|---|
+| `31ed4cd` | #154 | N+1 fix: SearchUnitsTool uses `withCount()` |
+| `b34c417` | #156 | SQL GROUP BY replaces PHP aggregation in ReportController + units view |
+| `c5708e5` | — | Restored missing test files |
+| `57ce505` | — | Removed stray `persons_ count` file (cleanup) |
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30)
+
+### Database Performance Indexes (#158 — `2a42a11`)
+- **New migration** `2026_07_29_235959_add_composite_indexes_to_tickets_table.php` adds composite indexes on `tickets` table for most frequent query patterns:
+  - `tickets_status_created_at_idx` on `(status, created_at)` — covers status filtering + created_at ordering (inbox, monitoring, API)
+  - `tickets_unit_status_created_idx` on `(unit_id, status, created_at)` — covers unit + status filtering + created_at ordering (monitoring, API)
+  - `tickets_assignee_status_idx` on `(current_assignee_id, status)` — covers "assigned to me" filter (inbox, API)
+- **Benefit**: Index-only scans for common ticket queries, eliminates filesorts on `created_at`
+
+### Security & Access Control — TicketController Scope Enforcement (#157 — `b00ec23`)
+- **`TicketController::store()`** now validates that the target `unit_id` is within the user's accessible scope before creating a ticket (returns 403 if not)
+- **`TicketController::index()`** now passes `$user` to `accessibleUnitIds($user)` for correct scoping
+- Consistent with `PersonController` and `HardwareController` patterns
+
+### Performance Optimizations
+
+#### #155 (`4eeff7a`): SQL GROUP BY for Todo byUnit Aggregation
+- **`ReportController::todos()`** (`app/Http/Controllers/Api/ReportController.php`): Moved todo-by-unit aggregation from PHP to SQL
+  - Before: Eloquent `->with('unit:...')->get()->groupBy(...)->map(..., count())` (loads all records into PHP memory)
+  - After: Raw SQL `selectRaw('...COALESCE...').leftJoin('units').groupBy('unit_name').pluck(...)` (database-side aggregation)
+- **Benefit**: No PHP memory overhead for large datasets; single aggregated DB query
+
+#### SearchUnitsTool Fix (Merge Conflict Resolution — `269936e`)
+- **`SearchUnitsTool`** (`app/Ai/Tools/SearchUnitsTool.php`): Fixed attribute name from `persons_count` to `person_count` (matches Laravel's `withCount('person')` naming convention)
+- **`HardwareImportTest`**: Updated test CSV to include `shutdown` and `mark` columns to match database defaults
+
+### Hardware Import Improvements (Merge Conflict Resolution — `269936e`)
+- **`HardwareImport`** (`app/Imports/HardwareImport.php`) refactored:
+  - Removed `WithValidation`, `SkipsOnFailure`, `SkipsFailures` interfaces (custom validation handled internally)
+  - Added `WithCustomCsvSettings` for tab-delimited CSV with UTF-8 encoding
+  - Improved boolean parsing: handles Persian `بله`/`تایید`, database `0`/`1`, and `\\N` NULL markers
+  - Counter reset logic during confirmation pass (preview increments → confirm re-increments)
+  - `normalizeForComparison()` handles null/empty/false/0/'0'/'1'/'بله'/'تایید' correctly
+  - Cleaner separation between preview (buildPreview) and execution (processRow) phases
+
+### Summary of Recent Issues Resolved
+| Issue | Commit | Area |
+|---|---|---|
+| #154 | `31ed4cd` | N+1 fix in SearchUnitsTool |
+| #155 | `4eeff7a` | Todo byUnit SQL GROUP BY |
+| #156 | `b342417` | Unit type SQL GROUP BY (ReportController + units view) |
+| #157 | `b00ec23` | TicketController store scope check |
+| #158 | `2a42a11` | Tickets composite indexes |
+| — | `c5708e5` | Test files restoration |
+| — | `269936e` | SearchUnitsTool attribute fix + HardwareImport test fix |
