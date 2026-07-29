@@ -42,6 +42,7 @@ class SearchUnitsTool extends Tool
 
         $results = Unit::query()
             ->with(['unitType', 'region', 'parent'])
+            ->withCount('person')
             ->whereIn('id', $unitIds)
             ->where('name', 'like', "%{$query}%")
             ->limit(20)
@@ -52,7 +53,7 @@ class SearchUnitsTool extends Tool
                 'type' => $u->unitType?->name,
                 'region' => $u->region?->name,
                 'parent' => $u->parent?->name,
-                'persons_count' => $u->person()->count(),
+                'persons_count' => $u->persons_count,
             ]);
 
         if ($results->isEmpty()) {
