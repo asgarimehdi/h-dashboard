@@ -4,6 +4,7 @@ use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\Region;
 use Livewire\Component;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
@@ -58,18 +59,22 @@ return new class extends Component
             return;
         }
 
-        $counties = Region::whereIn('id', $this->selectedRegions)
-            ->whereNotNull('boundary_id')
-            ->with('boundary')
-            ->get()
-            ->map(fn($r) => [
-                'id' => $r->id,
-                'name' => $r->name,
-                'geojson' => $r->boundary?->geojson,
-            ])
-            ->filter(fn($r) => $r['geojson'])
-            ->values()
-            ->toArray();
+        $cacheKey = 'county_boundaries_' . md5(implode(',', $this->selectedRegions));
+
+        $counties = Cache::remember($cacheKey, 300, function () {
+            return Region::whereIn('id', $this->selectedRegions)
+                ->whereNotNull('boundary_id')
+                ->with('boundary')
+                ->get()
+                ->map(fn($r) => [
+                    'id' => $r->id,
+                    'name' => $r->name,
+                    'geojson' => $r->boundary?->geojson,
+                ])
+                ->filter(fn($r) => $r['geojson'])
+                ->values()
+                ->toArray();
+        });
 
         $this->dispatch('county-boundaries-loaded', counties: $counties);
     }
@@ -95,11 +100,13 @@ return new class extends Component
         $units = collect();
 
         // Centers (types 5, 6, 7) — filtered by selected center types
+        $centers = collect();
         if (!empty($this->selectedCenterTypes)) {
             $centers = Unit::whereNotNull('boundary_id')
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $this->selectedCenterTypes)
                 ->select('id', 'name', 'unit_type_id')
+                ->with('boundary:id,unit_id,geojson')
                 ->get();
             $units = $units->merge($centers);
         }
@@ -108,17 +115,15 @@ return new class extends Component
         if (!empty($this->selectedSubTypes) && !empty($this->selectedCenterTypes)) {
             $subTypeIds = $this->resolveSubTypeIds();
 
-            // Get IDs of selected centers to use as parent filter
-            $parentIds = Unit::whereNotNull('boundary_id')
-                ->whereIn('region_id', $this->selectedRegions)
-                ->whereIn('unit_type_id', $this->selectedCenterTypes)
-                ->pluck('id');
+            // Get IDs of selected centers from the already-loaded collection (in-memory, no extra query)
+            $parentIds = $centers->pluck('id');
 
             $subUnits = Unit::whereNotNull('boundary_id')
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $subTypeIds)
                 ->whereIn('parent_id', $parentIds)
                 ->select('id', 'name', 'unit_type_id')
+                ->with('boundary:id,unit_id,geojson')
                 ->get();
             $units = $units->merge($subUnits);
         }
@@ -127,10 +132,10 @@ return new class extends Component
             'id' => $u->id,
             'name' => $u->name,
             'type_id' => $u->unit_type_id,
-            'geojson' => null,
+            'geojson' => $u->boundary?->geojson,
         ])->toArray();
 
-        $this->loadBoundaries();
+        $this->dispatch('units-updated', units: $this->units);
     }
 
     private function resolveSubTypeIds(): array
@@ -140,29 +145,6 @@ return new class extends Component
             $typeIds = array_merge($typeIds, self::SUB_TYPE_MAP[$name] ?? []);
         }
         return array_unique($typeIds);
-    }
-
-    private function loadBoundaries(): void
-    {
-        if (empty($this->units)) {
-            $this->dispatch('units-updated', units: []);
-            return;
-        }
-
-        $ids = array_column($this->units, 'id');
-        $boundaries = Unit::whereIn('id', $ids)
-            ->whereNotNull('boundary_id')
-            ->with('boundary')
-            ->get()
-            ->pluck('boundary.geojson', 'id')
-            ->toArray();
-
-        $this->units = array_map(function ($unit) use ($boundaries) {
-            $unit['geojson'] = $boundaries[$unit['id']] ?? null;
-            return $unit;
-        }, $this->units);
-
-        $this->dispatch('units-updated', units: $this->units);
     }
 };
 ?>
