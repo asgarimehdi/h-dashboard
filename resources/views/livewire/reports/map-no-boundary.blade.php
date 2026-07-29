@@ -3,25 +3,48 @@
 use Livewire\Component;
 use App\Models\Unit;
 use App\Services\AccessService;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
     public $units = [];
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
     }
 
-    public function chartPayload(): array
+    /**
+     * دریافت واحدهای فاقد مرز (Cached)
+     * هر دو property `chartPayload` و `allUnits` از این متد استفاده می‌کنند
+     * تا از اجرای تکراری کوئری و CTE جلوگیری شود
+     */
+    private function getUnitsWithoutBoundary()
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
-            ->whereNull('boundary_id')
+
+        // اگر کاربر hiç واحدی ندارند، از query جلوگیری کن
+        if (empty($accessibleIds)) {
+            return collect();
+        }
+
+        $cacheKey = 'report:no_boundary:' . md5(implode(',', $accessibleIds));
+
+        return Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
+            return Unit::query()
+                ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
+                ->whereNull('boundary_id')
+                ->with('unitType:id,name', 'region:id,name')
+                ->get();
+        });
+    }
+
+    public function chartPayload(): array
+    {
+        return $this->getUnitsWithoutBoundary()
             ->whereNotNull('lat')
             ->whereNotNull('lng')
-            ->with('unitType:id,name', 'region:id,name')
-            ->get()
             ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -35,12 +58,7 @@ return new class extends Component
 
     public function getAllUnitsProperty()
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
-            ->whereNull('boundary_id')
-            ->with('unitType:id,name', 'region:id,name')
-            ->get()
+        return $this->getUnitsWithoutBoundary()
             ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -57,9 +75,12 @@ return new class extends Component
 <div>
     <x-header title="نقاط فاقد مرز در نقشه" separator progress-indicator>
         <x-slot:actions>
+                        <x-help:button section="reports" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+    <x-help:modal wireModel="showHelpModal" section="reports" />
+
 
     {{-- آمار --}}
     <div class="grid grid-cols-3 gap-4 mb-4 p-4">
