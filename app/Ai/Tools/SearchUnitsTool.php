@@ -53,7 +53,7 @@ class SearchUnitsTool extends Tool
                 'type' => $u->unitType?->name,
                 'region' => $u->region?->name,
                 'parent' => $u->parent?->name,
-                'persons_count' => $u->persons_count,
+                'persons_count' => $u->person_count,
             ]);
 
         if ($results->isEmpty()) {

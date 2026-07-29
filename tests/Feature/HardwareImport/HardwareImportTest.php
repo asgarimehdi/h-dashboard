@@ -117,8 +117,9 @@ class HardwareImportTest extends TestCase
     {
         $this->createTestData();
 
-        $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
-        $csvContent .= "1234567890\tPC-001\tpc\tWindows 10\tIntel i5\t8192\tSSD 256GB\tAA:BB:CC:DD:EE:FF\n";
+        // Include shutdown and mark columns to match database defaults
+        $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\tshutdown\tmark\n";
+        $csvContent .= "1234567890\tPC-001\tpc\tWindows 10\tIntel i5\t8192\tSSD 256GB\tAA:BB:CC:DD:EE:FF\t1\t0\n";
 
         $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
         file_put_contents($file, $csvContent);

@@ -74,7 +74,7 @@ class TicketController extends Controller
             'deadline' => 'nullable|date',
         ]);
 
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+$accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($validated['unit_id'], $accessibleIds)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);

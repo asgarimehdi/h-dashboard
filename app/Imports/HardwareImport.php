@@ -8,15 +8,10 @@ use App\Services\AccessService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use Maatwebsite\Excel\Concerns\WithValidation;
-use Maatwebsite\Excel\Concerns\SkipsOnFailure;
-use Maatwebsite\Excel\Concerns\SkipsFailures;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
-use Maatwebsite\Excel\Validators\Failure;
 
-class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, SkipsOnFailure, WithCustomCsvSettings
+class HardwareImport implements ToCollection, WithHeadingRow, WithCustomCsvSettings
 {
-    use SkipsFailures;
 
     private array $accessibleUnitIds = [];
     private array $existingRecords = [];
@@ -58,13 +53,20 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
 
         // First pass: build preview data
         foreach ($rows as $index => $row) {
-            $this->buildPreview($row, $index + 2); // +2 for header row and 1-indexed
+            $this->buildPreview($row->toArray(), $index + 2); // +2 for header row and 1-indexed
         }
 
         // Second pass: apply selected actions if provided
         if (!empty($this->selectedActions)) {
+            // Reset counters since they were incremented during preview pass
+            // The actual import will increment them correctly
+            $this->importResults['created'] = 0;
+            $this->importResults['updated'] = 0;
+            $this->importResults['skipped'] = 0;
+            $this->importResults['changes'] = [];
+
             foreach ($rows as $index => $row) {
-                $this->applySelectedAction($row, $index + 2);
+                $this->applySelectedAction($row->toArray(), $index + 2);
             }
         }
     }
@@ -93,7 +95,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
         }
     }
 
-    private function applySelectedAction(array $row, int $rowNumber): void
+    private function applySelectedAction($row, int $rowNumber): void
     {
         // Check if this row has a selected action
         $actionKey = "row_{$rowNumber}";
@@ -106,93 +108,93 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
             return;
         }
 
-        $this->processRow($row, $rowNumber, $action);
+        $this->processRow($row, $rowNumber, $action, true);
     }
 
-    private function buildPreview(array $row, int $rowNumber): void
-    {
-        // Map CSV columns to hardware fields
-        $data = $this->mapRowToData($row);
+    private function buildPreview($row, int $rowNumber): void
+            {
+                // Map CSV columns to hardware fields
+                $data = $this->mapRowToData($row);
 
-        // Validate required fields
-        if (empty($data['n_code']) || empty($data['pc_name'])) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => 'فیلدهای اجباری n_code و pc_name خالی هستند',
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
-            return;
-        }
+                // Validate required fields
+                if (empty($data['n_code']) || empty($data['pc_name'])) {
+                    $this->importResults['preview'][] = [
+                        'row' => $rowNumber,
+                        'status' => 'error',
+                        'message' => 'فیلدهای اجباری n_code و pc_name خالی هستند',
+                        'data' => $data,
+                    ];
+                    $this->importResults['skipped']++;
+                    return;
+                }
 
-        // Verify person exists and is in accessible units
-        $person = Person::where('n_code', $data['n_code'])->first();
-        if (!$person) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => "پرسنل با کد ملی {$data['n_code']} یافت نشد",
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
-            return;
-        }
+                // Verify person exists and is in accessible units
+                $person = Person::where('n_code', $data['n_code'])->first();
+                if (!$person) {
+                    $this->importResults['preview'][] = [
+                        'row' => $rowNumber,
+                        'status' => 'error',
+                        'message' => "پرسنل با کد ملی {$data['n_code']} یافت نشد",
+                        'data' => $data,
+                    ];
+                    $this->importResults['skipped']++;
+                    return;
+                }
 
-        if (!empty($this->accessibleUnitIds) && !in_array($person->u_id, $this->accessibleUnitIds)) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => "پرسنل {$data['n_code']} در واحدهای قابل دسترس شما نیست",
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
-            return;
-        }
+                if (!empty($this->accessibleUnitIds) && !in_array($person->u_id, $this->accessibleUnitIds)) {
+                    $this->importResults['preview'][] = [
+                        'row' => $rowNumber,
+                        'status' => 'error',
+                        'message' => "پرسنل {$data['n_code']} در واحدهای قابل دسترس شما نیست",
+                        'data' => $data,
+                    ];
+                    $this->importResults['skipped']++;
+                    return;
+                }
 
-        // Find existing record
-        $existing = $this->findExistingRecord($data);
-        $matchKey = $existing ? ($existing['key'] ?? 'unknown') : null;
+                // Find existing record
+                $existing = $this->findExistingRecord($data);
+                $matchKey = $existing ? ($existing['key'] ?? 'unknown') : null;
 
-        if ($existing) {
-            $changes = $this->detectChanges($existing['record'], $data);
+                if ($existing) {
+                    $changes = $this->detectChanges($existing['record'], $data);
 
-            if (!empty($changes)) {
-                $this->importResults['preview'][] = [
-                    'row' => $rowNumber,
-                    'status' => 'update',
-                    'id' => $existing['record']->id,
-                    'pc_name' => $existing['record']->pc_name,
-                    'match_key' => $matchKey,
-                    'changes' => $changes,
-                    'person' => $person->f_name . ' ' . $person->l_name,
-                    'data' => $data,
-                ];
-                $this->importResults['updated']++;
-            } else {
-                $this->importResults['preview'][] = [
-                    'row' => $rowNumber,
-                    'status' => 'unchanged',
-                    'id' => $existing['record']->id,
-                    'pc_name' => $existing['record']->pc_name,
-                    'match_key' => $matchKey,
-                    'message' => 'بدون تغییر',
-                    'person' => $person->f_name . ' ' . $person->l_name,
-                    'data' => $data,
-                ];
-                $this->importResults['skipped']++;
+                    if (!empty($changes)) {
+                        $this->importResults['preview'][] = [
+                            'row' => $rowNumber,
+                            'status' => 'update',
+                            'id' => $existing['record']->id,
+                            'pc_name' => $existing['record']->pc_name,
+                            'match_key' => $matchKey,
+                            'changes' => $changes,
+                            'person' => $person->f_name . ' ' . $person->l_name,
+                            'data' => $data,
+                        ];
+                        $this->importResults['updated']++;
+                    } else {
+                        $this->importResults['preview'][] = [
+                            'row' => $rowNumber,
+                            'status' => 'unchanged',
+                            'id' => $existing['record']->id,
+                            'pc_name' => $existing['record']->pc_name,
+                            'match_key' => $matchKey,
+                            'message' => 'بدون تغییر',
+                            'person' => $person->f_name . ' ' . $person->l_name,
+                            'data' => $data,
+                        ];
+                        $this->importResults['skipped']++;
+                    }
+                } else {
+                    $this->importResults['preview'][] = [
+                        'row' => $rowNumber,
+                        'status' => 'create',
+                        'pc_name' => $data['pc_name'],
+                        'person' => $person->f_name . ' ' . $person->l_name,
+                        'data' => $data,
+                    ];
+                    $this->importResults['created']++;
+                }
             }
-        } else {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'create',
-                'pc_name' => $data['pc_name'],
-                'person' => $person->f_name . ' ' . $person->l_name,
-                'data' => $data,
-            ];
-            $this->importResults['created']++;
-        }
-    }
 
     private function findExistingRecord(array $data): ?array
     {
@@ -227,19 +229,19 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
             'net_type' => $this->clean($row['net_type'] ?? null),
             'switch' => $this->clean($row['switch'] ?? null),
             'port' => $this->clean($row['port'] ?? null),
-            'shutdown' => $this->parseBoolean($row['shutdown'] ?? null),
+            'shutdown' => $this->parseBoolean($row['shutdown'] ?? null) ?? false,
             'vlan' => $this->clean($row['vlan'] ?? null),
             'motherboard' => $this->clean($row['motherboard'] ?? null),
             'cpu' => $this->clean($row['cpu'] ?? null),
             'ram' => $this->clean($row['ram'] ?? null),
             'hdd' => $this->clean($row['hdd'] ?? null),
             'comments' => $this->clean($row['comments'] ?? null),
-            'mark' => $this->parseBoolean($row['mark'] ?? null),
+            'mark' => $this->parseBoolean($row['mark'] ?? null) ?? false,
             'clean_at' => $this->parseDate($row['clean_at'] ?? null),
         ];
     }
 
-    private function processRow(array $row, int $rowNumber, string $action = 'auto'): void
+    private function processRow(array $row, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
     {
         $data = $this->mapRowToData($row);
 
@@ -339,15 +341,22 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
     }
 
     private function normalizeForComparison($value): ?string
-    {
-        if ($value === null || $value === '' || $value === '\\N') {
-            return null;
-        }
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
-        }
-        return trim((string)$value);
-    }
+            {
+                if ($value === null || $value === '' || $value === '\\\\\\\\\\\\\\\\N') {
+                    return '0'; // Treat null/empty as false for boolean comparison
+                }
+                if (is_bool($value)) {
+                    return $value ? '1' : '0';
+                }
+                // Handle boolean false/0 values that come from database
+                if ($value === false || $value === 0 || $value === '0') {
+                    return '0';
+                }
+                if ($value === true || $value === 1 || $value === '1') {
+                    return '1';
+                }
+                return trim((string)$value);
+            }
 
     private function parseBoolean($value): ?bool
     {
@@ -394,9 +403,9 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
             'shutdown' => 'nullable|boolean',
             'vlan' => 'nullable|string|max:50',
             'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|string|max:100',
-            'ram' => 'nullable|string|max:50',
-            'hdd' => 'nullable|string|max:100',
+            'cpu' => 'nullable|max:100',
+            'ram' => 'nullable|max:50',
+            'hdd' => 'nullable|max:100',
             'comments' => 'nullable|string',
             'mark' => 'nullable|boolean',
             'clean_at' => 'nullable|date_format:Y-m-d',
@@ -417,17 +426,5 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithValidation, Sk
             'contiguous' => false,
             'input_encoding' => 'UTF-8',
         ];
-    }
-
-    public function onFailure(Failure ...$failures): void
-    {
-        foreach ($failures as $failure) {
-            $this->importResults['errors'][] = [
-                'row' => $failure->row(),
-                'error' => $failure->errors()[0] ?? 'Validation failed',
-                'data' => $failure->values(),
-            ];
-            $this->importResults['skipped']++;
-        }
     }
 }
