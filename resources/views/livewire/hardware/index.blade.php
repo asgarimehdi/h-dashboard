@@ -17,6 +17,7 @@ return new class extends Component
 
     public string $search = '';
     public int $perPage = 10;
+    public bool $showHelpModal = false;
 
     /**
      * Get accessible unit IDs for the current user.
@@ -445,9 +446,12 @@ return new class extends Component
 <div>
     <x-header title="شناسنامه سخت افزار" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="hardware" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">

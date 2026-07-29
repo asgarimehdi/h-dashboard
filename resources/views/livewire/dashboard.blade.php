@@ -29,6 +29,8 @@ return new class extends Component {
     public int $overdueTickets = 0;
     public float $avgResolutionDays = 0;
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
         $user = auth()->user();
@@ -131,13 +133,16 @@ return new class extends Component {
         return ActivityLog::with('user')->latest()->take(10)->get();
     }
 }; ?>
-
+}; ?>
 <div>
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="dashboard" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <x-stat

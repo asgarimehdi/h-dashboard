@@ -32,6 +32,8 @@ class ImportHardware extends Component
         'errors' => 0,
     ];
 
+    public bool $showHelpModal = false;
+
     protected $rules = [
         'file' => 'required|file|mimes:xlsx,xls,csv|max:10240', // max 10MB
     ];

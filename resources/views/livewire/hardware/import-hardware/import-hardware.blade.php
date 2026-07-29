@@ -1,9 +1,14 @@
 <div class="card w-full bg-base-100 shadow-xl">
     <div class="card-body">
-        <h2 class="card-title text-2xl mb-6 flex items-center gap-3">
-            <x-icon name="o-arrow-down-tray" class="w-6 h-6 text-primary" />
-            ورود اطلاعات شناسنامه سخت‌افزار از فایل اکسل
-        </h2>
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="card-title text-2xl flex items-center gap-3">
+                <x-icon name="o-arrow-down-tray" class="w-6 h-6 text-primary" />
+                ورود اطلاعات شناسنامه سخت‌افزار از فایل اکسل
+            </h2>
+            <x-help:button section="hardware-import" wireModel="showHelpModal" />
+        </div>
+        
+        <x-help:modal wireModel="showHelpModal" />
 
         <div class="alert alert-info mb-6">
             <x-icon name="o-info-circle" class="w-5 h-5" />

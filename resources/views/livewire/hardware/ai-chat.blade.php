@@ -12,6 +12,7 @@ return new class extends Component
     public array $chatHistory = [];
     public bool $isLoading = false;
     public string $sessionId = 'hw-chat-default';
+    public bool $showHelpModal = false;
 
     public function mount(): void
     {
@@ -143,9 +144,12 @@ return new class extends Component
 <div dir="rtl">
     <x-header title="🤖 دستیار سخت‌افزار" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="hardware-ai" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+    
+    <x-help:modal wireModel="showHelpModal" />
 
     <div class="flex flex-col h-[calc(100vh-12rem)]">
         {{-- Chat messages --}}
