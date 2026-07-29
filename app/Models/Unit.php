@@ -141,33 +141,43 @@ class Unit extends Model
     /**
      * Scope for spatial queries: find units whose boundary contains a point
      * Uses the spatial index on boundaries.boundary
+     * Optimized with EXISTS to better utilize spatial index
      */
     public function scopeContainingPoint($query, float $lat, float $lng)
     {
-        return $query->whereHas('boundary', function ($q) use ($lat, $lng) {
-            $q->whereRaw('ST_Contains(boundary, ST_GeomFromText(?, 4326))', ["POINT($lng $lat)"]);
+        return $query->whereExists(function ($q) use ($lat, $lng) {
+            $q->from('boundaries')
+                ->whereColumn('boundaries.unit_id', 'units.id')
+                ->whereRaw('ST_Contains(boundary, ST_GeomFromText(?, 4326))', ["POINT($lng $lat)"]);
         });
     }
 
     /**
      * Scope for spatial queries: find units whose boundary intersects with a polygon
      * Uses the spatial index on boundaries.boundary
+     * Optimized with EXISTS to better utilize spatial index
      */
     public function scopeIntersectsBoundary($query, string $wktPolygon)
     {
-        return $query->whereHas('boundary', function ($q) use ($wktPolygon) {
-            $q->whereRaw('ST_Intersects(boundary, ST_GeomFromText(?, 4326))', [$wktPolygon]);
+        return $query->whereExists(function ($q) use ($wktPolygon) {
+            $q->from('boundaries')
+                ->whereColumn('boundaries.unit_id', 'units.id')
+                ->whereRaw('ST_Intersects(boundary, ST_GeomFromText(?, 4326))', [$wktPolygon]);
         });
     }
 
     /**
-     * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
-     * More accurate than bounding box but may be slower without proper spatial index
-     */
-    public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
-    {
-        return $query->whereHas('boundary', function ($q) use ($lat, $lng, $radiusMeters) {
-            $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', ["POINT($lng $lat)", $radiusMeters]);
-        })->orWhereRaw('ST_Distance_Sphere(ST_Point(?, ?), ST_Point(?, ?)) <= ?', [$lng, $lat, $lng, $lat, $radiusMeters]);
-    }
+     /**
+          * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
+          * More accurate than bounding box but may be slower without proper spatial index
+          */
+         public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
+         {
+             // MySQL/MariaDB: Use ST_GeomFromText instead of ST_Point (PostGIS-specific)
+             $pointWkt = "POINT($lng $lat)";
+        
+             return $query->whereHas('boundary', function ($q) use ($pointWkt, $radiusMeters) {
+                 $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $radiusMeters]);
+             })->orWhereRaw('ST_Distance_Sphere(ST_GeomFromText(?, 4326), ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $pointWkt, $radiusMeters]);
+         }
 }

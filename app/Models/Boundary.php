@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 class Boundary extends Model
 {
@@ -41,6 +42,16 @@ class Boundary extends Model
 
     public function getGeojsonAttribute()
     {
+        // Use the already loaded 'boundary' attribute if available to avoid N+1 queries
+        if ($this->relationLoaded('boundary') || array_key_exists('boundary', $this->getAttributes())) {
+            $boundary = $this->getAttribute('boundary');
+            if ($boundary) {
+                return \DB::selectOne('SELECT ST_AsGeoJSON(ST_GeomFromText(?)) as geojson', [$boundary])->geojson ?? null;
+            }
+            return null;
+        }
+
+        // Fallback: query the database (this path triggers N+1 if used in a loop without eager loading)
         return \DB::table('boundaries')
             ->where('id', $this->id)
             ->selectRaw('ST_AsGeoJSON(boundary) as geojson')
