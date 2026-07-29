@@ -198,6 +198,15 @@
 
                 <x-menu-separator />
 
+                {{-- راهنما و پشتیبانی --}}
+                <x-menu-separator />
+                <x-menu-sub title="راهنما و پشتیبانی" icon="o-question-mark-circle">
+                    <x-menu-item title="راهنمای کاربر" icon="o-book-open" link="/docs/user-guide" wire:navigate />
+                    <x-menu-item title="راهنمای درون‌برنامه" icon="o-information-circle" link="/help" wire:navigate />
+                    <x-menu-item title="گزارش خطا" icon="o-beaker" link="/tickets/new?category=bug" wire:navigate />
+                    <x-menu-item title="تماس با پشتیبانی" icon="o-chat-bubble-left-right" link="/tickets/new?category=support" wire:navigate />
+                </x-menu-sub>
+
                 {{-- حساب کاربری --}}
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />

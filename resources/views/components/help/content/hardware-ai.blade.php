@@ -11,7 +11,7 @@
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
-            <x-icon name="o-message-square" class="w-5 h-5 text-info" />
+            <x-icon name="o-chat-bubble-left-right" class="w-5 h-5 text-info" />
             قابلیت‌ها
         </h4>
         <ul class="space-y-2 text-sm text-base-content/70">
@@ -43,7 +43,7 @@
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
-            <x-icon name="o-history" class="w-5 h-5 text-secondary" />
+            <x-icon name="o-clock" class="w-5 h-5 text-secondary" />
             تاریخچه چت
         </h4>
         <ul class="space-y-1 text-sm text-base-content/70">

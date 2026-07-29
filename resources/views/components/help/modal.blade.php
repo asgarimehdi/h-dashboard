@@ -1,4 +1,8 @@
-@props(['wireModel' => 'showHelpModal'])
+@props(['wireModel' => 'showHelpModal', 'section' => null])
+
+@php
+    $helpSection = $section ?? 'dashboard';
+@endphp
 
 <x-modal wire:model="{{ $wireModel }}" title="راهنما" separator>
     <div class="space-y-6 text-right" dir="rtl">
