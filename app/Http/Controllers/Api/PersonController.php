@@ -15,9 +15,9 @@ class PersonController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = Person::whereIn('u_id', $ids)
+        $query = Person::whereIn('u_id', $accessibleIds)
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
 
         if ($request->filled('search')) {
@@ -57,9 +57,9 @@ class PersonController extends Controller
 
     public function show(Person $person): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        if (! in_array($person->u_id, $ids)) {
+        if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
@@ -81,9 +81,9 @@ class PersonController extends Controller
             'u_id' => 'required|exists:units,id',
         ]);
 
-        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
-        if (! in_array($validated['u_id'], $ids)) {
+        if (! in_array($validated['u_id'], $accessibleIds)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
@@ -97,9 +97,9 @@ class PersonController extends Controller
 
     public function update(Request $request, Person $person): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        if (! in_array($person->u_id, $ids)) {
+        if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
@@ -124,9 +124,9 @@ class PersonController extends Controller
 
     public function destroy(Person $person): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        if (! in_array($person->u_id, $ids)) {
+        if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 

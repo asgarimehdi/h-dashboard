@@ -234,7 +234,8 @@ class HardwareController extends Controller
 
     public function bulkMark(Request $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
         $count = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
@@ -249,9 +250,6 @@ class HardwareController extends Controller
             'mark' => 'required|boolean',
         ]);
 
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-
         $count = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
             ->update(['mark' => $request->mark]);
@@ -261,7 +259,8 @@ class HardwareController extends Controller
 
     public function bulkDelete(Request $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
         $count = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
@@ -274,9 +273,6 @@ class HardwareController extends Controller
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
-
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
         $count = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))

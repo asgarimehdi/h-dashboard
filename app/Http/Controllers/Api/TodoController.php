@@ -14,7 +14,9 @@ class TodoController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Todo::accessible(withRelated: true);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        $query = Todo::whereIn('unit_id', $accessibleIds)->with('unit:id,name');
 
         if ($request->filled('date')) {
             $query->whereDate('start_at', $request->date);

@@ -24,8 +24,7 @@ class ReportController extends Controller
         $withBoundary = (clone $query)->whereNotNull('boundary_id')->count();
         $withoutBoundary = $total - $withBoundary;
 
-        $byType = Unit::whereIn('id', $accessibleIds)
-            ->with('unitType:id,name')
+        $byType = (clone $query)->with('unitType:id,name')
             ->get()
             ->groupBy(fn ($u) => $u->unitType?->name ?? 'نامشخص')
             ->map(fn ($items) => $items->count())
