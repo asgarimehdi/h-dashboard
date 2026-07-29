@@ -24,10 +24,12 @@ class ReportController extends Controller
         $withBoundary = (clone $query)->whereNotNull('boundary_id')->count();
         $withoutBoundary = $total - $withBoundary;
 
-        $byType = (clone $query)->with('unitType:id,name')
-            ->get()
-            ->groupBy(fn ($u) => $u->unitType?->name ?? 'نامشخص')
-            ->map(fn ($items) => $items->count())
+        $byType = Unit::query()
+            ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
+            ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
+            ->whereIn('units.id', $accessibleIds)
+            ->groupBy('type_name')
+            ->pluck('count', 'type_name')
             ->toArray();
 
         return response()->json([

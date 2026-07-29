@@ -47,14 +47,14 @@ return new class extends Component
         $hasBoundaryFilter = $this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '';
 
         $byType = Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('boundary_id'))
-            ->with('unitType:id,name')
-            ->get()
-            ->groupBy(fn($u) => $u->unitType?->name ?? 'نامشخص')
-            ->map(fn($items) => $items->count())
+            ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
+            ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
+            ->when($accessibleIds, fn($q) => $q->whereIn('units.id', $accessibleIds))
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
+            ->groupBy('type_name')
+            ->pluck('count', 'type_name')
             ->toArray();
 
         $noBoundary = Unit::query()
