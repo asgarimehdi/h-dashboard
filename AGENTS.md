@@ -687,3 +687,70 @@ php artisan db:seed --force
 
 ### Help System Integration
 - **Map/No-Boundary report** now includes help button and modal (consistent with other pages)
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Night)
+
+### Persian User Guide Documentation (#66 — `aa87bde`)
+- **New 12-chapter Persian user guide** in `docs/user-guide/` covering all major application sections:
+  - `00-introduction.md` — overview, tech stack, access control
+  - `01-login-profile.md` — authentication, profile management, password change
+  - `02-unit-context.md` — organizational unit selection and scope
+  - `03-personnel-management.md` — person CRUD, filters, management features
+  - `04-ticket-system.md` — ticket lifecycle, creation, assignment, acceptance, completion
+  - `05-map-features.md` — GIS map, unit boundaries, spatial queries
+  - `06-hardware-inventory.md` — hardware CRUD, import, AI assistant
+  - `07-reports.md` — all report types (units, persons, todos, tickets, advanced)
+  - `08-it-monitoring.md` — Zabbix integration, traffic monitoring
+  - `09-admin-settings.md` — roles, permissions, users, settings, activity log
+  - `10-in-app-help.md` — contextual help system usage
+  - `index.md` — table of contents and navigation
+- **New route** `GET /docs/user-guide/{page?}` serves the user guide rendered from markdown
+- **New view** `resources/views/docs/user-guide.blade.php` — renders markdown docs with RTL layout
+- **New sidebar link** in app layout pointing to the user guide
+
+### New Help Content Components (Part of #66 — `aa87bde`)
+- 6 new help content blade components added for previously uncovered sections:
+  - **`chat.blade.php`**: Chat/communication help
+  - **`it-monitoring.blade.php`**: IT monitoring help (Zabbix, network traffic)
+  - **`profile.blade.php`**: User profile and account settings help
+  - **`search.blade.php`**: Global search functionality help
+  - **`tools.blade.php`**: Tools and utilities help
+  - **`networks.blade.php`**: Network section help
+  - **`wireless.blade.php`**: Wireless/wi-fi section help
+- **Help modal integration extended** to additional Livewire pages: Permissions, Roles, Settings, Tickets (create, inbox, monitoring), Users, Units, Activity Log, Networks, Wireless, Personnel (kargozini), Map/Unit, Reports (index, advanced, units)
+- **Help modal added section prop** (`state.section`) for tracking which help section is currently active
+
+### Heroicon Fixes in Help Components (#66 — `1bc5f3d`)
+- Fixed outdated Heroicon icon names causing missing icons:
+  - `o-message-square` → `o-chat-bubble-left-right` (hardware-ai help)
+  - `o-history` → `o-clock` (hardware-ai help)
+  - `o-headphones` → `o-chat-bubble-left-right` (app sidebar)
+- Help modal now accepts `section` prop for contextual help navigation
+
+### Performance: Livewire Reports SQL GROUP BY (#163 — `d60f2b0`)
+- **`todos.blade.php`**: Replaced PHP `->get()->groupBy('unit_id')` with SQL `leftJoin('units')` + `groupBy('unit_name')` + `pluck()` for byUnit chart data
+- **`persons.blade.php`**: Applied SQL GROUP BY to 4 chart methods (byTahsil, bySemat, byEstekhdam, byUnit) — replaces loading all Person records into PHP memory
+- **`advanced.blade.php`**: Persons report details (byEstekhdam, byTahsil, bySemat) now use SQL-level aggregation
+- **All queries** continue to respect organizational scope via `AccessService::accessibleUnitIds()`
+- **Benefit**: Zero PHP memory overhead for large datasets; single aggregated DB query per chart instead of loading all records
+
+### Performance: Map/Unit Duplicate Query Reduction (#164 — `6e4eedb`)
+- **`map/unit.blade.php`** (`resources/views/livewire/maps/unit.blade.php`): Optimized `loadUnits()` method:
+  - Merged query 1 (get centers) & query 2: get centers with `get()`, then `pluck('id')` in-memory — eliminates a duplicate SQL query
+  - Eliminated query 4 (loadBoundaries): switch to eager-loading boundaries via `with('boundary:id,unit_id,geojson')` in initial queries instead of separate `loadBoundaries()` call
+  - Cached `showSelectedCounties()` results with `Cache::remember` (5-minute TTL)
+- **Benefit**: Reduced from 4–5 sequential SQL queries per filter change to 2–3 queries
+
+### Help System Integration Summary
+- Help modals now integrated across: Dashboard, Hardware (index + AI + Import), Personnel, Units, Tickets (create, inbox, monitoring), Todos, Reports (index, units, persons, advanced, todos), Maps (unit + no-boundary), Settings, Roles, Permissions, Users, Activity Log, IT Monitoring, Networks, Wireless
+
+### Changelog Summary (Last Sync Period)
+
+| Commit | Issue | Change |
+|---|---|---|
+| `aa87bde` | #66 | New 12-chapter Persian user guide + 7 new help content components + docs route |
+| `1bc5f3d` | #66 | Fixed heroicon names in help components and app layout |
+| `d60f2b0` | #163 | SQL GROUP BY in Livewire reports (todos, persons, advanced) |
+| `6e4eedb` | #164 | Reduced duplicate queries in map/unit loadUnits by merging + caching |
