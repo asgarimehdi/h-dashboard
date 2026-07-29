@@ -544,3 +544,16 @@ php artisan db:seed --force
 - **`Unit::descendantIds()`**: Added 15-minute cache with `md5`-based cache key for repeated hierarchical lookups
 - **`Unit::boundary()`**: New `BelongsTo` relationship to `Boundary` model
 - **`Unit::assignedUsers()`**: New `BelongsToMany` relationship to `User` via `user_units` pivot table
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-29 Late)
+
+### Controller Scope Optimization (#153 — `8e0ccf9`)
+- **Performance optimization**: Removed duplicate `accessibleUnitIds()` calls across all API controllers
+- **`HardwareController`**: Store `accessibleUnitIds` in local variable for `bulkMark` and `bulkDelete` methods
+- **`PersonController`**: Store `accessibleUnitIds` in local variable for all CRUD methods
+- **`TicketController`**: Store `accessibleUnitIds` in local variable for all CRUD methods + pass `$user` to `accessibleUnitIds()` in `index()` for correct scoping
+- **`ReportController`**: Clone base query instead of calling `accessibleUnitIds()` multiple times
+- **`TodoController`**: Call `accessibleUnitIds()` once in `index()` method
+- **Benefit**: Reduces redundant recursive CTE queries for unit hierarchy, improves API response times
