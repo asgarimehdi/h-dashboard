@@ -11,9 +11,29 @@ use Illuminate\Http\Request;
 
 class ZoneController extends Controller
 {
-    public function index(): JsonResponse
+    /**
+     * Check if the given zone is within the user's accessible organizational scope.
+     */
+    private function assertAccessible(Request $request, Zone $zone): void
     {
-        $zones = Zone::withCount('units')->get();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (empty($accessibleIds)) {
+            abort(403, 'Zone not accessible.');
+        }
+
+        $zoneUnitIds = $zone->units()->pluck('zone_unit.unit_id')->toArray();
+
+        if (empty(array_intersect($zoneUnitIds, $accessibleIds))) {
+            abort(403, 'Zone not accessible.');
+        }
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $zones = Zone::accessible($request->user())
+            ->withCount('units')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -31,6 +51,19 @@ class ZoneController extends Controller
             'unit_ids.*' => 'exists:units,id',
         ]);
 
+        // Validate that all unit_ids are within the user's organizational scope
+        if (! empty($validated['unit_ids'])) {
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+            $invalidIds = array_diff($validated['unit_ids'], $accessibleIds);
+
+            if (! empty($invalidIds)) {
+                return response()->json([
+                    'message' => 'One or more unit_ids are outside your organizational scope.',
+                    'invalid_ids' => array_values($invalidIds),
+                ], 403);
+            }
+        }
+
         $zone = Zone::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -47,8 +80,10 @@ class ZoneController extends Controller
         ], 201);
     }
 
-    public function show(Zone $zone): JsonResponse
+    public function show(Request $request, Zone $zone): JsonResponse
     {
+        $this->assertAccessible($request, $zone);
+
         return response()->json([
             'success' => true,
             'data' => $zone->load('units:id,name'),
@@ -57,6 +92,8 @@ class ZoneController extends Controller
 
     public function update(Request $request, Zone $zone): JsonResponse
     {
+        $this->assertAccessible($request, $zone);
+
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
@@ -64,6 +101,19 @@ class ZoneController extends Controller
             'unit_ids' => 'nullable|array',
             'unit_ids.*' => 'exists:units,id',
         ]);
+
+        // Validate that all unit_ids are within the user's organizational scope
+        if (array_key_exists('unit_ids', $validated) && ! empty($validated['unit_ids'])) {
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+            $invalidIds = array_diff($validated['unit_ids'], $accessibleIds);
+
+            if (! empty($invalidIds)) {
+                return response()->json([
+                    'message' => 'One or more unit_ids are outside your organizational scope.',
+                    'invalid_ids' => array_values($invalidIds),
+                ], 403);
+            }
+        }
 
         $zone->update([
             'name' => $validated['name'] ?? $zone->name,
@@ -81,8 +131,10 @@ class ZoneController extends Controller
         ]);
     }
 
-    public function destroy(Zone $zone): JsonResponse
+    public function destroy(Request $request, Zone $zone): JsonResponse
     {
+        $this->assertAccessible($request, $zone);
+
         $zone->units()->detach();
         $zone->delete();
 

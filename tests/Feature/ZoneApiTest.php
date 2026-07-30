@@ -61,10 +61,12 @@ class ZoneApiTest extends TestCase
 
     public function test_authenticated_user_can_list_zones(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
 
-        Zone::create(['name' => 'Zone A']);
-        Zone::create(['name' => 'Zone B']);
+        $zoneA = Zone::create(['name' => 'Zone A']);
+        $zoneA->units()->attach($unit->id);
+        $zoneB = Zone::create(['name' => 'Zone B']);
+        $zoneB->units()->attach($unit->id);
 
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zones');
 
@@ -103,10 +105,11 @@ class ZoneApiTest extends TestCase
 
     public function test_user_can_update_zone(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
         $zone = Zone::create(['name' => 'Old Name', 'color' => '#000000']);
+        $zone->units()->attach($unit->id);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/zones/{$zone->id}", [
+        $response = $this->actingAs($user, 'sanctum')->putJson('/api/zones/' . $zone->id, [
             'name' => 'New Name',
             'color' => '#FFFFFF',
         ]);
@@ -117,10 +120,11 @@ class ZoneApiTest extends TestCase
 
     public function test_user_can_delete_zone(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
         $zone = Zone::create(['name' => 'Delete Me']);
+        $zone->units()->attach($unit->id);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/zones/{$zone->id}");
+        $response = $this->actingAs($user, 'sanctum')->deleteJson('/api/zones/' . $zone->id);
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('zones', ['id' => $zone->id]);

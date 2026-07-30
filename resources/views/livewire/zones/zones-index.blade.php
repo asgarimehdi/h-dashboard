@@ -23,7 +23,7 @@ return new class extends Component {
 
     public function zones(): LengthAwarePaginator
     {
-        $query = Zone::query()
+        $query = Zone::accessible()
             ->withCount('units');
 
         if (! empty($this->search)) {
@@ -58,6 +58,17 @@ return new class extends Component {
             'selectedUnits.*' => 'exists:units,id',
         ]);
 
+        // Validate that all selected units are within the user's accessible scope
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (! empty($this->selectedUnits)) {
+            $invalidIds = array_diff($this->selectedUnits, $accessibleIds);
+            if (! empty($invalidIds)) {
+                $this->error('برخی واحدهای انتخاب‌شده خارج از محدوده دسترسی شما هستند.', position: 'toast-bottom');
+                return;
+            }
+        }
+
         $data = [
             'name' => $this->name,
             'description' => $this->description,
@@ -66,7 +77,7 @@ return new class extends Component {
 
         try {
             if ($this->editingId) {
-                $zone = Zone::findOrFail($this->editingId);
+                $zone = Zone::accessible()->findOrFail($this->editingId);
                 $zone->update($data);
                 $zone->units()->sync($this->selectedUnits ?? []);
                 $this->success("منطقه '{$this->name}' به‌روزرسانی شد");
@@ -87,7 +98,7 @@ return new class extends Component {
 
     public function editZone($id): void
     {
-        $zone = Zone::with('units')->findOrFail($id);
+        $zone = Zone::accessible()->with('units')->findOrFail($id);
         $this->editingId = $id;
         $this->name = $zone->name;
         $this->description = $zone->description;
@@ -98,6 +109,13 @@ return new class extends Component {
 
     public function deleteZone(Zone $zone): void
     {
+        // Ensure the zone is within the user's scope
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $zoneUnitIds = $zone->units()->pluck('zone_unit.unit_id')->toArray();
+        if (empty(array_intersect($zoneUnitIds, $accessibleIds))) {
+            $this->error("امکان حذف وجود ندارد.", position: 'toast-bottom');
+            return;
+        }
         try {
             $zone->units()->detach();
             $zone->delete();
