@@ -856,9 +856,48 @@ php artisan db:seed --force
 - **`app/Providers/AppServiceProvider.php`**: Now dynamically registers all help-content Blade components with colon syntax (`x-help-content:{name}`) in a loop — eliminating repetitive manual registrations and adding `networks` and `wireless` to the list
 
 ### Summary
+||| Commit | Issue | Change ||
+|||---|---|---|---|
+|| `f70f9eb` | #79 | Zone/block management: model, API CRUD, Livewire UI, sidebar link, tests ||
+|| `b2bacb2` | #167 | N+1 fix: county map uses single JOIN + ST_AsGeoJSON query ||
+|| `e65b75bc` | #166 | Composite indexes on persons table + N+1 fix in HardwareImport ||
+|| `0dde735` | #166 | PersonImport + ImportPersons Livewire component + route + UI + test ||
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Latest)
+
+### Zone Organizational Scope Enforcement (#169 — `72f103e`)
+- **`ZoneController`** (`app/Http/Controllers/Api/ZoneController.php`): Added full organizational scope enforcement
+  - New `assertAccessible(Request $request, Zone $zone)` private helper: checks if zone has at least one unit in user's accessible unit IDs
+  - `index()`: Uses new `Zone::accessible($user)` scope to filter zones by organizational scope
+  - `store()`: Validates that all `unit_ids` are within user's accessible scope before creating zone
+  - `show()` / `update()` / `destroy()`: All call `assertAccessible()` to verify zone access
+- **`Zone` model** (`app/Models/Zone.php`): Added `scopeAccessible(Builder $query, ?User $user)` query scope
+  - Filters zones to only those having at least one unit within the user's accessible unit IDs
+  - Returns empty result (1=0) if user has no accessible units
+- **New migration** `2026_07_30_071813_add_unit_id_index_to_zone_unit_table.php`: Added index on `zone_unit.unit_id` for faster scope queries
+- **Livewire Zone Index** (`resources/views/livewire/zones/zones-index.blade.php`):
+  - `zones()` query now uses `Zone::accessible()` scope
+  - `saveZone()` validates selected units against user's accessible scope
+  - `editZone()` and `deleteZone()` use `Zone::accessible()` to prevent unauthorized access
+- **Tests** updated: `ZoneApiTest.php` now attaches zones to user's unit for proper scope testing
+
+### Advanced Reports Optimization (#170 — `6117878`)
+- **`reports/advanced.blade.php`**: Replaced custom recursive PHP `getDescendantIds()` method with cached `Unit::descendantIds()` 
+  - Removed 12 lines of recursive PHP code that fetched child units one-by-one
+  - Now uses `Unit::descendantIds($unitId)->toArray()` which has 15-minute cache (added in #152)
+  - **Benefit**: Eliminates N recursive queries per report generation; uses single cached CTE call
+
+### County Map GeoJSON Caching (#171 — `e5d3d6a`)
+- **`maps/county.blade.php`** (`resources/views/livewire/maps/county.blade.php`): Added 5-minute cache for GeoJSON regions query
+  - Before: Query executed on every page load (JOIN regions + boundaries + ST_AsGeoJSON)
+  - After: Wrapped in `Cache::remember('county:regions_with_boundaries', 300, ...)`
+  - **Benefit**: Reduces DB load for map page; GeoJSON computed once per 5 minutes instead of per-request
+
+### Summary
 || Commit | Issue | Change ||
-||---|---|---|---|
-| `f70f9eb` | #79 | Zone/block management: model, API CRUD, Livewire UI, sidebar link, tests ||
-| `b2bacb2` | #167 | N+1 fix: county map uses single JOIN + ST_AsGeoJSON query ||
-| `e65b75bc` | #166 | Composite indexes on persons table + N+1 fix in HardwareImport ||
-| `0dde735` | #166 | PersonImport + ImportPersons Livewire component + route + UI + test ||
+|---|---|---|---|
+| `72f103e` | #169 | Zone API + Livewire: organizational scope enforcement, accessible scope, unit_id index ||
+| `6117878` | #170 | Advanced reports: replace recursive PHP getDescendantIds with cached Unit::descendantIds() ||
+| `e5d3d6a` | #171 | County map: cache GeoJSON regions query (5 min TTL) ||
