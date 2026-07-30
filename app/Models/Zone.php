@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\AccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Zone extends Model
@@ -13,12 +14,20 @@ class Zone extends Model
         'name',
         'description',
         'color',
+        'slug',
+        'boundary_id',
+        'is_active',
     ];
 
     public function units(): BelongsToMany
     {
         return $this->belongsToMany(Unit::class, 'zone_units')
             ->withTimestamps();
+    }
+
+    public function boundary(): BelongsTo
+    {
+        return $this->belongsTo(Boundary::class, 'boundary_id');
     }
 
     /**
