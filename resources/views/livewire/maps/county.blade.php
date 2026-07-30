@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Region;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 return new class extends Component
@@ -9,16 +10,20 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->regions = Region::with('boundary')
+        $this->regions = Region::query()
             ->whereNotNull('boundary_id')
+            ->select([
+                'regions.id',
+                'regions.name',
+                DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+            ])
+            ->join('boundaries', 'regions.boundary_id', '=', 'boundaries.id')
             ->get()
-            ->map(function ($region) {
-                return [
-                    'id' => $region->id,
-                    'name' => $region->name,
-                    'geojson' => $region->boundary?->geojson ?? null,
-                ];
-            })
+            ->map(fn($r) => [
+                'id'      => $r->id,
+                'name'    => $r->name,
+                'geojson' => $r->geojson,
+            ])
             ->toArray();
     }
 };
