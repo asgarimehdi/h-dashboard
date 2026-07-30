@@ -957,14 +957,38 @@ php artisan db:seed --force
 - **Benefit**: Index-only scans for notification queries, eliminates filesorts on `created_at`
 
 ### Summary
-| Commit | Issue | Change |
-|---|---|---|
-| `5e3f2f6` | #174 | ZoneMap loadAvailableZones() caching with 300s TTL |
-| `259d41a` | #175 | Composite index on notifications (user_id, is_read, created_at) |
-| `52d4b7f` | #176 | Add boundary relationship to Zone model |
+|| Commit | Issue | Change |
+||---|---|---|---|
+|| `5e3f2f6` | #174 | ZoneMap loadAvailableZones() caching with 300s TTL |
+|| `259d41a` | #175 | Composite index on notifications (user_id, is_read, created_at) |
+|| `52d4b7f` | #176 | Add boundary relationship to Zone model |
 
 ### Zone Model Boundary Relationship (#176 — `52d4b7f`)
 - **`Zone` model** (`app/Models/Zone.php`): Added `belongsTo` relationship to `Boundary` model via `boundary_id`
   - Added `boundary_id` and `is_active` to `$fillable` (alongside existing `slug`)
   - New `boundary()` method returns `BelongsTo` relationship
   - Enables zones to have their own geographic boundaries on the map
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Late Evening)
+
+### GitHub Actions Production Deploy Workflow (`06e0ba6`)
+- **New file** `.github/workflows/deploy.yml`: GitHub Actions workflow for automated production deployment
+  - Triggers on: push to `main` branch and manual `workflow_dispatch`
+  - Runs on: `self-hosted` runner
+  - Steps: `git pull origin main` → `php artisan view:clear` → `config:clear` → `route:clear` → `optimize` → `sudo systemctl reload apache2`
+  - Target path: `/home/boxd/h-dashboard`
+
+### Heroicon Fix — Non-existent Icon Name Causing 500 Error (#180 — `8c4c17`)
+- **`config/blade-heroicons.php`**: Updated icon name mapping from `o-arrow-` to `o-arrows-` (correct Heroicons naming)
+- **`public/vendor/blade-heroicons/`**: Regenerated all SVG sprite files (`c-`, `m-`, `o-`, `s-` variants) with corrected icon names
+- **Affected map views**: `interactive.`, `point.`, `unit.`, `zones/index`
+- **Bug**: The icon name `o-arrow-` was used but doesn't exist in the Heroicons sprite — causing a 500 Internal Server Error on the login page, preventing all users from logging in
+- **Fix**: Corrected to `o-arrows-` (the plural form that exists in the sprite sheet)
+
+### Summary
+| Commit | Issue | Change |
+|---|---|---|
+| `06e0ba6` | — | New GitHub Actions production deploy workflow |
+| `8c4c17` | #180 | Heroicon fix: `o-arrow-` → `o-arrows-` (500 error on login) |
