@@ -2,6 +2,7 @@
 
 use App\Models\Ticket;
 use App\Models\Unit;
+use App\Models\TaskActivity;
 use App\Services\AccessService;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -220,17 +221,67 @@ new class extends Component
         if (empty($this->selectedTickets)) return;
 
         $count = count($this->selectedTickets);
+        $now = now();
+        $userId = auth()->id();
+        $bulkNote = $this->bulkNote;
 
-        DB::transaction(function () use ($count) {
-            foreach ($this->selectedTickets as $ticketId) {
-                $ticket = Ticket::find($ticketId);
-                if (!$ticket) continue;
+        // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده
+        $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
+            ->where('status', '!=', 'completed')
+            ->pluck('id');
 
-                match($this->bulkAction) {
-                    'complete' => $this->bulkCompleteTicket($ticket),
-                    'forward' => $this->bulkForwardTicket($ticket),
-                    default => null,
-                };
+        if ($ticketIds->isEmpty()) {
+            $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
+            $this->closeAllModals();
+            return;
+        }
+
+        DB::transaction(function () use ($ticketIds, $count, $now, $userId, $bulkNote) {
+            if ($this->bulkAction === 'complete') {
+                // ۲. یک UPDATE برای همه
+                Ticket::whereIn('id', $ticketIds)->update([
+                    'status' => 'completed',
+                    'completed_at' => $now,
+                ]);
+
+                // ۳. یک batch INSERT برای فعالیت‌ها
+                $activityRows = $ticketIds->map(fn($id) => [
+                    'ticket_id' => $id,
+                    'user_id' => $userId,
+                    'action' => 'completed',
+                    'description' => 'تکمیل دسته‌ای تیکت' . ($bulkNote ? ": {$bulkNote}" : ''),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->toArray();
+                TaskActivity::insert($activityRows);
+
+                // ActivityLogService - برای هر تیکت جداگانه (جدول activity_logs جداگانه است)
+                $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status']);
+                foreach ($tickets as $ticket) {
+                    \App\Services\ActivityLogService::updated($ticket, ['status' => $ticket->status], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
+                }
+            }
+
+            if ($this->bulkAction === 'forward') {
+                Ticket::whereIn('id', $ticketIds)->update([
+                    'status' => 'forwarded',
+                    'current_assignee_id' => null,
+                ]);
+
+                $activityRows = $ticketIds->map(fn($id) => [
+                    'ticket_id' => $id,
+                    'user_id' => $userId,
+                    'action' => 'forwarded',
+                    'description' => 'ارجاع دسته‌ای تیکت' . ($bulkNote ? ": {$bulkNote}" : ''),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->toArray();
+                TaskActivity::insert($activityRows);
+
+                $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status']);
+                foreach ($tickets as $ticket) {
+                    \App\Services\ActivityLogService::updated($ticket, ['status' => 'accepted'], ['status' => 'forwarded'], "ارجاع دسته‌ای تیکت {$ticket->ticket_code}");
+                }
             }
         });
 
@@ -239,32 +290,7 @@ new class extends Component
         $this->resetPage();
     }
 
-    private function bulkCompleteTicket(Ticket $ticket): void
-    {
-        $ticket->update(['status' => 'completed', 'completed_at' => now()]);
-        $ticket->activities()->create([
-            'user_id' => auth()->id(),
-            'action' => 'completed',
-            'description' => 'تکمیل دسته‌ای تیکت' . ($this->bulkNote ? ": {$this->bulkNote}" : ''),
-        ]);
-
-        \App\Services\ActivityLogService::updated($ticket, ['status' => $ticket->status], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
-    }
-
-    private function bulkForwardTicket(Ticket $ticket): void
-    {
-        $ticket->update([
-            'status' => 'forwarded',
-            'current_assignee_id' => null,
-        ]);
-        $ticket->activities()->create([
-            'user_id' => auth()->id(),
-            'action' => 'forwarded',
-            'description' => 'ارجاع دسته‌ای تیکت' . ($this->bulkNote ? ": {$this->bulkNote}" : ''),
-        ]);
-
-        \App\Services\ActivityLogService::updated($ticket, ['status' => 'accepted'], ['status' => 'forwarded'], "ارجاع دسته‌ای تیکت {$ticket->ticket_code}");
-    }
+    // متدهای bulkCompleteTicket و bulkForwardTicket حذف شدند - منطق در executeBulkAction ادغام شد
 
     private function getAccessibleUnitIds(): array
     {
