@@ -62,6 +62,10 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 **Todo** (`todos` table)
 - `id`, `title`, `is_completed`, `unit_id`
 
+**Zone** (`zones` table)
+- `id`, `name`, `description`, `color`
+- Pivot table `zone_unit` connects Zone → Unit with timestamps
+
 **User** (`users` table)
 - `id`, `n_code`, `name`, `email`, `password`
 
@@ -75,6 +79,7 @@ Person → Tahsil (t_id → id)
 Person → Estekhdam (e_id → id)
 Person → Radif (r_id → id)
 Unit → Unit (parent_id, recursive self-join)
+Zone → Unit (BelongsToMany via zone_unit pivot)
 ```
 
 ---
@@ -225,6 +230,18 @@ All routes require `auth:sanctum`.
 | DELETE | `/api/todos/{id}` | Delete |
 | POST | `/api/todos/{id}/toggle-complete` | Toggle completion status |
 
+### Zone CRUD (`/api/zones`)
+
+All routes require `auth:sanctum`.
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/zones` | List all zones with unit count |
+| POST | `/api/zones` | Create zone (accepts `name`, `description`, `color`, `unit_ids[]`) |
+| GET | `/api/zones/{zone}` | Show zone with its units |
+| PUT | `/api/zones/{zone}` | Update zone (accepts `unit_ids[]` to replace unit assignments) |
+| DELETE | `/api/zones/{zone}` | Delete zone (detaches all units first) |
+
 ### Unit CRUD (`/api/units`)
 
 All routes require `auth:sanctum`.
@@ -306,6 +323,15 @@ All routes require `auth:sanctum`.
 - **Persian Validation:** Column validation with Persian error messages
 - **Organizational Scope:** Only imports hardware into user's accessible units
 - **Requires:** `manage_hardware` permission (via `safe_role_or_permission` middleware)
+
+### Zone/Block Management (`/zones`)
+
+- **Zone CRUD:** Create, read, update, delete zones with name, description, color
+- **Unit Assignment:** Assign/unassign units to zones via multi-select UI
+- **Color Picker:** Visual color selection for zone identification
+- **Unit Count Display:** Shows number of units per zone in list view
+- **Sidebar Access:** Available under ساختار سازمان (Organizational Structure) section
+- **Requires:** `organization` permission (web middleware)
 
 ---
 
@@ -792,7 +818,47 @@ php artisan db:seed --force
 - **New test** `tests/Feature/PersonImport/PersonImportTest.php` (251 lines): covers full import workflow with scope enforcement
 
 ### Summary
-| Commit | Issue | Change |
-|---|---|---|
-| `e65b75bc` | #166 | Composite indexes on persons table + N+1 fix in HardwareImport |
-| `0dde735` | #166 | New PersonImport + ImportPersons Livewire component + route + UI + test |
+|| Commit | Issue | Change ||
+||---|---|---|---|
+|| `e65b75bc` | #166 | Composite indexes on persons table + N+1 fix in HardwareImport ||
+|| `0dde735` | #166 | New PersonImport + ImportPersons Livewire component + route + UI + test ||
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Final)
+
+### Zone/Block Management Feature (#79 — `f70f9eb`)
+- **New model** `App\Models\Zone` (`app/Models/Zone.php`): stores zone name, description, color; `BelongsToMany` relationship to `Unit` via `zone_unit` pivot table with timestamps
+- **New API controller** `App\Http\Controllers\Api\ZoneController`: full CRUD with `withCount('units')`, unit sync via `unit_ids` parameter
+  - `index()`: list all zones with unit count
+  - `store()`: create zone + optional `unit_ids[]` sync
+  - `show()`: show zone with its units
+  - `update()`: partial update + optional `unit_ids` sync (replaces existing units)
+  - `destroy()`: detach all units then delete
+- **New API routes** (all require `auth:sanctum`):
+  - `GET /api/zones` — list all zones
+  - `POST /api/zones` — create zone (accepts `name`, `description`, `color`, `unit_ids[]`)
+  - `GET /api/zones/{zone}` — show zone
+  - `PUT /api/zones/{zone}` — update zone
+  - `DELETE /api/zones/{zone}` — delete zone
+- **New UI page** `zones.zones-index` (`resources/views/livewire/zones/zones-index.blade.php`): Volt-style Livewire component with zone CRUD, color picker, unit assignment
+- **New web route** `/zones` under `organization` middleware group — accessible to users with `organization` permission
+- **New test** `tests/Feature/ZoneApiTest.php` (7 tests): covers auth, CRUD, unit sync
+- **Sidebar link** added under ساختار سازمان (Organizational Structure) section
+
+### N+1 Query Fix in County Map (#167 — `b2bacb2`)
+- **`maps/county.blade.php`** (`resources/views/livewire/maps/county.blade.php`): Refactored `mount()` to eliminate N+1 query
+  - Before: `Region::with('boundary')->get()->map(...)` → loaded Region + separate query per boundary via relationship
+  - After: `Region::query()->select(...DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson')...).join('boundaries', ...)` → single query with GeoJSON computed inline
+- **Benefit**: 1 SQL query instead of N+1; GeoJSON computed at DB level, no Eloquent model hydration overhead
+
+### AppServiceProvider Help Component Registration
+- **`app/Providers/AppServiceProvider.php`**: Now dynamically registers all help-content Blade components with colon syntax (`x-help-content:{name}`) in a loop — eliminating repetitive manual registrations and adding `networks` and `wireless` to the list
+
+### Summary
+|| Commit | Issue | Change ||
+||---|---|---|---|
+| `f70f9eb` | #79 | Zone/block management: model, API CRUD, Livewire UI, sidebar link, tests ||
+| `b2bacb2` | #167 | N+1 fix: county map uses single JOIN + ST_AsGeoJSON query ||
+| `e65b75bc` | #166 | Composite indexes on persons table + N+1 fix in HardwareImport ||
+| `0dde735` | #166 | PersonImport + ImportPersons Livewire component + route + UI + test ||
