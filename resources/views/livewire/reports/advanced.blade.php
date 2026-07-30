@@ -91,7 +91,7 @@ return new class extends Component
         // فیلتر واحد (سلسله‌مراتبی)
         $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
         if ($unitId) {
-            $descendantIds = $this->getDescendantIds($unitId);
+            $descendantIds = Unit::descendantIds($unitId)->toArray();
             $descendantIds[] = $unitId;
             $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
             $query->whereIn($unitColumn, $descendantIds);
@@ -167,17 +167,6 @@ return new class extends Component
             'byUnit' => $byUnit,
             'details' => $details,
         ];
-    }
-
-    private function getDescendantIds(int $unitId): array
-    {
-        $ids = [];
-        $children = Unit::where('parent_id', $unitId)->pluck('id')->toArray();
-        foreach ($children as $childId) {
-            $ids[] = $childId;
-            $ids = array_merge($ids, $this->getDescendantIds($childId));
-        }
-        return $ids;
     }
 
     /**
