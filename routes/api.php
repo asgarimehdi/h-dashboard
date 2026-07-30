@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
+use App\Http\Controllers\Api\ZoneController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -104,4 +105,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/todos/{todo}', [TodoController::class, 'update']);
     Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
     Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+});
+
+// Zone API routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/zones', [ZoneController::class, 'index']);
+    Route::post('/zones', [ZoneController::class, 'store']);
+    Route::get('/zones/{zone}', [ZoneController::class, 'show']);
+    Route::put('/zones/{zone}', [ZoneController::class, 'update']);
+    Route::delete('/zones/{zone}', [ZoneController::class, 'destroy']);
 });
