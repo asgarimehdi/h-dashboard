@@ -63,8 +63,9 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `id`, `title`, `is_completed`, `unit_id`
 
 **Zone** (`zones` table)
-- `id`, `name`, `description`, `color`, `slug`, `is_active`
+- `id`, `name`, `description`, `color`, `slug`, `is_active`, `boundary_id` (FK to `boundaries.id`)
 - Pivot table `zone_units` connects Zone → Unit with timestamps
+- Relationships: `units()` (BelongsToMany), `boundary()` (BelongsTo)
 
 **User** (`users` table)
 - `id`, `n_code`, `name`, `email`, `password`
@@ -80,6 +81,7 @@ Person → Estekhdam (e_id → id)
 Person → Radif (r_id → id)
 Unit → Unit (parent_id, recursive self-join)
 Zone → Unit (BelongsToMany via zone_units pivot)
+Zone → Boundary (BelongsTo via boundary_id)
 ```
 
 ---
@@ -959,3 +961,10 @@ php artisan db:seed --force
 |---|---|---|
 | `5e3f2f6` | #174 | ZoneMap loadAvailableZones() caching with 300s TTL |
 | `259d41a` | #175 | Composite index on notifications (user_id, is_read, created_at) |
+| `52d4b7f` | #176 | Add boundary relationship to Zone model |
+
+### Zone Model Boundary Relationship (#176 — `52d4b7f`)
+- **`Zone` model** (`app/Models/Zone.php`): Added `belongsTo` relationship to `Boundary` model via `boundary_id`
+  - Added `boundary_id` and `is_active` to `$fillable` (alongside existing `slug`)
+  - New `boundary()` method returns `BelongsTo` relationship
+  - Enables zones to have their own geographic boundaries on the map
