@@ -15,6 +15,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithCustomCsvSetti
 
     private array $accessibleUnitIds = [];
     private array $existingRecords = [];
+    private array $existingPersons = [];
     private string $compareKey = 'both'; // 'pc_name', 'mac', 'both'
     private array $selectedActions = [];
     private array $importResults = [
@@ -93,6 +94,25 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithCustomCsvSetti
                 $this->existingRecords['mac'][$hw->mac] = $hw;
             }
         }
+
+        // Pre-load all persons in accessible units to avoid N+1 queries
+        $this->loadExistingPersons();
+    }
+
+    private function loadExistingPersons(): void
+    {
+        $query = Person::query();
+
+        // Apply organizational scope
+        if (!empty($this->accessibleUnitIds)) {
+            $query->whereIn('u_id', $this->accessibleUnitIds);
+        }
+
+        $persons = $query->get(['n_code', 'u_id', 'f_name', 'l_name']);
+
+        foreach ($persons as $person) {
+            $this->existingPersons[$person->n_code] = $person;
+        }
     }
 
     private function applySelectedAction($row, int $rowNumber): void
@@ -129,7 +149,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithCustomCsvSetti
                 }
 
                 // Verify person exists and is in accessible units
-                $person = Person::where('n_code', $data['n_code'])->first();
+                $person = $this->existingPersons[$data['n_code']] ?? null;
                 if (!$person) {
                     $this->importResults['preview'][] = [
                         'row' => $rowNumber,
@@ -257,7 +277,7 @@ class HardwareImport implements ToCollection, WithHeadingRow, WithCustomCsvSetti
         }
 
         // Verify person exists and is in accessible units
-        $person = Person::where('n_code', $data['n_code'])->first();
+        $person = $this->existingPersons[$data['n_code']] ?? null;
         if (!$person) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
