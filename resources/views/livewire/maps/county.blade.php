@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Region;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
@@ -10,21 +11,23 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->regions = Region::query()
-            ->whereNotNull('boundary_id')
-            ->select([
-                'regions.id',
-                'regions.name',
-                DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
-            ])
-            ->join('boundaries', 'regions.boundary_id', '=', 'boundaries.id')
-            ->get()
-            ->map(fn($r) => [
-                'id'      => $r->id,
-                'name'    => $r->name,
-                'geojson' => $r->geojson,
-            ])
-            ->toArray();
+        $this->regions = Cache::remember('county:regions_with_boundaries', 300, function () {
+            return Region::query()
+                ->whereNotNull('boundary_id')
+                ->select([
+                    'regions.id',
+                    'regions.name',
+                    DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
+                ->join('boundaries', 'regions.boundary_id', '=', 'boundaries.id')
+                ->get()
+                ->map(fn($r) => [
+                    'id'      => $r->id,
+                    'name'    => $r->name,
+                    'geojson' => $r->geojson,
+                ])
+                ->toArray();
+        });
     }
 };
 ?>
