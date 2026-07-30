@@ -29,15 +29,19 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->regions = Region::where('type', 'county')
-            ->select('id', 'name')
-            ->get()
-            ->toArray();
+        $this->regions = Cache::remember('unit_map:regions', 300, function () {
+            return Region::where('type', 'county')
+                ->select('id', 'name')
+                ->get()
+                ->toArray();
+        });
 
-        $this->centerTypes = UnitType::whereIn('id', [5, 6, 7])
-            ->select('id', 'name')
-            ->get()
-            ->toArray();
+        $this->centerTypes = Cache::remember('unit_map:center_types', 300, function () {
+            return UnitType::whereIn('id', [5, 6, 7])
+                ->select('id', 'name')
+                ->get()
+                ->toArray();
+        });
 
         $this->subTypes = [
             ['name' => 'خانه بهداشت'],

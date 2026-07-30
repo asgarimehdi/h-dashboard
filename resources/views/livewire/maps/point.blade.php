@@ -1,18 +1,19 @@
-<?php
-
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\Region;
 use Livewire\Component;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
     public $location = [];
 
     public $types = [];
+
     public $regions = [];
 
     public array $selectedRegions = [];
+
     public array $selectedTypes = [];
 
     public function mount(): void
@@ -20,15 +21,19 @@ return new class extends Component
         $excludedRegionIds = [1];
         $excludedTypeIds   = [1, 2, 3];
 
-        $this->regions = Region::whereNotIn('id', $excludedRegionIds)
-            ->select('id', 'name')
-            ->get()
-            ->toArray();
+        $this->regions = Cache::remember('point_map:regions', 300, function () use ($excludedRegionIds) {
+            return Region::whereNotIn('id', $excludedRegionIds)
+                ->select('id', 'name')
+                ->get()
+                ->toArray();
+        });
 
-        $this->types = UnitType::whereNotIn('id', $excludedTypeIds)
-            ->select('id', 'name')
-            ->get()
-            ->toArray();
+        $this->types = Cache::remember('point_map:types', 300, function () use ($excludedTypeIds) {
+            return UnitType::whereNotIn('id', $excludedTypeIds)
+                ->select('id', 'name')
+                ->get()
+                ->toArray();
+        });
 
         $this->fetchLocation();
     }

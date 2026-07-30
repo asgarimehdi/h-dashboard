@@ -4,6 +4,7 @@ use Livewire\Component;
 use Livewire\Attributes\Layout;
 use App\Models\Unit;
 use App\Services\AccessService;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
@@ -20,13 +21,15 @@ return new class extends Component
             ->toArray();
         $allIds = array_unique(array_merge($accessibleIds, $ancestorIds));
 
-        $this->units = Unit::whereIn('id', $allIds)
-            ->whereNotNull('lat')
-            ->whereNotNull('lng')
-            ->select('id', 'name', 'lat', 'lng', 'unit_type_id', 'parent_id')
-            ->with('unitType')
-            ->get()
-            ->toArray();
+        $this->units = Cache::remember('interactive_map:units:' . md5(implode(',', $allIds)), 300, function () use ($allIds) {
+            return Unit::whereIn('id', $allIds)
+                ->whereNotNull('lat')
+                ->whereNotNull('lng')
+                ->select('id', 'name', 'lat', 'lng', 'unit_type_id', 'parent_id')
+                ->with('unitType')
+                ->get()
+                ->toArray();
+        });
     }
 
 }; ?>

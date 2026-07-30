@@ -41,16 +41,16 @@
                 <thead class="bg-base-200">
                     <tr>
                         <th wire:click="sortBy('name')" class="cursor-pointer">
-                            نام <x-heroicon-o-arrow-down-up class="h-4 w-4 inline ml-1" />
+                            نام <x-heroicon-o-arrows-up-down class="h-4 w-4 inline ml-1" />
                         </th>
                         <th wire:click="sortBy('color')" class="cursor-pointer">
-                            رنگ <x-heroicon-o-arrow-down-up class="h-4 w-4 inline ml-1" />
+                            رنگ <x-heroicon-o-arrows-up-down class="h-4 w-4 inline ml-1" />
                         </th>
                         <th wire:click="sortBy('is_active')" class="cursor-pointer">
-                            وضعیت <x-heroicon-o-arrow-down-up class="h-4 w-4 inline ml-1" />
+                            وضعیت <x-heroicon-o-arrows-up-down class="h-4 w-4 inline ml-1" />
                         </th>
                         <th wire:click="sortBy('created_at')" class="cursor-pointer">
-                            تاریخ ایجاد <x-heroicon-o-arrow-down-up class="h-4 w-4 inline ml-1" />
+                            تاریخ ایجاد <x-heroicon-o-arrows-up-down class="h-4 w-4 inline ml-1" />
                         </th>
                         <th>تعداد واحدها</th>
                         <th class="text-center">عملیات</th>
