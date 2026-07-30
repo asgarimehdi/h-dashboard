@@ -1,0 +1,20 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Deploy to production
+        run: |
+          cd /home/boxd/h-dashboard
+          git pull origin main
+          php artisan view:clear
+          php artisan config:clear
+          php artisan route:clear
+          php artisan optimize
+          sudo systemctl reload apache2
