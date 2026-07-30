@@ -935,3 +935,27 @@ php artisan db:seed --force
 
 ### New Demo Script Documentation
 - **`docs/DEMO_SCRIPT.md`** (406 lines): comprehensive demo script covering all major features — login, units, tickets, persons, hardware, AI assistant, import, maps, reports, admin settings
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Latest)
+
+### ZoneMap Caching Optimization (#174 — `5e3f2f6`)
+- **`ZoneMap::loadAvailableZones()`** (`app/Livewire/Maps/ZoneMap.php`): Added 5-minute cache (300s TTL) for available zones query
+  - Before: Query executed on every page load (Zone::whereHas + withCount per request)
+  - After: Wrapped in `Cache::remember('zonemap:available_zones:' . md5(implode(',', $accessibleUnitIds)), 300, ...)` — cache key includes user's accessible unit IDs for scope isolation
+  - **Benefit**: Reduces DB load for zone map page; zones query computed once per 5 minutes per organizational scope
+
+### Database Performance Indexes (#175 — `259d41a`)
+- **New migration** `2026_07_30_080000_add_composite_index_to_notifications_table.php`: Adds composite index on `notifications` table:
+  - `notifications_user_read_created_idx` on `(user_id, is_read, created_at)` — covers:
+    1. Notification bell query: `WHERE user_id = ? ORDER BY created_at DESC LIMIT 15`
+    2. Unread count query: `WHERE user_id = ? AND is_read = false`
+    3. Cleanup queries: `WHERE created_at < ?`
+- **Benefit**: Index-only scans for notification queries, eliminates filesorts on `created_at`
+
+### Summary
+| Commit | Issue | Change |
+|---|---|---|
+| `5e3f2f6` | #174 | ZoneMap loadAvailableZones() caching with 300s TTL |
+| `259d41a` | #175 | Composite index on notifications (user_id, is_read, created_at) |
