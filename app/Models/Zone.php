@@ -17,7 +17,7 @@ class Zone extends Model
 
     public function units(): BelongsToMany
     {
-        return $this->belongsToMany(Unit::class, 'zone_unit')
+        return $this->belongsToMany(Unit::class, 'zone_units')
             ->withTimestamps();
     }
 

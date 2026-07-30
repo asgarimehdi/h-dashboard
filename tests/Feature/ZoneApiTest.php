@@ -141,13 +141,13 @@ class ZoneApiTest extends TestCase
         ]);
 
         $zoneId = $response->json('data.id');
-        $this->assertDatabaseHas('zone_unit', ['zone_id' => $zoneId, 'unit_id' => $unit->id]);
+        $this->assertDatabaseHas('zone_units', ['zone_id' => $zoneId, 'unit_id' => $unit->id]);
 
         // Update to remove units
         $this->actingAs($user, 'sanctum')->putJson("/api/zones/{$zoneId}", [
             'unit_ids' => [],
         ]);
 
-        $this->assertDatabaseMissing('zone_unit', ['zone_id' => $zoneId]);
+        $this->assertDatabaseMissing('zone_units', ['zone_id' => $zoneId]);
     }
 }

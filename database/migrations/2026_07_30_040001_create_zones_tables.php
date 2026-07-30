@@ -19,7 +19,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('zone_unit', function (Blueprint $table) {
+        Schema::create('zone_units', function (Blueprint $table) {
             $table->id();
             $table->foreignId('zone_id')->constrained()->cascadeOnDelete();
             $table->foreignId('unit_id')->constrained()->cascadeOnDelete();
@@ -34,7 +34,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('zone_unit');
+        Schema::dropIfExists('zone_units');
         Schema::dropIfExists('zones');
     }
 };

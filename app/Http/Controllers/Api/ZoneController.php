@@ -22,7 +22,7 @@ class ZoneController extends Controller
             abort(403, 'Zone not accessible.');
         }
 
-        $zoneUnitIds = $zone->units()->pluck('zone_unit.unit_id')->toArray();
+        $zoneUnitIds = $zone->units()->pluck('zone_units.unit_id')->toArray();
 
         if (empty(array_intersect($zoneUnitIds, $accessibleIds))) {
             abort(403, 'Zone not accessible.');

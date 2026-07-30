@@ -59,7 +59,7 @@ class ZoneMap extends Component
 
     public function loadAvailableRegions(): void
     {
-        $this->availableRegions = Cache::remember('zone_map:available_regions', 300, function () {
+        $this->availableRegions = Cache::remember('zonemap:available_regions', 300, function () {
             return Region::where('type', 'county')
                 ->select('id', 'name')
                 ->orderBy('name')

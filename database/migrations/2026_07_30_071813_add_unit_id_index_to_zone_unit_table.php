@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('zone_unit', function (Blueprint $table) {
-            $table->index('unit_id', 'zone_unit_unit_id_index');
+        Schema::table('zone_units', function (Blueprint $table) {
+            $table->index('unit_id', 'zone_units_unit_id_index');
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('zone_unit', function (Blueprint $table) {
-            $table->dropIndex('zone_unit_unit_id_index');
+        Schema::table('zone_units', function (Blueprint $table) {
+            $table->dropIndex('zone_units_unit_id_index');
         });
     }
 };
