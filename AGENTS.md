@@ -63,8 +63,8 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `id`, `title`, `is_completed`, `unit_id`
 
 **Zone** (`zones` table)
-- `id`, `name`, `description`, `color`
-- Pivot table `zone_unit` connects Zone → Unit with timestamps
+- `id`, `name`, `description`, `color`, `slug`, `is_active`
+- Pivot table `zone_units` connects Zone → Unit with timestamps
 
 **User** (`users` table)
 - `id`, `n_code`, `name`, `email`, `password`
@@ -79,7 +79,7 @@ Person → Tahsil (t_id → id)
 Person → Estekhdam (e_id → id)
 Person → Radif (r_id → id)
 Unit → Unit (parent_id, recursive self-join)
-Zone → Unit (BelongsToMany via zone_unit pivot)
+Zone → Unit (BelongsToMany via zone_units pivot)
 ```
 
 ---
@@ -827,8 +827,8 @@ php artisan db:seed --force
 
 ## Recent Changes (July 2026 Sync — Updated 2026-07-30 Final)
 
-### Zone/Block Management Feature (#79 — `f70f9eb`)
-- **New model** `App\Models\Zone` (`app/Models/Zone.php`): stores zone name, description, color; `BelongsToMany` relationship to `Unit` via `zone_unit` pivot table with timestamps
+|### Zone/Block Management Feature (#79 — `f70f9eb`)
+|- **New model** `App\Models\Zone` (`app/Models/Zone.php`): stores zone name, description, color, slug, is_active; `BelongsToMany` relationship to `Unit` via `zone_units` pivot table with timestamps
 - **New API controller** `App\Http\Controllers\Api\ZoneController`: full CRUD with `withCount('units')`, unit sync via `unit_ids` parameter
   - `index()`: list all zones with unit count
   - `store()`: create zone + optional `unit_ids[]` sync
@@ -876,7 +876,7 @@ php artisan db:seed --force
 - **`Zone` model** (`app/Models/Zone.php`): Added `scopeAccessible(Builder $query, ?User $user)` query scope
   - Filters zones to only those having at least one unit within the user's accessible unit IDs
   - Returns empty result (1=0) if user has no accessible units
-- **New migration** `2026_07_30_071813_add_unit_id_index_to_zone_unit_table.php`: Added index on `zone_unit.unit_id` for faster scope queries
+|- **New migration** `2026_07_30_071813_add_unit_id_index_to_zone_unit_table.php`: Added index on `zone_units.unit_id` for faster scope queries
 - **Livewire Zone Index** (`resources/views/livewire/zones/zones-index.blade.php`):
   - `zones()` query now uses `Zone::accessible()` scope
   - `saveZone()` validates selected units against user's accessible scope
@@ -896,8 +896,42 @@ php artisan db:seed --force
   - **Benefit**: Reduces DB load for map page; GeoJSON computed once per 5 minutes instead of per-request
 
 ### Summary
-|| Commit | Issue | Change ||
-|---|---|---|---|
-| `72f103e` | #169 | Zone API + Livewire: organizational scope enforcement, accessible scope, unit_id index ||
-| `6117878` | #170 | Advanced reports: replace recursive PHP getDescendantIds with cached Unit::descendantIds() ||
-| `e5d3d6a` | #171 | County map: cache GeoJSON regions query (5 min TTL) ||
+||| Commit | Issue | Change ||
+|||---|---|---|---|
+|| `72f103e` | #169 | Zone API + Livewire: organizational scope enforcement, accessible scope, unit_id index ||
+|| `6117878` | #170 | Advanced reports: replace recursive PHP getDescendantIds with cached Unit::descendantIds() ||
+|| `e5d3d6a` | #171 | County map: cache GeoJSON regions query (5 min TTL) ||
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Evening)
+
+### Zone Pivot Table Rename: `zone_unit` → `zone_units` (#173 — `40e8abc`)
+- **Migration fix**: `zone_unit` pivot table renamed to `zone_units` (plural, consistent with Laravel conventions)
+  - `2026_07_30_040001_create_zones_tables`: `zone_unit` → `zone_units`
+  - `2026_07_30_071813_add_unit_id_index_to_zone_unit_table`: table name + index name updated (`zone_unit_unit_id_index` → `zone_units_unit_id_index`)
+- **`Zone` model** (`app/Models/Zone.php`): `belongsToMany(..., 'zone_unit')` → `belongsToMany(..., 'zone_units')`
+- **`ZoneController`** (`app/Http/Controllers/Api/ZoneController.php`): pluck path `'zone_unit.unit_id'` → `'zone_units.unit_id'`
+- **`ZoneApiTest`**: `assertDatabaseHas('zone_unit', ...)` → `assertDatabaseHas('zone_units', ...)`
+- **`Zone` model**: also adds `slug` and `is_active` fields to the model (migration-created columns)
+- **Breaking change**: Existing databases with `zone_unit` table need a rename migration before deploying this update
+
+### Zone Map Page — New Feature (#173 — `3770923`, `97d0a30`, `40e8abc`)
+- **New Livewire component** `App\Livewire\Maps\ZoneMap` (`app/Livewire/Maps/ZoneMap.php`): interactive zone map with region overlay
+  - `loadAvailableZones()`: loads accessible zones filtered by organizational scope + unit count
+  - `loadAvailableRegions()`: cached 5 minutes via `Cache::remember('zonemap:available_regions', 300, ...)` — `#173` fix
+  - `loadZoneUnits()`: loads selected zones with their unit boundaries, dispatches `zone-units-loaded` event to JS
+  - `loadCountyBoundaries()`: per-region cached county boundaries (5-min TTL) dispatched to JS
+- **New view** `resources/views/livewire/maps/zone-map.blade.php`: Leaflet map with zone/unit boundaries, region overlay, zone selector sidebar
+- **New Volt Livewire components** (`app/Livewire/Zones/`): `Create.php`, `Edit.php`, `Index.php` — zone CRUD with organizational scope enforcement
+
+### Ticket Bulk Actions N+1 Query Fix (#172 — `3770923`)
+- **Tickets inbox** (`⚡inbox.blade.php`): `executeBulkAction()` refactored — replaces per-ticket `foreach` loop with batch queries
+  - Before: ~5×N queries for N tickets (1 SELECT + 1 UPDATE + 1 INSERT + 2 ActivityLog per ticket)
+  - After: ~3 queries total (1 SELECT + 1 UPDATE + 1 batch INSERT + batch ActivityLogService call)
+  - Removed redundant `ActivityLogService::updated()` call in the loop
+  - Added pre-filter: skips tickets already `completed` before processing bulk
+  - Deleted `bulkCompleteTicket()` and `bulkForwardTicket()` private methods (logic inlined into `executeBulkAction()`)
+
+### New Demo Script Documentation
+- **`docs/DEMO_SCRIPT.md`** (406 lines): comprehensive demo script covering all major features — login, units, tickets, persons, hardware, AI assistant, import, maps, reports, admin settings
