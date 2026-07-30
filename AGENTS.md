@@ -754,3 +754,45 @@ php artisan db:seed --force
 | `1bc5f3d` | #66 | Fixed heroicon names in help components and app layout |
 | `d60f2b0` | #163 | SQL GROUP BY in Livewire reports (todos, persons, advanced) |
 | `6e4eedb` | #164 | Reduced duplicate queries in map/unit loadUnits by merging + caching |
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-30 Final)
+
+### Database Performance Indexes (#166 — `e65b75bc`)
+- **New migration** `2026_07_30_035023_add_composite_indexes_to_persons_table.php` adds 4 composite indexes on `persons` table for frequent query patterns:
+  - `persons_u_id_n_code_idx` on `(u_id, n_code)` — covers unit filtering + n_code search (PersonController::index)
+  - `persons_u_id_f_name_l_name_idx` on `(u_id, f_name, l_name)` — covers unit filtering + name search
+  - `persons_u_id_s_id_idx` on `(u_id, s_id)` — covers unit + semat filtering
+  - `persons_u_id_s_id_n_code_idx` on `(u_id, s_id, n_code)` — covers import lookup pattern (HardwareImport)
+- **Benefit**: Index-covering for all common person queries; eliminates full table scans on `n_code`, name, and semat filters within unit scope
+
+### N+1 Query Fix in HardwareImport (#166 — `e65b75bc`)
+- **`HardwareImport.php`** (`app/Imports/HardwareImport.php`): Fixed N+1 query in `buildPreview()` and `processRow()`
+  - Before: queried `Person::where('n_code', ...)` once per row → O(n) DB calls for n rows
+  - After: new `loadExistingPersons()` pre-loads all persons in accessible units in a single query → O(1) DB call
+  - Uses in-memory `$this->existingPersons[$n_code]` lookup in `buildPreview()` and `applySelectedAction()`
+- **Benefit**: Hardware import now scales from O(n) queries to O(1) regardless of file size
+
+### Person Excel Import Feature (#166 — `0dde735`)
+- **New import class** `App\Imports\PersonImport` implements `ToCollection`, `WithHeadingRow`, `WithCustomCsvSettings`
+  - Supports `.xlsx`, `.xls`, `.csv` files up to 10 MB
+  - Match strategy: always by `n_code` (primary key)
+  - Two-phase import: preview → confirm (prevents accidental changes)
+  - Returns preview with status per row: `create`, `update`, `unchanged`, `errors`
+  - Validation with Persian error messages
+  - Respects organizational scope via `AccessService::accessibleUnitIds()`
+- **New Livewire component** `App\Livewire\Kargozini\ImportPersons\ImportPersons`:
+  - `importPreview()`: first pass, builds preview with stats (new, updated, unchanged, errors)
+  - `confirmImport()`: second pass, executes actual import
+  - Persian normalization via `PersianNormalizer` trait
+  - Help modal integration
+- **New route** `/kargozini/persons/import` (`kargozini.persons.import` named route) — protected by `kargozini` middleware
+- **New UI** `resources/views/livewire/kargozini/import-persons/import-persons.blade.php`: file upload → preview table → confirm flow with stats badges
+- **New test** `tests/Feature/PersonImport/PersonImportTest.php` (251 lines): covers full import workflow with scope enforcement
+
+### Summary
+| Commit | Issue | Change |
+|---|---|---|
+| `e65b75bc` | #166 | Composite indexes on persons table + N+1 fix in HardwareImport |
+| `0dde735` | #166 | New PersonImport + ImportPersons Livewire component + route + UI + test |
