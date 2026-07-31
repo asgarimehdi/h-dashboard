@@ -138,8 +138,5 @@ Route::middleware('auth')->group(function () {
         Route::livewire('/profile', 'profile.index')->name('profile');
         // ابزارهای مدیریتی
         Route::livewire('/tools', 'tools.tools')->name('tools');
-
-        // گفتگوی هوش مصنوعی
-        Route::livewire('/chat', 'chat.index')->name('chat');
     }); // unit_context
 });
