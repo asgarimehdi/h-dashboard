@@ -60,10 +60,6 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/units/{id}/map', 'units.map');
         });
 
-        Route::middleware('role_or_permission:organization')->group(function () {
-            Route::livewire('/zones', 'zones.zones-index')->name('zones');
-        });
-
         // ... more
 
         Route::middleware('role_or_permission:kargozini')->group(function () {

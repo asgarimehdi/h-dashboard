@@ -35,40 +35,35 @@ class ZoneMap extends Component
     public function loadAvailableZones(): void
     {
         $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
-        $cacheKey = 'zonemap:available_zones:' . md5(implode(',', $accessibleUnitIds));
-
-        $this->availableZones = Cache::remember($cacheKey, 300, function () use ($accessibleUnitIds) {
-            return Zone::where('is_active', true)
-                ->whereHas('units', function ($query) use ($accessibleUnitIds) {
-                    $query->whereIn('units.id', $accessibleUnitIds);
-                })
-                ->select('id', 'name', 'color', 'description', 'slug')
-                ->withCount(['units' => function ($query) use ($accessibleUnitIds) {
-                    $query->whereIn('units.id', $accessibleUnitIds);
-                }])
-                ->orderBy('name')
-                ->get()
-                ->map(fn($z) => [
-                    'id' => $z->id,
-                    'name' => $z->name,
-                    'color' => $z->color,
-                    'description' => $z->description,
-                    'slug' => $z->slug,
-                    'units_count' => $z->units_count,
-                ])
-                ->toArray();
-        });
+        
+        $this->availableZones = Zone::where('is_active', true)
+            ->whereHas('units', function ($query) use ($accessibleUnitIds) {
+                $query->whereIn('units.id', $accessibleUnitIds);
+            })
+            ->select('id', 'name', 'color', 'description', 'slug')
+            ->withCount(['units' => function ($query) use ($accessibleUnitIds) {
+                $query->whereIn('units.id', $accessibleUnitIds);
+            }])
+            ->orderBy('name')
+            ->get()
+            ->map(fn($z) => [
+                'id' => $z->id,
+                'name' => $z->name,
+                'color' => $z->color,
+                'description' => $z->description,
+                'slug' => $z->slug,
+                'units_count' => $z->units_count,
+            ])
+            ->toArray();
     }
 
     public function loadAvailableRegions(): void
     {
-        $this->availableRegions = Cache::remember('zonemap:available_regions', 300, function () {
-            return Region::where('type', 'county')
-                ->select('id', 'name')
-                ->orderBy('name')
-                ->get()
-                ->toArray();
-        });
+        $this->availableRegions = Region::where('type', 'county')
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get()
+            ->toArray();
     }
 
     public function updatedSelectedZoneIds(): void
