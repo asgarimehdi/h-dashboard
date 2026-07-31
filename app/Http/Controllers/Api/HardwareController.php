@@ -3,14 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\HardwareResource;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class HardwareController extends Controller
 {
@@ -33,12 +32,48 @@ class HardwareController extends Controller
         }
     }
 
-    public function index(Request $request): AnonymousResourceCollection
+    /**
+     * Transform hardware model to array (inline resource logic).
+     */
+    private function transformHardware(Hardware $hardware): array
+    {
+        return [
+            'id' => $hardware->id,
+            'n_code' => $hardware->n_code,
+            'pc_name' => $hardware->pc_name,
+            'type' => $hardware->type,
+            'os' => $hardware->os,
+            'ip_valid' => $hardware->ip_valid,
+            'ip_local' => $hardware->ip_local,
+            'mac' => $hardware->mac,
+            'net_type' => $hardware->net_type,
+            'switch' => $hardware->switch,
+            'port' => $hardware->port,
+            'shutdown' => (bool) $hardware->shutdown,
+            'vlan' => $hardware->vlan,
+            'motherboard' => $hardware->motherboard,
+            'cpu' => $hardware->cpu,
+            'ram' => $hardware->ram,
+            'hdd' => $hardware->hdd,
+            'comments' => $hardware->comments,
+            'mark' => (bool) $hardware->mark,
+            'clean_at' => $hardware->clean_at?->format('Y-m-d'),
+            'created_at' => $hardware->created_at?->toIso8601String(),
+            'updated_at' => $hardware->updated_at?->toIso8601String(),
+            'person' => $hardware->relationLoaded('person') && $hardware->person ? [
+                'n_code' => $hardware->person->n_code,
+                'name' => trim($hardware->person->f_name . ' ' . $hardware->person->l_name),
+                'unit' => $hardware->person->unit?->name,
+            ] : null,
+        ];
+    }
+
+    public function index(Request $request): array
     {
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $query = Hardware::with('person')
+        $query = Hardware::with('person.unit')
             ->whereHas('person', function ($q) use ($accessibleIds) {
                 $q->whereIn('u_id', $accessibleIds);
             });
@@ -114,7 +149,28 @@ class HardwareController extends Controller
         $query->orderBy($sortBy, $sortDir);
 
         $perPage = min((int) $request->get('per_page', 10), 100);
-        return HardwareResource::collection($query->paginate($perPage));
+        
+        $paginator = $query->paginate($perPage);
+        $items = $paginator->getCollection()->map(fn($hw) => $this->transformHardware($hw))->all();
+        
+        return [
+            'data' => $items,
+            'links' => [
+                'first' => $paginator->url(1),
+                'last' => $paginator->url($paginator->lastPage()),
+                'prev' => $paginator->previousPageUrl(),
+                'next' => $paginator->nextPageUrl(),
+            ],
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'from' => $paginator->firstItem(),
+                'last_page' => $paginator->lastPage(),
+                'path' => $paginator->path(),
+                'per_page' => $paginator->perPage(),
+                'to' => $paginator->lastItem(),
+                'total' => $paginator->total(),
+            ],
+        ];
     }
 
     public function store(Request $request): JsonResponse
@@ -152,7 +208,7 @@ class HardwareController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new HardwareResource($hardware),
+            'data' => $this->transformHardware($hardware),
         ], 201);
     }
 
@@ -161,9 +217,10 @@ class HardwareController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $hardware->load('person');
+
         return response()->json([
             'success' => true,
-            'data' => new HardwareResource($hardware),
+            'data' => $this->transformHardware($hardware),
         ]);
     }
 
@@ -198,7 +255,7 @@ class HardwareController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new HardwareResource($hardware),
+            'data' => $this->transformHardware($hardware),
         ]);
     }
 
