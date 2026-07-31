@@ -3,6 +3,7 @@
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\Region;
+use App\Services\AccessService;
 use Livewire\Component;
 use Illuminate\Support\Facades\Cache;
 
@@ -101,12 +102,14 @@ return new class extends Component
             return;
         }
 
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $units = collect();
 
         // Centers (types 5, 6, 7) — filtered by selected center types
         $centers = collect();
         if (!empty($this->selectedCenterTypes)) {
-            $centers = Unit::whereNotNull('boundary_id')
+            $centers = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
+                ->whereNotNull('boundary_id')
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $this->selectedCenterTypes)
                 ->select('id', 'name', 'unit_type_id')
@@ -122,7 +125,8 @@ return new class extends Component
             // Get IDs of selected centers from the already-loaded collection (in-memory, no extra query)
             $parentIds = $centers->pluck('id');
 
-            $subUnits = Unit::whereNotNull('boundary_id')
+            $subUnits = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
+                ->whereNotNull('boundary_id')
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $subTypeIds)
                 ->whereIn('parent_id', $parentIds)
