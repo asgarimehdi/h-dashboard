@@ -165,7 +165,6 @@
                     </a>
                     @can('manage_hardware')
                     <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
-                    <x-menu-item title="دستیار هوشمند سخت‌افزار" icon="o-chat-bubble-left-right" link="/hardware/ai" wire:navigate />
                     @endcan
                     <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
                 </x-menu-sub>
