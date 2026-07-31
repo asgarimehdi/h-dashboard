@@ -164,7 +164,6 @@ return new class extends Component {
         });
     }
 }; ?>
-}; ?>
 <div>
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
         <x-slot:actions>
