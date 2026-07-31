@@ -2,6 +2,7 @@
 
 use Livewire\Component;
 use App\Models\Notification;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
@@ -16,14 +17,25 @@ return new class extends Component
 
     public function loadNotifications(): void
     {
-        $this->notifications = Notification::where('user_id', auth()->id())
-            ->latest()
-            ->take(15)
-            ->get()
-            ->toArray();
-        $this->unreadCount = Notification::where('user_id', auth()->id())
-            ->where('is_read', false)
-            ->count();
+        $userId = auth()->id();
+        $cacheKey = 'notifications:user:' . $userId;
+
+        $cached = Cache::remember($cacheKey, 60, function () use ($userId) {
+            $notifications = Notification::where('user_id', $userId)
+                ->select('id', 'type', 'title', 'body', 'icon', 'color', 'url', 'is_read', 'created_at')
+                ->latest()
+                ->take(15)
+                ->get();
+
+            $unreadCount = Notification::where('user_id', $userId)
+                ->where('is_read', false)
+                ->count();
+
+            return ['notifications' => $notifications, 'unreadCount' => $unreadCount];
+        });
+
+        $this->notifications = $cached['notifications'];
+        $this->unreadCount = $cached['unreadCount'];
     }
 
     public function toggleDropdown(): void
@@ -36,6 +48,7 @@ return new class extends Component
         Notification::where('id', $id)
             ->where('user_id', auth()->id())
             ->update(['is_read' => true, 'read_at' => now()]);
+        Cache::forget('notifications:user:' . auth()->id());
         $this->loadNotifications();
     }
 
@@ -44,6 +57,7 @@ return new class extends Component
         Notification::where('user_id', auth()->id())
             ->where('is_read', false)
             ->update(['is_read' => true, 'read_at' => now()]);
+        Cache::forget('notifications:user:' . auth()->id());
         $this->loadNotifications();
     }
 
