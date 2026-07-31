@@ -70,13 +70,9 @@ return new class extends Component
             ])
             ->get();
 
-        // Include ancestor units so parent markers exist for connection lines
+        // Include ancestor units so parent markers exist for connection lines (single JOIN instead of 2 queries)
         $baseIds = $baseUnits->pluck('id')->toArray();
-        $ancestorIds = Unit::whereIn('id', $baseIds)
-            ->whereNotNull('parent_id')
-            ->pluck('parent_id')
-            ->toArray();
-        $allIds = array_unique(array_merge($baseIds, $ancestorIds));
+        $allIds = array_unique(array_merge($baseIds, Unit::ancestorIds($baseIds)->toArray()));
 
         $this->location = Unit::whereIn('id', $allIds)
             ->whereNotNull('lat')

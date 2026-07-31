@@ -71,6 +71,47 @@ class Unit extends Model
     }
 
     /**
+     * Get ancestor (parent) IDs for a set of unit IDs — single JOIN query.
+     *
+     * @param  array<int>  $unitIds
+     * @return \Illuminate\Support\Collection<int>
+     */
+    public static function ancestorIds(array $unitIds): Collection
+    {
+        $ids = array_values(array_filter($unitIds));
+
+        if (empty($ids)) {
+            return collect();
+        }
+
+        // Cache by sorted IDs to get consistent results regardless of input order
+        $cacheKey = 'unit_ancestors:' . md5(implode(',', array_map('strval', $ids)));
+
+        return Cache::remember(
+            $cacheKey,
+            now()->addMinutes(15), // Same TTL as descendantIds
+            fn () => self::ancestorQuery($ids)
+        );
+    }
+
+    /**
+     * Run the JOIN query for ancestor IDs.
+     */
+    protected static function ancestorQuery(array $ids): Collection
+    {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $results = DB::select("
+            SELECT DISTINCT parent.id
+            FROM units base
+            INNER JOIN units parent ON parent.id = base.parent_id
+            WHERE base.id IN ({$placeholders})
+        ", $ids);
+
+        return collect($results)->pluck('id');
+    }
+
+    /**
      * تمام id های زیرمجموعه (شامل خود واحدهای ورودی) با Recursive CTE
      *
      * @param  int|array<int>  $unitIds

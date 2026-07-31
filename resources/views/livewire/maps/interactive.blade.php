@@ -14,17 +14,12 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        // Include ancestor units so parent markers exist for connection lines
-        // Only ancestors that are within organizational scope
-        $ancestorIds = Unit::whereIn('id', $accessibleIds)
-            ->whereNotNull('parent_id')
-            ->pluck('parent_id')
-            ->toArray();
-        $allIds = array_unique(array_merge($accessibleIds, $ancestorIds));
+        // Include ancestor units so parent markers exist for connection lines (single JOIN instead of 2 queries)
+        $allIds = array_unique(array_merge($accessibleIds, Unit::ancestorIds($accessibleIds)->toArray()));
 
         // Cache key based on accessibleIds only (not allIds with ancestors)
         // This ensures cache is isolated per organizational scope
-        $cacheKey = 'interactive_map:units:' . md5(implode(',', $accessibleIds));
+        $cacheKey = 'interactive_map:units:' . md5(implode(',', $allIds));
 
         $this->units = Cache::remember($cacheKey, 300, function () use ($allIds) {
             return Unit::whereIn('id', $allIds)
