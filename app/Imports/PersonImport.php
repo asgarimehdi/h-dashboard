@@ -20,6 +20,14 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
     private array $existingRecords = [];
     private string $compareKey = 'n_code'; // always match by n_code for persons
     private array $selectedActions = [];
+    
+    // Pre-loaded related models to avoid N+1 queries
+    private array $units = [];
+    private array $tahsils = [];
+    private array $estekhdams = [];
+    private array $radifs = [];
+    private array $semats = [];
+
     private array $importResults = [
         'created' => 0,
         'updated' => 0,
@@ -53,6 +61,9 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
     {
         // Pre-load existing person records by n_code for comparison
         $this->loadExistingRecords();
+        
+        // Pre-load all related reference data to avoid N+1 queries
+        $this->loadReferenceData();
 
         // First pass: build preview data
         foreach ($rows as $index => $row) {
@@ -91,6 +102,42 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         }
     }
 
+    /**
+     * Pre-load all reference data (units, tahsils, estekhdams, radifs, semats)
+     * to avoid N+1 queries during import
+     */
+    private function loadReferenceData(): void
+    {
+        // Load units
+        $unitQuery = Unit::query();
+        if (!empty($this->accessibleUnitIds)) {
+            $unitQuery->whereIn('id', $this->accessibleUnitIds);
+        }
+        foreach ($unitQuery->get(['id', 'name']) as $unit) {
+            $this->units[$unit->id] = $unit;
+        }
+
+        // Load tahsils (education levels)
+        foreach (Tahsil::get(['id', 'name']) as $tahsil) {
+            $this->tahsils[$tahsil->id] = $tahsil;
+        }
+
+        // Load estekhdams (employment types)
+        foreach (Estekhdam::get(['id', 'name']) as $estekhdam) {
+            $this->estekhdams[$estekhdam->id] = $estekhdam;
+        }
+
+        // Load radifs (ranks)
+        foreach (Radif::get(['id', 'name']) as $radif) {
+            $this->radifs[$radif->id] = $radif;
+        }
+
+        // Load semats (job titles)
+        foreach (Semat::get(['id', 'name']) as $semat) {
+            $this->semats[$semat->id] = $semat;
+        }
+    }
+
     private function applySelectedAction($row, int $rowNumber): void
     {
         // Check if this row has a selected action
@@ -124,9 +171,9 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
             return;
         }
 
-        // Verify unit exists and is in accessible units
+        // Verify unit exists and is in accessible units (using pre-loaded data)
         if (!empty($data['u_id'])) {
-            $unit = Unit::find($data['u_id']);
+            $unit = $this->units[$data['u_id']] ?? null;
             if (!$unit) {
                 $this->importResults['preview'][] = [
                     'row' => $rowNumber,
@@ -159,7 +206,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
             return;
         }
 
-        // Verify related models exist
+        // Verify related models exist (using pre-loaded data)
         $validationError = $this->validateRelatedModels($data);
         if ($validationError) {
             $this->importResults['preview'][] = [
@@ -248,16 +295,16 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
 
     private function validateRelatedModels(array $data): ?string
     {
-        if (!empty($data['t_id']) && !Tahsil::find($data['t_id'])) {
+        if (!empty($data['t_id']) && !isset($this->tahsils[$data['t_id']])) {
             return "تحصیلات با شناسه {$data['t_id']} یافت نشد";
         }
-        if (!empty($data['e_id']) && !Estekhdam::find($data['e_id'])) {
+        if (!empty($data['e_id']) && !isset($this->estekhdams[$data['e_id']])) {
             return "نوع استخدام با شناسه {$data['e_id']} یافت نشد";
         }
-        if (!empty($data['r_id']) && !Radif::find($data['r_id'])) {
+        if (!empty($data['r_id']) && !isset($this->radifs[$data['r_id']])) {
             return "ردیف سازمانی با شناسه {$data['r_id']} یافت نشد";
         }
-        if (!empty($data['s_id']) && !Semat::find($data['s_id'])) {
+        if (!empty($data['s_id']) && !isset($this->semats[$data['s_id']])) {
             return "سمت با شناسه {$data['s_id']} یافت نشد";
         }
         return null;
@@ -278,8 +325,8 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
             return;
         }
 
-        // Verify unit exists and is in accessible units
-        $unit = Unit::find($data['u_id']);
+        // Verify unit exists and is in accessible units (using pre-loaded data)
+        $unit = $this->units[$data['u_id']] ?? null;
         if (!$unit) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
@@ -300,7 +347,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
             return;
         }
 
-        // Verify related models exist
+        // Verify related models exist (using pre-loaded data)
         $validationError = $this->validateRelatedModels($data);
         if ($validationError) {
             $this->importResults['errors'][] = [
