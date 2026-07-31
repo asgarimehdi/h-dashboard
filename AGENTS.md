@@ -992,3 +992,29 @@ php artisan db:seed --force
 |---|---|---|
 | `06e0ba6` | — | New GitHub Actions production deploy workflow |
 | `8c4c17` | #180 | Heroicon fix: `o-arrow-` → `o-arrows-` (500 error on login) |
+
+---
+
+## Recent Changes (July 2026 Sync — Updated 2026-07-31)
+
+### Production Deployment Workflow (#181 — `06e0ba6`)
+- **New GitHub Actions workflow** `.github/workflows/deploy.yml` for automated production deployment:
+  - Triggers: push to `main` branch + manual `workflow_dispatch`
+  - Runs on a **self-hosted** runner at `/home/boxd/h-dashboard`
+  - Steps: `git pull origin main` → `php artisan view:clear` → `config:clear` → `route:clear` → `optimize` → `sudo systemctl reload apache2`
+- **Note:** CI/CD is now the production deployment path — any merge to `main` auto-deploys the app on the production server
+
+### Heroicon Naming Fix (#180 — `8c4c17`)
+- **`config/blade-heroicons.php`**: Brand-new config file (previously absent from config/) — added full icon name mapping with correct `arrows-up-down` namespacing
+- **`public/vendor/blade-heroicons/`**: Regenerated all SVG sprite files (c-, m-, o-, s- variants) with corrected icon names
+- **Impact**: Fixes 500 errors on pages referencing the previously-invalid `o-arrow-down-up` icon name (login page + sortable table headers)
+
+### Changelog Summary (This Sync Period)
+| Commit | Issue | Change |
+|---|---|---|
+| `06e0ba6` | #181 | GitHub Actions production deploy workflow (self-hosted runner + artisan optimize) |
+| `8344c17` | #180 | Heroicon fix: `o-arrow-down-up` → `o-arrows-up-down` (invalid icon name) |
+
+---
+
+*Previous sync: 2026-07-30 Late Evening (commits `06e0ba6`, `8c4c17`).*
