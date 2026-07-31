@@ -5,6 +5,7 @@ use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Morilog\Jalali\Jalalian;
 
 return new class extends Component {
@@ -40,72 +41,79 @@ return new class extends Component {
 
     public function getEvents(): array
     {
+        $user = auth()->user();
         $accessService = app(AccessService::class);
-        $accessibleIds = $accessService->accessibleUnitIds(auth()->user());
+        $accessibleIds = $accessService->accessibleUnitIds($user);
 
-        // Base query with date range filtering for performance
-        $todoQuery = Todo::query()
-            ->where(function ($q) use ($accessibleIds) {
-                $q->whereIn('unit_id', $accessibleIds)
-                  ->orWhereNull('unit_id');
-            });
+        // Build cache key from accessible IDs + date range + user context
+        $cacheKey = 'calendar:events:' . $user->id . ':' . md5(implode(',', $accessibleIds)) . ':' . ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all');
 
-        $ticketQuery = Ticket::accessible()
-            ->with('task')
-            ->whereIn('status', ['created', 'forwarded', 'accepted']);
+        return Cache::remember($cacheKey, 120, function () use ($accessibleIds) {
+            // Base query with date range filtering for performance
+            $todoQuery = Todo::query()
+                ->where(function ($q) use ($accessibleIds) {
+                    $q->whereIn('unit_id', $accessibleIds)
+                      ->orWhereNull('unit_id');
+                });
 
-        // Apply date range filter when available
-        if ($this->calendarStart) {
-            $todoQuery->where('start_at', '>=', $this->calendarStart);
-            $ticketQuery->where('created_at', '>=', $this->calendarStart);
-        }
-        if ($this->calendarEnd) {
-            $todoQuery->where('start_at', '<=', $this->calendarEnd);
-            $ticketQuery->where('created_at', '<=', $this->calendarEnd);
-        }
+            $ticketQuery = Ticket::accessible()
+                ->whereHas('task')
+                ->with('task')
+                ->whereIn('status', ['created', 'forwarded', 'accepted']);
 
-        // وظایف
-        $todoEvents = $todoQuery
-            ->get()
-            ->map(function ($todo) {
-                return [
-                    'id' => 'todo-' . $todo->id,
-                    'title' => $todo->title,
-                    'start' => $todo->start_at,
-                    'end' => $todo->end_at,
-                    'color' => $todo->is_completed ? '#10b981' : '#3b82f6',
-                    'allDay' => false,
-                    'extendedProps' => [
-                        'type' => 'todo',
-                        'is_completed' => $todo->is_completed,
-                    ],
-                ];
-            })->toArray();
+            // Apply date range filter when available
+            if ($this->calendarStart) {
+                $todoQuery->where('start_at', '>=', $this->calendarStart);
+                $ticketQuery->where('created_at', '>=', $this->calendarStart);
+            }
+            if ($this->calendarEnd) {
+                $todoQuery->where('start_at', '<=', $this->calendarEnd);
+                $ticketQuery->where('created_at', '<=', $this->calendarEnd);
+            }
 
-        // تیکت‌ها
-        $ticketEvents = $ticketQuery
-            ->get()
-            ->map(function ($ticket) {
-                $priorityColors = ['urgent' => '#ef4444', 'normal' => '#f59e0b', 'low' => '#6b7280'];
-                $priorityLabels = ['urgent' => 'فوری', 'normal' => 'عادی', 'low' => 'کم‌اهمیت'];
-                return [
-                    'id' => 'ticket-' . $ticket->id,
-                    'title' => '🎫 ' . $ticket->subject,
-                    'start' => $ticket->created_at,
-                    'color' => $priorityColors[$ticket->priority] ?? '#f59e0b',
-                    'allDay' => false,
-                    'extendedProps' => [
-                        'type' => 'ticket',
-                        'ticket_code' => $ticket->ticket_code,
-                        'status' => $ticket->status_name,
-                        'priority' => $priorityLabels[$ticket->priority] ?? 'عادی',
-                        'task_id' => $ticket->task_id,
-                        'task_title' => $ticket->task?->title,
-                    ],
-                ];
-            })->toArray();
+            // وظایف
+            $todoEvents = $todoQuery
+                ->get()
+                ->map(function ($todo) {
+                    return [
+                        'id' => 'todo-' . $todo->id,
+                        'title' => $todo->title,
+                        'start' => $todo->start_at,
+                        'end' => $todo->end_at,
+                        'color' => $todo->is_completed ? '#10b981' : '#3b82f6',
+                        'allDay' => false,
+                        'extendedProps' => [
+                            'type' => 'todo',
+                            'is_completed' => $todo->is_completed,
+                        ],
+                    ];
+                })->toArray();
 
-        return array_merge($todoEvents, $ticketEvents);
+            // تیکت‌ها
+            $ticketEvents = $ticketQuery
+                ->get()
+                ->map(function ($ticket) {
+                    $priorityColors = ['urgent' => '#ef4444', 'normal' => '#f59e0b', 'low' => '#6b7280'];
+                    $priorityLabels = ['urgent' => 'فوری', 'normal' => 'عادی', 'low' => 'کم‌اهمیت'];
+                    return [
+                        'id' => 'ticket-' . $ticket->id,
+                        'title' => '🎫 ' . $ticket->subject,
+                        'start' => $ticket->created_at,
+                        'color' => $priorityColors[$ticket->priority] ?? '#f59e0b',
+                        'allDay' => false,
+                        'extendedProps' => [
+                            'type' => 'ticket',
+                            'ticket_code' => $ticket->ticket_code,
+                            'status' => $ticket->status_name,
+                            'priority' => $priorityLabels[$ticket->priority] ?? 'عادی',
+                            'task_id' => $ticket->task_id,
+                            'task_title' => $ticket->task?->title,
+                        ],
+                    ];
+                })->toArray();
+
+            return array_merge($todoEvents, $ticketEvents);
+        });
     }
 
     public function openModal()
@@ -205,6 +213,7 @@ return new class extends Component {
 
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
 
+        $this->invalidateEventCache();
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
 
@@ -226,6 +235,21 @@ return new class extends Component {
         return $jalalian->toCarbon();
     }
 
+    /**
+     * Invalidate calendar event cache for current user
+     */
+    private function invalidateEventCache(): void
+    {
+        $user = auth()->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $cacheKeyBase = 'calendar:events:' . $user->id . ':' . md5(implode(',', $accessibleIds)) . ':';
+
+        // Clear all calendar event caches for this user (all date ranges)
+        foreach (['all:all', 'all:' . ($this->calendarEnd ?? 'all'), ($this->calendarStart ?? 'all') . ':all', ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all')] as $suffix) {
+            Cache::forget($cacheKeyBase . $suffix);
+        }
+    }
+
     public function delete(): void
     {
         if ($this->editingId) {
@@ -242,6 +266,7 @@ return new class extends Component {
 
             $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
 
+            $this->invalidateEventCache();
             $this->dispatch('calendar-updated', events: $this->getEvents());
         }
     }
@@ -262,6 +287,7 @@ return new class extends Component {
         }
 
         $todo->update(['is_completed' => !$todo->is_completed]);
+        $this->invalidateEventCache();
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
 
