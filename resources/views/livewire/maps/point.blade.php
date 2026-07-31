@@ -3,6 +3,7 @@
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\Region;
+use App\Services\AccessService;
 use Livewire\Component;
 use Illuminate\Support\Facades\Cache;
 
@@ -42,7 +43,10 @@ return new class extends Component
 
     public function fetchLocation(): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         $query = Unit::query()
+            ->whereIn('id', $accessibleIds)  // Organizational Scope: only accessible units + descendants
             ->whereNotNull('lat')
             ->whereNotNull('lng');
 
