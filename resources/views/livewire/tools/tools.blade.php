@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\{Ticket, ActivityLog, Notification};
+use App\Models\User;
 use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component {
     use Toast;
@@ -16,17 +18,26 @@ return new class extends Component {
     public function mount(): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $this->stats = [
-            'old_tickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                ->where('status', 'completed')
-                ->where('completed_at', '<', now()->subDays(30))
-                ->count(),
-            'old_activities' => ActivityLog::where('created_at', '<', now()->subDays(90))->count(),
-            'old_notifications' => Notification::where('created_at', '<', now()->subDays(7))->count(),
-            'total_tickets' => Ticket::whereIn('unit_id', $accessibleIds)->count(),
-            'total_activities' => ActivityLog::count(),
-            'total_notifications' => Notification::count(),
-        ];
+        $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
+        $cacheKey = 'tools:stats:' . md5(implode(',', $accessibleIds) . ':' . implode(',', $userIds));
+
+        $this->stats = Cache::remember($cacheKey, 60, function () use ($accessibleIds, $userIds) {
+            return [
+                'old_tickets' => Ticket::whereIn('unit_id', $accessibleIds)
+                    ->where('status', 'completed')
+                    ->where('completed_at', '<', now()->subDays(30))
+                    ->count(),
+                'old_activities' => ActivityLog::whereIn('user_id', $userIds)
+                    ->where('created_at', '<', now()->subDays(90))
+                    ->count(),
+                'old_notifications' => Notification::whereIn('user_id', $userIds)
+                    ->where('created_at', '<', now()->subDays(7))
+                    ->count(),
+                'total_tickets' => Ticket::whereIn('unit_id', $accessibleIds)->count(),
+                'total_activities' => ActivityLog::whereIn('user_id', $userIds)->count(),
+                'total_notifications' => Notification::whereIn('user_id', $userIds)->count(),
+            ];
+        });
     }
 
     public function archiveTickets(): void
@@ -39,6 +50,7 @@ return new class extends Component {
             ->where('completed_at', '<', now()->subDays($this->archiveDays))
             ->update(['status' => 'archived']);
         $this->success("{$count} تیکت قدیمی آرشیو شد.");
+        $this->invalidateStatsCache();
         $this->mount();
     }
 
@@ -47,8 +59,11 @@ return new class extends Component {
         $this->validate([
             'activityDays' => 'required|integer|min:30|max:365',
         ]);
-        $count = ActivityLog::where('created_at', '<', now()->subDays($this->activityDays))->delete();
+        $count = ActivityLog::whereIn('user_id', User::whereHas('person', fn($q) => $q->whereIn('u_id', app(AccessService::class)->accessibleUnitIds()))->pluck('id'))
+            ->where('created_at', '<', now()->subDays($this->activityDays))
+            ->delete();
         $this->success("{$count} لاگ قدیمی پاک شد.");
+        $this->invalidateStatsCache();
         $this->mount();
     }
 
@@ -57,9 +72,20 @@ return new class extends Component {
         $this->validate([
             'notificationDays' => 'required|integer|min:1|max:90',
         ]);
-        $count = Notification::where('created_at', '<', now()->subDays($this->notificationDays))->delete();
+        $count = Notification::whereIn('user_id', User::whereHas('person', fn($q) => $q->whereIn('u_id', app(AccessService::class)->accessibleUnitIds()))->pluck('id'))
+            ->where('created_at', '<', now()->subDays($this->notificationDays))
+            ->delete();
         $this->success("{$count} اعلان قدیمی پاک شد.");
+        $this->invalidateStatsCache();
         $this->mount();
+    }
+
+    private function invalidateStatsCache(): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
+        $cacheKey = 'tools:stats:' . md5(implode(',', $accessibleIds) . ':' . implode(',', $userIds));
+        Cache::forget($cacheKey);
     }
 };
 ?>
