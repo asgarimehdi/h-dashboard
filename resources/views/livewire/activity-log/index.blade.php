@@ -1,12 +1,14 @@
 <?php
 
 use App\Models\ActivityLog;
+use App\Services\AccessService;
 use Carbon\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Computed;
 use Morilog\Jalali\Jalalian;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
@@ -43,6 +45,17 @@ return new class extends Component
         $this->typeStats = $this->getTypeStats();
     }
 
+    /**
+     * Get accessible user IDs for current user's organizational scope
+     */
+    private function getAccessibleUserIds(): array
+    {
+        $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+        return \App\Models\User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleUnitIds))
+            ->pluck('id')
+            ->toArray();
+    }
+
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
     {
         if (empty($date)) {
@@ -61,7 +74,10 @@ return new class extends Component
     #[Computed]
     public function logs()
     {
-        $query = ActivityLog::with("user");
+        $accessibleUserIds = $this->getAccessibleUserIds();
+
+        $query = ActivityLog::with("user")
+            ->whereIn("user_id", $accessibleUserIds);
 
         if (!empty($this->search)) {
             $query->where(function ($q) {
@@ -74,7 +90,7 @@ return new class extends Component
             $query->where("type", $this->typeFilter);
         }
 
-        if ($this->userId) {
+        if ($this->userId && in_array($this->userId, $accessibleUserIds)) {
             $query->where("user_id", $this->userId);
         }
 
@@ -103,10 +119,16 @@ return new class extends Component
 
     public function getTypeStats(): array
     {
-        return ActivityLog::selectRaw('type, count(*) as count')
-            ->groupBy('type')
-            ->pluck('count', 'type')
-            ->toArray();
+        $accessibleUserIds = $this->getAccessibleUserIds();
+        $cacheKey = 'activity_log:types:' . md5(implode(',', $accessibleUserIds));
+
+        return Cache::remember($cacheKey, 300, function () use ($accessibleUserIds) {
+            return ActivityLog::selectRaw('type, count(*) as count')
+                ->whereIn('user_id', $accessibleUserIds)
+                ->groupBy('type')
+                ->pluck('count', 'type')
+                ->toArray();
+        });
     }
 }; ?>
 <div>
