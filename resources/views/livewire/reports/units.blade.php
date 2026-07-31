@@ -4,6 +4,7 @@ use Livewire\Component;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Services\AccessService;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
@@ -26,7 +27,7 @@ return new class extends Component
 
     public function getUnitTypesProperty()
     {
-        return UnitType::all();
+        return Cache::remember('unit_types_all', 86400, fn() => UnitType::all());
     }
 
     public function chartPayload(): array
