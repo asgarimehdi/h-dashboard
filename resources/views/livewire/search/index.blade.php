@@ -2,7 +2,9 @@
 
 use Livewire\Component;
 use App\Models\{Ticket, Todo, User, Unit};
+use App\Services\AccessService;
 use Livewire\Attributes\Layout;
+use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
@@ -25,40 +27,49 @@ return new class extends Component
         if (strlen($this->query) < 2) return;
 
         $q = $this->query;
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
 
-        $this->results = [
-            'tickets' => Ticket::accessible()
-                ->where(function ($query) use ($q) {
-                    $query->where('subject', 'like', "%{$q}%")
-                          ->orWhere('ticket_code', 'like', "%{$q}%");
-                })
-                ->with(['user.person', 'unit'])
-                ->latest()
-                ->take(10)
-                ->get()
-                ->toArray(),
+        // Cache key includes query, accessible units, and user IDs
+        $cacheKey = 'global_search:' . md5($q . ':' . implode(',', $accessibleIds) . ':' . implode(',', $userIds));
 
-            'todos' => Todo::accessible()
-                ->where('title', 'like', "%{$q}%")
-                ->latest()
-                ->take(10)
-                ->get()
-                ->toArray(),
+        $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $userIds) {
+            return [
+                'tickets' => Ticket::accessible()
+                    ->where(function ($query) use ($q) {
+                        $query->where('subject', 'like', "%{$q}%")
+                              ->orWhere('ticket_code', 'like', "%{$q}%");
+                    })
+                    ->with(['user.person', 'unit'])
+                    ->latest()
+                    ->take(10)
+                    ->get()
+                    ->toArray(),
 
-            'users' => User::with('person')
-                ->whereHas('person', function ($query) use ($q) {
-                    $query->where('f_name', 'like', "%{$q}%")
-                          ->orWhere('l_name', 'like', "%{$q}%");
-                })
-                ->take(10)
-                ->get()
-                ->toArray(),
+                'todos' => Todo::accessible()
+                    ->where('title', 'like', "%{$q}%")
+                    ->latest()
+                    ->take(10)
+                    ->get()
+                    ->toArray(),
 
-            'units' => Unit::where('name', 'like', "%{$q}%")
-                ->take(10)
-                ->get()
-                ->toArray(),
-        ];
+                'users' => User::with('person')
+                    ->whereIn('id', $userIds)
+                    ->whereHas('person', function ($query) use ($q) {
+                        $query->where('f_name', 'like', "%{$q}%")
+                              ->orWhere('l_name', 'like', "%{$q}%");
+                    })
+                    ->take(10)
+                    ->get()
+                    ->toArray(),
+
+                'units' => Unit::whereIn('id', $accessibleIds)
+                    ->where('name', 'like', "%{$q}%")
+                    ->take(10)
+                    ->get()
+                    ->toArray(),
+            ];
+        });
 
         $this->hasSearched = true;
     }
