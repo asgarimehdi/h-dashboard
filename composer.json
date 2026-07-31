@@ -11,7 +11,6 @@
     "require": {
         "php": "^8.4",
         "hekmatinasser/verta": "^9.0",
-        "laravel/ai": "*",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",

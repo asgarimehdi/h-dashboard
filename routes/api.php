@@ -1,7 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\AiController;
-use App\Http\Controllers\Api\HardwareAgentController;
 use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
@@ -34,12 +32,12 @@ Route::post('/login', function (Request $request) {
 })->middleware('throttle:5,1');
 
 // Authenticated routes
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+Route::middleware('auth:Sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
 // Unit API routes
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:Sanctum')->group(function () {
     Route::get('/units', [UnitController::class, 'index']);
     Route::post('/units', [UnitController::class, 'store']);
     Route::get('/units/{unit}', [UnitController::class, 'show']);
@@ -49,12 +47,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
 Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
-
-// AI smoke test endpoint
-Route::middleware('auth:sanctum')->post('/ai/chat', AiController::class);
-
-// Hardware AI Agent endpoint
-Route::middleware('auth:sanctum')->post('/ai/hardware', HardwareAgentController::class);
 
 // Hardware API routes
 Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
