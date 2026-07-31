@@ -63,7 +63,7 @@ new class extends Component
     #[Computed]
     public function tickets()
     {
-        $query = Ticket::with(['user', 'unit', 'assignee', 'activities', 'task'])->accessible();
+        $query = Ticket::with(['user:id,n_code', 'unit:id,name'])->accessible();
 
         if ($this->selectedUnitId) {
             $query->where('unit_id', $this->selectedUnitId);
