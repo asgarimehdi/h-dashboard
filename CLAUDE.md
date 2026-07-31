@@ -21,19 +21,10 @@ php artisan db:seed --class=HardwareSeeder
 ## Code Architecture
 
 ### Key Directories
-- `app/Ai/` — Custom Agent/Tool pattern (no external AI SDK)
-- `app/Ai/Agents/` — Agent classes (e.g. `HardwareAgent`)
-- `app/Ai/Tools/Hardware/` — Tool implementations (6 tools)
 - `app/Http/Controllers/Api/` — REST API controllers
-- `app/Http/Resources/` — API resource transformers
 - `app/Traits/` — Reusable traits (`PersianNormalizer`)
 - `app/Services/` — Business logic (`AccessService`)
-- `resources/views/livewire/hardware/` — Volt components (`index.blade.php`, `ai-chat.blade.php`)
-
-### Creating a New Tool
-1. Create class in `app/Ai/Tools/Hardware/` extending `App\Ai\Tools\Tool`
-2. Implement `name()`, `description()`, `parameters()`, `execute()`
-3. Register in `app/Ai/Agents/HardwareAgent.php` via `withTool()`
+- `resources/views/livewire/hardware/` — Volt components (`index.blade.php`, `import-hardware.blade.php`)
 
 ## Database Models
 
@@ -54,7 +45,7 @@ php artisan db:seed --class=HardwareSeeder
 - Spatie Permission package
 - `HasOrganizationalScope` trait — auto-filters queries by user's accessible units
 - `AccessService::accessibleUnitIds($user)` — returns unit IDs (self + descendants via recursive CTE)
-- Permission `manage_hardware` for hardware CRUD + AI agent
+- Permission `manage_hardware` for hardware CRUD
 
 ## Persian Text Handling
 Always normalize user input for Persian character variants:
@@ -83,9 +74,3 @@ use App\Traits\PersianNormalizer;
 - `status` computed: `mark ? 'mark' : (shutdown ? 'off' : 'on')`
 - Marked rows: `bg-warning/20 border-r-4 border-r-warning`
 - Mobile: card layout via `grid grid-cols-1 md:hidden`
-
-## AI Agent Details
-- Agent reads instructions + tool descriptions, calls OpenAI-compatible API via `Agent::prompt()`
-- Response has thinking blocks stripped (`<thinking>`, `<think>`) before display
-- Chat history persisted via Laravel session
-- Markdown rendered client-side (bold, italic, tables, code)
