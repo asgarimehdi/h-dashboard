@@ -90,36 +90,37 @@ class extends Component {
 
 ?>
 
-{{--  ponytail: no external libs, pure CSS animations, glassmorphism card  --}}
-<div class="min-h-screen flex auth-layout">
-    {{-- Background --}}
-    <div class="fixed inset-0 -z-10 overflow-hidden">
-        <div class="absolute inset-0 bg-gradient-to-br from-primary/20 via-base-100 to-secondary/20 dark:from-primary/10 dark:via-base-300 dark:to-secondary/10"></div>
-        <div class="absolute top-[-20%] -right-[10%] w-[70%] h-[70%] rounded-full bg-primary/10 blur-3xl animate-pulse" style="animation-duration:8s"></div>
-        <div class="absolute bottom-[-15%] -left-[10%] w-[60%] h-[60%] rounded-full bg-secondary/10 blur-3xl animate-pulse" style="animation-duration:12s;animation-delay:-4s"></div>
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full bg-accent/5 blur-3xl animate-pulse" style="animation-duration:15s;animation-delay:-8s"></div>
+{{--  stitch-inspired: woven art + animations, keeps maryUI theme + theme selector  --}}
+<div class="min-h-screen flex auth-layout stitch-bg">
+    {{-- Background blobs --}}
+    <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div class="stitch-blob stitch-drift" style="top:-10%; right:-8%; width:45%; height:45%; background:linear-gradient(135deg,#F8B803,#FF750F);"></div>
+        <div class="stitch-blob stitch-drift" style="bottom:-15%; left:-8%; width:40%; height:40%; background:linear-gradient(135deg,#F0304E,#7C3AED); animation-delay:-6s;"></div>
+        <div class="stitch-blob stitch-drift" style="top:35%; left:35%; width:35%; height:35%; background:linear-gradient(135deg,#22D3EE,#F8B803); animation-delay:-12s;"></div>
     </div>
 
-    {{-- Brand side (hidden on mobile) --}}
-    <div class="hidden lg:flex w-1/2 flex-col justify-between p-12 bg-gradient-to-br from-primary to-secondary text-primary-content relative overflow-hidden">
-        {{-- Decorative circles --}}
-        <div class="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/10"></div>
-        <div class="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-white/5"></div>
-
-        <div class="relative z-10">
+    {{-- Brand / Art side --}}
+    <div class="hidden lg:flex w-1/2 flex-col justify-between p-12 relative overflow-hidden">
+        <div class="relative z-10 stitch-rise">
             <x-app-brand class="text-3xl font-bold" />
         </div>
 
-        <div class="relative z-10 space-y-6">
-            <h1 class="text-4xl font-bold leading-tight">داشبورد مدیریت سلامت</h1>
-            <p class="text-primary-content/80 text-lg leading-relaxed">سیستم یکپارچه مدیریت منابع انسانی، نقشه‌های GIS، پایش IT و مدیریت درخواست‌ها</p>
-            <div class="flex gap-6 pt-4 text-sm text-primary-content/70">
+        <div class="relative z-10 flex-1 flex items-center justify-center my-4">
+            <div class="stitch-float w-full max-w-md">
+                <x-stitch-parrot class="w-full h-auto" />
+            </div>
+        </div>
+
+        <div class="relative z-10 space-y-6 stitch-rise stitch-delay-2">
+            <h1 class="text-4xl font-extrabold leading-tight stitch-gradient-text">داشبورد مدیریت سلامت</h1>
+            <p class="text-base-content/70 text-lg leading-relaxed">سیستم یکپارچه مدیریت منابع انسانی، نقشه‌های GIS، پایش IT و مدیریت درخواست‌ها</p>
+            <div class="flex gap-6 pt-4 text-sm text-base-content/70">
                 <span class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary-content" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span class="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></span>
                     امنیت بالا
                 </span>
                 <span class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary-content" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span class="w-5 h-5 rounded-full bg-secondary/20 text-secondary flex items-center justify-center"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></span>
                     رابط کاربری مدرن
                 </span>
             </div>
@@ -129,14 +130,14 @@ class extends Component {
     {{-- Login form side --}}
     <div class="flex-1 flex items-center justify-center p-6 sm:p-12">
         <div class="w-full max-w-md">
-            {{-- Mobile brand (only on small screens) --}}
-            <div class="lg:hidden text-center mb-8">
+            {{-- Mobile brand --}}
+            <div class="lg:hidden text-center mb-8 stitch-rise">
                 <x-app-brand class="text-2xl font-bold mx-auto mb-2" />
                 <p class="text-base-content/60 text-sm">داشبورد مدیریت سلامت</p>
             </div>
 
             {{-- Glass card --}}
-            <div class="backdrop-blur-xl bg-base-100/80 border border-base-content/10 rounded-3xl shadow-2xl p-8 sm:p-10 space-y-8">
+            <div class="stitch-card p-8 sm:p-10 space-y-8 stitch-rise stitch-delay-1">
 
                 {{-- Header --}}
                 <div class="text-center space-y-2">

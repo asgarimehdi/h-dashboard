@@ -25,7 +25,7 @@
 @source "../../vendor/robsontenorio/mary/src/View/Components/**/*.php";
 
 /* Theme toggle */
-@custom-variant dark (&:where([data-theme=synthwave], [data-theme=synthwave] *));
+@custom-variant dark (&:where([data-theme=synthwave], [data-theme=synthwave] *), &:where([data-theme=dark], [data-theme=dark] *));
 
 
 /**
@@ -78,4 +78,161 @@ body {
 .dark .leaflet-control-attribution {
     filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
 }
+
+/* =====================================================================
+   Stitch-style theme additions (inspired by stitch.withgoogle.com)
+   Keeps maryUI / daisyUI tokens so the theme selector (dark/light) works.
+   ===================================================================== */
+
+/* ---- Reusable entrance animations (respects prefers-reduced-motion) ---- */
+@keyframes stitch-rise {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes stitch-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes stitch-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-14px); }
+}
+@keyframes stitch-drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    33%  { transform: translate(30px, -40px) scale(1.08); }
+    66%  { transform: translate(-25px, 20px) scale(0.95); }
+    100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes stitch-dash {
+    to { stroke-dashoffset: -1000; }
+}
+@keyframes stitch-spin-slow {
+    to { transform: rotate(360deg); }
+}
+@keyframes stitch-hue {
+    0%   { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
+@keyframes stitch-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.stitch-rise  { animation: stitch-rise 0.8s cubic-bezier(.22,.9,.36,1) both; }
+.stitch-fade  { animation: stitch-fade 1s ease both; }
+.stitch-float { animation: stitch-float 6s ease-in-out infinite; }
+.stitch-drift { animation: stitch-drift 18s ease-in-out infinite; }
+.stitch-spin-slow { animation: stitch-spin-slow 40s linear infinite; }
+
+/* Staggered entrance */
+.stitch-delay-1  { animation-delay: .1s; }
+.stitch-delay-2  { animation-delay: .25s; }
+.stitch-delay-3  { animation-delay: .4s; }
+.stitch-delay-4  { animation-delay: .55s; }
+.stitch-delay-5  { animation-delay: .7s; }
+.stitch-delay-6  { animation-delay: .85s; }
+
+@media (prefers-reduced-motion: reduce) {
+    .stitch-rise, .stitch-fade, .stitch-float, .stitch-drift,
+    .stitch-spin-slow {
+        animation: none !important;
+    }
+}
+
+/* ---- Woven / braided grid background (light + dark aware) ---- */
+.stitch-bg {
+    position: relative;
+}
+.stitch-bg::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background-color: #FDFAF3;
+    background-image:
+        linear-gradient(to right, rgba(27,27,24,0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(27,27,24,0.05) 1px, transparent 1px),
+        radial-gradient(circle at 20% 20%, rgba(248,184,3,0.10), transparent 40%),
+        radial-gradient(circle at 80% 30%, rgba(240,172,184,0.12), transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(255,117,15,0.08), transparent 45%);
+    background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%;
+}
+[data-theme="dark"].stitch-bg::before,
+[data-theme="synthwave"].stitch-bg::before,
+.dark .stitch-bg::before {
+    background-color: #140C1E;
+    background-image:
+        linear-gradient(to right, rgba(255,255,255,0.045) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.045) 1px, transparent 1px),
+        radial-gradient(circle at 20% 20%, rgba(167,139,250,0.14), transparent 40%),
+        radial-gradient(circle at 80% 30%, rgba(34,211,238,0.12), transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(255,117,15,0.10), transparent 45%);
+    background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* ---- Stitch thread divider ---- */
+.stitch-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+.stitch-divider::before,
+.stitch-divider::after {
+    content: "";
+    flex: 1;
+    height: 3px;
+    border-radius: 9999px;
+    background-image: linear-gradient(to left, transparent, currentColor 40%, currentColor 60%, transparent);
+    opacity: .4;
+}
+
+/* ---- Animated floating blobs ---- */
+.stitch-blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(60px);
+    opacity: .55;
+    pointer-events: none;
+    will-change: transform;
+}
+
+/* ---- Marquee of thread dots (Canvas-like decoration) ---- */
+.stitch-dots {
+    background-image: radial-gradient(circle, currentColor 2px, transparent 2.5px);
+    background-size: 18px 18px;
+    opacity: .5;
+}
+
+/* ---- Gradient text (Google-style) ---- */
+.stitch-gradient-text {
+    background: linear-gradient(100deg, #F8B803 0%, #FF750F 30%, #F0304E 55%, #7C3AED 80%, #22D3EE 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    background-size: 200% auto;
+    animation: stitch-shimmer 8s linear infinite;
+}
+[data-theme="dark"] .stitch-gradient-text {
+    background: linear-gradient(100deg, #FCD34D 0%, #FB923C 30%, #FF6B81 55%, #A78BFA 80%, #67E8F9 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    background-size: 200% auto;
+    animation: stitch-shimmer 8s linear infinite;
+}
+
+/* ---- Rounded "stitched" card ---- */
+.stitch-card {
+    position: relative;
+    border-radius: 1.75rem;
+    background: color-mix(in oklab, var(--color-base-100) 82%, transparent);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,.25);
+}
+
+/* Keep scrollbar pretty + consistent in both themes */
 
