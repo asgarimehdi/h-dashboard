@@ -37,8 +37,17 @@ class PersonController extends Controller
             $query->where('s_id', $request->semat_id);
         }
 
+        $allowedSortColumns = ['n_code', 'f_name', 'l_name', 'created_at', 'u_id', 's_id', 't_id', 'e_id', 'r_id'];
         $sortBy = $request->get('sort_by', 'n_code');
-        $sortDir = $request->get('sort_dir', 'asc');
+        if (! in_array($sortBy, $allowedSortColumns)) {
+            $sortBy = 'n_code';
+        }
+
+        $sortDir = strtolower($request->get('sort_dir', 'asc'));
+        if (! in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'asc';
+        }
+
         $query->orderBy($sortBy, $sortDir);
 
         $perPage = min((int) $request->get('per_page', 20), 100);

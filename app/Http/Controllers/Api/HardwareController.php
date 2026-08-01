@@ -144,8 +144,17 @@ class HardwareController extends Controller
             });
         }
 
+        $allowedSortColumns = ['id', 'n_code', 'pc_name', 'type', 'os', 'created_at', 'shutdown', 'mark', 'ip_valid', 'ip_local', 'mac', 'cpu', 'ram', 'hdd'];
         $sortBy = $request->get('sort_by', 'id');
-        $sortDir = $request->get('sort_dir', 'desc');
+        if (! in_array($sortBy, $allowedSortColumns)) {
+            $sortBy = 'id';
+        }
+
+        $sortDir = strtolower($request->get('sort_dir', 'desc'));
+        if (! in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'desc';
+        }
+
         $query->orderBy($sortBy, $sortDir);
 
         $perPage = min((int) $request->get('per_page', 10), 100);
