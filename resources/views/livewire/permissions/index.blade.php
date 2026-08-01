@@ -13,7 +13,7 @@ return new class extends Component
     public string $name, $label;
     public int|null $editingId = null;
     public string $search = '';
-    public int $perPage = 5;
+    public int $perPage = 20;
     public bool $modal = false;
     public bool $showHelpModal = false;
 
@@ -163,7 +163,7 @@ return new class extends Component
         </div>
 
         <x-table :headers="$headers" :rows="$permissions" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[3, 5, 10]">
+                 :per-page-values="[10, 20, 50]">
             @foreach($permissions as $permission)
                 <tr wire:key="{{ $permission->id }}">
                     @scope('actions', $permission)

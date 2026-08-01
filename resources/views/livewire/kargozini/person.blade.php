@@ -39,7 +39,7 @@ return new class extends Component
 
     public string $search = '';
 
-    public int $perPage = 5;
+    public int $perPage = 20;
 
     public bool $formOpen = false;
 
@@ -310,7 +310,7 @@ return new class extends Component
         @endif
 
         <x-table :headers="$headers" :rows="$persons" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[5, 10, 20]">
+                 :per-page-values="[10, 20, 50]">
             @scope('actions', $person)
                 <div class="flex w-1/12">
                     <x-button icon="o-pencil"

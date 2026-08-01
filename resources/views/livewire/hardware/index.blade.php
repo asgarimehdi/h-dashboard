@@ -17,7 +17,7 @@ return new class extends Component
     use PersianNormalizer;
 
     public string $search = '';
-    public int $perPage = 10;
+    public int $perPage = 20;
     public bool $showHelpModal = false;
 
     /**
@@ -707,7 +707,7 @@ return new class extends Component
         {{-- Desktop Table --}}
         <div class="hidden md:block">
             <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
-                    :per-page-values="[5, 10, 25, 50]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
+                    :per-page-values="[10, 20, 50, 100]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
                 @scope('cell_checkbox', $hw)
                     <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
                 @endscope

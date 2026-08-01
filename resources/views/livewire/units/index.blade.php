@@ -17,7 +17,7 @@ return new class extends Component {
     public $name, $description, $unit_type_id, $region_id, $province_id, $parent_id;
     public int|null $editingId = null;
     public string $search = '';
-    public int $perPage = 10;
+    public int $perPage = 20;
     public bool $modal = false;
     public bool $showHelpModal = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
@@ -349,7 +349,7 @@ return new class extends Component {
         </div>
         
         <x-table :headers="$headers" :rows="$units" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[5, 10, 20]">
+                 :per-page-values="[10, 20, 50]">
             @foreach($units as $unit)
                 <tr wire:key="{{ $unit->id }}">
                     @scope('actions', $unit)

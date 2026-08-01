@@ -17,7 +17,7 @@ return new class extends Component
 
     public string $search = '';
 
-    public int $perPage = 5;
+    public int $perPage = 20;
 
     public bool $showForm = false;
 
@@ -159,7 +159,7 @@ return new class extends Component
             :sort-by="$sortBy"
             with-pagination
             per-page="perPage"
-            :per-page-values="[3, 5, 10]"
+            :per-page-values="[10, 20, 50]">
         >
             @scope('cell_name', $estekhdam)
                 @if($this->editingId === $estekhdam->id)

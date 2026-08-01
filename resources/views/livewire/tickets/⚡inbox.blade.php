@@ -120,7 +120,7 @@ new class extends Component
             });
         }
 
-        return $query->latest()->paginate(5);
+        return $query->latest()->paginate(20);
     }
 
     public function updatedViewMode(): void
