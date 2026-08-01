@@ -16,9 +16,6 @@
             @case('hardware-import')
                 <x-help-content:hardware-import />
                 @break
-            @case('hardware-ai')
-                <x-help-content:hardware-ai />
-                @break
             @case('personnel')
                 <x-help-content:personnel />
                 @break

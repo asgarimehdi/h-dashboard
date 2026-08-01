@@ -22,7 +22,6 @@
 | داشبورد | `dashboard` |
 | سخت‌افزار | `hardware` |
 | ایمپورت سخت‌افزار | `hardware-import` |
-| چت هوش مصنوعی | `hardware-ai` |
 | پرسنل | `persons` |
 | واحدها | `units` |
 | بلیطینگ | `tickets` |
