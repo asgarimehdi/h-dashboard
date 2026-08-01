@@ -61,6 +61,13 @@ return new class extends Component
 
     public function delete(Person $person): void
     {
+        // Check organizational scope
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        if (! in_array($person->u_id, $accessibleIds)) {
+            $this->error('شما مجاز به حذف این پرسنل نیستید.', position: 'toast-bottom');
+            return;
+        }
+
         try {
             $person->delete();
             $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
@@ -84,6 +91,14 @@ return new class extends Component
 
         if ($this->editingId) {
             $person = Person::findOrFail($this->editingId);
+            
+            // Check organizational scope for update
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+            if (! in_array($person->u_id, $accessibleIds)) {
+                $this->error('شما مجاز به ویرایش این پرسنل نیستید.', position: 'toast-bottom');
+                return;
+            }
+            
             $person->update([
                 'n_code' => $this->n_code,
                 'f_name' => $this->f_name,
@@ -102,6 +117,13 @@ return new class extends Component
 
             $this->success('شخص به‌روزرسانی شد');
         } else {
+            // Check organizational scope for create - u_id must be in accessible units
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+            if (! in_array($this->u_id, $accessibleIds)) {
+                $this->error('شما مجاز به ثبت پرسنل در این واحد نیستید.', position: 'toast-bottom');
+                return;
+            }
+            
             $person = Person::create([
                 'n_code' => $this->n_code,
                 'f_name' => $this->f_name,
@@ -128,6 +150,14 @@ return new class extends Component
     {
         $this->resetValidation();
         $person = Person::findOrFail($id);
+        
+        // Check organizational scope
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        if (! in_array($person->u_id, $accessibleIds)) {
+            $this->error('شما مجاز به ویرایش این پرسنل نیستید.', position: 'toast-bottom');
+            return;
+        }
+        
         $this->editingId = (int) $id;
         $this->n_code = $person->n_code;
         $this->f_name = $person->f_name;
