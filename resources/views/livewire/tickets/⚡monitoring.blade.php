@@ -2,6 +2,7 @@
 
 use App\Models\Ticket;
 use App\Models\Unit;
+use App\Services\AccessService;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
@@ -105,13 +106,22 @@ new class extends Component
 
     public function showTicket($id): void
     {
-        $this->showingTicket = Ticket::with([
+        // Check organizational scope
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $ticket = Ticket::with([
             'user',
             'unit',
             'attachments',
             'activities.user',
             'activities.attachments'
         ])->findOrFail($id);
+
+        if (! in_array($ticket->unit_id, $accessibleIds)) {
+            $this->error('شما مجاز به مشاهده این تیکت نیستید.', position: 'toast-bottom');
+            return;
+        }
+
+        $this->showingTicket = $ticket;
         $this->showModal = true;
     }
 
