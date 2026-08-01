@@ -2,7 +2,7 @@ APP_NAME=h-dashboard
 APP_ENV=local
 APP_KEY=base64:aelQP/iruUmruqDr1iZ9XEFB/EgFm3crvwHN1lqnix8=
 APP_DEBUG=false
-APP_URL=http://h-dashboard.test
+APP_URL=http://coder1.boxd.sh
 TILE_SERVER_IP=tile.openstreetmap.org
 
 APP_LOCALE=fa
@@ -25,11 +25,11 @@ DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_DATABASE=h_dashboard
-DB_USERNAME=h_...
-DB_PASSWORD=h_...
-DB_ROOT_PASSWORD=admin@...
+DB_USERNAME=h_dashboard
+DB_PASSWORD=example_6162e0f827d119b0
+DB_ROOT_PASSWORD=example_4be97a3608e27da3
 DB_DEFAULT_EMAIL=admin@...
-DB_DEFAULT_PASSWORD=h_...
+DB_DEFAULT_PASSWORD=example_eb4bddfe0a613c1e
 
 SESSION_LIFETIME=120
 SESSION_ENCRYPT=false
@@ -73,7 +73,7 @@ QUEUE_CONNECTION=redis
 
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
-REDIS_PASSWORD=123
+REDIS_PASSWORD=example_e317eb5b0fd7e85c
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=
