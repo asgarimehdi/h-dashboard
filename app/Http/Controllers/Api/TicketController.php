@@ -141,6 +141,18 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
             'assignee_id' => 'required|exists:users,id',
         ]);
 
+        $assignee = User::find($validated['assignee_id']);
+
+        // Issue #205: the assignee must belong to the ticket's organizational scope
+        // (same unit or a descendant). Assigning to an out-of-scope user would leak
+        // ticket data across units and bypass organizational access control.
+        $assigneeUnitIds = $assignee->units()->pluck('units.id')->toArray();
+        $assigneeUnitIds[] = $assignee->person?->u_id;
+
+        if (empty(array_intersect($assigneeUnitIds, $accessibleIds))) {
+            return response()->json(['message' => 'Assignee is not in an accessible unit.'], 403);
+        }
+
         $ticket->update([
             'current_assignee_id' => $validated['assignee_id'],
             'status' => 'forwarded',

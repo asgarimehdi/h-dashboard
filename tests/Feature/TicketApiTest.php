@@ -181,4 +181,57 @@ class TicketApiTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    /**
+     * Issue #205: assign() must not allow assigning a ticket to a user
+     * who is outside the ticket's organizational scope.
+     */
+    public function test_cannot_assign_ticket_to_user_outside_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $ticket = Ticket::create(['ticket_code' => 'T-010', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Scoped', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
+
+        // Assignee in a DIFFERENT unit (no org relation to $unit)
+        $otherUnit = Unit::create(['name' => 'Other Unit']);
+        $otherNCode = (string) rand(1000000000, 9999999999);
+        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
+        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
+        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
+        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        Person::create(['n_code' => $otherNCode, 'f_name' => 'X', 'l_name' => 'Y', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $otherUnit->id]);
+        $otherUser = User::create(['n_code' => $otherNCode, 'password' => Hash::make('password')]);
+        $otherUser->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $otherUser->id,
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Assignee is not in an accessible unit.']);
+
+        $this->assertNull($ticket->fresh()->current_assignee_id);
+    }
+
+    public function test_can_assign_ticket_to_user_in_same_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $ticket = Ticket::create(['ticket_code' => 'T-011', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Scoped', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
+
+        // Second user in the SAME unit
+        $nCode2 = (string) rand(1000000000, 9999999999);
+        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
+        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
+        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
+        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        Person::create(['n_code' => $nCode2, 'f_name' => 'A', 'l_name' => 'B', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
+        $user2 = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
+        $user2->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $user2->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['data' => ['status' => 'forwarded', 'current_assignee_id' => $user2->id]]);
+    }
 }
