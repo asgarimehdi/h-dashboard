@@ -39,7 +39,93 @@
 </style>
 </head>
 
-<body class="min-h-screen font-sans antialiased bg-base-200">
+<body class="min-h-screen font-sans antialiased stitch-bg">
+    <!-- Stitch-style animated background JavaScript -->
+    <script>
+        // Initialize theme from localStorage on load (runs before Alpine/Livewire)
+        (function() {
+            const savedTheme = localStorage.getItem('mary-theme')?.replaceAll('"', '');
+            const savedClass = localStorage.getItem('mary-class')?.replaceAll('"', '');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            }
+            if (savedClass) {
+                document.documentElement.setAttribute('class', savedClass);
+            }
+        })();
+
+        // Create floating gradient blobs
+        function createBlobs() {
+            const container = document.querySelector('.stitch-blobs');
+            if (!container || container.children.length > 0) return; // Already created
+
+            const blobConfigs = [
+                { class: 'blob-1', size: Math.random() * 200 + 300, top: '10%', left: '5%' },
+                { class: 'blob-2', size: Math.random() * 150 + 250, top: '60%', right: '10%' },
+                { class: 'blob-3', size: Math.random() * 180 + 280, bottom: '20%', left: '50%' }
+            ];
+
+            blobConfigs.forEach(config => {
+                const blob = document.createElement('div');
+                blob.className = `stitch-blob ${config.class}`;
+                blob.style.width = `${config.size}px`;
+                blob.style.height = `${config.size}px`;
+
+                if (config.top) blob.style.top = config.top;
+                if (config.bottom) blob.style.bottom = config.bottom;
+                if (config.left) blob.style.left = config.left;
+                if (config.right) blob.style.right = config.right;
+
+                container.appendChild(blob);
+            });
+        }
+
+        // Update blob colors when theme changes
+        function updateBlobsForTheme(theme) {
+            const blobs = document.querySelectorAll('.stitch-blob');
+            blobs.forEach(blob => {
+                // Force reflow to trigger CSS theme-based color change
+                blob.style.display = 'none';
+                blob.offsetHeight; // trigger reflow
+                blob.style.display = '';
+            });
+        }
+
+        // Create blobs when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', createBlobs);
+        } else {
+            createBlobs();
+        }
+
+        // Listen for theme changes from MaryUI theme toggle
+        window.addEventListener('theme-changed', (e) => {
+            updateBlobsForTheme(e.detail);
+        });
+
+        // Also listen for the mary-theme localStorage changes (for multi-tab sync)
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'mary-theme' || e.key === 'mary-class') {
+                setTimeout(createBlobs, 100);
+            }
+        });
+
+        // Re-create blobs on Livewire navigate (since DOM may be partially replaced)
+        document.addEventListener('livewire:navigated', () => {
+            setTimeout(() => {
+                const container = document.querySelector('.stitch-blobs');
+                if (container && container.children.length === 0) {
+                    createBlobs();
+                }
+            }, 100);
+        });
+    </script>
+
+    <!-- Animated floating blobs (stitched background) -->
+    <div class="stitch-blobs fixed inset-0 pointer-events-none -z-10" aria-hidden="true"></div>
+
+    <!-- Stitch-style woven grid background -->
+    <div class="stitch-bg-fixed fixed inset-0 -z-20 pointer-events-none" aria-hidden="true"></div>
     <x-nav sticky class="lg:hidden">
         <x-slot:brand>
             <x-app-brand />
