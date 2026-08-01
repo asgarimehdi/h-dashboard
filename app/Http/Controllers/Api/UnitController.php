@@ -55,6 +55,11 @@ class UnitController extends Controller
 
         $unit = Unit::create($validated);
 
+        // Invalidate AccessService cache if hierarchy changed (new child created)
+        if (! empty($unit->parent_id)) {
+            app(AccessService::class)->clearAllCaches();
+        }
+
         return response()->json([
             'success' => true,
             'data' => $unit,
@@ -79,7 +84,15 @@ class UnitController extends Controller
             'lng' => 'nullable|numeric|between:-180,180',
         ]);
 
+        // Check if hierarchy is being changed
+        $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $unit->parent_id;
+
         $unit->update($validated);
+
+        // Invalidate AccessService cache for all users if hierarchy changed
+        if ($hierarchyChanged) {
+            app(AccessService::class)->clearAllCaches();
+        }
 
         return response()->json([
             'success' => true,
@@ -98,6 +111,9 @@ class UnitController extends Controller
         if ($unit->children()->exists()) {
             return response()->json(['message' => 'Cannot delete unit with children.'], 422);
         }
+
+        // Invalidate AccessService cache as hierarchy is changing
+        app(AccessService::class)->clearAllCaches();
 
         $unit->delete();
 

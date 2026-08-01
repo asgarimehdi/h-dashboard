@@ -138,13 +138,12 @@ This document provides a comprehensive script for recording a demo video of the 
 ### 7. Hardware Inventory (120 seconds)
 **Scenes**:
 - `/hardware` - Hardware list with filters
-- `/hardware/ai` - AI Assistant chat
 - `/hardware/import` - Excel Import
 
 **Narration (Persian)**:
-> "مدیریت انبار سخت‌افزار با فیلترهای پیشرفته، عملیات دسته‌جمعی، و دستیار هوشمند AI. دستگاه‌ها به پرسنل و واحدها متصل هستند. импорت اکسل با پیش‌نمایش و مقایسه کلید (نام دستگاه یا MAC) پشتیبانی می‌شود."
+> "مدیریت انبار سخت‌افزار با فیلترهای پیشرفته و عملیات دسته‌جمعی. دستگاه‌ها به پرسنل و واحدها متصل هستند. импорт اکسل با پیش‌نمایش و مقایسه کلید (نام دستگاه یا MAC) پشتیبانی می‌شود."
 
-**English Subtitle**: "Hardware inventory management with advanced filters, bulk operations, and AI assistant. Devices link to personnel and units. Excel import with preview and match-key comparison (device name or MAC)."
+**English Subtitle**: "Hardware inventory management with advanced filters and bulk operations. Devices link to personnel and units. Excel import with preview and match-key comparison (device name or MAC)."
 
 **Actions - Hardware List**:
 - Show table with columns (PC Name, Type, OS, IP, MAC, CPU, RAM, HDD, Status)
@@ -153,14 +152,6 @@ This document provides a comprehensive script for recording a demo video of the 
 - Bulk select → Mark/Unmark → Bulk Delete
 - Column visibility toggle
 - Mobile card view (resize browser)
-
-**Actions - AI Chat** (`/hardware/ai`):
-- Click AI Chat tab
-- Ask: "نمایش لپ‌تاپ‌های خاموش" (Show shutdown laptops)
-- Show AI response with table
-- Ask: "آمار سخت‌افزارها بر اساس نوع" (Hardware stats by type)
-- Show chart/table response
-- Demonstrate quick action buttons
 
 **Actions - Import** (`/hardware/import`):
 - Click Import

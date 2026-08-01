@@ -2,16 +2,20 @@
 
 ## Project Overview
 
-Health Dashboard is a Laravel 13.x application for managing hospital/healthcare center hardware inventory. Built with Livewire 4, Volt, MaryUI (DaisyUI), and Alpine.js. Fully RTL and Persian-language.
+Health Dashboard is a Laravel 13.x application for managing hospital/healthcare center hardware inventory, organizational units, tickets, and todos. Built with Livewire 4, MaryUI (DaisyUI), and Alpine.js. Fully RTL and Persian-language. Served to both a web UI and a Flutter mobile app (via Sanctum API tokens).
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x (PHP 8.4+)
-- **Frontend:** Livewire 4 + Volt, Alpine.js, MaryUI (DaisyUI)
-- **Database:** MySQL/MariaDB (with spatial/GIS indexes)
-- **Auth:** Laravel Sanctum
+- **Framework:** Laravel 13.x (`laravel/framework ^13.0`, currently 13.23.0) on PHP ^8.3
+- **Frontend:** Livewire 4 (class-based components under `app/Livewire/`, views under `resources/views/livewire/`), Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
+- **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
+- **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
+- **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
 - **Import:** maatwebsite/excel (Laravel Excel) — `.xlsx`, `.xls`, `.csv`
-- **Package Manager:** pnpm (frontend), Composer (backend)
+- **Permissions:** spatie/laravel-permission ^8.0
+- **Jalali calendar:** morilog/jalali (Jalalian), hekmatinasser/verta (installed)
+- **AI:** openai-php/client ^0.20.1 (installed; used by feature tests, e.g. `AiAgentTest`)
+- **Package Manager:** Composer (backend); frontend deps in `package.json` (Vite). Both `package-lock.json` (npm) and `pnpm-lock.yaml` exist in the repo; `npm run build` / `vite build` is the current build path (Node 24, npm 12)
 
 ---
 
@@ -39,27 +43,49 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 **Unit** (`units` table)
 - `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
-- Indexes: `parent_id` (B-tree), composite `lat`+`lng` (B-tree)
+- Indexes: `parent_id` (B-tree), composite `lat`+`lng` (B-tree), spatial indexes (PostGIS) on `boundaries`/`units`
 - Relationships: `boundary` (hasOne), `children` (recursive), `parent`, `type`, `region`
+- `Unit::ancestorIds()` resolves ancestor chains with a JOIN (recent performance fix, #187)
 
 **Region** (`regions` table)
 - `id`, `name`, `parent_id` (self-referencing), `unit_type_id`
 - Indexes: `parent_id` (B-tree)
 
+**Province** (`provinces` table)
+- `id`, `name` (geographic province, used by map features)
+
 **UnitType** (`unit_types` table)
-- `id`, `name`
+- `id`, `name`; allowed parent types constrained via `unit_type_relationships`
 
 **Semat** (`semats` table)
 - `id`, `name` (job titles)
 
 **Ticket** (`tickets` table)
 - `id`, `title`, `description`, `status`, `priority`, `assignee_id`, `unit_id`
+- Relationships: `unit`, `task` (→ `todos`, `task_id`), `user`, `assignee` (`current_assignee_id`), `attachments`, `activities` (`task_activities`)
+- Composite index on `(task_id, status)` (recent performance fix, #183)
+- Helpers: `canBeCompleted()`, `waitingDuration`, `statusName`
 
 **Todo** (`todos` table)
 - `id`, `title`, `is_completed`, `unit_id`
 
+**TaskActivity** (`task_activities` table)
+- `id`, `ticket_id`, `action` — audit trail for ticket lifecycle events (forward, assign, accept, complete)
+
+**Attachment** (`attachments` table)
+- `id`, `ticket_id`, file metadata — uploaded files attached to tickets
+
+**ActivityLog** (`activity_logs` table)
+- `id`, `user_id`, `action`, ... — user action audit trail (login/logout, CRUD), populated via `ActivityLogService`
+- Composite index on `(user_id, created_at)` (recent performance fix, #191)
+
+**Notification** (`notifications` table, custom)
+- `id`, `user_id`, `title`, `body`, `icon`, `color`, `url`, `is_read`, `created_at` — in-app notifications via `NotificationService` (cached bell queries, #185)
+
 **User** (`users` table)
 - `id`, `n_code`, `name`, `email`, `password`
+- BelongsToMany `units` via `user_units` pivot (with `role`, `is_primary`), `primaryUnit()`
+- Spatie `HasRoles`
 
 ### Relationships
 
@@ -71,6 +97,9 @@ Person → Tahsil (t_id → id)
 Person → Estekhdam (e_id → id)
 Person → Radif (r_id → id)
 Unit → Unit (parent_id, recursive self-join)
+Ticket → Todo (task_id)  Ticket → User (user_id / current_assignee_id)
+Ticket → Attachment / TaskActivity
+User ↔ Unit (user_units pivot)
 ```
 
 ---
@@ -88,6 +117,10 @@ Uses **Spatie Permission** package. Key features:
 
 The `AccessService` class provides `accessibleUnitIds()` which returns an array of unit IDs the current user can access (their unit + all descendant units via recursive CTE).
 
+### Permissions (from `PermissionSeeder`)
+
+`manage_users`, `organization`, `kargozini` (HR lookup tables: estekhdam, tahsil, semat, radif, persons), `map` (GIS/location features), `calendar` (todo/calendar), `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache` (OPcache GUI at `/op`), `manage_hardware`, `bw` (IT monitoring: networks, wireless, server cache), plus more defined in the seeder.
+
 ---
 
 ## Authentication
@@ -97,12 +130,12 @@ The application uses **Laravel Sanctum** with two authentication modes:
 | Mode | Routes | Auth Method | Usage |
 |---|---|---|---|
 | **Web (Session)** | All Livewire UI pages (`/hardware`, `/units`, `/tickets`, etc.) | Cookie-based session via `web` guard | Browser access, requires login form |
-| **API (Token)** | `/api/*` routes | Bearer token in `Authorization` header via `sanctum` guard | Programmatic access, cURL, external tools |
+| **API (Token)** | `/api/*` routes | Bearer token in `Authorization` header via `sanctum` guard | Flutter app (token created with `createToken('flutter-app')`), cURL, external tools |
 
 - Livewire components expect session-based authentication (web middleware group). **API tokens are NOT accepted** for Livewire pages — this is by design. To access Livewire UI, use a browser session.
 - API routes accept Sanctum tokens generated via `PersonalAccessTokenFactory`.
 - The login form is at `/login` (web session).
-- Token generation (for testing/automation): `POST /api/sanctum/token` with valid credentials.
+- Token generation (for testing/automation): `POST /api/sanctum/token` with valid credentials. The Flutter app uses `POST /api/login` with `n_code` + `password` (throttled 5/min).
 
 ### Safe Role/Permission Middleware
 
@@ -115,19 +148,23 @@ Route::middleware('safe_role_or_permission:manage_hardware')->group(function () 
 });
 ```
 
+### Unit Context Middleware
+
+`ValidateUnitContext` middleware (alias `unit_context`) ensures `session('current_unit_id')` is set before entering unit-scoped sections; UI supports selecting a unit context (`/select-context`).
+
 ---
 
 ## API Reference
 
-### Hardware CRUD (`/api/hardware`)
+All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
 
-All routes require `auth:sanctum` and filter by user's organizational scope.
+### Hardware CRUD (`/api/hardware`)
 
 | Method | URL | Description |
 |---|---|---|
 | GET | `/api/hardware` | List with filters: `search`, `type`, `os`, `cpu`, `ram`, `hdd`, `shutdown`, `net_type`, `mark`, `person`, `unit`, `semat` |
 | POST | `/api/hardware` | Create (requires `n_code`, `pc_name`) |
-| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) |
+| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached (`getTypeStats()`) |
 | GET | `/api/hardware/{id}` | Show details |
 | PUT/PATCH | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
 | DELETE | `/api/hardware/{id}` | Delete |
@@ -135,8 +172,6 @@ All routes require `auth:sanctum` and filter by user's organizational scope.
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
 
 ### Person CRUD (`/api/persons`)
-
-All routes require `auth:sanctum` and filter by user's organizational scope.
 
 | Method | URL | Description |
 |---|---|---|
@@ -157,8 +192,6 @@ All routes require `auth:sanctum` and filter by user's organizational scope.
 | DELETE | `/api/units/{unit}` | Delete (cascades if children exist) |
 
 ### Ticket CRUD (`/api/tickets`)
-
-All routes require `auth:sanctum`.
 
 | Method | URL | Description |
 |---|---|---|
@@ -190,6 +223,13 @@ All routes require `auth:sanctum`.
 | GET | `/api/reports/todos` | Todo statistics |
 | GET | `/api/reports/tickets` | Ticket statistics |
 
+### Zabbix (`/api/zabbix`)
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/zabbix/traffic` | Network traffic from Zabbix (via `ZabbixService`) |
+| GET | `/api/zabbix/multi-latest` | Multi-item latest values (cached) |
+
 ---
 
 ## UI Features
@@ -210,6 +250,15 @@ All routes require `auth:sanctum`.
 - Persian normalization for search fields
 - Bulk create with duplicate handling
 
+### Maps (`/maps`)
+
+- Unit map, interactive map, county map, point map, route maps — all with organizational scope applied
+- GIS data via PostGIS (boundaries as MULTIPOLYGON, SRID 4326); unit lat/lng with bounding-box queries (`withinBounds`)
+
+### Other Pages
+
+- Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
+
 ---
 
 ## Persian Text Handling
@@ -223,6 +272,12 @@ Applied to all search and filter operations in both Livewire components and API 
 
 ---
 
+## Jalali Dates
+
+Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `ReportController`, `Ticket::statusName`). `hekmatinasser/verta` is also installed. Use `Jalalian::fromCarbon(...)` for API date output and display.
+
+---
+
 ## Development Guidelines
 
 ### New Features
@@ -231,6 +286,7 @@ Applied to all search and filter operations in both Livewire components and API 
 3. Maintain RTL compatibility
 4. Use MaryUI components where possible
 5. Add permission checks for new routes
+6. Apply organizational scope (`HasOrganizationalScope`) to any new list/query
 
 ### Conventions
 - **RTL:** All layouts use `dir="rtl"` at root level
@@ -238,37 +294,82 @@ Applied to all search and filter operations in both Livewire components and API 
 - **Pagination:** Use `LengthAwarePaginator` with `WithPagination` trait
 - **Forms:** Use MaryUI `x-input`, `x-select`, `x-button` components
 - **Modal:** Use `x-modal` with `close-on-backdrop` for edit forms
+- **Components:** Class-based Livewire components (`app/Livewire/<Feature>/...`) with Blade views under `resources/views/livewire/<feature>/`
+- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest`
 
-### Performance
+### Performance (recent fixes pattern)
+- Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
 - Eager-load relationships (`with('person.unit')`) in list queries
 - Limit API pagination to max 100 per page
-- Use recursive CTE via raw SQL for unit hierarchy queries
+- Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
+- Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
 
 ---
 
 ## Deployment
 
+### Docker (local development)
+
+`docker-compose-pgsql-.yml` runs the full stack:
+
+| Service | Image | Port |
+|---|---|---|
+| PostGIS | `postgis/postgis:16-3.4` | 5432 |
+| Redis | `redis:latest` (requirepass `REDIS_PASSWORD`) | 6379 |
+| pgAdmin | `dpage/pgadmin4` | 8082 |
+| phpRedisAdmin | `erikdubbelboer/phpredisadmin` | 8083 |
+
+`docker compose -f docker-compose-pgsql-.yml up -d`
+
+> **Note:** Postgres only reads `POSTGRES_PASSWORD` on first init of the `postgis_data` volume. To change a password on an existing volume: `docker exec -it h-dashboard-postgis psql -U <user> -d <db> -c "ALTER USER <user> WITH PASSWORD '<new>';"`. Recreating without `-v` does NOT apply the change.
+
 ### Environment Variables
 
-Required:
+Required (see `.env.example.pgsql`):
 ```
-DB_CONNECTION=mysql
+DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
-DB_PORT=3306
+DB_PORT=5432
 DB_DATABASE=h_dashboard
 DB_USERNAME=...
 DB_PASSWORD=...
+DB_ROOT_PASSWORD=...       # docker postgres superuser
+DB_DEFAULT_EMAIL=...       # seeded admin email
+DB_DEFAULT_PASSWORD=...    # seeded admin password
 
-SANCTUM_STATEFUL_DOMAINS=localhost
-SESSION_DOMAIN=localhost
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=123
+
+ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
+ZABBIX_TOKEN=...
+TILE_SERVER_IP=tile.openstreetmap.org
 ```
 
 ### Build Commands
 
 ```bash
 composer install --no-dev --optimize-autoloader
-pnpm install && pnpm run build
+npm install && npm run build     # or: pnpm install && pnpm run build
 php artisan migrate --force
 php artisan db:seed --force
+```
+
+### CI/CD
+
+`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner): pulls `/home/boxd/h-dashboard`, clears views/config/routes cache, runs `php artisan optimize`, reloads apache2.
+
+### Storage Permissions (gotcha)
+
+The web user (`www-data` under FPM, or root under the built-in server) must be able to write into `storage/framework/views|cache|sessions`. `Filesystem::replace()` → `tempnam()` fails with "file created in the system's temporary directory" when the dir isn't writable by the PHP process. Fix:
+
+```bash
+chown -R www-data:www-data storage/framework storage/logs   # FPM
+# or, if using `php artisan serve` as your user:
+chown -R boxd:www-data storage/framework && chmod -R 775 storage/framework
+php artisan view:clear
 ```

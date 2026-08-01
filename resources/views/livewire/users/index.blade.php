@@ -28,7 +28,7 @@ return new class extends Component
 
     public bool $unitModal = false;
 
-    public int $perPage = 5;
+    public int $perPage = 20;
 
     public array $sortBy = ['column' => 'n_code', 'direction' => 'asc'];
 
@@ -394,7 +394,7 @@ return new class extends Component
             </div>
         @endif
 
-        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable with-pagination per-page="perPage" :per-page-values="[5, 10, 20, 50]">
+        <x-table :headers="$headers" :rows="$users" :sort-by="$sortBy" wire:model="expanded" expandable with-pagination per-page="perPage" :per-page-values="[10, 20, 50, 100]">
 
             @scope('cell_status', $user)
                 <x-badge

@@ -41,7 +41,7 @@ class AccessService
         }
 
         $sessionUnitId = session('current_unit_id', 'none');
-        $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
+        $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
 
         return Cache::remember(
             $cacheKey,
@@ -64,8 +64,16 @@ class AccessService
                 ? [$currentUnitId]
                 : $user->units()->pluck('units.id')->toArray();
 
-            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
+            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
             Cache::forget($cacheKey);
         }
+    }
+
+    /**
+     * پاک کردن تمام کش‌های دسترسی (هنگام تغییر سلسله‌مراتب واحدها)
+     */
+    public function clearAllCaches(): void
+    {
+        Cache::flush();
     }
 }

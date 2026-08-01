@@ -5,6 +5,7 @@ use App\Models\Person;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
@@ -16,7 +17,7 @@ return new class extends Component
     use PersianNormalizer;
 
     public string $search = '';
-    public int $perPage = 10;
+    public int $perPage = 20;
     public bool $showHelpModal = false;
 
     /**
@@ -115,9 +116,12 @@ return new class extends Component
             return;
         }
 
-        $this->personResults = Person::where('n_code', 'LIKE', "%{$normalized}%")
-            ->orWhere(function ($q) use ($normalized) {
-                $q->where('f_name', 'LIKE', "%{$normalized}%")
+        $accessibleIds = $this->accessibleUnitIds();
+
+        $this->personResults = Person::whereIn('u_id', $accessibleIds)
+            ->where(function ($q) use ($normalized) {
+                $q->where('n_code', 'LIKE', "%{$normalized}%")
+                  ->orWhere('f_name', 'LIKE', "%{$normalized}%")
                   ->orWhere('l_name', 'LIKE', "%{$normalized}%");
             })
             ->limit(10)
@@ -135,7 +139,11 @@ return new class extends Component
             return;
         }
 
-        $person = Person::where('n_code', $value)->first();
+        $accessibleIds = $this->accessibleUnitIds();
+
+        $person = Person::whereIn('u_id', $accessibleIds)
+            ->where('n_code', $value)
+            ->first();
 
         if ($person) {
             $this->n_code_status = 'valid';
@@ -208,7 +216,7 @@ return new class extends Component
     public function createHardware(): void
     {
         $this->validate([
-            'n_code' => 'required|string|exists:persons,n_code',
+            'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $this->accessibleUnitIds()))],
             'pc_name' => 'required|string|max:255',
         ]);
 
@@ -699,7 +707,7 @@ return new class extends Component
         {{-- Desktop Table --}}
         <div class="hidden md:block">
             <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
-                    :per-page-values="[5, 10, 25, 50]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
+                    :per-page-values="[10, 20, 50, 100]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
                 @scope('cell_checkbox', $hw)
                     <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
                 @endscope

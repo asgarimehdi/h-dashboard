@@ -16,7 +16,7 @@ return new class extends Component
     public string $label = '';
     public int|null $editingId = null;
     public string $search = '';
-    public int $perPage = 5;
+    public int $perPage = 20;
     public bool $modal = false;
     public array $allPermissions = [];
     public array $permissions = [];

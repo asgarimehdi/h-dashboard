@@ -23,7 +23,6 @@ class AppServiceProvider extends ServiceProvider
             'dashboard',
             'hardware',
             'hardware-import',
-            'hardware-ai',
             'personnel',
             'units',
             'tickets',

@@ -46,18 +46,12 @@ class HardwareApiTest extends TestCase
     }
 
     /**
-     * Verify that /hardware and /hardware/ai load for unauthenticated users.
-     * Issue #124: Regression — pages were redirecting to /login.
+     * Verify that /hardware loads for unauthenticated users.
+     * Issue #124: Regression — page was redirecting to /login.
      */
     public function test_hardware_page_loads_without_auth(): void
     {
         $response = $this->get('/hardware');
-        $response->assertStatus(200);
-    }
-
-    public function test_hardware_ai_page_loads_without_auth(): void
-    {
-        $response = $this->get('/hardware/ai');
         $response->assertStatus(200);
     }
 

@@ -17,7 +17,7 @@ return new class extends Component
 
     public string $search = '';
 
-    public int $perPage = 5;
+    public int $perPage = 20;
 
     public bool $showForm = false;
 
@@ -154,7 +154,7 @@ return new class extends Component
         @endif
 
         <x-table :headers="$headers" :rows="$semats" :sort-by="$sortBy" with-pagination per-page="perPage"
-                 :per-page-values="[3, 5, 10]">
+                 :per-page-values="[10, 20, 50]">
             @scope('cell_name', $semat)
                 @if($this->editingId === $semat->id)
                     <div class="flex gap-2 items-center">
