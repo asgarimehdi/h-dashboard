@@ -6,6 +6,8 @@ use App\Models\Hardware;
 use App\Observers\HardwareObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use App\Models\Hardware;
+use App\Observers\HardwareObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -49,5 +51,8 @@ class AppServiceProvider extends ServiceProvider
         foreach ($helpContents as $content) {
             Blade::component("components.help.content.{$content}", "help-content:{$content}");
         }
+        
+        // Register Hardware observer for audit trail
+        Hardware::observe(HardwareObserver::class);
     }
 }

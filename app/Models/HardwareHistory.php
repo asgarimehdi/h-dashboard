@@ -7,18 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HardwareHistory extends Model
 {
-    protected $fillable = [
-        'hardware_id',
-        'user_id',
-        'action',
-        'changes',
-        'ip_address',
-        'user_agent',
-    ];
-
-    protected $casts = [
-        'changes' => 'array',
-    ];
+    protected $fillable = ['hardware_id', 'user_id', 'action', 'changes', 'ip_address', 'user_agent'];
+    protected $casts = ['changes' => 'array'];
 
     public function hardware(): BelongsTo
     {

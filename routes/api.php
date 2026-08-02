@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\HardwareController;
+use App\Http\Controllers\Api\HardwareHistoryController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
@@ -59,6 +60,9 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::get('/{hardware}/history', [HardwareController::class, 'history']);
     Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
     Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
+    
+    // Hardware History
+    Route::get('/{hardware}/history', [HardwareHistoryController::class, 'index']);
 });
 
 // Ticket API routes

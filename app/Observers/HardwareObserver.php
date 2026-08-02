@@ -14,14 +14,7 @@ class HardwareObserver
      */
     public function created(Hardware $hardware): void
     {
-        HardwareHistory::create([
-            'hardware_id' => $hardware->id,
-            'user_id' => Auth::id(),
-            'action' => 'created',
-            'changes' => $hardware->getAttributes(),
-            'ip_address' => Request::ip(),
-            'user_agent' => Request::userAgent(),
-        ]);
+        $this->recordHistory($hardware, 'created', null);
     }
 
     /**
@@ -29,51 +22,107 @@ class HardwareObserver
      */
     public function updated(Hardware $hardware): void
     {
-        $changes = $hardware->getChanges();
+        $changes = $this->getChangedFields($hardware);
         
-        // Remove timestamps and unchanged fields
-        unset($changes['updated_at'], $changes['created_at']);
-        
-        if (empty($changes)) {
-            return;
-        }
-
-        $diff = [];
-        foreach ($changes as $field => $newValue) {
-            $oldValue = $hardware->getOriginal($field);
-            if ($oldValue !== $newValue) {
-                $diff[] = [
-                    'field' => $field,
-                    'old' => $oldValue,
-                    'new' => $newValue,
-                ];
-            }
-        }
-
-        if (!empty($diff)) {
-            HardwareHistory::create([
-                'hardware_id' => $hardware->id,
-                'user_id' => Auth::id(),
-                'action' => 'updated',
-                'changes' => $diff,
-                'ip_address' => Request::ip(),
-                'user_agent' => Request::userAgent(),
-            ]);
+        if (!empty($changes)) {
+            $this->recordHistory($hardware, 'updated', $changes);
         }
     }
 
     /**
      * Handle the Hardware "deleted" event.
      */
-    public function deleted(Hardware $hardware): void
+    public function deleting(Hardware $hardware): void
     {
+        $hardwareId = $hardware->id;
+        $this->recordHistory($hardware, 'deleted', null, $hardwareId);
+    }
+
+    /**
+     * Handle the Hardware "forceDeleted" event.
+     */
+    public function forceDeleted(Hardware $hardware): void
+    {
+        $this->recordHistory($hardware, 'force_deleted', null);
+    }
+
+    /**
+     * Record a history entry for the hardware.
+     */
+    protected function recordHistory(Hardware $hardware, string $action, ?array $changes, ?int $hardwareId = null): void
+    {
+        $user = Auth::user();
+        $request = Request::capture();
+
         HardwareHistory::create([
-            'hardware_id' => $hardware->id,
-            'user_id' => Auth::id(),
-            'action' => 'deleted',
-            'changes' => $hardware->getAttributes(),
-            'ip_address' => Request::ip(),
-            'user_agent' => Request::userAgent(),
+            'hardware_id' => $hardwareId ?? $hardware->id,
+            'user_id' => $user?->id,
+            'action' => $action,
+            'changes' => $changes,
+            'ip_address' => $request?->ip(),
+            'user_agent' => $request?->userAgent(),
         ]);
+    }
+
+    /**
+     * Get changed fields with old and new values.
+     */
+    protected function getChangedFields(Hardware $hardware): array
+    {
+        $dirty = $hardware->getDirty();
+        $original = $hardware->getOriginal();
+
+        $changes = [];
+
+        foreach ($dirty as $field => $newValue) {
+            if (isset($original[$field])) {
+                $oldValue = $original[$field];
+                
+                // Normalize values for comparison
+                $normalizedOld = $this->normalizeValue($oldValue);
+                $normalizedNew = $this->normalizeValue($newValue);
+
+                if ($normalizedOld !== $normalizedNew) {
+                    $changes[] = [
+                        'field' => $field,
+                        'old' => $this->formatValueForDisplay($oldValue),
+                        'new' => $this->formatValueForDisplay($newValue),
+                    ];
+                }
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Normalize a value for comparison.
+     */
+    protected function normalizeValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+        return (string) $value;
+    }
+
+    /**
+     * Format a value for display in the changes log.
+     */
+    protected function formatValueForDisplay(mixed $value): string
+    {
+        if ($value === null) {
+            return '—';
+        }
+        if (is_bool($value)) {
+            return $value ? 'بله' : 'خیر';
+        }
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+        return (string) $value;
     }
 }
