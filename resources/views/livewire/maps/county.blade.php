@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Region;
+use App\Services\AccessService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -11,9 +12,17 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->regions = Cache::remember('county:regions_with_boundaries', 300, function () {
+        $this->loadData();
+    }
+
+    public function loadData(): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $this->regions = Cache::remember('county:regions_with_boundaries:' . md5(implode(',', $accessibleIds)), 300, function () use ($accessibleIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
+                ->whereIn('id', $accessibleIds)
                 ->select([
                     'regions.id',
                     'regions.name',
