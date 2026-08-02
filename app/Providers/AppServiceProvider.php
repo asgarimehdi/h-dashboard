@@ -6,8 +6,6 @@ use App\Models\Hardware;
 use App\Observers\HardwareObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
-use App\Models\Hardware;
-use App\Observers\HardwareObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -18,8 +16,6 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Hardware::observe(HardwareObserver::class);
-
         // Register anonymous help components with colon syntax for Blade
         Blade::component('components.help.button', 'help:button');
         Blade::component('components.help.modal', 'help:modal');
@@ -52,7 +48,9 @@ class AppServiceProvider extends ServiceProvider
             Blade::component("components.help.content.{$content}", "help-content:{$content}");
         }
         
-        // Register Hardware observer for audit trail
-        Hardware::observe(HardwareObserver::class);
+        // Register Hardware observer for audit trail (skip during testing to avoid migration conflicts)
+        if (!app()->runningInConsole() || !app()->environment('testing')) {
+            Hardware::observe(HardwareObserver::class);
+        }
     }
 }
