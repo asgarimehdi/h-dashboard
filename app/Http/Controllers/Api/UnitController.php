@@ -53,6 +53,13 @@ class UnitController extends Controller
             'lng' => 'nullable|numeric|between:-180,180',
         ]);
 
+        // Check organizational scope for parent_id and region_id
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        
+        if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
+            return response()->json(['message' => 'Parent unit not accessible.'], 403);
+        }
+
         $unit = Unit::create($validated);
 
         // Invalidate AccessService cache if hierarchy changed (new child created)
@@ -83,6 +90,13 @@ class UnitController extends Controller
             'lat' => 'nullable|numeric|between:-90,90',
             'lng' => 'nullable|numeric|between:-180,180',
         ]);
+
+        // Check organizational scope for parent_id
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        
+        if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
+            return response()->json(['message' => 'Parent unit not accessible.'], 403);
+        }
 
         // Check if hierarchy is being changed
         $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $unit->parent_id;
