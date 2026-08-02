@@ -40,6 +40,13 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `vlan`, `motherboard`, `cpu`, `ram`, `hdd`
 - `comments`, `mark` (boolean)
 - `clean_at` (nullable date)
+- Relationship: `histories()` → `HardwareHistory` (change audit trail, #213)
+
+**HardwareHistory** (`hardware_histories` table)
+- `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `ip_address`, `user_agent`
+- Populated automatically by `HardwareObserver` (registered in `AppServiceProvider`)
+- Indexes: `(hardware_id, created_at)`, `user_id`
+- API: `GET /api/hardware/{hardware}/history` (paginated, action filter, org scope); UI: history modal on `/hardware` page (#213)
 
 **Unit** (`units` table)
 - `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
@@ -343,6 +350,11 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
 - Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
+
+### Recent Issues Resolved
+- **#213** — Hardware Change History & Audit Trail API (`hardware_histories` table, `HardwareObserver`, `GET /api/hardware/{hardware}/history`, Livewire history modal with Jalali dates)
+- **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
+- **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 
 ---
 
