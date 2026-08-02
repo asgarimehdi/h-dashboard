@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\HardwareHistoryController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\TicketCommentController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\TrafficController;
@@ -75,6 +76,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign']);
     Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept']);
     Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete']);
+
+    // Ticket Comments
+    Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index']);
+    Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store']);
+    Route::get('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'show']);
+    Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update']);
+    Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy']);
+    Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react']);
+    Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact']);
+    Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions']);
 });
 
 // Report API routes

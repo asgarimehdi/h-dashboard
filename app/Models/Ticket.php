@@ -91,4 +91,10 @@ class Ticket extends Model
         // دقت کنید که در مایگریشن جدید نام فیلد را ticket_id گذاشتیم
         return $this->hasMany(TaskActivity::class, 'ticket_id');
     }
+
+    // رابطه با نظرات
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TicketComment::class);
+    }
 }
