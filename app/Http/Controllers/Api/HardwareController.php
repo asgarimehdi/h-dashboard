@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hardware;
+use App\Models\HardwareHistory;
 use App\Models\Person;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
@@ -11,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Auth;
 
 class HardwareController extends Controller
 {
@@ -277,6 +279,62 @@ class HardwareController extends Controller
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
 
+    /**
+     * Get paginated change history for a hardware record.
+     * GET /api/hardware/{hardware}/history
+     * Query params: per_page (max 50), page, action (filter)
+     */
+    public function history(Request $request, Hardware $hardware): JsonResponse
+    {
+        $this->assertAccessible($request, $hardware);
+
+        $query = HardwareHistory::with('user:id,n_code,name')
+            ->where('hardware_id', $hardware->id);
+
+        if ($request->filled('action')) {
+            $query->where('action', $request->action);
+        }
+
+        $query->orderByDesc('created_at');
+
+        $perPage = min((int) $request->get('per_page', 15), 50);
+
+        $paginator = $query->paginate($perPage);
+        $items = $paginator->getCollection()->map(fn (HardwareHistory $h) => [
+            'id' => $h->id,
+            'action' => $h->action,
+            'changes' => $h->changes,
+            'ip_address' => $h->ip_address,
+            'user_agent' => $h->user_agent,
+            'created_at' => $h->created_at?->toIso8601String(),
+            'user' => $h->user ? [
+                'id' => $h->user->id,
+                'n_code' => $h->user->n_code,
+                'name' => $h->user->name,
+            ] : null,
+        ])->all();
+
+        return response()->json([
+            'success' => true,
+            'data' => $items,
+            'links' => [
+                'first' => $paginator->url(1),
+                'last' => $paginator->url($paginator->lastPage()),
+                'prev' => $paginator->previousPageUrl(),
+                'next' => $paginator->nextPageUrl(),
+            ],
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'from' => $paginator->firstItem(),
+                'last_page' => $paginator->lastPage(),
+                'path' => $paginator->path(),
+                'per_page' => $paginator->perPage(),
+                'to' => $paginator->lastItem(),
+                'total' => $paginator->total(),
+            ],
+        ]);
+    }
+
     public function stats(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -327,9 +385,25 @@ class HardwareController extends Controller
             'mark' => 'required|boolean',
         ]);
 
+        $hardwares = Hardware::whereIn('id', $request->ids)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->get();
+
         $count = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
             ->update(['mark' => $request->mark]);
+
+        // Log history for each hardware
+        foreach ($hardwares as $hardware) {
+            HardwareHistory::create([
+                'hardware_id' => $hardware->id,
+                'user_id' => Auth::id(),
+                'action' => 'bulk_mark',
+                'changes' => [['field' => 'mark', 'old' => !$request->mark, 'new' => $request->mark]],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
 
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
     }
@@ -350,6 +424,22 @@ class HardwareController extends Controller
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
+
+        $hardwares = Hardware::whereIn('id', $request->ids)
+            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->get();
+
+        // Log history for each hardware before deletion
+        foreach ($hardwares as $hardware) {
+            HardwareHistory::create([
+                'hardware_id' => $hardware->id,
+                'user_id' => Auth::id(),
+                'action' => 'bulk_delete',
+                'changes' => $hardware->getAttributes(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
 
         $count = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))

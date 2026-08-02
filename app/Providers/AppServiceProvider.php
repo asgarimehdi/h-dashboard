@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Hardware;
+use App\Observers\HardwareObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 
@@ -14,6 +16,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Hardware::observe(HardwareObserver::class);
+
         // Register anonymous help components with colon syntax for Blade
         Blade::component('components.help.button', 'help:button');
         Blade::component('components.help.modal', 'help:modal');

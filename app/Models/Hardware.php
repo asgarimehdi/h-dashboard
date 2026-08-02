@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Hardware extends Model
 {
@@ -76,5 +77,10 @@ class Hardware extends Model
     public function person(): BelongsTo
     {
         return $this->belongsTo(Person::class, 'n_code', 'n_code');
+    }
+
+    public function histories(): HasMany
+    {
+        return $this->hasMany(HardwareHistory::class);
     }
 }
