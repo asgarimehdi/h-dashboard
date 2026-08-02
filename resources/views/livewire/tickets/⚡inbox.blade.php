@@ -225,9 +225,13 @@ new class extends Component
         $userId = auth()->id();
         $bulkNote = $this->bulkNote;
 
-        // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده
+        // Get accessible unit IDs for scope filtering
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده + محدوده سازمانی
         $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
             ->where('status', '!=', 'completed')
+            ->whereIn('unit_id', $accessibleIds)
             ->pluck('id');
 
         if ($ticketIds->isEmpty()) {
@@ -306,7 +310,13 @@ new class extends Component
 
     public function showTicket($id): void
     {
-        $this->showingTicket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])->findOrFail($id);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $ticket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
+            ->whereIn('unit_id', $accessibleIds)
+            ->findOrFail($id);
+            
+        $this->showingTicket = $ticket;
         $this->showModal = true;
     }
 
@@ -326,6 +336,14 @@ new class extends Component
 
     public function forward(): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        // Verify showingTicket is accessible
+        if (!$this->showingTicket || !in_array($this->showingTicket->unit_id, $accessibleIds)) {
+            $this->dispatch('swal', ['title' => 'شما مجاز به ارجاع این تیکت نیستید.', 'icon' => 'error']);
+            return;
+        }
+        
         $this->validate([
             'targetUnitId' => 'required|exists:units,id',
             'forwardNote' => 'nullable|string|max:500',
@@ -355,7 +373,10 @@ new class extends Component
 
     public function acceptTicket($ticketId): void
     {
-        $ticket = Ticket::findOrFail($ticketId);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($ticketId);
+        
         DB::transaction(function () use ($ticket) {
             $ticket->update([
                 'status' => 'accepted',
@@ -410,15 +431,27 @@ new class extends Component
 
     public function openCompletionModal($id): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($id);
+        
+        if (!$ticket) {
+            $this->dispatch('swal', ['title' => 'شما مجاز به مشاهده این تیکت نیستید.', 'icon' => 'error']);
+            return;
+        }
+        
         $this->showingTicketId = $id;
-        $this->showingTicket = Ticket::find($id);
+        $this->showingTicket = $ticket;
         $this->isCompletionModalOpen = true;
     }
 
     public function submitAction($id = null): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
         $finalId = $id ?? $this->showingTicketId;
-        $ticket = Ticket::findOrFail($finalId);
+        
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($finalId);
 
         if ($ticket->status !== 'accepted' && !$this->targetUnitId) {
             $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
