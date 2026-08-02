@@ -60,6 +60,21 @@ return new class extends Component {
         }).addTo(map);
 
         window.map = map;
+
+        // Issue (map width): after init, force Leaflet to measure the real
+        // container size. Leaflet captures dimensions at construction; if the
+        // page/layout was still settling (SPA navigation, fonts, hidden
+        // containers) it can lock in a smaller width and render half-page.
+        // invalidateSize() recalculates to the actual container and fires
+        // 'moveend' so dependent scripts (markers, fitBounds) can react.
+        setTimeout(function () {
+            map.invalidateSize();
+        }, 100);
+
+        // Keep the map full-width on window resize / sidebar toggle.
+        window.addEventListener('resize', function () {
+            map.invalidateSize();
+        });
     }
 
     // Wait for the #map DOM element to exist (SPA navigation may not have it yet)

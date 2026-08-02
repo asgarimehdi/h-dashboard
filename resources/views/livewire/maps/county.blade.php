@@ -49,7 +49,7 @@ return new class extends Component
     </x-header>
 
     <x-card shadow class="p-0">
-        <div class="container">
+        <div class="relative">
             <livewire:maps.map/>
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">

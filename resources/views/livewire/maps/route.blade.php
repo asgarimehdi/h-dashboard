@@ -31,7 +31,7 @@ return new class extends Component {
             <x-toggle x-on:click="toggleRoutingContainer()" label="نمایش متنی مسیر"/>
         </div>
 
-        <div class="container">
+        <div class="relative">
             <livewire:maps.map/>
             <div id="route-info" class="bg-base-200 p-4 rounded mt-4">
                 <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>

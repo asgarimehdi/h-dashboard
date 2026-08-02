@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 Route::livewire('/login', 'auth.login')->name('login');
 
 // Hardware routes — require authentication and manage_hardware permission
+// (Issue #216: guests must NOT see sensitive hardware data)
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');

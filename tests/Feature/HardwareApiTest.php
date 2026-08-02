@@ -46,13 +46,15 @@ class HardwareApiTest extends TestCase
     }
 
     /**
-     * Verify that /hardware loads for unauthenticated users.
-     * Issue #124: Regression — page was redirecting to /login.
+     * Verify that /hardware redirects unauthenticated users to login.
+     * Issue #216: guests must NOT see sensitive hardware data (regression #124
+     * was intentionally reverted — the redirect is now the expected behavior).
      */
     public function test_hardware_page_loads_without_auth(): void
     {
         $response = $this->get('/hardware');
-        $response->assertStatus(200);
+        $response->assertStatus(302); // redirect to /login
+        $response->assertRedirect(route('login'));
     }
 
     public function test_unauthenticated_user_cannot_access_hardware(): void

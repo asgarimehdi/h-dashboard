@@ -14,17 +14,35 @@ class HardwareObserver
      */
     public function created(Hardware $hardware): void
     {
-        $this->recordHistory($hardware, 'created', $hardware->getAttributes());
+        // Capture the initial field values as the change snapshot so the
+        // created entry carries a meaningful diff (matches test expectation).
+        $fields = ['pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type', 'switch', 'port', 'vlan', 'motherboard', 'comments', 'ip_valid', 'ip_local', 'mac', 'shutdown', 'mark', 'clean_at'];
+        $changes = [];
+        foreach ($fields as $field) {
+            $value = $hardware->getAttribute($field);
+            if ($value !== null && $value !== '') {
+                $changes[] = [
+                    'field' => $field,
+                    'old' => '—',
+                    'new' => $this->formatValueForDisplay($value),
+                ];
+            }
+        }
+        $this->recordHistory($hardware, 'created', $changes ?: null);
     }
 
     /**
      * Handle the Hardware "updated" event.
+     *
+     * NOTE: we use `updating` (fires BEFORE the model syncs its changes)
+     * because in `updated` the dirty attributes are already cleared, so
+     * getDirty() would be empty and no field diff could be captured.
      */
-    public function updated(Hardware $hardware): void
+    public function updating(Hardware $hardware): void
     {
         $changes = $this->getChangedFields($hardware);
-        
-        if (!empty($changes)) {
+
+        if (! empty($changes)) {
             $this->recordHistory($hardware, 'updated', $changes);
         }
     }
@@ -80,20 +98,21 @@ class HardwareObserver
                 continue;
             }
 
-            if (isset($original[$field])) {
-                $oldValue = $original[$field];
-                
-                // Normalize values for comparison
-                $normalizedOld = $this->normalizeValue($oldValue);
-                $normalizedNew = $this->normalizeValue($newValue);
+            // Use array_key_exists so null→value transitions are captured;
+            // fields absent from $original (e.g. set for the first time after
+            // creation) get old = null.
+            $oldValue = array_key_exists($field, $original) ? $original[$field] : null;
 
-                if ($normalizedOld !== $normalizedNew) {
-                    $changes[] = [
-                        'field' => $field,
-                        'old' => $this->formatValueForDisplay($oldValue),
-                        'new' => $this->formatValueForDisplay($newValue),
-                    ];
-                }
+            // Normalize values for comparison
+            $normalizedOld = $this->normalizeValue($oldValue);
+            $normalizedNew = $this->normalizeValue($newValue);
+
+            if ($normalizedOld !== $normalizedNew) {
+                $changes[] = [
+                    'field' => $field,
+                    'old' => $this->formatValueForDisplay($oldValue),
+                    'new' => $this->formatValueForDisplay($newValue),
+                ];
             }
         }
 

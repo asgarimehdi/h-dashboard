@@ -104,7 +104,7 @@ return new class extends Component
     </x-header>
 
     <x-card shadow class="p-0">
-        <div class="container relative">
+        <div class="relative">
             <div wire:ignore>
                 <livewire:maps.map/>
             </div>
