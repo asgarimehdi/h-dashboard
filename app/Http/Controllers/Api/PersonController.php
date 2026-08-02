@@ -131,7 +131,7 @@ class PersonController extends Controller
         ]);
     }
 
-    public function destroy(Person $person): JsonResponse
+    public function destroy(Request $request, Person $person): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 

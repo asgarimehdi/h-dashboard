@@ -45,7 +45,7 @@ class TicketController extends Controller
         ]);
     }
 
-    public function show(Ticket $ticket): JsonResponse
+    public function show(Request $request, Ticket $ticket): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
@@ -116,7 +116,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         ]);
     }
 
-    public function destroy(Ticket $ticket): JsonResponse
+    public function destroy(Request $request, Ticket $ticket): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
