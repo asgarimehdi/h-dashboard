@@ -164,7 +164,7 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 |---|---|---|
 | GET | `/api/hardware` | List with filters: `search`, `type`, `os`, `cpu`, `ram`, `hdd`, `shutdown`, `net_type`, `mark`, `person`, `unit`, `semat` |
 | POST | `/api/hardware` | Create (requires `n_code`, `pc_name`) |
-| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached (`getTypeStats()`) |
+| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached 10 min per org scope, invalidated on hardware writes (#217) |
 | GET | `/api/hardware/{id}` | Show details |
 | PUT/PATCH | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
 | DELETE | `/api/hardware/{id}` | Delete |
@@ -299,6 +299,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 
 ### Performance (recent fixes pattern)
 - Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
+- Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush) (#217)
 - Eager-load relationships (`with('person.unit')`) in list queries
 - Limit API pagination to max 100 per page
 - Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains

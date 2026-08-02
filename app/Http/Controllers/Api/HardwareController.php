@@ -10,6 +10,7 @@ use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 
 class HardwareController extends Controller
 {
@@ -281,20 +282,30 @@ class HardwareController extends Controller
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $baseQuery = Hardware::whereHas('person', function ($q) use ($accessibleIds) {
-            $q->whereIn('u_id', $accessibleIds);
-        });
+        // Issue #217: cache stats to avoid 3 heavy queries per request.
+        // Key is scoped by (version, accessible units): the version counter is
+        // bumped on every hardware write (Hardware::flushStatsCache()), which
+        // invalidates all previously cached scopes without flushing the whole
+        // cache. Stale entries expire naturally via the 10-minute TTL.
+        $version = Cache::get('hardware_stats_version', 0);
+        $cacheKey = "hardware_stats:v{$version}:" . md5(json_encode($accessibleIds));
 
-        return response()->json([
-            'success' => true,
-            'data' => [
+        $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
+            $baseQuery = Hardware::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds));
+
+            return [
                 'total' => $baseQuery->count(),
                 'by_type' => (clone $baseQuery)->selectRaw('type, count(*) as count')
                     ->groupBy('type')
                     ->pluck('count', 'type')
                     ->toArray(),
                 'shutdown' => (clone $baseQuery)->where('shutdown', true)->count(),
-            ],
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
         ]);
     }
 
