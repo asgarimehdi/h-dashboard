@@ -71,6 +71,38 @@ class ZabbixService
         return $response['result'][0]['itemid'] ?? null;
     }
 
+    /**
+     * Discover all items for a given Zabbix host.
+     *
+     * @param  string  $hostId  Zabbix host ID
+     * @return array  Array of items with itemid, key_, name, units, value_type, delay
+     */
+    public function discoverItems(string $hostId): array
+    {
+        $response = $this->request('item.get', [
+            'output' => ['itemid', 'key_', 'name', 'units', 'value_type', 'delay', 'hostid'],
+            'hostids' => $hostId,
+            'sortfield' => 'name',
+        ]);
+
+        return $response['result'] ?? [];
+    }
+
+    /**
+     * Get hosts from Zabbix API (for discovery).
+     *
+     * @return array  Array of hosts with hostid, host, name, status
+     */
+    public function discoverHosts(): array
+    {
+        $response = $this->request('host.get', [
+            'output' => ['hostid', 'host', 'name', 'status', 'available'],
+            'sortfield' => 'name',
+        ]);
+
+        return $response['result'] ?? [];
+    }
+
     protected function request($method, $params = [])
     {
         $response = Http::withHeaders([

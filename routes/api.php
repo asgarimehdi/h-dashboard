@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
+use App\Http\Controllers\Api\ZabbixConfigController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -48,6 +49,33 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->get('/zabbix/traffic', [TrafficController::class, 'index']);
 Route::middleware('auth:sanctum')->get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
+
+// Zabbix Configuration Management (Issue #247)
+Route::middleware('auth:sanctum')->prefix('zabbix')->group(function () {
+    // Hosts
+    Route::get('/hosts', [ZabbixConfigController::class, 'hostsIndex']);
+    Route::post('/hosts', [ZabbixConfigController::class, 'hostStore']);
+    Route::get('/hosts/{host}', [ZabbixConfigController::class, 'hostShow']);
+    Route::put('/hosts/{host}', [ZabbixConfigController::class, 'hostUpdate']);
+    Route::delete('/hosts/{host}', [ZabbixConfigController::class, 'hostDestroy']);
+    Route::post('/hosts/{host}/sync', [ZabbixConfigController::class, 'hostSync']);
+    Route::get('/hosts/{host}/discover', [ZabbixConfigController::class, 'hostDiscover']);
+
+    // Items
+    Route::get('/items', [ZabbixConfigController::class, 'itemsIndex']);
+    Route::post('/items', [ZabbixConfigController::class, 'itemStore']);
+    Route::get('/items/{item}', [ZabbixConfigController::class, 'itemShow']);
+    Route::put('/items/{item}', [ZabbixConfigController::class, 'itemUpdate']);
+    Route::delete('/items/{item}', [ZabbixConfigController::class, 'itemDestroy']);
+    Route::post('/items/bulk-sync', [ZabbixConfigController::class, 'itemsBulkSync']);
+
+    // Pairs
+    Route::get('/pairs', [ZabbixConfigController::class, 'pairsIndex']);
+    Route::post('/pairs', [ZabbixConfigController::class, 'pairStore']);
+    Route::get('/pairs/{pair}', [ZabbixConfigController::class, 'pairShow']);
+    Route::put('/pairs/{pair}', [ZabbixConfigController::class, 'pairUpdate']);
+    Route::delete('/pairs/{pair}', [ZabbixConfigController::class, 'pairDestroy']);
+});
 
 // Hardware API routes
 Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {

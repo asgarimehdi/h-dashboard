@@ -264,6 +264,29 @@ Tracks all modifications to hardware records:
 | GET | `/api/zabbix/traffic` | Network traffic from Zabbix (via `ZabbixService`) |
 | GET | `/api/zabbix/multi-latest` | Multi-item latest values (cached) |
 
+### Zabbix Configuration Management (`/api/zabbix/*`) — #247
+
+Database-backed management of Zabbix hosts, items, and traffic pairs:
+
+**Models:** `ZabbixHost` (`zabbix_hosts`), `ZabbixItem` (`zabbix_items`), `ZabbixItemPair` (`zabbix_item_pairs`)
+- Hosts link to `unit` (org scope) and `hardware` (inventory); items belong to a host with type (`traffic_in/out`, `cpu`, `memory`, `disk`, `custom`); pairs map In/Out items for traffic links
+- All queries respect organizational scope (unit_id null = global, otherwise must be in accessible units)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/zabbix/hosts` | List (scoped, filter by status/search) / Create host config |
+| GET/PUT/DELETE | `/api/zabbix/hosts/{host}` | Show with items+pairs / Update / Delete |
+| POST | `/api/zabbix/hosts/{host}/sync` | Trigger Zabbix API discovery and bulk-import items |
+| GET | `/api/zabbix/hosts/{host}/discover` | Discover items from Zabbix API (returns list, marks already-imported) |
+| GET/POST | `/api/zabbix/items` | List items (filter by type/monitored/search) / Create item |
+| GET/PUT/DELETE | `/api/zabbix/items/{item}` | Show / Update / Delete item |
+| POST | `/api/zabbix/items/bulk-sync` | Bulk sync latest values from Zabbix API |
+| GET/POST | `/api/zabbix/pairs` | List traffic pairs / Create pair (validates same-host items) |
+| GET/PUT/DELETE | `/api/zabbix/pairs/{pair}` | Show / Update / Delete pair |
+
+`ZabbixService` extended with `discoverItems($hostId)` and `discoverHosts()` (Zabbix `item.get` / `host.get`).
+Tests: `tests/Feature/ZabbixConfigTest.php` (15 tests: CRUD, scope enforcement, item-host validation).
+
 ---
 
 ## UI Features
@@ -358,6 +381,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 - **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)
+- **#247** — Zabbix Configuration Management (Models: `ZabbixHost`, `ZabbixItem`, `ZabbixItemPair`; API: CRUD hosts/items/pairs + discover/sync; Scope enforcement; Tests: `ZabbixConfigTest`)
 
 ---
 
