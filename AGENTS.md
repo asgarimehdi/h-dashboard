@@ -257,6 +257,18 @@ Tracks all modifications to hardware records:
 | GET | `/api/reports/todos` | Todo statistics |
 | GET | `/api/reports/tickets` | Ticket statistics |
 
+### HR (`/api/hr`) — Issue #223
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/hr/org-chart` | Full org tree with personnel counts per unit (nested JSON) |
+| GET | `/api/hr/stats` | Aggregated HR stats (total, by unit/semat/tahsil/estekhdam/radif) |
+| GET | `/api/hr/vacancies` | Units with zero personnel |
+| GET | `/api/hr/personnel` | Paginated personnel list; filters: `search`, `unit_id`, `semat_id`, `tahsil_id`, `estekhdam_id`, `radif_id`, `status` |
+| GET | `/api/hr/personnel/{n_code}` | Personnel detail with full HR profile (403 if out of scope) |
+
+All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` + `/hr/org-chart` (permission `view_hr_dashboard`).
+
 ### Zabbix (`/api/zabbix`)
 
 | Method | URL | Description |
@@ -294,6 +306,7 @@ Tracks all modifications to hardware records:
 ### Other Pages
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
+- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Components under `app/Livewire/Hr/`, views under `resources/views/livewire/hr/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
 
 ### Help System (راهنما)
 
