@@ -11,7 +11,7 @@
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
-            <x-icon name="o-file-text" class="w-5 h-5 text-info" />
+            <x-icon name="o-document-text" class="w-5 h-5 text-info" />
             فرمت فایل و ستون‌ها
         </h4>
         <table class="table table-xs w-full text-sm">
@@ -83,7 +83,7 @@
 
     <div class="border-t border-base-200 pt-6 bg-warning/5 p-4 rounded-lg">
         <h4 class="font-bold text-sm mb-2 flex items-center gap-2">
-            <x-icon name="o-alert-triangle" class="w-4 h-4 text-warning" />
+            <x-icon name="o-exclamation-triangle" class="w-4 h-4 text-warning" />
             نکات مهم
         </h4>
         <ul class="space-y-1 text-xs text-base-content/70">

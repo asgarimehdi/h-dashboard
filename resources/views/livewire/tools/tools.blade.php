@@ -14,6 +14,7 @@ return new class extends Component {
     public int $archiveDays = 30;
     public int $activityDays = 90;
     public int $notificationDays = 7;
+    public bool $showHelpModal = false;
 
     public function mount(): void
     {
@@ -93,9 +94,12 @@ return new class extends Component {
 <div>
     <x-header title="🔧 ابزارهای مدیریتی" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="tools" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     {{-- آمار --}}
     <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">

@@ -27,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
             'dashboard',
             'hardware',
             'hardware-import',
+            'persons-import',
             'personnel',
             'units',
             'tickets',
@@ -40,6 +41,9 @@ class AppServiceProvider extends ServiceProvider
             'activity-log',
             'networks',
             'wireless',
+            'tools',
+            'search',
+            'profile',
         ];
         
         foreach ($helpContents as $content) {
