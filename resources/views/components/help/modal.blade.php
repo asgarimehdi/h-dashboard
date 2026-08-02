@@ -7,8 +7,8 @@
 <div
     x-data="{ helpSection: '{{ $helpSection }}' }"
     x-init="
-        Livewire.on('help-open', ({ section }) => {
-            if (section) { helpSection = section; }
+        document.addEventListener('help-open', (e) => {
+            if (e.detail?.section) { helpSection = e.detail.section; }
             $wire.{{ $wireModel }} = true;
         });
     "
