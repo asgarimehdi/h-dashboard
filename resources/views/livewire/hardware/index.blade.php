@@ -538,7 +538,7 @@ return new class extends Component
             'hardwares' => $this->hardwares()->through(fn($hw) => [
                 ...$hw->toArray(),
                 'person_name' => $hw->person ? trim($hw->person->f_name . ' ' . $hw->person->l_name) : '-',
-                'status' => $hw->mark ? 'mark' : ($hw->shutdown ? 'on' : 'off'),
+                'status' => $hw->mark ? 'mark' : ($hw->shutdown ? 'off' : 'on'),
             ]),
             'headers' => $this->headers(),
         ];
