@@ -146,9 +146,9 @@ The application uses **Laravel Sanctum** with two authentication modes:
 
 ### Safe Role/Permission Middleware (Deprecated for Hardware Routes)
 
-Previously, a middleware `SafeRoleOrPermission` (alias: `safe_role_or_permission`) allowed routes to be accessible to unauthenticated guests while still enforcing Spatie permissions for authenticated users. This was used on hardware Livewire routes but has been **removed** due to security concerns (Issue #216).
+### Safe Role/Permission Middleware
 
-**Fixed in Issue #216**: Hardware routes now use standard authentication with `auth` + `role_or_permission:manage_hardware`:
+`SafeRoleOrPermission` (alias: `safe_role_or_permission`) **is no longer used on hardware routes.** Issue #216 removed it from `/hardware` and `/hardware/import` because guests could see sensitive hardware data. Hardware routes now require full auth:
 
 ```php
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
@@ -157,7 +157,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 });
 ```
 
-The `SafeRoleOrPermission` middleware class still exists at `App\HttpAPI\Middleware\SafeRoleOrPermission` but is no longer used on any routes. It may be removed in a future cleanup.
+> **Gotcha:** `test_hardware_page_loads_without_auth` (originally from #124) now asserts **302 → /login** for guests, matching the #216 security decision. Do NOT "fix" it back to 200 — that reopens the data leak.
 
 ### Unit Context Middleware
 
@@ -288,6 +288,8 @@ Tracks all modifications to hardware records:
 
 - Unit map, interactive map, county map, point map, route maps — all with organizational scope applied
 - GIS data via PostGIS (boundaries as MULTIPOLYGON, SRID 4326); unit lat/lng with bounding-box queries (`withinBounds`)
+- **Map container:** shared `maps.map` component renders `#map` with `h-[80lvh]`; pages must NOT wrap it in a Bootstrap `container` class (restricts width) — use `relative` so overlays position correctly; `invalidateSize()` runs after init + on resize so Leaflet never locks a half-width
+- **Gotchas:** county map query joins `boundaries` — always qualify `regions.id` (ambiguous column error on pgsql otherwise)
 
 ### Other Pages
 

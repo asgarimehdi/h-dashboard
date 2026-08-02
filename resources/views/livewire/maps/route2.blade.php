@@ -29,7 +29,7 @@ return new class extends Component {
     </x-header>
 
     <x-card shadow>
-        <div class="container">
+        <div class="relative">
             <div class="flex items-center gap-2 flex-wrap pb-3">
                 <input
                     type="text"

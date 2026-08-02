@@ -78,9 +78,11 @@ class HardwareHistoryTest extends TestCase
         ])->getJson("/api/hardware/{$this->hardware->id}/history");
 
         $response->assertStatus(200)
-            ->assertJson([
-                'meta' => ['total' => 1], // created event from observer
-            ]);
+            ->assertJsonStructure([
+                'data',
+                'meta' => ['current_page', 'last_page', 'per_page', 'total'],
+            ])
+            ->assertJsonPath('meta.total', 1); // created event from observer
         
         $data = $response->json('data');
         $this->assertEquals(1, count($data));
