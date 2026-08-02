@@ -14,7 +14,7 @@ class HardwareObserver
      */
     public function created(Hardware $hardware): void
     {
-        $this->recordHistory($hardware, 'created', null);
+        $this->recordHistory($hardware, 'created', $hardware->getAttributes());
     }
 
     /**
@@ -75,6 +75,11 @@ class HardwareObserver
         $changes = [];
 
         foreach ($dirty as $field => $newValue) {
+            // Ignore auto-managed timestamp fields
+            if (in_array($field, ['updated_at', 'created_at'], true)) {
+                continue;
+            }
+
             if (isset($original[$field])) {
                 $oldValue = $original[$field];
                 

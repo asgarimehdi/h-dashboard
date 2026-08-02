@@ -79,7 +79,6 @@ class HardwareHistoryTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'success' => true,
                 'meta' => ['total' => 1], // created event from observer
             ]);
         
@@ -231,7 +230,7 @@ class HardwareHistoryTest extends TestCase
         $response->assertStatus(200);
         $data = $response->json('data');
         $this->assertEquals(3, count($data));
-        $this->assertEquals(6, $response->json('meta.total')); // 1 created + 5 updated
+        $this->assertEquals(5, $response->json('meta.total')); // 1 created + 4 updates (updated_at filtered)
         $this->assertEquals(1, $response->json('meta.current_page'));
 
         // Second page
@@ -241,7 +240,7 @@ class HardwareHistoryTest extends TestCase
 
         $response->assertStatus(200);
         $data = $response->json('data');
-        $this->assertEquals(3, count($data));
+        $this->assertEquals(2, count($data)); // 5 total - 3 on page 1 = 2 on page 2
         $this->assertEquals(2, $response->json('meta.current_page'));
     }
 

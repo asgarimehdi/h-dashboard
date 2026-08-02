@@ -355,6 +355,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **#213** — Hardware Change History & Audit Trail API (`hardware_histories` table, `HardwareObserver`, `GET /api/hardware/{hardware}/history`, Livewire history modal with Jalali dates)
 - **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
+- **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)
 
 ---
 
