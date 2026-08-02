@@ -47,7 +47,7 @@ class TicketController extends Controller
 
     public function show(Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);
@@ -95,7 +95,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
     public function update(Request $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);
@@ -118,7 +118,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
     public function destroy(Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);
@@ -131,7 +131,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
     public function assign(Request $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);
@@ -166,7 +166,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
     public function accept(Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);
@@ -185,7 +185,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
     public function complete(Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);

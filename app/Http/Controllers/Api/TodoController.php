@@ -71,7 +71,7 @@ class TodoController extends Controller
 
     public function show(Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
@@ -84,7 +84,7 @@ class TodoController extends Controller
 
     public function update(Request $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to update this todo.'], 403);
         }
@@ -106,7 +106,7 @@ class TodoController extends Controller
 
     public function destroy(Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to delete this todo.'], 403);
         }
@@ -121,7 +121,7 @@ class TodoController extends Controller
 
     public function toggleComplete(Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to modify this todo.'], 403);
         }

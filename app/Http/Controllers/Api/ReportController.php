@@ -16,7 +16,7 @@ class ReportController extends Controller
 {
     public function units(): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
         $query = Unit::whereIn('id', $accessibleIds);
 
@@ -42,7 +42,7 @@ class ReportController extends Controller
 
     public function todos(Request $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         $query = Todo::whereIn('unit_id', $accessibleIds);
 
         $now = now();
@@ -80,7 +80,7 @@ class ReportController extends Controller
 
     public function tickets(Request $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         $query = Ticket::whereIn('unit_id', $accessibleIds);
 
         $total = (clone $query)->count();
