@@ -159,8 +159,17 @@ return new class extends Component {
     // آخرین فعالیت‌ها — TTL 2 دقیقه
     public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
-        return Cache::remember('dashboard:recent_activities', 120, function () {
-            return ActivityLog::with('user')->latest()->take(10)->get();
+        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        
+        return Cache::remember("dashboard:recent_activities:{$scopeKey}", 120, function () {
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+            $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+                ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))
+                ->pluck('id')->toArray();
+            
+            return ActivityLog::with('user')
+                ->whereIn('user_id', $userIds)
+                ->latest()->take(10)->get();
         });
     }
 }; ?>
