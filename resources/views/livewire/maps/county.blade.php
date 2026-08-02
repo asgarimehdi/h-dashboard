@@ -22,7 +22,7 @@ return new class extends Component
         $this->regions = Cache::remember('county:regions_with_boundaries:' . md5(implode(',', $accessibleIds)), 300, function () use ($accessibleIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
-                ->whereIn('id', $accessibleIds)
+                ->whereIn('regions.id', $accessibleIds)
                 ->select([
                     'regions.id',
                     'regions.name',
