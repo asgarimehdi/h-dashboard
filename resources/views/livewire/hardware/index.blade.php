@@ -620,7 +620,7 @@ return new class extends Component
         @if($showColPanel)
             <div class="mb-4 p-4 bg-base-200 rounded-lg border-l-4 border-primary">
                 <div class="flex items-center gap-2 mb-2 font-bold text-sm">
-                    <x-icon name="o-columns-3" class="w-4 h-4" />
+                    <x-icon name="o-view-columns" class="w-4 h-4" />
                     مدیریت نمایش ستون‌ها
                 </div>
                 <div class="flex flex-wrap gap-3">
