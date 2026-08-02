@@ -80,6 +80,9 @@ Route::middleware('auth')->group(function () {
 
             Route::livewire('/it/wireless', 'it/wireless');
             Route::livewire('/it/networks', 'it/networks');
+            
+            // GIS Dashboard
+            Route::livewire('/map', 'map.map-dashboard')->name('map');
         });
 
         Route::middleware('role_or_permission:calendar')->group(function () {

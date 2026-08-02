@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\GisController;
 use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\HardwareHistoryController;
 use App\Http\Controllers\Api\MultiLatestValueController;
@@ -101,4 +102,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/todos/{todo}', [TodoController::class, 'update']);
     Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
     Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+});
+
+// GIS / Map API routes
+Route::middleware('auth:sanctum')->prefix('gis')->group(function () {
+    Route::get('/units', [GisController::class, 'units']);
+    Route::get('/hardware', [GisController::class, 'hardware']);
+    Route::get('/tickets', [GisController::class, 'tickets']);
+    Route::get('/stats', [GisController::class, 'stats']);
+    Route::get('/clusters', [GisController::class, 'clusters']);
 });
