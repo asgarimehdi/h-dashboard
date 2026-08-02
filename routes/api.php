@@ -32,12 +32,12 @@ Route::post('/login', function (Request $request) {
 })->middleware('throttle:5,1');
 
 // Authenticated routes
-Route::middleware('auth:Sanctum')->get('/user', function (Request $request) {
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
 // Unit API routes
-Route::middleware('auth:Sanctum')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/units', [UnitController::class, 'index']);
     Route::post('/units', [UnitController::class, 'store']);
     Route::get('/units/{unit}', [UnitController::class, 'show']);
