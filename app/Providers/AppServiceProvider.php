@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Hardware;
 use App\Observers\HardwareObserver;
+use App\Observers\HardwareAuditObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 
@@ -50,5 +51,8 @@ class AppServiceProvider extends ServiceProvider
         
         // Register Hardware observer for audit trail
         Hardware::observe(HardwareObserver::class);
+        
+        // Register Hardware Audit observer for field-level change tracking
+        Hardware::observe(HardwareAuditObserver::class);
     }
 }

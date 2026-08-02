@@ -63,6 +63,12 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     
     // Hardware History
     Route::get('/{hardware}/history', [HardwareHistoryController::class, 'index']);
+    
+    // Hardware Audit Trail (Issue #246)
+    Route::get('/{hardware}/audits', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']);
+    Route::get('/{hardware}/audits/export', [\App\Http\Controllers\Api\HardwareAuditController::class, 'export']);
+    Route::get('/{hardware}/audits/{audit}', [\App\Http\Controllers\Api\HardwareAuditController::class, 'show']);
+    Route::post('/{hardware}/audits/{audit}/rollback', [\App\Http\Controllers\Api\HardwareAuditController::class, 'rollback']);
 });
 
 // Ticket API routes
