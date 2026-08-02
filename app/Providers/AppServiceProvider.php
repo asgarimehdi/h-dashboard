@@ -48,9 +48,7 @@ class AppServiceProvider extends ServiceProvider
             Blade::component("components.help.content.{$content}", "help-content:{$content}");
         }
         
-        // Register Hardware observer for audit trail (skip during testing to avoid migration conflicts)
-        if (!app()->runningInConsole() || !app()->environment('testing')) {
-            Hardware::observe(HardwareObserver::class);
-        }
+        // Register Hardware observer for audit trail
+        Hardware::observe(HardwareObserver::class);
     }
 }
