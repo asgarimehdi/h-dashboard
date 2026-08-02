@@ -70,7 +70,7 @@
             <li>• مجوزها به <strong>نقش‌ها (Roles)</strong> اختصاص داده می‌شوند</li>
             <li>• کاربران از طریق نقش‌ها مجوز می‌گیرند</li>
             <li>• کنترل در کنترلرها: <code>can('manage_hardware')</code></li>
-            <li>• کنترل در Blade: <code>@can('manage_hardware')</code></li>
+            <li>• کنترل در Blade: <code>@@can('manage_hardware')</code></li>
             <li>• میدل‌ویر مسیرها: <code>middleware('permission:manage_hardware')</code></li>
         </ul>
     </div>

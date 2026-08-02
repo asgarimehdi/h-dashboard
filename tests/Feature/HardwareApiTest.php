@@ -282,4 +282,40 @@ class HardwareApiTest extends TestCase
                 ],
             ]);
     }
+
+    /**
+     * Issue #217: stats are cached, and a hardware write invalidates the cache
+     * so subsequent reads reflect fresh data.
+     */
+    public function test_stats_cache_is_invalidated_on_write(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $person = Person::first();
+
+        // Initial state: 1 device
+        Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-CACHE-1', 'type' => 'desktop', 'shutdown' => false]);
+        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+            ->assertJsonPath('data.total', 1);
+
+        // Create a new device → cache must be invalidated
+        $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-CACHE-2',
+            'type' => 'laptop',
+            'shutdown' => true,
+        ])->assertStatus(201);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.shutdown', 1);
+
+        // Delete one → cache invalidated again
+        $target = Hardware::where('pc_name', 'PC-CACHE-1')->first();
+        $this->actingAs($user, 'sanctum')->deleteJson("/api/hardware/{$target->id}")
+            ->assertStatus(200);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.shutdown', 1);
+    }
 }

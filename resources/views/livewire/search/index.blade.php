@@ -11,6 +11,7 @@ return new class extends Component
     public string $query = '';
     public array $results = ['tickets' => [], 'todos' => [], 'users' => [], 'units' => []];
     public bool $hasSearched = false;
+    public bool $showHelpModal = false;
 
     public function updatedQuery(): void
     {
@@ -99,9 +100,12 @@ return new class extends Component
 <div dir="rtl">
     <x-header title="جستجوی کلی" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="search" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
         <div class="mb-6">

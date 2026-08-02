@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Hardware extends Model
 {
@@ -52,10 +53,34 @@ class Hardware extends Model
                 }
             }
         });
+
+        // Issue #217: invalidate cached hardware stats on any write (create/update/delete).
+        // Uses a wildcard-friendly prefix so all per-user scope keys are cleared at once.
+        static::saved(fn () => self::flushStatsCache());
+        static::deleted(fn () => self::flushStatsCache());
+    }
+
+    /**
+     * Invalidate all cached hardware stats (any organizational scope).
+     *
+     * Stats cache keys are `hardware_stats:v<N>:<md5(accessibleIds)>`.
+     * A write may affect any scope, so bumping the version counter makes all
+     * previously cached scope keys unreachable; they expire naturally via TTL.
+     * This is driver-agnostic (array/file/redis all support increment) and
+     * avoids flushing unrelated cached data (access units, notifications...).
+     */
+    public static function flushStatsCache(): void
+    {
+        \Illuminate\Support\Facades\Cache::increment('hardware_stats_version');
     }
 
     public function person(): BelongsTo
     {
         return $this->belongsTo(Person::class, 'n_code', 'n_code');
+    }
+
+    public function histories(): HasMany
+    {
+        return $this->hasMany(HardwareHistory::class);
     }
 }

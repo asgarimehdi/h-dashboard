@@ -14,7 +14,7 @@ use Morilog\Jalali\Jalalian;
 
 class ReportController extends Controller
 {
-    public function units(): JsonResponse
+    public function units(Request $request): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 

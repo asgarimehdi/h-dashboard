@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Hardware;
+use App\Observers\HardwareObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
             'dashboard',
             'hardware',
             'hardware-import',
+            'persons-import',
             'personnel',
             'units',
             'tickets',
@@ -36,10 +39,18 @@ class AppServiceProvider extends ServiceProvider
             'activity-log',
             'networks',
             'wireless',
+            'tools',
+            'search',
+            'profile',
         ];
         
         foreach ($helpContents as $content) {
             Blade::component("components.help.content.{$content}", "help-content:{$content}");
+        }
+        
+        // Register Hardware observer for audit trail (skip during testing to avoid migration conflicts)
+        if (!app()->runningInConsole() || !app()->environment('testing')) {
+            Hardware::observe(HardwareObserver::class);
         }
     }
 }

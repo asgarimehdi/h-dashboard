@@ -69,7 +69,7 @@ class TodoController extends Controller
         ], 201);
     }
 
-    public function show(Todo $todo): JsonResponse
+    public function show(Request $request, Todo $todo): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
@@ -104,7 +104,7 @@ class TodoController extends Controller
         ]);
     }
 
-    public function destroy(Todo $todo): JsonResponse
+    public function destroy(Request $request, Todo $todo): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
@@ -119,7 +119,7 @@ class TodoController extends Controller
         ]);
     }
 
-    public function toggleComplete(Todo $todo): JsonResponse
+    public function toggleComplete(Request $request, Todo $todo): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {

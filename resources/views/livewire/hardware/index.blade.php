@@ -20,6 +20,15 @@ return new class extends Component
     public int $perPage = 20;
     public bool $showHelpModal = false;
 
+    // History modal
+    public bool $showHistoryModal = false;
+    public ?int $historyHardwareId = null;
+    public array $history = [];
+    public int $historyCurrentPage = 1;
+    public int $historyPerPage = 15;
+    public int $historyTotal = 0;
+    public ?string $historyActionFilter = null;
+
     /**
      * Get accessible unit IDs for the current user.
      *
@@ -343,6 +352,91 @@ return new class extends Component
         $this->warning('دستگاه‌های انتخاب شده حذف شدند.', position: 'toast-bottom');
     }
 
+    /**
+     * Load hardware change history.
+     */
+    public function loadHistory(int $hardwareId): void
+    {
+        $this->historyHardwareId = $hardwareId;
+        $this->historyCurrentPage = 1;
+        $this->historyActionFilter = null;
+        $this->fetchHistory();
+        $this->showHistoryModal = true;
+    }
+
+    /**
+     * Fetch history from DB (scoped to accessible units).
+     */
+    private function fetchHistory(): void
+    {
+        if (!$this->historyHardwareId) {
+            return;
+        }
+
+        $hw = Hardware::with('person')->find($this->historyHardwareId);
+        if (!$hw) {
+            $this->history = [];
+            $this->historyTotal = 0;
+            return;
+        }
+
+        $accessibleIds = $this->accessibleUnitIds();
+        if (!in_array($hw->person?->u_id, $accessibleIds)) {
+            $this->history = [];
+            $this->historyTotal = 0;
+            return;
+        }
+
+        $query = HardwareHistory::with('user:id,n_code,name')
+            ->where('hardware_id', $hw->id);
+
+        if ($this->historyActionFilter) {
+            $query->where('action', $this->historyActionFilter);
+        }
+
+        $this->historyTotal = $query->count();
+
+        $items = $query
+            ->orderByDesc('created_at')
+            ->forPage($this->historyCurrentPage, $this->historyPerPage)
+            ->get()
+            ->map(fn ($h) => [
+                'id' => $h->id,
+                'action' => $h->action,
+                'changes' => $h->changes,
+                'ip_address' => $h->ip_address,
+                'user_agent' => $h->user_agent,
+                'created_at' => $h->created_at?->toIso8601String(),
+                'user' => $h->user ? [
+                    'id' => $h->user->id,
+                    'n_code' => $h->user->n_code,
+                    'name' => $h->user->name,
+                ] : null,
+            ])
+            ->all();
+
+        $this->history = $items;
+    }
+
+    /**
+     * Pagination for history.
+     */
+    public function historyPage(int $page): void
+    {
+        $this->historyCurrentPage = $page;
+        $this->fetchHistory();
+    }
+
+    /**
+     * Filter history by action.
+     */
+    public function filterHistory(?string $action): void
+    {
+        $this->historyActionFilter = $action;
+        $this->historyCurrentPage = 1;
+        $this->fetchHistory();
+    }
+
     public function headers(): array
     {
         return [
@@ -663,6 +757,81 @@ return new class extends Component
             </x-modal>
         @endif
 
+        {{-- History Modal --}}
+        @if($showHistoryModal)
+            <x-modal wire:model="showHistoryModal" title="تاریخچه تغییرات" close-on-backdrop>
+                <div class="mb-3 flex flex-wrap gap-2">
+                    <x-button :class="$historyActionFilter === null ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory(null)" label="همه" />
+                    <x-button :class="$historyActionFilter === 'created' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('created')" label="ایجاد" />
+                    <x-button :class="$historyActionFilter === 'updated' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('updated')" label="ویرایش" />
+                    <x-button :class="$historyActionFilter === 'deleted' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('deleted')" label="حذف" />
+                    <x-button :class="$historyActionFilter === 'bulk_mark' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_mark')" label="علامت گروهی" />
+                    <x-button :class="$historyActionFilter === 'bulk_delete' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_delete')" label="حذف گروهی" />
+                </div>
+
+                @if(count($history) === 0)
+                    <div class="text-center py-8 text-base-content/50">تاریخچه‌ای ثبت نشده است.</div>
+                @else
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        @foreach($history as $entry)
+                            <div class="border rounded-lg p-3 bg-base-200/50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        @php
+                                            $badgeClass = match($entry['action']) {
+                                                'created' => 'badge-success',
+                                                'updated' => 'badge-info',
+                                                'deleted', 'bulk_delete' => 'badge-error',
+                                                'bulk_mark' => 'badge-warning',
+                                                default => 'badge-neutral',
+                                            };
+                                            $actionLabel = match($entry['action']) {
+                                                'created' => 'ایجاد',
+                                                'updated' => 'ویرایش',
+                                                'deleted' => 'حذف',
+                                                'bulk_mark' => 'علامت گروهی',
+                                                'bulk_delete' => 'حذف گروهی',
+                                                default => $entry['action'],
+                                            };
+                                        @endphp
+                                        <x-badge :value="$actionLabel" :class="$badgeClass" />
+                                        <span class="text-xs opacity-60">{{ $entry['user']['name'] ?? $entry['user']['n_code'] ?? 'سیستم' }}</span>
+                                    </div>
+                                    <span class="text-xs opacity-50">{{ \Morilog\Jalali\Jalalian::fromDateTime($entry['created_at'])->format('Y/m/d H:i') }}</span>
+                                </div>
+                                @if(!empty($entry['changes']) && is_array($entry['changes']))
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        @foreach($entry['changes'] as $change)
+                                            @if(is_array($change) && isset($change['field']))
+                                                <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
+                                                    {{ $change['field'] }}: {{ $change['old'] ?? '—' }} ← {{ $change['new'] ?? '—' }}
+                                                </span>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                @endif
+                                @if($entry['ip_address'])
+                                    <div class="text-[10px] opacity-40 mt-1">IP: {{ $entry['ip_address'] }}</div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+
+                    @if($historyTotal > $historyPerPage)
+                        <div class="flex justify-center items-center gap-2 mt-4">
+                            <x-button icon="o-chevron-right" class="btn-circle btn-sm"
+                                :disabled="$historyCurrentPage <= 1"
+                                wire:click="historyPage({{ $historyCurrentPage - 1 }})" />
+                            <span class="text-sm">صفحه {{ $historyCurrentPage }} از {{ ceil($historyTotal / $historyPerPage) }}</span>
+                            <x-button icon="o-chevron-left" class="btn-circle btn-sm"
+                                :disabled="$historyCurrentPage >= ceil($historyTotal / $historyPerPage)"
+                                wire:click="historyPage({{ $historyCurrentPage + 1 }})" />
+                        </div>
+                    @endif
+                @endif
+            </x-modal>
+        @endif
+
         {{-- Mobile Card Layout --}}
         <div class="grid grid-cols-1 gap-4 md:hidden">
             @foreach($hardwares as $hw)
@@ -698,6 +867,7 @@ return new class extends Component
                     </div>
                     <div class="flex gap-2">
                         <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-xs text-primary flex-1" label="ویرایش" />
+                        <x-button icon="o-clock" wire:click="loadHistory({{ $hw['id'] }})" class="btn-ghost btn-xs text-info flex-1" label="تاریخچه" />
                         <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-xs text-error flex-1" label="حذف" />
                     </div>
                 </div>
@@ -723,6 +893,7 @@ return new class extends Component
                 @scope('actions', $hw)
                     <div class="flex gap-1">
                         <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
+                        <x-button icon="o-clock" wire:click="loadHistory({{ $hw['id'] }})" class="btn-ghost btn-sm text-info" />
                         <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
                     </div>
                 @endscope

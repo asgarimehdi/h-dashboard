@@ -40,6 +40,13 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `vlan`, `motherboard`, `cpu`, `ram`, `hdd`
 - `comments`, `mark` (boolean)
 - `clean_at` (nullable date)
+- Relationship: `histories()` → `HardwareHistory` (change audit trail, #213)
+
+**HardwareHistory** (`hardware_histories` table)
+- `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `ip_address`, `user_agent`
+- Populated automatically by `HardwareObserver` (registered in `AppServiceProvider`)
+- Indexes: `(hardware_id, created_at)`, `user_id`
+- API: `GET /api/hardware/{hardware}/history` (paginated, action filter, org scope); UI: history modal on `/hardware` page (#213)
 
 **Unit** (`units` table)
 - `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
@@ -168,14 +175,37 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 |---|---|---|
 | GET | `/api/hardware` | List with filters: `search`, `type`, `os`, `cpu`, `ram`, `hdd`, `shutdown`, `net_type`, `mark`, `person`, `unit`, `semat` |
 | POST | `/api/hardware` | Create (requires `n_code`, `pc_name`) |
-| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached (`getTypeStats()`) |
+| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached 10 min per org scope, invalidated on hardware writes (#217) |
 | GET | `/api/hardware/{id}` | Show details |
 | PUT/PATCH | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
 | DELETE | `/api/hardware/{id}` | Delete |
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
+| GET | `/api/hardware/{hardware}/history` | **Paginated change history** with action filter (`action=updated`), organizational scope enforced |
 
-### Person CRUD (`/api/persons`)
+### Hardware History / Audit Trail (`/api/hardware/{hardware}/history`)
+
+Tracks all modifications to hardware records:
+
+| Action | Description |
+|--------|-------------|
+| `created` | Hardware record created |
+| `updated` | Field-level changes with old/new values |
+| `deleted` | Hardware record deleted (captures hardware_id before deletion) |
+| `bulk_mark` | Bulk mark/unmark operation |
+| `bulk_delete` | Bulk delete operation |
+
+**Query Parameters:**
+- `per_page` (max 50)
+- `action` (filter by action type: created/updated/deleted/bulk_mark/bulk_delete)
+
+**Response:** Paginated history with user info and field-level changes (old/new values).
+
+**Scope:** Respects organizational scope — users only see history for hardware in their accessible units.
+
+**Livewire Component:** New "History / تغییرات" tab on hardware detail page showing date, user, action, changed fields (badges), IP.
+
+### Hardware Import (`/hardware/import`)
 
 | Method | URL | Description |
 |---|---|---|
@@ -263,6 +293,17 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
 
+### Help System (راهنما)
+
+In-app help is a per-page modal (`?` button in page headers):
+
+- **Components:** `resources/views/components/help/` — `button.blade.php` (dispatches `help-open` with the section) + `modal.blade.php` (listens via `Livewire.on('help-open')`, switches content with Alpine `x-if` on `helpSection`, opens by setting the page's `showHelpModal` property)
+- **Content:** one file per section under `resources/views/components/help/content/<section>.blade.php`, registered in `AppServiceProvider::boot()` (`$helpContents`) as `help-content:<section>` components
+- **Wiring a new page:** add `public bool $showHelpModal = false;`, `<x-help:button section="<section>" wireModel="showHelpModal" />` in the header actions, and `<x-help:modal wireModel="showHelpModal" />`; create the content file + register it + add an `x-if` case in the modal
+- **Sections (20):** dashboard, hardware, hardware-import, persons-import, personnel, units, tickets, todos, reports, maps, settings, roles, permissions, users, activity-log, networks, wireless, tools, search, profile
+- **Gotchas:** escape Blade directives in content with `@@` (e.g. `@@can(...)`); use only icons present in the heroicons set (`o-*` in `vendor/blade-ui-kit/blade-heroicons/resources/svg/`)
+- **Tests:** `tests/Feature/HelpSystemTest.php` — page renders + all 20 content sections render
+
 ---
 
 ## Persian Text Handling
@@ -303,11 +344,17 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 
 ### Performance (recent fixes pattern)
 - Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
+- Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush) (#217)
 - Eager-load relationships (`with('person.unit')`) in list queries
 - Limit API pagination to max 100 per page
 - Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
 - Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
+
+### Recent Issues Resolved
+- **#213** — Hardware Change History & Audit Trail API (`hardware_histories` table, `HardwareObserver`, `GET /api/hardware/{hardware}/history`, Livewire history modal with Jalali dates)
+- **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
+- **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 
 ---
 

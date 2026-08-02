@@ -15,8 +15,17 @@ use Tests\TestCase;
 */
 
 pest()->extend(TestCase::class)
- ->use(RefreshDatabase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
+| Test Case for tests that don't need RefreshDatabase
+|--------------------------------------------------------------------------
+*/
+
+pest()->extend(TestCase::class)
+    ->in('Feature/HelpSystemTest');
 
 /*
 |--------------------------------------------------------------------------
