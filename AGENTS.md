@@ -137,16 +137,20 @@ The application uses **Laravel Sanctum** with two authentication modes:
 - The login form is at `/login` (web session).
 - Token generation (for testing/automation): `POST /api/sanctum/token` with valid credentials. The Flutter app uses `POST /api/login` with `n_code` + `password` (throttled 5/min).
 
-### Safe Role/Permission Middleware
+### Safe Role/Permission Middleware (Deprecated for Hardware Routes)
 
-A new middleware `SafeRoleOrPermission` (alias: `safe_role_or_permission`) allows routes to be accessible to unauthenticated guests while still enforcing Spatie permissions for authenticated users. This is used on hardware Livewire routes to support both web sessions and API token authentication patterns.
+Previously, a middleware `SafeRoleOrPermission` (alias: `safe_role_or_permission`) allowed routes to be accessible to unauthenticated guests while still enforcing Spatie permissions for authenticated users. This was used on hardware Livewire routes but has been **removed** due to security concerns (Issue #216).
+
+**Fixed in Issue #216**: Hardware routes now use standard authentication with `auth` + `role_or_permission:manage_hardware`:
 
 ```php
-Route::middleware('safe_role_or_permission:manage_hardware')->group(function () {
+Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
 });
 ```
+
+The `SafeRoleOrPermission` middleware class still exists at `App\HttpAPI\Middleware\SafeRoleOrPermission` but is no longer used on any routes. It may be removed in a future cleanup.
 
 ### Unit Context Middleware
 
