@@ -69,7 +69,7 @@ class TodoController extends Controller
         ], 201);
     }
 
-    public function show(Todo $todo): JsonResponse
+    public function show(Request $request, Todo $todo): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {

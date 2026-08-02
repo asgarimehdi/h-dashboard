@@ -164,7 +164,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         ]);
     }
 
-    public function accept(Ticket $ticket): JsonResponse
+    public function accept(Request $request, Ticket $ticket): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
@@ -183,7 +183,7 @@ $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         ]);
     }
 
-    public function complete(Ticket $ticket): JsonResponse
+    public function complete(Request $request, Ticket $ticket): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 

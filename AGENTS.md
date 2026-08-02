@@ -174,8 +174,31 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 | DELETE | `/api/hardware/{id}` | Delete |
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
+| GET | `/api/hardware/{hardware}/history` | **Paginated change history** with action filter (`action=updated`), organizational scope enforced |
 
-### Person CRUD (`/api/persons`)
+### Hardware History / Audit Trail (`/api/hardware/{hardware}/history`)
+
+Tracks all modifications to hardware records:
+
+| Action | Description |
+|--------|-------------|
+| `created` | Hardware record created |
+| `updated` | Field-level changes with old/new values |
+| `deleted` | Hardware record deleted (captures hardware_id before deletion) |
+| `bulk_mark` | Bulk mark/unmark operation |
+| `bulk_delete` | Bulk delete operation |
+
+**Query Parameters:**
+- `per_page` (max 50)
+- `action` (filter by action type: created/updated/deleted/bulk_mark/bulk_delete)
+
+**Response:** Paginated history with user info and field-level changes (old/new values).
+
+**Scope:** Respects organizational scope — users only see history for hardware in their accessible units.
+
+**Livewire Component:** New "History / تغییرات" tab on hardware detail page showing date, user, action, changed fields (badges), IP.
+
+### Hardware Import (`/hardware/import`)
 
 | Method | URL | Description |
 |---|---|---|

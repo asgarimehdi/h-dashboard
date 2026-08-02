@@ -64,7 +64,7 @@ class PersonController extends Controller
         ]);
     }
 
-    public function show(Person $person): JsonResponse
+    public function show(Request $request, Person $person): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
