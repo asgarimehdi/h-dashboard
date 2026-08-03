@@ -1,95 +1,3 @@
-<?php
-
-use Livewire\Attributes\Layout;
-use Livewire\Attributes\Rule;
-use Livewire\Attributes\Title;
-use Livewire\Component; // <--- ✅ تغییر اصلی: حذف Volt
-use Illuminate\Auth\Events\Lockout;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
-
-new
-#[Layout('components.layouts.auth')]
-#[Title('Login')]
-class extends Component {
-
-    #[Rule('required')]
-    public string $n_code = '';
-
-    #[Rule('required')]
-    public string $password = '';
-
-    public bool $remember = false;
-
-    public function mount()
-    {
-        // It is logged in
-        if (auth()->user()) {
-            return redirect('/');
-        }
-    }
-
-    public function login()
-    {
-        $this->validate();
-
-        $this->ensureIsNotRateLimited();
-
-        if (! Auth::attempt(['n_code' => $this->n_code, 'password' => $this->password], $this->remember)) {
-            RateLimiter::hit($this->throttleKey());
-
-            throw ValidationException::withMessages([
-                'n_code' => __('نام کاربری یا رمز عبور اشتباه است'),
-            ]);
-        }
-
-        RateLimiter::clear($this->throttleKey());
-        Session::regenerate();
-
-        // اطمینان از ذخیره remember me
-        Auth::login(auth()->user(), $this->remember);
-
-        // ثبت فعالیت ورود
-        \App\Services\ActivityLogService::login('ورود موفق به سیستم با کد ملی: ' . $this->n_code);
-
-        return redirect()->intended('/');
-    }
-
-    /**
-     * Ensure the authentication request is not rate limited.
-     */
-    protected function ensureIsNotRateLimited(): void
-    {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
-            return;
-        }
-
-        event(new Lockout(request()));
-
-        $seconds = RateLimiter::availableIn($this->throttleKey());
-
-        throw ValidationException::withMessages([
-            'n_code' => __('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
-        ]);
-    }
-
-    /**
-     * Get the authentication rate limiting throttle key.
-     */
-    protected function throttleKey(): string
-    {
-        return Str::transliterate(Str::lower($this->n_code).'|'.request()->ip());
-    }
-};
-
-?>
-
 {{--  stitch-inspired: woven art + animations, keeps maryUI theme + theme selector  --}}
 <div class="min-h-screen flex auth-layout stitch-bg">
     {{-- Background blobs --}}
@@ -208,41 +116,44 @@ class extends Component {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                             </svg>
                             <svg x-show="show" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21\"/>
+                            </svg>
+                            <svg x-show="show" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21\"/>
                             </svg>
                         </button>
                     </div>
+                </div>
 
-                    {{-- Remember & forgot --}}
-                    <div class="flex items-center justify-between text-sm">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input wire:model="remember" type="checkbox" class="checkbox checkbox-primary checkbox-sm" />
-                            <span class="text-base-content/60">مرا به خاطر بسپار</span>
-                        </label>
-                        <a href="#" class="text-primary hover:underline">فراموشی رمز عبور؟</a>
-                    </div>
+                {{-- Remember & forgot --}}
+                <div class="flex items-center justify-between text-sm">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input wire:model="remember" type="checkbox" class="checkbox checkbox-primary checkbox-sm" />
+                        <span class="text-base-content/60">مرا به خاطر بسپار</span>
+                    </label>
+                    <a href="#" class="text-primary hover:underline">فراموشی رمز عبور؟</a>
+                </div>
 
-                    {{-- Submit --}}
-                    <button type="submit" wire:loading.attr="disabled" class="btn btn-primary btn-lg w-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300 group">
-                        <span wire:loading.remove>ورود به سیستم</span>
-                        <span wire:loading>
-                            <span class="loading loading-spinner loading-sm"></span>
-                            در حال ورود...
-                        </span>
-                    </button>
-                </form>
+                {{-- Submit --}}
+                <button type="submit" wire:loading.attr="disabled" class="btn btn-primary btn-lg w-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300 group">
+                    <span wire:loading.remove>ورود به سیستم</span>
+                    <span wire:loading>
+                        <span class="loading loading-spinner loading-sm"></span>
+                        در حال ورود...
+                    </span>
+                </button>
+            </form>
 
-                {{-- Footer --}}
-                <p class="text-center text-sm text-base-content/50">
-                    حساب کاربری ندارید؟
-                    <a href="/register" class="text-primary font-medium hover:underline">ثبت‌نام کنید</a>
-                </p>
-            </div>
+            {{-- Footer --}}
+            <p class="text-center text-sm text-base-content/50">
+                حساب کاربری ندارید؟
+                <a href="/register" class="text-primary font-medium hover:underline">ثبت‌نام کنید</a>
+            </p>
+        </div>
 
-            {{-- Theme toggle for desktop --}}
-            <div class="hidden sm:flex justify-center mt-6">
-                <x-theme-selector />
-            </div>
+        {{-- Theme toggle for desktop --}}
+        <div class="hidden sm:flex justify-center mt-6">
+            <x-theme-selector />
         </div>
     </div>
 </div>

@@ -13,18 +13,21 @@ class EstekhdamSeeder extends Seeder
      */
     public function run(): void
     {
-        $names = [
-            'رسمی',
-            'پیمانی',
-            'قراردادی تبصره 3',
-            'قراردادی تبصره 4',
-            'شرکتی',
+        $data = [
+            ['id' => 1, 'name' => 'رسمی'],
+            ['id' => 2, 'name' => 'پیمانی'],
+            ['id' => 3, 'name' => 'قراردادی تبصره 3'],
+            ['id' => 4, 'name' => 'قراردادی تبصره 4'],
+            ['id' => 5, 'name' => 'شرکتی'],
         ];
 
-        foreach ($names as $name) {
-            Estekhdam::create([
-                'name' => $name,
-            ]);
+        foreach ($data as $item) {
+            Estekhdam::updateOrCreate(['id' => $item['id']], ['name' => $item['name']]);
+        }
+
+        // Reset sequence to max(id)+1 so subsequent auto-increment inserts don't conflict
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'pgsql') {
+            \Illuminate\Support\Facades\DB::statement("SELECT setval('estekhdams_id_seq', (SELECT max(id) FROM estekhdams), true)");
         }
     }
 }

@@ -82,6 +82,13 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/it/networks', 'it/networks');
         });
 
+        Route::middleware('role_or_permission:manage_zabbix_config')->group(function () {
+            Route::livewire('/it/zabbix', 'it.zabbix.index')->name('zabbix.index');
+            Route::livewire('/it/zabbix/hosts', 'it.zabbix.hosts')->name('zabbix.hosts');
+            Route::livewire('/it/zabbix/items', 'it.zabbix.items')->name('zabbix.items');
+            Route::livewire('/it/zabbix/pairs', 'it.zabbix.pairs')->name('zabbix.pairs');
+        });
+
         Route::middleware('role_or_permission:calendar')->group(function () {
             Route::livewire('/todo', 'todo.todo');
         });

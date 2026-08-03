@@ -308,13 +308,13 @@ class PersonUserFromDeviceSeeder extends Seeder
         if (isset($this->sematCache[$name])) {
             return $this->sematCache[$name];
         }
-        $id = DB::table('semats')->insertGetId([
-            'name' => $name,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $this->sematCache[$name] = $id;
-        return $id;
+        // Use updateOrCreate to avoid race conditions and PK conflicts
+        $semat = \App\Models\Semat::updateOrCreate(
+            ['name' => $name],
+            ['name' => $name]
+        );
+        $this->sematCache[$name] = $semat->id;
+        return $semat->id;
     }
 
     private function findOrCreateRadif(string $name): int
@@ -326,13 +326,9 @@ class PersonUserFromDeviceSeeder extends Seeder
         if (isset($this->radifCache[$name])) {
             return $this->radifCache[$name];
         }
-        $id = DB::table('radifs')->insertGetId([
-            'name' => $name,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $this->radifCache[$name] = $id;
-        return $id;
+        $radif = \App\Models\Radif::firstOrCreate(['name' => $name]);
+        $this->radifCache[$name] = $radif->id;
+        return $radif->id;
     }
 
     private function mapRole(string $unitType): string

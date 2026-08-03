@@ -33,6 +33,14 @@ class Login extends Component
         }
     }
 
+    public function rules(): array
+    {
+        return [
+            'n_code' => 'required',
+            'password' => 'required',
+        ];
+    }
+
     public function login()
     {
         $this->validate();
@@ -48,16 +56,15 @@ class Login extends Component
         }
 
         RateLimiter::clear($this->throttleKey());
-
-        // لاگین موفق - سشن ری‌جنریت میشه خودکار توسط Laravel
         Session::regenerate();
+
+        // اطمینان از ذخیره remember me
+        Auth::login(auth()->user(), $this->remember);
 
         // ثبت فعالیت ورود
         \App\Services\ActivityLogService::login('ورود موفق به سیستم با کد ملی: ' . $this->n_code);
 
-        // در Livewire 3 از redirect() برای ناوبری کامل استفاده می‌کنیم
-        // navigate: true باعث میشه Livewire به جای full reload، wire:navigate استفاده کنه
-        return $this->redirect('/', navigate: true);
+        return redirect()->intended('/');
     }
 
     /**

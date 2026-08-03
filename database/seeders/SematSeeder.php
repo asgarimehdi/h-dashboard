@@ -13,15 +13,18 @@ class SematSeeder extends Seeder
      */
     public function run(): void
     {
-        $names = [
-            'کارشناس آی تی',
-            'آبدارچی',
+        $data = [
+            ['id' => 1, 'name' => 'کارشناس آی تی'],
+            ['id' => 2, 'name' => 'آبدارچی'],
         ];
 
-        foreach ($names as $name) {
-            Semat::create([
-                'name' => $name,
-            ]);
+        foreach ($data as $item) {
+            Semat::updateOrCreate(['id' => $item['id']], ['name' => $item['name']]);
+        }
+
+        // Reset sequence to max(id)+1 so subsequent auto-increment inserts don't conflict
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'pgsql') {
+            \Illuminate\Support\Facades\DB::statement("SELECT setval('semats_id_seq', (SELECT max(id) FROM semats), true)");
         }
     }
 }
