@@ -843,11 +843,11 @@ return new class extends Component
                         </div>
                         <div class="flex gap-2">
                              @if($hw['status'] === 'mark')
-                                <x-badge value="⚑ علامت" class="badge-warning" />
+                                <x-badge value="علامت" class="badge-warning" />
                             @elseif($hw['status'] === 'off')
-                                <x-badge value="⬛ خاموش" class="badge-neutral" />
+                                <x-badge value="خاموش" class="badge-neutral" />
                             @else
-                                <x-badge value="🟢 فعال" class="badge-success" />
+                                <x-badge value="فعال" class="badge-success" />
                             @endif
                         </div>
                     </div>
@@ -883,11 +883,11 @@ return new class extends Component
                 @endscope
                 @scope('cell_status', $hw)
                     @if($hw['status'] === 'mark')
-                        <x-badge value="⚑ علامت" class="badge-warning" />
+                        <x-badge value="علامت" class="badge-warning" />
                     @elseif($hw['status'] === 'off')
-                        <x-badge value="⬛ خاموش" class="badge-neutral" />
+                        <x-badge value="خاموش" class="badge-neutral" />
                     @else
-                        <x-badge value="🟢 فعال" class="badge-success" />
+                        <x-badge value="فعال" class="badge-success" />
                     @endif
                 @endscope
                 @scope('actions', $hw)
