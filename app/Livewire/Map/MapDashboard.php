@@ -20,13 +20,15 @@ class MapDashboard extends Component
         'ticket_status' => '',
     ];
 
-    public $mapCenter = [36.669343, 48.47163]; // Default to Zanjan
+    public $mapCenter = [36.669343, 48.47163];
     public $mapZoom = 10;
     public $stats = [
         'units' => 0,
         'hardware' => 0,
         'open_tickets' => 0,
     ];
+    
+    public $mapToken = '';
 
     protected $listeners = [
         'mapMoved' => 'onMapMoved',
@@ -37,7 +39,7 @@ class MapDashboard extends Component
 
     public function mount()
     {
-        // Initialize map center based on user's accessible units
+        $this->mapToken = auth()->user()->createToken('map-dashboard')->plainTextToken;
         $this->loadStats();
     }
 
@@ -72,12 +74,29 @@ class MapDashboard extends Component
         $this->dispatch('showUnitDetails', ['unitId' => $unitId]);
     }
 
+    public function loadUnitDetails($unitId)
+    {
+        $unit = \App\Models\Unit::with(['children', 'type'])->find($unitId);
+        if (!$unit) {
+            return ['error' => 'Unit not found'];
+        }
+        
+        return [
+            'id' => $unit->id,
+            'name' => $unit->name,
+            'type' => $unit->type?->name,
+            'lat' => $unit->lat,
+            'lng' => $unit->lng,
+            'children_count' => $unit->children()->count(),
+        ];
+    }
+
     public function loadStats()
     {
         if (!$this->bbox) return;
         
         try {
-            $response = \Illuminate\Support\Facades\Http::withToken(auth()->user()->createToken('map-stats')->plainTextToken)
+            $response = \Illuminate\Support\Facades\Http::withToken($this->mapToken)
                 ->get(route('api.gis.stats'), [
                     'bbox' => $this->bbox,
                 ]);

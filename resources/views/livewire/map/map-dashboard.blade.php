@@ -101,7 +101,7 @@
             try {
                 const response = await fetch(`{{ route('api.gis.units') }}?bbox=${bbox}`, {
                     headers: {
-                        'Authorization': `Bearer {{ auth()->user()->createToken('map')->plainTextToken }}`,
+                        'Authorization': `Bearer {{ $mapToken }}`,
                         'Accept': 'application/json',
                     }
                 });
@@ -118,7 +118,7 @@
                 const url = `{{ route('api.gis.hardware') }}?bbox=${bbox}` + (type ? `&type=${type}` : '');
                 const response = await fetch(url, {
                     headers: {
-                        'Authorization': `Bearer {{ auth()->user()->createToken('map')->plainTextToken }}`,
+                        'Authorization': `Bearer {{ $mapToken }}`,
                         'Accept': 'application/json',
                     }
                 });
@@ -139,7 +139,7 @@
                 
                 const response = await fetch(url, {
                     headers: {
-                        'Authorization': `Bearer {{ auth()->user()->createToken('map')->plainTextToken }}`,
+                        'Authorization': `Bearer {{ $mapToken }}`,
                         'Accept': 'application/json',
                     }
                 });
@@ -407,24 +407,35 @@
     <div id="map" class="w-full h-full"></div>
     
     <!-- Unit Details Modal -->
-    <div x-show="false" x-data="{ unitId: null }" 
-         @showUnitDetails.window="unitId = $event.detail.unitId; $nextTick(() => $refs.modal.showModal())">
+    <div x-show="false" x-data="{ unitId: null, unitDetails: null }" 
+         @showUnitDetails.window="unitId = $event.detail.unitId; loadDetails(); $nextTick(() => $refs.modal.showModal())">
         <dialog x-ref="modal" class="modal modal-bottom sm:modal-middle">
             <div class="modal-box">
                 <h3 class="font-bold text-lg mb-4">جزئیات واحد</h3>
-                <div x-show="unitId" x-init="
-                    @this('loadUnitDetails', unitId).then(r => {
-                        this.unitDetails = r;
-                    })
-                ">
-                    <div class="space-y-2" x-text="unitDetails"></div>
+                <div x-show="unitDetails" class="space-y-2">
+                    <div><strong>نام:</strong> <span x-text="unitDetails.name"></span></div>
+                    <div><strong>نوع:</strong> <span x-text="unitDetails.type"></span></div>
+                    <div><strong>موقعیت:</strong> <span x-text="unitDetails.lat + ', ' + unitDetails.lng"></span></div>
+                    <div><strong>زیرمجموعه‌ها:</strong> <span x-text="unitDetails.children_count"></span></div>
                 </div>
-                <div class="modal-action">
+                <div x-show="unitDetails.error" class="text-error" x-text="unitDetails.error"></div>
+                <div x-show="!unitDetails" class="loading loading-spinner loading-lg"></div>
+                <div class="modal-action mt-4">
                     <form method="dialog"><button class="btn">بستن</button></form>
                 </div>
             </div>
         </dialog>
     </div>
+    
+    <script>
+        function loadDetails() {
+            if (!this.unitId) return;
+            
+            @this('loadUnitDetails', this.unitId).then(r => {
+                this.unitDetails = r;
+            });
+        }
+    </script>
 </div>
 
 @push('scripts')
