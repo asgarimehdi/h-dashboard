@@ -9,13 +9,34 @@ use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class GisController extends Controller
 {
     /**
+     * Apply bbox spatial filter using lat/lng columns (works without geom column).
+     */
+    protected function applyBbox($query, Request $request)
+    {
+        if (! $request->filled('bbox')) {
+            return $query;
+        }
+
+        $bbox = explode(',', $request->bbox);
+        if (count($bbox) !== 4) {
+            return $query;
+        }
+
+        [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
+
+        $query->whereBetween('lat', [$minLat, $maxLat])
+              ->whereBetween('lng', [$minLon, $maxLon]);
+
+        return $query;
+    }
+
+    /**
      * Get units as GeoJSON FeatureCollection within spatial bounds.
-     * Query params: bbox (minLon,minLat,maxLon,maxLat), radius (lat,lng,meters), polygon (WKT)
+     * Query params: bbox (minLon,minLat,maxLon,maxLat)
      */
     public function units(Request $request): JsonResponse
     {
@@ -23,32 +44,11 @@ class GisController extends Controller
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
         $query = Unit::whereIn('id', $accessibleIds)
-            ->whereNotNull('geom')
-            ->select('id', 'name', 'unit_type_id', 'parent_id', 'region_id', 'lat', 'lng', 'geom');
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->select('id', 'name', 'unit_type_id', 'parent_id', 'region_id', 'lat', 'lng');
 
-        // Spatial filtering
-        if ($request->filled('bbox')) {
-            $bbox = explode(',', $request->bbox);
-            if (count($bbox) === 4) {
-                [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
-                $query->whereRaw(
-                    "geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)",
-                    [$minLon, $minLat, $maxLon, $maxLat]
-                );
-            }
-        } elseif ($request->filled('radius')) {
-            $radius = explode(',', $request->radius);
-            if (count($radius) === 3) {
-                [$lat, $lng, $meters] = array_map('floatval', $radius);
-                $query->whereRaw(
-                    "ST_DWithin(geom, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
-                    [$lng, $lat, $meters]
-                );
-            }
-        } elseif ($request->filled('polygon')) {
-            $wkt = $request->polygon;
-            $query->whereRaw("ST_Within(geom, ST_GeomFromText(?, 4326))", [$wkt]);
-        }
+        $this->applyBbox($query, $request);
 
         // Limit results for performance
         $units = $query->limit(1000)->get();
@@ -57,15 +57,18 @@ class GisController extends Controller
             return [
                 'type' => 'Feature',
                 'id' => $unit->id,
-                'geometry' => json_decode($unit->geom),
+                'geometry' => [
+                    'type' => 'Point',
+                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
+                ],
                 'properties' => [
                     'id' => $unit->id,
                     'name' => $unit->name,
                     'unit_type_id' => $unit->unit_type_id,
                     'parent_id' => $unit->parent_id,
                     'region_id' => $unit->region_id,
-                    'lat' => $unit->lat,
-                    'lng' => $unit->lng,
+                    'lat' => (float) $unit->lat,
+                    'lng' => (float) $unit->lng,
                 ],
             ];
         })->values()->all();
@@ -77,17 +80,21 @@ class GisController extends Controller
     }
 
     /**
-     * Get hardware as GeoJSON FeatureCollection with parent unit geometry.
-     * Query params: bbox, radius, polygon, type, shutdown, mark
+     * Get hardware as GeoJSON FeatureCollection with parent unit location.
+     * Query params: bbox, type, shutdown, mark
      */
     public function hardware(Request $request): JsonResponse
     {
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $query = Hardware::with('person.unit:id,name,lat,lng,geom')
+        $query = Hardware::with('person.unit:id,name,lat,lng')
             ->whereHas('person', function ($q) use ($accessibleIds) {
                 $q->whereIn('u_id', $accessibleIds);
+            })
+            ->whereHas('person.unit', function ($q) use ($request) {
+                $q->whereNotNull('lat')->whereNotNull('lng');
+                $this->applyBbox($q, $request);
             });
 
         // Filters
@@ -105,12 +112,14 @@ class GisController extends Controller
 
         $features = $hardware->map(function ($hw) {
             $unit = $hw->person?->unit;
-            $geom = $unit?->geom;
 
             return [
                 'type' => 'Feature',
                 'id' => $hw->id,
-                'geometry' => $geom ? json_decode($geom) : null,
+                'geometry' => $unit ? [
+                    'type' => 'Point',
+                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
+                ] : null,
                 'properties' => [
                     'id' => $hw->id,
                     'n_code' => $hw->n_code,
@@ -127,8 +136,8 @@ class GisController extends Controller
                         'name' => $unit->name,
                     ] : null,
                     'person' => $hw->person ? [
-                        'n_code' => $hw->person->n_code,
-                        'name' => trim($hw->person->f_name . ' ' . $hw->person->l_name),
+                        'id' => $hw->person->id,
+                        'name' => $hw->person->name,
                     ] : null,
                 ],
             ];
@@ -141,16 +150,20 @@ class GisController extends Controller
     }
 
     /**
-     * Get tickets as GeoJSON FeatureCollection with unit geometry.
-     * Query params: bbox, radius, polygon, priority, status
+     * Get tickets as GeoJSON FeatureCollection with unit location.
+     * Query params: bbox, priority, status
      */
     public function tickets(Request $request): JsonResponse
     {
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $query = Ticket::with('unit:id,name,lat,lng,geom')
-            ->whereIn('unit_id', $accessibleIds);
+        $query = Ticket::with('unit:id,name,lat,lng')
+            ->whereIn('unit_id', $accessibleIds)
+            ->whereHas('unit', function ($q) use ($request) {
+                $q->whereNotNull('lat')->whereNotNull('lng');
+                $this->applyBbox($q, $request);
+            });
 
         // Filters
         if ($request->filled('priority')) {
@@ -164,18 +177,20 @@ class GisController extends Controller
 
         $features = $tickets->map(function ($ticket) {
             $unit = $ticket->unit;
-            $geom = $unit?->geom;
 
             return [
                 'type' => 'Feature',
                 'id' => $ticket->id,
-                'geometry' => $geom ? json_decode($geom) : null,
+                'geometry' => $unit ? [
+                    'type' => 'Point',
+                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
+                ] : null,
                 'properties' => [
                     'id' => $ticket->id,
-                    'title' => $ticket->title,
-                    'status' => $ticket->status,
-                    'priority' => $ticket->priority,
                     'ticket_code' => $ticket->ticket_code,
+                    'title' => $ticket->title,
+                    'priority' => $ticket->priority,
+                    'status' => $ticket->status,
                     'unit' => $unit ? [
                         'id' => $unit->id,
                         'name' => $unit->name,
@@ -192,59 +207,35 @@ class GisController extends Controller
 
     /**
      * Get summary stats for current viewport.
-     * Query params: bbox, radius, polygon
+     * Query params: bbox
      */
     public function stats(Request $request): JsonResponse
     {
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        // Build spatial filter
-        $spatialFilter = function ($query) use ($request) {
-            if ($request->filled('bbox')) {
-                $bbox = explode(',', $request->bbox);
-                if (count($bbox) === 4) {
-                    [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
-                    $query->whereRaw(
-                        "geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)",
-                        [$minLon, $minLat, $maxLon, $maxLat]
-                    );
-                }
-            } elseif ($request->filled('radius')) {
-                $radius = explode(',', $request->radius);
-                if (count($radius) === 3) {
-                    [$lat, $lng, $meters] = array_map('floatval', $radius);
-                    $query->whereRaw(
-                        "ST_DWithin(geom, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
-                        [$lng, $lat, $meters]
-                    );
-                }
-            } elseif ($request->filled('polygon')) {
-                $wkt = $request->polygon;
-                $query->whereRaw("ST_Within(geom, ST_GeomFromText(?, 4326))", [$wkt]);
-            }
-        };
-
-        // Units count
-        $unitsQuery = Unit::whereIn('id', $accessibleIds)->whereNotNull('geom');
-        $spatialFilter($unitsQuery);
+        // Units count (in bbox)
+        $unitsQuery = Unit::whereIn('id', $accessibleIds)
+            ->whereNotNull('lat')->whereNotNull('lng');
+        $this->applyBbox($unitsQuery, $request);
         $unitsCount = $unitsQuery->count();
 
-        // Hardware count
+        // Hardware count (in bbox via person.unit)
         $hardwareQuery = Hardware::whereHas('person', function ($q) use ($accessibleIds) {
             $q->whereIn('u_id', $accessibleIds);
-        })->whereHas('person.unit', function ($q) use ($spatialFilter) {
-            $q->whereNotNull('geom');
-            $spatialFilter($q);
+        })->whereHas('person.unit', function ($q) use ($request) {
+            $q->whereNotNull('lat')->whereNotNull('lng');
+            $this->applyBbox($q, $request);
         });
         $hardwareCount = $hardwareQuery->count();
 
-        // Open tickets count
+        // Open tickets count (in bbox via unit)
         $ticketsQuery = Ticket::whereIn('unit_id', $accessibleIds)
-            ->whereHas('unit', function ($q) use ($spatialFilter) {
-                $q->whereNotNull('geom');
-                $spatialFilter($q);
-            })->where('status', '!=', 'completed');
+            ->where('status', '!=', 'completed')
+            ->whereHas('unit', function ($q) use ($request) {
+                $q->whereNotNull('lat')->whereNotNull('lng');
+                $this->applyBbox($q, $request);
+            });
         $openTicketsCount = $ticketsQuery->count();
 
         return response()->json([
@@ -263,42 +254,36 @@ class GisController extends Controller
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $zoom = $request->get('zoom', 10);
-        $gridSize = max(0.001, 0.1 / pow(2, $zoom - 5)); // Adjust grid based on zoom
+        $zoom = (int) $request->get('zoom', 10);
+        // Grid size in degrees, adjusted by zoom
+        $gridSize = max(0.005, 0.5 / pow(2, $zoom - 2));
 
-        $bbox = $request->get('bbox');
-
-        // Build query using Eloquent to avoid raw SQL parameter issues
-        $query = Unit::whereIn('id', $accessibleIds)
-            ->whereNotNull('geom');
-
-        if ($bbox) {
-            $bboxArr = explode(',', $bbox);
-            if (count($bboxArr) === 4) {
-                [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bboxArr);
-                $query->whereRaw(
-                    "geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)",
-                    [$minLon, $minLat, $maxLon, $maxLat]
-                );
-            }
-        }
-
-        // Use ST_SnapToGrid for clustering
-        $clusters = $query->selectRaw(
+        // Build query with raw SQL for grouping
+        $selectRaw = sprintf(
             "COUNT(*) as count,
-            ST_Centroid(ST_Collect(geom)) as center,
-            ST_X(ST_Centroid(ST_Collect(geom))) as lng,
-            ST_Y(ST_Centroid(ST_Collect(geom))) as lat"
-        )
-        ->groupByRaw("ST_SnapToGrid(geom, ?)", [$gridSize])
-        ->get();
+            ROUND(lat / %f) * %f as lat_key,
+            ROUND(lng / %f) * %f as lng_key,
+            AVG(lat) as lat,
+            AVG(lng) as lng",
+            $gridSize, $gridSize, $gridSize, $gridSize
+        );
+
+        $query = Unit::whereIn('id', $accessibleIds)
+            ->whereNotNull('lat')->whereNotNull('lng')
+            ->selectRaw($selectRaw);
+
+        $this->applyBbox($query, $request);
+
+        $clusters = $query
+            ->groupBy('lat_key', 'lng_key')
+            ->get();
 
         $features = $clusters->map(function ($cluster) {
             return [
                 'type' => 'Feature',
                 'geometry' => [
                     'type' => 'Point',
-                    'coordinates' => [$cluster->lng, $cluster->lat],
+                    'coordinates' => [(float) $cluster->lng, (float) $cluster->lat],
                 ],
                 'properties' => [
                     'count' => (int) $cluster->count,

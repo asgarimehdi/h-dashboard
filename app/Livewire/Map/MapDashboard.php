@@ -7,26 +7,27 @@ use Livewire\Attributes\Url;
 
 class MapDashboard extends Component
 {
-    #[Url(as: 'bbox', keepInSession: true)]
+    #[Url(as: 'bbox')]
     public $bbox = null;
     
-    #[Url(as: 'layer', keepInSession: true)]
-    public $activeLayers = ['units'];
+    #[Url(as: 'layers')]
+    public $layers = 'units';
     
-    #[Url(as: 'filter', keepInSession: true)]
-    public $filters = [
-        'hardware_type' => '',
-        'ticket_priority' => '',
-        'ticket_status' => '',
-    ];
+    #[Url(as: 'filter_hardware')]
+    public $filterHardware = '';
+    
+    #[Url(as: 'filter_priority')]
+    public $filterPriority = '';
+    
+    #[Url(as: 'filter_status')]
+    public $filterStatus = '';
 
-    public $mapCenter = [36.669343, 48.47163];
+    public $mapCenterLat = 36.669343;
+    public $mapCenterLng = 48.47163;
     public $mapZoom = 10;
-    public $stats = [
-        'units' => 0,
-        'hardware' => 0,
-        'open_tickets' => 0,
-    ];
+    public $statsUnits = 0;
+    public $statsHardware = 0;
+    public $statsOpenTickets = 0;
     
     public $mapToken = '';
 
@@ -45,7 +46,8 @@ class MapDashboard extends Component
 
     public function onMapMoved($data)
     {
-        $this->mapCenter = $data['center'] ?? $this->mapCenter;
+        $this->mapCenterLat = $data['center'][0] ?? $this->mapCenterLat;
+        $this->mapCenterLng = $data['center'][1] ?? $this->mapCenterLng;
         $this->mapZoom = $data['zoom'] ?? $this->mapZoom;
         $this->bbox = $data['bbox'] ?? $this->bbox;
         $this->loadStats();
@@ -57,16 +59,22 @@ class MapDashboard extends Component
 
     public function onLayerToggled($layer)
     {
-        if (in_array($layer, $this->activeLayers)) {
-            $this->activeLayers = array_diff($this->activeLayers, [$layer]);
+        $layers = explode(',', $this->layers);
+        if (in_array($layer, $layers)) {
+            $layers = array_diff($layers, [$layer]);
         } else {
-            $this->activeLayers[] = $layer;
+            $layers[] = $layer;
         }
+        $this->layers = implode(',', $layers);
     }
 
     public function onFilterChanged($filters)
     {
-        $this->filters = array_merge($this->filters, $filters);
+        foreach ($filters as $key => $value) {
+            if (property_exists($this, $key)) {
+                $this->$key = $value;
+            }
+        }
     }
 
     public function onUnitSelected($unitId)
@@ -76,7 +84,7 @@ class MapDashboard extends Component
 
     public function loadUnitDetails($unitId)
     {
-        $unit = \App\Models\Unit::with(['children', 'type'])->find($unitId);
+        $unit = \App\Models\Unit::with(['children', 'unitType'])->find($unitId);
         if (!$unit) {
             return ['error' => 'Unit not found'];
         }
@@ -84,7 +92,7 @@ class MapDashboard extends Component
         return [
             'id' => $unit->id,
             'name' => $unit->name,
-            'type' => $unit->type?->name,
+            'type' => $unit->unitType?->name,
             'lat' => $unit->lat,
             'lng' => $unit->lng,
             'children_count' => $unit->children()->count(),
@@ -102,7 +110,10 @@ class MapDashboard extends Component
                 ]);
             
             if ($response->successful()) {
-                $this->stats = $response->json();
+                $data = $response->json();
+                $this->statsUnits = $data['units'] ?? 0;
+                $this->statsHardware = $data['hardware'] ?? 0;
+                $this->statsOpenTickets = $data['open_tickets'] ?? 0;
             }
         } catch (\Exception $e) {
             // Silently fail - stats are optional

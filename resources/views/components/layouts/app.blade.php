@@ -232,6 +232,7 @@
                 {{-- کار با نقشه --}}
                 @can('map')
                 <x-menu-sub title="کار با نقشه" icon="o-map">
+                    <x-menu-item title="داشبورد GIS" icon="o-chart-bar" link="/map" wire:navigate />
                     <x-menu-item title="نقشه واحدها" icon="o-building-library" link="/maps/unit" wire:navigate />
                     <x-menu-item title="مسیر" icon="o-map" link="/maps/route" wire:navigate />
                     <x-menu-item title="یافتن مسیر" icon="o-magnifying-glass-circle" link="/maps/route2" wire:navigate />
