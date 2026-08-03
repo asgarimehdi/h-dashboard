@@ -124,15 +124,8 @@ class HardwareAuditController extends Controller
             'new' => $oldValue,
         ]];
 
-        \App\Models\HardwareAudit::create([
-            'hardware_id' => $hardware->id,
-            'user_id' => $request->user()?->id,
-            'action' => 'rollback',
-            'changes' => $rollbackChanges,
-            'source' => request()->routeIs('api/*') ? 'api' : 'web',
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-        ]);
+        app(\App\Observers\HardwareAuditObserver::class)
+            ->recordRollbackAudit($hardware, $rollbackChanges, $request->user()?->id);
 
         return response()->json([
             'success' => true,

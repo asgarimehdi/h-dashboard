@@ -40,13 +40,13 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `vlan`, `motherboard`, `cpu`, `ram`, `hdd`
 - `comments`, `mark` (boolean)
 - `clean_at` (nullable date)
-- Relationship: `histories()` → `HardwareHistory` (change audit trail, #213)
+- Relationship: `audits()` → `HardwareAudit` (field-level change audit trail, #213/#246)
 
-**HardwareHistory** (`hardware_histories` table)
-- `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `ip_address`, `user_agent`
-- Populated automatically by `HardwareObserver` (registered in `AppServiceProvider`)
-- Indexes: `(hardware_id, created_at)`, `user_id`
-- API: `GET /api/hardware/{hardware}/history` (paginated, action filter, org scope); UI: history modal on `/hardware` page (#213)
+**HardwareAudit** (`hardware_audits` table)
+- `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete, force_deleted, rollback), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `source` (web, api, import, bulk), `ip_address`, `user_agent`
+- Populated automatically by `HardwareAuditObserver` (registered in `AppServiceProvider`) — the single unified audit source (replaces the old `HardwareHistory` / `HardwareObserver`)
+- Indexes: `(hardware_id, created_at)`, `user_id`, `action`
+- API: `GET /api/hardware/{hardware}/audits` (paginated, filterable) + alias `GET /api/hardware/{hardware}/history`; export, show, and rollback endpoints; UI: history modal with rollback on `/hardware` page (#213/#246)
 
 **Unit** (`units` table)
 - `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
@@ -354,7 +354,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Apply `PersianNormalizer` on all text search inputs
 
 ### Recent Issues Resolved
-- **#213** — Hardware Change History & Audit Trail API (`hardware_histories` table, `HardwareObserver`, `GET /api/hardware/{hardware}/history`, Livewire history modal with Jalali dates)
+- **#213** — Hardware Change History & Audit Trail API (`hardware_audits` table, `HardwareAuditObserver`, `GET /api/hardware/{hardware}/audits`, Livewire history modal with Jalali dates and rollback). Merged with #246: the old `HardwareHistory`/`hardware_histories` system was migrated into the unified `HardwareAudit`/`hardware_audits` trail.
 - **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 - **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)

@@ -30,7 +30,7 @@ class HardwareAuditObserver
                 ];
             }
         }
-        $this->recordAudit($hardware, 'created', $changes ?: null, 'web');
+        $this->recordAudit($hardware, 'created', $changes ?: null, $this->detectSource());
     }
 
     /**
@@ -44,8 +44,7 @@ class HardwareAuditObserver
         $changes = $this->getChangedFields($hardware);
 
         if (!empty($changes)) {
-            $source = request()->routeIs('api/*') ? 'api' : 'web';
-            $this->recordAudit($hardware, 'updated', $changes, $source);
+            $this->recordAudit($hardware, 'updated', $changes, $this->detectSource());
         }
     }
 
@@ -55,8 +54,7 @@ class HardwareAuditObserver
     public function deleting(Hardware $hardware): void
     {
         $hardwareId = $hardware->id;
-        $source = request()->routeIs('api/*') ? 'api' : 'web';
-        $this->recordAudit($hardware, 'deleted', null, $source, $hardwareId);
+        $this->recordAudit($hardware, 'deleted', null, $this->detectSource(), $hardwareId);
     }
 
     /**
@@ -64,8 +62,51 @@ class HardwareAuditObserver
      */
     public function forceDeleted(Hardware $hardware): void
     {
-        $source = request()->routeIs('api/*') ? 'api' : 'web';
-        $this->recordAudit($hardware, 'force_deleted', null, $source);
+        $this->recordAudit($hardware, 'force_deleted', null, $this->detectSource());
+    }
+
+    /**
+     * Record a bulk operation audit entry (bulk_mark / bulk_delete).
+     * Used by the API controller for bulk actions so each affected
+     * hardware record gets its own audit row.
+     */
+    public function recordBulkAudit(Hardware $hardware, string $action, ?array $changes): void
+    {
+        $this->recordAudit($hardware, $action, $changes, 'bulk');
+    }
+
+    /**
+     * Record a rollback audit entry (creates a new audit row for traceability).
+     */
+    public function recordRollbackAudit(Hardware $hardware, array $rollbackChanges, ?int $userId = null): void
+    {
+        HardwareAudit::create([
+            'hardware_id' => $hardware->id,
+            'user_id' => $userId ?? Auth::id(),
+            'action' => 'rollback',
+            'changes' => $rollbackChanges,
+            'source' => $this->detectSource(),
+            'ip_address' => Request::capture()->ip(),
+            'user_agent' => Request::capture()->userAgent(),
+        ]);
+    }
+
+    /**
+     * Detect the source of the change (web, api, import, bulk).
+     */
+    protected function detectSource(): string
+    {
+        $route = request()->route();
+
+        if ($route && $route->getName() === 'hardware.import') {
+            return 'import';
+        }
+
+        if ($route && str_starts_with($route->uri(), 'api/')) {
+            return 'api';
+        }
+
+        return 'web';
     }
 
     /**

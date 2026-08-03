@@ -387,7 +387,7 @@ return new class extends Component
             return;
         }
 
-        $query = HardwareHistory::with('user:id,n_code,name')
+        $query = \App\Models\HardwareAudit::with('user:id,n_code,name')
             ->where('hardware_id', $hw->id);
 
         if ($this->historyActionFilter) {
@@ -403,6 +403,7 @@ return new class extends Component
             ->map(fn ($h) => [
                 'id' => $h->id,
                 'action' => $h->action,
+                'source' => $h->source,
                 'changes' => $h->changes,
                 'ip_address' => $h->ip_address,
                 'user_agent' => $h->user_agent,
@@ -435,6 +436,71 @@ return new class extends Component
         $this->historyActionFilter = $action;
         $this->historyCurrentPage = 1;
         $this->fetchHistory();
+    }
+
+    /**
+     * Rollback a single field to its previous value (Issue #246).
+     */
+    public function rollbackHistoryField(int $auditId, string $field): void
+    {
+        $audit = \App\Models\HardwareAudit::find($auditId);
+
+        if (! $audit || $audit->hardware_id !== $this->historyHardwareId) {
+            $this->error('رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        $changes = $audit->changes ?? [];
+        $fieldChange = collect($changes)->firstWhere('field', $field);
+
+        if (! $fieldChange) {
+            $this->error('فیلد در رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        $hw = Hardware::find($this->historyHardwareId);
+        if (! $hw) {
+            $this->error('سخت افزار یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        // Parse old value and update
+        $restoredValue = $this->restoreAuditValue($fieldChange['old'] ?? '—', $field);
+        $hw->update([$field => $restoredValue]);
+
+        // Log rollback
+        app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
+            $hw,
+            [[
+                'field' => $field,
+                'old' => $fieldChange['new'] ?? '—',
+                'new' => $fieldChange['old'] ?? '—',
+            ]],
+            auth()->id()
+        );
+
+        $this->success("فیلد {$field} به مقدار قبلی بازگردانده شد.", position: 'toast-bottom');
+        $this->fetchHistory();
+    }
+
+    /**
+     * Parse a stored display value back for restore.
+     */
+    private function restoreAuditValue(string $displayValue, string $field): mixed
+    {
+        if ($displayValue === '—') {
+            return null;
+        }
+        if ($displayValue === 'بله') {
+            return true;
+        }
+        if ($displayValue === 'خیر') {
+            return false;
+        }
+        if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) {
+            return (int) $displayValue;
+        }
+        return $displayValue;
     }
 
     public function headers(): array
@@ -767,6 +833,7 @@ return new class extends Component
                     <x-button :class="$historyActionFilter === 'deleted' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('deleted')" label="حذف" />
                     <x-button :class="$historyActionFilter === 'bulk_mark' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_mark')" label="علامت گروهی" />
                     <x-button :class="$historyActionFilter === 'bulk_delete' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_delete')" label="حذف گروهی" />
+                    <x-button :class="$historyActionFilter === 'rollback' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('rollback')" label="بازگردانی" />
                 </div>
 
                 @if(count($history) === 0)
@@ -783,6 +850,7 @@ return new class extends Component
                                                 'updated' => 'badge-info',
                                                 'deleted', 'bulk_delete' => 'badge-error',
                                                 'bulk_mark' => 'badge-warning',
+                                                'rollback' => 'badge-secondary',
                                                 default => 'badge-neutral',
                                             };
                                             $actionLabel = match($entry['action']) {
@@ -791,10 +859,18 @@ return new class extends Component
                                                 'deleted' => 'حذف',
                                                 'bulk_mark' => 'علامت گروهی',
                                                 'bulk_delete' => 'حذف گروهی',
+                                                'rollback' => 'بازگردانی',
                                                 default => $entry['action'],
+                                            };
+                                            $sourceLabel = match($entry['source'] ?? '') {
+                                                'api' => 'API',
+                                                'import' => 'ایمپورت',
+                                                'bulk' => 'گروهی',
+                                                default => 'وب',
                                             };
                                         @endphp
                                         <x-badge :value="$actionLabel" :class="$badgeClass" />
+                                        <x-badge value="{{ $sourceLabel }}" class="badge-outline badge-xs" />
                                         <span class="text-xs opacity-60">{{ $entry['user']['name'] ?? $entry['user']['n_code'] ?? 'سیستم' }}</span>
                                     </div>
                                     <span class="text-xs opacity-50">{{ \Morilog\Jalali\Jalalian::fromDateTime($entry['created_at'])->format('Y/m/d H:i') }}</span>
@@ -805,6 +881,14 @@ return new class extends Component
                                             @if(is_array($change) && isset($change['field']))
                                                 <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
                                                     {{ $change['field'] }}: {{ $change['old'] ?? '—' }} ← {{ $change['new'] ?? '—' }}
+                                                    @if(in_array($entry['action'], ['updated', 'rollback']) && ($change['old'] ?? '—') !== '—')
+                                                        <button
+                                                            wire:click="rollbackHistoryField({{ $entry['id'] }}, '{{ $change['field'] }}')"
+                                                            wire:confirm="آیا از بازگردانی فیلد {{ $change['field'] }} به مقدار «{{ $change['old'] ?? '' }}» مطمئن هستید؟"
+                                                            class="text-primary hover:underline ms-1 text-[10px]"
+                                                            title="بازگردانی این فیلد"
+                                                        >↺ بازگردانی</button>
+                                                    @endif
                                                 </span>
                                             @endif
                                         @endforeach

@@ -13,7 +13,10 @@ return new class extends Migration
     {
         Schema::create('hardware_audits', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('hardware_id')->constrained('hardwares')->cascadeOnDelete();
+            // No FK constraint on hardware_id intentionally:
+            // the audit trail must survive hardware deletion (ON DELETE CASCADE
+            // would wipe the history record along with the hardware).
+            $table->unsignedBigInteger('hardware_id');
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('action'); // created, updated, deleted, bulk_mark, bulk_delete, rollback
             $table->json('changes')->nullable(); // field-level diff: [{field, old, new}]
