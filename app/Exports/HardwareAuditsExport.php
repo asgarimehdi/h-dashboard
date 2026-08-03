@@ -25,11 +25,10 @@ class HardwareAuditsExport implements FromCollection, WithHeadings, WithMapping,
      */
     public function collection(): Collection
     {
+        // Return the raw models; Maatwebsite calls map() per row (WithMapping).
         return $this->query->with('user:id,n_code,name')
             ->latest('created_at')
-            ->cursor()
-            ->map(fn($audit) => $this->mapAudit($audit))
-            ->toCollection();
+            ->get();
     }
 
     /**
