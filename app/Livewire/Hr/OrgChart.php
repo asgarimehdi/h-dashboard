@@ -48,9 +48,9 @@ class OrgChart extends Component
         $this->personCounts = $personCounts->toArray();
 
         if (empty($this->expanded)) {
-            // پیش‌فرض: فقط تا سطح شبکه‌های بهداشت باز باشد
-            // وزارت(1) → دانشگاه(2) → معاونت(3) → شبکه(4) → [مرکزها بسته]
-            $this->expanded = $this->collectFirstNLevels($this->rootUnits, 4);
+            // پیش‌فرض: فقط تا سطح معاونت‌های بهداشت باز باشد
+            // وزارت(1) → دانشگاه(2) → معاونت(3) → [شبکه‌ها و مراکز بسته]
+            $this->expanded = $this->collectFirstNLevels($this->rootUnits, 3);
         }
     }
 
