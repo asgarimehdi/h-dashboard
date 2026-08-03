@@ -1,5 +1,4 @@
-{{-- Items list --}}
-<x-app-layout>
+<div>
     <div class="container mx-auto px-4 py-8">
         <div class="flex items-center justify-between mb-6">
             <div>
@@ -48,7 +47,7 @@
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">هاست</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">واحد سازمانی</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">آخرین مقدار</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">م監控</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">م監ون</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -87,4 +86,4 @@
             </div>
         </div>
     </div>
-</x-app-layout>
+</div>
