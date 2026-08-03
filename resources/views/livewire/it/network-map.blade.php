@@ -42,14 +42,20 @@ return new class extends Component
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
             ->whereNotNull('switch')->where('switch', '!=', '')->get();
 
-        $this->switches = $switches->groupBy('switch')->map(fn($group) => [
-            'name' => $group->first()->switch,
-            'lat' => $group->first()->person->unit?->lat,
-            'lng' => $group->first()->person->unit?->lng,
-            'unit_name' => $group->first()->person->unit?->name,
-            'device_count' => $group->count(),
-            'vlans' => $group->pluck('vlan')->filter()->unique()->values(),
-        ])->values()->toArray();
+        // Resolve lat/lng from unit or nearest ancestor that has coordinates
+        $this->switches = $switches->groupBy('switch')->map(function ($group) {
+            $first = $group->first();
+            $unit = $first->person->unit;
+            $coord = $this->resolveUnitCoordinates($unit);
+            return [
+                'name' => $first->switch,
+                'lat' => $coord['lat'],
+                'lng' => $coord['lng'],
+                'unit_name' => $unit?->name,
+                'device_count' => $group->count(),
+                'vlans' => $group->pluck('vlan')->filter()->unique()->values(),
+            ];
+        })->values()->toArray();
 
         $this->links = NetworkLink::with(['sourceUnit', 'targetUnit'])
             ->where(fn($q) => $q->whereIn('source_unit_id', $accessibleIds)->orWhereIn('target_unit_id', $accessibleIds))
@@ -81,11 +87,12 @@ return new class extends Component
 
     public function loadStats(): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->stats = [
             'total_switches' => count($this->switches),
             'total_links' => count($this->links),
             'total_vlans' => count($this->vlans),
-            'total_devices' => array_sum(array_column($this->switches, 'device_count')),
+            'total_devices' => Hardware::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->count(),
             'spof_count' => count($this->spof),
         ];
     }
@@ -93,6 +100,21 @@ return new class extends Component
     public function getLinkTypeLabel(string $type): string
     {
         return match($type) { 'fiber' => 'فایبر نوری', 'wireless' => 'بی‌سیم', 'mpls' => 'MPLS', 'vpn' => 'VPN', default => 'نامشخص' };
+    }
+
+    /**
+     * Resolve unit coordinates by walking up the hierarchy until lat/lng found
+     */
+    protected function resolveUnitCoordinates(?\App\Models\Unit $unit): array
+    {
+        while ($unit) {
+            if (!is_null($unit->lat) && !is_null($unit->lng)) {
+                return ['lat' => $unit->lat, 'lng' => $unit->lng];
+            }
+            $unit = $unit->parent;
+        }
+        // Fallback to Tehran if no coordinates found
+        return ['lat' => 35.6892, 'lng' => 51.3890];
     }
 };
 ?>
@@ -241,11 +263,13 @@ return new class extends Component
 
     initMap();
 
-    Livewire.on('network-map-data-loaded', function(switches, links, vlans, spof) {
-        if (switches) allData.switches = switches;
-        if (links) allData.links = links;
-        if (vlans) allData.vlans = vlans;
-        if (spof) allData.spof = spof;
+    // Listen for data updates from Livewire (Livewire 4 sends named params as object in first arg array)
+    Livewire.on('network-map-data-loaded', function() {
+        var data = arguments[0];
+        if (data && data.switches) allData.switches = data.switches;
+        if (data && data.links) allData.links = data.links;
+        if (data && data.vlans) allData.vlans = data.vlans;
+        if (data && data.spof) allData.spof = data.spof;
         renderSwitches(allData.switches);
         renderLinks(allData.links);
         renderSpof(allData.spof);
