@@ -997,7 +997,7 @@ return new class extends Component
             <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
                     :per-page-values="[10, 20, 50, 100]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
                 @scope('cell_checkbox', $hw)
-                    <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
+                    <input type="checkbox" wire:model.live="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
                 @endscope
                 @scope('cell_status', $hw)
                     @if($hw['status'] === 'mark')
