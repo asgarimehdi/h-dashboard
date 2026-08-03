@@ -55,8 +55,8 @@
                 @if($unit->unitType)
                     <span class="text-[11px] opacity-70 font-medium italic">{{ $unit->unitType->name }}</span>
                 @endif
-                <span class="badge badge-sm badge-ghost">{{ $unit->personnel_count }} نفر</span>
-                @if($unit->personnel_count === 0)
+                <span class="badge badge-sm badge-ghost">{{ $personCounts[$unit->id] ?? 0 }} نفر</span>
+                @if(($personCounts[$unit->id] ?? 0) === 0)
                     <span class="badge badge-sm badge-error">خالی</span>
                 @endif
             </div>

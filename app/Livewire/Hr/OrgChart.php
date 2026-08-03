@@ -3,6 +3,7 @@
 namespace App\Livewire\Hr;
 
 use App\Models\Unit;
+use App\Models\Person;
 use App\Services\AccessService;
 use Livewire\Component;
 
@@ -11,6 +12,11 @@ class OrgChart extends Component
     public array $expanded = [];
     public string $search = '';
     public $rootUnits;
+    public $selectedUnit;
+    public $selectedPersonnel;
+    public int $selectedPersonnelTotal = 0;
+    public int $descendantPersonnelTotal = 0;
+    public array $personCounts = [];
 
     public function mount(): void
     {
@@ -29,8 +35,15 @@ class OrgChart extends Component
         $this->rootUnits = Unit::whereNull('parent_id')
             ->whereIn('id', $accessibleIds)
             ->with(['childrenRecursive', 'unitType'])
-            ->withCount('person as personnel_count')
             ->get();
+
+        // محاسبه تعداد پرسنل برای تمام واحدها (شامل فرزندان)
+        $personCounts = Person::whereIn('u_id', $accessibleIds)
+            ->selectRaw('u_id, count(*) as cnt')
+            ->groupBy('u_id')
+            ->pluck('cnt', 'u_id');
+
+        $this->personCounts = $personCounts->toArray();
 
         if (empty($this->expanded)) {
             $this->expanded = $this->collectAllIds($this->rootUnits);
@@ -73,6 +86,21 @@ class OrgChart extends Component
         } else {
             $this->expanded[] = $id;
         }
+    }
+
+    public function selectUnit(int $id): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (! in_array($id, $accessibleIds)) {
+            $this->error('شما مجاز به مشاهده این واحد نیستید.', position: 'toast-bottom');
+            return;
+        }
+
+        $this->selectedUnit = Unit::with(['parent', 'unitType'])->find($id);
+        $this->selectedPersonnel = Person::where('u_id', $id)->with(['semat', 'tahsil', 'estekhdam', 'radif'])->limit(20)->get();
+        $this->selectedPersonnelTotal = Person::where('u_id', $id)->count();
+        $this->descendantPersonnelTotal = Person::whereIn('u_id', Unit::descendantIds($id))->count();
     }
 
     public function expandAll(): void
