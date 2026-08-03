@@ -37,9 +37,12 @@
                     <span class="badge badge-outline badge-secondary">سرورها</span>
                     <span class="badge badge-outline badge-success">رم ۱۶GB+</span>
                     <span class="badge badge-outline badge-warning">فقط SSD</span>
-                    <span class="badge badge-outline badge-error">خاموش‌ها</span>
+                    <span class="badge badge-outline badge-success">روشن‌ها</span>
                     <span class="badge badge-outline badge-info">علامت‌دارها</span>
                 </div>
+                <p class="text-xs text-base-content/60 mt-2">
+                    وقتی فیلتری انتخاب می‌شود، دکمه آن با رنگ متمایز (پررنگ) مشخص می‌شود تا فیلترهای فعال به‌راحتی قابل تشخیص باشند.
+                </p>
             </div>
             <div class="space-y-1">
                 <strong class="text-base-content">فیلترهای پیشرفته:</strong>
