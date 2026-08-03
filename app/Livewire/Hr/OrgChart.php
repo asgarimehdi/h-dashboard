@@ -17,6 +17,8 @@ class OrgChart extends Component
     public int $selectedPersonnelTotal = 0;
     public int $descendantPersonnelTotal = 0;
     public array $personCounts = [];
+    public int $directUserCount = 0;
+    public int $descendantUserCount = 0;
 
     public function mount(): void
     {
@@ -97,10 +99,13 @@ class OrgChart extends Component
             return;
         }
 
-        $this->selectedUnit = Unit::with(['parent', 'unitType'])->find($id);
+        $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person'])->find($id);
         $this->selectedPersonnel = Person::where('u_id', $id)->with(['semat', 'tahsil', 'estekhdam', 'radif'])->limit(20)->get();
         $this->selectedPersonnelTotal = Person::where('u_id', $id)->count();
-        $this->descendantPersonnelTotal = Person::whereIn('u_id', Unit::descendantIds($id))->count();
+        $descendantIds = Unit::descendantIds($id);
+        $this->descendantPersonnelTotal = Person::whereIn('u_id', $descendantIds)->count();
+        $this->directUserCount = $this->selectedUnit->assignedUsers->count();
+        $this->descendantUserCount = \App\Models\User::whereHas('units', fn($q) => $q->whereIn('unit_id', $descendantIds))->count();
     }
 
     public function expandAll(): void

@@ -41,6 +41,7 @@
                     <div><span class="font-bold">نوع:</span> {{ $selectedUnit->unitType?->name ?? '---' }}</div>
                     <div><span class="font-bold">والد:</span> {{ $selectedUnit->parent?->name ?? '---' }}</div>
                     <div><span class="font-bold">پرسنل مستقیم:</span> {{ $selectedPersonnelTotal }} نفر <span class="text-xs opacity-60">(زیرمجموعه: {{ $descendantPersonnelTotal }} نفر)</span></div>
+                    <div><span class="font-bold">کاربران مستقیم:</span> {{ $directUserCount }} نفر <span class="text-xs opacity-60">(زیرمجموعه: {{ $descendantUserCount }} نفر)</span></div>
                 </div>
                 <div class="mt-4">
                     <h4 class="font-bold text-xs mb-2">پرسنل این واحد (۲۰ نفر اول):</h4>
@@ -52,6 +53,17 @@
                     </div>
                     @empty
                     <p class="text-xs opacity-50">پرسنلی ندارد</p>
+                    @endforelse
+                </div>
+                <div class="mt-4">
+                    <h4 class="font-bold text-xs mb-2">کاربران این واحد:</h4>
+                    @forelse($selectedUnit->assignedUsers as $u)
+                    <div class="flex items-center gap-2 p-2 bg-base-200/50 rounded mb-1">
+                        <x-icon name="o-user" class="w-4 h-4" />
+                        <span class="text-xs">{{ $u->person?->f_name }} {{ $u->person?->l_name }}</span>
+                    </div>
+                    @empty
+                    <p class="text-xs opacity-50">کاربری ندارد</p>
                     @endforelse
                 </div>
             </x-card>
