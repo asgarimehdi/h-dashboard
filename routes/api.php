@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\HardwareHistoryController;
+use App\Http\Controllers\Api\HrController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
@@ -101,4 +102,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/todos/{todo}', [TodoController::class, 'update']);
     Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
     Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+});
+
+// HR API routes (Issue #223)
+Route::middleware('auth:sanctum')->prefix('hr')->group(function () {
+    Route::get('/org-chart', [HrController::class, 'orgChart']);
+    Route::get('/stats', [HrController::class, 'stats']);
+    Route::get('/vacancies', [HrController::class, 'vacancies']);
+    Route::get('/personnel', [HrController::class, 'personnel']);
+    Route::get('/personnel/{n_code}', [HrController::class, 'personDetail']);
 });

@@ -203,6 +203,14 @@
                 </x-menu-sub>
                 @endcan
 
+                {{-- داشبورد منابع انسانی --}}
+                @can('view_hr_dashboard')
+                <x-menu-sub title="داشبورد منابع انسانی" icon="o-chart-bar">
+                    <x-menu-item title="آمار پرسنل" icon="o-chart-bar" link="/hr-dashboard" wire:navigate />
+                    <x-menu-item title="چارت سازمانی" icon="o-beaker" link="/hr/org-chart" wire:navigate />
+                </x-menu-sub>
+                @endcan
+
                 {{-- مدیریت تیکت‌ها --}}
                 @canany(['create_ticket', 'view_assigned_tickets', 'view_all_tickets'])
                 <x-menu-sub title="مدیریت تیکت‌ها" icon="o-ticket">
@@ -225,7 +233,6 @@
                 @can('organization')
                 <x-menu-sub title="ساختار سازمان" icon="o-building-library">
                     <x-menu-item title="مدیریت واحدها" icon="o-building-office-2" link="/units" wire:navigate />
-                    <x-menu-item title="درختواره واحدها" icon="o-folder" link="/units/chart" wire:navigate />
                 </x-menu-sub>
                 @endcan
 

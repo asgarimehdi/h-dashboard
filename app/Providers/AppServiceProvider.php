@@ -42,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
             'tools',
             'search',
             'profile',
+            'hr-dashboard',
         ];
         
         foreach ($helpContents as $content) {

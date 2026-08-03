@@ -75,8 +75,11 @@
             <template x-if="helpSection === 'profile'">
                 <div><x-help-content:profile /></div>
             </template>
+            <template x-if="helpSection === 'hr-dashboard'">
+                <div><x-help-content:hr-dashboard /></div>
+            </template>
 
-            <div x-show="!['dashboard','hardware','hardware-import','persons-import','personnel','units','tickets','todos','reports','maps','settings','roles','permissions','users','activity-log','networks','wireless','tools','search','profile'].includes(helpSection)"
+            <div x-show="!['dashboard','hardware','hardware-import','persons-import','personnel','units','tickets','todos','reports','maps','settings','roles','permissions','users','activity-log','networks','wireless','tools','search','profile','hr-dashboard'].includes(helpSection)"
                  class="text-center py-8 text-base-content/50">
                 <x-icon name="o-information-circle" class="w-12 h-12 mx-auto mb-4" />
                 <p class="text-lg font-medium">راهنمای این بخش در دسترس نیست</p>

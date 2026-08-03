@@ -18,7 +18,7 @@ class Person extends Model
         return 'n_code';
     }
 
-    protected $fillable = ['n_code','f_name','l_name','t_id', 'e_id', 'r_id', 's_id', 'u_id',];
+    protected $fillable = ['n_code','f_name','l_name','t_id', 'e_id', 'r_id', 's_id', 'u_id', 'birth_date', 'hire_date', 'status'];
     protected $table = 'persons';
 
     protected static function boot(): void

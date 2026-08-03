@@ -70,6 +70,12 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/persons/import', 'kargozini.import-persons.import-persons')->name('kargozini.persons.import');
         });
 
+        // HR Dashboard (Issue #223)
+        Route::middleware('role_or_permission:view_hr_dashboard')->group(function () {
+            Route::livewire('/hr-dashboard', 'hr.dashboard')->name('hr.dashboard');
+            Route::livewire('/hr/org-chart', 'hr.org-chart')->name('hr.org-chart');
+        });
+
         Route::middleware('role_or_permission:map')->group(function () {
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');
