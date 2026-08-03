@@ -79,8 +79,19 @@ class Hardware extends Model
         return $this->belongsTo(Person::class, 'n_code', 'n_code');
     }
 
+    /**
+     * Audit trail (unified, Issue #246) — replaces the old histories relation.
+     */
+    public function audits(): HasMany
+    {
+        return $this->hasMany(HardwareAudit::class);
+    }
+
+    /**
+     * @deprecated Use audits() instead (Issue #246 merge).
+     */
     public function histories(): HasMany
     {
-        return $this->hasMany(HardwareHistory::class);
+        return $this->hasMany(HardwareAudit::class, 'hardware_id');
     }
 }

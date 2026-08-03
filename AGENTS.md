@@ -40,13 +40,13 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `vlan`, `motherboard`, `cpu`, `ram`, `hdd`
 - `comments`, `mark` (boolean)
 - `clean_at` (nullable date)
-- Relationship: `histories()` → `HardwareHistory` (change audit trail, #213)
+- Relationship: `audits()` → `HardwareAudit` (field-level change audit trail, #213/#246)
 
-**HardwareHistory** (`hardware_histories` table)
-- `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `ip_address`, `user_agent`
-- Populated automatically by `HardwareObserver` (registered in `AppServiceProvider`)
-- Indexes: `(hardware_id, created_at)`, `user_id`
-- API: `GET /api/hardware/{hardware}/history` (paginated, action filter, org scope); UI: history modal on `/hardware` page (#213)
+**HardwareAudit** (`hardware_audits` table)
+- `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete, force_deleted, rollback), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `source` (web, api, import, bulk), `ip_address`, `user_agent`
+- Populated automatically by `HardwareAuditObserver` (registered in `AppServiceProvider`) — the single unified audit source (replaces the old `HardwareHistory` / `HardwareObserver`)
+- Indexes: `(hardware_id, created_at)`, `user_id`, `action`
+- API: `GET /api/hardware/{hardware}/audits` (paginated, filterable) + alias `GET /api/hardware/{hardware}/history`; export, show, and rollback endpoints; UI: history modal with rollback on `/hardware` page (#213/#246)
 
 **Unit** (`units` table)
 - `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
@@ -181,29 +181,38 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 | DELETE | `/api/hardware/{id}` | Delete |
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
-| GET | `/api/hardware/{hardware}/history` | **Paginated change history** with action filter (`action=updated`), organizational scope enforced |
+| GET | `/api/hardware/{hardware}/history` | **Backward-compat alias** for `/audits` (paginated change history, action filter, org scope) |
+| GET | `/api/hardware/{hardware}/audits` | Paginated audit trail — filters: `field`, `user_id`, `date_from`, `date_to`, `action`, `source`, `per_page` (max 50) |
+| GET | `/api/hardware/{hardware}/audits/export` | Export audit trail as Excel/CSV (compliance report, Jalali dates) |
+| GET | `/api/hardware/{hardware}/audits/{audit}` | Single audit record with full field diff + Persian labels |
+| POST | `/api/hardware/{hardware}/audits/{audit}/rollback` | `{field: ...}` — restore a field to its previous value; creates a new `rollback` audit entry |
 
-### Hardware History / Audit Trail (`/api/hardware/{hardware}/history`)
+### Hardware Audit Trail (`/api/hardware/{hardware}/audits`)
 
-Tracks all modifications to hardware records:
+Unified field-level audit trail (Issue #246 — merged with the old `/history` system; `hardware_histories` was migrated into `hardware_audits` and dropped).
 
 | Action | Description |
 |--------|-------------|
-| `created` | Hardware record created |
+| `created` | Hardware record created (initial field snapshot) |
 | `updated` | Field-level changes with old/new values |
 | `deleted` | Hardware record deleted (captures hardware_id before deletion) |
-| `bulk_mark` | Bulk mark/unmark operation |
-| `bulk_delete` | Bulk delete operation |
+| `bulk_mark` | Bulk mark/unmark operation (`source=bulk`) |
+| `bulk_delete` | Bulk delete operation (`source=bulk`) |
+| `force_deleted` | Force-deleted hardware |
+| `rollback` | A field was rolled back to its previous value |
 
-**Query Parameters:**
-- `per_page` (max 50)
-- `action` (filter by action type: created/updated/deleted/bulk_mark/bulk_delete)
+**Source tracking:** `web`, `api` (Sanctum/mobile), `import` (Excel import), `bulk` (bulk operations). Auto-detected by `HardwareAuditObserver`.
 
-**Response:** Paginated history with user info and field-level changes (old/new values).
+**Query Parameters (index):**
+- `per_page` (max 50), `page`
+- `field` (filter by changed field), `user_id`, `date_from`, `date_to`
+- `action` (created/updated/deleted/bulk_mark/bulk_delete/rollback), `source` (web/api/import/bulk)
 
-**Scope:** Respects organizational scope — users only see history for hardware in their accessible units.
+**Response:** Paginated audits with user info (n_code, name), source, IP, ISO + Jalali timestamps, and field-level changes.
 
-**Livewire Component:** New "History / تغییرات" tab on hardware detail page showing date, user, action, changed fields (badges), IP.
+**Scope:** Respects organizational scope — users only see audits for hardware in their accessible units (403 otherwise).
+
+**Livewire Component:** "History / تغییرات" modal on `/hardware` page — shows date (Jalali), user, action badge, **source badge**, changed fields (old ← new badges), IP, and a **↺ بازگردانی (rollback)** button per field with confirmation. Rollback restores the field and logs a new `rollback` audit entry.
 
 ### Hardware Import (`/hardware/import`)
 
@@ -273,6 +282,18 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | GET | `/api/reports/todos` | Todo statistics |
 | GET | `/api/reports/tickets` | Ticket statistics |
 
+### HR (`/api/hr`) — Issue #223
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/hr/org-chart` | Full org tree with personnel counts per unit (nested JSON) |
+| GET | `/api/hr/stats` | Aggregated HR stats (total, by unit/semat/tahsil/estekhdam/radif) |
+| GET | `/api/hr/vacancies` | Units with zero personnel |
+| GET | `/api/hr/personnel` | Paginated personnel list; filters: `search`, `unit_id`, `semat_id`, `tahsil_id`, `estekhdam_id`, `radif_id`, `status` |
+| GET | `/api/hr/personnel/{n_code}` | Personnel detail with full HR profile (403 if out of scope) |
+
+All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` + `/hr/org-chart` (permission `view_hr_dashboard`).
+
 ### Zabbix (`/api/zabbix`)
 
 | Method | URL | Description |
@@ -293,6 +314,7 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 - **Column Visibility:** Toggle columns on/off via a panel
 - **Mobile Card Layout:** Table auto-converts to cards on small screens
 - **Real-time n_code Validation:** Live validation against `persons` table with name/unit display
+- **History / تغییرات modal (Audit Trail, #246):** per-device history button (🕐) opens a modal showing the unified `hardware_audits` trail — action badge, **source badge** (وب/API/ایمپورت/گروهی), user, IP, Jalali timestamp, field-level diff (old ← new), action filters (همه/ایجاد/ویرایش/حذف/علامت گروهی/حذف گروهی/بازگردانی), and a **↺ بازگردانی** rollback button per field (with confirmation). Rollback restores the field value and logs a new `rollback` audit entry.
 
 ### Hardware Import (`/hardware/import`)
 
@@ -310,6 +332,7 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 ### Other Pages
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
+- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Components under `app/Livewire/Hr/`, views under `resources/views/livewire/hr/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
 
 ### Help System (راهنما)
 
@@ -370,7 +393,15 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Apply `PersianNormalizer` on all text search inputs
 
 ### Recent Issues Resolved
-- **#213** — Hardware Change History & Audit Trail API (`hardware_histories` table, `HardwareObserver`, `GET /api/hardware/{hardware}/history`, Livewire history modal with Jalali dates)
+- **#195** — Interactive GIS Map Dashboard for Health Units
+  - **MapDashboard Livewire Component** (`app/Livewire/Map/MapDashboard.php`): Full-screen Leaflet map at `/map` with unit/hardware/ticket layers, stats panel, unit detail modal, bbox-driven data loading
+  - **GIS API Controller** (`app/Http/Controllers/Api/GisController.php`): 5 GeoJSON endpoints (`units`, `hardware`, `tickets`, `stats`, `clusters`) using lat/lng columns (not geom), bbox spatial filtering, accessible-units scope via `AccessService`
+  - **Routes**: `GET /map` (web, `role_or_permission:map`), `GET /api/gis/*` (Sanctum, named `api.gis.*`)
+  - **Blade Template** (`resources/views/livewire/map/map-dashboard.blade.php`): Alpine.js `mapDashboard()` with `x-data`, layer toggles, filters, Leaflet markers/divIcons, `@this` Livewire-Alpine communication
+  - **Tests**: `tests/Feature/GisApiTest.php` (10 tests, GeoJSON structure, bbox filtering, permissions), `tests/Feature/MapDashboardTest.php` (12 tests, Livewire events, Alpine methods, auth, rendering)
+  - **Frontend**: Added "داشبورد GIS" to sidebar under "کار با نقشه"
+- **#213** — Hardware Change History & Audit Trail API (`hardware_audits` table, `HardwareAuditObserver`, `GET /api/hardware/{hardware}/audits`, Livewire history modal with Jalali dates and rollback). Merged with #246: the old `HardwareHistory`/`hardware_histories` system was migrated into the unified `HardwareAudit`/`hardware_audits` trail.
+- **#246** — Hardware Field-Level Audit Trail & Change History: source tracking (web/api/import/bulk), rollback endpoint + Livewire per-field ↺ بازگردانی, Excel/CSV compliance export (`HardwareAuditsExport`), filterable API (`field`/`user_id`/`date_from`/`date_to`/`action`/`source`), no FK cascade on `hardware_id` so audit survives deletes. Tests: `HardwareAuditTest`, `HardwareAuditDetailTest`, `HardwareAuditLivewireTest`, `HardwareAuditMigrationTest`.
 - **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 - **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)

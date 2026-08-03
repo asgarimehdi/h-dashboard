@@ -328,8 +328,17 @@ return new class extends Component
         }
 
         Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
-        $this->selected = [];
+        // Keep the selection so the user can immediately toggle back (e.g. "برداشتن")
+        // without having to re-select — do NOT clear $this->selected here.
         $this->success('وضعیت علامت‌گذاری تغییر کرد.', position: 'toast-bottom');
+    }
+
+    /**
+     * Clear the bulk selection (used by the UI after operations if needed).
+     */
+    public function clearSelection(): void
+    {
+        $this->selected = [];
     }
 
     public function bulkDelete(): void
@@ -387,7 +396,7 @@ return new class extends Component
             return;
         }
 
-        $query = HardwareHistory::with('user:id,n_code,name')
+        $query = \App\Models\HardwareAudit::with('user:id,n_code,name')
             ->where('hardware_id', $hw->id);
 
         if ($this->historyActionFilter) {
@@ -403,6 +412,7 @@ return new class extends Component
             ->map(fn ($h) => [
                 'id' => $h->id,
                 'action' => $h->action,
+                'source' => $h->source,
                 'changes' => $h->changes,
                 'ip_address' => $h->ip_address,
                 'user_agent' => $h->user_agent,
@@ -435,6 +445,71 @@ return new class extends Component
         $this->historyActionFilter = $action;
         $this->historyCurrentPage = 1;
         $this->fetchHistory();
+    }
+
+    /**
+     * Rollback a single field to its previous value (Issue #246).
+     */
+    public function rollbackHistoryField(int $auditId, string $field): void
+    {
+        $audit = \App\Models\HardwareAudit::find($auditId);
+
+        if (! $audit || $audit->hardware_id !== $this->historyHardwareId) {
+            $this->error('رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        $changes = $audit->changes ?? [];
+        $fieldChange = collect($changes)->firstWhere('field', $field);
+
+        if (! $fieldChange) {
+            $this->error('فیلد در رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        $hw = Hardware::find($this->historyHardwareId);
+        if (! $hw) {
+            $this->error('سخت افزار یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        // Parse old value and update
+        $restoredValue = $this->restoreAuditValue($fieldChange['old'] ?? '—', $field);
+        $hw->update([$field => $restoredValue]);
+
+        // Log rollback
+        app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
+            $hw,
+            [[
+                'field' => $field,
+                'old' => $fieldChange['new'] ?? '—',
+                'new' => $fieldChange['old'] ?? '—',
+            ]],
+            auth()->id()
+        );
+
+        $this->success("فیلد {$field} به مقدار قبلی بازگردانده شد.", position: 'toast-bottom');
+        $this->fetchHistory();
+    }
+
+    /**
+     * Parse a stored display value back for restore.
+     */
+    private function restoreAuditValue(string $displayValue, string $field): mixed
+    {
+        if ($displayValue === '—') {
+            return null;
+        }
+        if ($displayValue === 'بله') {
+            return true;
+        }
+        if ($displayValue === 'خیر') {
+            return false;
+        }
+        if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) {
+            return (int) $displayValue;
+        }
+        return $displayValue;
     }
 
     public function headers(): array
@@ -576,17 +651,20 @@ return new class extends Component
                         <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
                         <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
                         <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
+                        @if(!empty($selected))
+                            <x-button icon="o-x-mark" class="btn-ghost btn-sm text-base-content/50" label="{{ count($selected) }} انتخاب" wire:click="clearSelection" title="پاک کردن انتخاب" />
+                        @endif
                     </div>
                 </div>
 
                 {{-- Quick Presets --}}
         <div class="flex flex-wrap gap-2 mb-4">
-            <x-button icon="o-cpu-chip" class="btn-outline btn-xs" label="لپ‌تاپ‌ها" wire:click="$set('filterType', 'laptop')" />
-            <x-button icon="o-server" class="btn-outline btn-xs" label="سرورها" wire:click="$set('filterType', 'server')" />
-            <x-button icon="o-server-stack" class="btn-outline btn-xs" label="رم 16GB+" wire:click="$set('filterRam', '16384')" />
-            <x-button icon="o-computer-desktop" class="btn-outline btn-xs" label="فقط SSD" wire:click="$set('filterHdd', 'SSD')" />
-            <x-button icon="o-power" class="btn-outline btn-xs text-error" label="خاموش‌ها" wire:click="$set('filterShutdown', '0')" />
-            <x-button icon="o-check-circle" class="btn-outline btn-xs text-success" label="علامت‌دارها" wire:click="$set('filterMark', '1')" />
+            <x-button icon="o-cpu-chip" :class="$filterType === 'laptop' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="لپ‌تاپ‌ها" wire:click="$set('filterType', 'laptop')" />
+            <x-button icon="o-server" :class="$filterType === 'server' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="سرورها" wire:click="$set('filterType', 'server')" />
+            <x-button icon="o-server-stack" :class="$filterRam === '16384' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="رم 16GB+" wire:click="$set('filterRam', '16384')" />
+            <x-button icon="o-computer-desktop" :class="$filterHdd === 'SSD' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="فقط SSD" wire:click="$set('filterHdd', 'SSD')" />
+            <x-button icon="o-power" :class="$filterShutdown === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="روشن‌ها" wire:click="$set('filterShutdown', '1')" />
+            <x-button icon="o-check-circle" :class="$filterMark === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="علامت‌دارها" wire:click="$set('filterMark', '1')" />
             <x-button icon="o-x-mark" class="btn-ghost btn-xs" label="پاکسازی" wire:click="clearFilters" />
         </div>
 
@@ -594,20 +672,42 @@ return new class extends Component
         @if($showFilters)
             <div class="mb-4 p-4 bg-base-200 rounded-lg">
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    <x-input wire:model.live.debounce="filterType" label="نوع دستگاه" placeholder="pc, laptop..." clearable />
-                    <x-input wire:model.live.debounce="filterOs" label="سیستم عامل" placeholder="Windows 10..." clearable />
-                    <x-input wire:model.live.debounce="filterCpu" label="CPU" placeholder="Intel, AMD..." clearable />
-                    <x-input wire:model.live.debounce="filterRam" label="RAM" placeholder="4096, 8192..." clearable />
-                    <x-input wire:model.live.debounce="filterHdd" label="HDD/SSD" placeholder="SSD, 500GB..." clearable />
-                    <x-input wire:model.live.debounce="filterNetType" label="نوع شبکه" placeholder="wired, wireless..." clearable />
-                    <x-select wire:model.live="filterShutdown" label="وضعیت روشن/خاموش"
-                        :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'روشن'], ['id' => '0', 'name' => 'خاموش']])" />
-                    <x-select wire:model.live="filterMark" label="علامت‌دار"
-                        :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'علامت‌دار'], ['id' => '0', 'name' => 'بدون علامت']])" />
-                    <x-input wire:model.live.debounce="filterPerson" label="پرسنل (نام/کد ملی)" placeholder="جستجو..." clearable />
-                    <x-input wire:model.live.debounce="filterUnit" label="مرکز/واحد" placeholder="نام واحد..." clearable />
-                    <x-input wire:model.live.debounce="filterSemat" label="سمت" placeholder="پزشک، ممرض..." clearable />
-                </div>
+                        <div class="{{ $filterType ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterType" label="نوع دستگاه" placeholder="pc, laptop..." clearable />
+                        </div>
+                        <div class="{{ $filterOs ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterOs" label="سیستم عامل" placeholder="Windows 10..." clearable />
+                        </div>
+                        <div class="{{ $filterCpu ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterCpu" label="CPU" placeholder="Intel, AMD..." clearable />
+                        </div>
+                        <div class="{{ $filterRam ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterRam" label="RAM" placeholder="4096, 8192..." clearable />
+                        </div>
+                        <div class="{{ $filterHdd ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterHdd" label="HDD/SSD" placeholder="SSD, 500GB..." clearable />
+                        </div>
+                        <div class="{{ $filterNetType ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterNetType" label="نوع شبکه" placeholder="wired, wireless..." clearable />
+                        </div>
+                        <div class="{{ $filterShutdown !== null && $filterShutdown !== '' ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-select wire:model.live="filterShutdown" label="وضعیت روشن/خاموش"
+                                :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'روشن'], ['id' => '0', 'name' => 'خاموش']])" />
+                        </div>
+                        <div class="{{ $filterMark !== null && $filterMark !== '' ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-select wire:model.live="filterMark" label="علامت‌دار"
+                                :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'علامت‌دار'], ['id' => '0', 'name' => 'بدون علامت']])" />
+                        </div>
+                        <div class="{{ $filterPerson ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterPerson" label="پرسنل (نام/کد ملی)" placeholder="جستجو..." clearable />
+                        </div>
+                        <div class="{{ $filterUnit ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterUnit" label="مرکز/واحد" placeholder="نام واحد..." clearable />
+                        </div>
+                        <div class="{{ $filterSemat ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterSemat" label="سمت" placeholder="پزشک، ممرض..." clearable />
+                        </div>
+                    </div>
                 @if($this->hasActiveFilters())
                     <div class="mt-3 flex items-center gap-2">
                         <x-button icon="o-x-mark" label="پاک کردن فیلترها" class="btn-ghost btn-sm" wire:click="clearFilters" />
@@ -767,6 +867,7 @@ return new class extends Component
                     <x-button :class="$historyActionFilter === 'deleted' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('deleted')" label="حذف" />
                     <x-button :class="$historyActionFilter === 'bulk_mark' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_mark')" label="علامت گروهی" />
                     <x-button :class="$historyActionFilter === 'bulk_delete' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_delete')" label="حذف گروهی" />
+                    <x-button :class="$historyActionFilter === 'rollback' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('rollback')" label="بازگردانی" />
                 </div>
 
                 @if(count($history) === 0)
@@ -783,6 +884,7 @@ return new class extends Component
                                                 'updated' => 'badge-info',
                                                 'deleted', 'bulk_delete' => 'badge-error',
                                                 'bulk_mark' => 'badge-warning',
+                                                'rollback' => 'badge-secondary',
                                                 default => 'badge-neutral',
                                             };
                                             $actionLabel = match($entry['action']) {
@@ -791,10 +893,18 @@ return new class extends Component
                                                 'deleted' => 'حذف',
                                                 'bulk_mark' => 'علامت گروهی',
                                                 'bulk_delete' => 'حذف گروهی',
+                                                'rollback' => 'بازگردانی',
                                                 default => $entry['action'],
+                                            };
+                                            $sourceLabel = match($entry['source'] ?? '') {
+                                                'api' => 'API',
+                                                'import' => 'ایمپورت',
+                                                'bulk' => 'گروهی',
+                                                default => 'وب',
                                             };
                                         @endphp
                                         <x-badge :value="$actionLabel" :class="$badgeClass" />
+                                        <x-badge value="{{ $sourceLabel }}" class="badge-outline badge-xs" />
                                         <span class="text-xs opacity-60">{{ $entry['user']['name'] ?? $entry['user']['n_code'] ?? 'سیستم' }}</span>
                                     </div>
                                     <span class="text-xs opacity-50">{{ \Morilog\Jalali\Jalalian::fromDateTime($entry['created_at'])->format('Y/m/d H:i') }}</span>
@@ -805,6 +915,14 @@ return new class extends Component
                                             @if(is_array($change) && isset($change['field']))
                                                 <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
                                                     {{ $change['field'] }}: {{ $change['old'] ?? '—' }} ← {{ $change['new'] ?? '—' }}
+                                                    @if(in_array($entry['action'], ['updated', 'rollback']) && ($change['old'] ?? '—') !== '—')
+                                                        <button
+                                                            wire:click="rollbackHistoryField({{ $entry['id'] }}, '{{ $change['field'] }}')"
+                                                            wire:confirm="آیا از بازگردانی فیلد {{ $change['field'] }} به مقدار «{{ $change['old'] ?? '' }}» مطمئن هستید؟"
+                                                            class="text-primary hover:underline ms-1 text-[10px]"
+                                                            title="بازگردانی این فیلد"
+                                                        >↺ بازگردانی</button>
+                                                    @endif
                                                 </span>
                                             @endif
                                         @endforeach
@@ -843,11 +961,11 @@ return new class extends Component
                         </div>
                         <div class="flex gap-2">
                              @if($hw['status'] === 'mark')
-                                <x-badge value="⚑ علامت" class="badge-warning" />
+                                <x-badge value="علامت" class="badge-warning" />
                             @elseif($hw['status'] === 'off')
-                                <x-badge value="⬛ خاموش" class="badge-neutral" />
+                                <x-badge value="خاموش" class="badge-neutral" />
                             @else
-                                <x-badge value="🟢 فعال" class="badge-success" />
+                                <x-badge value="فعال" class="badge-success" />
                             @endif
                         </div>
                     </div>
@@ -879,15 +997,15 @@ return new class extends Component
             <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
                     :per-page-values="[10, 20, 50, 100]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
                 @scope('cell_checkbox', $hw)
-                    <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
+                    <input type="checkbox" wire:model.live="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
                 @endscope
                 @scope('cell_status', $hw)
                     @if($hw['status'] === 'mark')
-                        <x-badge value="⚑ علامت" class="badge-warning" />
+                        <x-badge value="علامت" class="badge-warning" />
                     @elseif($hw['status'] === 'off')
-                        <x-badge value="⬛ خاموش" class="badge-neutral" />
+                        <x-badge value="خاموش" class="badge-neutral" />
                     @else
-                        <x-badge value="🟢 فعال" class="badge-success" />
+                        <x-badge value="فعال" class="badge-success" />
                     @endif
                 @endscope
                 @scope('actions', $hw)
