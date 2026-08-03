@@ -328,8 +328,17 @@ return new class extends Component
         }
 
         Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
-        $this->selected = [];
+        // Keep the selection so the user can immediately toggle back (e.g. "برداشتن")
+        // without having to re-select — do NOT clear $this->selected here.
         $this->success('وضعیت علامت‌گذاری تغییر کرد.', position: 'toast-bottom');
+    }
+
+    /**
+     * Clear the bulk selection (used by the UI after operations if needed).
+     */
+    public function clearSelection(): void
+    {
+        $this->selected = [];
     }
 
     public function bulkDelete(): void
@@ -642,6 +651,9 @@ return new class extends Component
                         <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
                         <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
                         <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
+                        @if(!empty($selected))
+                            <x-button icon="o-x-mark" class="btn-ghost btn-sm text-base-content/50" label="{{ count($selected) }} انتخاب" wire:click="clearSelection" title="پاک کردن انتخاب" />
+                        @endif
                     </div>
                 </div>
 

@@ -111,3 +111,30 @@ it('rollbackHistoryField errors on invalid audit id', function () {
     // No crash; history still present
     $component->assertSet('showHistoryModal', true);
 });
+
+it('bulkMark keeps selection so unmark stays enabled', function () {
+    [$user, $hardware] = makeAuditLivewireUser();
+
+    $component = Livewire::actingAs($user)->test('hardware.index');
+    $component->set('selected', [$hardware->id])
+        ->call('bulkMark', true);
+
+    // Selection must be preserved after marking
+    $this->assertEquals([$hardware->id], $component->get('selected'));
+    // Hardware is marked
+    $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'mark' => true]);
+
+    // User can now unmark immediately without re-selecting
+    $component->call('bulkMark', false);
+    $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'mark' => false]);
+});
+
+it('clearSelection empties the selected array', function () {
+    [$user, $hardware] = makeAuditLivewireUser();
+
+    $component = Livewire::actingAs($user)->test('hardware.index');
+    $component->set('selected', [$hardware->id])
+        ->call('clearSelection');
+
+    $this->assertEquals([], $component->get('selected'));
+});
