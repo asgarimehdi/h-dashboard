@@ -314,14 +314,15 @@ class TicketCommentController extends Controller
     {
         foreach ($mentions as $username => $userId) {
             if ($userId === $author->id) continue;
-            
-            app(\App\Services\NotificationService::class)->create(
+
+            \App\Services\NotificationService::send(
                 $userId,
+                'mention',
                 "شما در یک نظر به تیکت {$comment->ticket->ticket_code} منشن شدید",
-                "منشن در نظر",
+                'منشن در نظر',
                 'at-sign',
-                'blue',
-                route('tickets.show', $comment->ticket_id)
+                'text-blue-500',
+                route('tickets.inbox', $comment->ticket_id)
             );
         }
     }
@@ -331,13 +332,14 @@ class TicketCommentController extends Controller
      */
     private function notifyReply(TicketComment $parentComment, TicketComment $reply, User $author): void
     {
-        app(\App\Services\NotificationService::class)->create(
+        \App\Services\NotificationService::send(
             $parentComment->user_id,
+            'reply',
             "{$author->n_code} به نظر شما در تیکت {$reply->ticket->ticket_code} پاسخ داد",
             'پاسخ به نظر',
             'message-circle',
-            'green',
-            route('tickets.show', $reply->ticket_id)
+            'text-green-500',
+            route('tickets.inbox', $reply->ticket_id)
         );
     }
 
@@ -359,13 +361,14 @@ class TicketCommentController extends Controller
 
         $emoji = $emojiMap[$reaction] ?? $reaction;
 
-        app(\App\Services\NotificationService::class)->create(
+        \App\Services\NotificationService::send(
             $comment->user_id,
+            'reaction',
             "{$reactor->n_code} واکنش {$emoji} را به نظر شما در تیکت {$comment->ticket->ticket_code} اضافه کرد",
             'واکنش جدید',
             'smile',
-            'yellow',
-            route('tickets.show', $comment->ticket_id)
+            'text-yellow-500',
+            route('tickets.inbox', $comment->ticket_id)
         );
     }
 }

@@ -238,6 +238,22 @@ Tracks all modifications to hardware records:
 | POST | `/api/tickets/{ticket}/accept` | Accept assigned ticket |
 | POST | `/api/tickets/{ticket}/complete` | Mark complete |
 
+### Ticket Comments (`/api/tickets/{ticket}/comments`) — issue #222
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `.../comments` | List root comments (`?threaded=true` includes children, paginated) |
+| POST | `.../comments` | Create comment (`body` required, `parent_id` for replies, max depth 3) |
+| GET | `.../comments/{comment}` | Show comment with children + reactions |
+| PUT/PATCH | `.../comments/{comment}` | Update (author only, within 15 min) |
+| DELETE | `.../comments/{comment}` | Soft delete (author or admin/`manage_tickets`) |
+| POST | `.../comments/{comment}/react` | Add reaction (`+1,-1,heart,tada,rocket,eyes`; idempotent) |
+| DELETE | `.../comments/{comment}/react` | Remove reaction |
+| GET | `.../comments/{comment}/reactions` | List reactions grouped with counts + users |
+
+Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edit/delete/reactions).
+**Gotchas:** notifications use `NotificationService::send()` (static; NOT `create()`) and `route('tickets.inbox')` — `tickets.show` does not exist.
+
 ### Todo CRUD (`/api/todos`)
 
 | Method | URL | Description |
