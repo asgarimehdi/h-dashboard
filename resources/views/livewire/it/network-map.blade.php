@@ -211,7 +211,7 @@ return new class extends Component
                 class="w-32"
             />
 
-            <x-button wire:click="loadData" label="بروزرسانی" icon="arrow-path" class="btn-sm btn-primary" />
+            <x-button wire:click="loadData" label="بروزرسانی" icon="o-arrow-path" class="btn-sm btn-primary" />
         </div>
     </x-card>
 
