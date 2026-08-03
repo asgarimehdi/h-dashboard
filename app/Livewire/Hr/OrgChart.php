@@ -100,7 +100,7 @@ class OrgChart extends Component
         }
 
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person'])->find($id);
-        $this->selectedPersonnel = Person::where('u_id', $id)->with(['semat', 'tahsil', 'estekhdam', 'radif'])->limit(20)->get();
+        $this->selectedPersonnel = Person::where('u_id', $id)->with(['semat', 'tahsil', 'estekhdam', 'radif', 'user'])->limit(20)->get();
         $this->selectedPersonnelTotal = Person::where('u_id', $id)->count();
         $descendantIds = Unit::descendantIds($id);
         $this->descendantPersonnelTotal = Person::whereIn('u_id', $descendantIds)->count();

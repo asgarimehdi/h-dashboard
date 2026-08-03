@@ -47,23 +47,12 @@
                     <h4 class="font-bold text-xs mb-2">پرسنل این واحد (۲۰ نفر اول):</h4>
                     @forelse($selectedPersonnel as $p)
                     <div class="flex items-center gap-2 p-2 bg-base-200/50 rounded mb-1">
-                        <x-icon name="o-user" class="w-4 h-4" />
+                        <x-icon name="o-user" class="w-4 h-4 {{ $p->user ? 'text-success' : 'text-error' }}" />
                         <span class="text-xs">{{ $p->f_name }} {{ $p->l_name }}</span>
                         <span class="badge badge-xs badge-ghost">{{ $p->semat?->name ?? '---' }}</span>
                     </div>
                     @empty
                     <p class="text-xs opacity-50">پرسنلی ندارد</p>
-                    @endforelse
-                </div>
-                <div class="mt-4">
-                    <h4 class="font-bold text-xs mb-2">کاربران این واحد:</h4>
-                    @forelse($selectedUnit->assignedUsers as $u)
-                    <div class="flex items-center gap-2 p-2 bg-base-200/50 rounded mb-1">
-                        <x-icon name="o-user" class="w-4 h-4" />
-                        <span class="text-xs">{{ $u->person?->f_name }} {{ $u->person?->l_name }}</span>
-                    </div>
-                    @empty
-                    <p class="text-xs opacity-50">کاربری ندارد</p>
                     @endforelse
                 </div>
             </x-card>
