@@ -367,6 +367,13 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Apply `PersianNormalizer` on all text search inputs
 
 ### Recent Issues Resolved
+- **#195** — Interactive GIS Map Dashboard for Health Units
+  - **MapDashboard Livewire Component** (`app/Livewire/Map/MapDashboard.php`): Full-screen Leaflet map at `/map` with unit/hardware/ticket layers, stats panel, unit detail modal, bbox-driven data loading
+  - **GIS API Controller** (`app/Http/Controllers/Api/GisController.php`): 5 GeoJSON endpoints (`units`, `hardware`, `tickets`, `stats`, `clusters`) using lat/lng columns (not geom), bbox spatial filtering, accessible-units scope via `AccessService`
+  - **Routes**: `GET /map` (web, `role_or_permission:map`), `GET /api/gis/*` (Sanctum, named `api.gis.*`)
+  - **Blade Template** (`resources/views/livewire/map/map-dashboard.blade.php`): Alpine.js `mapDashboard()` with `x-data`, layer toggles, filters, Leaflet markers/divIcons, `@this` Livewire-Alpine communication
+  - **Tests**: `tests/Feature/GisApiTest.php` (10 tests, GeoJSON structure, bbox filtering, permissions), `tests/Feature/MapDashboardTest.php` (12 tests, Livewire events, Alpine methods, auth, rendering)
+  - **Frontend**: Added "داشبورد GIS" to sidebar under "کار با نقشه"
 - **#213** — Hardware Change History & Audit Trail API (`hardware_histories` table, `HardwareObserver`, `GET /api/hardware/{hardware}/history`, Livewire history modal with Jalali dates)
 - **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)

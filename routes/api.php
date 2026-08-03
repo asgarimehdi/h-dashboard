@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\GisController;
 use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\HardwareHistoryController;
 use App\Http\Controllers\Api\HrController;
@@ -111,4 +112,13 @@ Route::middleware('auth:sanctum')->prefix('hr')->group(function () {
     Route::get('/vacancies', [HrController::class, 'vacancies']);
     Route::get('/personnel', [HrController::class, 'personnel']);
     Route::get('/personnel/{n_code}', [HrController::class, 'personDetail']);
+});
+
+// GIS / Map API routes
+Route::middleware('auth:sanctum')->prefix('gis')->group(function () {
+    Route::get('/units', [GisController::class, 'units'])->name('api.gis.units');
+    Route::get('/hardware', [GisController::class, 'hardware'])->name('api.gis.hardware');
+    Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');
+    Route::get('/stats', [GisController::class, 'stats'])->name('api.gis.stats');
+    Route::get('/clusters', [GisController::class, 'clusters'])->name('api.gis.clusters');
 });
