@@ -80,6 +80,7 @@ Route::middleware('auth')->group(function () {
 
             Route::livewire('/it/wireless', 'it/wireless');
             Route::livewire('/it/networks', 'it/networks');
+            Route::livewire('/network-map', 'it.network-map')->name('network-map');
         });
 
         Route::middleware('role_or_permission:calendar')->group(function () {

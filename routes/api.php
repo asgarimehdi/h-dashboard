@@ -102,3 +102,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
     Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
 });
+
+// Network Map API routes
+Route::middleware('auth:sanctum')->prefix('network-map')->group(function () {
+    Route::get('/switches', [NetworkMapController::class, 'switches']);
+    Route::get('/links', [NetworkMapController::class, 'links']);
+    Route::get('/vlans', [NetworkMapController::class, 'vlans']);
+    Route::get('/spof', [NetworkMapController::class, 'spof']);
+    Route::get('/trace', [NetworkMapController::class, 'trace']);
+    Route::get('/stats', [NetworkMapController::class, 'stats']);
+    Route::get('/devices', [NetworkMapController::class, 'devices']);
+});
