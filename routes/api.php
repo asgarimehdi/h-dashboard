@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Api\GisController;
 use App\Http\Controllers\Api\HardwareController;
-use App\Http\Controllers\Api\HardwareHistoryController;
+use App\Http\Controllers\Api\HardwareAuditController;
 use App\Http\Controllers\Api\HrController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
@@ -59,12 +59,15 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::get('/{hardware}', [HardwareController::class, 'show']);
     Route::match(['put', 'patch'], '/{hardware}', [HardwareController::class, 'update']);
     Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
-    Route::get('/{hardware}/history', [HardwareController::class, 'history']);
     Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
     Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
-    
-    // Hardware History
-    Route::get('/{hardware}/history', [HardwareHistoryController::class, 'index']);
+
+    // Hardware Audit Trail (Issue #246 — unified with old /history endpoint)
+    Route::get('/{hardware}/history', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']); // backward-compat alias
+    Route::get('/{hardware}/audits', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']);
+    Route::get('/{hardware}/audits/export', [\App\Http\Controllers\Api\HardwareAuditController::class, 'export']);
+    Route::get('/{hardware}/audits/{audit}', [\App\Http\Controllers\Api\HardwareAuditController::class, 'show']);
+    Route::post('/{hardware}/audits/{audit}/rollback', [\App\Http\Controllers\Api\HardwareAuditController::class, 'rollback']);
 });
 
 // Ticket API routes
