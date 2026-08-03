@@ -8,12 +8,16 @@
     </x-header>
 
     <div class="mb-4">
-        <x-input wire:model.live.debounce.300ms="search" placeholder="جستجوی واحد..." icon="o-magnifying-glass" />
+        <x-input wire:model.live.debounce.300ms="search" placeholder="جستجوی واحد..." icon="o-magnifying-glass" clearable />
     </div>
 
     <div class="space-y-2" dir="rtl">
-        @foreach ($tree as $node)
-            <x-livewire.hr.org-node :node="$node" :expanded="$expanded" :search="$search" />
+        @foreach ($rootUnits as $unit)
+            @include('livewire.hr.org-node', ['unit' => $unit, 'level' => 0])
         @endforeach
+
+        @if($rootUnits->isEmpty())
+            <div class="text-center p-10 text-gray-400">واحدی یافت نشد.</div>
+        @endif
     </div>
 </div>

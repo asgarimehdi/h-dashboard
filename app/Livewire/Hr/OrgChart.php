@@ -5,46 +5,71 @@ namespace App\Livewire\Hr;
 use App\Models\Unit;
 use App\Services\AccessService;
 use Livewire\Component;
-use Illuminate\Support\Facades\Cache;
 
 class OrgChart extends Component
 {
-    public array $tree = [];
     public array $expanded = [];
     public string $search = '';
+    public $rootUnits;
 
     public function mount(): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
-        $cacheKey = 'hr:orgchart:' . md5(implode(',', $accessibleIds));
-        $units = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
-            return Unit::whereIn('id', $accessibleIds)
-                ->withCount('person as personnel_count')
-                ->get()
-                ->toArray();
-        });
-
-        // Build tree
-        $byId = [];
-        foreach ($units as $u) {
-            $byId[$u['id']] = $u + ['children' => []];
-        }
-        foreach ($byId as $id => &$u) {
-            if ($u['parent_id'] && isset($byId[$u['parent_id']])) {
-                $byId[$u['parent_id']]['children'][] = &$u;
-            }
-        }
-        unset($u);
-
-        $this->tree = array_values(array_filter($byId, fn ($u) => ! $u['parent_id'] || ! isset($byId[$u['parent_id']])));
-        $this->expanded = array_keys($byId);
+        $this->loadData();
     }
 
-    public function toggle(string $id): void
+    /**
+     * الهام‌گرفته از درختواره واحدها (/units/chart) که خیلی سریع‌تر کار می‌کند:
+     * - eager loading با childrenRecursive (یک کوئری واحد + رابطه recursive)
+     * - بدون ساخت دستی tree از flat array
+     */
+    public function loadData(): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        $this->rootUnits = Unit::whereNull('parent_id')
+            ->whereIn('id', $accessibleIds)
+            ->with(['childrenRecursive', 'unitType'])
+            ->withCount('person as personnel_count')
+            ->get();
+
+        if (empty($this->expanded)) {
+            $this->expanded = $this->collectAllIds($this->rootUnits);
+        }
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->expanded = [];
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (strlen($this->search) > 2) {
+            $matchingUnits = Unit::where('name', 'LIKE', "%{$this->search}%")
+                ->whereIn('id', $accessibleIds)
+                ->get();
+
+            foreach ($matchingUnits as $unit) {
+                $this->expandParents($unit);
+            }
+
+            $this->expanded = array_unique($this->expanded);
+        }
+    }
+
+    protected function expandParents($unit): void
+    {
+        if ($unit->parent_id) {
+            $this->expanded[] = (string) $unit->parent_id;
+            $parent = Unit::find($unit->parent_id);
+            if ($parent) {
+                $this->expandParents($parent);
+            }
+        }
+    }
+
+    public function toggle($id): void
     {
         if (in_array($id, $this->expanded)) {
-            $this->expanded = array_values(array_diff($this->expanded, [$id]));
+            $this->expanded = array_diff($this->expanded, [$id]);
         } else {
             $this->expanded[] = $id;
         }
@@ -52,7 +77,7 @@ class OrgChart extends Component
 
     public function expandAll(): void
     {
-        $this->expanded = collect($this->flatten($this->tree))->pluck('id')->all();
+        $this->expanded = $this->collectAllIds($this->rootUnits);
     }
 
     public function collapseAll(): void
@@ -60,16 +85,16 @@ class OrgChart extends Component
         $this->expanded = [];
     }
 
-    protected function flatten(array $nodes): array
+    protected function collectAllIds($nodes): array
     {
-        $out = [];
-        foreach ($nodes as $n) {
-            $out[] = $n;
-            if (! empty($n['children'])) {
-                $out = array_merge($out, $this->flatten($n['children']));
+        $ids = [];
+        foreach ($nodes as $node) {
+            $ids[] = (string) $node->id;
+            if ($node->childrenRecursive->count()) {
+                $ids = array_merge($ids, $this->collectAllIds($node->childrenRecursive));
             }
         }
-        return $out;
+        return $ids;
     }
 
     public function render()
