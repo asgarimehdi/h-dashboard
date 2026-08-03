@@ -48,7 +48,9 @@ class OrgChart extends Component
         $this->personCounts = $personCounts->toArray();
 
         if (empty($this->expanded)) {
-            $this->expanded = $this->collectAllIds($this->rootUnits);
+            // پیش‌فرض: فقط تا سطح شبکه‌های بهداشت باز باشد
+            // وزارت(1) → دانشگاه(2) → معاونت(3) → شبکه(4) → [مرکزها بسته]
+            $this->expanded = $this->collectFirstNLevels($this->rootUnits, 4);
         }
     }
 
@@ -125,6 +127,24 @@ class OrgChart extends Component
             $ids[] = (string) $node->id;
             if ($node->childrenRecursive->count()) {
                 $ids = array_merge($ids, $this->collectAllIds($node->childrenRecursive));
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * فقط سطوح اول تا N درخت را باز می‌کند (بقیه بسته).
+     * سطح ۱ = ریشه، سطح ۲ = فرزندان، سطح ۳ = نوه‌ها و...
+     */
+    protected function collectFirstNLevels($nodes, int $maxLevel, int $level = 1): array
+    {
+        $ids = [];
+        foreach ($nodes as $node) {
+            if ($level <= $maxLevel) {
+                $ids[] = (string) $node->id;
+            }
+            if ($node->childrenRecursive->count() && $level < $maxLevel) {
+                $ids = array_merge($ids, $this->collectFirstNLevels($node->childrenRecursive, $maxLevel, $level + 1));
             }
         }
         return $ids;
