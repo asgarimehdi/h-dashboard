@@ -32,6 +32,8 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage_roles', 'label' => 'مدیریت نقش‌ها و دسترسی‌ها']);
         // شناسنامه سخت افزار
         Permission::firstOrCreate(['name' => 'manage_hardware', 'label' => 'شناسنامه سخت افزار']);
+        // کانفیگ زابیکس (Issue #247)
+        Permission::firstOrCreate(['name' => 'manage_zabbix_config', 'label' => 'مدیریت کانفیگ زابیکس']);
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 

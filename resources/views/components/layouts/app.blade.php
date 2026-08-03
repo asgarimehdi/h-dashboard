@@ -245,6 +245,9 @@
                 <x-menu-sub title="ابزارهای مدیریتی" icon="o-wrench-screwdriver">
                     <x-menu-item title="شبکه‌ها" icon="o-globe-alt" link="/it/networks" wire:navigate />
                     <x-menu-item title="وایرلس‌ها" icon="o-signal" link="/it/wireless" wire:navigate />
+                    @can('manage_zabbix_config')
+                    <x-menu-item title="کانفیگ زابیکس" icon="o-server" link="/it/zabbix" wire:navigate />
+                    @endcan
                     <a href="/op" class="flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-base-200 transition-colors">
                         <x-icon name="o-server" class="w-5 h-5" />
                         <span>کش سرور</span>
