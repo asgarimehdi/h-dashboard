@@ -24,6 +24,7 @@ class TicketComments extends Component
     public bool $editing = false;
     public ?int $editCommentId = null;
     public string $editBody = '';
+    public ?Ticket $ticket = null;
 
     protected $listeners = ['openComments' => 'openForTicket'];
 
@@ -35,6 +36,7 @@ class TicketComments extends Component
         $this->replyBody = '';
         $this->editing = false;
         $this->editCommentId = null;
+        $this->loadTicket();
         $this->showModal = true;
     }
 
@@ -44,13 +46,14 @@ class TicketComments extends Component
         $this->ticketId = null;
     }
 
-    public function getTicketProperty(): ?Ticket
+    public function loadTicket(): void
     {
         if (! $this->ticketId) {
-            return null;
+            $this->ticket = null;
+            return;
         }
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return Ticket::where('id', $this->ticketId)
+        $this->ticket = Ticket::where('id', $this->ticketId)
             ->whereIn('unit_id', $accessibleIds)
             ->with(['comments' => fn ($q) => $q->with('user.person')->orderByDesc('created_at')])
             ->first();
@@ -75,6 +78,14 @@ class TicketComments extends Component
 
         $this->body = '';
         $this->resetPage();
+        $this->refreshComments();
+    }
+
+    public function refreshComments(): void
+    {
+        // Reload the ticket so the comments list reflects the latest data
+        // immediately (no need to close & reopen the modal).
+        $this->loadTicket();
     }
 
     public function addReply(int $commentId): void
@@ -96,6 +107,7 @@ class TicketComments extends Component
 
         $this->replyBody = '';
         $this->replyToId = null;
+        $this->refreshComments();
     }
 
     public function startReply(int $commentId): void
@@ -160,6 +172,7 @@ class TicketComments extends Component
         // author or admin
         if ($comment->user_id === auth()->id() || auth()->user()->hasRole('admin') || auth()->user()->can('manage_tickets')) {
             $comment->delete();
+            $this->refreshComments();
         }
     }
 
