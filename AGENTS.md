@@ -181,29 +181,38 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 | DELETE | `/api/hardware/{id}` | Delete |
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
-| GET | `/api/hardware/{hardware}/history` | **Paginated change history** with action filter (`action=updated`), organizational scope enforced |
+| GET | `/api/hardware/{hardware}/history` | **Backward-compat alias** for `/audits` (paginated change history, action filter, org scope) |
+| GET | `/api/hardware/{hardware}/audits` | Paginated audit trail — filters: `field`, `user_id`, `date_from`, `date_to`, `action`, `source`, `per_page` (max 50) |
+| GET | `/api/hardware/{hardware}/audits/export` | Export audit trail as Excel/CSV (compliance report, Jalali dates) |
+| GET | `/api/hardware/{hardware}/audits/{audit}` | Single audit record with full field diff + Persian labels |
+| POST | `/api/hardware/{hardware}/audits/{audit}/rollback` | `{field: ...}` — restore a field to its previous value; creates a new `rollback` audit entry |
 
-### Hardware History / Audit Trail (`/api/hardware/{hardware}/history`)
+### Hardware Audit Trail (`/api/hardware/{hardware}/audits`)
 
-Tracks all modifications to hardware records:
+Unified field-level audit trail (Issue #246 — merged with the old `/history` system; `hardware_histories` was migrated into `hardware_audits` and dropped).
 
 | Action | Description |
 |--------|-------------|
-| `created` | Hardware record created |
+| `created` | Hardware record created (initial field snapshot) |
 | `updated` | Field-level changes with old/new values |
 | `deleted` | Hardware record deleted (captures hardware_id before deletion) |
-| `bulk_mark` | Bulk mark/unmark operation |
-| `bulk_delete` | Bulk delete operation |
+| `bulk_mark` | Bulk mark/unmark operation (`source=bulk`) |
+| `bulk_delete` | Bulk delete operation (`source=bulk`) |
+| `force_deleted` | Force-deleted hardware |
+| `rollback` | A field was rolled back to its previous value |
 
-**Query Parameters:**
-- `per_page` (max 50)
-- `action` (filter by action type: created/updated/deleted/bulk_mark/bulk_delete)
+**Source tracking:** `web`, `api` (Sanctum/mobile), `import` (Excel import), `bulk` (bulk operations). Auto-detected by `HardwareAuditObserver`.
 
-**Response:** Paginated history with user info and field-level changes (old/new values).
+**Query Parameters (index):**
+- `per_page` (max 50), `page`
+- `field` (filter by changed field), `user_id`, `date_from`, `date_to`
+- `action` (created/updated/deleted/bulk_mark/bulk_delete/rollback), `source` (web/api/import/bulk)
 
-**Scope:** Respects organizational scope — users only see history for hardware in their accessible units.
+**Response:** Paginated audits with user info (n_code, name), source, IP, ISO + Jalali timestamps, and field-level changes.
 
-**Livewire Component:** New "History / تغییرات" tab on hardware detail page showing date, user, action, changed fields (badges), IP.
+**Scope:** Respects organizational scope — users only see audits for hardware in their accessible units (403 otherwise).
+
+**Livewire Component:** "History / تغییرات" modal on `/hardware` page — shows date (Jalali), user, action badge, **source badge**, changed fields (old ← new badges), IP, and a **↺ بازگردانی (rollback)** button per field with confirmation. Rollback restores the field and logs a new `rollback` audit entry.
 
 ### Hardware Import (`/hardware/import`)
 
@@ -277,6 +286,7 @@ Tracks all modifications to hardware records:
 - **Column Visibility:** Toggle columns on/off via a panel
 - **Mobile Card Layout:** Table auto-converts to cards on small screens
 - **Real-time n_code Validation:** Live validation against `persons` table with name/unit display
+- **History / تغییرات modal (Audit Trail, #246):** per-device history button (🕐) opens a modal showing the unified `hardware_audits` trail — action badge, **source badge** (وب/API/ایمپورت/گروهی), user, IP, Jalali timestamp, field-level diff (old ← new), action filters (همه/ایجاد/ویرایش/حذف/علامت گروهی/حذف گروهی/بازگردانی), and a **↺ بازگردانی** rollback button per field (with confirmation). Rollback restores the field value and logs a new `rollback` audit entry.
 
 ### Hardware Import (`/hardware/import`)
 
@@ -355,6 +365,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 
 ### Recent Issues Resolved
 - **#213** — Hardware Change History & Audit Trail API (`hardware_audits` table, `HardwareAuditObserver`, `GET /api/hardware/{hardware}/audits`, Livewire history modal with Jalali dates and rollback). Merged with #246: the old `HardwareHistory`/`hardware_histories` system was migrated into the unified `HardwareAudit`/`hardware_audits` trail.
+- **#246** — Hardware Field-Level Audit Trail & Change History: source tracking (web/api/import/bulk), rollback endpoint + Livewire per-field ↺ بازگردانی, Excel/CSV compliance export (`HardwareAuditsExport`), filterable API (`field`/`user_id`/`date_from`/`date_to`/`action`/`source`), no FK cascade on `hardware_id` so audit survives deletes. Tests: `HardwareAuditTest`, `HardwareAuditDetailTest`, `HardwareAuditLivewireTest`, `HardwareAuditMigrationTest`.
 - **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 - **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)

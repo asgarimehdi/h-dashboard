@@ -93,6 +93,24 @@
         </ol>
     </div>
 
+    <div class="border-t border-base-200 pt-6">
+        <h4 class="font-bold text-base mb-3 flex items-center gap-2">
+            <x-icon name="o-clock" class="w-5 h-5 text-info" />
+            تاریخچه تغییرات (Audit Trail)
+        </h4>
+        <p class="text-sm text-base-content/70 leading-relaxed mb-3">
+            هر تغییر روی دستگاه به‌صورت خودکار در جدول <code class="px-1 bg-base-200 rounded">hardware_audits</code> ثبت می‌شود. با دکمه «تاریخچه» (آیکون ساعت 🕐) روی هر دستگاه می‌توانید آن را مشاهده کنید.
+        </p>
+        <ul class="space-y-2 text-sm text-base-content/70">
+            <li class="flex gap-2"><span class="badge badge-outline badge-success">ایجاد</span> <span class="badge badge-outline badge-info">ویرایش</span> <span class="badge badge-outline badge-error">حذف</span> <span class="badge badge-outline badge-warning">علامت گروهی</span> <span class="badge badge-outline badge-secondary">بازگردانی</span></li>
+            <li>• نمایش <strong>منبع تغییر</strong>: وب، API (موبایل)، ایمپورت، عملیات گروهی</li>
+            <li>• نمایش کاربر، آدرس IP و تاریخ شمسی در هر رکورد</li>
+            <li>• نمایش diff فیلد به فیلد: مقدار قبلی ← مقدار جدید</li>
+            <li>• <strong>بازگردانی (↺)</strong>: هر فیلد را با یک کلیک (و تأیید) به مقدار قبلی برگردانید — عملیات بازگردانی هم به‌عنوان رکورد جدید ثبت می‌شود</li>
+            <li>• فیلتر بر اساس نوع عملیات (همه / ایجاد / ویرایش / حذف / علامت گروهی / حذف گروهی / بازگردانی)</li>
+        </ul>
+    </div>
+
     <div class="border-t border-base-200 pt-6 bg-info/5 p-4 rounded-lg">
         <h4 class="font-bold text-sm mb-2 flex items-center gap-2">
             <x-icon name="o-light-bulb" class="w-4 h-4 text-info" />
