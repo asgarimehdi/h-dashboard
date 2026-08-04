@@ -1,10 +1,13 @@
 <?php
 
+use App\Http\Controllers\Api\GisController;
 use App\Http\Controllers\Api\HardwareController;
-use App\Http\Controllers\Api\HardwareHistoryController;
+use App\Http\Controllers\Api\HardwareAuditController;
+use App\Http\Controllers\Api\HrController;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\TicketCommentController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\TrafficController;
@@ -57,12 +60,15 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::get('/{hardware}', [HardwareController::class, 'show']);
     Route::match(['put', 'patch'], '/{hardware}', [HardwareController::class, 'update']);
     Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
-    Route::get('/{hardware}/history', [HardwareController::class, 'history']);
     Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
     Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
-    
-    // Hardware History
-    Route::get('/{hardware}/history', [HardwareHistoryController::class, 'index']);
+
+    // Hardware Audit Trail (Issue #246 — unified with old /history endpoint)
+    Route::get('/{hardware}/history', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']); // backward-compat alias
+    Route::get('/{hardware}/audits', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']);
+    Route::get('/{hardware}/audits/export', [\App\Http\Controllers\Api\HardwareAuditController::class, 'export']);
+    Route::get('/{hardware}/audits/{audit}', [\App\Http\Controllers\Api\HardwareAuditController::class, 'show']);
+    Route::post('/{hardware}/audits/{audit}/rollback', [\App\Http\Controllers\Api\HardwareAuditController::class, 'rollback']);
 });
 
 // Ticket API routes
@@ -75,6 +81,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign']);
     Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept']);
     Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete']);
+
+    // Ticket Comments
+    Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index']);
+    Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store']);
+    Route::get('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'show']);
+    Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update']);
+    Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy']);
+    Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react']);
+    Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact']);
+    Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions']);
 });
 
 // Report API routes
@@ -101,4 +117,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/todos/{todo}', [TodoController::class, 'update']);
     Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
     Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+});
+
+// HR API routes (Issue #223)
+Route::middleware('auth:sanctum')->prefix('hr')->group(function () {
+    Route::get('/org-chart', [HrController::class, 'orgChart']);
+    Route::get('/stats', [HrController::class, 'stats']);
+    Route::get('/vacancies', [HrController::class, 'vacancies']);
+    Route::get('/personnel', [HrController::class, 'personnel']);
+    Route::get('/personnel/{n_code}', [HrController::class, 'personDetail']);
+});
+
+// GIS / Map API routes
+Route::middleware('auth:sanctum')->prefix('gis')->group(function () {
+    Route::get('/units', [GisController::class, 'units'])->name('api.gis.units');
+    Route::get('/hardware', [GisController::class, 'hardware'])->name('api.gis.hardware');
+    Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');
+    Route::get('/stats', [GisController::class, 'stats'])->name('api.gis.stats');
+    Route::get('/clusters', [GisController::class, 'clusters'])->name('api.gis.clusters');
 });

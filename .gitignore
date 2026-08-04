@@ -26,3 +26,4 @@ yarn-error.log
 /graphify-out
 .mimocode
 !.mimocode/plans/.env.testing
+cookies.txt

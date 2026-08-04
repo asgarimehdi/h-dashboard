@@ -308,6 +308,11 @@ new class extends Component
         $this->resetPage();
     }
 
+    public function openCommentsFor($ticketId): void
+    {
+        $this->dispatch('openComments', ticketId: (int) $ticketId);
+    }
+
     public function showTicket($id): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
@@ -682,6 +687,8 @@ new class extends Component
 
                 <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
 
+                <x-button icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
+
                 @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
                 <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
                 @endif
@@ -810,6 +817,9 @@ new class extends Component
             </div>
         </x-form>
     </x-modal>
+
+    {{-- Ticket Comments modal --}}
+    <livewire:tickets.ticket-comments />
 </div>
 
 <script>
