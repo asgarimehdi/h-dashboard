@@ -12,7 +12,7 @@ class UnitController extends Controller
 {
     public function index(Request $request): array
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
         $perPage = min($request->integer('per_page', 15), 100);
         $units = Unit::whereIn('id', $ids)
             ->with('unitType:id,name')
@@ -29,9 +29,9 @@ class UnitController extends Controller
         ];
     }
 
-    public function show(Unit $unit): JsonResponse
+    public function show(Request $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -76,7 +76,7 @@ class UnitController extends Controller
 
     public function update(Request $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -115,9 +115,9 @@ class UnitController extends Controller
         ]);
     }
 
-    public function destroy(Unit $unit): JsonResponse
+    public function destroy(Request $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
