@@ -112,6 +112,11 @@ class PersonController extends Controller
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
+        // Check organizational scope for new u_id if present in request
+        if ($request->has('u_id') && ! in_array($request->input('u_id'), $accessibleIds)) {
+            return response()->json(['message' => 'New unit not accessible.'], 403);
+        }
+
         $validated = $request->validate([
             'n_code' => 'sometimes|required|string|size:10|unique:persons,n_code,' . $person->n_code . ',n_code',
             'f_name' => 'sometimes|required|string|max:255',
