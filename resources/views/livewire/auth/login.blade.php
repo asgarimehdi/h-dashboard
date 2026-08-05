@@ -107,7 +107,7 @@ class extends Component {
 
         <div class="relative z-10 flex-1 flex items-center justify-center my-4">
             <div class="stitch-float w-full max-w-md">
-                <x-stitch-parrot class="w-full h-auto" />
+                <x-stitch-health class="w-full h-auto" />
             </div>
         </div>
 
