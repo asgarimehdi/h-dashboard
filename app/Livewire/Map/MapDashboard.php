@@ -84,6 +84,12 @@ class MapDashboard extends Component
 
     public function loadUnitDetails($unitId)
     {
+        $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
+
+        if (!in_array($unitId, $accessibleIds)) {
+            return ['error' => 'Unit not found'];
+        }
+
         $unit = \App\Models\Unit::with(['children', 'unitType'])->find($unitId);
         if (!$unit) {
             return ['error' => 'Unit not found'];

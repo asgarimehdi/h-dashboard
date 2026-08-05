@@ -245,6 +245,28 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
+    public function test_loadUnitDetails_blocks_units_outside_org_scope(): void
+    {
+        $user = $this->createAuthenticatedUser();
+
+        // Unit NOT in the user's org scope (no relation to user's unit tree)
+        $outsideUnit = Unit::create([
+            'name' => 'Outside Unit',
+            'lat' => 35.0,
+            'lng' => 51.0,
+        ]);
+
+        $component = Livewire::actingAs($user)
+            ->test(MapDashboard::class);
+
+        $result = $component->instance()->loadUnitDetails($outsideUnit->id);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('error', $result);
+        $this->assertEquals('Unit not found', $result['error']);
+    }
+
+    /** @test */
     public function test_map_page_renders_leaflet_assets(): void
     {
         $user = $this->createAuthenticatedUser();
