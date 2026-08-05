@@ -167,4 +167,24 @@ class UnitApiTest extends TestCase
         $response->assertStatus(422)
             ->assertJson(['message' => 'Cannot delete unit with children.']);
     }
+
+    public function test_pagination_per_page_is_limited(): void
+    {
+        $this->createUserWithUnit();
+        
+        // Create additional units within the same scope
+        $unit = Unit::where('name', 'Test Unit')->first();
+        for ($i = 0; $i < 150; $i++) {
+            Unit::create([
+                'name' => "Unit {$i}",
+                'parent_id' => $unit->id,
+            ]);
+        }
+
+        $response = $this->actingAs(User::first(), 'sanctum')
+            ->getJson('/api/units?per_page=1000');
+
+        $response->assertStatus(200);
+        $this->assertLessThanOrEqual(100, $response->json('meta.per_page'));
+    }
 }

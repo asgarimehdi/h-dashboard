@@ -10,12 +10,13 @@ use Illuminate\Http\Request;
 
 class UnitController extends Controller
 {
-    public function index(): array
+    public function index(Request $request): array
     {
         $ids = app(AccessService::class)->accessibleUnitIds();
+        $perPage = min($request->integer('per_page', 15), 100);
         $units = Unit::whereIn('id', $ids)
             ->with('unitType:id,name')
-            ->paginate();
+            ->paginate($perPage);
 
         return [
             'data' => $units->items(),
