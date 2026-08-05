@@ -266,15 +266,69 @@ class TodoApiTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_todo_with_null_unit_is_accessible(): void
+    public function test_todo_with_null_unit_is_denied(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
 
         $todo = Todo::factory()->create(['unit_id' => null]);
 
+        // Null-unit todos are outside any user's org scope — must be denied (issue #249)
         $response = $this->actingAs($user, 'sanctum')->getJson("/api/todos/{$todo->id}");
 
-        $response->assertStatus(200);
+        $response->assertStatus(403);
+    }
+
+    public function test_user_cannot_update_todo_with_null_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+
+        $todo = Todo::factory()->create(['unit_id' => null]);
+
+        $response = $this->actingAs($user, 'sanctum')->putJson("/api/todos/{$todo->id}", [
+            'title' => 'Hacked Title',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_cannot_delete_todo_with_null_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+
+        $todo = Todo::factory()->create(['unit_id' => null]);
+
+        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/todos/{$todo->id}");
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_cannot_toggle_todo_with_null_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+
+        $todo = Todo::factory()->create(['unit_id' => null, 'is_completed' => false]);
+
+        $response = $this->actingAs($user, 'sanctum')->postJson("/api/todos/{$todo->id}/toggle-complete");
+
+        $response->assertStatus(403);
+    }
+
+    public function test_todo_with_null_unit_not_created_via_store(): void
+    {
+        // Regression for issue #249: even when unit_id is omitted entirely,
+        // the controller must fall back to person->u_id and never store a null-unit todo.
+        // Here the user HAS a person with a unit, so this succeeds — proving the
+        // fallback path still works. The null-bypass is covered by the show/update/
+        // delete/toggle null-unit tests above (all expect 403).
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+
+        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+            'title' => 'Fallback Todo',
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.unit_id', $unit->id);
     }
 
     public function test_user_can_create_todo_without_unit_id_using_person_unit(): void
