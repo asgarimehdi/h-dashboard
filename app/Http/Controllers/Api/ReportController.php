@@ -18,10 +18,13 @@ class ReportController extends Controller
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
-        $query = Unit::whereIn('id', $accessibleIds);
+        // Single query: total + with_boundary via conditional aggregation (was 2 count queries)
+        $stats = Unit::whereIn('id', $accessibleIds)
+            ->selectRaw('COUNT(*) as total, SUM(CASE WHEN boundary_id IS NOT NULL THEN 1 ELSE 0 END) as with_boundary')
+            ->first();
 
-        $total = $query->count();
-        $withBoundary = (clone $query)->whereNotNull('boundary_id')->count();
+        $total = (int) $stats->total;
+        $withBoundary = (int) $stats->with_boundary;
         $withoutBoundary = $total - $withBoundary;
 
         $byType = Unit::query()
@@ -43,15 +46,19 @@ class ReportController extends Controller
     public function todos(Request $request): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-        $query = Todo::whereIn('unit_id', $accessibleIds);
-
         $now = now();
-        $completed = (clone $query)->where('is_completed', true)->count();
-        $pending = (clone $query)->where('is_completed', false)->count();
-        $overdue = (clone $query)->where('is_completed', false)
-            ->whereNotNull('end_at')->where('end_at', '<', $now)->count();
 
-        $byDay = (clone $query)
+        // Single query: completed/pending/overdue via conditional aggregation (was 3 count queries)
+        $stats = Todo::whereIn('unit_id', $accessibleIds)
+            ->selectRaw(
+                'SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) as completed, '
+                . 'SUM(CASE WHEN NOT is_completed THEN 1 ELSE 0 END) as pending, '
+                . 'SUM(CASE WHEN NOT is_completed AND end_at IS NOT NULL AND end_at < ? THEN 1 ELSE 0 END) as overdue',
+                [$now]
+            )
+            ->first();
+
+        $byDay = Todo::whereIn('unit_id', $accessibleIds)
             ->selectRaw("date(start_at) as day, count(*) as count")
             ->groupBy('day')
             ->orderBy('day')
@@ -70,9 +77,9 @@ class ReportController extends Controller
             ->toArray();
 
         return response()->json([
-            'completed' => $completed,
-            'pending' => $pending,
-            'overdue' => $overdue,
+            'completed' => (int) $stats->completed,
+            'pending' => (int) $stats->pending,
+            'overdue' => (int) $stats->overdue,
             'by_day' => $byDay,
             'by_unit' => $byUnit,
         ]);
@@ -83,7 +90,6 @@ class ReportController extends Controller
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         $query = Ticket::whereIn('unit_id', $accessibleIds);
 
-        $total = (clone $query)->count();
         $byStatus = (clone $query)
             ->selectRaw('status, count(*) as count')
             ->groupBy('status')
@@ -108,7 +114,7 @@ class ReportController extends Controller
             ->toArray();
 
         return response()->json([
-            'total' => $total,
+            'total' => array_sum($byStatus),
             'by_status' => $byStatus,
             'by_priority' => $byPriority,
             'by_day' => $byDay,
