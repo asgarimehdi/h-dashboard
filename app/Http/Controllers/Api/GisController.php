@@ -136,8 +136,8 @@ class GisController extends Controller
                         'name' => $unit->name,
                     ] : null,
                     'person' => $hw->person ? [
-                        'id' => $hw->person->id,
-                        'name' => $hw->person->name,
+                        'n_code' => $hw->person->n_code,
+                        'name' => trim($hw->person->f_name . ' ' . $hw->person->l_name),
                     ] : null,
                 ],
             ];
