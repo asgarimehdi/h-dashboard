@@ -275,6 +275,28 @@ class TicketCommentController extends Controller
     }
 
     /**
+     * Sanitize URL by blocking dangerous protocols.
+     */
+    private function sanitizeUrl(string $url): string
+    {
+        $url = trim($url);
+        $dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+
+        foreach ($dangerousProtocols as $proto) {
+            if (stripos($url, $proto) === 0) {
+                return '#';
+            }
+        }
+
+        // Only allow http, https, mailto, tel
+        if (!preg_match('/^(https?|mailto|tel):/i', $url)) {
+            return '#';
+        }
+
+        return $url;
+    }
+
+    /**
      * Process markdown to HTML (simple implementation).
      */
     private function processMarkdown(string $body): string
@@ -284,7 +306,11 @@ class TicketCommentController extends Controller
         $html = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $html);
         $html = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $html);
         $html = preg_replace('/`(.+?)`/', '<code>$1</code>', $html);
-        $html = preg_replace('/\[(.+?)\]\((.+?)\)/', '<a href="$2" target="_blank" rel="noopener">$1</a>', $html);
+        $html = preg_replace_callback(
+            '/\[(.+?)\]\((.+?)\)/',
+            fn($m) => '<a href="' . $this->sanitizeUrl($m[2]) . '" target="_blank" rel="noopener">' . $m[1] . '</a>',
+            $html
+        );
         $html = preg_replace('/^> (.+)$/m', '<blockquote>$1</blockquote>', $html);
         $html = preg_replace('/^- (.+)$/m', '<li>$1</li>', $html);
         $html = preg_replace('/(<li>.*<\/li>)/s', '<ul>$1</ul>', $html);
