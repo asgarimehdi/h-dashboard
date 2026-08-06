@@ -452,6 +452,11 @@ return new class extends Component
      */
     public function rollbackHistoryField(int $auditId, string $field): void
     {
+        if (! auth()->user()->can('manage_hardware')) {
+            $this->error('شما مجوز manage_hardware ندارید.', position: 'toast-bottom');
+            return;
+        }
+
         $audit = \App\Models\HardwareAudit::find($auditId);
 
         if (! $audit || $audit->hardware_id !== $this->historyHardwareId) {

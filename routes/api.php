@@ -75,7 +75,8 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::get('/{hardware}/audits', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']);
     Route::get('/{hardware}/audits/export', [\App\Http\Controllers\Api\HardwareAuditController::class, 'export']);
     Route::get('/{hardware}/audits/{audit}', [\App\Http\Controllers\Api\HardwareAuditController::class, 'show']);
-    Route::post('/{hardware}/audits/{audit}/rollback', [\App\Http\Controllers\Api\HardwareAuditController::class, 'rollback']);
+    Route::post('/{hardware}/audits/{audit}/rollback', [\App\Http\Controllers\Api\HardwareAuditController::class, 'rollback'])
+        ->middleware('permission:manage_hardware');
 });
 
 // Ticket API routes
