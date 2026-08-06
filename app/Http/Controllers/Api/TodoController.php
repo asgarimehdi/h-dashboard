@@ -31,7 +31,8 @@ class TodoController extends Controller
             $query->where('is_completed', $request->boolean('is_completed'));
         }
 
-        $todos = $query->latest()->paginate($request->input('per_page', 15));
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $todos = $query->latest()->paginate($perPage);
 
         return TodoResource::collection($todos);
     }
