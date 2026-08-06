@@ -291,32 +291,38 @@
             },
 
             createPopup(type, props) {
+                const escapeHtml = (str) => {
+                    const div = document.createElement('div');
+                    div.textContent = str ?? '';
+                    return div.innerHTML;
+                };
+
                 if (type === 'unit') {
                     return `
                         <div dir="rtl" style="min-width:200px;font-family:inherit;">
-                            <strong>${props.name}</strong><br>
+                            <strong>${escapeHtml(props.name)}</strong><br>
                             نوع: ${this.getUnitTypeLabel(props.unit_type_id)}<br>
                             موقعیت: ${props.lat?.toFixed(6)}, ${props.lng?.toFixed(6)}
                         </div>`;
                 } else if (type === 'hardware') {
                     return `
                         <div dir="rtl" style="min-width:200px;font-family:inherit;">
-                            <strong>${props.pc_name}</strong><br>
+                            <strong>${escapeHtml(props.pc_name)}</strong><br>
                             نوع: ${props.type || '—'}<br>
                             CPU: ${props.cpu || '—'}<br>
                             RAM: ${props.ram || '—'}<br>
                             وضعیت: ${props.shutdown ? 'شات‌داون' : 'فعال'}<br>
-                            واحد: ${props.unit?.name || '—'}<br>
-                            شخص: ${props.person?.name || '—'}
+                            واحد: ${escapeHtml(props.unit?.name || '—')}<br>
+                            شخص: ${escapeHtml(props.person?.name || '—')}
                         </div>`;
                 } else if (type === 'ticket') {
                     return `
                         <div dir="rtl" style="min-width:200px;font-family:inherit;">
-                            <strong>${props.title}</strong><br>
+                            <strong>${escapeHtml(props.title)}</strong><br>
                             کد: ${props.ticket_code}<br>
                             اولویت: ${this.getPriorityLabel(props.priority)}<br>
                             وضعیت: ${props.status}<br>
-                            واحد: ${props.unit?.name || '—'}
+                            واحد: ${escapeHtml(props.unit?.name || '—')}
                         </div>`;
                 }
                 return '';
