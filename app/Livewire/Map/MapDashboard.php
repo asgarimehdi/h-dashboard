@@ -40,7 +40,13 @@ class MapDashboard extends Component
 
     public function mount()
     {
-        $this->mapToken = auth()->user()->createToken('map-dashboard')->plainTextToken;
+        $user = auth()->user();
+        $existingToken = $user->tokens()->where('name', 'map-dashboard')->first();
+        if ($existingToken) {
+            $this->mapToken = $existingToken->plainTextToken;
+        } else {
+            $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
+        }
         $this->loadStats();
     }
 
