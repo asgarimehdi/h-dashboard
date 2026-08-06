@@ -96,8 +96,6 @@ new class extends Component
             });
         }
 
-        $query->accessible();
-
         if ($this->statusFilter === 'pending') {
             $query->whereIn('status', ['created', 'forwarded']);
         } elseif ($this->statusFilter !== 'all') {
