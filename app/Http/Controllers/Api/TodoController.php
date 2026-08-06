@@ -43,14 +43,10 @@ class TodoController extends Controller
             'start_at' => 'required|date',
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'is_completed' => 'boolean',
-            'unit_id' => 'nullable|exists:units,id',
+            'unit_id' => 'required|exists:units,id',
         ]);
 
         $unitId = $validated['unit_id'] ?? $request->user()->person?->u_id;
-
-        if (! $unitId) {
-            return response()->json(['message' => 'User has no assigned unit and no unit_id provided.'], 422);
-        }
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         if (! in_array($unitId, $accessibleIds)) {

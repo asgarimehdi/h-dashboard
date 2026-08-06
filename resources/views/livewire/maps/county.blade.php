@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Region;
+use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -19,10 +20,14 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         
-        $this->regions = Cache::remember('county:regions_with_boundaries:' . md5(implode(',', $accessibleIds)), 300, function () use ($accessibleIds) {
+        $accessibleRegionIds = Unit::whereIn('id', $accessibleIds)
+            ->whereNotNull('region_id')
+            ->pluck('region_id');
+
+        $this->regions = Cache::remember('county:regions_with_boundaries:' . md5(implode(',', $accessibleRegionIds)), 300, function () use ($accessibleRegionIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
-                ->whereIn('regions.id', $accessibleIds)
+                ->whereIn('regions.id', $accessibleRegionIds)
                 ->select([
                     'regions.id',
                     'regions.name',
