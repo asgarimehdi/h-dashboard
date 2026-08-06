@@ -208,17 +208,16 @@ class Unit extends Model
     }
 
     /**
-     /**
-          * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
-          * More accurate than bounding box but may be slower without proper spatial index
-          */
-         public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
-         {
-             // MySQL/MariaDB: Use ST_GeomFromText instead of ST_Point (PostGIS-specific)
-             $pointWkt = "POINT($lng $lat)";
-        
-             return $query->whereHas('boundary', function ($q) use ($pointWkt, $radiusMeters) {
-                 $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $radiusMeters]);
-             })->orWhereRaw('ST_Distance_Sphere(ST_GeomFromText(?, 4326), ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $pointWkt, $radiusMeters]);
-         }
-}
+         * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
+         * More accurate than bounding box but may be slower without proper spatial index
+         */
+        public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
+        {
+            // MySQL/MariaDB: Use ST_GeomFromText instead of ST_Point (PostGIS-specific)
+            $pointWkt = "POINT($lng $lat)";
+
+            return $query->whereHas('boundary', function ($q) use ($pointWkt, $radiusMeters) {
+                $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $radiusMeters]);
+            });
+        }
+    }
