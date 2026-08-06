@@ -64,7 +64,7 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ], 201);
     }
 
@@ -101,7 +101,7 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ]);
     }
 
@@ -133,7 +133,7 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ]);
     }
 }
