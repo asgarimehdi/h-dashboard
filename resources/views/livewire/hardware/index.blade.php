@@ -382,22 +382,25 @@ return new class extends Component
             return;
         }
 
-        $hw = Hardware::with('person')->find($this->historyHardwareId);
-        if (!$hw) {
+        $unitId = Hardware::where('id', $this->historyHardwareId)
+            ->join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+            ->value('persons.u_id');
+
+        if (!$unitId) {
             $this->history = [];
             $this->historyTotal = 0;
             return;
         }
 
         $accessibleIds = $this->accessibleUnitIds();
-        if (!in_array($hw->person?->u_id, $accessibleIds)) {
+        if (!in_array($unitId, $accessibleIds)) {
             $this->history = [];
             $this->historyTotal = 0;
             return;
         }
 
         $query = \App\Models\HardwareAudit::with('user:id,n_code,name')
-            ->where('hardware_id', $hw->id);
+            ->where('hardware_id', $this->historyHardwareId);
 
         if ($this->historyActionFilter) {
             $query->where('action', $this->historyActionFilter);

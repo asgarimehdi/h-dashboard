@@ -233,6 +233,8 @@ return new class extends Component {
         } catch (\Exception $e) {
             $this->error("خطا ", position: 'toast-bottom');
         }
+
+        app(\App\Services\AccessService::class)->clearAllCaches();
         
         $this->resetForm();
         $this->modal = false;
@@ -280,6 +282,8 @@ return new class extends Component {
         } catch (\Exception $e) {
             $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
         }
+
+        app(\App\Services\AccessService::class)->clearAllCaches();
     }
 
     public function resetForm(): void

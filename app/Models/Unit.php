@@ -85,7 +85,8 @@ class Unit extends Model
         }
 
         // Cache by sorted IDs to get consistent results regardless of input order
-        $cacheKey = 'unit_ancestors:' . md5(implode(',', array_map('strval', $ids)));
+        $version = Cache::get('unit_hierarchy_version', 0);
+        $cacheKey = 'unit_ancestors:v' . $version . ':' . md5(implode(',', array_map('strval', $ids)));
 
         return Cache::remember(
             $cacheKey,
@@ -125,7 +126,8 @@ class Unit extends Model
         }
 
         // Cache by sorted IDs to get consistent results regardless of input order
-        $cacheKey = 'unit_descendants:' . md5(implode(',', array_map('strval', $ids)));
+        $version = Cache::get('unit_hierarchy_version', 0);
+        $cacheKey = 'unit_descendants:v' . $version . ':' . md5(implode(',', array_map('strval', $ids)));
 
         return Cache::remember(
             $cacheKey,

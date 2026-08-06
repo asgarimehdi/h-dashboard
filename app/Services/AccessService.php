@@ -74,6 +74,6 @@ class AccessService
      */
     public function clearAllCaches(): void
     {
-        Cache::flush();
+        Cache::increment('unit_hierarchy_version');
     }
 }
