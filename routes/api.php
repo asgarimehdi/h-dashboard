@@ -26,7 +26,15 @@ Route::post('/login', function (Request $request) {
 
     $user = User::where('n_code', $credentials['n_code'])->first();
 
-    if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+    // Constant-time comparison with dummy hash for non-existent users
+    static $dummyHash = null;
+    if ($dummyHash === null) {
+        $dummyHash = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'; // 'password'
+    }
+    $userHash = $user ? $user->password : $dummyHash;
+    $passwordMatches = Hash::check($credentials['password'], $userHash);
+
+    if (! $user || ! $passwordMatches) {
         return response()->json(['message' => 'Credentials not match'], 401);
     }
 
