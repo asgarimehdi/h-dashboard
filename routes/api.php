@@ -71,8 +71,7 @@ Route::middleware('auth:sanctum')->prefix('hardware')->group(function () {
     Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
     Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
 
-    // Hardware Audit Trail (Issue #246 — unified with old /history endpoint)
-    Route::get('/{hardware}/history', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']); // backward-compat alias
+    // Hardware Audit Trail
     Route::get('/{hardware}/audits', [\App\Http\Controllers\Api\HardwareAuditController::class, 'index']);
     Route::get('/{hardware}/audits/export', [\App\Http\Controllers\Api\HardwareAuditController::class, 'export']);
     Route::get('/{hardware}/audits/{audit}', [\App\Http\Controllers\Api\HardwareAuditController::class, 'show']);

@@ -29,7 +29,7 @@ class HardwareController extends Controller
             ? $hardware->person?->u_id
             : $hardware->person()->value('u_id');
 
-        if ($unitId && ! in_array($unitId, $accessibleIds)) {
+        if (!$unitId || !in_array($unitId, $accessibleIds)) {
             abort(403, 'Hardware record not accessible.');
         }
     }
