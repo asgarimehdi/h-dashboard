@@ -261,6 +261,15 @@ class HardwareController extends Controller
             'shutdown' => 'boolean',
         ]);
 
+        // Verify the new person's unit is within the user's accessible scope (if n_code is being changed)
+        if (isset($validated['n_code'])) {
+            $newPerson = Person::where('n_code', $validated['n_code'])->firstOrFail();
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+            if (! in_array($newPerson->u_id, $accessibleIds)) {
+                return response()->json(['message' => 'Cannot assign hardware to a person in an inaccessible unit.'], 403);
+            }
+        }
+
         $hardware->update($validated);
         $hardware->load('person');
 
