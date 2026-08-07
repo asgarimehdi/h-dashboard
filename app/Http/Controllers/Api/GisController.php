@@ -130,7 +130,7 @@ class GisController extends Controller
             'type' => $request->filled('type') ? $request->type : null,
             'shutdown' => $request->filled('shutdown') ? $request->boolean('shutdown') : null,
             'mark' => $request->filled('mark') ? $request->boolean('mark') : null,
-        ]);
+        ], fn ($v) => $v !== null); // only remove null, keep false/0
         $cacheKey = $this->gisCacheKey('hardware', $accessibleIds, $bbox, $extra);
 
         $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
@@ -206,7 +206,7 @@ class GisController extends Controller
         $extra = array_filter([
             'priority' => $request->filled('priority') ? $request->priority : null,
             'status' => $request->filled('status') ? $request->status : null,
-        ]);
+        ], fn ($v) => $v !== null);
         $cacheKey = $this->gisCacheKey('tickets', $accessibleIds, $bbox, $extra);
 
         $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
