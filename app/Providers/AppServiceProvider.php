@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Hardware;
 use App\Models\Ticket;
 use App\Models\Todo;
+use App\Models\Unit;
 use App\Observers\HardwareAuditObserver;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Cache;
@@ -64,5 +65,10 @@ class AppServiceProvider extends ServiceProvider
         Ticket::created(fn () => Cache::increment('report_tickets_version'));
         Ticket::updated(fn () => Cache::increment('report_tickets_version'));
         Ticket::deleted(fn () => Cache::increment('report_tickets_version'));
+
+        // Invalidate units report cache on Unit changes (Issue #340)
+        Unit::created(fn () => Cache::increment('report_units_version'));
+        Unit::updated(fn () => Cache::increment('report_units_version'));
+        Unit::deleted(fn () => Cache::increment('report_units_version'));
     }
 }

@@ -18,30 +18,36 @@ class ReportController extends Controller
     public function units(Request $request): JsonResponse
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $version = Cache::get('report_units_version', 0);
+        $cacheKey = "report_units:v{$version}:" . md5(json_encode($accessibleIds));
 
-        // Single query: total + with_boundary via conditional aggregation (was 2 count queries)
-        $stats = Unit::whereIn('id', $accessibleIds)
-            ->selectRaw('COUNT(*) as total, SUM(CASE WHEN boundary_id IS NOT NULL THEN 1 ELSE 0 END) as with_boundary')
-            ->first();
+        $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
+            // Single query: total + with_boundary via conditional aggregation (was 2 count queries)
+            $stats = Unit::whereIn('id', $accessibleIds)
+                ->selectRaw('COUNT(*) as total, SUM(CASE WHEN boundary_id IS NOT NULL THEN 1 ELSE 0 END) as with_boundary')
+                ->first();
 
-        $total = (int) $stats->total;
-        $withBoundary = (int) $stats->with_boundary;
-        $withoutBoundary = $total - $withBoundary;
+            $total = (int) $stats->total;
+            $withBoundary = (int) $stats->with_boundary;
+            $withoutBoundary = $total - $withBoundary;
 
-        $byType = Unit::query()
-            ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
-            ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
-            ->whereIn('units.id', $accessibleIds)
-            ->groupBy('type_name')
-            ->pluck('count', 'type_name')
-            ->toArray();
+            $byType = Unit::query()
+                ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
+                ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
+                ->whereIn('units.id', $accessibleIds)
+                ->groupBy('type_name')
+                ->pluck('count', 'type_name')
+                ->toArray();
 
-        return response()->json([
-            'total' => $total,
-            'with_boundary' => $withBoundary,
-            'without_boundary' => $withoutBoundary,
-            'by_type' => $byType,
-        ]);
+            return [
+                'total' => $total,
+                'with_boundary' => $withBoundary,
+                'without_boundary' => $withoutBoundary,
+                'by_type' => $byType,
+            ];
+        });
+
+        return response()->json($data);
     }
 
     public function todos(Request $request): JsonResponse
