@@ -68,16 +68,51 @@ class HrController extends Controller
         $persons = Person::whereIn('u_id', $accessibleIds);
 
         $total = (clone $persons)->count();
-        $byUnit = (clone $persons)->selectRaw('u_id, count(*) as total')
-            ->groupBy('u_id')->with(['unit:id,name'])->get();
-        $bySemat = (clone $persons)->selectRaw('s_id, count(*) as total')
-            ->whereNotNull('s_id')->groupBy('s_id')->with(['semat:id,name'])->get();
-        $byTahsil = (clone $persons)->selectRaw('t_id, count(*) as total')
-            ->whereNotNull('t_id')->groupBy('t_id')->with(['tahsil:id,name'])->get();
-        $byEstekhdam = (clone $persons)->selectRaw('e_id, count(*) as total')
-            ->whereNotNull('e_id')->groupBy('e_id')->with(['estekhdam:id,name'])->get();
-        $byRadif = (clone $persons)->selectRaw('r_id, count(*) as total')
-            ->whereNotNull('r_id')->groupBy('r_id')->with(['radif:id,name'])->get();
+
+        // Use JOIN to fetch names alongside aggregates — removes dead with() calls and N+1
+        $byUnit = (clone $persons)
+            ->leftJoin('units', 'persons.u_id', '=', 'units.id')
+            ->selectRaw('persons.u_id, units.name as unit_name, count(*) as total')
+            ->groupBy('persons.u_id', 'units.name')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->unit_name ?? $r->u_id => $r->total])
+            ->toArray();
+
+        $bySemat = (clone $persons)
+            ->whereNotNull('s_id')
+            ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+            ->selectRaw('persons.s_id, semats.name as semat_name, count(*) as total')
+            ->groupBy('persons.s_id', 'semats.name')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->semat_name ?? $r->s_id => $r->total])
+            ->toArray();
+
+        $byTahsil = (clone $persons)
+            ->whereNotNull('t_id')
+            ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+            ->selectRaw('persons.t_id, tahsils.name as tahsil_name, count(*) as total')
+            ->groupBy('persons.t_id', 'tahsils.name')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->tahsil_name ?? $r->t_id => $r->total])
+            ->toArray();
+
+        $byEstekhdam = (clone $persons)
+            ->whereNotNull('e_id')
+            ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+            ->selectRaw('persons.e_id, estekhdams.name as estekhdam_name, count(*) as total')
+            ->groupBy('persons.e_id', 'estekhdams.name')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->estekhdam_name ?? $r->e_id => $r->total])
+            ->toArray();
+
+        $byRadif = (clone $persons)
+            ->whereNotNull('r_id')
+            ->leftJoin('radifs', 'persons.r_id', '=', 'radifs.id')
+            ->selectRaw('persons.r_id, radifs.name as radif_name, count(*) as total')
+            ->groupBy('persons.r_id', 'radifs.name')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->radif_name ?? $r->r_id => $r->total])
+            ->toArray();
 
         return response()->json([
             'data' => [
