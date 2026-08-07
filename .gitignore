@@ -27,3 +27,5 @@ yarn-error.log
 .mimocode
 !.mimocode/plans/.env.testing
 cookies.txt
+
+/opencode.json

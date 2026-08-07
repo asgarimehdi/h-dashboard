@@ -1,7 +1,6 @@
 <?php
 
-use App\\Traits\\PersianNormalizer;
-use Illuminate\\Support\\Support;
+use App\Traits\PersianNormalizer;
 
 class NormalizerHelper {
     use PersianNormalizer;

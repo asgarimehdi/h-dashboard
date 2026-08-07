@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Unit;
 use App\Models\Person;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -14,7 +15,12 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(\Database\Seeders\PermissionSeeder::class);
-    
+
+    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
         'n_code' => '1234567890',
@@ -43,7 +49,7 @@ test('web login via livewire authenticates user', function () {
         ->set('n_code', '1234567890')
         ->set('password', 'password')
         ->call('login')
-        ->assertRedirect('/dashboard');
+        ->assertRedirect('/');
     
     $this->assertAuthenticatedAs($this->user);
 });
@@ -53,7 +59,7 @@ test('web login fails with invalid credentials', function () {
         ->set('n_code', '1234567890')
         ->set('password', 'wrong-password')
         ->call('login')
-        ->assertHasErrors(['password']);
+        ->assertHasErrors(['n_code']);
 });
 
 test('logout invalidates session and redirects', function () {

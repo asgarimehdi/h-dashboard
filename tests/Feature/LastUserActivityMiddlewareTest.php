@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Illuminate\\Support\\Facades\\Cache;
-use App\\Models\\User;
-use App\\Models\\Unit;
-use App\\Models\\Person;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use App\Models\User;
+use App\Models\Unit;
+use App\Models\Person;
 
 uses(RefreshDatabase::class);
 

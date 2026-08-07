@@ -8,6 +8,7 @@ use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -16,7 +17,12 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(\Database\Seeders\PermissionSeeder::class);
-    
+
+    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
         'n_code' => '1234567890',

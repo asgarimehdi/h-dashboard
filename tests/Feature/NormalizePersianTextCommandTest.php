@@ -1,12 +1,19 @@
 <?php
 
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use App\\Models\\Hardware;
-use App\\Models\\Person;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Hardware;
+use App\Models\Person;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
 test('normalize:persian-text command normalizes Arabic characters in database', function () {
+    // Seed lookup tables required by Person FK constraints
+    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
+    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+
     // Seed a Person with Arabic Yeh in f_name
     $person = Person::create([
         'n_code' => '1234567890',

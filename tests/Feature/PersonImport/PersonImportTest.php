@@ -54,7 +54,7 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t" . $data['unit']->id . "\n";
 
         $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
         file_put_contents($file, $csvContent);
@@ -78,7 +78,7 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "1234567890\tاحمد\tاحمدی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "1234567890\tاحمد\tاحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t" . $data['unit']->id . "\n";
 
         $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
         file_put_contents($file, $csvContent);
@@ -102,7 +102,7 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "1234567890\tاحمد\tمحمدی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t" . $data['unit']->id . "\n";
 
         $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
         file_put_contents($file, $csvContent);
@@ -163,7 +163,7 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t" . $data['unit']->id . "\n";
 
         $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
         file_put_contents($file, $csvContent);

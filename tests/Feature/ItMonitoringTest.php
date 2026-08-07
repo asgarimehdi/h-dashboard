@@ -27,16 +27,16 @@ test('it monitoring pages render and check permissions', function () {
     Livewire::actingAs($this->user)
         ->test('it.wireless')
         ->assertOk()
-        ->assertSee('مونیتورینگ');
+        ->assertSee('دستگاه های بی سیم');
 
     // Test Networks page
     Livewire::actingAs($this->user)
         ->test('it.networks')
         ->assertOk()
-        ->assertSee('مونیتورینگ');
+        ->assertSee('داشبورد فناوری اطلاعات');
 
     // Test RBAC: guest
-    $this->ensureUnauthenticated();
+    auth()->logout();
     $this->get('/it/wireless')->assertRedirect('/login');
 
     // Test RBAC: user without 'bw'

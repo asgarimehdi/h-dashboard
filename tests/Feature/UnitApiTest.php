@@ -29,7 +29,7 @@ class UnitApiTest extends TestCase
         $sId = DB::table('semats')->insertGetId(['name' => 'Test Semat']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test Radif']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode,
             'f_name' => 'Test',

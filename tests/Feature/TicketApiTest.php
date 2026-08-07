@@ -41,7 +41,7 @@ class TicketApiTest extends TestCase
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->assignRole('admin');
@@ -217,7 +217,7 @@ class TicketApiTest extends TestCase
 
         // Assignee in a DIFFERENT unit (no org relation to $unit)
         $otherUnit = Unit::create(['name' => 'Other Unit']);
-        $otherNCode = (string) rand(1000000000, 9999999999);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
@@ -242,7 +242,7 @@ class TicketApiTest extends TestCase
         $ticket = Ticket::create(['ticket_code' => 'T-011', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Scoped', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
         // Second user in the SAME unit
-        $nCode2 = (string) rand(1000000000, 9999999999);
+        $nCode2 = (string) fake()->unique()->numerify('##########');
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);

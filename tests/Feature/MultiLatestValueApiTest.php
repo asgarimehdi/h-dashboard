@@ -87,7 +87,7 @@ class MultiLatestValueApiTest extends TestCase
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-        $nCode = (string) rand(1000000000, 9999999999);
+        $nCode = (string) fake()->unique()->numerify('##########');
         \App\Models\Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
         return \App\Models\User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
     }

@@ -8,6 +8,7 @@ use App\Models\Province;
 use App\Models\Region;
 use App\Models\Boundary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -54,9 +55,11 @@ test('map pages are protected by map permission', function () {
 
 test('county map page renders shared map container', function () {
     // Provide a region + boundary for county page
-    $boundary = Boundary::create(['boundary' => 'POINT(0 0)', 'name' => 'مرز تست']);
+    DB::statement("INSERT INTO boundaries (boundary, created_at, updated_at) VALUES (ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326), now(), now())");
+    $boundary = Boundary::first();
     $region = Region::create([
         'name' => 'شهرستان تست',
+        'type' => 'county',
         'boundary_id' => $boundary->id,
     ]);
     $this->unit->update(['region_id' => $region->id]);

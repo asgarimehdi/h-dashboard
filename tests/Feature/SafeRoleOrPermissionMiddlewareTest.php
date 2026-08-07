@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use App\\Models\\User;
-use App\\Models\\Unit;
-use App\\Models\\Person;
-use Illuminate\\Support\\Facades\\Spatie\\Permission\\Permission;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+use App\Models\Unit;
+use App\Models\Person;
+use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
 
@@ -17,7 +17,7 @@ test('SafeRoleOrPermission allows guests to pass through', function () {
 
 test('SafeRoleOrPermission blocks authenticated users without permission', function () {
     $unit = Unit::factory()->create();
-    $person = Person::factory()->create(['u_//id' => $unit->id]);
+    $person = Person::factory()->create(['u_id' => $unit->id]);
     $user = User::factory()->create(['n_code' => $person->n_code]);
     
     $this->actingAs($user);
@@ -30,7 +30,7 @@ test('SafeRoleOrPermission blocks authenticated users without permission', funct
 test('SafeRoleOrPermission allows authenticated users with permission', function () {
     $unit = Unit::factory()->create();
     $person = Person::factory()->create(['u_id' => $unit->id]);
-    $user = User::factory()->create(['n_//code' => $person->n_code]);
+    $user = User::factory()->create(['n_code' => $person->n_code]);
     $user->givePermissionTo('some-perm');
     
     $this->actingAs($user);
