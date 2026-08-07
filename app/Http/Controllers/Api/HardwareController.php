@@ -321,72 +321,94 @@ class HardwareController extends Controller
 
     public function bulkMark(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-
-        $count = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
-            ->count();
-        if ($count !== count($request->ids)) {
-            return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
-        }
-
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
             'mark' => 'required|boolean',
         ]);
 
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+
+        // Single query: load accessible hardwares
         $hardwares = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
             ->get();
 
-        $count = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+        if ($hardwares->count() !== count($request->ids)) {
+            return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
+        }
+
+        $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
+
+        // Single update query on the verified IDs
+        $count = Hardware::whereIn('id', $accessibleHardwareIds)
             ->update(['mark' => $request->mark]);
 
-        // Log audit for each hardware (unified audit trail, Issue #246)
-        $observer = app(\App\Observers\HardwareAuditObserver::class);
-        foreach ($hardwares as $hardware) {
-            $observer->recordBulkAudit($hardware, 'bulk_mark', [
-                ['field' => 'mark', 'old' => !$request->mark, 'new' => $request->mark],
-            ]);
-        }
+        // Batch insert audit entries
+        $this->batchInsertAudits($hardwares, 'bulk_mark', [
+            ['field' => 'mark', 'old' => !$request->mark, 'new' => $request->mark],
+        ]);
+
+        app(\App\Http\Controllers\Api\GisController::class)::invalidateCache();
 
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
     }
 
     public function bulkDelete(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-
-        $count = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
-            ->count();
-        if ($count !== count($request->ids)) {
-            return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
-        }
-
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
 
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+
+        // Single query: load accessible hardwares
         $hardwares = Hardware::whereIn('id', $request->ids)
             ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
             ->get();
 
-        // Log audit for each hardware before deletion (unified audit trail, Issue #246)
-        $observer = app(\App\Observers\HardwareAuditObserver::class);
-        foreach ($hardwares as $hardware) {
-            $observer->recordBulkAudit($hardware, 'bulk_delete', $hardware->getAttributes());
+        if ($hardwares->count() !== count($request->ids)) {
+            return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
-        $count = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
-            ->delete();
+        // Batch insert audit entries before deletion
+        $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn($hw) => $hw->getAttributes());
+
+        $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
+        $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
+
+        app(\App\Http\Controllers\Api\GisController::class)::invalidateCache();
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
+    }
+
+    /**
+     * Batch insert audit entries in a single query instead of N+1 loop.
+     */
+    protected function batchInsertAudits($hardwares, string $action, ?array $staticChanges, ?\Closure $changesPerItem = null): void
+    {
+        $user = \Auth::user();
+        $request = \Illuminate\Support\Facades\Request::capture();
+
+        $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
+            return [
+                'hardware_id' => $hardware->id,
+                'user_id' => $user?->id,
+                'action' => $action,
+                'changes' => $changesPerItem ? $changesPerItem($hardware) : $staticChanges,
+                'source' => 'bulk',
+                'ip_address' => $request?->ip(),
+                'user_agent' => $request?->userAgent(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        })->toArray();
+
+        if (!empty($rows)) {
+            \App\Models\HardwareAudit::insert($rows);
+        }
     }
 }
