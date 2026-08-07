@@ -41,7 +41,8 @@ class AccessService
         }
 
         $sessionUnitId = session('current_unit_id', 'none');
-        $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
+        $version = Cache::get('unit_hierarchy_version', 0);
+        $cacheKey = "accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
 
         return Cache::remember(
             $cacheKey,
@@ -66,6 +67,10 @@ class AccessService
 
             $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
             Cache::forget($cacheKey);
+
+            // Also forget the versioned key used by accessibleUnitIds() (#337)
+            $version = \Illuminate\Support\Facades\Cache::get('unit_hierarchy_version', 0);
+            Cache::forget("accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds)));
         }
     }
 
