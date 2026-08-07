@@ -216,6 +216,7 @@ class HardwareController extends Controller
 
         $hardware = Hardware::create($validated);
         $hardware->load('person');
+        GisController::invalidateCache();
 
         return response()->json([
             'success' => true,
@@ -272,6 +273,7 @@ class HardwareController extends Controller
 
         $hardware->update($validated);
         $hardware->load('person');
+        GisController::invalidateCache();
 
         return response()->json([
             'success' => true,
@@ -284,6 +286,7 @@ class HardwareController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $hardware->delete();
+        GisController::invalidateCache();
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
 
