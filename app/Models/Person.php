@@ -33,6 +33,13 @@ class Person extends Model
                 }
             }
         });
+
+        // Invalidate cached HR stats whenever a person is created/updated/deleted (#341)
+        foreach (['saved', 'deleted'] as $event) {
+            static::$event(function () {
+                \Illuminate\Support\Facades\Cache::increment('hr_stats_version');
+            });
+        }
     }
 
     /**

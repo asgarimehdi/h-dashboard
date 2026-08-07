@@ -9,6 +9,7 @@ use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * HR API endpoints (Issue #223) — for the Flutter app and HR dashboard.
@@ -65,65 +66,78 @@ class HrController extends Controller
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
-        $persons = Person::whereIn('u_id', $accessibleIds);
+        $data = Cache::remember(
+            $this->hrStatsCacheKey($accessibleIds),
+            now()->addMinutes(5),
+            function () use ($accessibleIds) {
+                $persons = Person::whereIn('u_id', $accessibleIds);
 
-        $total = (clone $persons)->count();
+                $total = (clone $persons)->count();
 
-        // Use JOIN to fetch names alongside aggregates — removes dead with() calls and N+1
-        $byUnit = (clone $persons)
-            ->leftJoin('units', 'persons.u_id', '=', 'units.id')
-            ->selectRaw('persons.u_id, units.name as unit_name, count(*) as total')
-            ->groupBy('persons.u_id', 'units.name')
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->unit_name ?? $r->u_id => $r->total])
-            ->toArray();
+                // Use JOIN to fetch names alongside aggregates — removes dead with() calls and N+1
+                $byUnit = (clone $persons)
+                    ->leftJoin('units', 'persons.u_id', '=', 'units.id')
+                    ->selectRaw('persons.u_id, units.name as unit_name, count(*) as total')
+                    ->groupBy('persons.u_id', 'units.name')
+                    ->get()
+                    ->mapWithKeys(fn ($r) => [$r->unit_name ?? $r->u_id => $r->total])
+                    ->toArray();
 
-        $bySemat = (clone $persons)
-            ->whereNotNull('s_id')
-            ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-            ->selectRaw('persons.s_id, semats.name as semat_name, count(*) as total')
-            ->groupBy('persons.s_id', 'semats.name')
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->semat_name ?? $r->s_id => $r->total])
-            ->toArray();
+                $bySemat = (clone $persons)
+                    ->whereNotNull('s_id')
+                    ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+                    ->selectRaw('persons.s_id, semats.name as semat_name, count(*) as total')
+                    ->groupBy('persons.s_id', 'semats.name')
+                    ->get()
+                    ->mapWithKeys(fn ($r) => [$r->semat_name ?? $r->s_id => $r->total])
+                    ->toArray();
 
-        $byTahsil = (clone $persons)
-            ->whereNotNull('t_id')
-            ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-            ->selectRaw('persons.t_id, tahsils.name as tahsil_name, count(*) as total')
-            ->groupBy('persons.t_id', 'tahsils.name')
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->tahsil_name ?? $r->t_id => $r->total])
-            ->toArray();
+                $byTahsil = (clone $persons)
+                    ->whereNotNull('t_id')
+                    ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+                    ->selectRaw('persons.t_id, tahsils.name as tahsil_name, count(*) as total')
+                    ->groupBy('persons.t_id', 'tahsils.name')
+                    ->get()
+                    ->mapWithKeys(fn ($r) => [$r->tahsil_name ?? $r->t_id => $r->total])
+                    ->toArray();
 
-        $byEstekhdam = (clone $persons)
-            ->whereNotNull('e_id')
-            ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-            ->selectRaw('persons.e_id, estekhdams.name as estekhdam_name, count(*) as total')
-            ->groupBy('persons.e_id', 'estekhdams.name')
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->estekhdam_name ?? $r->e_id => $r->total])
-            ->toArray();
+                $byEstekhdam = (clone $persons)
+                    ->whereNotNull('e_id')
+                    ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+                    ->selectRaw('persons.e_id, estekhdams.name as estekhdam_name, count(*) as total')
+                    ->groupBy('persons.e_id', 'estekhdams.name')
+                    ->get()
+                    ->mapWithKeys(fn ($r) => [$r->estekhdam_name ?? $r->e_id => $r->total])
+                    ->toArray();
 
-        $byRadif = (clone $persons)
-            ->whereNotNull('r_id')
-            ->leftJoin('radifs', 'persons.r_id', '=', 'radifs.id')
-            ->selectRaw('persons.r_id, radifs.name as radif_name, count(*) as total')
-            ->groupBy('persons.r_id', 'radifs.name')
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->radif_name ?? $r->r_id => $r->total])
-            ->toArray();
+                $byRadif = (clone $persons)
+                    ->whereNotNull('r_id')
+                    ->leftJoin('radifs', 'persons.r_id', '=', 'radifs.id')
+                    ->selectRaw('persons.r_id, radifs.name as radif_name, count(*) as total')
+                    ->groupBy('persons.r_id', 'radifs.name')
+                    ->get()
+                    ->mapWithKeys(fn ($r) => [$r->radif_name ?? $r->r_id => $r->total])
+                    ->toArray();
 
-        return response()->json([
-            'data' => [
-                'total_personnel' => $total,
-                'by_unit' => $byUnit,
-                'by_semat' => $bySemat,
-                'by_tahsil' => $byTahsil,
-                'by_estekhdam' => $byEstekhdam,
-                'by_radif' => $byRadif,
-            ],
-        ]);
+                return [
+                    'total_personnel' => $total,
+                    'by_unit' => $byUnit,
+                    'by_semat' => $bySemat,
+                    'by_tahsil' => $byTahsil,
+                    'by_estekhdam' => $byEstekhdam,
+                    'by_radif' => $byRadif,
+                ];
+            }
+        );
+
+        return response()->json(['data' => $data]);
+    }
+
+    private function hrStatsCacheKey(array $accessibleIds): string
+    {
+        $version = Cache::get('hr_stats_version', 0);
+        $scopeHash = md5(implode(',', $accessibleIds));
+        return "hr:stats:v{$version}:{$scopeHash}";
     }
 
     /**
