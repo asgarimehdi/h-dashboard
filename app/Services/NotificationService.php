@@ -30,15 +30,16 @@ class NotificationService
 
     public static function notifyUnit(int $unitId, string $type, string $title, ?string $body = null, ?string $url = null): void
     {
-        $users = \App\Models\User::whereHas('units', fn($q) => $q->where('units.id', $unitId))->get();
+        $userIds = \App\Models\User::whereHas('units', fn($q) => $q->where('units.id', $unitId))
+            ->pluck('id');
 
-        if ($users->isEmpty()) {
+        if ($userIds->isEmpty()) {
             return;
         }
 
         // Batch insert for better performance
-        $notifications = $users->map(fn($user) => [
-            'user_id' => $user->id,
+        $notifications = $userIds->map(fn($userId) => [
+            'user_id' => $userId,
             'type' => $type,
             'title' => $title,
             'body' => $body,
