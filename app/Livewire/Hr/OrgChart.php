@@ -75,10 +75,9 @@ class OrgChart extends Component
     protected function expandParents($unit): void
     {
         if ($unit->parent_id) {
-            $this->expanded[] = (string) $unit->parent_id;
-            $parent = Unit::find($unit->parent_id);
-            if ($parent) {
-                $this->expandParents($parent);
+            $ancestorIds = Unit::ancestorIds([$unit->id]);
+            foreach ($ancestorIds as $id) {
+                $this->expanded[] = (string) $id;
             }
         }
     }
