@@ -13,6 +13,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
@@ -36,6 +39,15 @@ class TicketCommentApiComprehensiveTest extends TestCase
         parent::setUp();
         Session::flush();
 
+        // Ensure permissions and roles exist for testing (Issue #323)
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        Permission::firstOrCreate(['name' => 'create_ticket']);
+        Permission::firstOrCreate(['name' => 'view_assigned_tickets']);
+        Permission::firstOrCreate(['name' => 'view_all_tickets']);
+        Permission::firstOrCreate(['name' => 'manage_unit_tickets']);
+        $adminRole = Role::firstOrCreate(['name' => 'admin']);
+        $adminRole->syncPermissions(Permission::all());
+
         $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
         $sId = DB::table('semats')->insertGetId(['name' => 'S']);
@@ -48,12 +60,18 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $nCodeA = (string) random_int(1000000000, 2147483647);
         Person::create(['n_code' => $nCodeA, 'f_name' => 'علی', 'l_name' => 'محمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->unit->id]);
         $this->user = User::create(['n_code' => $nCodeA, 'password' => Hash::make('password')]);
+        $this->user->assignRole('admin');
+        $this->user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
         // User B in unit B (out of scope)
         $nCodeB = (string) random_int(1000000000, 2147483647);
         Person::create(['n_code' => $nCodeB, 'f_name' => 'رضا', 'l_name' => 'احمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->otherUnit->id]);
         $this->otherUser = User::create(['n_code' => $nCodeB, 'password' => Hash::make('password')]);
+        $this->otherUser->assignRole('admin');
+        $this->otherUser->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $this->otherUser->units()->attach($this->otherUnit->id, ['role' => 'staff', 'is_primary' => true]);
 
         Session::put('current_unit_id', $this->unit->id);
@@ -363,6 +381,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'u_id' => $this->unit->id,
         ]);
         $userC = User::create(['n_code' => $nCodeC, 'password' => Hash::make('password')]);
+        $userC->assignRole('admin');
+        $userC->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $userC->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         $this->actingAs($userC, 'sanctum');
 
@@ -406,6 +427,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'u_id' => $this->unit->id,
         ]);
         $userC = User::create(['n_code' => $nCodeC, 'password' => Hash::make('password')]);
+        $userC->assignRole('admin');
+        $userC->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $userC->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         $this->actingAs($userC, 'sanctum');
 

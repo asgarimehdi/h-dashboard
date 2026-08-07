@@ -19,6 +19,8 @@ class User extends Authenticatable
     // The User model requires this trait
     use HasRoles;
 
+    protected $guard_name = 'web';
+
     protected $fillable = [
         'n_code',
         'password',

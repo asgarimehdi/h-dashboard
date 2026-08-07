@@ -10,6 +10,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
@@ -32,6 +35,15 @@ class TicketCommentTest extends TestCase
         parent::setUp();
         Session::flush();
 
+        // Ensure permissions and roles exist for testing (Issue #323)
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        Permission::firstOrCreate(['name' => 'create_ticket']);
+        Permission::firstOrCreate(['name' => 'view_assigned_tickets']);
+        Permission::firstOrCreate(['name' => 'view_all_tickets']);
+        Permission::firstOrCreate(['name' => 'manage_unit_tickets']);
+        $adminRole = Role::firstOrCreate(['name' => 'admin']);
+        $adminRole->syncPermissions(Permission::all());
+
         $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
         $sId = DB::table('semats')->insertGetId(['name' => 'S']);
@@ -45,6 +57,9 @@ class TicketCommentTest extends TestCase
             'u_id' => $this->unit->id,
         ]);
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $this->user->assignRole('admin');
+        $this->user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
 

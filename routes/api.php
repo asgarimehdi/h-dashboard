@@ -78,25 +78,41 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
             ->middleware('permission:manage_hardware');
     });
 
-    // Ticket API routes
-    Route::get('/tickets', [TicketController::class, 'index']);
-    Route::post('/tickets', [TicketController::class, 'store']);
-    Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
-    Route::put('/tickets/{ticket}', [TicketController::class, 'update']);
-    Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy']);
-    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign']);
-    Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept']);
-    Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete']);
+    // Ticket API routes — permission-gated (Issue #323)
+    Route::get('/tickets', [TicketController::class, 'index'])
+        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+    Route::post('/tickets', [TicketController::class, 'store'])
+        ->middleware('permission:create_ticket');
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
+        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+    Route::put('/tickets/{ticket}', [TicketController::class, 'update'])
+        ->middleware('permission:manage_unit_tickets');
+    Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
+        ->middleware('permission:manage_unit_tickets');
+    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
+        ->middleware('permission:manage_unit_tickets');
+    Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept'])
+        ->middleware('permission:create_ticket');
+    Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete'])
+        ->middleware('permission:manage_unit_tickets');
 
-    // Ticket Comments
-    Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index']);
-    Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store']);
-    Route::get('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'show']);
-    Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update']);
-    Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy']);
-    Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react']);
-    Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact']);
-    Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions']);
+    // Ticket Comments — permission-gated (Issue #323)
+    Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index'])
+        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+    Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store'])
+        ->middleware('permission:create_ticket');
+    Route::get('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'show'])
+        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+    Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])
+        ->middleware('permission:manage_unit_tickets');
+    Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])
+        ->middleware('permission:manage_unit_tickets');
+    Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react'])
+        ->middleware('permission:create_ticket');
+    Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact'])
+        ->middleware('permission:create_ticket');
+    Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions'])
+        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
 
     // Report API routes
     Route::get('/reports/units', [ReportController::class, 'units']);
