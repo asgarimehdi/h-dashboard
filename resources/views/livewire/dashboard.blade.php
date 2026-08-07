@@ -64,12 +64,16 @@ return new class extends Component {
         // آمار امروز (حساس‌تر به زمان) — TTL 2 دقیقه
         $todayStats = Cache::remember("dashboard:today:{$scopeKey}", 120, function () use ($accessibleIds) {
             $today = now()->startOfDay();
+            $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+                ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))
+                ->pluck('id')->toArray();
             return [
                 'todayTickets' => Ticket::whereIn('unit_id', $accessibleIds)
                     ->where('created_at', '>=', $today)->count(),
                 'todayTodos' => Todo::whereIn('unit_id', $accessibleIds)
                     ->where('created_at', '>=', $today)->count(),
-                'todayActivities' => ActivityLog::count(),
+                'todayActivities' => ActivityLog::whereIn('user_id', $userIds)
+                    ->where('created_at', '>=', $today)->count(),
             ];
         });
 
