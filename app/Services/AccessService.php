@@ -75,5 +75,6 @@ class AccessService
     public function clearAllCaches(): void
     {
         Cache::increment('unit_hierarchy_version');
+        Cache::increment('gis_version');
     }
 }

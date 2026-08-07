@@ -154,7 +154,6 @@
                 };
 
                 this.map.on('moveend', () => this.onMapMove());
-                this.map.on('zoomend', () => this.onMapMove());
 
                 this.onMapMove();
             },
@@ -162,15 +161,19 @@
             onMapMove() {
                 if (!this.map) return;
 
-                const bounds = this.map.getBounds();
-                this.currentBbox = [
-                    bounds.getWest(),
-                    bounds.getSouth(),
-                    bounds.getEast(),
-                    bounds.getNorth()
-                ].join(',');
+                clearTimeout(this._moveTimer);
 
-                this.loadLayers();
+                this._moveTimer = setTimeout(() => {
+                    const bounds = this.map.getBounds();
+                    this.currentBbox = [
+                        bounds.getWest(),
+                        bounds.getSouth(),
+                        bounds.getEast(),
+                        bounds.getNorth()
+                    ].join(',');
+
+                    this.loadLayers();
+                }, 300);
             },
 
             async loadLayers() {

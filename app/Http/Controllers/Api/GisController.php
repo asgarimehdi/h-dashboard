@@ -9,6 +9,7 @@ use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class GisController extends Controller
 {
@@ -35,43 +36,81 @@ class GisController extends Controller
     }
 
     /**
+     * Build a normalized bbox string for cache keys (2 decimal places).
+     */
+    protected function normalizedBbox(Request $request): string
+    {
+        if (! $request->filled('bbox')) {
+            return 'all';
+        }
+
+        $bbox = explode(',', $request->bbox);
+        if (count($bbox) !== 4) {
+            return 'all';
+        }
+
+        [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
+
+        return implode(',', [
+            round($minLon, 2),
+            round($minLat, 2),
+            round($maxLon, 2),
+            round($maxLat, 2),
+        ]);
+    }
+
+    /**
+     * Build a cache key for GIS endpoints.
+     */
+    protected function gisCacheKey(string $endpoint, array $accessibleIds, string $bbox, array $extra = []): string
+    {
+        $version = Cache::get('gis_version', 0);
+        $scopeHash = md5(implode(',', $accessibleIds));
+        $extraHash = empty($extra) ? 'none' : md5(serialize($extra));
+
+        return "gis_{$endpoint}:v{$version}:{$scopeHash}:{$bbox}:{$extraHash}";
+    }
+
+    /**
      * Get units as GeoJSON FeatureCollection within spatial bounds.
      * Query params: bbox (minLon,minLat,maxLon,maxLat)
      */
     public function units(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $bbox = $this->normalizedBbox($request);
+        $cacheKey = $this->gisCacheKey('units', $accessibleIds, $bbox);
 
-        $query = Unit::whereIn('id', $accessibleIds)
-            ->whereNotNull('lat')
-            ->whereNotNull('lng')
-            ->select('id', 'name', 'unit_type_id', 'parent_id', 'region_id', 'lat', 'lng');
+        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+            $query = Unit::whereIn('id', $accessibleIds)
+                ->whereNotNull('lat')
+                ->whereNotNull('lng')
+                ->select('id', 'name', 'unit_type_id', 'parent_id', 'region_id', 'lat', 'lng');
 
-        $this->applyBbox($query, $request);
+            $this->applyBbox($query, $request);
 
-        // Limit results for performance
-        $units = $query->limit(1000)->get();
+            $units = $query->limit(1000)->get();
 
-        $features = $units->map(function ($unit) {
-            return [
-                'type' => 'Feature',
-                'id' => $unit->id,
-                'geometry' => [
-                    'type' => 'Point',
-                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
-                ],
-                'properties' => [
+            return $units->map(function ($unit) {
+                return [
+                    'type' => 'Feature',
                     'id' => $unit->id,
-                    'name' => $unit->name,
-                    'unit_type_id' => $unit->unit_type_id,
-                    'parent_id' => $unit->parent_id,
-                    'region_id' => $unit->region_id,
-                    'lat' => (float) $unit->lat,
-                    'lng' => (float) $unit->lng,
-                ],
-            ];
-        })->values()->all();
+                    'geometry' => [
+                        'type' => 'Point',
+                        'coordinates' => [(float) $unit->lng, (float) $unit->lat],
+                    ],
+                    'properties' => [
+                        'id' => $unit->id,
+                        'name' => $unit->name,
+                        'unit_type_id' => $unit->unit_type_id,
+                        'parent_id' => $unit->parent_id,
+                        'region_id' => $unit->region_id,
+                        'lat' => (float) $unit->lat,
+                        'lng' => (float) $unit->lng,
+                    ],
+                ];
+            })->values()->all();
+        });
 
         return response()->json([
             'type' => 'FeatureCollection',
@@ -85,63 +124,70 @@ class GisController extends Controller
      */
     public function hardware(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $bbox = $this->normalizedBbox($request);
+        $extra = array_filter([
+            'type' => $request->filled('type') ? $request->type : null,
+            'shutdown' => $request->filled('shutdown') ? $request->boolean('shutdown') : null,
+            'mark' => $request->filled('mark') ? $request->boolean('mark') : null,
+        ]);
+        $cacheKey = $this->gisCacheKey('hardware', $accessibleIds, $bbox, $extra);
 
-        $query = Hardware::with('person.unit:id,name,lat,lng')
-            ->whereHas('person', function ($q) use ($accessibleIds) {
-                $q->whereIn('u_id', $accessibleIds);
-            })
-            ->whereHas('person.unit', function ($q) use ($request) {
-                $q->whereNotNull('lat')->whereNotNull('lng');
-                $this->applyBbox($q, $request);
-            });
+        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+            $query = Hardware::with('person.unit:id,name,lat,lng')
+                ->whereHas('person', function ($q) use ($accessibleIds) {
+                    $q->whereIn('u_id', $accessibleIds);
+                })
+                ->whereHas('person.unit', function ($q) use ($request) {
+                    $q->whereNotNull('lat')->whereNotNull('lng');
+                    $this->applyBbox($q, $request);
+                });
 
-        // Filters
-        if ($request->filled('type')) {
-            $query->where('type', 'LIKE', "%{$request->type}%");
-        }
-        if ($request->filled('shutdown')) {
-            $query->where('shutdown', $request->boolean('shutdown'));
-        }
-        if ($request->filled('mark')) {
-            $query->where('mark', $request->boolean('mark'));
-        }
+            if ($request->filled('type')) {
+                $query->where('type', 'LIKE', "%{$request->type}%");
+            }
+            if ($request->filled('shutdown')) {
+                $query->where('shutdown', $request->boolean('shutdown'));
+            }
+            if ($request->filled('mark')) {
+                $query->where('mark', $request->boolean('mark'));
+            }
 
-        $hardware = $query->limit(1000)->get();
+            $hardware = $query->limit(1000)->get();
 
-        $features = $hardware->map(function ($hw) {
-            $unit = $hw->person?->unit;
+            return $hardware->map(function ($hw) {
+                $unit = $hw->person?->unit;
 
-            return [
-                'type' => 'Feature',
-                'id' => $hw->id,
-                'geometry' => $unit ? [
-                    'type' => 'Point',
-                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
-                ] : null,
-                'properties' => [
+                return [
+                    'type' => 'Feature',
                     'id' => $hw->id,
-                    'n_code' => $hw->n_code,
-                    'pc_name' => $hw->pc_name,
-                    'type' => $hw->type,
-                    'os' => $hw->os,
-                    'cpu' => $hw->cpu,
-                    'ram' => $hw->ram,
-                    'hdd' => $hw->hdd,
-                    'shutdown' => (bool) $hw->shutdown,
-                    'mark' => (bool) $hw->mark,
-                    'unit' => $unit ? [
-                        'id' => $unit->id,
-                        'name' => $unit->name,
+                    'geometry' => $unit ? [
+                        'type' => 'Point',
+                        'coordinates' => [(float) $unit->lng, (float) $unit->lat],
                     ] : null,
-                    'person' => $hw->person ? [
-                        'n_code' => $hw->person->n_code,
-                        'name' => trim($hw->person->f_name . ' ' . $hw->person->l_name),
-                    ] : null,
-                ],
-            ];
-        })->values()->all();
+                    'properties' => [
+                        'id' => $hw->id,
+                        'n_code' => $hw->n_code,
+                        'pc_name' => $hw->pc_name,
+                        'type' => $hw->type,
+                        'os' => $hw->os,
+                        'cpu' => $hw->cpu,
+                        'ram' => $hw->ram,
+                        'hdd' => $hw->hdd,
+                        'shutdown' => (bool) $hw->shutdown,
+                        'mark' => (bool) $hw->mark,
+                        'unit' => $unit ? [
+                            'id' => $unit->id,
+                            'name' => $unit->name,
+                        ] : null,
+                        'person' => $hw->person ? [
+                            'n_code' => $hw->person->n_code,
+                            'name' => trim($hw->person->f_name . ' ' . $hw->person->l_name),
+                        ] : null,
+                    ],
+                ];
+            })->values()->all();
+        });
 
         return response()->json([
             'type' => 'FeatureCollection',
@@ -155,49 +201,55 @@ class GisController extends Controller
      */
     public function tickets(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $bbox = $this->normalizedBbox($request);
+        $extra = array_filter([
+            'priority' => $request->filled('priority') ? $request->priority : null,
+            'status' => $request->filled('status') ? $request->status : null,
+        ]);
+        $cacheKey = $this->gisCacheKey('tickets', $accessibleIds, $bbox, $extra);
 
-        $query = Ticket::with('unit:id,name,lat,lng')
-            ->whereIn('unit_id', $accessibleIds)
-            ->whereHas('unit', function ($q) use ($request) {
-                $q->whereNotNull('lat')->whereNotNull('lng');
-                $this->applyBbox($q, $request);
-            });
+        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+            $query = Ticket::with('unit:id,name,lat,lng')
+                ->whereIn('unit_id', $accessibleIds)
+                ->whereHas('unit', function ($q) use ($request) {
+                    $q->whereNotNull('lat')->whereNotNull('lng');
+                    $this->applyBbox($q, $request);
+                });
 
-        // Filters
-        if ($request->filled('priority')) {
-            $query->where('priority', $request->priority);
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
+            if ($request->filled('priority')) {
+                $query->where('priority', $request->priority);
+            }
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
 
-        $tickets = $query->limit(1000)->get();
+            $tickets = $query->limit(1000)->get();
 
-        $features = $tickets->map(function ($ticket) {
-            $unit = $ticket->unit;
+            return $tickets->map(function ($ticket) {
+                $unit = $ticket->unit;
 
-            return [
-                'type' => 'Feature',
-                'id' => $ticket->id,
-                'geometry' => $unit ? [
-                    'type' => 'Point',
-                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
-                ] : null,
-                'properties' => [
+                return [
+                    'type' => 'Feature',
                     'id' => $ticket->id,
-                    'ticket_code' => $ticket->ticket_code,
-                    'title' => $ticket->title,
-                    'priority' => $ticket->priority,
-                    'status' => $ticket->status,
-                    'unit' => $unit ? [
-                        'id' => $unit->id,
-                        'name' => $unit->name,
+                    'geometry' => $unit ? [
+                        'type' => 'Point',
+                        'coordinates' => [(float) $unit->lng, (float) $unit->lat],
                     ] : null,
-                ],
-            ];
-        })->values()->all();
+                    'properties' => [
+                        'id' => $ticket->id,
+                        'ticket_code' => $ticket->ticket_code,
+                        'title' => $ticket->title,
+                        'priority' => $ticket->priority,
+                        'status' => $ticket->status,
+                        'unit' => $unit ? [
+                            'id' => $unit->id,
+                            'name' => $unit->name,
+                        ] : null,
+                    ],
+                ];
+            })->values()->all();
+        });
 
         return response()->json([
             'type' => 'FeatureCollection',
@@ -211,38 +263,43 @@ class GisController extends Controller
      */
     public function stats(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $bbox = $this->normalizedBbox($request);
+        $cacheKey = $this->gisCacheKey('stats', $accessibleIds, $bbox);
 
-        // Units count (in bbox)
-        $unitsQuery = Unit::whereIn('id', $accessibleIds)
-            ->whereNotNull('lat')->whereNotNull('lng');
-        $this->applyBbox($unitsQuery, $request);
-        $unitsCount = $unitsQuery->count();
+        $data = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+            // Units count (in bbox)
+            $unitsQuery = Unit::whereIn('id', $accessibleIds)
+                ->whereNotNull('lat')->whereNotNull('lng');
+            $this->applyBbox($unitsQuery, $request);
+            $unitsCount = $unitsQuery->count();
 
-        // Hardware count (in bbox via person.unit)
-        $hardwareQuery = Hardware::whereHas('person', function ($q) use ($accessibleIds) {
-            $q->whereIn('u_id', $accessibleIds);
-        })->whereHas('person.unit', function ($q) use ($request) {
-            $q->whereNotNull('lat')->whereNotNull('lng');
-            $this->applyBbox($q, $request);
-        });
-        $hardwareCount = $hardwareQuery->count();
-
-        // Open tickets count (in bbox via unit)
-        $ticketsQuery = Ticket::whereIn('unit_id', $accessibleIds)
-            ->where('status', '!=', 'completed')
-            ->whereHas('unit', function ($q) use ($request) {
+            // Hardware count (in bbox via person.unit)
+            $hardwareQuery = Hardware::whereHas('person', function ($q) use ($accessibleIds) {
+                $q->whereIn('u_id', $accessibleIds);
+            })->whereHas('person.unit', function ($q) use ($request) {
                 $q->whereNotNull('lat')->whereNotNull('lng');
                 $this->applyBbox($q, $request);
             });
-        $openTicketsCount = $ticketsQuery->count();
+            $hardwareCount = $hardwareQuery->count();
 
-        return response()->json([
-            'units' => $unitsCount,
-            'hardware' => $hardwareCount,
-            'open_tickets' => $openTicketsCount,
-        ]);
+            // Open tickets count (in bbox via unit)
+            $ticketsQuery = Ticket::whereIn('unit_id', $accessibleIds)
+                ->where('status', '!=', 'completed')
+                ->whereHas('unit', function ($q) use ($request) {
+                    $q->whereNotNull('lat')->whereNotNull('lng');
+                    $this->applyBbox($q, $request);
+                });
+            $openTicketsCount = $ticketsQuery->count();
+
+            return [
+                'units' => $unitsCount,
+                'hardware' => $hardwareCount,
+                'open_tickets' => $openTicketsCount,
+            ];
+        });
+
+        return response()->json($data);
     }
 
     /**
@@ -251,49 +308,60 @@ class GisController extends Controller
      */
     public function clusters(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $bbox = $this->normalizedBbox($request);
         $zoom = (int) $request->get('zoom', 10);
-        // Grid size in degrees, adjusted by zoom
-        $gridSize = max(0.005, 0.5 / pow(2, $zoom - 2));
+        $cacheKey = $this->gisCacheKey('clusters', $accessibleIds, $bbox, ['zoom' => $zoom]);
 
-        // Build query with raw SQL for grouping
-        $selectRaw = sprintf(
-            "COUNT(*) as count,
-            ROUND(lat / %f) * %f as lat_key,
-            ROUND(lng / %f) * %f as lng_key,
-            AVG(lat) as lat,
-            AVG(lng) as lng",
-            $gridSize, $gridSize, $gridSize, $gridSize
-        );
+        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request, $zoom) {
+            // Grid size in degrees, adjusted by zoom
+            $gridSize = max(0.005, 0.5 / pow(2, $zoom - 2));
 
-        $query = Unit::whereIn('id', $accessibleIds)
-            ->whereNotNull('lat')->whereNotNull('lng')
-            ->selectRaw($selectRaw);
+            // Build query with raw SQL for grouping
+            $selectRaw = sprintf(
+                "COUNT(*) as count,
+                ROUND(lat / %f) * %f as lat_key,
+                ROUND(lng / %f) * %f as lng_key,
+                AVG(lat) as lat,
+                AVG(lng) as lng",
+                $gridSize, $gridSize, $gridSize, $gridSize
+            );
 
-        $this->applyBbox($query, $request);
+            $query = Unit::whereIn('id', $accessibleIds)
+                ->whereNotNull('lat')->whereNotNull('lng')
+                ->selectRaw($selectRaw);
 
-        $clusters = $query
-            ->groupBy('lat_key', 'lng_key')
-            ->get();
+            $this->applyBbox($query, $request);
 
-        $features = $clusters->map(function ($cluster) {
-            return [
-                'type' => 'Feature',
-                'geometry' => [
-                    'type' => 'Point',
-                    'coordinates' => [(float) $cluster->lng, (float) $cluster->lat],
-                ],
-                'properties' => [
-                    'count' => (int) $cluster->count,
-                ],
-            ];
-        })->values()->all();
+            $clusters = $query
+                ->groupBy('lat_key', 'lng_key')
+                ->get();
+
+            return $clusters->map(function ($cluster) {
+                return [
+                    'type' => 'Feature',
+                    'geometry' => [
+                        'type' => 'Point',
+                        'coordinates' => [(float) $cluster->lng, (float) $cluster->lat],
+                    ],
+                    'properties' => [
+                        'count' => (int) $cluster->count,
+                    ],
+                ];
+            })->values()->all();
+        });
 
         return response()->json([
             'type' => 'FeatureCollection',
             'features' => $features,
         ]);
+    }
+
+    /**
+     * Invalidate GIS cache by bumping the version counter.
+     */
+    public static function invalidateCache(): void
+    {
+        Cache::increment('gis_version');
     }
 }
