@@ -304,16 +304,16 @@
                     return `
                         <div dir="rtl" style="min-width:200px;font-family:inherit;">
                             <strong>${escapeHtml(props.name)}</strong><br>
-                            نوع: ${this.getUnitTypeLabel(props.unit_type_id)}<br>
+                            نوع: ${escapeHtml(this.getUnitTypeLabel(props.unit_type_id))}<br>
                             موقعیت: ${props.lat?.toFixed(6)}, ${props.lng?.toFixed(6)}
                         </div>`;
                 } else if (type === 'hardware') {
                     return `
                         <div dir="rtl" style="min-width:200px;font-family:inherit;">
                             <strong>${escapeHtml(props.pc_name)}</strong><br>
-                            نوع: ${props.type || '—'}<br>
-                            CPU: ${props.cpu || '—'}<br>
-                            RAM: ${props.ram || '—'}<br>
+                            نوع: ${escapeHtml(props.type || '—')}<br>
+                            CPU: ${escapeHtml(props.cpu || '—')}<br>
+                            RAM: ${escapeHtml(props.ram || '—')}<br>
                             وضعیت: ${props.shutdown ? 'شات‌داون' : 'فعال'}<br>
                             واحد: ${escapeHtml(props.unit?.name || '—')}<br>
                             شخص: ${escapeHtml(props.person?.name || '—')}
@@ -322,9 +322,9 @@
                     return `
                         <div dir="rtl" style="min-width:200px;font-family:inherit;">
                             <strong>${escapeHtml(props.title)}</strong><br>
-                            کد: ${props.ticket_code}<br>
-                            اولویت: ${this.getPriorityLabel(props.priority)}<br>
-                            وضعیت: ${props.status}<br>
+                            کد: ${escapeHtml(props.ticket_code)}<br>
+                            اولویت: ${escapeHtml(this.getPriorityLabel(props.priority))}<br>
+                            وضعیت: ${escapeHtml(props.status)}<br>
                             واحد: ${escapeHtml(props.unit?.name || '—')}
                         </div>`;
                 }

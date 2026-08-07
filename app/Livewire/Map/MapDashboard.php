@@ -41,12 +41,11 @@ class MapDashboard extends Component
     public function mount()
     {
         $user = auth()->user();
-        $existingToken = $user->tokens()->where('name', 'map-dashboard')->first();
-        if ($existingToken) {
-            $this->mapToken = $existingToken->plainTextToken;
-        } else {
-            $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
-        }
+        // Always create a new token — Sanctum stores only the hash,
+        // so plainTextToken is null on tokens loaded from DB.
+        // Delete old map-dashboard tokens first to avoid accumulation.
+        $user->tokens()->where('name', 'map-dashboard')->delete();
+        $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
         $this->loadStats();
     }
 
