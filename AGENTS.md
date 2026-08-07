@@ -109,6 +109,40 @@ Ticket → Attachment / TaskActivity
 User ↔ Unit (user_units pivot)
 ```
 
+### Key Linked Entities (from `opencode.md`)
+
+- **User ↔ Person** are linked by `n_code` (not `id`). `Person.hasOne(User)` / `User.belongsTo(Person)`. `User` uses SoftDeletes; `User.units()` is a BelongsToMany via the `user_units` pivot (`role` enum: `responsible`/`staff`, `is_primary` flag); `primaryUnit()` returns the assignment where `is_primary = true`.
+- **`user_units` pivot** — many-to-many user↔unit assignments (a user can belong to multiple units). Unique on `(user_id, unit_id)`. Seeded from `Person.u_id` via `UserUnitSeeder`.
+- **Migration/style note:** migrations were consolidated to 21 clean migrations — each table has a single CREATE migration with indexes and constraints inline; FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter), not timestamps.
+
+## Area & Vocabulary (from `CONTEXT.md`)
+
+Definitions shared across codebase, docs, and team communication:
+
+- **Person** — HR record in the directory, linked to a `User` one-to-one via `n_code`.
+- **User** — authenticated account; Spatie roles/permissions; linked to Person via `n_code`.
+- **Unit** — organizational unit (hospital, health center, county); tree via `parent_id`.
+- **UnitType** — classification of a Unit; allowed parent types via `unit_type_relationships`.
+- **Region** — hierarchical geographic division (province or county).
+- **Boundary** — GIS polygon (MULTIPOLYGON, SRID 4326) representing a geographic area.
+- **Location Log** — GPS point recorded by the mobile app (`location_logs`).
+
+**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
+
+### FK Delete Behavior Summary (from `opencode.md` schema)
+
+| FK | onDelete |
+|----|----------|
+| `users.n_code → persons` | restrict |
+| `persons.e_id/t_id/s_id/r_id → lookups` | restrict |
+| `units.region_id`, `units.parent_id` | restrict |
+| `user_units.user_id → users` / `unit_id → units` | cascade |
+| `tickets → task_activities`, `attachments` | cascade |
+| `task_activities.activity_id → attachments` | cascade |
+| `location_logs.user_id → users` | cascade |
+| `todos.unit_id → units` | set null |
+| `regions.boundary_id`, `units.boundary_id → boundaries` | cascade |
+
 ---
 
 ## Access Control
@@ -347,6 +381,62 @@ In-app help is a per-page modal (`?` button in page headers):
 
 ---
 
+## Design System & Frontend Conventions
+
+### Design tokens (from `DESIGN.md`)
+
+- **CSS:** Tailwind CSS v4 · **Components:** DaisyUI v5 (Tailwind plugin) + maryUI v2.8 (Livewire components)
+- **Palette:** Primary `emerald` (success/online), Secondary `orange` (warning/pending), Error `red` (danger/offline), Info `blue`
+- **Themes:** dark `synthwave`, light `fantasy` — set via `data-theme` on `<html>`; sidebar uses `currentColor` SVG for theme adaptability
+- **Typography:** **Vazirmatn** (Persian) via `@font-face`; fallback system stack
+- **Icons:** Heroicons via maryUI (`o-` outline, `s-` solid); custom SVGs in `public/icons/` (unit-type icons)
+- **Layouts:** `resources/views/components/layouts/app.blade.php` (sidebar) and `auth.blade.php` (minimal)
+
+### maryUI component inventory (used across pages)
+
+`<x-nav>`, `<x-main>`, `<x-menu>` / `<x-menu-item>` / `<x-menu-sub>`, `<x-app-brand>`, `<x-header>` (w/ `:middle` / `:actions` slots), `<x-card shadow>`, `<x-table>` (+ `@scope` cell / `expansion`), `<x-stat>`, `<x-badge>`, `<x-icon>`, `<x-form>`, `<x-input>`, `<x-select>`, `<x-textarea>`, `<x-checkbox>`, `<x-toggle>`, `<x-file>`, `<x-choices-offline>`, `<x-errors>`, `<x-modal>` (with `persistent`, `<x-slot:actions>`), `<x-button>` (with `wire:confirm`, `external`, `responsive`), `<x-toast>`, `<x-theme-toggle darkTheme="synthwave" lightTheme="fantasy" />` (wrapped as `<x-theme-selector>`).
+
+- **Layout slot structure:** `<x-nav sticky>` with `<x-slot:brand>` + `<x-slot:actions>`; `<x-main>` with `<x-slot:sidebar>` + `<x-slot:content>`.
+- **Toasts** (`Mary\Traits\Toast`): `$this->success/warning/error/info('msg', position: 'toast-bottom')`. SweetAlert2 via `$this->dispatch('swal', [...])`.
+
+### Standard CRUD page pattern (class-based Livewire)
+
+```
+PHP class:
+  - use WithPagination, Toast
+  - public bool $modal; string $search; array $sortBy; int $perPage
+  - headers(): array; items(): LengthAwarePaginator (with withAggregate())
+  - resetModal(): clears all form fields (MUST call on create button AND cancel)
+
+Blade:
+  <x-header title="" separator progress-indicator>
+  <x-card shadow>
+    <x-button class="btn-success" wire:click="resetModal" @click="$wire.modal=true" icon="o-plus"/>  // create
+    <x-input wire:model.live.debounce="search"/>
+    <x-table :headers :rows :sort-by with-pagination> @scope('actions') ... @endscope </x-table>
+  </x-card>
+  <x-modal wire:model="modal" persistent separator>
+    <x-form wire:submit.prevent="save" class="grid grid-cols-2 gap-4"> ... <x-button type="submit" class="btn-primary"/> </x-form>
+  </x-modal>
+```
+
+### Third-party JS libraries (loaded in app layout)
+
+- **Leaflet** — `leaflet.js`, `leaflet.draw.js`, `leaflet-routing-machine.min.js`, `leaflet.geometryutil.js`
+- **Highcharts** — `highcharts.js`, `treemap.js`, `treegraph.js`, `exporting.js`
+- **FullCalendar** — `full-calendar.min.js` (RTL/Farsi locale)
+- **Jalali datepicker** — `jalalidatepicker.min.js` (`data-jdp` attribute)
+- **SweetAlert2** — via `Livewire.on('swal', ...)`
+
+### Responsive patterns
+
+- Hide table columns on small screens: `class="hidden sm:table-cell"`, `hidden 2xl:table-cell`
+- Grid layouts: `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4`
+- Keep icon, hide text: `<span class="hidden 2xl:inline">ویرایش</span>`
+- Sidebar: `collapsible` + `drawer="main-drawer"` for mobile
+
+---
+
 ## Persian Text Handling
 
 The `PersianNormalizer` trait normalizes:
@@ -381,7 +471,13 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **Forms:** Use MaryUI `x-input`, `x-select`, `x-button` components
 - **Modal:** Use `x-modal` with `close-on-backdrop` for edit forms
 - **Components:** Class-based Livewire components (`app/Livewire/<Feature>/...`) with Blade views under `resources/views/livewire/<feature>/`
-- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest`
+- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest` or `php artisan test --compact` / `--filter=testName`
+- **Factories:** use factories with custom states (only `UserFactory` exists; other models have seeders). Don't delete tests without approval.
+- **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
+- **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL in tinker. Don't create models in tinker without approval.
+- **Laravel Boost (MCP):** prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
+- **Artisan:** new migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter), not timestamps; pass `--no-interaction` to all Artisan commands.
+- **Frontend rebuild:** after frontend changes run `npm run build` (or `vite build`); Livewire for dynamic UI, Alpine.js for client-side interactions.
 
 ### Performance (recent fixes pattern)
 - Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
