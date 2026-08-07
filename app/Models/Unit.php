@@ -145,11 +145,16 @@ class Unit extends Model
 
         $results = DB::select("
             WITH RECURSIVE unit_tree AS (
-                SELECT id FROM units WHERE id IN ({$placeholders})
+                SELECT id, ARRAY[id] AS path, 1 AS depth
+                FROM units
+                WHERE id IN ({$placeholders})
                 UNION ALL
-                SELECT u.id FROM units u
+                SELECT u.id, ut.path || u.id, ut.depth + 1
+                FROM units u
                 INNER JOIN unit_tree ut ON u.parent_id = ut.id
                 WHERE u.is_active = true
+                  AND u.id <> ALL (ut.path)      -- anti-cycle: exclude nodes already visited
+                  AND ut.depth < 50               -- depth safety net against pathological data
             )
             SELECT id FROM unit_tree
         ", $ids);

@@ -99,10 +99,19 @@ class UnitController extends Controller
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
         }
 
+        // Prevent hierarchy cycles: parent cannot be the unit itself or one of its descendants (#324)
+        if (empty($validated['parent_id'])) {
+            $unit->update($validated);
+        } else {
+            $forbiddenIds = Unit::descendantIds($unit->id)->push($unit->id)->all();
+            if (in_array($validated['parent_id'], $forbiddenIds)) {
+                return response()->json(['message' => 'Cannot set a descendant or self as parent (would create a cycle).'], 422);
+            }
+            $unit->update($validated);
+        }
+
         // Check if hierarchy is being changed
         $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $unit->parent_id;
-
-        $unit->update($validated);
 
         // Invalidate AccessService cache for all users if hierarchy changed
         if ($hierarchyChanged) {
