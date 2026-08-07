@@ -100,13 +100,29 @@ class OrgChart extends Component
             return;
         }
 
+        // Query 1: Unit with relations
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person'])->find($id);
-        $this->selectedPersonnel = Person::where('u_id', $id)->with(['semat', 'tahsil', 'estekhdam', 'radif', 'user'])->limit(20)->get();
-        $this->selectedPersonnelTotal = Person::where('u_id', $id)->count();
+
+        // Query 2: Personnel + total count (clone query, no separate count query)
+        $personQuery = Person::where('u_id', $id)->with(['semat', 'tahsil', 'estekhdam', 'radif', 'user']);
+        $this->selectedPersonnelTotal = (clone $personQuery)->count();
+        $this->selectedPersonnel = $personQuery->limit(20)->get();
+
+        // Query 3: Descendant personnel + user counts (descendantIds is cached)
         $descendantIds = Unit::descendantIds($id);
-        $this->descendantPersonnelTotal = Person::whereIn('u_id', $descendantIds)->count();
+        $this->descendantPersonnelTotal = $descendantIds->isNotEmpty()
+            ? Person::whereIn('u_id', $descendantIds)->count()
+            : 0;
+
+        // Query 4: Descendant user count via direct JOIN (faster than whereHas)
+        $this->descendantUserCount = $descendantIds->isNotEmpty()
+            ? \Illuminate\Support\Facades\DB::table('user_units')
+                ->whereIn('unit_id', $descendantIds)
+                ->distinct()
+                ->count('user_id')
+            : 0;
+
         $this->directUserCount = $this->selectedUnit->assignedUsers->count();
-        $this->descendantUserCount = \App\Models\User::whereHas('units', fn($q) => $q->whereIn('unit_id', $descendantIds))->count();
     }
 
     public function expandAll(): void
