@@ -99,6 +99,8 @@ class UnitController extends Controller
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
         }
 
+        $oldParentId = $unit->parent_id; // Capture before update for hierarchy-change detection (#371)
+
         // Prevent hierarchy cycles: parent cannot be the unit itself or one of its descendants (#324)
         if (empty($validated['parent_id'])) {
             $unit->update($validated);
@@ -110,8 +112,8 @@ class UnitController extends Controller
             $unit->update($validated);
         }
 
-        // Check if hierarchy is being changed
-        $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $unit->parent_id;
+        // Check if hierarchy is being changed (compare against pre-update value)
+        $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $oldParentId;
 
         // Invalidate AccessService cache for all users if hierarchy changed
         if ($hierarchyChanged) {
