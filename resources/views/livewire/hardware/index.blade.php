@@ -328,6 +328,7 @@ return new class extends Component
         }
 
         Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
+        Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
         // Keep the selection so the user can immediately toggle back (e.g. "برداشتن")
         // without having to re-select — do NOT clear $this->selected here.
         $this->success('وضعیت علامت‌گذاری تغییر کرد.', position: 'toast-bottom');
@@ -357,6 +358,7 @@ return new class extends Component
         }
 
         Hardware::whereIn('id', $scopedIds)->delete();
+        Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
         $this->selected = [];
         $this->warning('دستگاه‌های انتخاب شده حذف شدند.', position: 'toast-bottom');
     }

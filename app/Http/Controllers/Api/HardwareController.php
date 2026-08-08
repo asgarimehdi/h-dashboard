@@ -354,6 +354,7 @@ class HardwareController extends Controller
         ]);
 
         app(\App\Http\Controllers\Api\GisController::class)::invalidateCache();
+        Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
 
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
     }
@@ -384,6 +385,7 @@ class HardwareController extends Controller
         $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
 
         app(\App\Http\Controllers\Api\GisController::class)::invalidateCache();
+        Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
     }
