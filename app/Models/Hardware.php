@@ -72,6 +72,7 @@ class Hardware extends Model
     public static function flushStatsCache(): void
     {
         \Illuminate\Support\Facades\Cache::increment('hardware_stats_version');
+        \Illuminate\Support\Facades\Cache::increment('gis_version'); // Issue #373: imports also change map data
     }
 
     public function person(): BelongsTo
