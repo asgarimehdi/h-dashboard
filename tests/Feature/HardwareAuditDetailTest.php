@@ -51,6 +51,9 @@ class HardwareAuditDetailTest extends TestCase
             'n_code' => $nCode,
             'password' => Hash::make('password'),
         ]);
+        // Rollback requires manage_hardware permission (route middleware, #309)
+        $permission = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'manage_hardware', 'guard_name' => 'web']);
+        $this->user->givePermissionTo($permission);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
 

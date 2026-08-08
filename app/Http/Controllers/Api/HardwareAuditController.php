@@ -21,7 +21,7 @@ class HardwareAuditController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $query = HardwareAudit::where('hardware_id', $hardware->id)
-            ->with('user:id,n_code,name')
+            ->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at');
 
         // Filters
@@ -69,7 +69,7 @@ class HardwareAuditController extends Controller
             return response()->json(['message' => 'Audit not found for this hardware.'], 404);
         }
 
-        $audit->load('user:id,n_code,name');
+        $audit->load('user.person:id,n_code,f_name,l_name');
 
         return response()->json([
             'data' => $this->transformAudit($audit, true),
@@ -145,7 +145,7 @@ class HardwareAuditController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $query = HardwareAudit::where('hardware_id', $hardware->id)
-            ->with('user:id,n_code,name')
+            ->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at');
 
         // Apply same filters as index
