@@ -23,7 +23,9 @@ class Dashboard extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         // Cache heavy aggregations (5 min) — Issue #223 perf note
-        $cacheKey = 'hr:dashboard:' . md5(implode(',', $accessibleIds));
+        // Versioned by hr_stats_version so Person saved/deleted invalidates it immediately (#375)
+        $version = Cache::get('hr_stats_version', 0);
+        $cacheKey = 'hr:dashboard:v' . $version . ':' . md5(implode(',', $accessibleIds));
         $data = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
             $persons = Person::whereIn('u_id', $accessibleIds);
 
