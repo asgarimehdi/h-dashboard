@@ -66,9 +66,9 @@ class AppServiceProvider extends ServiceProvider
         Ticket::updated(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); });
         Ticket::deleted(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); });
 
-        // Invalidate units report cache on Unit changes (Issue #340)
-        Unit::created(fn () => Cache::increment('report_units_version'));
-        Unit::updated(fn () => Cache::increment('report_units_version'));
-        Unit::deleted(fn () => Cache::increment('report_units_version'));
+        // Invalidate units report + hierarchy + GIS caches on Unit changes (Issues #340, #372)
+        Unit::created(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });
+        Unit::updated(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });
+        Unit::deleted(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });
     }
 }
