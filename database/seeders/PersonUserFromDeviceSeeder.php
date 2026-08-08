@@ -160,6 +160,29 @@ class PersonUserFromDeviceSeeder extends Seeder
         'پایگاه 3 هفده شهریور', 'اعلایی', 'کوه زین', 'سراج',
     ];
 
+    /**
+     * Special CSV locations → the real organizational unit they belong to.
+     * Map: CSV location => [unit name to create/resolve, parent unit name]
+     * - parent unit name ''        → parent is the network unit
+     * - parent unit name is another → the target unit becomes its child
+     */
+    private array $locationToUnit = [
+        'هفده شهریور' => ['مرکز 17 شهریور', ''],
+        'اعلایی پایگاه 1' => ['پایگاه ضمیمه اعلایی', 'مرکز اعلایی'],
+        'عمیدآباد' => ['مرکز عمید آباد', ''],
+        'هیدج پایگاه 1' => ['پایگاه 1 هیدج', 'مرکز هیدج'],
+        'هیدج پایگاه 2' => ['پایگاه 2 هیدج', 'مرکز هیدج'],
+        'شریف آباد پایگاه 2' => ['پایگاه شریف آباد', 'مرکز شریف آباد'],
+        'شناط پایگاه 1' => ['پایگاه ضمیمه', 'مرکز شماره 4 ( شناط)'],
+        'شناط پایگاه 2' => ['پایگاه غ.ضمیمه شماره 2', 'مرکز شماره 4 ( شناط)'],
+        'شناط پایگاه 3' => ['پایگاه غ.ضمیمه شماره3', 'مرکز شماره 4 ( شناط)'],
+        'ارغوان' => ['غیرضمیمه شماره3', 'مرکز 17 شهریور'],
+        'سراج' => ['مرکز سراج', ''],
+        'فوریت امدادی' => ['فوریت امدادی', 'فوریت'],
+        'فوریت هیدج' => ['فوریت هیدج', 'فوریت'],
+        'فوریت شماره 2' => ['فوریت شماره 2', 'فوریت'],
+    ];
+
     public function run(): void
     {
         $csvFile = __DIR__.'/data/person_devices.csv';
@@ -297,7 +320,49 @@ class PersonUserFromDeviceSeeder extends Seeder
             return $this->matchOrCreateUnit('ستاد', $existingUnits, $networkUnitId);
         }
 
-        return $this->matchOrCreateUnit($location, $existingUnits);
+        return $this->resolveMappedLocation($location, $existingUnits);
+    }
+
+    /**
+     * Resolve a CSV location via the $locationToUnit map, creating the parent
+     * hierarchy chain when the target unit does not exist yet. Falls back to the
+     * generic (fuzzy) matcher for locations not in the map.
+     */
+    private function resolveMappedLocation(string $location, array &$existingUnits): int
+    {
+        if (! isset($this->locationToUnit[$location])) {
+            return $this->matchOrCreateUnit($location, $existingUnits);
+        }
+
+        [$unitName, $parentName] = $this->locationToUnit[$location];
+        $parentId = $parentName === ''
+            ? $this->networkUnitId()
+            : $this->matchOrCreateExactUnit($parentName, $existingUnits, $this->networkUnitId());
+
+        return $this->matchOrCreateExactUnit($unitName, $existingUnits, $parentId);
+    }
+
+    /**
+     * Exact-name unit matcher — used for the mapped hierarchy units so we never
+     * fuzzy-match "فوریت" onto "فوریت کهلا" or "پایگاه ضمیمه" onto its siblings.
+     */
+    private function matchOrCreateExactUnit(string $name, array &$existingUnits, int $parentId): int
+    {
+        $name = trim($name);
+        if (isset($this->locationCache[$name])) {
+            return $this->locationCache[$name];
+        }
+        if (isset($existingUnits[$name])) {
+            $this->setParentIfNeeded($existingUnits[$name], $parentId);
+            $this->locationCache[$name] = $existingUnits[$name];
+
+            return $existingUnits[$name];
+        }
+        $newUnit = Unit::create(['name' => $name, 'parent_id' => $parentId, 'is_active' => true]);
+        $existingUnits[$name] = $newUnit->id;
+        $this->locationCache[$name] = $newUnit->id;
+
+        return $newUnit->id;
     }
 
     private function networkUnitId(): int
