@@ -29,6 +29,10 @@ class UnitApiTest extends TestCase
         $sId = DB::table('semats')->insertGetId(['name' => 'Test Semat']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test Radif']);
 
+        $unit = Unit::create(array_merge([
+            'name' => 'Test Unit',
+        ], $unitAttrs));
+
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode,
@@ -38,15 +42,12 @@ class UnitApiTest extends TestCase
             'e_id' => $eId,
             's_id' => $sId,
             'r_id' => $rId,
-            'u_id' => 1,
+            'u_id' => $unit->id,
         ]);
         $user = User::create([
             'n_code' => $nCode,
             'password' => Hash::make('password'),
         ]);
-        $unit = Unit::create(array_merge([
-            'name' => 'Test Unit',
-        ], $unitAttrs));
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 

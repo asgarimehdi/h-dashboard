@@ -35,7 +35,7 @@ class HardwareAuditTest extends TestCase
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
         Person::create([
             'n_code' => $nCode,
@@ -158,7 +158,7 @@ class HardwareAuditTest extends TestCase
     public function test_audit_api_respects_organizational_scope(): void
     {
         $otherUnit = Unit::create(['name' => 'Other Unit']);
-        $otherNCode = (string) random_int(1000000000, 2147483647);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
 
         Person::create([
             'n_code' => $otherNCode,

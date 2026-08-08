@@ -33,7 +33,7 @@ class HrApiTest extends TestCase
         $this->unit = Unit::create(['name' => 'مرکز بهداشت']);
         $childUnit = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $this->unit->id]);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی',
             't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
@@ -111,7 +111,7 @@ class HrApiTest extends TestCase
         $this->actingAs($this->user, 'sanctum');
         $otherUnit = Unit::create(['name' => 'Out of scope']);
         $other = Person::create([
-            'n_code' => (string) random_int(1000000000, 2147483647),
+            'n_code' => (string) fake()->unique()->numerify('##########'),
             'f_name' => 'X', 'l_name' => 'Y', 'u_id' => $otherUnit->id,
             't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),
             'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E']),

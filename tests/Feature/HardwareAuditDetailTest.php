@@ -35,7 +35,7 @@ class HardwareAuditDetailTest extends TestCase
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
         Person::create([
             'n_code' => $nCode,
@@ -193,7 +193,7 @@ class HardwareAuditDetailTest extends TestCase
     public function test_show_respects_org_scope(): void
     {
         $otherUnit = Unit::create(['name' => 'Other']);
-        $otherNCode = (string) random_int(1000000000, 2147483647);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $otherNCode, 'f_name' => 'O', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $otherUnit->id]);
         $otherUser = User::create(['n_code' => $otherNCode, 'password' => Hash::make('password')]);
         $otherUser->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -260,7 +260,7 @@ class HardwareAuditDetailTest extends TestCase
     public function test_export_respects_org_scope(): void
     {
         $otherUnit = Unit::create(['name' => 'Other']);
-        $otherNCode = (string) random_int(1000000000, 2147483647);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $otherNCode, 'f_name' => 'O', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $otherUnit->id]);
         $otherUser = User::create(['n_code' => $otherNCode, 'password' => Hash::make('password')]);
         $otherUser->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => true]);

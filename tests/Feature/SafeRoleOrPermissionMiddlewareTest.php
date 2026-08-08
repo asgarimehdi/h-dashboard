@@ -8,6 +8,10 @@ use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->seed(\Database\Seeders\PermissionSeeder::class);
+});
+
 test('SafeRoleOrPermission allows guests to pass through', function () {
     // Guest request to a route wrapped in safe_role_or_permission
     // Should not hit Spatie's check and return 200 (or proceed to next)
@@ -19,9 +23,9 @@ test('SafeRoleOrPermission blocks authenticated users without permission', funct
     $unit = Unit::factory()->create();
     $person = Person::factory()->create(['u_id' => $unit->id]);
     $user = User::factory()->create(['n_code' => $person->n_code]);
-    
+
     $this->actingAs($user);
-    
+
     // User exists but lacks the specific permission
     $this->get('/test-safe-route')
          ->assertStatus(403);
@@ -31,10 +35,10 @@ test('SafeRoleOrPermission allows authenticated users with permission', function
     $unit = Unit::factory()->create();
     $person = Person::factory()->create(['u_id' => $unit->id]);
     $user = User::factory()->create(['n_code' => $person->n_code]);
-    $user->givePermissionTo('some-perm');
-    
+    $user->givePermissionTo('test-permission');
+
     $this->actingAs($user);
-    
+
     $this->get('/test-safe-route')
          ->assertStatus(200);
 });

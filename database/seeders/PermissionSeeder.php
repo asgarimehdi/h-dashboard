@@ -36,6 +36,8 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view_hr_dashboard', 'label' => 'مشاهده داشبورد منابع انسانی']);
         Permission::firstOrCreate(['name' => 'manage_personnel', 'label' => 'مدیریت پرسنل']);
         Permission::firstOrCreate(['name' => 'manage_org_chart', 'label' => 'مدیریت چارت سازمانی']);
+        // Test permission for SafeRoleOrPermission middleware tests
+        Permission::firstOrCreate(['name' => 'test-permission', 'label' => 'تست مجوز']);
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 

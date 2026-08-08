@@ -42,7 +42,7 @@ class MapDashboardTest extends TestCase
             'lng' => 48.47163,
         ]);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         
         $person = Person::create([
             'n_code' => $nCode,

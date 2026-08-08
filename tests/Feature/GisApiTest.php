@@ -46,7 +46,7 @@ class GisApiTest extends TestCase
             'lng' => 48.47163,
         ], $unitData));
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         
         $this->person = Person::create([
             'n_code' => $nCode,
@@ -334,7 +334,7 @@ class GisApiTest extends TestCase
         
         // Create another unit not accessible to user
         $unitB = Unit::create(['name' => 'Unit B', 'lat' => 36.7, 'lng' => 48.5]);
-        $nCode2 = (string) random_int(1000000000, 2147483647);
+        $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2,
             'f_name' => 'Other',
@@ -346,7 +346,7 @@ class GisApiTest extends TestCase
             'u_id' => $unitB->id,
         ]);
         Hardware::create([
-            'n_code' => (string) random_int(1000000000, 2147483647),
+            'n_code' => (string) fake()->unique()->numerify('##########'),
             'pc_name' => 'PC-B',
             'type' => 'laptop',
         ]);

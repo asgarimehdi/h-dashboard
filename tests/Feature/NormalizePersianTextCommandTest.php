@@ -9,21 +9,22 @@ uses(RefreshDatabase::class);
 
 test('normalize:persian-text command normalizes Arabic characters in database', function () {
     // Seed lookup tables required by Person FK constraints
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
+    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
+    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
+    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $unitId = DB::table('units')->insertGetId(['name' => 'Test Unit']);
 
     // Seed a Person with Arabic Yeh in f_name
     $person = Person::create([
         'n_code' => '1234567890',
         'f_name' => 'علي', // Arabic Yeh
         'l_name' => 'احمدي', // Arabic Yeh
-        'u_id' => 1,
-        'semat_id' => 1,
-        't_id' => 1,
-        'e_id' => 1,
-        'r_id' => 1,
+        'u_id' => $unitId,
+        's_id' => $sId,
+        't_id' => $tId,
+        'e_id' => $eId,
+        'r_id' => $rId,
     ]);
 
     // Seed Hardware with Arabic Kaf in pc_name
@@ -51,6 +52,6 @@ test('normalize:persian-text command normalizes Arabic characters in database', 
     // Assert Hardware is normalized
     $this->assertDatabaseHas('hardwares', [
         'n_code' => '1234567890',
-        'pc_name' => 'کامپیوتر',
+        'pc_name' => 'کمپیوتر',
     ]);
 });

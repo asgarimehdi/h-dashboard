@@ -33,7 +33,7 @@ class TicketCommentsRefreshTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
 
         $this->unit = Unit::create(['name' => 'Test Unit']);
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->unit->id]);
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -41,7 +41,7 @@ class TicketCommentsRefreshTest extends TestCase
         $this->actingAs($this->user);
 
         $this->ticket = Ticket::create([
-            'ticket_code' => 'TC-' . random_int(10000, 99999),
+            'ticket_code' => 'TC-' . fake()->unique()->numerify('#####'),
             'subject' => 'Test', 'content' => 'Desc',
             'unit_id' => $this->unit->id, 'user_id' => $this->user->id,
         ]);

@@ -35,7 +35,7 @@ class HardwareApiTest extends TestCase
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $this->unit->id]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
@@ -239,7 +239,7 @@ class HardwareApiTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
         $unitB = Unit::create(['name' => 'Unit B']);
-        $nCodeB = (string) random_int(1000000000, 2147483647);
+        $nCodeB = (string) fake()->unique()->numerify('##########');
         $personB = Person::create([
             'n_code' => $nCodeB,
             'f_name' => 'TestB',
