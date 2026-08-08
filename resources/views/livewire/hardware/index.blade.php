@@ -537,8 +537,14 @@ return new class extends Component
         ];
     }
 
+    private ?LengthAwarePaginator $hardwaresCache = null;
+
     public function hardwares(): LengthAwarePaginator
     {
+        if ($this->hardwaresCache !== null) {
+            return $this->hardwaresCache;
+        }
+
         $query = $this->applyOrgScope(Hardware::with('person'));
 
         // General search
@@ -612,7 +618,7 @@ return new class extends Component
 
         $query->orderBy(...array_values($this->sortBy));
 
-        return $query->paginate($this->perPage);
+        return $this->hardwaresCache = $query->paginate($this->perPage);
     }
 
     public function with(): array
