@@ -20,7 +20,8 @@ test('normalize converts ZWNJ and ZWJ to spaces', function () {
 
 test('normalize handles mixed strings correctly', function () {
     $input = "تست ي ك ZWNJ\u{200C} ZWJ\u{200D}";
-    $expected = "تست ی ک  ";
+    // ZWNJ and ZWJ characters become spaces, but literal "ZWNJ" and "ZWJ" text remains
+    $expected = "تست ی ک ZWNJ  ZWJ ";
     expect(NormalizerHelper::normalize($input))->toBe($expected);
 });
 

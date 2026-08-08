@@ -12,15 +12,21 @@ class ZabbixServiceTest extends TestCase
     {
         parent::setUp();
         // Mock the config values
-        config(['services.zabbix.url' => 'http://zabbix.local', 'services.zabbix.token' => 'test-token']);
+        config(['services.zabbix.url' => 'http://zabbix.local/api_json_rpc.php', 'services.zabbix.token' => 'test-token']);
     }
 
     public function test_request_sends_correct_auth_header()
     {
-        Http::fake();
+        Http::fake([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
+                'result' => ['token' => 'test-token'],
+                'error' => null,
+                'id' => 1,
+            ], 200),
+        ]);
 
         $service = new ZabbixService();
-        $service->request(['jsonrpc' => '2.0', 'method' => 'user.login', 'params' => [], 'id' => 1]);
+        $service->getItemIdByKey('test.key');
 
         Http::assertSent(function ($request) {
             return $request->hasHeader('Authorization', 'Bearer test-token');
@@ -30,7 +36,7 @@ class ZabbixServiceTest extends TestCase
     public function test_get_interface_traffic_calculates_rate_correctly()
     {
         Http::fake([
-            '*/api_json_rpc.php*' => Http::response([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
                 'result' => [
                     ['value' => 1000000, 'clock' => 1600000000],
                     ['value' => 5000000, 'clock' => 1600000060], // 4s diff, 4M diff
@@ -51,7 +57,7 @@ class ZabbixServiceTest extends TestCase
     public function test_get_interface_traffic_returns_empty_on_single_sample()
     {
         Http::fake([
-            '*/api_json_rpc.php*' => Http::response([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
                 'result' => [
                     ['value' => 1000000, 'clock' => 1600000000],
                 ],
@@ -69,9 +75,9 @@ class ZabbixServiceTest extends TestCase
     public function test_get_latest_values_fills_nulls_for_missing_ids()
     {
         Http::fake([
-            '*/api_json_rpc.php*' => Http::response([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
                 'result' => [
-                    ['itemid' => '1', 'value' => '10.5'],
+                    ['itemid' => '1', 'lastvalue' => '10.5'],
                 ],
                 'error' => null,
                 'id' => 1,
@@ -88,7 +94,7 @@ class ZabbixServiceTest extends TestCase
     public function test_request_throws_exception_on_zabbix_error()
     {
         Http::fake([
-            '*/api_json_rpc.php*' => Http::response([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
                 'result' => null,
                 'error' => ['code' => -32602, 'message' => 'Invalid params'],
                 'id' => 1,
@@ -98,7 +104,7 @@ class ZabbixServiceTest extends TestCase
         $service = new ZabbixService();
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Invalid params');
-        
-        $service->request(['jsonrpc' => '2.0', 'method' => 'test', 'params' => [], 'id' => 1]);
+
+        $service->getItemIdByKey('test.key');
     }
 }

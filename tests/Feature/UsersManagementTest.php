@@ -41,7 +41,15 @@ beforeEach(function () {
 });
 
 test('users index renders and filters results', function () {
-    $otherUser = User::factory()->create(['name' => 'کاربر دیگر', 'n_code' => '1112223334']);
+    // Create a person for the other user first (FK constraint)
+    Person::create([
+        'n_code' => '1112223334',
+        'f_name' => 'کاربر',
+        'l_name' => 'دیگر',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $otherUser = User::factory()->create(['n_code' => '1112223334']);
 
     Livewire::actingAs($this->admin)
         ->test('users.index')
@@ -57,15 +65,22 @@ test('users index renders and filters results', function () {
 });
 
 test('create user persists data and assigns roles', function () {
-    $newUser = User::factory()->make(['n_code' => '9998887776']);
-    
+    // Create a person first (FK constraint)
+    $person = Person::create([
+        'n_code' => '9998887776',
+        'f_name' => 'کاربر',
+        'l_name' => 'جدید',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
     Livewire::actingAs($this->admin)
-        ->test('users.create')
-        ->set('name', 'کاربر جدید')
+        ->test('users.index')
+        ->call('openFormForCreate')
         ->set('n_code', '9998887776')
-        ->set('email', 'new@test.com')
-        ->set('unit_id', $this->unit->id)
-        ->call('store');
+        ->set('password', 'password123')
+        ->set('role_ids', [$this->admin->roles->first()->id])
+        ->call('createUser');
 
     $this->assertDatabaseHas('users', ['n_code' => '9998887776']);
 });
@@ -74,16 +89,16 @@ test('change password updates password correctly', function () {
     $user = $this->admin;
     $oldPassword = 'old-password';
     $newPassword = 'new-password-123';
-    
+
     // Manually set password for test
     $user->update(['password' => bcrypt($oldPassword)]);
 
     Livewire::actingAs($this->admin)
         ->test('auth.changepassword')
-        ->set('old_password', $oldPassword)
-        ->set('new_password', $newPassword)
-        ->set('new_password_confirmation', $newPassword)
-        ->call('updatePassword');
+        ->set('currentPassword', $oldPassword)
+        ->set('newPassword', $newPassword)
+        ->set('newPasswordConfirmation', $newPassword)
+        ->call('changePassword');
 
     $this->assertTrue(\Illuminate\Support\Facades\Hash::check($newPassword, $user->fresh()->password));
 });
