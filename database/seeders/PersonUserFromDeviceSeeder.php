@@ -13,7 +13,9 @@ use Spatie\Permission\Models\Role;
 class PersonUserFromDeviceSeeder extends Seeder
 {
     private array $locationCache = [];
+
     private array $sematCache = [];
+
     private array $radifCache = [];
 
     private array $roleMap = [
@@ -160,10 +162,11 @@ class PersonUserFromDeviceSeeder extends Seeder
 
     public function run(): void
     {
-        $csvFile = __DIR__ . '/data/person_devices.csv';
+        $csvFile = __DIR__.'/data/person_devices.csv';
         $handle = fopen($csvFile, 'r');
         if ($handle === false) {
             $this->command->error('Cannot open person_devices.csv');
+
             return;
         }
 
@@ -182,7 +185,7 @@ class PersonUserFromDeviceSeeder extends Seeder
         }
         fclose($handle);
 
-        $devices = collect($rows)->filter(fn($d) => $d->n_code && trim($d->n_code) !== '');
+        $devices = collect($rows)->filter(fn ($d) => $d->n_code && trim($d->n_code) !== '');
         $grouped = $devices->groupBy('n_code');
         $existingUnits = Unit::pluck('id', 'name')->toArray();
 
@@ -205,20 +208,22 @@ class PersonUserFromDeviceSeeder extends Seeder
                 $parts = $this->parseName($operatorName);
             } else {
                 $record = $records->first();
-                $generated = trim(($record->unit ?? '') . ' ' . ($record->location_type ?? '') . ' ' . ($record->location ?? ''));
+                $generated = trim(($record->unit ?? '').' '.($record->location_type ?? '').' '.($record->location ?? ''));
                 $parts = $this->parseName($generated ?: 'کاربر ناشناس');
             }
 
             // Primary location → unit
             $primaryLocation = $records->pluck('location')
-                ->filter(fn($loc) => $loc && trim($loc) !== '')
+                ->filter(fn ($loc) => $loc && trim($loc) !== '')
                 ->countBy()->sortDesc()->keys()->first() ?? '';
-            $unitId = $this->matchOrCreateUnit(trim($primaryLocation), $existingUnits);
 
             // Primary unit type → semat + role
             $primaryUnitType = $records->pluck('unit')
-                ->filter(fn($u) => $u && trim($u) !== '')
+                ->filter(fn ($u) => $u && trim($u) !== '')
                 ->countBy()->sortDesc()->keys()->first() ?? '';
+
+            $unitId = $this->resolveUnitId(trim($primaryLocation), $primaryUnitType, $existingUnits);
+
             $sematName = $this->mapSemat($primaryUnitType);
             $roleName = $this->mapRole($sematName);
             $sematId = $this->findOrCreateSemat($sematName);
@@ -258,13 +263,50 @@ class PersonUserFromDeviceSeeder extends Seeder
     {
         $name = trim($name);
         $parts = preg_split('/\s+/', $name, 2);
+
         return [
             'f_name' => $parts[0] ?? $name,
             'l_name' => $parts[1] ?? '',
         ];
     }
 
-    private function matchOrCreateUnit(string $location, array &$existingUnits): int
+    /**
+     * Resolve the unit a person belongs to, applying the special hierarchy rules:
+     * - location "ستاد"        → unit «ستاد» under the network (شبکه)
+     * - unit  "بهداشت محیط"    → unit «بهداشت محیط» under «ستاد»
+     * - location "بهورزی"      → unit «بهورزی» under «ستاد»
+     * - location "آزمایشگاه مرکزی" → unit «آزمایشگاه مرکزی» under «ستاد»
+     */
+    private function resolveUnitId(string $location, string $unitType, array &$existingUnits): int
+    {
+        $networkUnitId = $this->networkUnitId();
+
+        if ($unitType === 'بهداشت محیط') {
+            $headquartersId = $this->matchOrCreateUnit('ستاد', $existingUnits, $networkUnitId);
+
+            return $this->matchOrCreateUnit('بهداشت محیط', $existingUnits, $headquartersId);
+        }
+
+        if (in_array($location, ['بهورزی', 'آزمایشگاه مرکزی'], true)) {
+            $headquartersId = $this->matchOrCreateUnit('ستاد', $existingUnits, $networkUnitId);
+
+            return $this->matchOrCreateUnit($location, $existingUnits, $headquartersId);
+        }
+
+        if ($location === 'ستاد') {
+            return $this->matchOrCreateUnit('ستاد', $existingUnits, $networkUnitId);
+        }
+
+        return $this->matchOrCreateUnit($location, $existingUnits);
+    }
+
+    private function networkUnitId(): int
+    {
+        // This CSV belongs to «شبکه بهداشت و درمان ابهر» (id 5) — see matchOrCreateUnit fallback
+        return 5;
+    }
+
+    private function matchOrCreateUnit(string $location, array &$existingUnits, ?int $parentId = null): int
     {
         if ($location === '') {
             return 5;
@@ -273,19 +315,35 @@ class PersonUserFromDeviceSeeder extends Seeder
             return $this->locationCache[$location];
         }
         if (isset($existingUnits[$location])) {
+            $this->setParentIfNeeded($existingUnits[$location], $parentId);
             $this->locationCache[$location] = $existingUnits[$location];
+
             return $existingUnits[$location];
         }
         foreach ($existingUnits as $unitName => $unitId) {
             if (str_contains($unitName, $location) || str_contains($location, $unitName)) {
+                $this->setParentIfNeeded($unitId, $parentId);
                 $this->locationCache[$location] = $unitId;
+
                 return $unitId;
             }
         }
-        $newUnit = Unit::create(['name' => $location, 'is_active' => true]);
+        $newUnit = Unit::create(['name' => $location, 'parent_id' => $parentId, 'is_active' => true]);
         $existingUnits[$location] = $newUnit->id;
         $this->locationCache[$location] = $newUnit->id;
+
         return $newUnit->id;
+    }
+
+    private function setParentIfNeeded(int $unitId, ?int $parentId): void
+    {
+        if ($parentId === null) {
+            return;
+        }
+        $unit = DB::table('units')->where('id', $unitId)->first();
+        if ($unit && $unit->parent_id !== $parentId) {
+            DB::table('units')->where('id', $unitId)->update(['parent_id' => $parentId]);
+        }
     }
 
     private function mapSemat(string $rawUnit): string
@@ -314,6 +372,7 @@ class PersonUserFromDeviceSeeder extends Seeder
             'updated_at' => now(),
         ]);
         $this->sematCache[$name] = $id;
+
         return $id;
     }
 
@@ -332,12 +391,14 @@ class PersonUserFromDeviceSeeder extends Seeder
             'updated_at' => now(),
         ]);
         $this->radifCache[$name] = $id;
+
         return $id;
     }
 
     private function mapRole(string $unitType): string
     {
         $unitType = trim($unitType);
+
         return $this->roleMap[$unitType] ?? 'user';
     }
 }
