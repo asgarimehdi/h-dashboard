@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class TicketCommentController extends Controller
@@ -262,16 +263,23 @@ class TicketCommentController extends Controller
     }
 
     /**
-     * Calculate thread depth recursively.
+     * Calculate thread depth in a single query (recursive CTE) — Issue #392.
      */
     private function getThreadDepth(TicketComment $comment): int
     {
-        $depth = 0;
-        while ($comment->parent) {
-            $depth++;
-            $comment = $comment->parent;
-        }
-        return $depth;
+        $depth = DB::selectOne(
+            "WITH RECURSIVE cte AS (
+                SELECT id, parent_id, 0 AS depth FROM ticket_comments WHERE id = ?
+                UNION ALL
+                SELECT tc.id, tc.parent_id, cte.depth + 1
+                FROM ticket_comments tc
+                INNER JOIN cte ON tc.id = cte.parent_id
+            )
+            SELECT MAX(depth) AS max_depth FROM cte",
+            [$comment->id]
+        );
+
+        return (int) ($depth->max_depth ?? 0);
     }
 
     /**
