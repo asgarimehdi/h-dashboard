@@ -62,9 +62,9 @@ class AppServiceProvider extends ServiceProvider
         Todo::updated(fn () => Cache::increment('report_todos_version'));
         Todo::deleted(fn () => Cache::increment('report_todos_version'));
 
-        Ticket::created(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); });
-        Ticket::updated(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); });
-        Ticket::deleted(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); });
+        Ticket::created(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); });
+        Ticket::updated(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); });
+        Ticket::deleted(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); });
 
         // Invalidate units report + hierarchy + GIS caches on Unit changes (Issues #340, #372)
         Unit::created(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });

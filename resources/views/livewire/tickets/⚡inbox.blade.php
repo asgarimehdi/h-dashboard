@@ -246,9 +246,10 @@ new class extends Component
                     'status' => 'completed',
                     'completed_at' => $now,
                 ]);
-                // Issue #378: bulk update bypasses Eloquent events — bump caches manually
+                // Issue #378/#389: bulk update bypasses Eloquent events — bump caches manually
                 Cache::increment('report_tickets_version');
                 Cache::increment('gis_version');
+                Cache::increment('calendar_version');
 
                 // ۳. یک batch INSERT برای فعالیت‌ها
                 $activityRows = $ticketIds->map(fn($id) => [
@@ -273,9 +274,10 @@ new class extends Component
                     'status' => 'forwarded',
                     'current_assignee_id' => null,
                 ]);
-                // Issue #378: bulk update bypasses Eloquent events — bump caches manually
+                // Issue #378/#389: bulk update bypasses Eloquent events — bump caches manually
                 Cache::increment('report_tickets_version');
                 Cache::increment('gis_version');
+                Cache::increment('calendar_version');
 
                 $activityRows = $ticketIds->map(fn($id) => [
                     'ticket_id' => $id,
