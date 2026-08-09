@@ -96,5 +96,5 @@ test('map-no-boundary page renders without crash when boundary is missing', func
 test('reports pages render Persian labels', function () {
     Livewire::actingAs($this->user)
         ->test('reports.advanced')
-        ->assertSee('گزارش‌ها');
+        ->assertSee('گزارش تیکت‌ها');
 });
