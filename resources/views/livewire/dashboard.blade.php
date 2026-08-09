@@ -77,6 +77,7 @@ return new class extends Component {
         $details = Cache::remember("dashboard:ticket_details:{$scopeKey}", 180, function () use ($accessibleIds) {
             $diffExpr = match (DB::getDriverName()) {
                 'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
+                'sqlite' => 'julianday(completed_at) - julianday(created_at)',
                 default => 'DATEDIFF(completed_at, created_at)',
             };
             return [
