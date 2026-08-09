@@ -36,13 +36,14 @@ return new class extends Component {
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $scopeKey = md5(implode(',', $accessibleIds));
+        $v = Cache::get('dashboard_version', 0);
 
         // آمارهای سراسری (به واحد کاربر وابسته نیست) — TTL 5 دقیقه
-        $this->totalUsers = Cache::remember('dashboard:total_users', 300, fn() => User::count());
-        $this->totalRoles = Cache::remember('dashboard:total_roles', 300, fn() => Role::count());
+        $this->totalUsers = Cache::remember("dashboard:total_users:v{$v}", 300, fn() => User::count());
+        $this->totalRoles = Cache::remember("dashboard:total_roles:v{$v}", 300, fn() => Role::count());
 
         // آمار واحد (وابسته به scope کاربر) — TTL 5 دقیقه
-        $stats = Cache::remember("dashboard:stats:{$scopeKey}", 300, function () use ($accessibleIds) {
+        $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
             return [
                 'totalPersons' => Person::whereIn('u_id', $accessibleIds)->count(),
                 'totalUnits' => Unit::whereIn('id', $accessibleIds)->count(),
@@ -62,7 +63,7 @@ return new class extends Component {
         });
 
         // آمار امروز (حساس‌تر به زمان) — TTL 2 دقیقه
-        $todayStats = Cache::remember("dashboard:today:{$scopeKey}", 120, function () use ($accessibleIds) {
+        $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
             $today = now()->startOfDay();
             $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
                 ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))
@@ -78,7 +79,7 @@ return new class extends Component {
         });
 
         // آمار تفصیلی تیکت‌ها — TTL 3 دقیقه
-        $details = Cache::remember("dashboard:ticket_details:{$scopeKey}", 180, function () use ($accessibleIds) {
+        $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
             $diffExpr = match (DB::getDriverName()) {
                 'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
                 default => 'DATEDIFF(completed_at, created_at)',
@@ -127,9 +128,10 @@ return new class extends Component {
     // داده‌های نمودار تیکت‌ها — TTL 5 دقیقه
     public function getTicketChartDataProperty(): array
     {
+        $v = Cache::get('dashboard_version', 0);
         $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
 
-        return Cache::remember("dashboard:ticket_chart:{$scopeKey}", 300, function () {
+        return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             $tickets = Ticket::whereIn('unit_id', $accessibleIds)
                 ->selectRaw("date(created_at) as day, count(*) as count")
@@ -148,9 +150,10 @@ return new class extends Component {
     // داده‌های نمودار وضعیت تیکت‌ها — TTL 5 دقیقه
     public function getTicketStatusDataProperty(): array
     {
+        $v = Cache::get('dashboard_version', 0);
         $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
 
-        return Cache::remember("dashboard:ticket_status:{$scopeKey}", 300, function () {
+        return Cache::remember("dashboard:ticket_status:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             return Ticket::whereIn('unit_id', $accessibleIds)
                 ->selectRaw("status, count(*) as count")
@@ -163,9 +166,10 @@ return new class extends Component {
     // آخرین فعالیت‌ها — TTL 2 دقیقه
     public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
+        $v = Cache::get('dashboard_version', 0);
         $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
         
-        return Cache::remember("dashboard:recent_activities:{$scopeKey}", 120, function () {
+        return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
                 ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))

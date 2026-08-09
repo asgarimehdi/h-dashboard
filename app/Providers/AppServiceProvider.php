@@ -58,17 +58,17 @@ class AppServiceProvider extends ServiceProvider
         Hardware::observe(HardwareAuditObserver::class);
 
         // Invalidate report caches on Todo/Ticket changes (Issue #320)
-        Todo::created(fn () => Cache::increment('report_todos_version'));
-        Todo::updated(fn () => Cache::increment('report_todos_version'));
-        Todo::deleted(fn () => Cache::increment('report_todos_version'));
+        Todo::created(function () { Cache::increment('report_todos_version'); Cache::increment('dashboard_version'); });
+        Todo::updated(function () { Cache::increment('report_todos_version'); Cache::increment('dashboard_version'); });
+        Todo::deleted(function () { Cache::increment('report_todos_version'); Cache::increment('dashboard_version'); });
 
-        Ticket::created(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); });
-        Ticket::updated(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); });
-        Ticket::deleted(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); });
+        Ticket::created(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); Cache::increment('dashboard_version'); });
+        Ticket::updated(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); Cache::increment('dashboard_version'); });
+        Ticket::deleted(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); Cache::increment('dashboard_version'); });
 
-        // Invalidate units report + hierarchy + GIS caches on Unit changes (Issues #340, #372)
-        Unit::created(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });
-        Unit::updated(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });
-        Unit::deleted(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); });
+        // Invalidate units report + hierarchy + GIS + maps caches on Unit changes (Issues #340, #372, #391)
+        Unit::created(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); });
+        Unit::updated(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); });
+        Unit::deleted(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); });
     }
 }

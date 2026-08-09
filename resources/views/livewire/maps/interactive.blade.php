@@ -19,7 +19,8 @@ return new class extends Component
 
         // Cache key based on accessibleIds only (not allIds with ancestors)
         // This ensures cache is isolated per organizational scope
-        $cacheKey = 'interactive_map:units:' . md5(implode(',', $allIds));
+        $v = Cache::get('maps_version', 0);
+        $cacheKey = 'interactive_map:units:v' . $v . ':' . md5(implode(',', $allIds));
 
         $this->units = Cache::remember($cacheKey, 300, function () use ($allIds) {
             return Unit::whereIn('id', $allIds)

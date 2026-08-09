@@ -24,7 +24,7 @@ return new class extends Component
             ->whereNotNull('region_id')
             ->pluck('region_id');
 
-        $this->regions = Cache::remember('county:regions_with_boundaries:' . md5(implode(',', $accessibleRegionIds)), 300, function () use ($accessibleRegionIds) {
+        $this->regions = Cache::remember('county:regions_with_boundaries:v' . Cache::get('maps_version', 0) . ':' . md5(implode(',', $accessibleRegionIds)), 300, function () use ($accessibleRegionIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
                 ->whereIn('regions.id', $accessibleRegionIds)

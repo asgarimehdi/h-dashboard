@@ -30,14 +30,15 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->regions = Cache::remember('unit_map:regions', 300, function () {
+        $v = Cache::get('maps_version', 0);
+        $this->regions = Cache::remember('unit_map:regions:v' . $v, 300, function () {
             return Region::where('type', 'county')
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
         });
 
-        $this->centerTypes = Cache::remember('unit_map:center_types', 300, function () {
+        $this->centerTypes = Cache::remember('unit_map:center_types:v' . $v, 300, function () {
             return UnitType::whereIn('id', [5, 6, 7])
                 ->select('id', 'name')
                 ->get()
@@ -64,7 +65,7 @@ return new class extends Component
             return;
         }
 
-        $cacheKey = 'county_boundaries_' . md5(implode(',', $this->selectedRegions));
+        $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0) . '_' . md5(implode(',', $this->selectedRegions));
 
         $counties = Cache::remember($cacheKey, 300, function () {
             return Region::whereIn('id', $this->selectedRegions)
