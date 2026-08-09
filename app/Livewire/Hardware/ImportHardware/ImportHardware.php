@@ -85,7 +85,6 @@ class ImportHardware extends Component
 
             $this->showPreview = true;
             $this->importResults = $results;
-            $this->importResults['import'] = $import; // Store import object for second pass
 
             $this->success('پیش‌نمایش ایمپورت آماده شد. تغییرات را بررسی و تایید کنید.', 'موفقیت');
         } catch (\Exception $e) {
@@ -95,13 +94,15 @@ class ImportHardware extends Component
 
     public function confirmImport(): void
     {
-        if (!$this->importResults || !isset($this->importResults['import'])) {
+        if (!$this->importResults) {
             $this->error('داده‌ای برای ایمپورت وجود ندارد.', 'خطا');
             return;
         }
 
         try {
-            $import = $this->importResults['import'];
+            $import = new HardwareImport();
+            $import->setCompareKey($this->compareKey);
+            $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
             $import->setSelectedActions($this->getSelectedActions());
 
             Excel::import($import, $this->file->getRealPath());
@@ -136,8 +137,17 @@ class ImportHardware extends Component
     {
         $actions = [];
         foreach ($this->previewData as $index => $row) {
-            if (isset($row['id'])) {
-                $actions[$index] = $row['selected_action'] ?? $this->selectedAction;
+            // For create status, there's no 'id' yet, so check for pc_name or n_code
+            if (isset($row['id']) || isset($row['pc_name']) || isset($row['n_code'])) {
+                // Match the format used in applySelectedAction: row_{rowNumber}
+                // rowNumber = index + 2 (header row + 1-indexed)
+                // Use row status as default action: create->create, update->update, unchanged/skip/error->skip
+                $defaultAction = match($row['status'] ?? 'create') {
+                    'create' => 'create',
+                    'update' => 'update',
+                    default => 'skip',
+                };
+                $actions["row_" . ($index + 2)] = $row['selected_action'] ?? $defaultAction;
             }
         }
         return $actions;

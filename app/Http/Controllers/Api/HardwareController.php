@@ -394,11 +394,12 @@ class HardwareController extends Controller
         $request = \Illuminate\Support\Facades\Request::capture();
 
         $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
+            $changes = $changesPerItem ? $changesPerItem($hardware) : $staticChanges;
             return [
                 'hardware_id' => $hardware->id,
                 'user_id' => $user?->id,
                 'action' => $action,
-                'changes' => $changesPerItem ? $changesPerItem($hardware) : $staticChanges,
+                'changes' => $changes ? json_encode($changes, JSON_UNESCAPED_UNICODE) : null,
                 'source' => 'bulk',
                 'ip_address' => $request?->ip(),
                 'user_agent' => $request?->userAgent(),

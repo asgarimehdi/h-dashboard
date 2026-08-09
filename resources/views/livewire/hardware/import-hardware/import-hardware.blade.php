@@ -11,7 +11,7 @@
         <x-help:modal wireModel="showHelpModal" />
 
         <div class="alert alert-info mb-6">
-            <x-icon name="o-info-circle" class="w-5 h-5" />
+            <x-icon name="o-information-circle" class="w-5 h-5" />
             <span>
                 فرمت‌های پشتیبانی شده: <strong>.xlsx، .xls، .csv</strong> (حداکثر ۱۰ مگابایت).
                 فایل باید شامل ستون‌های: <code class="px-1 bg-base-200 rounded">n_code</code>، <code class="px-1 bg-base-200 rounded">pc_name</code>، <code class="px-1 bg-base-200 rounded">type</code>، <code class="px-1 bg-base-200 rounded">os</code>، <code class="px-1 bg-base-200 rounded">ip_local</code>، <code class="px-1 bg-base-200 rounded">mac</code> و سایر فیلدهای سخت‌افزار باشد.
@@ -55,7 +55,7 @@
                     </label>
                 </div>
 
-                <x-button wire:click="importPreview" class="btn-primary w-full max-w-xl" :loading="wire:loading">
+                <x-button wire:click="importPreview" class="btn-primary w-full max-w-xl" spinner="wire:loading">
                     <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                     پیش‌نمایش و مقایسه
                 </x-button>
@@ -93,17 +93,17 @@
                         </thead>
                         <tbody>
                             @foreach($previewData as $index => $row)
-                                <tr class="{{ $row['action'] === 'create' ? 'bg-success/10' : ($row['action'] === 'update' ? 'bg-warning/10' : 'bg-base-100') }}">
+                                <tr class="{{ $row['status'] === 'create' ? 'bg-success/10' : ($row['status'] === 'update' ? 'bg-warning/10' : 'bg-base-100') }}">
                                     <td>{{ $index + 1 }}</td>
                                     <td>
                                         <select
                                             wire:model="previewData.{{ $index }}.selected_action"
                                             class="select select-sm w-full max-w-xs"
-                                            @if($row['action'] === 'skip') disabled @endif
+                                            @if($row['status'] === 'skip') disabled @endif
                                         >
-                                            <option value="create" @if($row['action'] === 'create') selected @endif>ایجاد جدید</option>
-                                            <option value="update" @if($row['action'] === 'update') selected @endif>بروزرسانی</option>
-                                            <option value="skip" @if($row['action'] === 'skip') selected @endif>نادیده بگیر</option>
+                                            <option value="create" @if($row['status'] === 'create') selected @endif>ایجاد جدید</option>
+                                            <option value="update" @if($row['status'] === 'update') selected @endif>بروزرسانی</option>
+                                            <option value="skip" @if($row['status'] === 'skip') selected @endif>نادیده بگیر</option>
                                         </select>
                                     </td>
                                     <td class="font-mono font-medium">{{ $row['pc_name'] ?? '-' }}</td>
@@ -149,10 +149,10 @@
 
                 <div class="flex justify-end gap-3">
                     <x-button wire:click="cancelImport" variant="ghost">
-                        <x-icon name="o-x" class="w-5 h-5" />
+                        <x-icon name="o-x-mark" class="w-5 h-5" />
                         انصراف
                     </x-button>
-                    <x-button wire:click="confirmImport" class="btn-primary" :loading="wire:loading">
+                    <x-button wire:click="confirmImport" class="btn-primary" spinner="wire:loading">
                         <x-icon name="o-check" class="w-5 h-5" />
                         تایید و انجام ایمپورت
                     </x-button>

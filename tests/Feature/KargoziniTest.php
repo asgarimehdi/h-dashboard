@@ -43,7 +43,7 @@ beforeEach(function () {
     Session::put('current_unit_id', $this->unit->id);
 });
 
-test('kargozini lookup pages render and allow CRUD', function ($component, $model, $field) {
+test('kargozini lookup pages render and allow CRUD', function ($component, $model, $field, $createMethod) {
     Livewire::actingAs($this->user)
         ->test($component)
         ->assertOk();
@@ -52,14 +52,14 @@ test('kargozini lookup pages render and allow CRUD', function ($component, $mode
     Livewire::actingAs($this->user)
         ->test($component)
         ->set('name', 'تست جدید')
-        ->call('store');
+        ->call($createMethod);
 
     $this->assertDatabaseHas($model, ['name' => 'تست جدید']);
 })->with([
-    ['kargozini.estekhdam', 'estekhdams', 'name'],
-    ['kargozini.tahsil', 'tahsils', 'name'],
-    ['kargozini.semat', 'semats', 'name'],
-    ['kargozini.radif', 'radifs', 'name'],
+    ['kargozini.estekhdam', 'estekhdams', 'name', 'createEstekhdam'],
+    ['kargozini.tahsil', 'tahsils', 'name', 'createTahsil'],
+    ['kargozini.semat', 'semats', 'name', 'createSemat'],
+    ['kargozini.radif', 'radifs', 'name', 'createRadif'],
 ]);
 
 test('persons page allows CRUD and respects organizational scope', function () {
@@ -79,7 +79,7 @@ test('persons page allows CRUD and respects organizational scope', function () {
         ->set('t_id', $this->tahsil->id)
         ->set('e_id', $this->estekhdam->id)
         ->set('r_id', $this->radif->id)
-        ->call('store');
+        ->call('savePerson');
 
     $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
 

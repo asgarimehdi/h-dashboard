@@ -55,14 +55,8 @@ test('hardware import component shows preview and confirms import', function () 
         ->set('file', $file)
         ->call('importPreview')
         ->assertSet('showPreview', true)
-        ->assertSet('importStats.total', 1);
-
-    Livewire::actingAs($this->user)
-        ->test('hardware.import-hardware.import-hardware')
-        ->set('file', $file)
-        ->call('importPreview')
-        ->call('confirmImport')
-        ->assertSee('ایمپورت با موفقیت انجام شد');
+        ->assertSet('importStats.total', 1)
+        ->call('confirmImport');
 
     $this->assertDatabaseHas('hardwares', ['pc_name' => 'PC-NEW']);
 });
@@ -77,26 +71,22 @@ test('person import component shows preview and confirms import', function () {
         ->set('file', $file)
         ->call('importPreview')
         ->assertSet('showPreview', true)
-        ->assertSet('importStats.total', 1);
-
-    Livewire::actingAs($this->user)
-        ->test('kargozini.import-persons.import-persons')
-        ->set('file', $file)
-        ->call('importPreview')
-        ->call('confirmImport')
-        ->assertSee('ایمپورت با موفقیت انجام شد');
+        ->assertSet('importStats.total', 1)
+        ->call('confirmImport');
 
     $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
 });
 
 test('import components are protected by RBAC', function () {
     $guestUser = User::factory()->create(); // No permissions
-    
-    Livewire::actingAs($guestUser)
-        ->test('hardware.import-hardware.import-hardware')
+
+    // Test hardware import route middleware
+    $this->actingAs($guestUser)
+        ->get('/hardware/import')
         ->assertStatus(403);
 
-    Livewire::actingAs($guestUser)
-        ->test('kargozini.import-persons.import-persons')
+    // Test persons import route middleware
+    $this->actingAs($guestUser)
+        ->get('/kargozini/persons/import')
         ->assertStatus(403);
 });

@@ -52,6 +52,9 @@ class HardwareAuditTest extends TestCase
             'password' => Hash::make('password'),
         ]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+        // Ensure permission exists and give to user for rollback test
+        \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'manage_hardware']);
+        $this->user->givePermissionTo('manage_hardware');
         Session::put('current_unit_id', $this->unit->id);
 
         $this->actingAs($this->user);
@@ -94,7 +97,7 @@ class HardwareAuditTest extends TestCase
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token,
-        ])->getJson("/api/hardware/{$this->hardware->id}/history");
+        ])->getJson("/api/hardware/{$this->hardware->id}/audits");
 
         $response->assertStatus(200)
             ->assertJsonPath('meta.total', 1);

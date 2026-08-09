@@ -23,6 +23,9 @@ function makeAuditLivewireUser(): array
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+    // Ensure permission exists (seeded by PermissionSeeder)
+    \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'manage_hardware']);
+    $user->givePermissionTo('manage_hardware');
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $unit->id);
 

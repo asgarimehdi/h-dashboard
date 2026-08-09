@@ -382,7 +382,7 @@ return new class extends Component
             return;
         }
 
-        $unitId = Hardware::where('id', $this->historyHardwareId)
+        $unitId = Hardware::where('hardwares.id', $this->historyHardwareId)
             ->join('persons', 'hardwares.n_code', '=', 'persons.n_code')
             ->value('persons.u_id');
 
