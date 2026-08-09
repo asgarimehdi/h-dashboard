@@ -36,11 +36,29 @@ class HardwareAuditMigrationTest extends TestCase
     public function test_hardware_audits_has_no_fk_cascade_on_hardware_id(): void
     {
         // The whole point of the merge: deleting a hardware record must NOT
-        // wipe its audit trail. Verify there is no FK constraint on hardware_id
-        // (SQLite: check foreign_key_list is empty for hardware_id).
-        $fks = collect(DB::select('PRAGMA foreign_key_list("hardware_audits")'))
-            ->where('from', 'hardware_id');
+        // wipe its audit trail. Verify there is no FK constraint on hardware_id.
+        // Use driver-agnostic approach.
+        $driver = DB::getDriverName();
 
-        $this->assertCount(0, $fks, 'hardware_id should not have a FK (audit trail must survive deletion)');
+        if ($driver === 'sqlite') {
+            // SQLite: check foreign_key_list is empty for hardware_id
+            $fks = collect(DB::select('PRAGMA foreign_key_list("hardware_audits")'))
+                ->where('from', 'hardware_id');
+            $this->assertCount(0, $fks, 'hardware_id should not have a FK (audit trail must survive deletion)');
+        } elseif ($driver === 'mysql') {
+            // MySQL: check information_schema for FK on hardware_id
+            $fks = DB::select("
+                SELECT * FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'hardware_audits'
+                AND COLUMN_NAME = 'hardware_id'
+                AND REFERENCED_TABLE_NAME IS NOT NULL
+            ");
+            $this->assertCount(0, $fks, 'hardware_id should not have a FK (audit trail must survive deletion)');
+        } else {
+            // For other drivers, use Laravel's schema introspection if available
+            // or skip with a warning
+            $this->markTestSkipped("FK check not implemented for driver: {$driver}");
+        }
     }
 }

@@ -71,7 +71,12 @@ class Hardware extends Model
      */
     public static function flushStatsCache(): void
     {
-        \Illuminate\Support\Facades\Cache::increment('hardware_stats_version');
+        $cache = \Illuminate\Support\Facades\Cache::store('database');
+        // Ensure the key exists before incrementing (database driver requires existing key)
+        if (!$cache->has('hardware_stats_version')) {
+            $cache->put('hardware_stats_version', 0, 600); // 10 minutes TTL
+        }
+        $cache->increment('hardware_stats_version');
     }
 
     public function person(): BelongsTo
