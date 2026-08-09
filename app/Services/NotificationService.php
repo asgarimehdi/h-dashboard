@@ -16,7 +16,7 @@ class NotificationService
         ?string $url = null,
         ?array $data = null
     ): NotificationModel {
-        return NotificationModel::create([
+        $notification = NotificationModel::create([
             'user_id' => $userId,
             'type' => $type,
             'title' => $title,
@@ -26,6 +26,11 @@ class NotificationService
             'url' => $url,
             'data' => $data,
         ]);
+
+        // Issue #393: invalidate the bell component cache for the recipient
+        \Illuminate\Support\Facades\Cache::forget("notifications:user:{$userId}");
+
+        return $notification;
     }
 
     public static function notifyUnit(int $unitId, string $type, string $title, ?string $body = null, ?string $url = null): void
@@ -51,5 +56,10 @@ class NotificationService
         ])->toArray();
 
         \App\Models\Notification::insert($notifications);
+
+        // Issue #393: invalidate bell cache for all recipients
+        foreach ($userIds as $userId) {
+            \Illuminate\Support\Facades\Cache::forget("notifications:user:{$userId}");
+        }
     }
 }
