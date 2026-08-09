@@ -63,10 +63,13 @@ test('kargozini lookup pages render and allow CRUD', function ($component, $mode
 ]);
 
 test('persons page allows CRUD and respects organizational scope', function () {
-    Livewire::actingAs($this->user)
+    $component = Livewire::actingAs($this->user)
         ->test('kargozini.person')
-        ->assertOk()
-        ->assertSee('تست کاربر');
+        ->assertOk();
+
+    // The table renders f_name and l_name in separate cells
+    $component->assertSee('تست');
+    $component->assertSee('کاربر');
 
     // Create new person
     Livewire::actingAs($this->user)
@@ -120,10 +123,22 @@ test('kargozini pages are protected by RBAC', function () {
 });
 
 test('person search normalizes Persian characters', function () {
-    // Person exists as 'احمد' (Persian)
-    // Search for 'أحمد' (Arabic/Other variant)
+    // Create a person with Persian characters
+    $personWithArabic = Person::create([
+        'n_code' => '5555555555',
+        'f_name' => 'احمد',  // Persian Yeh
+        'l_name' => 'محمدی',
+        'u_id' => $this->unit->id,
+        's_id' => $this->semat->id,
+        't_id' => $this->tahsil->id,
+        'e_id' => $this->estekhdam->id,
+        'r_id' => $this->radif->id,
+    ]);
+
+    // Search for Arabic variant (Arabic Yeh instead of Persian Yeh)
     Livewire::actingAs($this->user)
         ->test('kargozini.person')
-        ->set('search', 'أحمد') // Arabic variant
-        ->assertSee('تست کاربر');
+        ->set('search', 'أحمد') // Arabic Yeh
+        ->assertSee('احمد')
+        ->assertSee('محمدی');
 });

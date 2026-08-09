@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Person extends Model
 {
@@ -35,6 +36,16 @@ class Person extends Model
                 }
             }
         });
+    }
+
+    /**
+     * Get the person's full name (f_name + l_name).
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => trim("{$this->f_name} {$this->l_name}") ?: '—'
+        );
     }
 
     /**
