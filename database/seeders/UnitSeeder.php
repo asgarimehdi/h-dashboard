@@ -7906,9 +7906,32 @@ class UnitSeeder extends Seeder
             ],
         ];
 
-        // وارد کردن داده‌ها
+        // وارد کردن داده‌ها — bulk insert (fast) since Unit has no model hooks.
+        // Rows have inconsistent key sets — normalize them to a single column order.
+        $columns = [];
         foreach ($units as $unit) {
-            Unit::create($unit);
+            foreach (array_keys($unit) as $key) {
+                $columns[$key] = true;
+            }
+        }
+        $columns['created_at'] = true;
+        $columns['updated_at'] = true;
+        $columns = array_keys($columns);
+
+        $now = now()->toDateTimeString();
+        $normalized = [];
+        foreach ($units as $unit) {
+            $row = [];
+            foreach ($columns as $column) {
+                $row[$column] = $unit[$column] ?? (in_array($column, ['created_at', 'updated_at']) ? $now : null);
+            }
+            $normalized[] = $row;
+        }
+
+        unset($units);
+
+        foreach (array_chunk($normalized, 200) as $chunk) {
+            DB::table('units')->insert($chunk);
         }
 
         $maxId = DB::table('units')->max('id');
