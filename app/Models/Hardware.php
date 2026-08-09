@@ -73,6 +73,8 @@ class Hardware extends Model
     {
         \Illuminate\Support\Facades\Cache::increment('hardware_stats_version');
         \Illuminate\Support\Facades\Cache::increment('gis_version'); // Issue #373: imports also change map data
+        \Illuminate\Support\Facades\Cache::increment('maps_version'); // Issue #394
+        \Illuminate\Support\Facades\Cache::increment('dashboard_version'); // Issue #394
     }
 
     public function person(): BelongsTo
