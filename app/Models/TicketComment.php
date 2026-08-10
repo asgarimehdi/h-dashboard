@@ -127,6 +127,6 @@ class TicketComment extends Model
         if ($this->user_id === $user->id) {
             return true;
         }
-        return $user->can('manage_tickets') || $user->hasRole('admin');
+        return $user->can('manage_unit_tickets') || $user->hasRole('admin');
     }
 }

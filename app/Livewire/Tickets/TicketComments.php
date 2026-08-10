@@ -170,7 +170,7 @@ class TicketComments extends Component
             return;
         }
         // author or admin
-        if ($comment->user_id === auth()->id() || auth()->user()->hasRole('admin') || auth()->user()->can('manage_tickets')) {
+        if ($comment->user_id === auth()->id() || auth()->user()->hasRole('admin') || auth()->user()->can('manage_unit_tickets')) {
             $comment->delete();
             $this->refreshComments();
         }

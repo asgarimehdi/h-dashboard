@@ -28,7 +28,7 @@
             مجوزهای تیکتینگ
         </h4>
         <div class="grid grid-cols-2 gap-2 text-sm">
-            <span class="badge badge-outline">manage_tickets</span> <span class="text-base-content/70">مدیریت کامل تیکت‌ها</span>
+            <span class="badge badge-outline">manage_unit_tickets</span> <span class="text-base-content/70">مدیریت و ارجاع تیکت‌های واحد</span>
             <span class="badge badge-outline">view_tickets</span> <span class="text-base-content/70">مشاهده تیکت‌ها</span>
             <span class="badge badge-outline">create_tickets</span> <span class="text-base-content/70">ایجاد تیکت جدید</span>
             <span class="badge badge-outline">assign_tickets</span> <span class="text-base-content/70">ارجاع/تخصیص تیکت</span>

@@ -73,7 +73,7 @@ class TicketCommentPolicy
             return false;
         }
 
-        return $user->can('manage_tickets') || $user->hasRole('admin');
+        return $user->can('manage_unit_tickets') || $user->hasRole('admin');
     }
 
     /**
