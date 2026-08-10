@@ -268,34 +268,47 @@ class GisController extends Controller
         $cacheKey = $this->gisCacheKey('stats', $accessibleIds, $bbox);
 
         $data = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
+            // Build bbox conditions once and reuse across all three counts (#402)
+            $bboxConditions = [];
+            if ($request->filled('bbox')) {
+                $bbox = explode(',', $request->bbox);
+                if (count($bbox) === 4) {
+                    [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
+                    $bboxConditions = [
+                        ['units.lat', '>=', $minLat],
+                        ['units.lat', '<=', $maxLat],
+                        ['units.lng', '>=', $minLon],
+                        ['units.lng', '<=', $maxLon],
+                    ];
+                }
+            }
+
             // Units count (in bbox)
-            $unitsQuery = Unit::whereIn('id', $accessibleIds)
-                ->whereNotNull('lat')->whereNotNull('lng');
-            $this->applyBbox($unitsQuery, $request);
-            $unitsCount = $unitsQuery->count();
+            $unitsCount = Unit::whereIn('id', $accessibleIds)
+                ->whereNotNull('lat')->whereNotNull('lng')
+                ->when($bboxConditions, fn ($q) => $q->where($bboxConditions))
+                ->count();
 
-            // Hardware count (in bbox via person.unit)
-            $hardwareQuery = Hardware::whereHas('person', function ($q) use ($accessibleIds) {
-                $q->whereIn('u_id', $accessibleIds);
-            })->whereHas('person.unit', function ($q) use ($request) {
-                $q->whereNotNull('lat')->whereNotNull('lng');
-                $this->applyBbox($q, $request);
-            });
-            $hardwareCount = $hardwareQuery->count();
+            // Hardware count (in bbox via person.unit) — direct JOIN instead of whereHas (#402)
+            $hardwareCount = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+                ->join('units', 'persons.u_id', '=', 'units.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->whereNotNull('units.lat')->whereNotNull('units.lng')
+                ->when($bboxConditions, fn ($q) => $q->where($bboxConditions))
+                ->count();
 
-            // Open tickets count (in bbox via unit)
-            $ticketsQuery = Ticket::whereIn('unit_id', $accessibleIds)
-                ->where('status', '!=', 'completed')
-                ->whereHas('unit', function ($q) use ($request) {
-                    $q->whereNotNull('lat')->whereNotNull('lng');
-                    $this->applyBbox($q, $request);
-                });
-            $openTicketsCount = $ticketsQuery->count();
+            // Open tickets count (in bbox via unit) — direct JOIN instead of whereHas (#402)
+            $ticketsCount = Ticket::join('units', 'tickets.unit_id', '=', 'units.id')
+                ->whereIn('tickets.unit_id', $accessibleIds)
+                ->where('tickets.status', '!=', 'completed')
+                ->whereNotNull('units.lat')->whereNotNull('units.lng')
+                ->when($bboxConditions, fn ($q) => $q->where($bboxConditions))
+                ->count();
 
             return [
                 'units' => $unitsCount,
                 'hardware' => $hardwareCount,
-                'open_tickets' => $openTicketsCount,
+                'open_tickets' => $ticketsCount,
             ];
         });
 
