@@ -36,6 +36,28 @@ class GisController extends Controller
     }
 
     /**
+     * Bbox filter for queries with prefixed/aliased columns (JOINs) — Issue #404.
+     */
+    protected function applyBboxAliased($query, Request $request)
+    {
+        if (! $request->filled('bbox')) {
+            return $query;
+        }
+
+        $bbox = explode(',', $request->bbox);
+        if (count($bbox) !== 4) {
+            return $query;
+        }
+
+        [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
+
+        $query->whereBetween('units.lat', [$minLat, $maxLat])
+              ->whereBetween('units.lng', [$minLon, $maxLon]);
+
+        return $query;
+    }
+
+    /**
      * Build a normalized bbox string for cache keys (2 decimal places).
      */
     protected function normalizedBbox(Request $request): string
@@ -134,37 +156,53 @@ class GisController extends Controller
         $cacheKey = $this->gisCacheKey('hardware', $accessibleIds, $bbox, $extra);
 
         $features = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
-            $query = Hardware::with('person.unit:id,name,lat,lng')
-                ->whereHas('person', function ($q) use ($accessibleIds) {
-                    $q->whereIn('u_id', $accessibleIds);
-                })
-                ->whereHas('person.unit', function ($q) use ($request) {
-                    $q->whereNotNull('lat')->whereNotNull('lng');
-                    $this->applyBbox($q, $request);
-                });
+            // Direct JOIN instead of eager-loading 3 model layers — collects only the
+            // columns the GeoJSON needs (unit name/coords + person name) (#404)
+            $query = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+                ->join('units', 'persons.u_id', '=', 'units.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->whereNotNull('units.lat')->whereNotNull('units.lng')
+                ->select(
+                    'hardwares.id',
+                    'hardwares.n_code',
+                    'hardwares.pc_name',
+                    'hardwares.type',
+                    'hardwares.os',
+                    'hardwares.cpu',
+                    'hardwares.ram',
+                    'hardwares.hdd',
+                    'hardwares.shutdown',
+                    'hardwares.mark',
+                    'units.id as unit_id',
+                    'units.name as unit_name',
+                    'units.lat as unit_lat',
+                    'units.lng as unit_lng',
+                    'persons.f_name',
+                    'persons.l_name'
+                );
+
+            $this->applyBboxAliased($query, $request);
 
             if ($request->filled('type')) {
-                $query->where('type', 'LIKE', "%{$request->type}%");
+                $query->where('hardwares.type', 'LIKE', "%{$request->type}%");
             }
             if ($request->filled('shutdown')) {
-                $query->where('shutdown', $request->boolean('shutdown'));
+                $query->where('hardwares.shutdown', $request->boolean('shutdown'));
             }
             if ($request->filled('mark')) {
-                $query->where('mark', $request->boolean('mark'));
+                $query->where('hardwares.mark', $request->boolean('mark'));
             }
 
             $hardware = $query->limit(1000)->get();
 
             return $hardware->map(function ($hw) {
-                $unit = $hw->person?->unit;
-
                 return [
                     'type' => 'Feature',
                     'id' => $hw->id,
-                    'geometry' => $unit ? [
+                    'geometry' => [
                         'type' => 'Point',
-                        'coordinates' => [(float) $unit->lng, (float) $unit->lat],
-                    ] : null,
+                        'coordinates' => [(float) $hw->unit_lng, (float) $hw->unit_lat],
+                    ],
                     'properties' => [
                         'id' => $hw->id,
                         'n_code' => $hw->n_code,
@@ -176,14 +214,14 @@ class GisController extends Controller
                         'hdd' => $hw->hdd,
                         'shutdown' => (bool) $hw->shutdown,
                         'mark' => (bool) $hw->mark,
-                        'unit' => $unit ? [
-                            'id' => $unit->id,
-                            'name' => $unit->name,
-                        ] : null,
-                        'person' => $hw->person ? [
-                            'n_code' => $hw->person->n_code,
-                            'name' => trim($hw->person->f_name . ' ' . $hw->person->l_name),
-                        ] : null,
+                        'unit' => [
+                            'id' => $hw->unit_id,
+                            'name' => $hw->unit_name,
+                        ],
+                        'person' => [
+                            'n_code' => $hw->n_code,
+                            'name' => trim($hw->f_name . ' ' . $hw->l_name),
+                        ],
                     ],
                 ];
             })->values()->all();
