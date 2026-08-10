@@ -49,7 +49,7 @@ class Hardware extends Model
         static::saving(function (self $model) {
             $fields = ['pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type', 'switch', 'vlan', 'motherboard', 'comments'];
             foreach ($fields as $field) {
-                if ($model->isDirty($field) && !empty($model->$field) && is_string($model->$field)) {
+                if ($model->isDirty($field) && ! empty($model->$field) && is_string($model->$field)) {
                     $model->$field = self::normalizeForSearch($model->$field);
                 }
             }
@@ -72,7 +72,7 @@ class Hardware extends Model
      */
     public static function flushStatsCache(): void
     {
-        if (!Cache::has('hardware_stats_version')) {
+        if (! Cache::has('hardware_stats_version')) {
             Cache::put('hardware_stats_version', 0, 600); // 10 minutes TTL
         }
         Cache::increment('hardware_stats_version');

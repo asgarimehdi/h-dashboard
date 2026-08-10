@@ -2,21 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Unit;
-use App\Models\Province;
-use App\Models\Region;
 use App\Models\Boundary;
+use App\Models\Region;
+use App\Models\Unit;
+use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Tests\TestCase;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->seed(\Database\Seeders\PermissionSeeder::class);
+    $this->seed(PermissionSeeder::class);
 
     $this->unit = Unit::create([
         'name' => 'واحد تست',
@@ -57,7 +56,7 @@ test('county map page renders shared map container', function () {
     // SQLite does not ship PostGIS. Register lightweight stubs for the GIS
     // functions the county page (and its boundary insert) rely on so the page
     // can render in the test environment.
-    $pdo = \Illuminate\Support\Facades\DB::connection()->getPdo();
+    $pdo = DB::connection()->getPdo();
     $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
     $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
 

@@ -2,21 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Unit;
 use App\Models\Person;
 use App\Models\Ticket;
-use App\Models\Todo;
+use App\Models\Unit;
+use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Tests\TestCase;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->seed(\Database\Seeders\PermissionSeeder::class);
+    $this->seed(PermissionSeeder::class);
 
     DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
@@ -34,12 +33,12 @@ beforeEach(function () {
         'e_id' => 1,
         'r_id' => 1,
     ]);
-    
+
     $this->user = User::factory()->create(['n_code' => $this->person->n_code]);
     $this->user->givePermissionTo('view_assigned_tickets');
     $this->user->givePermissionTo('create_ticket');
     $this->user->givePermissionTo('view_all_tickets');
-    
+
     Session::put('current_unit_id', $this->unit->id);
 });
 
@@ -117,7 +116,7 @@ test('monitoring page renders tickets and displays Persian status', function () 
 
 test('tickets pages are protected by RBAC', function () {
     $noPermUser = User::factory()->create();
-    
+
     // Inbox requires 'view_assigned_tickets'
     $this->actingAs($noPermUser)
         ->get('/tickets/inbox')
@@ -137,7 +136,7 @@ test('tickets pages are protected by RBAC', function () {
 test('ticket model helpers return expected values', function () {
     $ticket = new Ticket(['status' => 'created']);
     expect($ticket->canBeCompleted())->toBeFalse();
-    
+
     $ticketNew = new Ticket(['status' => 'accepted']);
     expect($ticketNew->canBeCompleted())->toBeTrue();
 });

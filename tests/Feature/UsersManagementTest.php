@@ -2,19 +2,21 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Unit;
 use App\Models\Person;
+use App\Models\Unit;
+use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Tests\TestCase;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->seed(\Database\Seeders\PermissionSeeder::class);
+    $this->seed(PermissionSeeder::class);
 
     DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
@@ -32,11 +34,11 @@ beforeEach(function () {
         'e_id' => 1,
         'r_id' => 1,
     ]);
-    
+
     $this->admin = User::factory()->create(['n_code' => $this->person->n_code]);
     $this->admin->givePermissionTo('manage_users');
     $this->admin->givePermissionTo('manage_roles');
-    
+
     Session::put('current_unit_id', $this->unit->id);
 });
 
@@ -84,7 +86,7 @@ test('create user persists data and assigns roles', function () {
         's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
     ]);
 
-    $role = \Spatie\Permission\Models\Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
 
     Livewire::actingAs($this->admin)
         ->test('users.index')
@@ -95,7 +97,7 @@ test('create user persists data and assigns roles', function () {
         ->call('createUser');
 
     $this->assertDatabaseHas('users', ['n_code' => '9998887776']);
-    $this->assertTrue(\App\Models\User::where('n_code', '9998887776')->first()->hasRole('operator'));
+    $this->assertTrue(User::where('n_code', '9998887776')->first()->hasRole('operator'));
 });
 
 test('change password updates password correctly', function () {
@@ -113,7 +115,7 @@ test('change password updates password correctly', function () {
         ->set('newPasswordConfirmation', $newPassword)
         ->call('changePassword');
 
-    $this->assertTrue(\Illuminate\Support\Facades\Hash::check($newPassword, $user->fresh()->password));
+    $this->assertTrue(Hash::check($newPassword, $user->fresh()->password));
 });
 
 test('roles and permissions pages render and allow modifications', function () {
@@ -128,7 +130,7 @@ test('roles and permissions pages render and allow modifications', function () {
 
 test('users management pages are protected by RBAC', function () {
     $noPermUser = User::factory()->create();
-    
+
     $urls = ['/users', '/roles', '/permissions'];
 
     foreach ($urls as $url) {
