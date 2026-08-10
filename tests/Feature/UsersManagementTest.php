@@ -41,7 +41,8 @@ beforeEach(function () {
 });
 
 test('users index renders and filters results', function () {
-    // Create a person for the other user first (FK constraint)
+    // Create persons for the users first (FK constraint).
+    // Note: the signed-in admin is excluded from the list by the component.
     Person::create([
         'n_code' => '1112223334',
         'f_name' => 'کاربر',
@@ -51,17 +52,26 @@ test('users index renders and filters results', function () {
     ]);
     $otherUser = User::factory()->create(['n_code' => '1112223334']);
 
-    Livewire::actingAs($this->admin)
-        ->test('users.index')
-        ->assertOk()
-        ->assertSee('تست کاربر')
-        ->assertSee('کاربر دیگر');
+    Person::create([
+        'n_code' => '2223334445',
+        'f_name' => 'کاربر',
+        'l_name' => 'دوم',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $secondUser = User::factory()->create(['n_code' => '2223334445']);
 
     Livewire::actingAs($this->admin)
         ->test('users.index')
-        ->set('search', 'کاربر دیگر')
+        ->assertOk()
         ->assertSee('کاربر دیگر')
-        ->assertDontSee('تست کاربر');
+        ->assertSee('کاربر دوم');
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'کاربر دوم')
+        ->assertSee('کاربر دوم')
+        ->assertDontSee('کاربر دیگر');
 });
 
 test('create user persists data and assigns roles', function () {
@@ -74,15 +84,18 @@ test('create user persists data and assigns roles', function () {
         's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
     ]);
 
+    $role = \Spatie\Permission\Models\Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
     Livewire::actingAs($this->admin)
         ->test('users.index')
         ->call('openFormForCreate')
         ->set('n_code', '9998887776')
         ->set('password', 'password123')
-        ->set('role_ids', [$this->admin->roles->first()->id])
+        ->set('role_ids', [$role->id])
         ->call('createUser');
 
     $this->assertDatabaseHas('users', ['n_code' => '9998887776']);
+    $this->assertTrue(\App\Models\User::where('n_code', '9998887776')->first()->hasRole('operator'));
 });
 
 test('change password updates password correctly', function () {
