@@ -73,16 +73,24 @@
                             @if ($comment->children->count() > 0)
                                 <div class="pr-6 mt-2 space-y-2 border-r-2 border-base-200">
                                     @foreach ($comment->children as $child)
-                                        <div class="bg-base-200/40 rounded-lg p-2">
+                                        <div class="border border-base-300 rounded-lg p-3">
                                             <div class="flex items-center justify-between">
-                                                <span class="text-[11px] font-bold">
-                                                    {{ $child->user?->person?->f_name }} {{ $child->user?->person?->l_name }}
-                                                </span>
+                                                <div class="flex items-center gap-2">
+                                                    <div class="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+                                                        {{ mb_substr($child->user?->person?->f_name ?? '؟', 0, 1) }}
+                                                    </div>
+                                                    <span class="text-xs font-bold">
+                                                        {{ $child->user?->person?->f_name }} {{ $child->user?->person?->l_name }}
+                                                        @if ($child->is_system)
+                                                            <span class="badge badge-xs badge-info">سیستمی</span>
+                                                        @endif
+                                                    </span>
+                                                </div>
                                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($child->created_at)->format('H:i - Y/m/d') }}</span>
                                             </div>
-                                            <p class="text-xs leading-5 mt-1 whitespace-pre-wrap">{!! $child->body_html !!}</p>
+                                            <p class="text-sm leading-6 mt-2 whitespace-pre-wrap">{!! $child->body_html !!}</p>
                                             @if ($child->user_id === auth()->id())
-                                                <div class="flex gap-1 mt-1">
+                                                <div class="flex gap-1 mt-2">
                                                     <x-button icon="o-pencil" wire:click="startEdit({{ $child->id }})" class="btn-ghost btn-xs" />
                                                     <x-button icon="o-trash" wire:click="deleteComment({{ $child->id }})" wire:confirm="کامنت حذف شود؟" class="btn-ghost btn-xs text-error" />
                                                 </div>
