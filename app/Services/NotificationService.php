@@ -42,8 +42,9 @@ class NotificationService
             return;
         }
 
-        // Batch insert for better performance
+        // Batch insert for better performance (must include UUID since insert() bypasses model boot)
         $notifications = $userIds->map(fn($userId) => [
+            'id' => \Illuminate\Support\Str::uuid(),
             'user_id' => $userId,
             'type' => $type,
             'title' => $title,
