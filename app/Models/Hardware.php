@@ -6,6 +6,7 @@ use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Hardware extends Model
 {
@@ -71,12 +72,10 @@ class Hardware extends Model
      */
     public static function flushStatsCache(): void
     {
-        $cache = \Illuminate\Support\Facades\Cache::store('database');
-        // Ensure the key exists before incrementing (database driver requires existing key)
-        if (!$cache->has('hardware_stats_version')) {
-            $cache->put('hardware_stats_version', 0, 600); // 10 minutes TTL
+        if (!Cache::has('hardware_stats_version')) {
+            Cache::put('hardware_stats_version', 0, 600); // 10 minutes TTL
         }
-        $cache->increment('hardware_stats_version');
+        Cache::increment('hardware_stats_version');
     }
 
     public function person(): BelongsTo
