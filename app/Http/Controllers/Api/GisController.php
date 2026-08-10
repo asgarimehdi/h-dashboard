@@ -317,14 +317,16 @@ class GisController extends Controller
             // Grid size in degrees, adjusted by zoom
             $gridSize = max(0.005, 0.5 / pow(2, $zoom - 2));
 
-            // Build query with raw SQL for grouping
+            // Build query with raw SQL for grouping (#400)
+            // ST_SnapToGrid snaps lat/lng to the grid in one pass — cheaper than ROUND(x/g)*g,
+            // and lets PostGIS use spatial indexes where available.
             $selectRaw = sprintf(
                 "COUNT(*) as count,
-                ROUND(lat / %f) * %f as lat_key,
-                ROUND(lng / %f) * %f as lng_key,
+                ST_X(ST_SnapToGrid(ST_MakePoint(lng, lat), %f)) as lng_key,
+                ST_Y(ST_SnapToGrid(ST_MakePoint(lng, lat), %f)) as lat_key,
                 AVG(lat) as lat,
                 AVG(lng) as lng",
-                $gridSize, $gridSize, $gridSize, $gridSize
+                $gridSize, $gridSize
             );
 
             $query = Unit::whereIn('id', $accessibleIds)
