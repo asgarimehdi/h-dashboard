@@ -81,7 +81,7 @@ class GisController extends Controller
         $bbox = $this->normalizedBbox($request);
         $cacheKey = $this->gisCacheKey('units', $accessibleIds, $bbox);
 
-        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+        $features = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
             $query = Unit::whereIn('id', $accessibleIds)
                 ->whereNotNull('lat')
                 ->whereNotNull('lng')
@@ -133,7 +133,7 @@ class GisController extends Controller
         ], fn ($v) => $v !== null); // only remove null, keep false/0
         $cacheKey = $this->gisCacheKey('hardware', $accessibleIds, $bbox, $extra);
 
-        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+        $features = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
             $query = Hardware::with('person.unit:id,name,lat,lng')
                 ->whereHas('person', function ($q) use ($accessibleIds) {
                     $q->whereIn('u_id', $accessibleIds);
@@ -209,7 +209,7 @@ class GisController extends Controller
         ], fn ($v) => $v !== null);
         $cacheKey = $this->gisCacheKey('tickets', $accessibleIds, $bbox, $extra);
 
-        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+        $features = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
             $query = Ticket::with('unit:id,name,lat,lng')
                 ->whereIn('unit_id', $accessibleIds)
                 ->whereHas('unit', function ($q) use ($request) {
@@ -267,7 +267,7 @@ class GisController extends Controller
         $bbox = $this->normalizedBbox($request);
         $cacheKey = $this->gisCacheKey('stats', $accessibleIds, $bbox);
 
-        $data = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request) {
+        $data = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
             // Units count (in bbox)
             $unitsQuery = Unit::whereIn('id', $accessibleIds)
                 ->whereNotNull('lat')->whereNotNull('lng');
