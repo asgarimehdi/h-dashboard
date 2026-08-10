@@ -1,17 +1,19 @@
 <?php
 
+namespace Tests\Feature;
+
 use App\Traits\PersianNormalizer;
 use Tests\TestCase;
 
-class NormalizerHelper2
+class NormalizerHelper
 {
     use PersianNormalizer;
 }
 
 uses(TestCase::class);
 
-test('persian normalizer normalizes additional mixed characters', function () {
-    $helper = new NormalizerHelper2();
+test('persian normalizer handles additional mixed characters', function () {
+    $helper = new NormalizerHelper();
 
     expect($helper->normalize('ي و ك'))->toBe('ی و ک');
     expect($helper->normalize('محمدی‌پور'))->toBe('محمدی پور');

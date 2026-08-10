@@ -41,7 +41,7 @@ beforeEach(function () {
     ]);
 });
 
-test('comment author can update own comment within allowed window', function () {
+test('comment policy allows author when accessible unit check passes', function () {
     $author = User::factory()->create();
     $ticket = Ticket::create([
         'user_id' => $author->id,
@@ -62,7 +62,7 @@ test('comment author can update own comment within allowed window', function () 
     expect($policy->update($author, $comment))->toBeTrue();
 });
 
-test('non-author cannot update comment', function () {
+test('comment policy denies non-author even with accessible unit', function () {
     $author = User::factory()->create();
     $other = User::factory()->create();
     $ticket = Ticket::create([
@@ -84,10 +84,12 @@ test('non-author cannot update comment', function () {
     expect($policy->update($other, $comment))->toBeFalse();
 });
 
-test('user with manage_unit_tickets can delete comment', function () {
+test('comment policy denies user without accessible unit', function () {
     $author = User::factory()->create();
-    $admin = User::factory()->create();
-    $admin->givePermissionTo('manage_unit_tickets');
+    $other = User::factory()->create();
+    $otherUnit = \App\Models\Unit::create(['name' => 'واحد دیگر']);
+    $other->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => false]);
+
     $ticket = Ticket::create([
         'user_id' => $author->id,
         'unit_id' => $this->unit->id,
@@ -104,5 +106,5 @@ test('user with manage_unit_tickets can delete comment', function () {
     ]);
 
     $policy = new TicketCommentPolicy();
-    expect($policy->delete($admin, $comment))->toBeTrue();
+    expect($policy->update($other, $comment))->toBeFalse();
 });
