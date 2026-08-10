@@ -66,9 +66,9 @@ class AppServiceProvider extends ServiceProvider
         Ticket::updated(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); Cache::increment('dashboard_version'); });
         Ticket::deleted(function () { Cache::increment('report_tickets_version'); Cache::increment('gis_version'); Cache::increment('calendar_version'); Cache::increment('dashboard_version'); });
 
-        // Invalidate units report + hierarchy + GIS + maps caches on Unit changes (Issues #340, #372, #391)
-        Unit::created(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); });
-        Unit::updated(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); });
-        Unit::deleted(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); });
+        // Invalidate units report + hierarchy + GIS + maps + dashboard + HR caches on Unit changes (Issues #340, #372, #391, #395)
+        Unit::created(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); Cache::increment('hr_stats_version'); });
+        Unit::updated(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); Cache::increment('hr_stats_version'); });
+        Unit::deleted(function () { Cache::increment('report_units_version'); Cache::increment('unit_hierarchy_version'); Cache::increment('gis_version'); Cache::increment('maps_version'); Cache::increment('dashboard_version'); Cache::increment('hr_stats_version'); });
     }
 }
