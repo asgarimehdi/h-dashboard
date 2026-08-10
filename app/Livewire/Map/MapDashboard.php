@@ -95,7 +95,7 @@ class MapDashboard extends Component
             return ['error' => 'Unit not found'];
         }
 
-        $unit = \App\Models\Unit::with(['children', 'unitType'])->find($unitId);
+        $unit = \App\Models\Unit::with(['children', 'unitType'])->withCount('children')->find($unitId);
         if (!$unit) {
             return ['error' => 'Unit not found'];
         }
@@ -106,7 +106,7 @@ class MapDashboard extends Component
             'type' => $unit->unitType?->name,
             'lat' => $unit->lat,
             'lng' => $unit->lng,
-            'children_count' => $unit->children()->count(),
+            'children_count' => $unit->children_count,
         ];
     }
 
