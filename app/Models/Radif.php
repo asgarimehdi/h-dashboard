@@ -10,6 +10,6 @@ class Radif extends Model
     protected $fillable = ['name'];
     public function person():hasMany
     {
-        return $this->hasMany(Person::class);
+        return $this->hasMany(Person::class, 'r_id');
     }
 }
