@@ -6,6 +6,7 @@ use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Hardware extends Model
 {
@@ -48,7 +49,7 @@ class Hardware extends Model
         static::saving(function (self $model) {
             $fields = ['pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type', 'switch', 'vlan', 'motherboard', 'comments'];
             foreach ($fields as $field) {
-                if ($model->isDirty($field) && !empty($model->$field) && is_string($model->$field)) {
+                if ($model->isDirty($field) && ! empty($model->$field) && is_string($model->$field)) {
                     $model->$field = self::normalizeForSearch($model->$field);
                 }
             }
@@ -71,10 +72,10 @@ class Hardware extends Model
      */
     public static function flushStatsCache(): void
     {
-        \Illuminate\Support\Facades\Cache::increment('hardware_stats_version');
-        \Illuminate\Support\Facades\Cache::increment('gis_version'); // Issue #373: imports also change map data
-        \Illuminate\Support\Facades\Cache::increment('maps_version'); // Issue #394
-        \Illuminate\Support\Facades\Cache::increment('dashboard_version'); // Issue #394
+        Cache::increment('hardware_stats_version');
+        Cache::increment('gis_version'); // Issue #373: imports also change map data
+        Cache::increment('maps_version'); // Issue #394
+        Cache::increment('dashboard_version'); // Issue #394
     }
 
     public function person(): BelongsTo

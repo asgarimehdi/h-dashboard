@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class HardwareAuditTest extends TestCase
@@ -18,11 +19,17 @@ class HardwareAuditTest extends TestCase
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
+
     protected $unit;
+
     protected $user;
+
     protected $hardware;
 
     protected function setUp(): void
@@ -35,7 +42,7 @@ class HardwareAuditTest extends TestCase
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
         Person::create([
             'n_code' => $nCode,
@@ -52,6 +59,9 @@ class HardwareAuditTest extends TestCase
             'password' => Hash::make('password'),
         ]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+        // Ensure permission exists and give to user for rollback test
+        Permission::firstOrCreate(['name' => 'manage_hardware']);
+        $this->user->givePermissionTo('manage_hardware');
         Session::put('current_unit_id', $this->unit->id);
 
         $this->actingAs($this->user);
@@ -72,7 +82,7 @@ class HardwareAuditTest extends TestCase
         $token = $this->user->createToken('test')->plainTextToken;
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson("/api/hardware/{$this->hardware->id}/audits");
 
         $response->assertStatus(200)
@@ -93,8 +103,8 @@ class HardwareAuditTest extends TestCase
         $token = $this->user->createToken('test')->plainTextToken;
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
-        ])->getJson("/api/hardware/{$this->hardware->id}/history");
+            'Authorization' => 'Bearer '.$token,
+        ])->getJson("/api/hardware/{$this->hardware->id}/audits");
 
         $response->assertStatus(200)
             ->assertJsonPath('meta.total', 1);
@@ -158,7 +168,7 @@ class HardwareAuditTest extends TestCase
     public function test_audit_api_respects_organizational_scope(): void
     {
         $otherUnit = Unit::create(['name' => 'Other Unit']);
-        $otherNCode = (string) random_int(1000000000, 2147483647);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
 
         Person::create([
             'n_code' => $otherNCode,
@@ -184,7 +194,7 @@ class HardwareAuditTest extends TestCase
 
         $token = $this->user->createToken('test')->plainTextToken;
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson("/api/hardware/{$otherHardware->id}/audits");
 
         $response->assertStatus(403);
@@ -198,7 +208,7 @@ class HardwareAuditTest extends TestCase
         $this->hardware->update(['ram' => '16384']);
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson("/api/hardware/{$this->hardware->id}/audits?action=created");
 
         $response->assertStatus(200);
@@ -207,7 +217,7 @@ class HardwareAuditTest extends TestCase
         $this->assertEquals('created', $data[0]['action']);
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson("/api/hardware/{$this->hardware->id}/audits?action=updated");
 
         $response->assertStatus(200);
@@ -227,7 +237,7 @@ class HardwareAuditTest extends TestCase
         }
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson("/api/hardware/{$this->hardware->id}/audits?per_page=3");
 
         $response->assertStatus(200);
@@ -237,7 +247,7 @@ class HardwareAuditTest extends TestCase
         $this->assertEquals(1, $response->json('meta.current_page'));
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson("/api/hardware/{$this->hardware->id}/audits?per_page=3&page=2");
 
         $response->assertStatus(200);
@@ -251,7 +261,7 @@ class HardwareAuditTest extends TestCase
         $token = $this->user->createToken('test')->plainTextToken;
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->postJson('/api/hardware/bulk-mark', [
             'ids' => [$this->hardware->id],
             'mark' => true,
@@ -280,7 +290,7 @@ class HardwareAuditTest extends TestCase
         $this->assertNotNull($audit);
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
             'field' => 'cpu',
         ]);

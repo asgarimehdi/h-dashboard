@@ -384,7 +384,7 @@ return new class extends Component
             return;
         }
 
-        $unitId = Hardware::where('id', $this->historyHardwareId)
+        $unitId = Hardware::where('hardwares.id', $this->historyHardwareId)
             ->join('persons', 'hardwares.n_code', '=', 'persons.n_code')
             ->value('persons.u_id');
 
@@ -401,7 +401,11 @@ return new class extends Component
             return;
         }
 
-        $query = \App\Models\HardwareAudit::with('user:id,n_code,name')
+        // The User model has no `name` column — `name` is an accessor derived
+        // from the related Person (f_name . ' ' . l_name). Eager-load the
+        // person relation instead of selecting a nonexistent column. Mirrors
+        // the API controller (HardwareAuditController::index).
+        $query = \App\Models\HardwareAudit::with('user.person:id,n_code,f_name,l_name')
             ->where('hardware_id', $this->historyHardwareId);
 
         if ($this->historyActionFilter) {

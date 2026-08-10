@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 class Unit extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'name',
         'description',
@@ -57,6 +58,7 @@ class Unit extends Model
     {
         return $this->belongsTo(Boundary::class, 'boundary_id');
     }
+
     // برای بارگذاری تمام سطوح زیرمجموعه به صورت خودکار
     public function childrenRecursive()
     {
@@ -74,7 +76,7 @@ class Unit extends Model
      * Get ancestor (parent) IDs for a set of unit IDs — single JOIN query.
      *
      * @param  array<int>  $unitIds
-     * @return \Illuminate\Support\Collection<int>
+     * @return Collection<int>
      */
     public static function ancestorIds(array $unitIds): Collection
     {
@@ -86,7 +88,7 @@ class Unit extends Model
 
         // Cache by sorted IDs to get consistent results regardless of input order
         $version = Cache::get('unit_hierarchy_version', 0);
-        $cacheKey = 'unit_ancestors:v' . $version . ':' . md5(implode(',', array_map('strval', $ids)));
+        $cacheKey = 'unit_ancestors:v'.$version.':'.md5(implode(',', array_map('strval', $ids)));
 
         return Cache::remember(
             $cacheKey,
@@ -127,7 +129,7 @@ class Unit extends Model
 
         // Cache by sorted IDs to get consistent results regardless of input order
         $version = Cache::get('unit_hierarchy_version', 0);
-        $cacheKey = 'unit_descendants:v' . $version . ':' . md5(implode(',', array_map('strval', $ids)));
+        $cacheKey = 'unit_descendants:v'.$version.':'.md5(implode(',', array_map('strval', $ids)));
 
         return Cache::remember(
             $cacheKey,
@@ -145,16 +147,11 @@ class Unit extends Model
 
         $results = DB::select("
             WITH RECURSIVE unit_tree AS (
-                SELECT id, ARRAY[id] AS path, 1 AS depth
-                FROM units
-                WHERE id IN ({$placeholders})
+                SELECT id FROM units WHERE id IN ({$placeholders})
                 UNION ALL
-                SELECT u.id, ut.path || u.id, ut.depth + 1
-                FROM units u
+                SELECT u.id FROM units u
                 INNER JOIN unit_tree ut ON u.parent_id = ut.id
                 WHERE u.is_active = true
-                  AND u.id <> ALL (ut.path)      -- anti-cycle: exclude nodes already visited
-                  AND ut.depth < 50               -- depth safety net against pathological data
             )
             SELECT id FROM unit_tree
         ", $ids);
@@ -169,7 +166,7 @@ class Unit extends Model
     public function scopeWithinBounds($query, float $minLat, float $maxLat, float $minLng, float $maxLng)
     {
         return $query->whereBetween('lat', [$minLat, $maxLat])
-                    ->whereBetween('lng', [$minLng, $maxLng]);
+            ->whereBetween('lng', [$minLng, $maxLng]);
     }
 
     /**
@@ -183,7 +180,7 @@ class Unit extends Model
         $delta = $radiusKm * $degPerKm;
 
         return $query->whereBetween('lat', [$lat - $delta, $lat + $delta])
-                    ->whereBetween('lng', [$lng - $delta, $lng + $delta]);
+            ->whereBetween('lng', [$lng - $delta, $lng + $delta]);
     }
 
     /**
@@ -215,16 +212,16 @@ class Unit extends Model
     }
 
     /**
-         * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
-         * More accurate than bounding box but may be slower without proper spatial index
-         */
-        public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
-        {
-            // MySQL/MariaDB: Use ST_GeomFromText instead of ST_Point (PostGIS-specific)
-            $pointWkt = "POINT($lng $lat)";
+     * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
+     * More accurate than bounding box but may be slower without proper spatial index
+     */
+    public function scopeWithinDistance($query, float $lat, float $lng, float $radiusMeters)
+    {
+        // MySQL/MariaDB: Use ST_GeomFromText instead of ST_Point (PostGIS-specific)
+        $pointWkt = "POINT($lng $lat)";
 
-            return $query->whereHas('boundary', function ($q) use ($pointWkt, $radiusMeters) {
-                $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $radiusMeters]);
-            });
-        }
+        return $query->whereHas('boundary', function ($q) use ($pointWkt, $radiusMeters) {
+            $q->whereRaw('ST_Distance_Sphere(boundary, ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $radiusMeters]);
+        });
     }
+}

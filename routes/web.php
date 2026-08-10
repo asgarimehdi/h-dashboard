@@ -32,6 +32,13 @@ Route::get('/logout', function () {
     return redirect('/');
 });
 
+// Test route for SafeRoleOrPermission middleware
+if (app()->isLocal() || app()->environment('testing')) {
+    Route::middleware('safe_role_or_permission:test-permission')->get('/test-safe-route', function () {
+        return response('OK', 200);
+    })->name('test.safe-route');
+}
+
 // Protected routes here
 Route::middleware('auth')->group(function () {
     Route::livewire('/select-context', 'select-context');
@@ -86,7 +93,7 @@ Route::middleware('auth')->group(function () {
 
             Route::livewire('/it/wireless', 'it/wireless');
             Route::livewire('/it/networks', 'it/networks');
-            
+
             // GIS Dashboard
             Route::livewire('/map', 'map.map-dashboard')->name('map');
         });
@@ -130,6 +137,7 @@ Route::middleware('auth')->group(function () {
                 })->name('op');
             });
         }
+
         // جستجوی سراسری
         Route::livewire('/search', 'search.index')->name('search');
 

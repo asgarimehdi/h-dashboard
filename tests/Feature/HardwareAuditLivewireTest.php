@@ -9,8 +9,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class)
+uses(TestCase::class)
     ->in('Feature');
 
 function makeAuditLivewireUser(): array
@@ -20,9 +22,12 @@ function makeAuditLivewireUser(): array
     $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
     $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
     $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-    $nCode = (string) random_int(1000000000, 2147483647);
+    $nCode = (string) fake()->unique()->numerify('##########');
     Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+    // Ensure permission exists (seeded by PermissionSeeder)
+    Permission::firstOrCreate(['name' => 'manage_hardware']);
+    $user->givePermissionTo('manage_hardware');
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $unit->id);
 

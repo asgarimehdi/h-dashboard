@@ -3,10 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Person;
-use App\Models\Semat;
-use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -18,6 +17,7 @@ class HrApiTest extends TestCase
     use RefreshDatabase;
 
     protected $unit;
+
     protected $user;
 
     protected function setUp(): void
@@ -33,7 +33,7 @@ class HrApiTest extends TestCase
         $this->unit = Unit::create(['name' => 'مرکز بهداشت']);
         $childUnit = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $this->unit->id]);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی',
             't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
@@ -43,6 +43,8 @@ class HrApiTest extends TestCase
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
+        $this->seed(PermissionSeeder::class);
+        $this->user->givePermissionTo('view_hr_dashboard');
     }
 
     public function test_org_chart_returns_tree_with_counts(): void
@@ -111,7 +113,7 @@ class HrApiTest extends TestCase
         $this->actingAs($this->user, 'sanctum');
         $otherUnit = Unit::create(['name' => 'Out of scope']);
         $other = Person::create([
-            'n_code' => (string) random_int(1000000000, 2147483647),
+            'n_code' => (string) fake()->unique()->numerify('##########'),
             'f_name' => 'X', 'l_name' => 'Y', 'u_id' => $otherUnit->id,
             't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),
             'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E']),

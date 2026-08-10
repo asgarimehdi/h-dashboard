@@ -7,10 +7,12 @@ use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Observers\HardwareAuditObserver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class HardwareAuditDetailTest extends TestCase
@@ -18,11 +20,17 @@ class HardwareAuditDetailTest extends TestCase
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
+
     protected $unit;
+
     protected $user;
+
     protected $hardware;
 
     protected function setUp(): void
@@ -35,7 +43,7 @@ class HardwareAuditDetailTest extends TestCase
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
         Person::create([
             'n_code' => $nCode,
@@ -51,6 +59,9 @@ class HardwareAuditDetailTest extends TestCase
             'n_code' => $nCode,
             'password' => Hash::make('password'),
         ]);
+        // Rollback requires manage_hardware permission (route middleware, #309)
+        $permission = Permission::firstOrCreate(['name' => 'manage_hardware', 'guard_name' => 'web']);
+        $this->user->givePermissionTo($permission);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
 
@@ -69,7 +80,8 @@ class HardwareAuditDetailTest extends TestCase
     protected function headers(): array
     {
         $token = $this->user->createToken('test')->plainTextToken;
-        return ['Authorization' => 'Bearer ' . $token];
+
+        return ['Authorization' => 'Bearer '.$token];
     }
 
     // ---- Filters on index ----
@@ -135,7 +147,7 @@ class HardwareAuditDetailTest extends TestCase
         $this->assertCount(0, $response->json('data'));
 
         $response = $this->withHeaders($this->headers())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits?date_from=" . now()->toDateString());
+            ->getJson("/api/hardware/{$this->hardware->id}/audits?date_from=".now()->toDateString());
 
         $response->assertStatus(200);
         $this->assertNotEmpty($response->json('data'));
@@ -193,7 +205,7 @@ class HardwareAuditDetailTest extends TestCase
     public function test_show_respects_org_scope(): void
     {
         $otherUnit = Unit::create(['name' => 'Other']);
-        $otherNCode = (string) random_int(1000000000, 2147483647);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $otherNCode, 'f_name' => 'O', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $otherUnit->id]);
         $otherUser = User::create(['n_code' => $otherNCode, 'password' => Hash::make('password')]);
         $otherUser->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -260,7 +272,7 @@ class HardwareAuditDetailTest extends TestCase
     public function test_export_respects_org_scope(): void
     {
         $otherUnit = Unit::create(['name' => 'Other']);
-        $otherNCode = (string) random_int(1000000000, 2147483647);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $otherNCode, 'f_name' => 'O', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $otherUnit->id]);
         $otherUser = User::create(['n_code' => $otherNCode, 'password' => Hash::make('password')]);
         $otherUser->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -276,7 +288,7 @@ class HardwareAuditDetailTest extends TestCase
 
     public function test_record_bulk_audit_helper(): void
     {
-        $observer = app(\App\Observers\HardwareAuditObserver::class);
+        $observer = app(HardwareAuditObserver::class);
         $observer->recordBulkAudit($this->hardware, 'bulk_mark', [
             ['field' => 'mark', 'old' => false, 'new' => true],
         ]);
@@ -290,7 +302,7 @@ class HardwareAuditDetailTest extends TestCase
 
     public function test_record_rollback_audit_helper(): void
     {
-        $observer = app(\App\Observers\HardwareAuditObserver::class);
+        $observer = app(HardwareAuditObserver::class);
         $observer->recordRollbackAudit($this->hardware, [
             ['field' => 'cpu', 'old' => 'Intel i7', 'new' => 'Intel i5'],
         ], $this->user->id);

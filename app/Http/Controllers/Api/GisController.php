@@ -30,7 +30,7 @@ class GisController extends Controller
         [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
 
         $query->whereBetween('lat', [$minLat, $maxLat])
-              ->whereBetween('lng', [$minLon, $maxLon]);
+            ->whereBetween('lng', [$minLon, $maxLon]);
 
         return $query;
     }
@@ -52,7 +52,7 @@ class GisController extends Controller
         [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
 
         $query->whereBetween('units.lat', [$minLat, $maxLat])
-              ->whereBetween('units.lng', [$minLon, $maxLon]);
+            ->whereBetween('units.lng', [$minLon, $maxLon]);
 
         return $query;
     }
@@ -220,7 +220,7 @@ class GisController extends Controller
                         ],
                         'person' => [
                             'n_code' => $hw->n_code,
-                            'name' => trim($hw->f_name . ' ' . $hw->l_name),
+                            'name' => trim($hw->f_name.' '.$hw->l_name),
                         ],
                     ],
                 ];
@@ -369,15 +369,15 @@ class GisController extends Controller
             $gridSize = max(0.005, 0.5 / pow(2, $zoom - 2));
 
             // Build query with raw SQL for grouping (#400)
-            // ST_SnapToGrid snaps lat/lng to the grid in one pass — cheaper than ROUND(x/g)*g,
-            // and lets PostGIS use spatial indexes where available.
+            // Portable grid bucketing: snap to the nearest grid line via ROUND(l/g)*g —
+            // equivalent to PostGIS ST_SnapToGrid but works on sqlite/MySQL/PG.
             $selectRaw = sprintf(
-                "COUNT(*) as count,
-                ST_X(ST_SnapToGrid(ST_MakePoint(lng, lat), %f)) as lng_key,
-                ST_Y(ST_SnapToGrid(ST_MakePoint(lng, lat), %f)) as lat_key,
+                'COUNT(*) as count,
+                ROUND(lng / %f) * %f as lng_key,
+                ROUND(lat / %f) * %f as lat_key,
                 AVG(lat) as lat,
-                AVG(lng) as lng",
-                $gridSize, $gridSize
+                AVG(lng) as lng',
+                $gridSize, $gridSize, $gridSize, $gridSize
             );
 
             $query = Unit::whereIn('id', $accessibleIds)

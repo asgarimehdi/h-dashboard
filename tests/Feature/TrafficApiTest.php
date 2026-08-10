@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Person;
+use App\Models\User;
 use App\Services\ZabbixService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -94,14 +96,15 @@ class TrafficApiTest extends TestCase
         $this->assertNotEmpty(Cache::get('traffic_100_200_3600'));
     }
 
-    protected function createUser(): \App\Models\User
+    protected function createUser(): User
     {
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-        $nCode = (string) rand(1000000000, 9999999999);
-        \App\Models\Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
-        return \App\Models\User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
+
+        return User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
     }
 }

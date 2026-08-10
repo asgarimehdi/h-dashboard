@@ -14,7 +14,6 @@ use Livewire\Livewire;
  * - The help modal opens and shows section-specific content
  * - No broken sections (all wired content files render)
  */
-
 beforeEach(function () {
     Session::flush();
 });
@@ -26,7 +25,7 @@ function makeHelpUser(): User
     $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
     $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
     $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-    $nCode = (string) random_int(1000000000, 2147483647);
+    $nCode = (string) fake()->unique()->numerify('##########');
     Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);

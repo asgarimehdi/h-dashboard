@@ -2,16 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Map\MapDashboard;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
-use App\Livewire\Map\MapDashboard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class MapDashboardTest extends TestCase
@@ -19,15 +19,18 @@ class MapDashboardTest extends TestCase
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
 
     protected function setUp(): void
     {
         parent::setUp();
         Session::flush();
-        
+
         $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
@@ -42,8 +45,8 @@ class MapDashboardTest extends TestCase
             'lng' => 48.47163,
         ]);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
-        
+        $nCode = (string) fake()->unique()->numerify('##########');
+
         $person = Person::create([
             'n_code' => $nCode,
             'f_name' => 'Test',
@@ -59,7 +62,7 @@ class MapDashboardTest extends TestCase
             'n_code' => $nCode,
             'password' => Hash::make('password'),
         ]);
-        
+
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Permission::firstOrCreate(['name' => 'map', 'guard_name' => 'web']);
         $user->givePermissionTo('map');
@@ -108,7 +111,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_onMapMoved_updates_coordinates(): void
+    public function test_on_map_moved_updates_coordinates(): void
     {
         $user = $this->createAuthenticatedUser();
 
@@ -128,7 +131,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_onLayerToggled_toggles_layer(): void
+    public function test_on_layer_toggled_toggles_layer(): void
     {
         $user = $this->createAuthenticatedUser();
 
@@ -152,7 +155,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_onFilterChanged_updates_filters(): void
+    public function test_on_filter_changed_updates_filters(): void
     {
         $user = $this->createAuthenticatedUser();
 
@@ -171,7 +174,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_onFilterChanged_only_updates_known_properties(): void
+    public function test_on_filter_changed_only_updates_known_properties(): void
     {
         $user = $this->createAuthenticatedUser();
 
@@ -190,7 +193,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_onUnitSelected_dispatches_event(): void
+    public function test_on_unit_selected_dispatches_event(): void
     {
         $user = $this->createAuthenticatedUser();
 
@@ -203,12 +206,12 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_loadUnitDetails_returns_unit_data(): void
+    public function test_load_unit_details_returns_unit_data(): void
     {
         $user = $this->createAuthenticatedUser();
 
         $unit = Unit::where('name', 'Test Unit')->first();
-        
+
         // Add a child unit
         Unit::create([
             'name' => 'Child Unit',
@@ -230,7 +233,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_loadUnitDetails_returns_error_for_invalid_id(): void
+    public function test_load_unit_details_returns_error_for_invalid_id(): void
     {
         $user = $this->createAuthenticatedUser();
 
@@ -245,7 +248,7 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_loadUnitDetails_blocks_units_outside_org_scope(): void
+    public function test_load_unit_details_blocks_units_outside_org_scope(): void
     {
         $user = $this->createAuthenticatedUser();
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Tickets\TicketComments;
 use App\Models\Person;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,7 +20,9 @@ class TicketCommentsRefreshTest extends TestCase
     use RefreshDatabase;
 
     protected $unit;
+
     protected $user;
+
     protected $ticket;
 
     protected function setUp(): void
@@ -33,7 +36,7 @@ class TicketCommentsRefreshTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
 
         $this->unit = Unit::create(['name' => 'Test Unit']);
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->unit->id]);
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -41,7 +44,7 @@ class TicketCommentsRefreshTest extends TestCase
         $this->actingAs($this->user);
 
         $this->ticket = Ticket::create([
-            'ticket_code' => 'TC-' . random_int(10000, 99999),
+            'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
             'subject' => 'Test', 'content' => 'Desc',
             'unit_id' => $this->unit->id, 'user_id' => $this->user->id,
         ]);
@@ -74,7 +77,7 @@ class TicketCommentsRefreshTest extends TestCase
             ->set('body', 'والد')
             ->call('addComment');
 
-        $parent = \App\Models\TicketComment::where('ticket_id', $this->ticket->id)->first();
+        $parent = TicketComment::where('ticket_id', $this->ticket->id)->first();
 
         $component->call('startReply', $parent->id)
             ->set('replyBody', 'پاسخ')
@@ -85,7 +88,7 @@ class TicketCommentsRefreshTest extends TestCase
 
     public function test_delete_removes_immediately(): void
     {
-        $comment = \App\Models\TicketComment::create([
+        $comment = TicketComment::create([
             'ticket_id' => $this->ticket->id,
             'user_id' => $this->user->id,
             'body' => 'برای حذف',

@@ -3,7 +3,6 @@
 namespace App\Livewire\Kargozini\ImportPersons;
 
 use App\Imports\PersonImport;
-use App\Models\Person;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Livewire\Component;
@@ -13,17 +12,24 @@ use Mary\Traits\Toast;
 
 class ImportPersons extends Component
 {
+    use PersianNormalizer;
     use Toast;
     use WithFileUploads;
-    use PersianNormalizer;
 
     public $file;
+
     public $importResults = null;
+
     public $previewData = [];
+
     public $showPreview = false;
+
     public $importConfirmed = false;
+
     public $selectedAction = 'update'; // 'update', 'create', 'skip'
+
     public $compareKey = 'n_code'; // always n_code for persons
+
     public $importStats = [
         'total' => 0,
         'new' => 0,
@@ -66,7 +72,7 @@ class ImportPersons extends Component
         $this->validate();
 
         try {
-            $import = new PersonImport();
+            $import = new PersonImport;
             $import->setCompareKey($this->compareKey);
             $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
 
@@ -77,31 +83,33 @@ class ImportPersons extends Component
             $this->previewData = $results['preview'] ?? [];
             $this->importStats = [
                 'total' => count($this->previewData),
-                'new' => count(array_filter($this->previewData, fn($r) => $r['status'] === 'create')),
-                'updated' => count(array_filter($this->previewData, fn($r) => $r['status'] === 'update')),
-                'unchanged' => count(array_filter($this->previewData, fn($r) => $r['status'] === 'unchanged')),
+                'new' => count(array_filter($this->previewData, fn ($r) => $r['status'] === 'create')),
+                'updated' => count(array_filter($this->previewData, fn ($r) => $r['status'] === 'update')),
+                'unchanged' => count(array_filter($this->previewData, fn ($r) => $r['status'] === 'unchanged')),
                 'errors' => count($results['errors'] ?? []),
             ];
 
             $this->showPreview = true;
             $this->importResults = $results;
-            $this->importResults['import'] = $import; // Store import object for second pass
 
             $this->success('پیش‌نمایش ایمپورت آماده شد. تغییرات را بررسی و تایید کنید.', 'موفقیت');
         } catch (\Exception $e) {
-            $this->error('خطا در پردازش فایل: ' . $e->getMessage(), 'خطا');
+            $this->error('خطا در پردازش فایل: '.$e->getMessage(), 'خطا');
         }
     }
 
     public function confirmImport(): void
     {
-        if (!$this->importResults || !isset($this->importResults['import'])) {
+        if (! $this->importResults) {
             $this->error('داده‌ای برای ایمپورت وجود ندارد.', 'خطا');
+
             return;
         }
 
         try {
-            $import = $this->importResults['import'];
+            $import = new PersonImport;
+            $import->setCompareKey($this->compareKey);
+            $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
             $import->setSelectedActions($this->getSelectedActions());
 
             Excel::import($import, $this->file->getRealPath());
@@ -116,7 +124,7 @@ class ImportPersons extends Component
             $this->resetForm();
             $this->dispatch('persons-imported'); // Notify parent component
         } catch (\Exception $e) {
-            $this->error('خطا در انجام ایمپورت: ' . $e->getMessage(), 'خطا');
+            $this->error('خطا در انجام ایمپورت: '.$e->getMessage(), 'خطا');
         }
     }
 
@@ -136,10 +144,19 @@ class ImportPersons extends Component
     {
         $actions = [];
         foreach ($this->previewData as $index => $row) {
-            if (isset($row['id'])) {
-                $actions[$index] = $row['selected_action'] ?? $this->selectedAction;
+            if (isset($row['n_code'])) {
+                // Match the format used in applySelectedAction: row_{rowNumber}
+                // rowNumber = index + 2 (header row + 1-indexed)
+                // Use row status as default action: create->create, update->update, unchanged/skip/error->skip
+                $defaultAction = match ($row['status'] ?? 'create') {
+                    'create' => 'create',
+                    'update' => 'update',
+                    default => 'skip',
+                };
+                $actions['row_'.($index + 2)] = $row['selected_action'] ?? $defaultAction;
             }
         }
+
         return $actions;
     }
 

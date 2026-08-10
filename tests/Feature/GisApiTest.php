@@ -7,6 +7,7 @@ use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -18,19 +19,26 @@ class GisApiTest extends TestCase
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
+
     protected $unit;
+
     protected $unitChild;
+
     protected $user;
+
     protected $person;
 
     protected function setUp(): void
     {
         parent::setUp();
         Session::flush();
-        
+
         // Setup reference data
         $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test Tahsil']);
         $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test Estekhdam']);
@@ -46,8 +54,8 @@ class GisApiTest extends TestCase
             'lng' => 48.47163,
         ], $unitData));
 
-        $nCode = (string) random_int(1000000000, 2147483647);
-        
+        $nCode = (string) fake()->unique()->numerify('##########');
+
         $this->person = Person::create([
             'n_code' => $nCode,
             'f_name' => 'Test',
@@ -63,9 +71,11 @@ class GisApiTest extends TestCase
             'n_code' => $nCode,
             'password' => Hash::make('password'),
         ]);
-        
+
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
+        $this->seed(PermissionSeeder::class);
+        $this->user->givePermissionTo('map');
 
         return ['user' => $this->user, 'unit' => $this->unit];
     }
@@ -103,10 +113,10 @@ class GisApiTest extends TestCase
             ->assertJsonStructure([
                 'type',
                 'features' => [
-                    '*' => ['type', 'id', 'geometry', 'properties']
-                ]
+                    '*' => ['type', 'id', 'geometry', 'properties'],
+                ],
             ]);
-        
+
         $this->assertEquals('FeatureCollection', $response->json('type'));
         $this->assertCount(2, $response->json('features'));
     }
@@ -134,7 +144,7 @@ class GisApiTest extends TestCase
     {
         $this->createUserWithUnit();
         $person = Person::first();
-        
+
         Hardware::create([
             'n_code' => $person->n_code,
             'pc_name' => 'PC-001',
@@ -150,10 +160,10 @@ class GisApiTest extends TestCase
             ->assertJsonStructure([
                 'type',
                 'features' => [
-                    '*' => ['type', 'id', 'geometry', 'properties']
-                ]
+                    '*' => ['type', 'id', 'geometry', 'properties'],
+                ],
             ]);
-        
+
         $this->assertEquals('FeatureCollection', $response->json('type'));
         $this->assertCount(1, $response->json('features'));
     }
@@ -163,7 +173,7 @@ class GisApiTest extends TestCase
     {
         $this->createUserWithUnit();
         $person = Person::first();
-        
+
         Hardware::create([
             'n_code' => $person->n_code,
             'pc_name' => 'Laptop-001',
@@ -186,7 +196,7 @@ class GisApiTest extends TestCase
     public function test_gis_tickets_returns_geojson_feature_collection(): void
     {
         $this->createUserWithUnit();
-        
+
         Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $this->user->id,
@@ -204,10 +214,10 @@ class GisApiTest extends TestCase
             ->assertJsonStructure([
                 'type',
                 'features' => [
-                    '*' => ['type', 'id', 'geometry', 'properties']
-                ]
+                    '*' => ['type', 'id', 'geometry', 'properties'],
+                ],
             ]);
-        
+
         $this->assertEquals('FeatureCollection', $response->json('type'));
         $this->assertCount(1, $response->json('features'));
     }
@@ -216,7 +226,7 @@ class GisApiTest extends TestCase
     public function test_gis_tickets_filters_by_priority_and_status(): void
     {
         $this->createUserWithUnit();
-        
+
         Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $this->user->id,
@@ -254,7 +264,7 @@ class GisApiTest extends TestCase
         // Test status filter
         $response = $this->actingAs($this->user, 'sanctum')
             ->getJson('/api/gis/tickets?bbox=48,36,49,37&status=completed');
-        
+
         $this->assertCount(1, $response->json('features'));
         $this->assertEquals('completed', $response->json('features.0.properties.status'));
     }
@@ -265,13 +275,13 @@ class GisApiTest extends TestCase
         $this->createUserWithUnit();
         $this->createChildUnit('Child Unit', 36.67, 48.48);
         $person = Person::first();
-        
+
         Hardware::create([
             'n_code' => $person->n_code,
             'pc_name' => 'PC-001',
             'type' => 'laptop',
         ]);
-        
+
         Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $this->user->id,
@@ -296,7 +306,7 @@ class GisApiTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonStructure(['units', 'hardware', 'open_tickets']);
-        
+
         $this->assertEquals(2, $response->json('units'));
         $this->assertEquals(1, $response->json('hardware'));
         $this->assertEquals(1, $response->json('open_tickets')); // only non-completed
@@ -317,10 +327,10 @@ class GisApiTest extends TestCase
             ->assertJsonStructure([
                 'type',
                 'features' => [
-                    '*' => ['type', 'geometry', 'properties' => ['count']]
-                ]
+                    '*' => ['type', 'geometry', 'properties' => ['count']],
+                ],
             ]);
-        
+
         $this->assertEquals('FeatureCollection', $response->json('type'));
         // At least one cluster in the bbox (all parent units cluster together at low zoom)
         $this->assertGreaterThan(0, count($response->json('features')));
@@ -331,10 +341,10 @@ class GisApiTest extends TestCase
     {
         $this->createUserWithUnit(['name' => 'Unit A', 'lat' => 36.669, 'lng' => 48.471]);
         $this->createChildUnit('Unit A Child', 36.67, 48.48);
-        
+
         // Create another unit not accessible to user
         $unitB = Unit::create(['name' => 'Unit B', 'lat' => 36.7, 'lng' => 48.5]);
-        $nCode2 = (string) random_int(1000000000, 2147483647);
+        $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2,
             'f_name' => 'Other',
@@ -346,7 +356,7 @@ class GisApiTest extends TestCase
             'u_id' => $unitB->id,
         ]);
         Hardware::create([
-            'n_code' => (string) random_int(1000000000, 2147483647),
+            'n_code' => (string) fake()->unique()->numerify('##########'),
             'pc_name' => 'PC-B',
             'type' => 'laptop',
         ]);

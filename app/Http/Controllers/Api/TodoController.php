@@ -44,7 +44,7 @@ class TodoController extends Controller
             'start_at' => 'required|date',
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'is_completed' => 'boolean',
-            'unit_id' => 'required|exists:units,id',
+            'unit_id' => 'nullable|exists:units,id',
         ]);
 
         $unitId = $validated['unit_id'] ?? $request->user()->person?->u_id;

@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\HardwareAuditsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
+use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\HardwareAuditsExport;
+use Morilog\Jalali\Jalalian;
 
 class HardwareAuditController extends Controller
 {
@@ -21,7 +23,7 @@ class HardwareAuditController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $query = HardwareAudit::where('hardware_id', $hardware->id)
-            ->with('user:id,n_code,name')
+            ->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at');
 
         // Filters
@@ -48,7 +50,7 @@ class HardwareAuditController extends Controller
         $audits = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $audits->getCollection()->map(fn($audit) => $this->transformAudit($audit))->all(),
+            'data' => $audits->getCollection()->map(fn ($audit) => $this->transformAudit($audit))->all(),
             'meta' => [
                 'current_page' => $audits->currentPage(),
                 'last_page' => $audits->lastPage(),
@@ -69,7 +71,7 @@ class HardwareAuditController extends Controller
             return response()->json(['message' => 'Audit not found for this hardware.'], 404);
         }
 
-        $audit->load('user:id,n_code,name');
+        $audit->load('user.person:id,n_code,f_name,l_name');
 
         return response()->json([
             'data' => $this->transformAudit($audit, true),
@@ -92,7 +94,7 @@ class HardwareAuditController extends Controller
         ]);
 
         $changes = $audit->changes;
-        if (!$changes || !is_array($changes)) {
+        if (! $changes || ! is_array($changes)) {
             return response()->json(['message' => 'No changes to rollback.'], 422);
         }
 
@@ -104,7 +106,7 @@ class HardwareAuditController extends Controller
             }
         }
 
-        if (!$fieldChange) {
+        if (! $fieldChange) {
             return response()->json(['message' => 'Field not found in audit record.'], 422);
         }
 
@@ -124,7 +126,7 @@ class HardwareAuditController extends Controller
             'new' => $oldValue,
         ]];
 
-        app(\App\Observers\HardwareAuditObserver::class)
+        app(HardwareAuditObserver::class)
             ->recordRollbackAudit($hardware, $rollbackChanges, $request->user()?->id);
 
         return response()->json([
@@ -145,7 +147,7 @@ class HardwareAuditController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $query = HardwareAudit::where('hardware_id', $hardware->id)
-            ->with('user:id,n_code,name')
+            ->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at');
 
         // Apply same filters as index
@@ -169,7 +171,7 @@ class HardwareAuditController extends Controller
         }
 
         $format = $request->get('format', 'xlsx');
-        $filename = "hardware-{$hardware->pc_name}-audits-" . now()->format('Ymd-His');
+        $filename = "hardware-{$hardware->pc_name}-audits-".now()->format('Ymd-His');
 
         return Excel::download(
             new HardwareAuditsExport($query),
@@ -193,7 +195,7 @@ class HardwareAuditController extends Controller
             'user_agent' => $audit->user_agent,
             'created_at' => $audit->created_at?->toIso8601String(),
             'created_at_jalali' => $audit->created_at
-                ? \Morilog\Jalali\Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')
+                ? Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')
                 : null,
             'user' => $audit->user ? [
                 'id' => $audit->user->id,
@@ -249,6 +251,7 @@ class HardwareAuditController extends Controller
         foreach ($changes as $change) {
             $summary[] = "فیلد <strong>{$change['field']}</strong>: از <span class='text-error'>{$change['old']}</span> به <span class='text-success'>{$change['new']}</span> تغییر یافت.";
         }
+
         return $summary;
     }
 
@@ -296,7 +299,7 @@ class HardwareAuditController extends Controller
             ? $hardware->person?->u_id
             : $hardware->person()->value('u_id');
 
-        if (!$unitId || !in_array($unitId, $accessibleIds)) {
+        if (! $unitId || ! in_array($unitId, $accessibleIds)) {
             abort(403, 'Hardware record not accessible.');
         }
     }

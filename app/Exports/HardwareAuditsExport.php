@@ -2,7 +2,6 @@
 
 namespace App\Exports;
 
-use App\Models\HardwareAudit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -26,7 +25,7 @@ class HardwareAuditsExport implements FromCollection, WithHeadings, WithMapping,
     public function collection(): Collection
     {
         // Return the raw models; Maatwebsite calls map() per row (WithMapping).
-        return $this->query->with('user:id,n_code,name')
+        return $this->query->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at')
             ->get();
     }
@@ -51,7 +50,7 @@ class HardwareAuditsExport implements FromCollection, WithHeadings, WithMapping,
     }
 
     /**
-     * @param mixed $audit
+     * @param  mixed  $audit
      * @return array<int, mixed>
      */
     public function map($audit): array
@@ -59,7 +58,7 @@ class HardwareAuditsExport implements FromCollection, WithHeadings, WithMapping,
         $changesSummary = '';
         if ($audit->changes && is_array($audit->changes)) {
             $changesSummary = implode(' | ', array_map(
-                fn($c) => "{$c['field']}: {$c['old']} → {$c['new']}",
+                fn ($c) => "{$c['field']}: {$c['old']} → {$c['new']}",
                 $audit->changes
             ));
         }
@@ -80,9 +79,6 @@ class HardwareAuditsExport implements FromCollection, WithHeadings, WithMapping,
         ];
     }
 
-    /**
-     * @return string
-     */
     public function title(): string
     {
         return 'تاریخچه تغییرات سخت‌افزار';

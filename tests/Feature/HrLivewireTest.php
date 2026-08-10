@@ -29,7 +29,7 @@ class HrLivewireTest extends TestCase
         $this->unit = Unit::create(['name' => 'مرکز بهداشت']);
         Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $this->unit->id]);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی',
             't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
@@ -154,7 +154,7 @@ class HrLivewireTest extends TestCase
     public function test_org_chart_personnel_without_user_highlighted_red(): void
     {
         // Create a person WITHOUT a user account
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'بدون', 'l_name' => 'کاربر',
             't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),

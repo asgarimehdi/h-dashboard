@@ -197,9 +197,10 @@ return new class extends Component
             ->withAggregate('unit', 'name');
 
         if (! empty($this->search)) {
-            $query->where(function ($q) {
-                $q->where('n_code', 'LIKE', '%'.$this->search.'%')
-                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
+            $search = \App\Traits\PersianNormalizer::normalizeForSearch($this->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('n_code', 'LIKE', '%'.$search.'%')
+                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -211,6 +212,7 @@ return new class extends Component
     public function with(): array
     {
         $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+
         $units = Unit::with('unitType')
             ->whereIn('id', $accessibleUnitIds)
             ->get()

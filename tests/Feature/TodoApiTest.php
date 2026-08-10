@@ -6,6 +6,7 @@ use App\Models\Person;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
@@ -29,13 +30,15 @@ class TodoApiTest extends TestCase
         $sId = \DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = \DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $unit = Unit::create(['name' => 'Test Unit']);
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
 
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
+        $this->seed(PermissionSeeder::class);
+        $user->givePermissionTo('calendar');
 
         return ['user' => $user, 'unit' => $unit];
     }

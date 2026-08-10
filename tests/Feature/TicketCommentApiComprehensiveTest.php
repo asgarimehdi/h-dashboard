@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Notification;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -29,9 +28,13 @@ class TicketCommentApiComprehensiveTest extends TestCase
     use RefreshDatabase;
 
     protected $unit;
+
     protected $user;
+
     protected $ticket;
+
     protected $otherUnit;
+
     protected $otherUser;
 
     protected function setUp(): void
@@ -57,7 +60,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->otherUnit = Unit::create(['name' => 'Unit B']);
 
         // User A in unit A
-        $nCodeA = (string) random_int(1000000000, 2147483647);
+        $nCodeA = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCodeA, 'f_name' => 'علی', 'l_name' => 'محمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->unit->id]);
         $this->user = User::create(['n_code' => $nCodeA, 'password' => Hash::make('password')]);
         $this->user->assignRole('admin');
@@ -66,7 +69,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
         // User B in unit B (out of scope)
-        $nCodeB = (string) random_int(1000000000, 2147483647);
+        $nCodeB = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCodeB, 'f_name' => 'رضا', 'l_name' => 'احمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->otherUnit->id]);
         $this->otherUser = User::create(['n_code' => $nCodeB, 'password' => Hash::make('password')]);
         $this->otherUser->assignRole('admin');
@@ -77,7 +80,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         Session::put('current_unit_id', $this->unit->id);
 
         $this->ticket = Ticket::create([
-            'ticket_code' => 'TC-' . random_int(10000, 99999),
+            'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
             'subject' => 'Test', 'content' => 'Desc',
             'unit_id' => $this->unit->id, 'user_id' => $this->user->id,
         ]);
@@ -152,7 +155,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     {
         $this->authAsUserA();
         $otherTicket = Ticket::create([
-            'ticket_code' => 'TC-X' . random_int(1000, 9999),
+            'ticket_code' => 'TC-X'.fake()->unique()->numerify('####'),
             'subject' => 'Other', 'content' => 'X',
             'unit_id' => $this->unit->id, 'user_id' => $this->user->id,
         ]);
@@ -220,7 +223,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     {
         $this->authAsUserA();
         $otherTicket = Ticket::create([
-            'ticket_code' => 'TC-Y' . random_int(1000, 9999),
+            'ticket_code' => 'TC-Y'.fake()->unique()->numerify('####'),
             'subject' => 'Other', 'content' => 'Y',
             'unit_id' => $this->unit->id, 'user_id' => $this->user->id,
         ]);
@@ -274,8 +277,8 @@ class TicketCommentApiComprehensiveTest extends TestCase
     {
         $this->authAsUserA();
         // Ensure the admin role exists (needed for canBeDeletedBy hasRole('admin'))
-        if (! \Spatie\Permission\Models\Role::where('name', 'admin')->exists()) {
-            \Spatie\Permission\Models\Role::create(['name' => 'admin']);
+        if (! Role::where('name', 'admin')->exists()) {
+            Role::create(['name' => 'admin']);
         }
         $this->user->assignRole('admin');
         $comment = $this->makeComment();
@@ -371,7 +374,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
 
         // Other user replies to A's comment (from a ticket in B's scope? No —
         // same ticket, but user B can't access it. Use a second user in unit A.)
-        $nCodeC = (string) random_int(1000000000, 2147483647);
+        $nCodeC = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCodeC, 'f_name' => 'سارا', 'l_name' => 'کریمی',
             't_id' => DB::table('tahsils')->insertGetId(['name' => 'T3']),
@@ -403,7 +406,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
 
         // Mention user B by n_code
         $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
-            'body' => 'سلام @' . $this->otherUser->n_code . ' لطفا ببین',
+            'body' => 'سلام @'.$this->otherUser->n_code.' لطفا ببین',
         ])->assertStatus(201);
 
         $this->assertDatabaseHas('notifications', [
@@ -417,7 +420,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $comment = $this->makeComment(['body' => 'کامنت علی']);
 
         // User B can't access; use user C in unit A
-        $nCodeC = (string) random_int(1000000000, 2147483647);
+        $nCodeC = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCodeC, 'f_name' => 'سارا', 'l_name' => 'کریمی',
             't_id' => DB::table('tahsils')->insertGetId(['name' => 'T3']),

@@ -4,14 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hardware;
+use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Auth;
 
 class HardwareController extends Controller
 {
@@ -29,7 +28,7 @@ class HardwareController extends Controller
             ? $hardware->person?->u_id
             : $hardware->person()->value('u_id');
 
-        if (!$unitId || !in_array($unitId, $accessibleIds)) {
+        if (! $unitId || ! in_array($unitId, $accessibleIds)) {
             abort(403, 'Hardware record not accessible.');
         }
     }
@@ -64,7 +63,7 @@ class HardwareController extends Controller
             'updated_at' => $hardware->updated_at?->toIso8601String(),
             'person' => $hardware->relationLoaded('person') && $hardware->person ? [
                 'n_code' => $hardware->person->n_code,
-                'name' => trim($hardware->person->f_name . ' ' . $hardware->person->l_name),
+                'name' => trim($hardware->person->f_name.' '.$hardware->person->l_name),
                 'unit' => $hardware->person->unit?->name,
             ] : null,
         ];
@@ -85,15 +84,15 @@ class HardwareController extends Controller
             $s = self::normalizeForSearch($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
-                  ->orWhere('n_code', 'LIKE', "%{$s}%")
-                  ->orWhere('ip_valid', 'LIKE', "%{$s}%")
-                  ->orWhere('ip_local', 'LIKE', "%{$s}%")
-                  ->orWhere('mac', 'LIKE', "%{$s}%")
-                  ->orWhere('comments', 'LIKE', "%{$s}%")
-                  ->orWhereHas('person', function ($pq) use ($s) {
-                      $pq->where('f_name', 'LIKE', "%{$s}%")
-                        ->orWhere('l_name', 'LIKE', "%{$s}%");
-                  });
+                    ->orWhere('n_code', 'LIKE', "%{$s}%")
+                    ->orWhere('ip_valid', 'LIKE', "%{$s}%")
+                    ->orWhere('ip_local', 'LIKE', "%{$s}%")
+                    ->orWhere('mac', 'LIKE', "%{$s}%")
+                    ->orWhere('comments', 'LIKE', "%{$s}%")
+                    ->orWhereHas('person', function ($pq) use ($s) {
+                        $pq->where('f_name', 'LIKE', "%{$s}%")
+                            ->orWhere('l_name', 'LIKE', "%{$s}%");
+                    });
             });
         }
 
@@ -129,8 +128,8 @@ class HardwareController extends Controller
             $normalized = self::normalizeForSearch($request->person);
             $query->whereHas('person', function ($q) use ($normalized) {
                 $q->where('f_name', 'LIKE', "%{$normalized}%")
-                  ->orWhere('l_name', 'LIKE', "%{$normalized}%")
-                  ->orWhere('n_code', 'LIKE', "%{$normalized}%");
+                    ->orWhere('l_name', 'LIKE', "%{$normalized}%")
+                    ->orWhere('n_code', 'LIKE', "%{$normalized}%");
             });
         }
         if ($request->filled('unit')) {
@@ -160,10 +159,10 @@ class HardwareController extends Controller
         $query->orderBy($sortBy, $sortDir);
 
         $perPage = min((int) $request->get('per_page', 10), 100);
-        
+
         $paginator = $query->paginate($perPage);
-        $items = $paginator->getCollection()->map(fn($hw) => $this->transformHardware($hw))->all();
-        
+        $items = $paginator->getCollection()->map(fn ($hw) => $this->transformHardware($hw))->all();
+
         return [
             'data' => $items,
             'links' => [
@@ -287,6 +286,7 @@ class HardwareController extends Controller
 
         $hardware->delete();
         GisController::invalidateCache();
+
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
 
@@ -301,10 +301,10 @@ class HardwareController extends Controller
         // invalidates all previously cached scopes without flushing the whole
         // cache. Stale entries expire naturally via the 10-minute TTL.
         $version = Cache::get('hardware_stats_version', 0);
-        $cacheKey = "hardware_stats:v{$version}:" . md5(json_encode($accessibleIds));
+        $cacheKey = "hardware_stats:v{$version}:".md5(json_encode($accessibleIds));
 
         $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
-            $baseQuery = Hardware::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds));
+            $baseQuery = Hardware::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds));
 
             return [
                 'total' => $baseQuery->count(),
@@ -335,7 +335,7 @@ class HardwareController extends Controller
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->get();
 
         if ($hardwares->count() !== count($request->ids)) {
@@ -350,10 +350,10 @@ class HardwareController extends Controller
 
         // Batch insert audit entries
         $this->batchInsertAudits($hardwares, 'bulk_mark', [
-            ['field' => 'mark', 'old' => !$request->mark, 'new' => $request->mark],
+            ['field' => 'mark', 'old' => ! $request->mark, 'new' => $request->mark],
         ]);
 
-        app(\App\Http\Controllers\Api\GisController::class)::invalidateCache();
+        app(GisController::class)::invalidateCache();
         Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
 
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
@@ -371,7 +371,7 @@ class HardwareController extends Controller
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->get();
 
         if ($hardwares->count() !== count($request->ids)) {
@@ -379,12 +379,12 @@ class HardwareController extends Controller
         }
 
         // Batch insert audit entries before deletion
-        $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn($hw) => $hw->getAttributes());
+        $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn ($hw) => $hw->getAttributes());
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
         $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
 
-        app(\App\Http\Controllers\Api\GisController::class)::invalidateCache();
+        app(GisController::class)::invalidateCache();
         Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
@@ -399,11 +399,13 @@ class HardwareController extends Controller
         $request = \Illuminate\Support\Facades\Request::capture();
 
         $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
+            $changes = $changesPerItem ? $changesPerItem($hardware) : $staticChanges;
+
             return [
                 'hardware_id' => $hardware->id,
                 'user_id' => $user?->id,
                 'action' => $action,
-                'changes' => $changesPerItem ? $changesPerItem($hardware) : $staticChanges,
+                'changes' => $changes ? json_encode($changes, JSON_UNESCAPED_UNICODE) : null,
                 'source' => 'bulk',
                 'ip_address' => $request?->ip(),
                 'user_agent' => $request?->userAgent(),
@@ -412,8 +414,8 @@ class HardwareController extends Controller
             ];
         })->toArray();
 
-        if (!empty($rows)) {
-            \App\Models\HardwareAudit::insert($rows);
+        if (! empty($rows)) {
+            HardwareAudit::insert($rows);
         }
     }
 }

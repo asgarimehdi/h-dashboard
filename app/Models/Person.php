@@ -4,12 +4,16 @@ namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
 use App\Traits\PersianNormalizer;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Cache;
 
 class Person extends Model
 {
+    use HasFactory;
     use HasOrganizationalScope;
     use PersianNormalizer;
 
@@ -18,7 +22,8 @@ class Person extends Model
         return 'n_code';
     }
 
-    protected $fillable = ['n_code','f_name','l_name','t_id', 'e_id', 'r_id', 's_id', 'u_id', 'birth_date', 'hire_date', 'status'];
+    protected $fillable = ['n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'birth_date', 'hire_date', 'status'];
+
     protected $table = 'persons';
 
     protected static function boot(): void
@@ -28,7 +33,7 @@ class Person extends Model
         static::saving(function (self $model) {
             $fields = ['f_name', 'l_name'];
             foreach ($fields as $field) {
-                if ($model->isDirty($field) && !empty($model->$field) && is_string($model->$field)) {
+                if ($model->isDirty($field) && ! empty($model->$field) && is_string($model->$field)) {
                     $model->$field = self::normalizeForSearch($model->$field);
                 }
             }
@@ -37,11 +42,21 @@ class Person extends Model
         // Invalidate cached HR stats + dashboard whenever a person is created/updated/deleted (#341, #391)
         foreach (['saved', 'deleted'] as $event) {
             static::$event(function () {
-                \Illuminate\Support\Facades\Cache::increment('hr_stats_version');
-                \Illuminate\Support\Facades\Cache::increment('dashboard_version');
-                \Illuminate\Support\Facades\Cache::increment('maps_version');
+                Cache::increment('hr_stats_version');
+                Cache::increment('dashboard_version');
+                Cache::increment('maps_version');
             });
         }
+    }
+
+    /**
+     * Get the person's full name (f_name + l_name).
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => trim("{$this->f_name} {$this->l_name}") ?: '—'
+        );
     }
 
     /**
@@ -60,18 +75,22 @@ class Person extends Model
     {
         return $this->belongsTo(Estekhdam::class, 'e_id');
     }
+
     public function radif(): BelongsTo
     {
         return $this->belongsTo(Radif::class, 'r_id');
     }
+
     public function semat(): BelongsTo
     {
         return $this->belongsTo(Semat::class, 's_id');
     }
+
     public function tahsil(): BelongsTo
     {
         return $this->belongsTo(Tahsil::class, 't_id');
     }
+
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class, 'u_id');
