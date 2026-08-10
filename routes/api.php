@@ -49,26 +49,31 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         return $request->user();
     });
 
-    // Unit API routes
+    // Unit API routes — write gated (Issue #396)
     Route::get('/units', [UnitController::class, 'index']);
-    Route::post('/units', [UnitController::class, 'store']);
     Route::get('/units/{unit}', [UnitController::class, 'show']);
-    Route::put('/units/{unit}', [UnitController::class, 'update']);
-    Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+    Route::middleware('role_or_permission:organization')->group(function () {
+        Route::post('/units', [UnitController::class, 'store']);
+        Route::put('/units/{unit}', [UnitController::class, 'update']);
+        Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+    });
 
     Route::get('/zabbix/traffic', [TrafficController::class, 'index']);
     Route::get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
 
-    // Hardware API routes
+    // Hardware API routes — write gated (Issue #396)
     Route::prefix('hardware')->group(function () {
         Route::get('/', [HardwareController::class, 'index']);
-        Route::post('/', [HardwareController::class, 'store']);
         Route::get('/stats', [HardwareController::class, 'stats']);
         Route::get('/{hardware}', [HardwareController::class, 'show']);
-        Route::match(['put', 'patch'], '/{hardware}', [HardwareController::class, 'update']);
-        Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
-        Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
-        Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
+
+        Route::middleware('role_or_permission:manage_hardware')->group(function () {
+            Route::post('/', [HardwareController::class, 'store']);
+            Route::match(['put', 'patch'], '/{hardware}', [HardwareController::class, 'update']);
+            Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
+            Route::post('/bulk-mark', [HardwareController::class, 'bulkMark']);
+            Route::post('/bulk-delete', [HardwareController::class, 'bulkDelete']);
+        });
 
         // Hardware Audit Trail
         Route::get('/{hardware}/audits', [HardwareAuditController::class, 'index']);
@@ -119,25 +124,30 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/reports/todos', [ReportController::class, 'todos']);
     Route::get('/reports/tickets', [ReportController::class, 'tickets']);
 
-    // Person API routes
+    // Person API routes — write gated (Issue #396)
     Route::prefix('persons')->group(function () {
         Route::get('/', [PersonController::class, 'index']);
-        Route::post('/', [PersonController::class, 'store']);
         Route::get('/{person}', [PersonController::class, 'show']);
-        Route::put('/{person}', [PersonController::class, 'update']);
-        Route::delete('/{person}', [PersonController::class, 'destroy']);
+
+        Route::middleware('role_or_permission:manage_personnel')->group(function () {
+            Route::post('/', [PersonController::class, 'store']);
+            Route::put('/{person}', [PersonController::class, 'update']);
+            Route::delete('/{person}', [PersonController::class, 'destroy']);
+        });
     });
 
-    // Todo API routes
+    // Todo API routes — write gated (Issue #396)
     Route::get('/todos', [TodoController::class, 'index']);
-    Route::post('/todos', [TodoController::class, 'store']);
     Route::get('/todos/{todo}', [TodoController::class, 'show']);
-    Route::put('/todos/{todo}', [TodoController::class, 'update']);
-    Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
-    Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+    Route::middleware('role_or_permission:calendar')->group(function () {
+        Route::post('/todos', [TodoController::class, 'store']);
+        Route::put('/todos/{todo}', [TodoController::class, 'update']);
+        Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
+        Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+    });
 
-    // HR API routes (Issue #223)
-    Route::prefix('hr')->group(function () {
+    // HR API routes (Issue #223) — view gated (Issue #396)
+    Route::prefix('hr')->middleware('role_or_permission:view_hr_dashboard')->group(function () {
         Route::get('/org-chart', [HrController::class, 'orgChart']);
         Route::get('/stats', [HrController::class, 'stats']);
         Route::get('/vacancies', [HrController::class, 'vacancies']);
@@ -145,8 +155,8 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::get('/personnel/{n_code}', [HrController::class, 'personDetail']);
     });
 
-    // GIS / Map API routes
-    Route::prefix('gis')->group(function () {
+    // GIS / Map API routes — view gated (Issue #396)
+    Route::prefix('gis')->middleware('role_or_permission:map')->group(function () {
         Route::get('/units', [GisController::class, 'units'])->name('api.gis.units');
         Route::get('/hardware', [GisController::class, 'hardware'])->name('api.gis.hardware');
         Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');
