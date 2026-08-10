@@ -44,60 +44,75 @@ beforeEach(function () {
 });
 
 test('tickets inbox renders tickets assigned to user', function () {
+    $otherUser = User::factory()->create();
+
     $ticket = Ticket::create([
-        'title' => 'تیکت اختصاص یافته',
-        'description' => 'توضیحات',
-        'status' => 'new',
-        'priority' => 'medium',
-        'assignee_id' => $this->user->id,
+        'ticket_code' => 'TKT-0001',
+        'user_id' => $otherUser->id,
         'unit_id' => $this->unit->id,
+        'subject' => 'تیکت اختصاص یافته',
+        'content' => 'توضیحات',
+        'status' => 'forwarded',
+        'priority' => 'normal',
+        'current_assignee_id' => $this->user->id,
     ]);
 
-    $otherUser = User::factory()->create();
     $otherTicket = Ticket::create([
-        'title' => 'تیکت دیگر',
-        'description' => 'توضیحات',
-        'status' => 'new',
-        'priority' => 'medium',
-        'assignee_id' => $otherUser->id,
+        'ticket_code' => 'TKT-0002',
+        'user_id' => $otherUser->id,
         'unit_id' => $this->unit->id,
+        'subject' => 'تیکت دیگر',
+        'content' => 'توضیحات',
+        'status' => 'forwarded',
+        'priority' => 'normal',
+        'current_assignee_id' => $otherUser->id,
     ]);
 
     Livewire::actingAs($this->user)
         ->test('tickets.inbox')
+        ->set('viewMode', 'sent')
         ->assertOk()
         ->assertSee('تیکت اختصاص یافته')
         ->assertDontSee('تیکت دیگر');
 });
 
 test('creating ticket persists data', function () {
+    $targetUnit = Unit::create([
+        'name' => 'واحد مقصد',
+        'can_receive_tickets' => true,
+        'is_active' => true,
+    ]);
+
     Livewire::actingAs($this->user)
         ->test('tickets.create')
-        ->set('title', 'تیکت جدید تست')
-        ->set('description', 'توضیحات تست')
+        ->set('unit_id', $targetUnit->id)
+        ->set('subject', 'تیکت جدید تست')
+        ->set('content', 'توضیحات تست تست تست')
         ->set('priority', 'high')
-        ->call('save');
+        ->call('saveTicket');
 
     $this->assertDatabaseHas('tickets', [
-        'title' => 'تیکت جدید تست',
-        'unit_id' => $this->unit->id,
+        'subject' => 'تیکت جدید تست',
+        'unit_id' => $targetUnit->id,
     ]);
 });
 
 test('monitoring page renders tickets and displays Persian status', function () {
     Ticket::create([
-        'title' => 'تیکت مانیتورینگ',
-        'description' => 'توضیحات',
-        'status' => 'new',
-        'priority' => 'low',
+        'ticket_code' => 'TKT-0003',
+        'user_id' => $this->user->id,
         'unit_id' => $this->unit->id,
+        'subject' => 'تیکت مانیتورینگ',
+        'content' => 'توضیحات',
+        'status' => 'created',
+        'priority' => 'low',
     ]);
 
     Livewire::actingAs($this->user)
         ->test('tickets.monitoring')
         ->assertOk()
         ->assertSee('تیکت مانیتورینگ')
-        ->assertSee('جدید'); // statusName for 'new'
+        ->assertSee('جدید'); // statusName for 'created'
 });
 
 test('tickets pages are protected by RBAC', function () {
@@ -120,9 +135,9 @@ test('tickets pages are protected by RBAC', function () {
 });
 
 test('ticket model helpers return expected values', function () {
-    $ticket = new Ticket(['status' => 'closed']);
+    $ticket = new Ticket(['status' => 'created']);
     expect($ticket->canBeCompleted())->toBeFalse();
     
-    $ticketNew = new Ticket(['status' => 'new']);
+    $ticketNew = new Ticket(['status' => 'accepted']);
     expect($ticketNew->canBeCompleted())->toBeTrue();
 });
