@@ -54,9 +54,17 @@ test('map pages are protected by map permission', function () {
 });
 
 test('county map page renders shared map container', function () {
+    // SQLite does not ship PostGIS. Register lightweight stubs for the GIS
+    // functions the county page (and its boundary insert) rely on so the page
+    // can render in the test environment.
+    $pdo = \Illuminate\Support\Facades\DB::connection()->getPdo();
+    $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
+    $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
+
     // Provide a region + boundary for county page
-    DB::statement("INSERT INTO boundaries (boundary, created_at, updated_at) VALUES (ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326), now(), now())");
-    $boundary = Boundary::first();
+    $boundary = Boundary::create([
+        'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326)"),
+    ]);
     $region = Region::create([
         'name' => 'شهرستان تست',
         'type' => 'county',
