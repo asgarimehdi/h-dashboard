@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('ALTER TABLE hardware_audits ALTER COLUMN changes TYPE jsonb USING changes::jsonb');
         DB::statement(
             'CREATE INDEX hardware_audits_changes_gin_idx ON hardware_audits USING GIN (changes jsonb_path_ops)'
@@ -23,6 +27,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('DROP INDEX IF EXISTS hardware_audits_changes_gin_idx');
         DB::statement('ALTER TABLE hardware_audits ALTER COLUMN changes TYPE json USING changes::text::json');
     }
