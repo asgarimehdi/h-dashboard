@@ -10,6 +10,7 @@ use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * HR API endpoints (Issue #223) — for the Flutter app and HR dashboard.
@@ -76,62 +77,52 @@ class HrController extends Controller
             $this->hrStatsCacheKey($accessibleIds),
             now()->addMinutes(5),
             function () use ($accessibleIds) {
-                $persons = Person::whereIn('u_id', $accessibleIds);
+                $idList = implode(',', array_map('intval', $accessibleIds));
 
-                $total = (clone $persons)->count();
-
-                // Use JOIN to fetch names alongside aggregates — removes dead with() calls and N+1
-                $byUnit = (clone $persons)
-                    ->leftJoin('units', 'persons.u_id', '=', 'units.id')
-                    ->selectRaw('persons.u_id, units.name as unit_name, count(*) as total')
-                    ->groupBy('persons.u_id', 'units.name')
-                    ->get()
-                    ->mapWithKeys(fn ($r) => [$r->unit_name ?? $r->u_id => $r->total])
-                    ->toArray();
-
-                $bySemat = (clone $persons)
-                    ->whereNotNull('s_id')
-                    ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-                    ->selectRaw('persons.s_id, semats.name as semat_name, count(*) as total')
-                    ->groupBy('persons.s_id', 'semats.name')
-                    ->get()
-                    ->mapWithKeys(fn ($r) => [$r->semat_name ?? $r->s_id => $r->total])
-                    ->toArray();
-
-                $byTahsil = (clone $persons)
-                    ->whereNotNull('t_id')
-                    ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-                    ->selectRaw('persons.t_id, tahsils.name as tahsil_name, count(*) as total')
-                    ->groupBy('persons.t_id', 'tahsils.name')
-                    ->get()
-                    ->mapWithKeys(fn ($r) => [$r->tahsil_name ?? $r->t_id => $r->total])
-                    ->toArray();
-
-                $byEstekhdam = (clone $persons)
-                    ->whereNotNull('e_id')
-                    ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-                    ->selectRaw('persons.e_id, estekhdams.name as estekhdam_name, count(*) as total')
-                    ->groupBy('persons.e_id', 'estekhdams.name')
-                    ->get()
-                    ->mapWithKeys(fn ($r) => [$r->estekhdam_name ?? $r->e_id => $r->total])
-                    ->toArray();
-
-                $byRadif = (clone $persons)
-                    ->whereNotNull('r_id')
-                    ->leftJoin('radifs', 'persons.r_id', '=', 'radifs.id')
-                    ->selectRaw('persons.r_id, radifs.name as radif_name, count(*) as total')
-                    ->groupBy('persons.r_id', 'radifs.name')
-                    ->get()
-                    ->mapWithKeys(fn ($r) => [$r->radif_name ?? $r->r_id => $r->total])
-                    ->toArray();
+                // Single-pass aggregation (#436): one query computes all groupings via
+                // JSON_AGG/LEFT JOINs instead of 6 separate round-trips.
+                $row = DB::selectOne(
+                    "SELECT
+                        (SELECT count(*) FROM persons WHERE u_id IN ({$idList})) AS total,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(u.name, p.u_id::text), c), '{}')
+                           FROM (SELECT p.u_id, u.name, count(*) AS c
+                                 FROM persons p LEFT JOIN units u ON p.u_id = u.id
+                                 WHERE p.u_id IN ({$idList}) GROUP BY p.u_id, u.name) x
+                           LEFT JOIN persons p ON true
+                           LEFT JOIN units u ON p.u_id = u.id) AS by_unit,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(s.name, p.s_id::text), c), '{}')
+                           FROM (SELECT p.s_id, s.name, count(*) AS c
+                                 FROM persons p LEFT JOIN semats s ON p.s_id = s.id
+                                 WHERE p.s_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.s_id, s.name) x
+                           LEFT JOIN persons p ON true
+                           LEFT JOIN semats s ON p.s_id = s.id) AS by_semat,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(t.name, p.t_id::text), c), '{}')
+                           FROM (SELECT p.t_id, t.name, count(*) AS c
+                                 FROM persons p LEFT JOIN tahsils t ON p.t_id = t.id
+                                 WHERE p.t_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.t_id, t.name) x
+                           LEFT JOIN persons p ON true
+                           LEFT JOIN tahsils t ON p.t_id = t.id) AS by_tahsil,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(e.name, p.e_id::text), c), '{}')
+                           FROM (SELECT p.e_id, e.name, count(*) AS c
+                                 FROM persons p LEFT JOIN estekhdams e ON p.e_id = e.id
+                                 WHERE p.e_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.e_id, e.name) x
+                           LEFT JOIN persons p ON true
+                           LEFT JOIN estekhdams e ON p.e_id = e.id) AS by_estekhdam,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(r.name, p.r_id::text), c), '{}')
+                           FROM (SELECT p.r_id, r.name, count(*) AS c
+                                 FROM persons p LEFT JOIN radifs r ON p.r_id = r.id
+                                 WHERE p.r_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.r_id, r.name) x
+                           LEFT JOIN persons p ON true
+                           LEFT JOIN radifs r ON p.r_id = r.id) AS by_radif"
+                );
 
                 return [
-                    'total_personnel' => $total,
-                    'by_unit' => $byUnit,
-                    'by_semat' => $bySemat,
-                    'by_tahsil' => $byTahsil,
-                    'by_estekhdam' => $byEstekhdam,
-                    'by_radif' => $byRadif,
+                    'total_personnel' => (int) $row->total,
+                    'by_unit' => json_decode($row->by_unit, true) ?? [],
+                    'by_semat' => json_decode($row->by_semat, true) ?? [],
+                    'by_tahsil' => json_decode($row->by_tahsil, true) ?? [],
+                    'by_estekhdam' => json_decode($row->by_estekhdam, true) ?? [],
+                    'by_radif' => json_decode($row->by_radif, true) ?? [],
                 ];
             }
         );
