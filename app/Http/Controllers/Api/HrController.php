@@ -26,37 +26,43 @@ class HrController extends Controller
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
-        $units = Unit::whereIn('id', $accessibleIds)
-            ->withCount(['person as personnel_count'])
-            ->get();
+        $data = Cache::remember(
+            $this->hrStatsCacheKey($accessibleIds, 'orgchart'),
+            now()->addMinutes(10),
+            function () use ($accessibleIds) {
+                $units = Unit::whereIn('id', $accessibleIds)
+                    ->withCount(['person as personnel_count'])
+                    ->get();
 
-        // Build nested tree from flat list (parent_id references)
-        $byId = $units->keyBy('id');
-        $tree = [];
-        foreach ($units as $unit) {
-            if ($unit->parent_id && $byId->has($unit->parent_id)) {
-                $byId[$unit->parent_id]->children ??= [];
-                $byId[$unit->parent_id]->children[] = $unit;
-            } else {
-                $tree[] = $unit;
+                // Build nested tree from flat list (parent_id references)
+                $byId = $units->keyBy('id');
+                $tree = [];
+                foreach ($units as $unit) {
+                    if ($unit->parent_id && $byId->has($unit->parent_id)) {
+                        $byId[$unit->parent_id]->children ??= [];
+                        $byId[$unit->parent_id]->children[] = $unit;
+                    } else {
+                        $tree[] = $unit;
+                    }
+                }
+
+                $format = function ($unit) use (&$format) {
+                    return [
+                        'id' => $unit->id,
+                        'name' => $unit->name,
+                        'parent_id' => $unit->parent_id,
+                        'personnel_count' => $unit->personnel_count,
+                        'children' => isset($unit->children)
+                            ? collect($unit->children)->map($format)->values()
+                            : [],
+                    ];
+                };
+
+                return collect($tree)->map($format)->values();
             }
-        }
+        );
 
-        $format = function ($unit) use (&$format) {
-            return [
-                'id' => $unit->id,
-                'name' => $unit->name,
-                'parent_id' => $unit->parent_id,
-                'personnel_count' => $unit->personnel_count,
-                'children' => isset($unit->children)
-                    ? collect($unit->children)->map($format)->values()
-                    : [],
-            ];
-        };
-
-        return response()->json([
-            'data' => collect($tree)->map($format)->values(),
-        ]);
+        return response()->json(['data' => $data]);
     }
 
     /**
@@ -133,11 +139,11 @@ class HrController extends Controller
         return response()->json(['data' => $data]);
     }
 
-    private function hrStatsCacheKey(array $accessibleIds): string
+    private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
     {
         $version = Cache::get('hr_stats_version', 0);
         $scopeHash = md5(implode(',', $accessibleIds));
-        return "hr:stats:v{$version}:{$scopeHash}";
+        return "hr:{$segment}:v{$version}:{$scopeHash}";
     }
 
     /**
