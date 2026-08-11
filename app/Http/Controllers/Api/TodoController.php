@@ -47,10 +47,14 @@ class TodoController extends Controller
             'unit_id' => 'nullable|exists:units,id',
         ]);
 
-        $unitId = $validated['unit_id'] ?? $request->user()->person?->u_id;
+        $user = $request->user();
 
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-        if (! in_array($unitId, $accessibleIds)) {
+        // Explicit unit_id wins; fall back to the user's primary unit (pivot is_primary),
+        // then to the person's unit — never silently null (#431)
+        $unitId = $validated['unit_id'] ?? $user->primaryUnit()?->id ?? $user->person?->u_id;
+
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        if (! $unitId || ! in_array($unitId, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to create todo in this unit.'], 403);
         }
 
