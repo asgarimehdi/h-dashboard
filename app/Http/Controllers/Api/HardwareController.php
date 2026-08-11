@@ -214,7 +214,7 @@ class HardwareController extends Controller
         }
 
         $hardware = Hardware::create($validated);
-        $hardware->load('person');
+        $hardware->load('person.unit');
         GisController::invalidateCache();
 
         return response()->json([
@@ -227,7 +227,7 @@ class HardwareController extends Controller
     {
         $this->assertAccessible($request, $hardware);
 
-        $hardware->load('person');
+        $hardware->load('person.unit');
 
         return response()->json([
             'success' => true,
@@ -271,7 +271,7 @@ class HardwareController extends Controller
         }
 
         $hardware->update($validated);
-        $hardware->load('person');
+        $hardware->load('person.unit');
         GisController::invalidateCache();
 
         return response()->json([
