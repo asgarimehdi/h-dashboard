@@ -283,11 +283,14 @@ class TicketCommentController extends Controller
     }
 
     /**
-     * Sanitize URL by blocking dangerous protocols.
+     * Sanitize URL by blocking dangerous protocols and escape attribute-breaking characters (Issue #425).
      */
     private function sanitizeUrl(string $url): string
     {
         $url = trim($url);
+        // Strip control characters and quote/angle chars that could break out of href="..."
+        $url = preg_replace('/[\x00-\x20\x7F"\'<>]/', '', $url);
+
         $dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
 
         foreach ($dangerousProtocols as $proto) {
@@ -316,6 +319,9 @@ class TicketCommentController extends Controller
         $html = preg_replace('/`(.+?)`/', '<code>$1</code>', $html);
         $html = preg_replace_callback(
             '/\[(.+?)\]\((.+?)\)/',
+            // Issue #425: URL goes through sanitizeUrl() which strips any character that could
+            // break out of the href="..." attribute (quotes, angle brackets, control chars).
+            // Note: $body is e()-escaped before this, so this is an extra defense-in-depth layer.
             fn($m) => '<a href="' . $this->sanitizeUrl($m[2]) . '" target="_blank" rel="noopener">' . $m[1] . '</a>',
             $html
         );
