@@ -308,7 +308,9 @@ class HardwareController extends Controller
         $cacheKey = "hardware_stats:v{$version}:".md5(json_encode($accessibleIds));
 
         $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
-            $baseQuery = Hardware::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds));
+            $baseQuery = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->select('hardwares.*');
 
             return [
                 'total' => $baseQuery->count(),
@@ -338,8 +340,10 @@ class HardwareController extends Controller
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
         // Single query: load accessible hardwares
-        $hardwares = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+        $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+            ->whereIn('hardwares.id', $request->ids)
+            ->whereIn('persons.u_id', $accessibleIds)
+            ->select('hardwares.*')
             ->get();
 
         if ($hardwares->count() !== count($request->ids)) {
@@ -374,8 +378,10 @@ class HardwareController extends Controller
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
         // Single query: load accessible hardwares
-        $hardwares = Hardware::whereIn('id', $request->ids)
-            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+        $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+            ->whereIn('hardwares.id', $request->ids)
+            ->whereIn('persons.u_id', $accessibleIds)
+            ->select('hardwares.*')
             ->get();
 
         if ($hardwares->count() !== count($request->ids)) {
