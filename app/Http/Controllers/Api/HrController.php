@@ -84,36 +84,26 @@ class HrController extends Controller
                 $row = DB::selectOne(
                     "SELECT
                         (SELECT count(*) FROM persons WHERE u_id IN ({$idList})) AS total,
-                        (SELECT coalesce(jsonb_object_agg(coalesce(u.name, p.u_id::text), c), '{}')
+                        (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.u_id::text), x.c), '{}')
                            FROM (SELECT p.u_id, u.name, count(*) AS c
                                  FROM persons p LEFT JOIN units u ON p.u_id = u.id
-                                 WHERE p.u_id IN ({$idList}) GROUP BY p.u_id, u.name) x
-                           LEFT JOIN persons p ON true
-                           LEFT JOIN units u ON p.u_id = u.id) AS by_unit,
-                        (SELECT coalesce(jsonb_object_agg(coalesce(s.name, p.s_id::text), c), '{}')
+                                 WHERE p.u_id IN ({$idList}) GROUP BY p.u_id, u.name) x) AS by_unit,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.s_id::text), x.c), '{}')
                            FROM (SELECT p.s_id, s.name, count(*) AS c
                                  FROM persons p LEFT JOIN semats s ON p.s_id = s.id
-                                 WHERE p.s_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.s_id, s.name) x
-                           LEFT JOIN persons p ON true
-                           LEFT JOIN semats s ON p.s_id = s.id) AS by_semat,
-                        (SELECT coalesce(jsonb_object_agg(coalesce(t.name, p.t_id::text), c), '{}')
+                                 WHERE p.s_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.s_id, s.name) x) AS by_semat,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.t_id::text), x.c), '{}')
                            FROM (SELECT p.t_id, t.name, count(*) AS c
                                  FROM persons p LEFT JOIN tahsils t ON p.t_id = t.id
-                                 WHERE p.t_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.t_id, t.name) x
-                           LEFT JOIN persons p ON true
-                           LEFT JOIN tahsils t ON p.t_id = t.id) AS by_tahsil,
-                        (SELECT coalesce(jsonb_object_agg(coalesce(e.name, p.e_id::text), c), '{}')
+                                 WHERE p.t_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.t_id, t.name) x) AS by_tahsil,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.e_id::text), x.c), '{}')
                            FROM (SELECT p.e_id, e.name, count(*) AS c
                                  FROM persons p LEFT JOIN estekhdams e ON p.e_id = e.id
-                                 WHERE p.e_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.e_id, e.name) x
-                           LEFT JOIN persons p ON true
-                           LEFT JOIN estekhdams e ON p.e_id = e.id) AS by_estekhdam,
-                        (SELECT coalesce(jsonb_object_agg(coalesce(r.name, p.r_id::text), c), '{}')
+                                 WHERE p.e_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.e_id, e.name) x) AS by_estekhdam,
+                        (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.r_id::text), x.c), '{}')
                            FROM (SELECT p.r_id, r.name, count(*) AS c
                                  FROM persons p LEFT JOIN radifs r ON p.r_id = r.id
-                                 WHERE p.r_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.r_id, r.name) x
-                           LEFT JOIN persons p ON true
-                           LEFT JOIN radifs r ON p.r_id = r.id) AS by_radif"
+                                 WHERE p.r_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.r_id, r.name) x) AS by_radif"
                 );
 
                 return [
