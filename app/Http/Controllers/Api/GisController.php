@@ -7,12 +7,17 @@ use App\Models\Hardware;
 use App\Models\Ticket;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class GisController extends Controller
 {
+    public function __construct(
+        protected CacheInvalidationServiceInterface $cache
+    ) {}
+
     /**
      * Apply bbox spatial filter using lat/lng columns (works without geom column).
      */
@@ -82,15 +87,14 @@ class GisController extends Controller
     }
 
     /**
-     * Build a cache key for GIS endpoints.
+     * Build a cache key for GIS endpoints via the unified service.
      */
     protected function gisCacheKey(string $endpoint, array $accessibleIds, string $bbox, array $extra = []): string
     {
-        $version = Cache::get('gis_version', 0);
         $scopeHash = md5(implode(',', $accessibleIds));
         $extraHash = empty($extra) ? 'none' : md5(serialize($extra));
 
-        return "gis_{$endpoint}:v{$version}:{$scopeHash}:{$bbox}:{$extraHash}";
+        return $this->cache->cacheKey("gis_{$endpoint}", $scopeHash, "{$bbox}:{$extraHash}");
     }
 
     /**
@@ -411,10 +415,10 @@ class GisController extends Controller
     }
 
     /**
-     * Invalidate GIS cache by bumping the version counter.
+     * Invalidate GIS cache by bumping the version counter via the unified service.
      */
     public static function invalidateCache(): void
     {
-        Cache::increment('gis_version');
+        app(CacheInvalidationServiceInterface::class)->increment('gis');
     }
 }

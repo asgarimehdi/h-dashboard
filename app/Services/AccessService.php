@@ -41,8 +41,9 @@ class AccessService
         }
 
         $sessionUnitId = session('current_unit_id', 'none');
-        $version = Cache::get('unit_hierarchy_version', 0);
-        $cacheKey = "accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $version = $cache->getVersion('unit_hierarchy');
+        $cacheKey = "accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
 
         return Cache::remember(
             $cacheKey,
@@ -65,12 +66,13 @@ class AccessService
                 ? [$currentUnitId]
                 : $user->units()->pluck('units.id')->toArray();
 
-            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
+            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
             Cache::forget($cacheKey);
 
             // Also forget the versioned key used by accessibleUnitIds() (#337)
-            $version = \Illuminate\Support\Facades\Cache::get('unit_hierarchy_version', 0);
-            Cache::forget("accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds)));
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $version = $cache->getVersion('unit_hierarchy');
+            Cache::forget("accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds)));
         }
     }
 
@@ -79,7 +81,8 @@ class AccessService
      */
     public function clearAllCaches(): void
     {
-        Cache::increment('unit_hierarchy_version');
-        Cache::increment('gis_version');
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('unit_hierarchy');
+        $cache->increment('gis');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\HasOrganizationalScope;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -9,7 +10,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\Cache;
 
 class Person extends Model
 {
@@ -42,9 +42,10 @@ class Person extends Model
         // Invalidate cached HR stats + dashboard whenever a person is created/updated/deleted (#341, #391)
         foreach (['saved', 'deleted'] as $event) {
             static::$event(function () {
-                Cache::increment('hr_stats_version');
-                Cache::increment('dashboard_version');
-                Cache::increment('maps_version');
+                $cache = app(CacheInvalidationServiceInterface::class);
+                $cache->increment('hr_stats');
+                $cache->increment('dashboard');
+                $cache->increment('maps');
             });
         }
     }

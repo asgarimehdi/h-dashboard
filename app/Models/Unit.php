@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -87,7 +88,8 @@ class Unit extends Model
         }
 
         // Cache by sorted IDs to get consistent results regardless of input order
-        $version = Cache::get('unit_hierarchy_version', 0);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $version = $cache->getVersion('unit_hierarchy');
         $cacheKey = 'unit_ancestors:v'.$version.':'.md5(implode(',', array_map('strval', $ids)));
 
         return Cache::remember(
@@ -128,7 +130,8 @@ class Unit extends Model
         }
 
         // Cache by sorted IDs to get consistent results regardless of input order
-        $version = Cache::get('unit_hierarchy_version', 0);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $version = $cache->getVersion('unit_hierarchy');
         $cacheKey = 'unit_descendants:v'.$version.':'.md5(implode(',', array_map('strval', $ids)));
 
         return Cache::remember(

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,10 +73,11 @@ class Hardware extends Model
      */
     public static function flushStatsCache(): void
     {
-        Cache::increment('hardware_stats_version');
-        Cache::increment('gis_version'); // Issue #373: imports also change map data
-        Cache::increment('maps_version'); // Issue #394
-        Cache::increment('dashboard_version'); // Issue #394
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('hardware_stats');
+        $cache->increment('gis'); // Issue #373: imports also change map data
+        $cache->increment('maps'); // Issue #394
+        $cache->increment('dashboard'); // Issue #394
     }
 
     public function person(): BelongsTo
