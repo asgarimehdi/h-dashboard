@@ -67,6 +67,82 @@ class HrController extends Controller
     }
 
     /**
+     * GET /api/hr/org-chart/expandable — expandable org chart with initial_limit.
+     * Returns first N root units; children loaded on-demand via loadSubtree.
+     */
+    public function orgChartExpandable(Request $request): JsonResponse
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $initialLimit = min((int) $request->get('initial_limit', 20), 100);
+
+        $units = Unit::whereIn('id', $accessibleIds)
+            ->withCount('person as personnel_count')
+            ->with('unitType:id,name')
+            ->orderBy('name')
+            ->limit($initialLimit)
+            ->get()
+            ->map(fn (Unit $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'parent_id' => $u->parent_id,
+                'unit_type' => $u->unitType?->name,
+                'personnel_count' => $u->personnel_count,
+                'has_children' => Unit::where('parent_id', $u->id)->exists(),
+                'level' => 1,
+            ]);
+
+        return response()->json([
+            'data' => $units->values(),
+            'meta' => ['initial_limit' => $initialLimit],
+        ]);
+    }
+
+    /**
+     * GET /api/hr/org-chart/subtree/{unitId} — load entire subtree for a unit.
+     */
+    public function loadSubtree(Request $request, int $unitId): JsonResponse
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! in_array($unitId, $accessibleIds)) {
+            return response()->json(['message' => 'Unit not accessible.'], 403);
+        }
+
+        $units = Unit::whereIn('id', $accessibleIds)
+            ->subtree($unitId)
+            ->withCount('person as personnel_count')
+            ->with('unitType:id,name')
+            ->get();
+
+        $byId = $units->keyBy('id');
+        $root = $byId->get($unitId);
+
+        if (! $root) {
+            return response()->json(['data' => []]);
+        }
+
+        $children = $units->filter(fn (Unit $u) => $u->parent_id == $unitId);
+
+        $format = function (Unit $unit) use (&$format, $byId) {
+            $childUnits = $byId->filter(fn (Unit $u) => $u->parent_id == $unit->id);
+
+            return [
+                'id' => $unit->id,
+                'name' => $unit->name,
+                'parent_id' => $unit->parent_id,
+                'unit_type' => $unit->unitType?->name,
+                'personnel_count' => $unit->personnel_count,
+                'has_children' => $childUnits->isNotEmpty(),
+                'children' => $childUnits->map(fn (Unit $c) => $format($c))->values(),
+            ];
+        };
+
+        $result = collect($children)->map(fn (Unit $c) => $format($c))->values();
+
+        return response()->json(['data' => $result]);
+    }
+
+    /**
      * GET /api/hr/stats — aggregated HR stats.
      */
     public function stats(Request $request): JsonResponse
@@ -268,5 +344,117 @@ class HrController extends Controller
         }
 
         return response()->json(['data' => $person]);
+    }
+
+    /**
+     * GET /api/hr/analytics/headcount-trend — monthly headcount for last N months.
+     */
+    public function headcountTrend(Request $request): JsonResponse
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $months = min((int) $request->get('months', 12), 24);
+
+        $data = Cache::remember(
+            $this->hrAnalyticsCacheKey('headcount_trend', $accessibleIds, $months),
+            now()->addMinutes(5),
+            function () use ($accessibleIds, $months) {
+                $since = now()->subMonths($months)->startOfMonth();
+
+                // Fetch created_at dates and group by month in PHP for DB-agnostic behavior
+                $records = Person::whereIn('u_id', $accessibleIds)
+                    ->where('created_at', '>=', $since)
+                    ->select('created_at')
+                    ->get()
+                    ->groupBy(fn ($p) => $p->created_at->format('Y-m'));
+
+                return $records->map(fn ($group, $month) => [
+                    'month' => $month,
+                    'count' => $group->count(),
+                ])->values();
+            }
+        );
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /api/hr/analytics/vacancy-trend — monthly vacancy count (units with zero personnel).
+     */
+    public function vacancyTrend(Request $request): JsonResponse
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $months = min((int) $request->get('months', 12), 24);
+
+        $data = Cache::remember(
+            $this->hrAnalyticsCacheKey('vacancy_trend', $accessibleIds, $months),
+            now()->addMinutes(5),
+            function () use ($accessibleIds, $months) {
+                $since = now()->subMonths($months)->startOfMonth();
+
+                // Count units that have zero personnel as of each month
+                $results = [];
+                for ($i = $months; $i >= 0; $i--) {
+                    $monthDate = now()->subMonths($i)->startOfMonth();
+                    $monthLabel = $monthDate->format('Y-m');
+
+                    // Units accessible that have no personnel created before or in this month
+                    $vacantCount = Unit::whereIn('id', $accessibleIds)
+                        ->whereDoesntHave('person', function ($q) use ($monthDate) {
+                            $q->where('created_at', '<=', $monthDate->endOfMonth());
+                        })
+                        ->count();
+
+                    $results[] = ['month' => $monthLabel, 'count' => $vacantCount];
+                }
+
+                return collect($results);
+            }
+        );
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /api/hr/analytics/staffing-ratio — personnel count per unit_type and per semat.
+     */
+    public function staffingRatio(Request $request): JsonResponse
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        $data = Cache::remember(
+            $this->hrAnalyticsCacheKey('staffing_ratio', $accessibleIds),
+            now()->addMinutes(5),
+            function () use ($accessibleIds) {
+                $persons = Person::whereIn('u_id', $accessibleIds);
+
+                $byUnitType = (clone $persons)
+                    ->join('units', 'persons.u_id', '=', 'units.id')
+                    ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
+                    ->selectRaw('unit_types.name as unit_type_name, count(*) as total')
+                    ->groupBy('unit_types.name')
+                    ->pluck('total', 'unit_type_name')
+                    ->toArray();
+
+                $bySemat = (clone $persons)
+                    ->whereNotNull('s_id')
+                    ->join('semats', 'persons.s_id', '=', 'semats.id')
+                    ->selectRaw('semats.name as semat_name, count(*) as total')
+                    ->groupBy('semats.name')
+                    ->pluck('total', 'semat_name')
+                    ->toArray();
+
+                return [
+                    'by_unit_type' => $byUnitType,
+                    'by_semat' => $bySemat,
+                ];
+            }
+        );
+
+        return response()->json(['data' => $data]);
+    }
+
+    private function hrAnalyticsCacheKey(string $type, array $accessibleIds, int $months = 12): string
+    {
+        return $this->hrStatsCacheKey($accessibleIds, "analytics:{$type}:m{$months}");
     }
 }

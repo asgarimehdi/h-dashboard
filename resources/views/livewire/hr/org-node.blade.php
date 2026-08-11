@@ -1,7 +1,13 @@
 @props(['unit', 'level' => 0, 'isLast' => false])
 
 @php
-    $hasChildren = $unit->childrenRecursive->count() > 0;
+    // Check children from lazy-loaded cache
+    $childUnits = $this->lazyChildren[$unit->id] ?? collect();
+    $hasChildren = $childUnits->count() > 0;
+    // Also check DB if we don't know yet (for root units or if has_children flag exists)
+    if (!$hasChildren && !isset($this->lazyChildren[$unit->id])) {
+        $hasChildren = \App\Models\Unit::where('parent_id', $unit->id)->exists();
+    }
     $isExpanded = in_array((string)$unit->id, $this->expanded);
     $isMatch = !empty($this->search) && mb_strpos($unit->name, $this->search) !== false;
 @endphp
@@ -68,7 +74,7 @@
     @if($hasChildren && $isExpanded)
         {{-- ایجاد فاصله و خط عمودی ممتد برای زیرمجموعه‌ها --}}
         <div class="mr-9">
-            @foreach($unit->childrenRecursive as $child)
+            @foreach($childUnits as $child)
                 @include('livewire.hr.org-node', [
                     'unit' => $child, 
                     'level' => $level + 1, 

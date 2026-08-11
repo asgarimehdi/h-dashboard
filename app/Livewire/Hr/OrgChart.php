@@ -2,23 +2,39 @@
 
 namespace App\Livewire\Hr;
 
-use App\Models\Unit;
 use App\Models\Person;
+use App\Models\Unit;
 use App\Services\AccessService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class OrgChart extends Component
 {
     public array $expanded = [];
+
     public string $search = '';
+
     public $rootUnits;
+
     public $selectedUnit;
+
     public $selectedPersonnel;
+
     public int $selectedPersonnelTotal = 0;
+
     public int $descendantPersonnelTotal = 0;
+
     public array $personCounts = [];
+
     public int $directUserCount = 0;
+
     public int $descendantUserCount = 0;
+
+    /** Lazily loaded children keyed by parent unit ID. */
+    public array $lazyChildren = [];
+
+    /** Units currently loading their children. */
+    public array $loadingUnits = [];
 
     public function mount(): void
     {
@@ -26,9 +42,7 @@ class OrgChart extends Component
     }
 
     /**
-     * الهام‌گرفته از درختواره واحدها (/units/chart) که خیلی سریع‌تر کار می‌کند:
-     * - eager loading با childrenRecursive (یک کوئری واحد + رابطه recursive)
-     * - بدون ساخت دستی tree از flat array
+     * Load only root units initially — children loaded lazily on expand.
      */
     public function loadData(): void
     {
@@ -36,10 +50,10 @@ class OrgChart extends Component
 
         $this->rootUnits = Unit::whereNull('parent_id')
             ->whereIn('id', $accessibleIds)
-            ->with(['childrenRecursive', 'unitType'])
+            ->with(['unitType'])
             ->get();
 
-        // محاسبه تعداد پرسنل برای تمام واحدها (شامل فرزندان)
+        // Personnel counts for all accessible units
         $personCounts = Person::whereIn('u_id', $accessibleIds)
             ->selectRaw('u_id, count(*) as cnt')
             ->groupBy('u_id')
@@ -48,15 +62,89 @@ class OrgChart extends Component
         $this->personCounts = $personCounts->toArray();
 
         if (empty($this->expanded)) {
-            // پیش‌فرض: فقط تا سطح معاونت‌های بهداشت باز باشد
-            // وزارت(1) → دانشگاه(2) → معاونت(3) → [شبکه‌ها و مراکز بسته]
-            $this->expanded = $this->collectFirstNLevels($this->rootUnits, 3);
+            // Expand first N levels: load children progressively
+            $this->expanded = $this->expandFirstNLevels($this->rootUnits, 3);
+        }
+
+        // Pre-load children for expanded units
+        $this->loadExpandedChildren();
+    }
+
+    /**
+     * Expand root units and their children up to maxLevel, loading children from DB as needed.
+     */
+    protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
+    {
+        $ids = [];
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        foreach ($nodes as $node) {
+            if ($level <= $maxLevel) {
+                $ids[] = (string) $node->id;
+            }
+
+            // Load children for nodes that should be expanded
+            if ($level < $maxLevel) {
+                $children = Unit::where('parent_id', $node->id)
+                    ->whereIn('id', $accessibleIds)
+                    ->get();
+
+                $this->lazyChildren[(int) $node->id] = $children;
+
+                if ($children->isNotEmpty()) {
+                    $ids = array_merge($ids, $this->expandFirstNLevels($children, $maxLevel, $level + 1));
+                }
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Load children for all currently expanded units that don't have cached children yet.
+     */
+    public function loadExpandedChildren(): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        foreach ($this->expanded as $unitId) {
+            $id = (int) $unitId;
+            if (! isset($this->lazyChildren[$id])) {
+                $children = Unit::where('parent_id', $id)
+                    ->whereIn('id', $accessibleIds)
+                    ->with(['unitType'])
+                    ->get();
+
+                $this->lazyChildren[$id] = $children;
+            }
+        }
+    }
+
+    /**
+     * Lazy-load children for a specific unit when expanded.
+     */
+    public function loadChildren(int $unitId): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (! in_array($unitId, $accessibleIds)) {
+            return;
+        }
+
+        if (! isset($this->lazyChildren[$unitId])) {
+            $children = Unit::where('parent_id', $unitId)
+                ->whereIn('id', $accessibleIds)
+                ->with(['unitType'])
+                ->get();
+
+            $this->lazyChildren[$unitId] = $children;
         }
     }
 
     public function updatedSearch(): void
     {
         $this->expanded = [];
+        $this->lazyChildren = [];
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         if (strlen($this->search) > 2) {
@@ -69,6 +157,7 @@ class OrgChart extends Component
             }
 
             $this->expanded = array_unique($this->expanded);
+            $this->loadExpandedChildren();
         }
     }
 
@@ -88,6 +177,7 @@ class OrgChart extends Component
             $this->expanded = array_diff($this->expanded, [$id]);
         } else {
             $this->expanded[] = $id;
+            $this->loadChildren((int) $id);
         }
     }
 
@@ -97,6 +187,7 @@ class OrgChart extends Component
 
         if (! in_array($id, $accessibleIds)) {
             $this->error('شما مجاز به مشاهده این واحد نیستید.', position: 'toast-bottom');
+
             return;
         }
 
@@ -116,7 +207,7 @@ class OrgChart extends Component
 
         // Query 4: Descendant user count via direct JOIN (faster than whereHas)
         $this->descendantUserCount = $descendantIds->isNotEmpty()
-            ? \Illuminate\Support\Facades\DB::table('user_units')
+            ? DB::table('user_units')
                 ->whereIn('unit_id', $descendantIds)
                 ->distinct()
                 ->count('user_id')
@@ -128,11 +219,13 @@ class OrgChart extends Component
     public function expandAll(): void
     {
         $this->expanded = $this->collectAllIds($this->rootUnits);
+        $this->loadExpandedChildren();
     }
 
     public function collapseAll(): void
     {
         $this->expanded = [];
+        $this->lazyChildren = [];
     }
 
     protected function collectAllIds($nodes): array
@@ -140,10 +233,8 @@ class OrgChart extends Component
         $ids = [];
         foreach ($nodes as $node) {
             $ids[] = (string) $node->id;
-            if ($node->childrenRecursive->count()) {
-                $ids = array_merge($ids, $this->collectAllIds($node->childrenRecursive));
-            }
         }
+
         return $ids;
     }
 
@@ -158,10 +249,8 @@ class OrgChart extends Component
             if ($level <= $maxLevel) {
                 $ids[] = (string) $node->id;
             }
-            if ($node->childrenRecursive->count() && $level < $maxLevel) {
-                $ids = array_merge($ids, $this->collectFirstNLevels($node->childrenRecursive, $maxLevel, $level + 1));
-            }
         }
+
         return $ids;
     }
 

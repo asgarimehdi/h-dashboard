@@ -212,6 +212,25 @@ class Unit extends Model
     }
 
     /**
+     * Scope: filter to only descendants of a given unit (inclusive) using the
+     * existing descendantIds() CTE with caching.
+     */
+    public function scopeSubtree($query, int $unitId)
+    {
+        $descendantIds = self::descendantIds($unitId)->all();
+
+        return $query->whereIn('units.id', $descendantIds);
+    }
+
+    /**
+     * Scope: add withCount('person as personnel_count') in a chainable way.
+     */
+    public function scopeWithPersonnelCount($query)
+    {
+        return $query->withCount('person as personnel_count');
+    }
+
+    /**
      * Scope for spatial queries: find units within a distance of a point (using ST_Distance_Sphere)
      * More accurate than bounding box but may be slower without proper spatial index
      */

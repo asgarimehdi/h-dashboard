@@ -1,15 +1,15 @@
 <?php
 
 use App\Http\Controllers\Api\GisController;
-use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\HardwareAuditController;
+use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\HrController;
 use App\Http\Controllers\Api\MultiLatestValueController;
-use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\TicketController;
-use App\Http\Controllers\Api\TicketCommentController;
-use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\PersonController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\TicketCommentController;
+use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
 use App\Models\User;
@@ -146,13 +146,18 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
     });
 
-    // HR API routes (Issue #223) — view gated (Issue #396)
+    // HR API routes (Issue #223, #444) — view gated (Issue #396)
     Route::prefix('hr')->middleware('role_or_permission:view_hr_dashboard')->group(function () {
         Route::get('/org-chart', [HrController::class, 'orgChart']);
+        Route::get('/org-chart/expandable', [HrController::class, 'orgChartExpandable']);
+        Route::get('/org-chart/subtree/{unitId}', [HrController::class, 'loadSubtree']);
         Route::get('/stats', [HrController::class, 'stats']);
         Route::get('/vacancies', [HrController::class, 'vacancies']);
         Route::get('/personnel', [HrController::class, 'personnel']);
         Route::get('/personnel/{n_code}', [HrController::class, 'personDetail']);
+        Route::get('/analytics/headcount-trend', [HrController::class, 'headcountTrend']);
+        Route::get('/analytics/vacancy-trend', [HrController::class, 'vacancyTrend']);
+        Route::get('/analytics/staffing-ratio', [HrController::class, 'staffingRatio']);
     });
 
     // GIS / Map API routes — view gated (Issue #396)

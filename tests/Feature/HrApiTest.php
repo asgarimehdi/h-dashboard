@@ -130,4 +130,102 @@ class HrApiTest extends TestCase
         $response = $this->getJson('/api/hr/stats');
         $response->assertStatus(401);
     }
+
+    // === Issue #444: Expandable Org Chart ===
+
+    public function test_org_chart_expandable_returns_root_units(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson('/api/hr/org-chart/expandable');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [['id', 'name', 'parent_id', 'personnel_count', 'has_children', 'level']],
+                'meta' => ['initial_limit'],
+            ]);
+    }
+
+    public function test_org_chart_expandable_respects_initial_limit(): void
+    {
+        // Create additional root units
+        Unit::create(['name' => 'واحد ۲']);
+        Unit::create(['name' => 'واحد ۳']);
+        Unit::create(['name' => 'واحد ۴']);
+
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson('/api/hr/org-chart/expandable?initial_limit=2');
+
+        $response->assertStatus(200);
+        $this->assertCount(2, $response->json('data'));
+        $this->assertEquals(2, $response->json('meta.initial_limit'));
+    }
+
+    public function test_org_chart_expandable_returns_has_children_flag(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson('/api/hr/org-chart/expandable');
+
+        $response->assertStatus(200);
+        // The parent unit should have has_children = true
+        $parentUnit = collect($response->json('data'))->firstWhere('id', $this->unit->id);
+        $this->assertTrue($parentUnit['has_children']);
+    }
+
+    public function test_org_chart_subtree_returns_children(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson("/api/hr/org-chart/subtree/{$this->unit->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data' => [['id', 'name', 'children']]]);
+        // Should have one child
+        $this->assertCount(1, $response->json('data'));
+    }
+
+    public function test_org_chart_subtree_scoped_to_org(): void
+    {
+        $otherUnit = Unit::create(['name' => 'Out of scope']);
+
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson("/api/hr/org-chart/subtree/{$otherUnit->id}");
+
+        $response->assertStatus(403);
+    }
+
+    // === Issue #444: HR Analytics ===
+
+    public function test_headcount_trend_returns_monthly_data(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson('/api/hr/analytics/headcount-trend');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data' => [['month', 'count']]]);
+    }
+
+    public function test_vacancy_trend_returns_monthly_data(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson('/api/hr/analytics/vacancy-trend');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data' => [['month', 'count']]]);
+    }
+
+    public function test_staffing_ratio_returns_aggregations(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+        $response = $this->getJson('/api/hr/analytics/staffing-ratio');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => ['by_unit_type', 'by_semat'],
+            ]);
+    }
+
+    public function test_analytics_unauthenticated_gets_401(): void
+    {
+        $response = $this->getJson('/api/hr/analytics/headcount-trend');
+        $response->assertStatus(401);
+    }
 }
