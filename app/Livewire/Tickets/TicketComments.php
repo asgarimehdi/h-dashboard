@@ -55,7 +55,7 @@ class TicketComments extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->ticket = Ticket::where('id', $this->ticketId)
             ->whereIn('unit_id', $accessibleIds)
-            ->with(['comments' => fn ($q) => $q->with('user.person')->orderByDesc('created_at')])
+            ->with(['comments' => fn ($q) => $q->with('user.person')->with('children.user.person')->orderByDesc('created_at')])
             ->first();
     }
 
