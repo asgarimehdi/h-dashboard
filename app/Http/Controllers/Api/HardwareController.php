@@ -74,25 +74,23 @@ class HardwareController extends Controller
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $query = Hardware::with('person.unit')
-            ->whereHas('person', function ($q) use ($accessibleIds) {
-                $q->whereIn('u_id', $accessibleIds);
-            });
+        $query = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
+            ->whereIn('persons.u_id', $accessibleIds)
+            ->select('hardwares.*')
+            ->distinct();
 
         // Filters
         if ($request->filled('search')) {
             $s = self::normalizeForSearch($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
-                    ->orWhere('n_code', 'LIKE', "%{$s}%")
+                    ->orWhere('hardwares.n_code', 'LIKE', "%{$s}%")
                     ->orWhere('ip_valid', 'LIKE', "%{$s}%")
                     ->orWhere('ip_local', 'LIKE', "%{$s}%")
                     ->orWhere('mac', 'LIKE', "%{$s}%")
                     ->orWhere('comments', 'LIKE', "%{$s}%")
-                    ->orWhereHas('person', function ($pq) use ($s) {
-                        $pq->where('f_name', 'LIKE', "%{$s}%")
-                            ->orWhere('l_name', 'LIKE', "%{$s}%");
-                    });
+                    ->orWhere('persons.f_name', 'LIKE', "%{$s}%")
+                    ->orWhere('persons.l_name', 'LIKE', "%{$s}%");
             });
         }
 
@@ -126,22 +124,28 @@ class HardwareController extends Controller
         }
         if ($request->filled('person')) {
             $normalized = self::normalizeForSearch($request->person);
-            $query->whereHas('person', function ($q) use ($normalized) {
-                $q->where('f_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('n_code', 'LIKE', "%{$normalized}%");
+            $query->where(function ($q) use ($normalized) {
+                $q->where('persons.f_name', 'LIKE', "%{$normalized}%")
+                    ->orWhere('persons.l_name', 'LIKE', "%{$normalized}%")
+                    ->orWhere('persons.n_code', 'LIKE', "%{$normalized}%");
             });
         }
         if ($request->filled('unit')) {
             $normalized = self::normalizeForSearch($request->unit);
-            $query->whereHas('person.unit', function ($q) use ($normalized) {
-                $q->where('name', 'LIKE', "%{$normalized}%");
+            $query->whereExists(function ($q) use ($normalized) {
+                $q->selectRaw('1')
+                    ->from('units')
+                    ->whereColumn('units.id', 'persons.u_id')
+                    ->where('units.name', 'LIKE', "%{$normalized}%");
             });
         }
         if ($request->filled('semat')) {
             $normalized = self::normalizeForSearch($request->semat);
-            $query->whereHas('person.semat', function ($q) use ($normalized) {
-                $q->where('name', 'LIKE', "%{$normalized}%");
+            $query->whereExists(function ($q) use ($normalized) {
+                $q->selectRaw('1')
+                    ->from('semats')
+                    ->whereColumn('semats.id', 'persons.s_id')
+                    ->where('semats.name', 'LIKE', "%{$normalized}%");
             });
         }
 
