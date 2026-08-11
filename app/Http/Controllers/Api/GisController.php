@@ -364,7 +364,7 @@ class GisController extends Controller
         $zoom = (int) $request->get('zoom', 10);
         $cacheKey = $this->gisCacheKey('clusters', $accessibleIds, $bbox, ['zoom' => $zoom]);
 
-        $features = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($accessibleIds, $request, $zoom) {
+        $features = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request, $zoom) {
             // Grid size in degrees, adjusted by zoom
             $gridSize = max(0.005, 0.5 / pow(2, $zoom - 2));
 
