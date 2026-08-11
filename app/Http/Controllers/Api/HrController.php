@@ -167,28 +167,59 @@ class HrController extends Controller
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
-        $query = Person::whereIn('u_id', $accessibleIds)
-            ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
+        $query = Person::leftJoin('units', 'persons.u_id', '=', 'units.id')
+            ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+            ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+            ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+            ->leftJoin('radifs', 'persons.r_id', '=', 'radifs.id')
+            ->whereIn('persons.u_id', $accessibleIds)
+            ->select(
+                'persons.*',
+                'units.name as unit_name',
+                'semats.name as semat_name',
+                'tahsils.name as tahsil_name',
+                'estekhdams.name as estekhdam_name',
+                'radifs.name as radif_name',
+            );
 
+        $p = 'persons.';
         if ($request->filled('search')) {
             $s = self::normalizeForSearch($request->search);
-            $query->where(function ($q) use ($s) {
-                $q->where('n_code', 'LIKE', "%{$s}%")
-                  ->orWhere('f_name', 'LIKE', "%{$s}%")
-                  ->orWhere('l_name', 'LIKE', "%{$s}%");
+            $query->where(function ($q) use ($s, $p) {
+                $q->where($p.'n_code', 'LIKE', "%{$s}%")
+                  ->orWhere($p.'f_name', 'LIKE', "%{$s}%")
+                  ->orWhere($p.'l_name', 'LIKE', "%{$s}%");
             });
         }
         foreach (['unit_id' => 'u_id', 'semat_id' => 's_id', 'tahsil_id' => 't_id', 'estekhdam_id' => 'e_id', 'radif_id' => 'r_id', 'status' => 'status'] as $param => $col) {
             if ($request->filled($param)) {
-                $query->where($col, $request->{$param});
+                $query->where($p.$col, $request->{$param});
             }
         }
 
         $perPage = min((int) $request->get('per_page', 20), 100);
         $persons = $query->paginate($perPage);
 
+        // Rebuild the nested relation shape the clients expect (unit/semat/... objects)
+        $items = $persons->getCollection()->map(function ($person) {
+            $data = $person->toArray();
+            $names = [
+                'unit' => ['id' => $data['u_id'], 'name' => $data['unit_name']],
+                'semat' => ['id' => $data['s_id'], 'name' => $data['semat_name']],
+                'tahsil' => ['id' => $data['t_id'], 'name' => $data['tahsil_name']],
+                'estekhdam' => ['id' => $data['e_id'], 'name' => $data['estekhdam_name']],
+                'radif' => ['id' => $data['r_id'], 'name' => $data['radif_name']],
+            ];
+            foreach ([
+                'unit_name', 'semat_name', 'tahsil_name', 'estekhdam_name', 'radif_name',
+            ] as $alias) {
+                unset($data[$alias]);
+            }
+            return array_merge($data, $names);
+        });
+
         return response()->json([
-            'data' => $persons->items(),
+            'data' => $items->values(),
             'meta' => [
                 'current_page' => $persons->currentPage(),
                 'last_page' => $persons->lastPage(),
