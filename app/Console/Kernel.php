@@ -27,8 +27,12 @@ class Kernel extends ConsoleKernel
         // Report generation — daily at 06:00 Tehran time
         $schedule->command('reports:generate-daily')->dailyAt('06:00');
 
-        // Zabbix sync — every 5 minutes
-        $schedule->command('zabbix:sync')->everyFiveMinutes();
+        // Zabbix sync — every 5 minutes (timeout 10s, no overlap, background)
+        $schedule->command('zabbix:sync')
+            ->everyFiveMinutes()
+            ->timeout(15)
+            ->withoutOverlapping()
+            ->runInBackground();
     }
 
     /**
