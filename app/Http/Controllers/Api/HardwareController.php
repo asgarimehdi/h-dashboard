@@ -352,9 +352,15 @@ class HardwareController extends Controller
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
+        // Suppress individual audit entries during bulk operations
+        Hardware::$suppressAudit = true;
+
         // Single update query on the verified IDs
         $count = Hardware::whereIn('id', $accessibleHardwareIds)
             ->update(['mark' => $request->mark]);
+
+        // Restore audit logging
+        Hardware::$suppressAudit = false;
 
         // Batch insert audit entries
         $this->batchInsertAudits($hardwares, 'bulk_mark', [
@@ -392,7 +398,14 @@ class HardwareController extends Controller
         $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn ($hw) => $hw->getAttributes());
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
+
+        // Suppress individual audit entries during bulk operations
+        Hardware::$suppressAudit = true;
+
         $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
+
+        // Restore audit logging
+        Hardware::$suppressAudit = false;
 
         app(GisController::class)::invalidateCache();
         Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events

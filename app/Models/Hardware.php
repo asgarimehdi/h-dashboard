@@ -13,6 +13,12 @@ class Hardware extends Model
 {
     use PersianNormalizer;
 
+    /**
+     * Flag to suppress audit logging during bulk operations.
+     * @var bool
+     */
+    public static bool $suppressAudit = false;
+
     protected $table = 'hardwares';
 
     protected $fillable = [

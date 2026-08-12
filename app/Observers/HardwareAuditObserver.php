@@ -14,6 +14,10 @@ class HardwareAuditObserver
      */
     public function created(Hardware $hardware): void
     {
+        if (Hardware::$suppressAudit) {
+            return;
+        }
+
         $fields = [
             'pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type',
             'switch', 'port', 'vlan', 'motherboard', 'comments',
@@ -41,6 +45,10 @@ class HardwareAuditObserver
      */
     public function updating(Hardware $hardware): void
     {
+        if (Hardware::$suppressAudit) {
+            return;
+        }
+
         $changes = $this->getChangedFields($hardware);
 
         if (!empty($changes)) {
@@ -53,6 +61,10 @@ class HardwareAuditObserver
      */
     public function deleting(Hardware $hardware): void
     {
+        if (Hardware::$suppressAudit) {
+            return;
+        }
+
         $hardwareId = $hardware->id;
         $this->recordAudit($hardware, 'deleted', null, $this->detectSource(), $hardwareId);
     }
@@ -62,6 +74,10 @@ class HardwareAuditObserver
      */
     public function forceDeleted(Hardware $hardware): void
     {
+        if (Hardware::$suppressAudit) {
+            return;
+        }
+
         $this->recordAudit($hardware, 'force_deleted', null, $this->detectSource());
     }
 
