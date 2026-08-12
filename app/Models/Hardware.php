@@ -75,9 +75,7 @@ class Hardware extends Model
     {
         $cache = app(CacheInvalidationServiceInterface::class);
         $cache->increment('hardware_stats');
-        $cache->increment('gis'); // Issue #373: imports also change map data
-        $cache->increment('maps'); // Issue #394
-        $cache->increment('dashboard'); // Issue #394
+        $cache->increment('gis'); // Hardware changes affect GIS data
     }
 
     public function person(): BelongsTo

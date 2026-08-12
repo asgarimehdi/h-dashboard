@@ -79,8 +79,8 @@ class AppServiceProvider extends ServiceProvider
         Ticket::updated(fn () => $invalidate($ticketNamespaces));
         Ticket::deleted(fn () => $invalidate($ticketNamespaces));
 
-        // Invalidate units report + hierarchy + GIS + maps + dashboard + HR caches on Unit changes (Issues #340, #372, #391, #395)
-        $unitNamespaces = ['report_units', 'unit_hierarchy', 'gis', 'maps', 'dashboard', 'hr_stats'];
+        // Invalidate units report + hierarchy + GIS + HR caches on Unit changes (Issues #340, #372, #391)
+        $unitNamespaces = ['report_units', 'unit_hierarchy', 'gis', 'hr_stats'];
         Unit::created(fn () => $invalidate($unitNamespaces));
         Unit::updated(fn () => $invalidate($unitNamespaces));
         Unit::deleted(fn () => $invalidate($unitNamespaces));

@@ -39,13 +39,11 @@ class Person extends Model
             }
         });
 
-        // Invalidate cached HR stats + dashboard whenever a person is created/updated/deleted (#341, #391)
+        // Invalidate cached HR stats whenever a person is created/updated/deleted (#341)
         foreach (['saved', 'deleted'] as $event) {
             static::$event(function () {
                 $cache = app(CacheInvalidationServiceInterface::class);
                 $cache->increment('hr_stats');
-                $cache->increment('dashboard');
-                $cache->increment('maps');
             });
         }
     }
