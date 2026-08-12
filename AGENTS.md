@@ -502,6 +502,37 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
 - **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)
 
+### Recent Changes (Last 7 Days — August 2026)
+- **Hardware Audit GIN Index** — New migration `2026_08_11_000001_add_gin_index_to_hardware_audits_changes.php` adds a GIN index on `hardware_audits.changes` JSONB column for faster `whereJsonContains` queries (#454).
+- **HR Controller Performance Suite** — Multiple optimizations:
+  - Single-pass `JSON_AGG` aggregation for `HrController::stats` (#436)
+  - Org chart cached with `hr_stats_version` key (#435)
+  - JOIN-based personnel list, dropping 5 eager-load queries (#440)
+  - Fixed cross-join inflating `HR stats` JSON_AGG counts (#441)
+  - SQLite compatibility fix for tests (#455)
+- **Hardware Controller** — JOIN-based filtering in `index` to drop `whereHas` (#430); JOIN-based scope checks in `stats/bulkMark/bulkDelete` (#433); eager-load `person.unit` in store/show/update to kill N+1 (#405).
+- **TicketComments Livewire** — Eager-load `children.user.person` to fix N+1 in `loadTicket` (#455).
+- **Todo Controller** — Explicit unit scope validation + `primaryUnit` fallback in `store` (#431).
+- **GIS Controller** — Cluster cache TTL raised from 30s to 60m, consistent with `gis_version` invalidation (#437).
+- **Security** — Hardened `sanitizeUrl` against attribute-breaking chars in ticket comments (#425).
+- **Models** — Corrected `person()` FK on `Semat`/`Tahsil`/`Estekhdam`/`Radif` models (#404).
+- **NotificationService** — Fixed UUID generation in `notifyUnit()` (#434).
+- **Test Coverage Expansion** — Added 30+ new test files covering:
+  - `HardwareBulkOperationsTest` (bulk-mark, bulk-delete, audit entries, auth)
+  - `ActivityLogPageLivewireTest` (auth, mount, filters, detail modal, pagination)
+  - `ToolsLivewireTest` (stats, archive tickets, clean activities/notifications, validation)
+  - `LookupSimpleModelsTest` (Region, Boundary, UnitType, UnitTypeRelationship, Semat, Tahsil, Estekhdam, Radif)
+  - `ActivityLogModelTest`, `ChangePasswordTest`, `SettingsProfileTest`, `OtherModelsTest` (TaskActivity, Attachment, TicketCommentReaction)
+  - `ReportsApiTest` (units/todos/tickets reports, auth, scope)
+  - `HardwareAuditModelTest` (relationships, changes cast, survives deletion, action/source types)
+  - `HasOrganizationalScopeTest` (unit filtering, child units, related loading)
+  - `UnitModelTest` (hierarchy, ancestorIds, descendantIds, scopes, relationships)
+  - `TodoModelTest`, `UsersPageTest`, `ApiLoginTest`, `LogoutTest`, `PersonModelTest`
+  - `TicketCommentModelTest`, `NotificationModelTest`, `HardwareModelTest`, `TicketModelTest`, `UserModelTest`
+  - `ActivityLogServiceTest`, `NotificationServiceTest`, `AccessServiceTest`
+  - `TicketCommentPolicyTest`, `PersianNormalizerExtraTest`, `HardwareAuditObserverTest`, `HardwareObserverTest`, `PagesRenderTest`, `AppBrandTest`
+  - Page-render and middleware coverage for Dashboard, IT, Maps, Permissions, Profile, Roles, Search, SelectContext, Settings, Tools, ValidateUnitContext
+
 ---
 
 ## Deployment
