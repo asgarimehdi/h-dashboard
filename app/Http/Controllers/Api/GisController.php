@@ -63,7 +63,8 @@ class GisController extends Controller
     }
 
     /**
-     * Build a normalized bbox string for cache keys (2 decimal places).
+     * Build a normalized bbox string for cache keys (4 decimal places ≈ 11m precision).
+     * Fixes Issue #456: GIS bbox rounding caused incorrect map data display.
      */
     protected function normalizedBbox(Request $request): string
     {
@@ -79,10 +80,10 @@ class GisController extends Controller
         [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
 
         return implode(',', [
-            round($minLon, 2),
-            round($minLat, 2),
-            round($maxLon, 2),
-            round($maxLat, 2),
+            round($minLon, 4),
+            round($minLat, 4),
+            round($maxLon, 4),
+            round($maxLat, 4),
         ]);
     }
 

@@ -489,6 +489,12 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Apply `PersianNormalizer` on all text search inputs
 
 ### Recent Issues Resolved
+- **#456** — GIS Bounding Box Cache Precision Fix
+  - **Problem**: `normalizedBbox()` rounded coordinates to **2 decimal places** (≈1.1 km precision), causing cache keys to mismatch the actual bbox used in SQL queries. This led to incorrect map data (e.g., showing units outside the viewport).
+  - **Solution**: Increased precision to **4 decimal places** (≈11 m precision) in `GisController::normalizedBbox()`. Cache keys now match the bbox used in SQL filters.
+  - **Files**: `app/Http/Controllers/Api/GisController.php` (lines 63-87).
+  - **Tests**: No new tests added — verified via manual testing and cache key inspection.
+
 - **#195** — Interactive GIS Map Dashboard for Health Units
   - **MapDashboard Livewire Component** (`app/Livewire/Map/MapDashboard.php`): Full-screen Leaflet map at `/map` with unit/hardware/ticket layers, stats panel, unit detail modal, bbox-driven data loading
   - **GIS API Controller** (`app/Http/Controllers/Api/GisController.php`): 5 GeoJSON endpoints (`units`, `hardware`, `tickets`, `stats`, `clusters`) using lat/lng columns (not geom), bbox spatial filtering, accessible-units scope via `AccessService`
