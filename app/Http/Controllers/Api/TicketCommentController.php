@@ -283,14 +283,12 @@ class TicketCommentController extends Controller
     }
 
     /**
-     * Sanitize URL by blocking dangerous protocols and escape attribute-breaking characters (Issue #425).
+     * Sanitize URL by blocking dangerous protocols and escaping attribute-breaking characters.
+     * Fixes Issue #458: XSS via unquoted HTML event attributes in URLs (e.g., `onmouseover=alert(1)`).
      */
     private function sanitizeUrl(string $url): string
     {
         $url = trim($url);
-        // Strip control characters and quote/angle chars that could break out of href="..."
-        $url = preg_replace('/[\x00-\x20\x7F"\'<>]/', '', $url);
-
         $dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
 
         foreach ($dangerousProtocols as $proto) {
@@ -304,7 +302,8 @@ class TicketCommentController extends Controller
             return '#';
         }
 
-        return $url;
+        // Escape any remaining dangerous chars in the URL value (e.g., spaces, quotes, angle brackets)
+        return htmlspecialchars($url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**

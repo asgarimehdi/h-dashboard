@@ -1,0 +1,5 @@
+- **#458** — XSS in `TicketCommentController` via Unquoted HTML Event Attributes
+  - **Problem**: `sanitizeUrl()` removed quotes but allowed unquoted event attributes (e.g., `onmouseover=alert(1)`) in URLs, causing stored XSS when rendered in `<a href="...">`.
+  - **Solution**: Replaced `preg_replace` with `htmlspecialchars(ENT_QUOTES | ENT_HTML5)` to escape all dangerous characters (spaces, quotes, angle brackets) in URLs.
+  - **Files**: `app/Http/Controllers/Api/TicketCommentController.php` (lines 288-308).
+  - **Impact**: Blocks XSS payloads like `[click](http://example.com onmouseover=alert(1))`.
