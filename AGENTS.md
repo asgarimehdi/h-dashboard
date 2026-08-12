@@ -489,6 +489,18 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Apply `PersianNormalizer` on all text search inputs
 
 ### Recent Issues Resolved
+- **#463** — Prevent Duplicate Hardware Audit Entries on Bulk Operations
+  - **Problem**: Bulk operations (e.g., `bulk-mark`, `bulk-delete`) on hardware records could create **duplicate audit entries** in the `hardware_audits` table. While the current implementation bypasses Eloquent events, there was a risk of duplicates if Eloquent events were ever used for bulk operations in the future.
+  - **Solution**:
+    - Added a `Hardware::$suppressAudit` flag to suppress audit logging during bulk operations.
+    - Updated the `HardwareAuditObserver` to respect this flag.
+    - Set the flag in `bulkMark` and `bulkDelete` methods before performing the operations.
+  - **Files**:
+    - `app/Models/Hardware.php` (flag addition).
+    - `app/Observers/HardwareAuditObserver.php` (flag check).
+    - `app/Http/Controllers/Api/HardwareController.php` (flag usage in bulk operations).
+  - **Impact**: Eliminated the risk of duplicate audit entries during bulk operations.
+
 - **#462** — ZabbixSync HTTP Timeout + Scheduler Blocking Prevention
   - **Problem**: The `zabbix:sync` command could hang indefinitely due to:
     - No HTTP timeout for Zabbix API calls.
