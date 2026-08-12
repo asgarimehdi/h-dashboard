@@ -489,6 +489,34 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - Apply `PersianNormalizer` on all text search inputs
 
 ### Recent Issues Resolved
+- **#462** — ZabbixSync HTTP Timeout + Scheduler Blocking Prevention
+  - **Problem**: The `zabbix:sync` command could hang indefinitely due to:
+    - No HTTP timeout for Zabbix API calls.
+    - No protection against overlapping executions.
+    - Blocking the Laravel scheduler while waiting for the sync to complete.
+  - **Solution**:
+    - **HTTP Timeout**: Added `->timeout(10)` to all Zabbix API calls in `ZabbixService::request()`.
+    - **Scheduler Timeout**: Set `->timeout(15)` on the scheduled command in `Kernel.php`.
+    - **No Overlap**: Added `->withoutOverlapping()` to prevent concurrent executions.
+    - **Background Execution**: Added `->runInBackground()` to avoid scheduler blocking.
+    - **Error Handling**: The `SyncZabbix` command now catches exceptions and logs warnings without crashing.
+  - **Files**:
+    - `app/Services/ZabbixService.php` (HTTP timeout).
+    - `app/Console/Kernel.php` (scheduler improvements).
+    - `app/Console/Commands/SyncZabbix.php` (error handling).
+  - **Impact**: Eliminated scheduler blocking and prevented indefinite hangs in Zabbix API calls.
+
+- **#461** — HR Vacancy Trend N+1 Query — Single Query with generate_series (PostgreSQL)
+  - **Problem**: The `/api/hr/analytics/vacancy-trend` endpoint suffered from an N+1 query problem. The original implementation fetched personnel records month-by-month, resulting in a separate query for each month and unit.
+  - **Solution**: Replaced the N+1 logic with a **single PostgreSQL query using `generate_series`** to compute vacancy counts for all months in one pass. The query:
+    - Uses `generate_series` to create a time series of months.
+    - Joins with `accessible_units` (user's organizational scope).
+    - Counts personnel per unit per month via `personnel_counts`.
+    - Computes vacant units as `COUNT(au.id) - COUNT(pc.u_id)`.
+  - **Fallback**: Non-PostgreSQL databases (e.g., SQLite) use a PHP-based fallback that preloads all personnel records and computes vacancy counts in memory.
+  - **Files**: `app/Http/Controllers/Api/HrController.php` (lines 380–459).
+  - **Impact**: Reduced query count from **O(N*M)** (N = months, M = units) to **1 query** for PostgreSQL users.
+
 - **#457** — Cache Version Counter Over-Invalidation
   - **Problem**: `Hardware`, `Person`, and `Unit` models incremented unrelated cache version counters (e.g., `maps`, `dashboard`), causing unnecessary cache invalidation and performance degradation.
   - **Solution**: Removed over-broad increments:
