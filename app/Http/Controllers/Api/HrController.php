@@ -389,19 +389,64 @@ class HrController extends Controller
             $this->hrAnalyticsCacheKey('vacancy_trend', $accessibleIds, $months),
             now()->addMinutes(5),
             function () use ($accessibleIds, $months) {
-                $since = now()->subMonths($months)->startOfMonth();
+                if (DB::getDriverName() === 'pgsql') {
+                    // PostgreSQL-optimized: single query with generate_series
+                    $results = DB::select(
+                        "WITH accessible_units AS (
+                            SELECT id FROM units WHERE id = ANY(?)
+                        ),
+                        month_series AS (
+                            SELECT generate_series(
+                                date_trunc('month', CURRENT_DATE) - interval '{$months} months',
+                                date_trunc('month', CURRENT_DATE),
+                                '1 month'::interval
+                            ) AS month_start
+                        ),
+                        personnel_counts AS (
+                            SELECT
+                                date_trunc('month', p.created_at) AS month_start,
+                                p.u_id,
+                                COUNT(*) AS personnel_count
+                            FROM persons p
+                            WHERE p.u_id = ANY(ARRAY(SELECT id FROM accessible_units))
+                            GROUP BY date_trunc('month', p.created_at), p.u_id
+                        )
+                        SELECT
+                            to_char(ms.month_start, 'YYYY-MM') AS month,
+                            COUNT(au.id) - COUNT(pc.u_id) AS vacant_count
+                        FROM month_series ms
+                        CROSS JOIN accessible_units au
+                        LEFT JOIN personnel_counts pc ON pc.month_start = ms.month_start AND pc.u_id = au.id
+                        GROUP BY ms.month_start
+                        ORDER BY ms.month_start DESC",
+                        [$accessibleIds]
+                    );
 
-                // Count units that have zero personnel as of each month
+                    return collect($results)->map(fn ($row) => [
+                        'month' => $row->month,
+                        'count' => (int) $row->vacant_count,
+                    ]);
+                }
+
+                // Fallback for non-PgSQL (e.g., SQLite): preload all personnel and compute in PHP
+                $since = now()->subMonths($months)->startOfMonth();
+                $allPersonnel = Person::whereIn('u_id', $accessibleIds)
+                    ->where('created_at', '>=', $since)
+                    ->select('u_id', 'created_at')
+                    ->get()
+                    ->groupBy(fn ($p) => $p->created_at->format('Y-m'));
+
                 $results = [];
                 for ($i = $months; $i >= 0; $i--) {
-                    $monthDate = now()->subMonths($i)->startOfMonth();
+                    $monthDate = now()->subMonths($i);
                     $monthLabel = $monthDate->format('Y-m');
+                    $monthEnd = $monthDate->endOfMonth();
 
-                    // Units accessible that have no personnel created before or in this month
+                    $personnelInMonth = $allPersonnel->get($monthLabel, collect());
+                    $unitsWithPersonnel = $personnelInMonth->pluck('u_id')->unique();
+
                     $vacantCount = Unit::whereIn('id', $accessibleIds)
-                        ->whereDoesntHave('person', function ($q) use ($monthDate) {
-                            $q->where('created_at', '<=', $monthDate->endOfMonth());
-                        })
+                        ->whereNotIn('id', $unitsWithPersonnel)
                         ->count();
 
                     $results[] = ['month' => $monthLabel, 'count' => $vacantCount];

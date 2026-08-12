@@ -1,0 +1,7 @@
+- **#460** — HR Vacancy Trend N+1 Query Performance Fix
+  - **Problem**: `HrController::vacancyTrend()` used an N+1 query loop (1 query per month), causing **13-25 queries** for the default 12-24 month range.
+  - **Solution**:
+    - **PostgreSQL**: Single query with `generate_series` and `CROSS JOIN` to compute all months in one round-trip.
+    - **Fallback (SQLite)**: Preload all personnel data and compute vacant units in PHP.
+  - **Files**: `app/Http/Controllers/Api/HrController.php` (lines 383-460).
+  - **Impact**: Reduced query count from **O(N)** to **O(1)** (PostgreSQL) or **O(1) + 1 query** (SQLite).
