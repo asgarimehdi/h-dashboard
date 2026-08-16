@@ -11,6 +11,7 @@ use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class HardwareController extends Controller
 {
@@ -314,7 +315,7 @@ class HardwareController extends Controller
 
             return [
                 'total' => $baseQuery->count(),
-                'by_type' => (clone $baseQuery)->selectRaw('type, count(*) as count')
+                'by_type' => (clone $baseQuery)->select('type', DB::raw('count(*) as count'))
                     ->groupBy('type')
                     ->pluck('count', 'type')
                     ->toArray(),
