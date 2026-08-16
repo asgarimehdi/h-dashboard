@@ -30,7 +30,7 @@ trait InteractsWithTestSetup
     protected function assertCacheInvalidated(string $cacheKey): void
     {
         $versionBefore = Cache::get($cacheKey . '_version', 0);
-        $this->value();
+        $this->createHardware(['pc_name' => 'Cache-Invalidate-Test']);
         $versionAfter = Cache::get($cacheKey . '_version', 0);
         $this->assertGreaterThan($versionBefore, $versionAfter, "Cache key '{$cacheKey}' was not invalidated.");
     }

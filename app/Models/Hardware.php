@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Cache;
 class Hardware extends Model
 {
     use PersianNormalizer;
+    use HasFactory;
 
     /**
      * Flag to suppress audit logging during bulk operations.
