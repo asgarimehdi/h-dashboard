@@ -39,11 +39,15 @@ class Person extends Model
             }
         });
 
-        // Invalidate cached HR stats whenever a person is created/updated/deleted (#341)
+        // Invalidate cached HR stats whenever a person is created/updated/deleted (#341).
+        // Dashboard and map caches also depend on person data, so bump those
+        // version namespaces too.
         foreach (['saved', 'deleted'] as $event) {
             static::$event(function () {
                 $cache = app(CacheInvalidationServiceInterface::class);
-                $cache->increment('hr_stats');
+                foreach (['hr_stats', 'dashboard', 'maps'] as $namespace) {
+                    $cache->increment($namespace);
+                }
             });
         }
     }
