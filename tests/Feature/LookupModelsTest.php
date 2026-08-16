@@ -54,11 +54,6 @@ class LookupModelsTest extends TestCase
 
     public function test_region_belongs_to_boundary(): void
     {
-        // Boundary requires PostGIS (ST_GeomFromText) — register a stub for SQLite
-        $pdo = DB::connection()->getPdo();
-        $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
-        $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
-
         $boundary = Boundary::create([
             'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326)"),
         ]);
@@ -89,10 +84,6 @@ class LookupModelsTest extends TestCase
 
     public function test_boundary_belongs_to_unit(): void
     {
-        $pdo = DB::connection()->getPdo();
-        $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
-        $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
-
         $boundary = Boundary::create([
             'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326)"),
         ]);
@@ -104,10 +95,6 @@ class LookupModelsTest extends TestCase
 
     public function test_boundary_allows_mass_assignment(): void
     {
-        $pdo = DB::connection()->getPdo();
-        $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
-        $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
-
         $boundary = Boundary::create([
             'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326)"),
         ]);

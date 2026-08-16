@@ -53,13 +53,8 @@ test('map pages are protected by map permission', function () {
 });
 
 test('county map page renders shared map container', function () {
-    // SQLite does not ship PostGIS. Register lightweight stubs for the GIS
-    // functions the county page (and its boundary insert) rely on so the page
-    // can render in the test environment.
-    $pdo = DB::connection()->getPdo();
-    $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
-    $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
-
+    // PostGIS is enabled in the test DB, so ST_GeomFromText / ST_AsGeoJSON
+    // are available natively — no SQLite stub needed.
     // Provide a region + boundary for county page
     $boundary = Boundary::create([
         'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326)"),

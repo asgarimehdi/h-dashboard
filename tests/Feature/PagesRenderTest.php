@@ -22,10 +22,6 @@ beforeEach(function () {
     DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
 
-    $pdo = DB::connection()->getPdo();
-    $pdo->sqliteCreateFunction('ST_GeomFromText', fn ($wkt, $srid = null) => $wkt, 2);
-    $pdo->sqliteCreateFunction('ST_AsGeoJSON', fn ($geom) => $geom, 1);
-
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
         'n_code' => '1234567890',
