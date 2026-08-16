@@ -166,6 +166,7 @@ class HardwareController extends Controller
         $perPage = min((int) $request->get('per_page', 10), 100);
 
         $paginator = $query->paginate($perPage);
+        $paginator->getCollection()->load('person.unit');
         $items = $paginator->getCollection()->map(fn ($hw) => $this->transformHardware($hw))->all();
 
         return [
