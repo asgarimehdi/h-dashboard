@@ -82,6 +82,8 @@ class Hardware extends Model
         $cache = app(CacheInvalidationServiceInterface::class);
         $cache->increment('hardware_stats');
         $cache->increment('gis'); // Hardware changes affect GIS data
+        $cache->increment('maps'); // Hardware positions affect the map
+        $cache->increment('dashboard'); // Hardware counts feed the dashboard
     }
 
     public function person(): BelongsTo
