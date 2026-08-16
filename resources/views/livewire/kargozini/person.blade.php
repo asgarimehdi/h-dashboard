@@ -79,7 +79,7 @@ return new class extends Component
     public function savePerson(): void
     {
         $this->validate([
-            'n_code' => 'required|string|size:10|unique:persons,n_code,'.$this->editingId,
+            'n_code' => 'required|string|size:10|unique:persons,n_code,'.($this->editingId ?: 'NULL'),
             'f_name' => 'required|string|max:255',
             'l_name' => 'required|string|max:255',
             't_id' => 'required|exists:tahsils,id',
