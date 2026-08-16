@@ -32,14 +32,14 @@ class ActivityLogServiceTest extends TestCase
 
     protected function createUserWithUnit(): User
     {
-        $unit = Unit::create(['name' => 'واحد تست']);
+        $this->unit = Unit::create(['name' => 'واحد تست']);
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $this->unit->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
         return $user;
     }
@@ -66,7 +66,7 @@ class ActivityLogServiceTest extends TestCase
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
 
-        $todo = Todo::factory()->create(['title' => 'وظیفه تست', 'unit_id' => 1]);
+        $todo = Todo::factory()->create(['title' => 'وظیفه تست', 'unit_id' => $this->unit->id]);
 
         $log = ActivityLogService::log('created', $todo, 'ایجاد وظیفه');
 
@@ -113,7 +113,7 @@ class ActivityLogServiceTest extends TestCase
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
 
-        $todo = Todo::factory()->create(['title' => 'وظیفه جدید', 'unit_id' => 1]);
+        $todo = Todo::factory()->create(['title' => 'وظیفه جدید', 'unit_id' => $this->unit->id]);
 
         $log = ActivityLogService::created($todo);
 
@@ -126,7 +126,7 @@ class ActivityLogServiceTest extends TestCase
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
 
-        $todo = Todo::factory()->create(['title' => 'وظیفه', 'unit_id' => 1]);
+        $todo = Todo::factory()->create(['title' => 'وظیفه', 'unit_id' => $this->unit->id]);
 
         $log = ActivityLogService::created($todo, 'توضیح سفارشی');
 
@@ -140,7 +140,7 @@ class ActivityLogServiceTest extends TestCase
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
 
-        $todo = Todo::factory()->create(['title' => 'عنوان اصلی', 'unit_id' => 1]);
+        $todo = Todo::factory()->create(['title' => 'عنوان اصلی', 'unit_id' => $this->unit->id]);
 
         $log = ActivityLogService::updated($todo, ['title' => 'عنوان اصلی'], ['title' => 'عنوان جدید']);
 
@@ -156,7 +156,7 @@ class ActivityLogServiceTest extends TestCase
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
 
-        $todo = Todo::factory()->create(['title' => 'وظیفه حذف', 'unit_id' => 1]);
+        $todo = Todo::factory()->create(['title' => 'وظیفه حذف', 'unit_id' => $this->unit->id]);
 
         $log = ActivityLogService::deleted($todo);
 
@@ -169,7 +169,7 @@ class ActivityLogServiceTest extends TestCase
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
 
-        $todo = Todo::factory()->create(['title' => 'وظیفه', 'unit_id' => 1]);
+        $todo = Todo::factory()->create(['title' => 'وظیفه', 'unit_id' => $this->unit->id]);
 
         $log = ActivityLogService::deleted($todo, 'حذف اجباری');
 
