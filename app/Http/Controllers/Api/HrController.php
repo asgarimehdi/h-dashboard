@@ -391,6 +391,7 @@ class HrController extends Controller
             function () use ($accessibleIds, $months) {
                 if (DB::getDriverName() === 'pgsql') {
                     // PostgreSQL-optimized: single query with generate_series
+                    $idList = '{' . implode(',', array_map('intval', $accessibleIds)) . '}';
                     $results = DB::select(
                         "WITH accessible_units AS (
                             SELECT id FROM units WHERE id = ANY(?)
@@ -419,7 +420,7 @@ class HrController extends Controller
                         LEFT JOIN personnel_counts pc ON pc.month_start = ms.month_start AND pc.u_id = au.id
                         GROUP BY ms.month_start
                         ORDER BY ms.month_start DESC",
-                        [$accessibleIds]
+                        [$idList]
                     );
 
                     return collect($results)->map(fn ($row) => [
