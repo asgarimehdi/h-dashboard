@@ -63,7 +63,7 @@ test('hardware import component shows preview and confirms import', function () 
 
 test('person import component shows preview and confirms import', function () {
     $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-    $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t".$this->unit->id."\n";
+    $csvContent .= "9876543210\tعلی\tرضایی\t{$this->tahsil->id}\t{$this->estekhdam->id}\t{$this->semat->id}\t{$this->radif->id}\t".$this->unit->id."\n";
     $file = UploadedFile::fake()->createWithContent('persons.csv', $csvContent);
 
     Livewire::actingAs($this->user)
@@ -74,7 +74,7 @@ test('person import component shows preview and confirms import', function () {
         ->assertSet('importStats.total', 1)
         ->call('confirmImport');
 
-    $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
+    $this->assertDatabaseHas('persons', ['n_code' => '9876543210', 'u_id' => $this->unit->id]);
 });
 
 test('import components are protected by RBAC', function () {
