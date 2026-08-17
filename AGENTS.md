@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Documentation
 
-> **Doc review (2026-08-17):** Cross-checked against the working tree on branch `feature/mehdi` (Laravel 13.25.0 per `composer.lock`). Corrections vs. prior text: framework version (13.23.0 → 13.25.0); `pnpm-lock.yaml` does **not** exist (npm only); Person FK column is `s_id` not `semat_id`; migration count is **46** (not 21); the `zabbix:sync` schedule no longer sets `->timeout()` (reverted in `17cfd79`). See **Scheduler** and **Cache Version Namespaces** for verified current state.
+> **Doc review (2026-08-17):** Cross-checked against the working tree on branch `feature/mehdi` (Laravel **13.25.0**, Livewire **4.4.0**). Removed stale issue references, the historical "Recent Issues Resolved" / "Recent Changes" sections, and refs to removed components (Boost MCP, openai/AiAgentTest, op-cache permission listing). See **Running Tests (Pest)** and **Code Intelligence (CodeGraph)** for the current setup workflows.
 
 ## Project Overview
 
@@ -16,7 +16,6 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **Import:** maatwebsite/excel (Laravel Excel) — `.xlsx`, `.xls`, `.csv`
 - **Permissions:** spatie/laravel-permission ^8.0
 - **Jalali calendar:** morilog/jalali (Jalalian), hekmatinasser/verta (installed)
-- **AI:** openai-php/client ^0.20.1 (installed; used by feature tests, e.g. `AiAgentTest`)
 - **Package Manager:** Composer (backend); frontend deps in `package.json` (Vite). Only `package-lock.json` is committed (there is **no** `pnpm-lock.yaml`), so use **npm**: `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 
 ---
@@ -42,19 +41,19 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `vlan`, `motherboard`, `cpu`, `ram`, `hdd`
 - `comments`, `mark` (boolean)
 - `clean_at` (nullable date)
-- Relationship: `audits()` → `HardwareAudit` (field-level change audit trail, #213/#246)
+- Relationship: `audits()` → `HardwareAudit` (field-level change audit trail)
 
 **HardwareAudit** (`hardware_audits` table)
 - `id`, `hardware_id` (no FK — audit trail survives hardware deletion), `user_id` (nullable FK), `action` (created, updated, deleted, bulk_mark, bulk_delete, force_deleted, rollback), `changes` (JSON: full attrs for created/deleted, `[{field, old, new}]` diff for updated), `source` (web, api, import, bulk), `ip_address`, `user_agent`
-- Populated automatically by `HardwareAuditObserver` (registered in `AppServiceProvider`) — the single unified audit source (replaces the old `HardwareHistory` / `HardwareObserver`)
+- Populated automatically by `HardwareAuditObserver` (registered in `AppServiceProvider`) — the single unified audit source (replaces the old `HardwareHistory` / `HardwareObserver` system)
 - Indexes: `(hardware_id, created_at)`, `user_id`, `action`
-- API: `GET /api/hardware/{hardware}/audits` (paginated, filterable) + alias `GET /api/hardware/{hardware}/history`; export, show, and rollback endpoints; UI: history modal with rollback on `/hardware` page (#213/#246)
+- API: `GET /api/hardware/{hardware}/audits` (paginated, filterable) + alias `GET /api/hardware/{hardware}/history`; export, show, and rollback endpoints; UI: history modal with rollback on `/hardware` page
 
 **Unit** (`units` table)
 - `id`, `name`, `parent_id` (self-referencing for hierarchy), `lat`, `lng`, `unit_type_id`, `region_id`
 - Indexes: `parent_id` (B-tree), composite `lat`+`lng` (B-tree), spatial indexes (PostGIS) on `boundaries`/`units`
 - Relationships: `boundary` (hasOne), `children` (recursive), `parent`, `type`, `region`
-- `Unit::ancestorIds()` resolves ancestor chains with a JOIN (recent performance fix, #187)
+- `Unit::ancestorIds()` resolves ancestor chains with a JOIN (performance fix)
 
 **Region** (`regions` table)
 - `id`, `name`, `parent_id` (self-referencing), `unit_type_id`
@@ -72,7 +71,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 **Ticket** (`tickets` table)
 - `id`, `title`, `description`, `status`, `priority`, `assignee_id`, `unit_id`
 - Relationships: `unit`, `task` (→ `todos`, `task_id`), `user`, `assignee` (`current_assignee_id`), `attachments`, `activities` (`task_activities`)
-- Composite index on `(task_id, status)` (recent performance fix, #183)
+- Composite index on `(task_id, status)` (performance fix)
 - Helpers: `canBeCompleted()`, `waitingDuration`, `statusName`
 
 **Todo** (`todos` table)
@@ -86,10 +85,10 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 **ActivityLog** (`activity_logs` table)
 - `id`, `user_id`, `action`, ... — user action audit trail (login/logout, CRUD), populated via `ActivityLogService`
-- Composite index on `(user_id, created_at)` (recent performance fix, #191)
+- Composite index on `(user_id, created_at)` (performance fix)
 
 **Notification** (`notifications` table, custom)
-- `id`, `user_id`, `title`, `body`, `icon`, `color`, `url`, `is_read`, `created_at` — in-app notifications via `NotificationService` (cached bell queries, #185)
+- `id`, `user_id`, `title`, `body`, `icon`, `color`, `url`, `is_read`, `created_at` — in-app notifications via `NotificationService` (cached bell queries)
 
 **User** (`users` table)
 - `id`, `n_code`, `name`, `email`, `password`
@@ -111,13 +110,13 @@ Ticket → Attachment / TaskActivity
 User ↔ Unit (user_units pivot)
 ```
 
-### Key Linked Entities (from `opencode.md`)
+### Key Linked Entities
 
 - **User ↔ Person** are linked by `n_code` (not `id`). `Person.hasOne(User)` / `User.belongsTo(Person)`. `User` uses SoftDeletes; `User.units()` is a BelongsToMany via the `user_units` pivot (`role` enum: `responsible`/`staff`, `is_primary` flag); `primaryUnit()` returns the assignment where `is_primary = true`.
 - **`user_units` pivot** — many-to-many user↔unit assignments (a user can belong to multiple units). Unique on `(user_id, unit_id)`. Seeded from `Person.u_id` via `UserUnitSeeder`.
-- **Migration/style note:** FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). The migration count is now **46** — the earlier "21 clean migrations" consolidation has since grown with feature work (e.g. `hardware_audits`, `ticket_comments`, PostGIS geometry, GIN index). New migrations follow `YYYY_MM_DD_######_description.php`; both a sequential counter (`000001`) and a time-suffixed form (`002725`) appear in the tree. Avoid the classic `YYYY_MM_DD_HHMMSS` Laravel default and pass `--no-interaction`.
+- **Migration/style note:** FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). Migration count is **46**. New migrations follow `YYYY_MM_DD_######_description.php`; both a sequential counter (`000001`) and a time-suffixed form (`002725`) appear in the tree. Avoid the classic `YYYY_MM_DD_HHMMSS` Laravel default and pass `--no-interaction`.
 
-## Area & Vocabulary (from `CONTEXT.md`)
+## Area & Vocabulary
 
 Definitions shared across codebase, docs, and team communication:
 
@@ -131,7 +130,7 @@ Definitions shared across codebase, docs, and team communication:
 
 **Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
 
-### FK Delete Behavior Summary (from `opencode.md` schema)
+### FK Delete Behavior Summary
 
 | FK | onDelete |
 |----|----------|
@@ -158,11 +157,11 @@ Uses **Spatie Permission** package. Key features:
 
 ### AccessService
 
-The `AccessService` class provides `accessibleUnitIds()` which returns an array of unit IDs the current user can access (their unit + all descendant units via recursive CTE).
+The `AccessService` class provides `accessibleUnitIds()` which returns an array of unit IDs the current user can access (their unit + all descendant units via recursive CTE). Results are cached and version-invalidated (see **Cache Version Namespaces**).
 
 ### Permissions (from `PermissionSeeder`)
 
-`manage_users`, `organization`, `kargozini` (HR lookup tables: estekhdam, tahsil, semat, radif, persons), `map` (GIS/location features), `calendar` (todo/calendar), `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache` (OPcache GUI at `/op`), `manage_hardware`, `bw` (IT monitoring: networks, wireless, server cache), plus more defined in the seeder.
+`manage_users`, `organization`, `kargozini` (HR lookup tables: estekhdam, tahsil, semat, radif, persons), `map` (GIS/location features), `calendar` (todo/calendar), `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `manage_hardware`, `bw` (IT monitoring: networks, wireless, server cache), `view_hr_dashboard`, plus more defined in the seeder.
 
 ---
 
@@ -182,7 +181,7 @@ The application uses **Laravel Sanctum** with two authentication modes:
 
 ### Safe Role/Permission Middleware
 
-`SafeRoleOrPermission` (alias: `safe_role_or_permission`) is **registered and still used** (e.g. a `/test-safe-route` test route in `routes/web.php`), but it is **intentionally NOT used on hardware routes**. Issue #216 removed it from `/hardware` and `/hardware/import` because guests could see sensitive hardware data; hardware routes now require full auth via `auth` + `role_or_permission:manage_hardware`:
+`SafeRoleOrPermission` (alias: `safe_role_or_permission`) is **registered and still used** (e.g. a `/test-safe-route` test route in `routes/web.php`), but it is **intentionally NOT used on hardware routes**. Guests must not see sensitive hardware data; hardware routes require full auth via `auth` + `role_or_permission:manage_hardware`:
 
 ```php
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
@@ -191,7 +190,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 });
 ```
 
-> **Gotcha:** `test_hardware_page_loads_without_auth` (originally from #124) now asserts **302 → /login** for guests, matching the #216 security decision. Do NOT "fix" it back to 200 — that reopens the data leak.
+> **Gotcha:** `test_hardware_page_loads_without_auth` asserts **302 → /login** for guests — a security decision. Do NOT "fix" it back to 200 — that reopens the data leak.
 
 ### Unit Context Middleware
 
@@ -206,13 +205,13 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 | Command | Schedule | Class | Purpose |
 |---|---|---|---|
 | `cache:prune-stale` | hourly | `PruneStaleCache` | Resets all cache version counters (see **Cache Version Namespaces**) so stale versioned keys expire |
-| `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todos (#214) |
+| `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todos |
 | `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance records |
-| `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Archives old records (#450) |
-| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds daily reports (#450) |
+| `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Archives old records |
+| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds daily reports |
 | `zabbix:sync` | every 5 min | `SyncZabbix` | Pulls Zabbix traffic/latest values |
 
-`zabbix:sync` uses `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler. **Do not add `->timeout(N)` to the schedule** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted in `17cfd79`; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
+`zabbix:sync` uses `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler. **Do not add `->timeout(N)` to the schedule** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
 
 Other commands: `NormalizePersianText` (one-off Persian normalization), plus the standard `migrate`, `db:seed`, `queue:listen` (see `composer.json` `dev` script).
 
@@ -237,7 +236,7 @@ The `CacheInvalidationService` (`app/Services/CacheInvalidationService.php`, int
 
 `PruneStaleCache` resets all of: `hardware_stats, gis, maps, dashboard, hr_stats, report_todos, report_tickets, report_units, unit_hierarchy, calendar`.
 
-> **Historical note:** Issue #457 narrowed these bumps (Person→`hr_stats` only, Hardware→`hardware_stats`+`gis`), but later commits `f721d13` (Person also bumps `dashboard`/`maps`) and `b9128b0` (Hardware also bumps `maps`/`dashboard`) **re-broadened** invalidation. The table above reflects current code, not the #457 summary.
+> **Note:** invalidation has historically been re-broadened (Person bumps `dashboard`/`maps`, Hardware bumps `maps`/`dashboard`). The table above reflects current code.
 
 ---
 
@@ -251,7 +250,7 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 |---|---|---|
 | GET | `/api/hardware` | List with filters: `search`, `type`, `os`, `cpu`, `ram`, `hdd`, `shutdown`, `net_type`, `mark`, `person`, `unit`, `semat` |
 | POST | `/api/hardware` | Create (requires `n_code`, `pc_name`) |
-| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached 10 min per org scope, invalidated on hardware writes (#217) |
+| GET | `/api/hardware/stats` | Aggregate stats (total, by type, shutdown count) — cached 10 min per org scope, invalidated on hardware writes |
 | GET | `/api/hardware/{id}` | Show details |
 | PUT/PATCH | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
 | DELETE | `/api/hardware/{id}` | Delete |
@@ -265,7 +264,7 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 
 ### Hardware Audit Trail (`/api/hardware/{hardware}/audits`)
 
-Unified field-level audit trail (Issue #246 — merged with the old `/history` system; `hardware_histories` was migrated into `hardware_audits` and dropped).
+Unified field-level audit trail (merged with the old `/history` system; `hardware_histories` was migrated into `hardware_audits` and dropped).
 
 | Action | Description |
 |--------|-------------|
@@ -323,7 +322,7 @@ Unified field-level audit trail (Issue #246 — merged with the old `/history` s
 | POST | `/api/tickets/{ticket}/accept` | Accept assigned ticket |
 | POST | `/api/tickets/{ticket}/complete` | Mark complete |
 
-### Ticket Comments (`/api/tickets/{ticket}/comments`) — issue #222
+### Ticket Comments (`/api/tickets/{ticket}/comments`)
 
 | Method | URL | Description |
 |---|---|---|
@@ -358,7 +357,7 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | GET | `/api/reports/todos` | Todo statistics |
 | GET | `/api/reports/tickets` | Ticket statistics |
 
-### HR (`/api/hr`) — Issue #223
+### HR (`/api/hr`)
 
 | Method | URL | Description |
 |---|---|---|
@@ -390,7 +389,7 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - **Column Visibility:** Toggle columns on/off via a panel
 - **Mobile Card Layout:** Table auto-converts to cards on small screens
 - **Real-time n_code Validation:** Live validation against `persons` table with name/unit display
-- **History / تغییرات modal (Audit Trail, #246):** per-device history button (🕐) opens a modal showing the unified `hardware_audits` trail — action badge, **source badge** (وب/API/ایمپورت/گروهی), user, IP, Jalali timestamp, field-level diff (old ← new), action filters (همه/ایجاد/ویرایش/حذف/علامت گروهی/حذف گروهی/بازگردانی), and a **↺ بازگردانی** rollback button per field (with confirmation). Rollback restores the field value and logs a new `rollback` audit entry.
+- **History / تغییرات modal (Audit Trail):** per-device history button (🕐) opens a modal showing the unified `hardware_audits` trail — action badge, **source badge** (وب/API/ایمپورت/گروهی), user, IP, Jalali timestamp, field-level diff (old ← new), action filters (همه/ایجاد/ویرایش/حذف/علامت گروهی/حذف گروهی/بازگردانی), and a **↺ بازگردانی** rollback button per field (with confirmation). Rollback restores the field value and logs a new `rollback` audit entry.
 
 ### Hardware Import (`/hardware/import`)
 
@@ -425,7 +424,7 @@ In-app help is a per-page modal (`?` button in page headers):
 
 ## Design System & Frontend Conventions
 
-### Design tokens (from `DESIGN.md`)
+### Design tokens
 
 - **CSS:** Tailwind CSS v4 · **Components:** DaisyUI v5 (Tailwind plugin) + maryUI v2.8 (Livewire components)
 - **Palette:** Primary `emerald` (success/online), Secondary `orange` (warning/pending), Error `red` (danger/offline), Info `blue`
@@ -441,7 +440,7 @@ In-app help is a per-page modal (`?` button in page headers):
 - **Layout slot structure:** `<x-nav sticky>` with `<x-slot:brand>` + `<x-slot:actions>`; `<x-main>` with `<x-slot:sidebar>` + `<x-slot:content>`.
 - **Toasts** (`Mary\Traits\Toast`): `$this->success/warning/error/info('msg', position: 'toast-bottom')`. SweetAlert2 via `$this->dispatch('swal', [...])`.
 
-### Standard CRUD page pattern (class-based Livewire)
+### Standard CRUD page pattern (Livewire)
 
 ```
 PHP class:
@@ -512,139 +511,22 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **Pagination:** Use `LengthAwarePaginator` with `WithPagination` trait
 - **Forms:** Use MaryUI `x-input`, `x-select`, `x-button` components
 - **Modal:** Use `x-modal` with `close-on-backdrop` for edit forms
-- **Components:** Class-based Livewire components (`app/Livewire/<Feature>/...`) with Blade views under `resources/views/livewire/<feature>/`
-- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest` or `php artisan test --compact` / `--filter=testName`
+- **Components:** Livewire components (`app/Livewire/<Feature>/...`) with Blade views under `resources/views/livewire/<feature>/`
+- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest tests/` (see **Running Tests (Pest)**)
 - **Factories:** use factories with custom states (only `UserFactory` exists; other models have seeders). Don't delete tests without approval.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
-- **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL in tinker. Don't create models in tinker without approval.
-- **Laravel Boost (MCP):** prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
+- **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion.
 - **Artisan:** new migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter), not timestamps; pass `--no-interaction` to all Artisan commands.
 - **Frontend rebuild:** after frontend changes run `npm run build` (or `vite build`); Livewire for dynamic UI, Alpine.js for client-side interactions.
 
 ### Performance (recent fixes pattern)
 - Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
-- Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush) (#217)
+- Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush)
 - Eager-load relationships (`with('person.unit')`) in list queries
 - Limit API pagination to max 100 per page
 - Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
 - Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
-
-### Recent Issues Resolved
-- **#463** — Prevent Duplicate Hardware Audit Entries on Bulk Operations
-  - **Problem**: Bulk operations (e.g., `bulk-mark`, `bulk-delete`) on hardware records could create **duplicate audit entries** in the `hardware_audits` table. While the current implementation bypasses Eloquent events, there was a risk of duplicates if Eloquent events were ever used for bulk operations in the future.
-  - **Solution**:
-    - Added a `Hardware::$suppressAudit` flag to suppress audit logging during bulk operations.
-    - Updated the `HardwareAuditObserver` to respect this flag.
-    - Set the flag in `bulkMark` and `bulkDelete` methods before performing the operations.
-  - **Files**:
-    - `app/Models/Hardware.php` (flag addition).
-    - `app/Observers/HardwareAuditObserver.php` (flag check).
-    - `app/Http/Controllers/Api/HardwareController.php` (flag usage in bulk operations).
-  - **Impact**: Eliminated the risk of duplicate audit entries during bulk operations.
-
-- **#462** — ZabbixSync HTTP Timeout + Scheduler Blocking Prevention
-  - **Problem**: The `zabbix:sync` command could hang indefinitely due to:
-    - No HTTP timeout for Zabbix API calls.
-    - No protection against overlapping executions.
-    - Blocking the Laravel scheduler while waiting for the sync to complete.
-  - **Solution**:
-    - **HTTP Timeout**: Added `->timeout(10)` to all Zabbix API calls in `ZabbixService::request()`.
-    - **Scheduler Protection**: The schedule uses `withoutOverlapping()` + `runInBackground()` to prevent overlap and scheduler blocking. A `->timeout(15)` on the schedule was attempted but **reverted** — that method does not exist on the installed Laravel version and threw `BadMethodCallException` (commit `17cfd79`). See the **Scheduler** section.
-    - **Error Handling**: The `SyncZabbix` command now catches exceptions and logs warnings without crashing.
-  - **Files**:
-    - `app/Services/ZabbixService.php` (HTTP timeout).
-    - `app/Console/Kernel.php` (scheduler improvements).
-    - `app/Console/Commands/SyncZabbix.php` (error handling).
-  - **Impact**: Eliminated scheduler blocking and prevented indefinite hangs in Zabbix API calls.
-
-- **#460** — HR Vacancy Trend N+1 Query Performance Fix
-  - **Problem**: `HrController::vacancyTrend()` used an N+1 query loop (1 query per month), causing 13-25 queries for the default 12-24 month range.
-  - **Solution**: PostgreSQL single query with `generate_series` + `CROSS JOIN`; SQLite PHP fallback. (Same root fix as **#461**; #460/#461 are duplicate issue numbers for this work.)
-  - **Files**: `app/Http/Controllers/Api/HrController.php`.
-  - **Impact**: Reduced query count from O(N*M) to O(1) (PostgreSQL).
-
-- **#459** — ZabbixSync HTTP Timeout and Scheduler Blocking
-  - **Problem**: `ZabbixService::request()` had no HTTP timeout, risking scheduler blockage if the Zabbix API was slow.
-  - **Solution**: Added `->timeout(10)` to `Http::post()` in `ZabbixService`; Kernel schedule uses `withoutOverlapping()` + `runInBackground()`. Note: a `->timeout(15)` on the **schedule** was attempted here but later **reverted** (`17cfd79`) — that method does not exist on the installed Laravel version. See the **Scheduler** section and issue **#462**.
-  - **Files**: `app/Services/ZabbixService.php`, `app/Console/Kernel.php`.
-  - **Impact**: Prevents scheduler blockage and overlapping executions.
-
-- **#458** — XSS in `TicketCommentController` via Unquoted HTML Event Attributes
-  - **Problem**: `sanitizeUrl()` removed quotes but allowed unquoted event attributes (e.g. `onmouseover=alert(1)`) in URLs, causing stored XSS when rendered in `<a href="...">`.
-  - **Solution**: Replaced the `preg_replace` approach with `htmlspecialchars(ENT_QUOTES | ENT_HTML5)` to escape all dangerous characters (spaces, quotes, angle brackets) in URLs.
-  - **Files**: `app/Http/Controllers/Api/TicketCommentController.php`.
-  - **Impact**: Blocks XSS payloads like `[click](http://example.com onmouseover=alert(1))`.
-
-- **#461** — HR Vacancy Trend N+1 Query — Single Query with generate_series (PostgreSQL)
-  - **Problem**: The `/api/hr/analytics/vacancy-trend` endpoint suffered from an N+1 query problem. The original implementation fetched personnel records month-by-month, resulting in a separate query for each month and unit.
-  - **Solution**: Replaced the N+1 logic with a **single PostgreSQL query using `generate_series`** to compute vacancy counts for all months in one pass. The query:
-    - Uses `generate_series` to create a time series of months.
-    - Joins with `accessible_units` (user's organizational scope).
-    - Counts personnel per unit per month via `personnel_counts`.
-    - Computes vacant units as `COUNT(au.id) - COUNT(pc.u_id)`.
-  - **Fallback**: Non-PostgreSQL databases (e.g., SQLite) use a PHP-based fallback that preloads all personnel records and computes vacancy counts in memory.
-  - **Files**: `app/Http/Controllers/Api/HrController.php` (lines 380–459).
-  - **Impact**: Reduced query count from **O(N*M)** (N = months, M = units) to **1 query** for PostgreSQL users.
-
-- **#457** — Cache Version Counter Over-Invalidation
-  - **Problem**: `Hardware`, `Person`, and `Unit` models incremented unrelated cache version counters (e.g., `maps`, `dashboard`), causing unnecessary cache invalidation and performance degradation.
-  - **Solution**: Removed over-broad increments:
-    - `Hardware`: Keep `hardware_stats` and `gis` (hardware affects GIS data).
-    - `Person`: Keep `hr_stats` only.
-    - `Unit`: Keep `report_units`, `unit_hierarchy`, `gis`, `hr_stats`.
-  - **Files**: `app/Models/Hardware.php`, `app/Models/Person.php`, `app/Providers/AppServiceProvider.php`.
-  - **Impact**: Reduced cache misses by **60-80%** for map/dashboard users at the time. **Caveat:** later commits (`f721d13`, `b9128b0`) re-broadened invalidation to also bump `dashboard`/`maps` when Persons/Hardware change — the **Cache Version Namespaces** section reflects current HEAD, not this #457 description.
-
-- **#456** — GIS Bounding Box Cache Precision Fix
-  - **Problem**: `normalizedBbox()` rounded coordinates to **2 decimal places** (≈1.1 km precision), causing cache keys to mismatch the actual bbox used in SQL queries. This led to incorrect map data (e.g., showing units outside the viewport).
-  - **Solution**: Increased precision to **4 decimal places** (≈11 m precision) in `GisController::normalizedBbox()`. Cache keys now match the bbox used in SQL filters.
-  - **Files**: `app/Http/Controllers/Api/GisController.php` (lines 63-87).
-  - **Tests**: No new tests added — verified via manual testing and cache key inspection.
-
-- **#195** — Interactive GIS Map Dashboard for Health Units
-  - **MapDashboard Livewire Component** (`app/Livewire/Map/MapDashboard.php`): Full-screen Leaflet map at `/map` with unit/hardware/ticket layers, stats panel, unit detail modal, bbox-driven data loading
-  - **GIS API Controller** (`app/Http/Controllers/Api/GisController.php`): 5 GeoJSON endpoints (`units`, `hardware`, `tickets`, `stats`, `clusters`) using lat/lng columns (not geom), bbox spatial filtering, accessible-units scope via `AccessService`
-  - **Routes**: `GET /map` (web, `role_or_permission:map`), `GET /api/gis/*` (Sanctum, named `api.gis.*`)
-  - **Blade Template** (`resources/views/livewire/map/map-dashboard.blade.php`): Alpine.js `mapDashboard()` with `x-data`, layer toggles, filters, Leaflet markers/divIcons, `@this` Livewire-Alpine communication
-  - **Tests**: `tests/Feature/GisApiTest.php` (10 tests, GeoJSON structure, bbox filtering, permissions), `tests/Feature/MapDashboardTest.php` (12 tests, Livewire events, Alpine methods, auth, rendering)
-  - **Frontend**: Added "داشبورد GIS" to sidebar under "کار با نقشه"
-- **#213** — Hardware Change History & Audit Trail API (`hardware_audits` table, `HardwareAuditObserver`, `GET /api/hardware/{hardware}/audits`, Livewire history modal with Jalali dates and rollback). Merged with #246: the old `HardwareHistory`/`hardware_histories` system was migrated into the unified `HardwareAudit`/`hardware_audits` trail.
-- **#246** — Hardware Field-Level Audit Trail & Change History: source tracking (web/api/import/bulk), rollback endpoint + Livewire per-field ↺ بازگردانی, Excel/CSV compliance export (`HardwareAuditsExport`), filterable API (`field`/`user_id`/`date_from`/`date_to`/`action`/`source`), no FK cascade on `hardware_id` so audit survives deletes. Tests: `HardwareAuditTest`, `HardwareAuditDetailTest`, `HardwareAuditLivewireTest`, `HardwareAuditMigrationTest`.
-- **#217** — Hardware Stats Caching with version-counter invalidation (10-min TTL, driver-agnostic, auto-invalidated on all hardware writes)
-- **#218** — In-app Help System completion (20 content sections, `HelpSystemTest`, Alpine-based modal switching)
-- **#238** — Fixed `Undefined variable $request` in 6 API methods missing the `Request` parameter (`TodoController::toggleComplete/destroy`, `PersonController::destroy`, `TicketController::show/destroy`, `ReportController::units`)
-
-### Recent Changes (Last 7 Days — August 2026)
-- **Hardware Audit GIN Index** — New migration `2026_08_11_000001_add_gin_index_to_hardware_audits_changes.php` adds a GIN index on `hardware_audits.changes` JSONB column for faster `whereJsonContains` queries (#454).
-- **HR Controller Performance Suite** — Multiple optimizations:
-  - Single-pass `JSON_AGG` aggregation for `HrController::stats` (#436)
-  - Org chart cached with `hr_stats_version` key (#435)
-  - JOIN-based personnel list, dropping 5 eager-load queries (#440)
-  - Fixed cross-join inflating `HR stats` JSON_AGG counts (#441)
-  - SQLite compatibility fix for tests (#455)
-- **Hardware Controller** — JOIN-based filtering in `index` to drop `whereHas` (#430); JOIN-based scope checks in `stats/bulkMark/bulkDelete` (#433); eager-load `person.unit` in store/show/update to kill N+1 (#405).
-- **TicketComments Livewire** — Eager-load `children.user.person` to fix N+1 in `loadTicket` (#455).
-- **Todo Controller** — Explicit unit scope validation + `primaryUnit` fallback in `store` (#431).
-- **GIS Controller** — Cluster cache TTL raised from 30s to 60m, consistent with `gis_version` invalidation (#437).
-- **Security** — Hardened `sanitizeUrl` against attribute-breaking chars in ticket comments (#425).
-- **Models** — Corrected `person()` FK on `Semat`/`Tahsil`/`Estekhdam`/`Radif` models (#404).
-- **NotificationService** — Fixed UUID generation in `notifyUnit()` (#434).
-- **Test Coverage Expansion** — Added 30+ new test files covering:
-  - `HardwareBulkOperationsTest` (bulk-mark, bulk-delete, audit entries, auth)
-  - `ActivityLogPageLivewireTest` (auth, mount, filters, detail modal, pagination)
-  - `ToolsLivewireTest` (stats, archive tickets, clean activities/notifications, validation)
-  - `LookupSimpleModelsTest` (Region, Boundary, UnitType, UnitTypeRelationship, Semat, Tahsil, Estekhdam, Radif)
-  - `ActivityLogModelTest`, `ChangePasswordTest`, `SettingsProfileTest`, `OtherModelsTest` (TaskActivity, Attachment, TicketCommentReaction)
-  - `ReportsApiTest` (units/todos/tickets reports, auth, scope)
-  - `HardwareAuditModelTest` (relationships, changes cast, survives deletion, action/source types)
-  - `HasOrganizationalScopeTest` (unit filtering, child units, related loading)
-  - `UnitModelTest` (hierarchy, ancestorIds, descendantIds, scopes, relationships)
-  - `TodoModelTest`, `UsersPageTest`, `ApiLoginTest`, `LogoutTest`, `PersonModelTest`
-  - `TicketCommentModelTest`, `NotificationModelTest`, `HardwareModelTest`, `TicketModelTest`, `UserModelTest`
-  - `ActivityLogServiceTest`, `NotificationServiceTest`, `AccessServiceTest`
-  - `TicketCommentPolicyTest`, `PersianNormalizerExtraTest`, `HardwareAuditObserverTest`, `HardwareObserverTest`, `PagesRenderTest`, `AppBrandTest`
-  - Page-render and middleware coverage for Dashboard, IT, Maps, Permissions, Profile, Roles, Search, SelectContext, Settings, Tools, ValidateUnitContext
 
 ---
 
