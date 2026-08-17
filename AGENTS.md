@@ -161,7 +161,7 @@ The `AccessService` class provides `accessibleUnitIds()` which returns an array 
 
 ### Permissions (from `PermissionSeeder`)
 
-`manage_users`, `organization`, `kargozini` (HR lookup tables: estekhdam, tahsil, semat, radif, persons), `map` (GIS/location features), `calendar` (todo/calendar), `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache` (OPcache GUI at `/op`), `manage_hardware`, `bw` (IT monitoring: networks, wireless, server cache), `view_hr_dashboard`, plus more defined in the seeder.
+`manage_users`, `organization`, `kargozini` (HR lookup tables: estekhdam, tahsil, semat, radif, persons), `map` (GIS/location features), `calendar` (todo/calendar), `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache` (OPcache GUI at `/op`), `manage_hardware`, `bw` (IT monitoring: networks, wireless, server cache), `view_hr_dashboard`, `manage_personnel` (HR personnel routes), `manage_unit_tickets` (unit ticket routes), `manage_org_chart` (org chart), plus more defined in the seeder.
 
 ---
 
