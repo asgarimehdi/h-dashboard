@@ -700,6 +700,70 @@ php artisan migrate --force
 php artisan db:seed --force
 ```
 
+### Running Tests (Pest)
+
+Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** + a **password-less Redis**. Getting the environment right is the most common failure mode — follow these steps exactly.
+
+#### 1. Prerequisites (services must be up)
+```bash
+docker compose -f docker-compose-pgsql-.yml up -d      # PostGIS on :5432, Redis on :6379
+```
+- PostGIS must be healthy. Verify: `pg_isready -h 127.0.0.1 -p 5432`
+- Redis must be reachable: `php -r '$r=new Redis(); $r->connect("127.0.0.1",6379); echo $r->ping();'`
+
+#### 2. Create the test database + role (phpunit.xml hard-codes `postgres`/`secret`/`h_dashboard_test`)
+The committed `phpunit.xml` expects:
+```xml
+<env name="DB_CONNECTION" value="pgsql"/>
+<env name="DB_DATABASE"  value="h_dashboard_test"/>
+<env name="DB_USERNAME"  value="postgres"/>
+<env name="DB_PASSWORD"  value="secret"/>
+<env name="REDIS_HOST"   value="127.0.0.1"/>
+<env name="REDIS_PASSWORD" value=""/>          <!-- expects NO password -->
+```
+Create them once (the `postgis` extension must be enabled — build from the `template_postgis` template):
+```bash
+# as a superuser (e.g. h_dashboard), create the postgres role + test db
+psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
+  "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='postgres') \
+   THEN CREATE ROLE postgres LOGIN PASSWORD 'secret' SUPERUSER; END IF; END \$\$;"
+psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
+  "CREATE DATABASE h_dashboard_test WITH OWNER=postgres TEMPLATE=template_postgis;"
+```
+
+#### 3. Redis must accept connections WITHOUT a password
+The docker Redis runs with `--requirepass $REDIS_PASSWORD`, but `phpunit.xml` sends an empty `REDIS_PASSWORD`. Either:
+- restart the container without a password: `docker run -d --name h-dashboard-redis -p 6379:6379 redis:latest redis-server --requirepass ""`, **or**
+- temporarily edit `phpunit.xml` `<env name="REDIS_PASSWORD" value=""/>` → your actual `REDIS_PASSWORD`.
+- ⚠️ If you see `NOAUTH Authentication required`, the Redis password does not match `phpunit.xml`.
+
+#### 4. Clear cached config/routes BEFORE running (critical!)
+`.env.testing` ships `DB_CONNECTION=mysql` and a **different `APP_KEY`** than `.env`. If `bootstrap/cache/config.php` or the route cache exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists).
+```bash
+php artisan config:clear      # must be clear so phpunit.xml can override DB_* 
+# Do NOT run `php artisan optimize` / `route:cache` with APP_ENV=local before tests,
+# or the cached route hash (from .env's APP_KEY) won't match the test env's hash.
+```
+
+#### 5. Run the suite
+```bash
+export XDEBUG_MODE=coverage    # phpunit.xml requests coverage; without this Pest errors
+php artisan config:clear        # repeat before each run if caches were regenerated
+vendor/bin/pest tests/          # MUST pass a path; bare `vendor/bin/pest` prints usage
+```
+- **Always pass `tests/` (or a file):** `vendor/bin/pest` with no argument prints the phpunit help and exits 1.
+- Expected: **695 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
+- If you only want a single file: `php vendor/bin/pest tests/Feature/UsersManagementTest.php`.
+
+#### Common failure → cause
+| Symptom | Cause | Fix |
+|---|---|---|
+| `NOAUTH Authentication required` | Redis password ≠ `phpunit.xml` | Step 3 |
+| `Connection refused (mysql … 3306)` | config cache from `.env.testing` wins over phpunit.xml | `php artisan config:clear` |
+| `404` on every `->set()`/`->call()`, mutations don't persist | Livewire endpoint hash mismatch (cached route from wrong `APP_KEY`) | `php artisan config:clear` + don't `optimize` with local env |
+| `postgres`/`secret`/`h_dashboard_test` auth fail | test DB/role missing | Step 2 |
+| bare `vendor/bin/pest` → usage text | no path argument | pass `tests/` |
+
 ### CI/CD
 
 `.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner): pulls `/home/boxd/h-dashboard`, clears views/config/routes cache, runs `php artisan optimize`, reloads apache2.
