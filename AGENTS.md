@@ -768,6 +768,8 @@ vendor/bin/pest tests/          # MUST pass a path; bare `vendor/bin/pest` print
 
 [CodeGraph](https://github.com/colbymchenry/codegraph) is a local (100% on-machine, SQLite, no API keys) code knowledge graph that the team uses for surgical context — symbol/route resolution, call paths, and blast-radius analysis. It supports PHP/Laravel (routes → handlers) and cross-language (PHP ↔ JS) flows.
 
+**Hermes Agent MUST use CodeGraph for code-understanding tasks.** Before crawling files with grep/glob/Read to answer a structural question ("how does X work", "what calls Y", "what breaks if I change Z", survey an area, trace a request/flow), run `codegraph explore` / `codegraph query` first and answer from the returned graph. Trust its verbatim source and call paths; only fall back to Read for files it flags as stale. This is the project's standard for context discovery — prefer it over hand-reconstructing structure.
+
 **Each developer / Hermes Agent instance installs it once on their own machine — the `.codegraph/` index is local and must NOT be committed (it is already git-ignored).**
 
 ```bash
@@ -776,7 +778,7 @@ cd /home/runner/workspace/h-dashboard   # or your project root
 codegraph init .                        # builds .codegraph/codegraph.db (~30s, auto-syncs on file change)
 ```
 
-Once installed, an agent (or a developer in a terminal) can answer structural questions directly instead of crawling files:
+Once installed, an agent (or a developer in a terminal) answers structural questions directly instead of crawling files:
 
 ```bash
 codegraph explore "how does AccessService accessibleUnitIds resolve unit hierarchy"
@@ -784,7 +786,7 @@ codegraph query "HardwareAuditObserver" --limit 5
 codegraph status .
 ```
 
-> **For other Hermes Agent instances:** after the operator installs CodeGraph on their own environment (above), they can use it the same way — the index is per-machine, so every agent that needs it must run `codegraph init` once on its host. No agent shares another's `.codegraph/` database.
+> **For other Hermes Agent instances:** after the operator installs CodeGraph on their own environment (above), they MUST use it the same way — the index is per-machine, so every agent that needs it must run `codegraph init` once on its host. No agent shares another's `.codegraph/` database.
 >
 > Note: the graph auto-syncs via a file watcher, so it stays current as code changes — no need to re-run `init`. If a session edited files while no MCP/index was running, `codegraph sync` catches up against the working tree.
 
