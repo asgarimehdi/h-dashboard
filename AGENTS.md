@@ -1,12 +1,14 @@
 # Health Dashboard (داشبورد سلامت) — Documentation
 
+> **Doc review (2026-08-17):** Cross-checked against the working tree on branch `feature/mehdi` (Laravel 13.25.0 per `composer.lock`). Corrections vs. prior text: framework version (13.23.0 → 13.25.0); `pnpm-lock.yaml` does **not** exist (npm only); Person FK column is `s_id` not `semat_id`; migration count is **46** (not 21); the `zabbix:sync` schedule no longer sets `->timeout()` (reverted in `17cfd79`). See **Scheduler** and **Cache Version Namespaces** for verified current state.
+
 ## Project Overview
 
 Health Dashboard is a Laravel 13.x application for managing hospital/healthcare center hardware inventory, organizational units, tickets, and todos. Built with Livewire 4, MaryUI (DaisyUI), and Alpine.js. Fully RTL and Persian-language. Served to both a web UI and a Flutter mobile app (via Sanctum API tokens).
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x (`laravel/framework ^13.0`, currently 13.23.0) on PHP ^8.3
+- **Framework:** Laravel 13.x (`laravel/framework ^13.0`, locked at **13.25.0** in `composer.lock`) on PHP ^8.3
 - **Frontend:** Livewire 4 (class-based components under `app/Livewire/`, views under `resources/views/livewire/`), Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
@@ -15,7 +17,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **Permissions:** spatie/laravel-permission ^8.0
 - **Jalali calendar:** morilog/jalali (Jalalian), hekmatinasser/verta (installed)
 - **AI:** openai-php/client ^0.20.1 (installed; used by feature tests, e.g. `AiAgentTest`)
-- **Package Manager:** Composer (backend); frontend deps in `package.json` (Vite). Both `package-lock.json` (npm) and `pnpm-lock.yaml` exist in the repo; `npm run build` / `vite build` is the current build path (Node 24, npm 12)
+- **Package Manager:** Composer (backend); frontend deps in `package.json` (Vite). Only `package-lock.json` is committed (there is **no** `pnpm-lock.yaml`), so use **npm**: `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 
 ---
 
@@ -27,7 +29,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - `n_code` (PK, string)
 - `f_name`, `l_name`
 - `u_id` (FK to `units.id`)
-- `semat_id` (FK to `semats.id`)
+- `s_id` (FK to `semats.id`) — job title (note: the column is **`s_id`**, not `semat_id`)
 - `t_id` (FK to `tahsils.id`) — education level
 - `e_id` (FK to `estekhdams.id`) — employment type
 - `r_id` (FK to `radifs.id`) — rank/grade
@@ -99,7 +101,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 ```
 Hardware → Person (n_code)
 Person → Unit (u_id → id)
-Person → Semat (semat_id → id)
+Person → Semat (s_id → id)
 Person → Tahsil (t_id → id)
 Person → Estekhdam (e_id → id)
 Person → Radif (r_id → id)
@@ -113,7 +115,7 @@ User ↔ Unit (user_units pivot)
 
 - **User ↔ Person** are linked by `n_code` (not `id`). `Person.hasOne(User)` / `User.belongsTo(Person)`. `User` uses SoftDeletes; `User.units()` is a BelongsToMany via the `user_units` pivot (`role` enum: `responsible`/`staff`, `is_primary` flag); `primaryUnit()` returns the assignment where `is_primary = true`.
 - **`user_units` pivot** — many-to-many user↔unit assignments (a user can belong to multiple units). Unique on `(user_id, unit_id)`. Seeded from `Person.u_id` via `UserUnitSeeder`.
-- **Migration/style note:** migrations were consolidated to 21 clean migrations — each table has a single CREATE migration with indexes and constraints inline; FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter), not timestamps.
+- **Migration/style note:** FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). The migration count is now **46** — the earlier "21 clean migrations" consolidation has since grown with feature work (e.g. `hardware_audits`, `ticket_comments`, PostGIS geometry, GIN index). New migrations follow `YYYY_MM_DD_######_description.php`; both a sequential counter (`000001`) and a time-suffixed form (`002725`) appear in the tree. Avoid the classic `YYYY_MM_DD_HHMMSS` Laravel default and pass `--no-interaction`.
 
 ## Area & Vocabulary (from `CONTEXT.md`)
 
@@ -178,11 +180,9 @@ The application uses **Laravel Sanctum** with two authentication modes:
 - The login form is at `/login` (web session).
 - Token generation (for testing/automation): `POST /api/sanctum/token` with valid credentials. The Flutter app uses `POST /api/login` with `n_code` + `password` (throttled 5/min).
 
-### Safe Role/Permission Middleware (Deprecated for Hardware Routes)
-
 ### Safe Role/Permission Middleware
 
-`SafeRoleOrPermission` (alias: `safe_role_or_permission`) **is no longer used on hardware routes.** Issue #216 removed it from `/hardware` and `/hardware/import` because guests could see sensitive hardware data. Hardware routes now require full auth:
+`SafeRoleOrPermission` (alias: `safe_role_or_permission`) is **registered and still used** (e.g. a `/test-safe-route` test route in `routes/web.php`), but it is **intentionally NOT used on hardware routes**. Issue #216 removed it from `/hardware` and `/hardware/import` because guests could see sensitive hardware data; hardware routes now require full auth via `auth` + `role_or_permission:manage_hardware`:
 
 ```php
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
@@ -196,6 +196,48 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 ### Unit Context Middleware
 
 `ValidateUnitContext` middleware (alias `unit_context`) ensures `session('current_unit_id')` is set before entering unit-scoped sections; UI supports selecting a unit context (`/select-context`).
+
+---
+
+## Scheduler & Console Commands
+
+Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule()`). Commands live in `app/Console/Commands/`:
+
+| Command | Schedule | Class | Purpose |
+|---|---|---|---|
+| `cache:prune-stale` | hourly | `PruneStaleCache` | Resets all cache version counters (see **Cache Version Namespaces**) so stale versioned keys expire |
+| `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todos (#214) |
+| `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance records |
+| `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Archives old records (#450) |
+| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds daily reports (#450) |
+| `zabbix:sync` | every 5 min | `SyncZabbix` | Pulls Zabbix traffic/latest values |
+
+`zabbix:sync` uses `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler. **Do not add `->timeout(N)` to the schedule** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted in `17cfd79`; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
+
+Other commands: `NormalizePersianText` (one-off Persian normalization), plus the standard `migrate`, `db:seed`, `queue:listen` (see `composer.json` `dev` script).
+
+---
+
+## Cache Version Namespaces
+
+The `CacheInvalidationService` (`app/Services/CacheInvalidationService.php`, interface `CacheInvalidationServiceInterface`) implements driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter so old keys become unreachable and expire via TTL (no full cache flush). Hot paths use it via `Cache::remember(...)` with the versioned key.
+
+**Verified namespaces and what bumps them (current HEAD):**
+
+| Namespace | Bumped by | Used for |
+|---|---|---|
+| `hardware_stats` | `Hardware::flushStatsCache()` (saved/deleted) | hardware stats aggregation |
+| `gis` | Hardware, Unit, AppServiceProvider unit namespaces | GIS/map geometry |
+| `maps` | Hardware (`flushStatsCache`), Person (saved/deleted) | map view |
+| `dashboard` | Hardware (`flushStatsCache`), Person (saved/deleted) | dashboard counts |
+| `hr_stats` | Person (saved/deleted), Unit | HR dashboard + org chart (`hr:dashboard:*`, `hr:orgchart:*`) |
+| `unit_hierarchy` | Unit (ancestor/descendant queries) | `Unit::ancestorIds()` / `descendantIds()` |
+| `report_units` / `report_todos` / `report_tickets` | (unit/calendar namespaces) | report endpoints |
+| `calendar` | (calendar namespace) | todo/calendar |
+
+`PruneStaleCache` resets all of: `hardware_stats, gis, maps, dashboard, hr_stats, report_todos, report_tickets, report_units, unit_hierarchy, calendar`.
+
+> **Historical note:** Issue #457 narrowed these bumps (Person→`hr_stats` only, Hardware→`hardware_stats`+`gis`), but later commits `f721d13` (Person also bumps `dashboard`/`maps`) and `b9128b0` (Hardware also bumps `maps`/`dashboard`) **re-broadened** invalidation. The table above reflects current code, not the #457 summary.
 
 ---
 
@@ -508,15 +550,31 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
     - Blocking the Laravel scheduler while waiting for the sync to complete.
   - **Solution**:
     - **HTTP Timeout**: Added `->timeout(10)` to all Zabbix API calls in `ZabbixService::request()`.
-    - **Scheduler Timeout**: Set `->timeout(15)` on the scheduled command in `Kernel.php`.
-    - **No Overlap**: Added `->withoutOverlapping()` to prevent concurrent executions.
-    - **Background Execution**: Added `->runInBackground()` to avoid scheduler blocking.
+    - **Scheduler Protection**: The schedule uses `withoutOverlapping()` + `runInBackground()` to prevent overlap and scheduler blocking. A `->timeout(15)` on the schedule was attempted but **reverted** — that method does not exist on the installed Laravel version and threw `BadMethodCallException` (commit `17cfd79`). See the **Scheduler** section.
     - **Error Handling**: The `SyncZabbix` command now catches exceptions and logs warnings without crashing.
   - **Files**:
     - `app/Services/ZabbixService.php` (HTTP timeout).
     - `app/Console/Kernel.php` (scheduler improvements).
     - `app/Console/Commands/SyncZabbix.php` (error handling).
   - **Impact**: Eliminated scheduler blocking and prevented indefinite hangs in Zabbix API calls.
+
+- **#460** — HR Vacancy Trend N+1 Query Performance Fix
+  - **Problem**: `HrController::vacancyTrend()` used an N+1 query loop (1 query per month), causing 13-25 queries for the default 12-24 month range.
+  - **Solution**: PostgreSQL single query with `generate_series` + `CROSS JOIN`; SQLite PHP fallback. (Same root fix as **#461**; #460/#461 are duplicate issue numbers for this work.)
+  - **Files**: `app/Http/Controllers/Api/HrController.php`.
+  - **Impact**: Reduced query count from O(N*M) to O(1) (PostgreSQL).
+
+- **#459** — ZabbixSync HTTP Timeout and Scheduler Blocking
+  - **Problem**: `ZabbixService::request()` had no HTTP timeout, risking scheduler blockage if the Zabbix API was slow.
+  - **Solution**: Added `->timeout(10)` to `Http::post()` in `ZabbixService`; Kernel schedule uses `withoutOverlapping()` + `runInBackground()`. Note: a `->timeout(15)` on the **schedule** was attempted here but later **reverted** (`17cfd79`) — that method does not exist on the installed Laravel version. See the **Scheduler** section and issue **#462**.
+  - **Files**: `app/Services/ZabbixService.php`, `app/Console/Kernel.php`.
+  - **Impact**: Prevents scheduler blockage and overlapping executions.
+
+- **#458** — XSS in `TicketCommentController` via Unquoted HTML Event Attributes
+  - **Problem**: `sanitizeUrl()` removed quotes but allowed unquoted event attributes (e.g. `onmouseover=alert(1)`) in URLs, causing stored XSS when rendered in `<a href="...">`.
+  - **Solution**: Replaced the `preg_replace` approach with `htmlspecialchars(ENT_QUOTES | ENT_HTML5)` to escape all dangerous characters (spaces, quotes, angle brackets) in URLs.
+  - **Files**: `app/Http/Controllers/Api/TicketCommentController.php`.
+  - **Impact**: Blocks XSS payloads like `[click](http://example.com onmouseover=alert(1))`.
 
 - **#461** — HR Vacancy Trend N+1 Query — Single Query with generate_series (PostgreSQL)
   - **Problem**: The `/api/hr/analytics/vacancy-trend` endpoint suffered from an N+1 query problem. The original implementation fetched personnel records month-by-month, resulting in a separate query for each month and unit.
@@ -536,7 +594,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
     - `Person`: Keep `hr_stats` only.
     - `Unit`: Keep `report_units`, `unit_hierarchy`, `gis`, `hr_stats`.
   - **Files**: `app/Models/Hardware.php`, `app/Models/Person.php`, `app/Providers/AppServiceProvider.php`.
-  - **Impact**: Reduced cache misses by **60-80%** for map/dashboard users.
+  - **Impact**: Reduced cache misses by **60-80%** for map/dashboard users at the time. **Caveat:** later commits (`f721d13`, `b9128b0`) re-broadened invalidation to also bump `dashboard`/`maps` when Persons/Hardware change — the **Cache Version Namespaces** section reflects current HEAD, not this #457 description.
 
 - **#456** — GIS Bounding Box Cache Precision Fix
   - **Problem**: `normalizedBbox()` rounded coordinates to **2 decimal places** (≈1.1 km precision), causing cache keys to mismatch the actual bbox used in SQL queries. This led to incorrect map data (e.g., showing units outside the viewport).
@@ -637,7 +695,7 @@ TILE_SERVER_IP=tile.openstreetmap.org
 
 ```bash
 composer install --no-dev --optimize-autoloader
-npm install && npm run build     # or: pnpm install && pnpm run build
+npm install && npm run build
 php artisan migrate --force
 php artisan db:seed --force
 ```
