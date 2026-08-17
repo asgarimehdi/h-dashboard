@@ -282,7 +282,7 @@ class GisController extends Controller
                     'properties' => [
                         'id' => $ticket->id,
                         'ticket_code' => $ticket->ticket_code,
-                        'title' => $ticket->title,
+                        'title' => $ticket->subject,
                         'priority' => $ticket->priority,
                         'status' => $ticket->status,
                         'unit' => $unit ? [

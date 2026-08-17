@@ -37,6 +37,8 @@ return [
     'zabbix' => [
         'url' => env('ZABBIX_URL'),
         'token' => env('ZABBIX_TOKEN'),
+        'out_item_id' => env('ZABBIX_OUT_ITEM_ID'),
+        'in_item_id' => env('ZABBIX_IN_ITEM_ID'),
     ],
 
 ];

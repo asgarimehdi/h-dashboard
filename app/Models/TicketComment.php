@@ -54,7 +54,7 @@ class TicketComment extends Model
      */
     public function children(): HasMany
     {
-        return $this->hasMany(TicketComment::class, 'parent_id')->with('user');
+        return $this->hasMany(TicketComment::class, 'parent_id')->with('user.person');
     }
 
     /**

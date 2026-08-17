@@ -48,8 +48,13 @@ class OrgChart extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $this->rootUnits = Unit::whereNull('parent_id')
-            ->whereIn('id', $accessibleIds)
+        // Root units = accessible units whose parent is NOT accessible (or has no parent).
+        // This way a user with access to a child unit (but not its parent) still sees it.
+        $this->rootUnits = Unit::whereIn('id', $accessibleIds)
+            ->where(function ($q) {
+                $q->whereNull('parent_id')
+                  ->orWhereNotIn('parent_id', app(AccessService::class)->accessibleUnitIds());
+            })
             ->with(['unitType'])
             ->get();
 
