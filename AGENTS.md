@@ -515,7 +515,8 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest tests/` (see **Running Tests (Pest)**)
 - **Factories:** use factories with custom states (only `UserFactory` exists; other models have seeders). Don't delete tests without approval.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
-- **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion.
+- **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL in tinker. Don't create models in tinker without approval.
+- **Laravel Boost (MCP):** prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
 - **Artisan:** new migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter), not timestamps; pass `--no-interaction` to all Artisan commands.
 - **Frontend rebuild:** after frontend changes run `npm run build` (or `vite build`); Livewire for dynamic UI, Alpine.js for client-side interactions.
 
