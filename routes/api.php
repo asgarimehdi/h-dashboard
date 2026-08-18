@@ -136,10 +136,10 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         });
     });
 
-    // Todo API routes — write gated (Issue #396)
-    Route::get('/todos', [TodoController::class, 'index']);
-    Route::get('/todos/{todo}', [TodoController::class, 'show']);
+    // Todo API routes — gated on calendar permission (Issue #396)
     Route::middleware('role_or_permission:calendar')->group(function () {
+        Route::get('/todos', [TodoController::class, 'index']);
+        Route::get('/todos/{todo}', [TodoController::class, 'show']);
         Route::post('/todos', [TodoController::class, 'store']);
         Route::put('/todos/{todo}', [TodoController::class, 'update']);
         Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);

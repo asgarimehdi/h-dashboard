@@ -76,7 +76,7 @@ class HrController extends Controller
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
         $units = Unit::whereIn('id', $accessibleIds)
-            ->withCount('person as personnel_count')
+            ->withCount(['person as personnel_count', 'children as has_children'])
             ->with('unitType:id,name')
             ->orderBy('name')
             ->limit($initialLimit)
@@ -87,7 +87,7 @@ class HrController extends Controller
                 'parent_id' => $u->parent_id,
                 'unit_type' => $u->unitType?->name,
                 'personnel_count' => $u->personnel_count,
-                'has_children' => Unit::where('parent_id', $u->id)->exists(),
+                'has_children' => $u->has_children > 0,
                 'level' => 1,
             ]);
 

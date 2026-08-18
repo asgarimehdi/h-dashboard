@@ -421,7 +421,7 @@ class HardwareController extends Controller
     protected function batchInsertAudits($hardwares, string $action, ?array $staticChanges, ?\Closure $changesPerItem = null): void
     {
         $user = \Auth::user();
-        $request = \Illuminate\Support\Facades\Request::capture();
+        $request = request(); // actual request, not Request::capture()
 
         $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
             $changes = $changesPerItem ? $changesPerItem($hardware) : $staticChanges;
