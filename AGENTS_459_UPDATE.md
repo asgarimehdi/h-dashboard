@@ -1,7 +1,0 @@
-- **#459** — ZabbixSync HTTP Timeout and Scheduler Blocking
-  - **Problem**: `ZabbixService::request()` had no HTTP timeout, causing scheduler blockage if Zabbix API was slow/unresponsive.
-  - **Solution**:
-    - Added `->timeout(10)` to `Http::post()` in `ZabbixService`.
-    - Added `->timeout(15)`, `->withoutOverlapping()`, and `->runInBackground()` to the scheduler in `Kernel.php`.
-  - **Files**: `app/Services/ZabbixService.php`, `app/Console/Kernel.php`.
-  - **Impact**: Prevents scheduler blockage and overlapping executions.

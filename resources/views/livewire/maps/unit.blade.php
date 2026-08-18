@@ -113,8 +113,8 @@ return new class extends Component
                 ->whereNotNull('boundary_id')
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $this->selectedCenterTypes)
-                ->select('id', 'name', 'unit_type_id')
-                ->with('boundary:id,unit_id,geojson')
+                ->select('id', 'name', 'unit_type_id', 'boundary_id')
+                ->with('boundary:id,boundary')
                 ->get();
             $units = $units->merge($centers);
         }
@@ -131,8 +131,8 @@ return new class extends Component
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $subTypeIds)
                 ->whereIn('parent_id', $parentIds)
-                ->select('id', 'name', 'unit_type_id')
-                ->with('boundary:id,unit_id,geojson')
+                ->select('id', 'name', 'unit_type_id', 'boundary_id')
+                ->with('boundary:id,boundary')
                 ->get();
             $units = $units->merge($subUnits);
         }

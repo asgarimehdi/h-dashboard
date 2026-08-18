@@ -4,13 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\DB;
 
 class Boundary extends Model
 {
     protected $table = 'boundaries';
 
     protected $guarded = [];
+
     protected $casts = [
         'multipolygon' => 'multipolygon',
     ];
@@ -38,6 +38,7 @@ class Boundary extends Model
     {
         return $this->hasOne(Unit::class);
     }
+
     protected $appends = ['geojson'];
 
     public function getGeojsonAttribute()
@@ -46,8 +47,9 @@ class Boundary extends Model
         if ($this->relationLoaded('boundary') || array_key_exists('boundary', $this->getAttributes())) {
             $boundary = $this->getAttribute('boundary');
             if ($boundary) {
-                return \DB::selectOne('SELECT ST_AsGeoJSON(ST_GeomFromText(?)) as geojson', [$boundary])->geojson ?? null;
+                return \DB::selectOne('SELECT ST_AsGeoJSON(ST_GeomFromEWKB(decode(?, \'hex\'))) as geojson', [$boundary])->geojson ?? null;
             }
+
             return null;
         }
 
@@ -57,5 +59,4 @@ class Boundary extends Model
             ->selectRaw('ST_AsGeoJSON(boundary) as geojson')
             ->value('geojson');
     }
-
 }
