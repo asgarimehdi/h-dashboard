@@ -158,6 +158,7 @@ class OrgChart extends Component
                 ->get();
 
             foreach ($matchingUnits as $unit) {
+                $this->expanded[] = (string) $unit->id;
                 $this->expandParents($unit);
             }
 
