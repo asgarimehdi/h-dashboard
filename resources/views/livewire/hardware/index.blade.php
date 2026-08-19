@@ -747,7 +747,7 @@ return new class extends Component
                     @foreach($visibleCols as $key => $visible)
                         <label class="flex items-center gap-2 cursor-pointer text-xs">
                             <input type="checkbox" wire:model.live="visibleCols.{{ $key }}" class="checkbox checkbox-xs" />
-                            {{ $headers()->collect()->firstWhere('key', $key)['label'] ?? $key }}
+                            {{ $this->headers()->collect()->firstWhere('key', $key)['label'] ?? $key }}\n                            <span class=\"text-xs opacity-50 ml-1\">({{ $key }})</span>
                         </label>
                     @endforeach
                 </div>
