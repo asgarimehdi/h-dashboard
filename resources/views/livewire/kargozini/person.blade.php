@@ -204,6 +204,23 @@ return new class extends Component
             });
         }
 
+        // Unit, Semat, Tahsil, Estekhdam, Radif Filters (#494)
+        if ($this->u_id) {
+            $query->where('u_id', $this->u_id);
+        }
+        if ($this->s_id) {
+            $query->where('s_id', $this->s_id);
+        }
+        if ($this->t_id) {
+            $query->where('t_id', $this->t_id);
+        }
+        if ($this->e_id) {
+            $query->where('e_id', $this->e_id);
+        }
+        if ($this->r_id) {
+            $query->where('r_id', $this->r_id);
+        }
+
         $query->orderBy(...array_values($this->sortBy));
 
         return $query->paginate($this->perPage);
