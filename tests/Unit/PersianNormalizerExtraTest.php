@@ -1,14 +1,9 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Unit;
 
-use App\Traits\PersianNormalizer;
 use Tests\TestCase;
-
-class NormalizerHelper
-{
-    use PersianNormalizer;
-}
+use Tests\Unit\NormalizerHelper;
 
 uses(TestCase::class);
 

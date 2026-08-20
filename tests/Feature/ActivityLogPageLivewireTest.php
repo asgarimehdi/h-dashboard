@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-class ActivityLogPageTest extends TestCase
+class ActivityLogPageLivewireTest extends TestCase
 {
     use RefreshDatabase;
 

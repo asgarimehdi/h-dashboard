@@ -1,11 +1,6 @@
 <?php
 
-use App\Traits\PersianNormalizer;
-
-class NormalizerHelper
-{
-    use PersianNormalizer;
-}
+use Tests\Unit\NormalizerHelper;
 
 test('normalize converts Arabic Yeh and Kaf to Persian', function () {
     $input = 'ي ك'; // Arabic Yeh (U+064A), Arabic Kaf (U+0643)
