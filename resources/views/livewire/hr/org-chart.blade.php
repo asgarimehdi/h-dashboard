@@ -14,12 +14,6 @@
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6" dir="rtl">
         <div class="lg:col-span-3">
             <x-card shadow>
-                <x-input
-                    placeholder="جستجوی واحد..."
-                    wire:model.live.debounce.300ms="search"
-                    icon="o-magnifying-glass"
-                    clearable
-                    class="w-full mb-4" />
                 <div class="tree-container text-right" dir="rtl">
                     @foreach ($rootUnits as $unit)
                         @include('livewire.hr.org-node', ['unit' => $unit, 'level' => 0, 'isLast' => $loop->last])
