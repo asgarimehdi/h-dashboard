@@ -155,6 +155,7 @@ class OrgChart extends Component
         if (strlen($this->search) > 2) {
             $matchingUnits = Unit::where('name', 'LIKE', "%{$this->search}%")
                 ->whereIn('id', $accessibleIds)
+                ->with(['parent'])
                 ->get();
 
             foreach ($matchingUnits as $unit) {
@@ -167,13 +168,30 @@ class OrgChart extends Component
         }
     }
 
+    /**
+     * Walk the full ancestor chain (root → … → direct parent) of a unit and
+     * mark every ancestor (plus the unit itself) as expanded, so a deep
+     * search match is never hidden behind a collapsed branch.
+     *
+     * NOTE: We walk the chain in PHP via the `parent` relation rather than
+     * Unit::ancestorIds(), because ancestorIds() is intentionally documented
+     * and tested as single-level (direct parents only) and is also used by
+     * the maps feature.
+     */
     protected function expandParents($unit): void
     {
-        if ($unit->parent_id) {
-            $ancestorIds = Unit::ancestorIds([$unit->id]);
-            foreach ($ancestorIds as $id) {
-                $this->expanded[] = (string) $id;
+        $this->expanded[] = (string) $unit->id;
+
+        $visited = [(int) $unit->id => true];
+        $current = $unit;
+        while ($current && $current->parent_id) {
+            $parent = $current->parent;
+            if (! $parent || isset($visited[(int) $parent->id])) {
+                break;
             }
+            $this->expanded[] = (string) $parent->id;
+            $visited[(int) $parent->id] = true;
+            $current = $parent;
         }
     }
 
