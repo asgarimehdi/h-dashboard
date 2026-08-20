@@ -29,3 +29,5 @@ yarn-error.log
 cookies.txt
 .codegraph
 /opencode.json
+coverage.xml
+coverage/
