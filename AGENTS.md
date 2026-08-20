@@ -587,6 +587,8 @@ php artisan db:seed --force
 
 Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** + a **password-less Redis**. Getting the environment right is the most common failure mode — follow these steps exactly.
 
+> **✅ Working as of 2026-08-20:** `php artisan test` runs the full suite (695 passed, 1 skipped) with no arguments — `phpunit.xml` now has `<testsuites>` for `Unit` + `Feature` and `pestphp/pest-plugin-laravel` is installed, so the plain artisan command no longer falls back to bare PHPUnit help (the old "always pass `tests/`" caveat no longer applies).
+
 #### 1. Prerequisites (services must be up)
 ```bash
 docker compose -f docker-compose-pgsql-.yml up -d      # PostGIS on :5432, Redis on :6379
@@ -632,11 +634,11 @@ php artisan config:clear      # must be clear so phpunit.xml can override DB_*
 ```bash
 export XDEBUG_MODE=coverage    # phpunit.xml requests coverage; without this Pest errors
 php artisan config:clear        # repeat before each run if caches were regenerated
-vendor/bin/pest tests/          # MUST pass a path; bare `vendor/bin/pest` prints usage
+php artisan test                # runs the FULL suite (Unit + Feature via phpunit.xml <testsuites>)
+# For a single file: php artisan test tests/Feature/UsersManagementTest.php
 ```
-- **Always pass `tests/` (or a file):** `vendor/bin/pest` with no argument prints the phpunit help and exits 1.
+- **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
 - Expected: **695 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
-- If you only want a single file: `php vendor/bin/pest tests/Feature/UsersManagementTest.php`.
 
 #### Common failure → cause
 | Symptom | Cause | Fix |
