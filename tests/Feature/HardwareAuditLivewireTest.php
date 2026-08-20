@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-uses(TestCase::class)
-    ->in('Feature');
+uses(TestCase::class, RefreshDatabase::class);
 
 function makeAuditLivewireUser(): array
 {

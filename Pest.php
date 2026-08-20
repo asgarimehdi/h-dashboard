@@ -1,21 +1,13 @@
 <?php
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
-
-uses(TestCase::class)->in('Feature');
-uses(TestCase::class, RefreshDatabase::class)->in('Unit');
-uses()->group('browser')->in('Browser');
-uses()->parallel();
-
-expect()->extend('toBeOne', function () {
-    return $this->toBe(1);
-});
-
-// Cache invalidation test helper
-expect()->extend('toInvalidateCache', function (string $key) {
-    $versionBefore = \Illuminate\Support\Facades\Cache::get($key . '_version', 0);
-    $this->value();
-    $versionAfter = \Illuminate\Support\Facades\Cache::get($key . '_version', 0);
-    return expect($versionAfter)->toBeGreaterThan($versionBefore);
-});
+/*
+|--------------------------------------------------------------------------
+| Root Pest configuration
+|--------------------------------------------------------------------------
+|
+| NOTE: Pest only auto-loads tests/Pest.php — this root file is NOT loaded
+| by the Pest runner. Global test-case configuration lives in tests/Pest.php.
+|
+| Kept as documentation; do NOT put uses()/expect() calls here — they are dead code.
+|
+*/

@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /*
@@ -12,30 +11,20 @@ use Tests\TestCase;
 | case class. By default, that class is "PHPUnit\Framework\TestCase". Of course, you may
 | need to change it using the "pest()" function to bind different classes or traits.
 |
+| NOTE: Each Pest-style test file in tests/Feature/ binds its own TestCase
+| (and RefreshDatabase where needed) explicitly. Class-based tests extend
+| Tests\TestCase directly. NO global TestCase/RefreshDatabase binding here —
+| a global `use(RefreshDatabase)` in this file combined with a file-level
+| `uses(RefreshDatabase::class)` merged into the SAME trait list (TestRepository
+| appends, never dedupes), causing double transaction hooks and a flaky
+| `permissions table does not exist` race under random test order.
+|
 */
-
-pest()->extend(TestCase::class)
-    ->use(RefreshDatabase::class)
-    ->in('Feature');
-
-/*
-|--------------------------------------------------------------------------
-| Test Case for tests that don't need RefreshDatabase
-|--------------------------------------------------------------------------
-*/
-
-pest()->extend(TestCase::class)
-    ->in('Feature/HelpSystemTest');
 
 /*
 |--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------
-|
-| When you're writing tests, you often need to check that values meet certain conditions. The
-| "expect()" function gives you access to a set of "expectations" methods that you can use
-| to assert different things. Of course, you may extend the Expectation API at any time.
-|
 */
 
 expect()->extend('toBeOne', function () {
@@ -46,11 +35,6 @@ expect()->extend('toBeOne', function () {
 |--------------------------------------------------------------------------
 | Functions
 |--------------------------------------------------------------------------
-|
-| While Pest is very powerful out-of-the-box, you may have some testing code specific to your
-| project that you don't want to repeat in every file. Here you can also expose helpers as
-| global functions to help you to reduce the number of lines of code in your test files.
-|
 */
 
 function something()
