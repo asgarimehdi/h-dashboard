@@ -45,12 +45,27 @@ return new class extends Component
 
     public bool $unitModal = false;
 
+    // List filter properties (#494) — kept separate from the create/edit form
+    // properties ($u_id, $s_id, ...) so opening the edit form does not filter the list.
+    public $filter_u_id;
+    public $filter_s_id;
+    public $filter_t_id;
+    public $filter_e_id;
+    public $filter_r_id;
+    public bool $filterUnitModal = false;
+    public bool $showFilters = false;
+
+    public function clearFilters(): void
+    {
+        $this->reset(['filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
+    }
+
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     public function resetForm(): void
     {
         $this->resetValidation();
-        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId', 'formOpen', 'unitModal']);
+        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId', 'formOpen', 'unitModal', 'showFilters', 'filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
     }
 
     public function startCreate(): void
@@ -205,20 +220,20 @@ return new class extends Component
         }
 
         // Unit, Semat, Tahsil, Estekhdam, Radif Filters (#494)
-        if ($this->u_id) {
-            $query->where('u_id', $this->u_id);
+        if ($this->filter_u_id) {
+            $query->where('u_id', $this->filter_u_id);
         }
-        if ($this->s_id) {
-            $query->where('s_id', $this->s_id);
+        if ($this->filter_s_id) {
+            $query->where('s_id', $this->filter_s_id);
         }
-        if ($this->t_id) {
-            $query->where('t_id', $this->t_id);
+        if ($this->filter_t_id) {
+            $query->where('t_id', $this->filter_t_id);
         }
-        if ($this->e_id) {
-            $query->where('e_id', $this->e_id);
+        if ($this->filter_e_id) {
+            $query->where('e_id', $this->filter_e_id);
         }
-        if ($this->r_id) {
-            $query->where('r_id', $this->r_id);
+        if ($this->filter_r_id) {
+            $query->where('r_id', $this->filter_r_id);
         }
 
         $query->orderBy(...array_values($this->sortBy));
@@ -246,6 +261,11 @@ return new class extends Component
             $selectedUnitName = collect($units)->firstWhere('id', (int) $this->u_id)['name'] ?? Unit::find($this->u_id)?->name;
         }
 
+        $filterUnitName = null;
+        if ($this->filter_u_id) {
+            $filterUnitName = collect($units)->firstWhere('id', (int) $this->filter_u_id)['name'] ?? Unit::find($this->filter_u_id)?->name;
+        }
+
         return [
             'persons' => $this->persons(),
             'headers' => $this->headers(),
@@ -255,6 +275,7 @@ return new class extends Component
             'radifs' => Radif::all(),
             'units' => $units,
             'selectedUnitName' => $selectedUnitName,
+            'filterUnitName' => $filterUnitName,
         ];
     }
 }; ?>
@@ -281,7 +302,46 @@ return new class extends Component
                     class="w-full"
                 />
             </div>
+            <x-button icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
+                      :class="$showFilters ? 'btn-primary' : ''" />
         </div>
+
+        @if($showFilters)
+            <div class="mb-4 p-4 bg-base-200 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <x-select wire:model.live="filter_s_id" label="سمت" :options="$semats" placeholder="همه سمت‌ها" />
+                <x-select wire:model.live="filter_t_id" label="تحصیلات" :options="$tahsils" placeholder="همه سطوح تحصیلات" />
+                <x-select wire:model.live="filter_e_id" label="استخدام" :options="$estekhdams" placeholder="همه انواع استخدام" />
+                <x-select wire:model.live="filter_r_id" label="ردیف سازمانی" :options="$radifs" placeholder="همه ردیف‌ها" />
+                <div>
+                    <label class="text-sm font-medium block mb-1">واحد</label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex-1 min-w-[12rem] input input-bordered flex items-center">
+                            <span class="{{ $filterUnitName ? '' : 'text-base-content/40' }} text-sm">
+                                {{ $filterUnitName ?: 'همه واحدها' }}
+                            </span>
+                        </div>
+                        <x-button type="button" label="انتخاب واحد" icon="o-building-office-2"
+                                  class="btn-outline btn-sm" wire:click="$set('filterUnitModal', true)" />
+                    </div>
+                </div>
+                <div class="flex items-end">
+                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="clearFilters" label="پاک کردن فیلترها" />
+                </div>
+            </div>
+        @endif
+
+        <x-modal wire:model="filterUnitModal" title="انتخاب واحد (فیلتر)" persistent separator>
+            @include('livewire.partials.unit-tree-picker', [
+                'model' => 'filter_u_id',
+                'multiple' => false,
+                'alwaysOpen' => true,
+                'label' => 'واحد سازمانی',
+            ])
+            <x-slot:actions>
+                <x-button label="تأیید" icon="o-check" class="btn-primary" wire:click="$set('filterUnitModal', false)" />
+                <x-button label="بستن" icon="o-x-mark" class="btn-ghost" wire:click="$set('filterUnitModal', false)" />
+            </x-slot:actions>
+        </x-modal>
 
         @if($formOpen)
             <div class="mb-6 p-4 bg-base-200 rounded-xl border border-base-300">
