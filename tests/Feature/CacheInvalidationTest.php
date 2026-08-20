@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 uses(\Tests\Support\Concerns\InteractsWithTestSetup::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 it('increments cache version on hardware create', function () {
     $this->assertCacheInvalidated('hardware_stats');

@@ -4,8 +4,9 @@ use App\Models\Hardware;
 use App\Models\Person;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 
-uses(RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 test('normalize:persian-text command normalizes Arabic characters in database', function () {
     // Seed lookup tables required by Person FK constraints
