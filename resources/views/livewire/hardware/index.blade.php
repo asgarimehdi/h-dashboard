@@ -194,6 +194,15 @@ return new class extends Component
         ]);
     }
 
+    /**
+     * Toggle a quick-preset filter on/off. Clicking an already-active preset
+     * clears it (so users can remove a filter by clicking it again).
+     */
+    public function toggleFilter(string $property, string $value): void
+    {
+        $this->$property = ($this->$property === $value) ? null : $value;
+    }
+
     public function hasActiveFilters(): bool
     {
         return collect([
@@ -679,12 +688,12 @@ return new class extends Component
 
                 {{-- Quick Presets --}}
         <div class="flex flex-wrap gap-2 mb-4">
-            <x-button icon="o-cpu-chip" :class="$filterType === 'laptop' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="لپ‌تاپ‌ها" wire:click="$set('filterType', 'laptop')" />
-            <x-button icon="o-server" :class="$filterType === 'server' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="سرورها" wire:click="$set('filterType', 'server')" />
-            <x-button icon="o-server-stack" :class="$filterRam === '16384' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="رم 16GB+" wire:click="$set('filterRam', '16384')" />
-            <x-button icon="o-computer-desktop" :class="$filterHdd === 'SSD' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="فقط SSD" wire:click="$set('filterHdd', 'SSD')" />
-            <x-button icon="o-power" :class="$filterShutdown === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="روشن‌ها" wire:click="$set('filterShutdown', '1')" />
-            <x-button icon="o-check-circle" :class="$filterMark === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="علامت‌دارها" wire:click="$set('filterMark', '1')" />
+            <x-button icon="o-cpu-chip" :class="$filterType === 'laptop' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="لپ‌تاپ‌ها" wire:click="toggleFilter('filterType', 'laptop')" />
+            <x-button icon="o-server" :class="$filterType === 'server' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="سرورها" wire:click="toggleFilter('filterType', 'server')" />
+            <x-button icon="o-server-stack" :class="$filterRam === '16384' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="رم 16GB+" wire:click="toggleFilter('filterRam', '16384')" />
+            <x-button icon="o-computer-desktop" :class="$filterHdd === 'SSD' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="فقط SSD" wire:click="toggleFilter('filterHdd', 'SSD')" />
+            <x-button icon="o-power" :class="$filterShutdown === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="روشن‌ها" wire:click="toggleFilter('filterShutdown', '1')" />
+            <x-button icon="o-check-circle" :class="$filterMark === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="علامت‌دارها" wire:click="toggleFilter('filterMark', '1')" />
             <x-button icon="o-x-mark" class="btn-ghost btn-xs" label="پاکسازی" wire:click="clearFilters" />
         </div>
 
