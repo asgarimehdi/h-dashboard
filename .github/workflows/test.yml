@@ -1,8 +1,6 @@
 name: Tests
 
 on:
-  push:
-    branches: [main, beta, test]
   pull_request:
     branches: [main, beta, test]
 
@@ -22,7 +20,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: h_dashboard_test
-        options: >-
+        options: >
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -32,7 +30,7 @@ jobs:
 
       redis:
         image: redis:latest
-        options: >-
+        options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
@@ -95,7 +93,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: h_dashboard_test
-        options: >-
+        options: >
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -105,7 +103,7 @@ jobs:
 
       redis:
         image: redis:latest
-        options: >-
+        options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
