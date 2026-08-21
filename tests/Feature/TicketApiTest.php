@@ -10,6 +10,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class TicketApiTest extends TestCase
@@ -24,19 +27,41 @@ class TicketApiTest extends TestCase
 
     protected function createUserWithUnit(): array
     {
+        // Ensure permissions and roles exist for testing (Issue #323)
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        Permission::firstOrCreate(['name' => 'create_ticket']);
+        Permission::firstOrCreate(['name' => 'view_assigned_tickets']);
+        Permission::firstOrCreate(['name' => 'view_all_tickets']);
+        Permission::firstOrCreate(['name' => 'manage_unit_tickets']);
+        $adminRole = Role::firstOrCreate(['name' => 'admin']);
+        $adminRole->syncPermissions(Permission::all());
+
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->assignRole('admin');
+        $user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $unit = Unit::create(['name' => 'Test Unit']);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 
-        return ['user' => $user, 'unit' => $unit];
+        return ['user' => User::find($user->id), 'unit' => $unit];
+    }
+
+    /**
+     * Override actingAs to ensure Spatie permissions are properly resolved.
+     */
+    public function actingAs($user, $driver = null)
+    {
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        return parent::actingAs($user, $driver);
     }
 
     public function test_unauthenticated_user_cannot_access_tickets(): void
@@ -193,7 +218,7 @@ class TicketApiTest extends TestCase
 
         // Assignee in a DIFFERENT unit (no org relation to $unit)
         $otherUnit = Unit::create(['name' => 'Other Unit']);
-        $otherNCode = (string) rand(1000000000, 9999999999);
+        $otherNCode = (string) fake()->unique()->numerify('##########');
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
@@ -218,7 +243,7 @@ class TicketApiTest extends TestCase
         $ticket = Ticket::create(['ticket_code' => 'T-011', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Scoped', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
         // Second user in the SAME unit
-        $nCode2 = (string) rand(1000000000, 9999999999);
+        $nCode2 = (string) fake()->unique()->numerify('##########');
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);

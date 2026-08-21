@@ -10,6 +10,6 @@ class Semat extends Model
     protected $fillable = ['name'];
     public function person():hasMany
     {
-        return $this->hasMany(Person::class);
+        return $this->hasMany(Person::class, 's_id');
     }
 }

@@ -30,7 +30,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         // Trust proxies for HTTPS detection behind Cloudflare/load balancer
-        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_HOST | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT | Request::HEADER_X_FORWARDED_PREFIX);
+        // Only trust X-Forwarded-Proto/Host for HTTPS detection — NOT X-Forwarded-For
+        // to prevent IP spoofing via fake X-Forwarded-For headers (Issue #321)
+        $trustedProxies = env('TRUSTED_PROXIES', '*');
+        $middleware->trustProxies(
+            at: $trustedProxies,
+            headers: Request::HEADER_X_FORWARDED_HOST | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT | Request::HEADER_X_FORWARDED_PREFIX
+        );
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->shouldRenderJsonWhen(function ($request) {

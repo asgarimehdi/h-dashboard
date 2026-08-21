@@ -24,14 +24,16 @@ return new class extends Component
         $excludedRegionIds = [1];
         $excludedTypeIds   = [1, 2, 3];
 
-        $this->regions = Cache::remember('point_map:regions', 300, function () use ($excludedRegionIds) {
+        $v = Cache::get('maps_version', 0);
+
+        $this->regions = Cache::remember('point_map:regions:v' . $v, 300, function () use ($excludedRegionIds) {
             return Region::whereNotIn('id', $excludedRegionIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
         });
 
-        $this->types = Cache::remember('point_map:types', 300, function () use ($excludedTypeIds) {
+        $this->types = Cache::remember('point_map:types:v' . $v, 300, function () use ($excludedTypeIds) {
             return UnitType::whereNotIn('id', $excludedTypeIds)
                 ->select('id', 'name')
                 ->get()
@@ -104,7 +106,7 @@ return new class extends Component
     </x-header>
 
     <x-card shadow class="p-0">
-        <div class="container relative">
+        <div class="relative">
             <div wire:ignore>
                 <livewire:maps.map/>
             </div>

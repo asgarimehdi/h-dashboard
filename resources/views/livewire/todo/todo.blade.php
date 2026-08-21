@@ -45,8 +45,9 @@ return new class extends Component {
         $accessService = app(AccessService::class);
         $accessibleIds = $accessService->accessibleUnitIds($user);
 
-        // Build cache key from accessible IDs + date range + user context
-        $cacheKey = 'calendar:events:' . $user->id . ':' . md5(implode(',', $accessibleIds)) . ':' . ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all');
+        // Build cache key from accessible IDs + date range + user context + version (Issue #389)
+        $calendarVersion = Cache::get('calendar_version', 0);
+        $cacheKey = 'calendar:events:' . $user->id . ':' . $calendarVersion . ':' . md5(implode(',', $accessibleIds)) . ':' . ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all');
 
         return Cache::remember($cacheKey, 120, function () use ($accessibleIds) {
             // Base query with date range filtering for performance
@@ -240,14 +241,8 @@ return new class extends Component {
      */
     private function invalidateEventCache(): void
     {
-        $user = auth()->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-        $cacheKeyBase = 'calendar:events:' . $user->id . ':' . md5(implode(',', $accessibleIds)) . ':';
-
-        // Clear all calendar event caches for this user (all date ranges)
-        foreach (['all:all', 'all:' . ($this->calendarEnd ?? 'all'), ($this->calendarStart ?? 'all') . ':all', ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all')] as $suffix) {
-            Cache::forget($cacheKeyBase . $suffix);
-        }
+        // Version-based invalidation covers all users and date ranges (Issue #389)
+        Cache::increment('calendar_version');
     }
 
     public function delete(): void

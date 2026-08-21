@@ -11,6 +11,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Attributes\Computed;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 new class extends Component
 {
@@ -95,8 +96,6 @@ new class extends Component
                     ->orWhereHas('activities', fn ($q) => $q->where('user_id', $user->id));
             });
         }
-
-        $query->accessible();
 
         if ($this->statusFilter === 'pending') {
             $query->whereIn('status', ['created', 'forwarded']);
@@ -225,9 +224,13 @@ new class extends Component
         $userId = auth()->id();
         $bulkNote = $this->bulkNote;
 
-        // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده
+        // Get accessible unit IDs for scope filtering
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده + محدوده سازمانی
         $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
             ->where('status', '!=', 'completed')
+            ->whereIn('unit_id', $accessibleIds)
             ->pluck('id');
 
         if ($ticketIds->isEmpty()) {
@@ -243,6 +246,10 @@ new class extends Component
                     'status' => 'completed',
                     'completed_at' => $now,
                 ]);
+                // Issue #378/#389: bulk update bypasses Eloquent events — bump caches manually
+                Cache::increment('report_tickets_version');
+                Cache::increment('gis_version');
+                Cache::increment('calendar_version');
 
                 // ۳. یک batch INSERT برای فعالیت‌ها
                 $activityRows = $ticketIds->map(fn($id) => [
@@ -267,6 +274,10 @@ new class extends Component
                     'status' => 'forwarded',
                     'current_assignee_id' => null,
                 ]);
+                // Issue #378/#389: bulk update bypasses Eloquent events — bump caches manually
+                Cache::increment('report_tickets_version');
+                Cache::increment('gis_version');
+                Cache::increment('calendar_version');
 
                 $activityRows = $ticketIds->map(fn($id) => [
                     'ticket_id' => $id,
@@ -304,9 +315,20 @@ new class extends Component
         $this->resetPage();
     }
 
+    public function openCommentsFor($ticketId): void
+    {
+        $this->dispatch('openComments', ticketId: (int) $ticketId);
+    }
+
     public function showTicket($id): void
     {
-        $this->showingTicket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])->findOrFail($id);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $ticket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
+            ->whereIn('unit_id', $accessibleIds)
+            ->findOrFail($id);
+            
+        $this->showingTicket = $ticket;
         $this->showModal = true;
     }
 
@@ -326,6 +348,14 @@ new class extends Component
 
     public function forward(): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        // Verify showingTicket is accessible
+        if (!$this->showingTicket || !in_array($this->showingTicket->unit_id, $accessibleIds)) {
+            $this->dispatch('swal', ['title' => 'شما مجاز به ارجاع این تیکت نیستید.', 'icon' => 'error']);
+            return;
+        }
+        
         $this->validate([
             'targetUnitId' => 'required|exists:units,id',
             'forwardNote' => 'nullable|string|max:500',
@@ -355,7 +385,10 @@ new class extends Component
 
     public function acceptTicket($ticketId): void
     {
-        $ticket = Ticket::findOrFail($ticketId);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($ticketId);
+        
         DB::transaction(function () use ($ticket) {
             $ticket->update([
                 'status' => 'accepted',
@@ -410,15 +443,27 @@ new class extends Component
 
     public function openCompletionModal($id): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($id);
+        
+        if (!$ticket) {
+            $this->dispatch('swal', ['title' => 'شما مجاز به مشاهده این تیکت نیستید.', 'icon' => 'error']);
+            return;
+        }
+        
         $this->showingTicketId = $id;
-        $this->showingTicket = Ticket::find($id);
+        $this->showingTicket = $ticket;
         $this->isCompletionModalOpen = true;
     }
 
     public function submitAction($id = null): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
         $finalId = $id ?? $this->showingTicketId;
-        $ticket = Ticket::findOrFail($finalId);
+        
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($finalId);
 
         if ($ticket->status !== 'accepted' && !$this->targetUnitId) {
             $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
@@ -649,6 +694,8 @@ new class extends Component
 
                 <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
 
+                <x-button icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
+
                 @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
                 <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
                 @endif
@@ -777,6 +824,9 @@ new class extends Component
             </div>
         </x-form>
     </x-modal>
+
+    {{-- Ticket Comments modal --}}
+    <livewire:tickets.ticket-comments />
 </div>
 
 <script>

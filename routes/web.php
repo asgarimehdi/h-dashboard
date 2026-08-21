@@ -5,9 +5,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
-// Hardware routes — accessible without auth (API tokens work separately via Sanctum)
-// safe_role_or_permission: guests pass through, authenticated users need manage_hardware permission
-Route::middleware('safe_role_or_permission:manage_hardware')->group(function () {
+// Hardware routes — require authentication and manage_hardware permission
+// (Issue #216: guests must NOT see sensitive hardware data)
+Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
 });
@@ -31,6 +31,13 @@ Route::get('/logout', function () {
 
     return redirect('/');
 });
+
+// Test route for SafeRoleOrPermission middleware
+if (app()->isLocal() || app()->environment('testing')) {
+    Route::middleware('safe_role_or_permission:test-permission')->get('/test-safe-route', function () {
+        return response('OK', 200);
+    })->name('test.safe-route');
+}
 
 // Protected routes here
 Route::middleware('auth')->group(function () {
@@ -70,6 +77,12 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/persons/import', 'kargozini.import-persons.import-persons')->name('kargozini.persons.import');
         });
 
+        // HR Dashboard (Issue #223)
+        Route::middleware('role_or_permission:view_hr_dashboard')->group(function () {
+            Route::livewire('/hr-dashboard', 'hr.dashboard')->name('hr.dashboard');
+            Route::livewire('/hr/org-chart', 'hr.org-chart')->name('hr.org-chart');
+        });
+
         Route::middleware('role_or_permission:map')->group(function () {
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');
@@ -80,6 +93,9 @@ Route::middleware('auth')->group(function () {
 
             Route::livewire('/it/wireless', 'it/wireless');
             Route::livewire('/it/networks', 'it/networks');
+
+            // GIS Dashboard
+            Route::livewire('/map', 'map.map-dashboard')->name('map');
         });
 
         Route::middleware('role_or_permission:calendar')->group(function () {
@@ -121,6 +137,7 @@ Route::middleware('auth')->group(function () {
                 })->name('op');
             });
         }
+
         // جستجوی سراسری
         Route::livewire('/search', 'search.index')->name('search');
 

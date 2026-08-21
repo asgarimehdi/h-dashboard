@@ -24,7 +24,7 @@
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
-            <x-icon name="o-tree-pine" class="w-5 h-5 text-success" />
+            <x-icon name="o-circle-stack" class="w-5 h-5 text-success" />
             نمایش درختی و جستجو
         </h4>
         <ul class="space-y-1 text-sm text-base-content/70">

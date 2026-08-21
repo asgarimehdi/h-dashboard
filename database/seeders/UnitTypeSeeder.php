@@ -38,6 +38,8 @@ class UnitTypeSeeder extends Seeder
             'فوریت', //17
             'خانه بهداشت کارگری', //18
             'بیمارستان', //19
+            'خانه های کارگری', //20
+            'HSE', //21
         ];
 
         foreach ($unitTypes as $type) {

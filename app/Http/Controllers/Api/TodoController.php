@@ -31,7 +31,8 @@ class TodoController extends Controller
             $query->where('is_completed', $request->boolean('is_completed'));
         }
 
-        $todos = $query->latest()->paginate($request->input('per_page', 15));
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $todos = $query->latest()->paginate($perPage);
 
         return TodoResource::collection($todos);
     }
@@ -46,13 +47,15 @@ class TodoController extends Controller
             'unit_id' => 'nullable|exists:units,id',
         ]);
 
-        $unitId = $validated['unit_id'] ?? $request->user()->person?->u_id;
+        $user = $request->user();
 
-        if ($unitId) {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-            if (! in_array($unitId, $accessibleIds)) {
-                return response()->json(['message' => 'Unauthorized to create todo in this unit.'], 403);
-            }
+        // Explicit unit_id wins; fall back to the user's primary unit (pivot is_primary),
+        // then to the person's unit — never silently null (#431)
+        $unitId = $validated['unit_id'] ?? $user->primaryUnit()?->id ?? $user->person?->u_id;
+
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        if (! $unitId || ! in_array($unitId, $accessibleIds)) {
+            return response()->json(['message' => 'Unauthorized to create todo in this unit.'], 403);
         }
 
         $todo = Todo::create([
@@ -65,14 +68,15 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ], 201);
     }
 
-    public function show(Todo $todo): JsonResponse
+    public function show(Request $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -84,8 +88,9 @@ class TodoController extends Controller
 
     public function update(Request $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to update this todo.'], 403);
         }
 
@@ -100,14 +105,15 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ]);
     }
 
-    public function destroy(Todo $todo): JsonResponse
+    public function destroy(Request $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to delete this todo.'], 403);
         }
 
@@ -119,10 +125,11 @@ class TodoController extends Controller
         ]);
     }
 
-    public function toggleComplete(Todo $todo): JsonResponse
+    public function toggleComplete(Request $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        if ($todo->unit_id && ! in_array($todo->unit_id, $accessibleIds)) {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Unauthorized to modify this todo.'], 403);
         }
 
@@ -130,7 +137,7 @@ class TodoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TodoResource($todo),
+            'data' => new TodoResource($todo->load('unit')),
         ]);
     }
 }

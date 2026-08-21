@@ -2,13 +2,24 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Hardware extends Model
 {
     use PersianNormalizer;
+    use HasFactory;
+
+    /**
+     * Flag to suppress audit logging during bulk operations.
+     * @var bool
+     */
+    public static bool $suppressAudit = false;
 
     protected $table = 'hardwares';
 
@@ -47,15 +58,54 @@ class Hardware extends Model
         static::saving(function (self $model) {
             $fields = ['pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type', 'switch', 'vlan', 'motherboard', 'comments'];
             foreach ($fields as $field) {
-                if ($model->isDirty($field) && !empty($model->$field) && is_string($model->$field)) {
+                if ($model->isDirty($field) && ! empty($model->$field) && is_string($model->$field)) {
                     $model->$field = self::normalizeForSearch($model->$field);
                 }
             }
         });
+
+        // Issue #217: invalidate cached hardware stats on any write (create/update/delete).
+        // Uses a wildcard-friendly prefix so all per-user scope keys are cleared at once.
+        static::saved(fn () => self::flushStatsCache());
+        static::deleted(fn () => self::flushStatsCache());
+    }
+
+    /**
+     * Invalidate all cached hardware stats (any organizational scope).
+     *
+     * Stats cache keys are `hardware_stats:v<N>:<md5(accessibleIds)>`.
+     * A write may affect any scope, so bumping the version counter makes all
+     * previously cached scope keys unreachable; they expire naturally via TTL.
+     * This is driver-agnostic (array/file/redis all support increment) and
+     * avoids flushing unrelated cached data (access units, notifications...).
+     */
+    public static function flushStatsCache(): void
+    {
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('hardware_stats');
+        $cache->increment('gis'); // Hardware changes affect GIS data
+        $cache->increment('maps'); // Hardware positions affect the map
+        $cache->increment('dashboard'); // Hardware counts feed the dashboard
     }
 
     public function person(): BelongsTo
     {
         return $this->belongsTo(Person::class, 'n_code', 'n_code');
+    }
+
+    /**
+     * Audit trail (unified, Issue #246) — replaces the old histories relation.
+     */
+    public function audits(): HasMany
+    {
+        return $this->hasMany(HardwareAudit::class);
+    }
+
+    /**
+     * @deprecated Use audits() instead (Issue #246 merge).
+     */
+    public function histories(): HasMany
+    {
+        return $this->hasMany(HardwareAudit::class, 'hardware_id');
     }
 }

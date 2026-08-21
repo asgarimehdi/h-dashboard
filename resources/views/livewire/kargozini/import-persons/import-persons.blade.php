@@ -11,7 +11,7 @@
         <x-help:modal wireModel="showHelpModal" />
 
         <div class="alert alert-info mb-6">
-            <x-icon name="o-info-circle" class="w-5 h-5" />
+            <x-icon name="o-information-circle" class="w-5 h-5" />
             <span>
                 فرمت‌های پشتیبانی شده: <strong>.xlsx، .xls، .csv</strong> (حداکثر ۱۰ مگابایت).
                 فایل باید شامل ستون‌های: <code class="px-1 bg-base-200 rounded">n_code</code>، <code class="px-1 bg-base-200 rounded">f_name</code>، <code class="px-1 bg-base-200 rounded">l_name</code>، <code class="px-1 bg-base-200 rounded">t_id</code>، <code class="px-1 bg-base-200 rounded">e_id</code>، <code class="px-1 bg-base-200 rounded">s_id</code>، <code class="px-1 bg-base-200 rounded">r_id</code>، <code class="px-1 bg-base-200 rounded">u_id</code> باشد.
@@ -40,7 +40,7 @@
                     @enderror
                 </div>
 
-                <x-button wire:click="importPreview" class="btn-primary w-full max-w-xl" :loading="wire:loading">
+                <x-button wire:click="importPreview" class="btn-primary w-full max-w-xl" spinner="wire:loading">
                     <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                     پیش‌نمایش و مقایسه
                 </x-button>
@@ -136,17 +136,17 @@
 
                 <div class="flex justify-end gap-3">
                     <x-button wire:click="cancelImport" variant="ghost">
-                        <x-icon name="o-x" class="w-5 h-5" />
+                        <x-icon name="o-x-mark" class="w-5 h-5" />
                         انصراف
                     </x-button>
-                    <x-button wire:click="confirmImport" class="btn-primary" :loading="wire:loading">
+                    <x-button wire:click="confirmImport" class="btn-primary" spinner="wire:loading">
                         <x-icon name="o-check" class="w-5 h-5" />
                         تایید و انجام ایمپورت
                     </x-button>
                 </div>
             </div>
         @endif
-    </div</div>
+    </div></div>
 
 @push('scripts')
 <script>

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Unit;
+use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
 
@@ -21,7 +22,10 @@ return new class extends Component {
 
     public function loadData(): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
         $this->rootUnits = Unit::whereNull('parent_id')
+            ->whereIn('id', $accessibleIds)
             ->with(['childrenRecursive', 'unitType'])
             ->get();
     }
@@ -29,9 +33,12 @@ return new class extends Component {
     public function updatedSearch(): void
     {
         $this->expanded = [];
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         if (strlen($this->search) > 2) {
-            $matchingUnits = Unit::where('name', 'LIKE', "%{$this->search}%")->get();
+            $matchingUnits = Unit::where('name', 'LIKE', "%{$this->search}%")
+                ->whereIn('id', $accessibleIds)
+                ->get();
 
             foreach ($matchingUnits as $unit) {
                 $this->expandParents($unit);
@@ -63,12 +70,19 @@ return new class extends Component {
 
     public function selectUnit(int $id): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        if (! in_array($id, $accessibleIds)) {
+            $this->error('شما مجاز به مشاهده این واحد نیستید.', position: 'toast-bottom');
+            return;
+        }
+
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
         $descendantIds = Unit::descendantIds($id);
         $this->descendantUserCount = \App\Models\User::whereHas('units', fn($q) => $q->whereIn('unit_id', $descendantIds))->count();
         $this->directUserCount = $this->selectedUnit->assignedUsers->count();
     }
-    
+
 }; ?>
 
 <div>

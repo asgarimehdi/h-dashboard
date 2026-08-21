@@ -16,6 +16,10 @@ class TodoResource extends JsonResource
             'end_at' => $this->end_at,
             'is_completed' => $this->is_completed,
             'unit_id' => $this->unit_id,
+            'unit' => $this->whenLoaded('unit', fn () => [
+                'id' => $this->unit->id,
+                'name' => $this->unit->name,
+            ]),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

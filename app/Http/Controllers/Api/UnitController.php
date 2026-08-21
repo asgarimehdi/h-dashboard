@@ -10,12 +10,13 @@ use Illuminate\Http\Request;
 
 class UnitController extends Controller
 {
-    public function index(): array
+    public function index(Request $request): array
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+        $perPage = min($request->integer('per_page', 15), 100);
         $units = Unit::whereIn('id', $ids)
             ->with('unitType:id,name')
-            ->paginate();
+            ->paginate($perPage);
 
         return [
             'data' => $units->items(),
@@ -28,9 +29,9 @@ class UnitController extends Controller
         ];
     }
 
-    public function show(Unit $unit): JsonResponse
+    public function show(Request $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -53,6 +54,13 @@ class UnitController extends Controller
             'lng' => 'nullable|numeric|between:-180,180',
         ]);
 
+        // Check organizational scope for parent_id and region_id
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        
+        if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
+            return response()->json(['message' => 'Parent unit not accessible.'], 403);
+        }
+
         $unit = Unit::create($validated);
 
         // Invalidate AccessService cache if hierarchy changed (new child created)
@@ -68,7 +76,7 @@ class UnitController extends Controller
 
     public function update(Request $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -84,10 +92,28 @@ class UnitController extends Controller
             'lng' => 'nullable|numeric|between:-180,180',
         ]);
 
-        // Check if hierarchy is being changed
-        $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $unit->parent_id;
+        // Check organizational scope for parent_id
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        
+        if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
+            return response()->json(['message' => 'Parent unit not accessible.'], 403);
+        }
 
-        $unit->update($validated);
+        $oldParentId = $unit->parent_id; // Capture before update for hierarchy-change detection (#371)
+
+        // Prevent hierarchy cycles: parent cannot be the unit itself or one of its descendants (#324)
+        if (empty($validated['parent_id'])) {
+            $unit->update($validated);
+        } else {
+            $forbiddenIds = Unit::descendantIds($unit->id)->push($unit->id)->all();
+            if (in_array($validated['parent_id'], $forbiddenIds)) {
+                return response()->json(['message' => 'Cannot set a descendant or self as parent (would create a cycle).'], 422);
+            }
+            $unit->update($validated);
+        }
+
+        // Check if hierarchy is being changed (compare against pre-update value)
+        $hierarchyChanged = $request->has('parent_id') && $request->input('parent_id') !== $oldParentId;
 
         // Invalidate AccessService cache for all users if hierarchy changed
         if ($hierarchyChanged) {
@@ -100,9 +126,9 @@ class UnitController extends Controller
         ]);
     }
 
-    public function destroy(Unit $unit): JsonResponse
+    public function destroy(Request $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds();
+        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);

@@ -26,3 +26,8 @@ yarn-error.log
 /graphify-out
 .mimocode
 !.mimocode/plans/.env.testing
+cookies.txt
+.codegraph
+/opencode.json
+coverage.xml
+coverage/

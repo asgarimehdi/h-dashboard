@@ -16,6 +16,7 @@ return new class extends Component
     public int $pendingTickets = 0;
     public int $totalTodos = 0;
     public int $completedTodos = 0;
+    public bool $showHelpModal = false;
 
     public function mount(): void
     {
@@ -60,9 +61,12 @@ return new class extends Component
     {{-- Header --}}
     <x-header title="پروفایل من" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="profile" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" />
 
     {{-- User Info Card --}}
     <x-card shadow class="mb-6">

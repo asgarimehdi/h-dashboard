@@ -37,6 +37,10 @@ class UnitTypeRelationshipSeeder extends Seeder
             [17, 4],
             [18, 4],
             [19, 4],
+            [20, 4], // خانه های کارگری child of شبکه بهداشت
+            [21, 4], // HSE child of شبکه بهداشت
+            [18, 20], // خانه بهداشت کارگری child of خانه های کارگری
+            [18, 21], // خانه بهداشت کارگری child of HSE
         ];
 
         foreach ($relationships as [$childId, $parentId]) {

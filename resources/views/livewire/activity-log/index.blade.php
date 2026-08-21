@@ -46,14 +46,19 @@ return new class extends Component
     }
 
     /**
-     * Get accessible user IDs for current user's organizational scope
+     * Get accessible user IDs for current user's organizational scope.
+     * Cached 5 min per scope — called from both logs() and getTypeStats().
      */
     private function getAccessibleUserIds(): array
     {
         $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
-        return \App\Models\User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleUnitIds))
-            ->pluck('id')
-            ->toArray();
+        $cacheKey = 'activity_log:accessible_users:' . md5(implode(',', $accessibleUnitIds));
+
+        return Cache::remember($cacheKey, 300, function () use ($accessibleUnitIds) {
+            return \App\Models\User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleUnitIds))
+                ->pluck('id')
+                ->toArray();
+        });
     }
 
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon

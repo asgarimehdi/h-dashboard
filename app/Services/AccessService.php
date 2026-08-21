@@ -41,7 +41,9 @@ class AccessService
         }
 
         $sessionUnitId = session('current_unit_id', 'none');
-        $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $version = $cache->getVersion('unit_hierarchy');
+        $cacheKey = "accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
 
         return Cache::remember(
             $cacheKey,
@@ -58,12 +60,19 @@ class AccessService
         $user ??= auth()->user();
 
         if ($user) {
+            // Bump the version counter so ANY versioned accessible_units key for this
+            // hierarchy (including keys written under an older version) becomes
+            // unreachable instead of surviving until TTL (fix for stale-cache bug).
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('unit_hierarchy');
+
             $currentUnitId = session('current_unit_id');
             $sessionUnitId = session('current_unit_id', 'none');
             $baseUnitIds = $currentUnitId
                 ? [$currentUnitId]
                 : $user->units()->pluck('units.id')->toArray();
 
+            // Forget the legacy unversioned key too.
             $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
             Cache::forget($cacheKey);
         }
@@ -74,6 +83,8 @@ class AccessService
      */
     public function clearAllCaches(): void
     {
-        Cache::flush();
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('unit_hierarchy');
+        $cache->increment('gis');
     }
 }

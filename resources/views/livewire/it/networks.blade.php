@@ -182,9 +182,6 @@ return new class extends Component {
     <x-help:modal wireModel="showHelpModal" />
 
     <!-- TABLE  -->
-    <x-help:modal wireModel="showHelpModal" />
-
-    <!-- TABLE  -->
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
             <div class="flex-1">

@@ -149,6 +149,102 @@ class UnitSeeder extends Seeder
                 'updated_at' => '2025-04-07 23:00:12',
             ],
             [
+                'id' => 793,
+                'region_id' => 9,
+                'parent_id' => 11,
+                'name' => 'خانه های کارگری طارم',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری طارم',
+                'lat' => '36.931218',
+                'lng' => '48.943604',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 795,
+                'region_id' => 2,
+                'parent_id' => 4,
+                'name' => 'خانه های کارگری زنجان',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری زنجان',
+                'lat' => '36.669488',
+                'lng' => '48.470819',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 797,
+                'region_id' => 3,
+                'parent_id' => 5,
+                'name' => 'خانه های کارگری ابهر',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری ابهر',
+                'lat' => '36.147246',
+                'lng' => '49.22877',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 799,
+                'region_id' => 4,
+                'parent_id' => 6,
+                'name' => 'خانه های کارگری ایجرود',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری ایجرود',
+                'lat' => '36.446004',
+                'lng' => '48.299503',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 801,
+                'region_id' => 5,
+                'parent_id' => 7,
+                'name' => 'خانه های کارگری خدابنده',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری خدابنده',
+                'lat' => '36.130462',
+                'lng' => '48.590609',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 803,
+                'region_id' => 6,
+                'parent_id' => 8,
+                'name' => 'خانه های کارگری خرمدره',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری خرمدره',
+                'lat' => '36.20523',
+                'lng' => '49.188122',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 805,
+                'region_id' => 7,
+                'parent_id' => 9,
+                'name' => 'خانه های کارگری ماهنشان',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری ماهنشان',
+                'lat' => '36.739515',
+                'lng' => '47.685113',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
+                'id' => 807,
+                'region_id' => 8,
+                'parent_id' => 10,
+                'name' => 'خانه های کارگری سلطانیه',
+                'unit_type_id' => 20,
+                'description' => 'مجموعه خانه های بهداشت کارگری سلطانیه',
+                'lat' => '36.434293',
+                'lng' => '48.789264',
+                'created_at' => '2025-04-07 23:00:12',
+                'updated_at' => '2025-04-07 23:00:12',
+            ],
+            [
                 'id' => 12,
                 'region_id' => 4,
                 'parent_id' => 6,
@@ -902,7 +998,7 @@ class UnitSeeder extends Seeder
                 'id' => 87,
                 'region_id' => 5,
                 'parent_id' => 7,
-                'name' => ' جرین',
+                'name' => 'جرین',
                 'unit_type_id' => 6,
                 'lat' => 35.934778,
                 'lng' => 48.791944,
@@ -951,7 +1047,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 92,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'ایران ترانسفو',
                 'unit_type_id' => 18,
                 'lat' => 36.649897,
@@ -961,7 +1057,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 93,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'لایی ساز',
                 'unit_type_id' => 18,
                 'lat' => 36.598371,
@@ -971,7 +1067,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 94,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'نیک ریس',
                 'unit_type_id' => 18,
                 'lat' => 36.607846,
@@ -981,7 +1077,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 95,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'سرب وروی ملی ایران',
                 'unit_type_id' => 18,
                 'lat' => 36.623,
@@ -991,7 +1087,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 96,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'نخ تایر صبا',
                 'unit_type_id' => 18,
                 'lat' => 36.603109,
@@ -1001,7 +1097,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 97,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'راشا',
                 'unit_type_id' => 18,
                 'lat' => 36.582073,
@@ -1011,7 +1107,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 98,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'ارس زنجان',
                 'unit_type_id' => 18,
                 'lat' => 36.582418,
@@ -1021,7 +1117,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 99,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'چشمه سار',
                 'unit_type_id' => 18,
                 'lat' => 36.581091,
@@ -1031,7 +1127,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 100,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'صانع روی',
                 'unit_type_id' => 18,
                 'lat' => 36.6303,
@@ -1041,7 +1137,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 101,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'متین روی',
                 'unit_type_id' => 18,
                 'lat' => 36.6305,
@@ -1051,7 +1147,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 102,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'کانه آرایی آریا',
                 'unit_type_id' => 18,
                 'lat' => 36.6305,
@@ -1061,7 +1157,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 103,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'زرین معدن آسیا',
                 'unit_type_id' => 18,
                 'lat' => 36.631251,
@@ -1071,7 +1167,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 104,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'ذوب روی صبا',
                 'unit_type_id' => 18,
                 'lat' => 36.6311,
@@ -1091,7 +1187,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 106,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'سازند روی',
                 'unit_type_id' => 18,
                 'lat' => 36.6278,
@@ -1101,7 +1197,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 107,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'زرین روی',
                 'unit_type_id' => 18,
                 'lat' => 36.627927,
@@ -1111,7 +1207,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 108,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'خالص سازان روی',
                 'unit_type_id' => 18,
                 'lat' => 36.624276,
@@ -1121,7 +1217,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 109,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'صنعت روی زنگان',
                 'unit_type_id' => 18,
                 'lat' => 36.6383,
@@ -1131,7 +1227,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 110,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'سمن آسا',
                 'unit_type_id' => 18,
                 'lat' => 36.709268,
@@ -1141,7 +1237,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 111,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'مددبخش',
                 'unit_type_id' => 18,
                 'lat' => 36.7092,
@@ -1151,7 +1247,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 112,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'توسعه پستها',
                 'unit_type_id' => 18,
                 'lat' => 36.709956,
@@ -1161,7 +1257,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 113,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'پودررنگ کوثر',
                 'unit_type_id' => 18,
                 'lat' => 36.7077,
@@ -1171,7 +1267,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 114,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'راهان توان',
                 'unit_type_id' => 18,
                 'lat' => 36.7071,
@@ -1181,7 +1277,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 115,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'مرمرین سنگ',
                 'unit_type_id' => 18,
                 'lat' => 36.7075,
@@ -1191,7 +1287,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 116,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'نوردیاوران',
                 'unit_type_id' => 18,
                 'lat' => 36.714,
@@ -1201,7 +1297,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 117,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'تسکو',
                 'unit_type_id' => 18,
                 'lat' => 36.716011,
@@ -1221,7 +1317,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 119,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'ریخته گری آلومینیم',
                 'unit_type_id' => 18,
                 'lat' => 36.069433,
@@ -1251,7 +1347,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 122,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'پارس حیات',
                 'unit_type_id' => 18,
                 'lat' => 36.123975,
@@ -1261,7 +1357,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 123,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'دیسال',
                 'unit_type_id' => 18,
                 'lat' => 36.094886,
@@ -1271,7 +1367,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 124,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'ذوب آهن نگین البرز غرب',
                 'unit_type_id' => 18,
                 'lat' => 36.129903,
@@ -1281,7 +1377,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 125,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'ایریکو',
                 'unit_type_id' => 18,
                 'lat' => 36.129972,
@@ -1291,7 +1387,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 126,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'سیم وکابل',
                 'unit_type_id' => 18,
                 'lat' => 36.103763,
@@ -1301,7 +1397,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 127,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'ساینا',
                 'unit_type_id' => 18,
                 'lat' => 36.071302,
@@ -1311,7 +1407,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 128,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'ذوب البرز',
                 'unit_type_id' => 18,
                 'lat' => 36.125349,
@@ -1321,7 +1417,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 129,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'پرجین',
                 'unit_type_id' => 18,
                 'lat' => 36.321055,
@@ -1331,7 +1427,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 130,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'پرریس',
                 'unit_type_id' => 18,
                 'lat' => 36.321799,
@@ -1341,7 +1437,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 131,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'پارس دکور',
                 'unit_type_id' => 18,
                 'lat' => 36.322127,
@@ -1351,7 +1447,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 132,
                 'region_id' => 3,
-                'parent_id' => 5,
+                'parent_id' => 797,
                 'name' => 'نساجی رازی',
                 'unit_type_id' => 18,
                 'lat' => 36.107491,
@@ -1361,7 +1457,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 133,
                 'region_id' => 6,
-                'parent_id' => 8,
+                'parent_id' => 803,
                 'name' => 'هوراطب',
                 'unit_type_id' => 18,
                 'lat' => 36.26141,
@@ -1371,7 +1467,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 134,
                 'region_id' => 6,
-                'parent_id' => 8,
+                'parent_id' => 803,
                 'name' => 'مینو',
                 'unit_type_id' => 18,
                 'lat' => 36.198781,
@@ -1381,7 +1477,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 135,
                 'region_id' => 6,
-                'parent_id' => 8,
+                'parent_id' => 803,
                 'name' => 'سیلیس آرا',
                 'unit_type_id' => 18,
                 'lat' => 36.251507,
@@ -1391,7 +1487,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 136,
                 'region_id' => 6,
-                'parent_id' => 8,
+                'parent_id' => 803,
                 'name' => 'معدن کاران نسوز',
                 'unit_type_id' => 18,
                 'lat' => 36.253722,
@@ -1401,7 +1497,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 137,
                 'region_id' => 6,
-                'parent_id' => 8,
+                'parent_id' => 803,
                 'name' => 'کشتارگاه پرطلائی',
                 'unit_type_id' => 18,
                 'lat' => 36.252251,
@@ -1411,7 +1507,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 138,
                 'region_id' => 4,
-                'parent_id' => 6,
+                'parent_id' => 799,
                 'name' => 'سیمان خمسه',
                 'unit_type_id' => 18,
                 'lat' => 36.4127,
@@ -1421,7 +1517,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 139,
                 'region_id' => 4,
-                'parent_id' => 6,
+                'parent_id' => 799,
                 'name' => 'مجتمع زرین',
                 'unit_type_id' => 18,
                 'lat' => 36.388469,
@@ -1431,7 +1527,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 140,
                 'region_id' => 5,
-                'parent_id' => 7,
+                'parent_id' => 801,
                 'name' => 'سیمان زنجان',
                 'unit_type_id' => 18,
                 'lat' => 36.27,
@@ -1441,7 +1537,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 141,
                 'region_id' => 8,
-                'parent_id' => 10,
+                'parent_id' => 807,
                 'name' => 'فرش سهند',
                 'unit_type_id' => 18,
                 'lat' => 36.517845,
@@ -1451,7 +1547,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 142,
                 'region_id' => 8,
-                'parent_id' => 10,
+                'parent_id' => 807,
                 'name' => 'کریستال',
                 'unit_type_id' => 18,
                 'lat' => 36.424528,
@@ -1461,7 +1557,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 143,
                 'region_id' => 8,
-                'parent_id' => 10,
+                'parent_id' => 807,
                 'name' => 'آرین توتون صنعت',
                 'unit_type_id' => 18,
                 'lat' => 36.455359,
@@ -1471,7 +1567,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 144,
                 'region_id' => 7,
-                'parent_id' => 9,
+                'parent_id' => 805,
                 'name' => 'کالسیمین',
                 'unit_type_id' => 18,
                 'lat' => 36.568115,
@@ -1481,7 +1577,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 145,
                 'region_id' => 7,
-                'parent_id' => 9,
+                'parent_id' => 805,
                 'name' => 'معدن انگوران',
                 'unit_type_id' => 18,
                 'lat' => 36.61,
@@ -1671,7 +1767,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 164,
                 'region_id' => 4,
-                'parent_id' => 6,
+                'parent_id' => 799,
                 'name' => 'ریخته گری سهند',
                 'unit_type_id' => 18,
                 'lat' => 36.483141,
@@ -1771,7 +1867,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 174,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'زنجان محور خودرو',
                 'unit_type_id' => 18,
                 'lat' => 36.71288,
@@ -1781,7 +1877,7 @@ class UnitSeeder extends Seeder
             [
                 'id' => 175,
                 'region_id' => 2,
-                'parent_id' => 4,
+                'parent_id' => 795,
                 'name' => 'پارس سویچ',
                 'unit_type_id' => 18,
                 'lat' => 36.642839,
@@ -2542,7 +2638,7 @@ class UnitSeeder extends Seeder
                 'id' => 251,
                 'region_id' => 7,
                 'parent_id' => 21,
-                'name' => ' خانه بهداشت تات قشلاق',
+                'name' => 'خانه بهداشت تات قشلاق',
                 'unit_type_id' => 9,
                 'lat' => 36.820748,
                 'lng' => 47.259893,
@@ -3382,7 +3478,7 @@ class UnitSeeder extends Seeder
                 'id' => 335,
                 'region_id' => 3,
                 'parent_id' => 33,
-                'name' => ' پیرسقا',
+                'name' => 'پیرسقا',
                 'unit_type_id' => 9,
                 'lat' => 36.332097,
                 'lng' => 49.014453,
@@ -3392,7 +3488,7 @@ class UnitSeeder extends Seeder
                 'id' => 336,
                 'region_id' => 3,
                 'parent_id' => 33,
-                'name' => ' خراسانلو',
+                'name' => 'خراسانلو',
                 'unit_type_id' => 9,
                 'lat' => 36.366121,
                 'lng' => 49.092148,
@@ -7810,9 +7906,32 @@ class UnitSeeder extends Seeder
             ],
         ];
 
-        // وارد کردن داده‌ها
+        // وارد کردن داده‌ها — bulk insert (fast) since Unit has no model hooks.
+        // Rows have inconsistent key sets — normalize them to a single column order.
+        $columns = [];
         foreach ($units as $unit) {
-            Unit::create($unit);
+            foreach (array_keys($unit) as $key) {
+                $columns[$key] = true;
+            }
+        }
+        $columns['created_at'] = true;
+        $columns['updated_at'] = true;
+        $columns = array_keys($columns);
+
+        $now = now()->toDateTimeString();
+        $normalized = [];
+        foreach ($units as $unit) {
+            $row = [];
+            foreach ($columns as $column) {
+                $row[$column] = $unit[$column] ?? (in_array($column, ['created_at', 'updated_at']) ? $now : null);
+            }
+            $normalized[] = $row;
+        }
+
+        unset($units);
+
+        foreach (array_chunk($normalized, 200) as $chunk) {
+            DB::table('units')->insert($chunk);
         }
 
         $maxId = DB::table('units')->max('id');

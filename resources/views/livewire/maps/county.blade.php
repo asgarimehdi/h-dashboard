@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Region;
+use App\Models\Unit;
+use App\Services\AccessService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -11,9 +13,21 @@ return new class extends Component
 
     public function mount(): void
     {
-        $this->regions = Cache::remember('county:regions_with_boundaries', 300, function () {
+        $this->loadData();
+    }
+
+    public function loadData(): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        
+        $accessibleRegionIds = Unit::whereIn('id', $accessibleIds)
+            ->whereNotNull('region_id')
+            ->pluck('region_id');
+
+$this->regions = Cache::remember('county:regions_with_boundaries:v' . Cache::get('maps_version', 0) . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
+                ->whereIn('regions.id', $accessibleRegionIds)
                 ->select([
                     'regions.id',
                     'regions.name',
@@ -40,7 +54,7 @@ return new class extends Component
     </x-header>
 
     <x-card shadow class="p-0">
-        <div class="container">
+        <div class="relative">
             <livewire:maps.map/>
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">

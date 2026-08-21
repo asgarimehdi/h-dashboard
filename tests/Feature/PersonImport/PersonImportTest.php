@@ -9,6 +9,7 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
@@ -20,7 +21,7 @@ class PersonImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\PermissionSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     protected function createTestData(): array
@@ -54,12 +55,12 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new PersonImport();
+        $import = new PersonImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -78,12 +79,12 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "1234567890\tاحمد\tاحمدی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "1234567890\tاحمد\tاحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new PersonImport();
+        $import = new PersonImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -102,12 +103,12 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "1234567890\tاحمد\tمحمدی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new PersonImport();
+        $import = new PersonImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -139,13 +140,13 @@ class PersonImportTest extends TestCase
         ]);
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t" . $otherUnit->id . "\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t".$otherUnit->id."\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
         // Import with only the first unit's accessible IDs
-        $import = new PersonImport();
+        $import = new PersonImport;
         $import->setAccessibleUnitIds([$data['unit']->id]);
         Excel::import($import, $file);
 
@@ -163,12 +164,12 @@ class PersonImportTest extends TestCase
         $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "9876543210\tعلی\tرضایی\t1\t1\t1\t1\t" . $data['unit']->id . "\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new PersonImport();
+        $import = new PersonImport;
         $import->setSelectedActions([
             'row_2' => 'create',
         ]);
@@ -193,10 +194,10 @@ class PersonImportTest extends TestCase
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
         $csvContent .= "\t\t\t1\t1\t1\t1\t1\n"; // Missing required fields
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new PersonImport();
+        $import = new PersonImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -220,18 +221,18 @@ class PersonImportTest extends TestCase
         $radif2 = Radif::create(['name' => 'ردیف 2']);
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
-        $csvContent .= "1234567890\tاکبر\tاحمدی\t{$tahsil2->id}\t{$estekhdam2->id}\t{$semat2->id}\t{$radif2->id}\t" . $data['unit']->id . "\n";
+        $csvContent .= "1234567890\tاکبر\tاحمدی\t{$tahsil2->id}\t{$estekhdam2->id}\t{$semat2->id}\t{$radif2->id}\t".$data['unit']->id."\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'person_import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new PersonImport();
+        $import = new PersonImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
 
         // Debug output
-        error_log('Test results: ' . json_encode($results, JSON_PRETTY_PRINT));
+        error_log('Test results: '.json_encode($results, JSON_PRETTY_PRINT));
 
         $this->assertEquals(1, $results['updated']);
         $changes = $results['preview'][0]['changes'] ?? [];

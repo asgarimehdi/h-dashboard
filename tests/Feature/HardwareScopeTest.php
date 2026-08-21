@@ -7,12 +7,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+uses(TestCase::class, RefreshDatabase::class);
 
 /**
  * Issue #201: hardware Livewire component person search/validation
  * must enforce organizational scope — no cross-unit person data leakage.
  */
-
 beforeEach(function () {
     Session::flush();
 });
@@ -41,7 +44,7 @@ function makeUnitAndPerson(string $unitName, string $nCode, string $fName, strin
 function makeUserInUnit(Unit $unit): User
 {
     // User must correspond to an existing person (users.n_code FK)
-    $nCode = (string) random_int(1000000000, 2147483647);
+    $nCode = (string) fake()->unique()->numerify('##########');
     $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
     $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
     $sId = DB::table('semats')->insertGetId(['name' => 'Test']);

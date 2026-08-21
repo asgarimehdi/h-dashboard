@@ -72,6 +72,24 @@ return [
             'after_commit' => false,
         ],
 
+        'redis-maintenance' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'maintenance',
+            'retry_after' => 300,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
+        'redis-reports' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'reports',
+            'retry_after' => 600,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
     ],
 
     /*

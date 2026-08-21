@@ -11,17 +11,24 @@ class Todo extends Model
 {
     use HasFactory;
     use HasOrganizationalScope;
+
     protected $fillable = [
         'title',
         'start_at',
         'end_at',
         'is_completed',
         'unit_id',
+        'user_id',
     ];
 
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     // تیکت‌های مرتبط با این وظیفه

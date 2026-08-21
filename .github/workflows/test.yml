@@ -1,0 +1,76 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, beta, test]
+  pull_request:
+    branches: [main, beta, test]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:latest
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pgsql, redis, pcntl, bcmath
+          coverage: pcov
+      - name: Cache Composer
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+      - name: Run tests (parallel)
+        run: ./vendor/bin/pest --parallel --coverage --min=80
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+
+  mutation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:latest
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pgsql, redis, pcntl, bcmath
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+      - name: Run mutation tests
+        run: ./vendor/bin/pest --mutate --min=80 --covered-only --parallel

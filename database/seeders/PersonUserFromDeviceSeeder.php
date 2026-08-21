@@ -12,181 +12,23 @@ use Spatie\Permission\Models\Role;
 
 class PersonUserFromDeviceSeeder extends Seeder
 {
-    private array $locationCache = [];
+    private array $unitCache = [];
+
     private array $sematCache = [];
+
     private array $radifCache = [];
 
-    private array $roleMap = [
-        // Clinical / Expert
-        'پزشک' => 'expert',
-        'دندانپزشک' => 'expert',
-        'ماما' => 'expert',
-        'آزمایشگاه' => 'expert',
-        'ژنتیک' => 'expert',
-        'پرستاری' => 'expert',
-        'داروخانه' => 'expert',
-        // Health workers
-        'بهورز' => 'expert',
-        'مراقب سلامت' => 'expert',
-        'مراقب ناظر' => 'expert',
-        'بهداشت محیط' => 'expert',
-        'بهداشت حرفه ای' => 'expert',
-        'بهداشت خانواده' => 'expert',
-        'بهداشت مدارس' => 'expert',
-        'بهداشت روان' => 'expert',
-        'سلامت روان' => 'expert',
-        'تغذیه' => 'expert',
-        'واکسیناسیون' => 'expert',
-        'مشاوره' => 'expert',
-        'فوریت' => 'expert',
-        'ناظر' => 'expert',
-        'نظارت بر درمان' => 'expert',
-        'بیماری واگیر' => 'expert',
-        'بیماریهای واگیر' => 'expert',
-        'بیماریهای غیر واگیر' => 'expert',
-        // Management
-        'مدیریت' => 'unit_manager',
-        'ریاست' => 'unit_manager',
-        'معاونت بهداشت' => 'unit_manager',
-        // Admin / Staff
-        'کارشناس آی تی' => 'user',
-        'آی تی' => 'user',
-        'حسابدار' => 'user',
-        'اسناد' => 'user',
-        'بایگانی' => 'user',
-        'امور حقوقی' => 'user',
-        'امور عمومی' => 'user',
-        'اموال' => 'user',
-        'انبار' => 'user',
-        'انبار دارویی' => 'user',
-        'تدارکات' => 'user',
-        'تجهیزات پزشکی' => 'user',
-        'حراست' => 'user',
-        'دبیرخانه' => 'user',
-        'دفتر فنی' => 'user',
-        'دفتر مدیریت' => 'user',
-        'روابط عمومی' => 'user',
-        'گزینش' => 'user',
-        'گسترش' => 'user',
-        'نگهبانی' => 'user',
-        'کارگزینی' => 'user',
-        'غذا و دارو' => 'user',
-        'آموزش سلامت' => 'user',
-        'مربی' => 'user',
-        'خدمات' => 'user',
-        'شخصی' => 'user',
-        'دیده وری' => 'user',
-        'کلاس' => 'user',
-        'پذیرش' => 'user',
-        'تایمکس' => 'user',
-        'بحران' => 'user',
-    ];
-
-    // Map raw devices.unit values to proper semat names
-    private array $sematMap = [
-        'پزشک' => 'پزشک',
-        'دندانپزشک' => 'دندانپزشک',
-        'ماما' => 'ماما',
-        'بهورز' => 'بهورز',
-        'بهورزی' => 'بهورز',
-        'مراقب سلامت' => 'مراقب سلامت',
-        'ناظر' => 'ناظر',
-        'مراقب ناظر' => 'مراقب ناظر',
-        'بهداشت محیط' => 'بهداشت محیط',
-        'بهداشت حرفه ای' => 'بهداشت حرفه ای',
-        'بهداشت خانواده' => 'بهداشت خانواده',
-        'بهداشت مدارس' => 'بهداشت مدارس',
-        'سلامت روان' => 'بهداشت روان',
-        'روان' => 'بهداشت روان',
-        'تغذیه' => 'تغذیه',
-        'واکسیناسیون' => 'واکسیناسیون',
-        'آزمایشگاه' => 'آزمایشگاه',
-        'داروخانه' => 'داروخانه',
-        'پرستاری' => 'پرستاری',
-        'مشاوره ازدواج' => 'مشاوره',
-        'مشاوره اعتیاد' => 'مشاوره',
-        'مشاوره رفتاری' => 'مشاوره',
-        'ژنتیک' => 'ژنتیک',
-        'پذیرش' => 'پذیرش',
-        'فوریت' => 'فوریت',
-        'آی تی' => 'کارشناس آی تی',
-        'حسابدار' => 'حسابدار',
-        'اسناد' => 'اسناد',
-        'بایگانی' => 'بایگانی',
-        'اموال' => 'اموال',
-        'امور حقوقی' => 'امور حقوقی',
-        'امور عمومی' => 'امور عمومی',
-        'انبار' => 'انبار',
-        'انبار دارویی' => 'انبار دارویی',
-        'بحران' => 'بحران',
-        'تدارکات' => 'تدارکات',
-        'تجهیزات پزشکی' => 'تجهیزات پزشکی',
-        'حراست' => 'حراست',
-        'دبیرخانه' => 'دبیرخانه',
-        'دفتر فنی' => 'دفتر فنی',
-        'دفتر مدیریت' => 'دفتر مدیریت',
-        'روابط عمومی' => 'روابط عمومی',
-        'گزینش' => 'گزینش',
-        'گسترش' => 'گسترش',
-        'نگهبانی' => 'نگهبانی',
-        'نظارت بر درمان' => 'نظارت بر درمان',
-        'مدیریت' => 'مدیریت',
-        'ریاست' => 'ریاست',
-        'معاونت بهداشت' => 'معاونت بهداشت',
-        'آموزش سلامت' => 'آموزش سلامت',
-        'مربی' => 'مربی',
-        'کارگزینی' => 'کارگزینی',
-        'غذا و دارو' => 'غذا و دارو',
-        'تایمکس' => 'تایمکس',
-        'بیماری واگیر' => 'بیماری واگیر',
-        'بیماریهای واگیر' => 'بیماری واگیر',
-        'بیماریهای غیر واگیر' => 'بیماریهای غیر واگیر',
-        'خدمات' => 'خدمات',
-        'شخصی' => 'شخصی',
-        'دیده وری' => 'دیده وری',
-        'کلاس' => 'کلاس',
-    ];
-
-    // Location/hardware names that should NOT be semat — map to "سایر"
-    private array $invalidSemat = [
-        'دکل قروه به قروه', 'قروه', 'قروه به شبکه', 'شبکه به قروه',
-        'هفده شهریور', 'هیدج', 'عمیدآباد', 'اعلایی', 'شناط', 'درسجین',
-        'شریف آباد', 'حسین آباد', 'صائین قلعه', 'مرکز 5',
-        'شبکه به شناط', 'شبکه به صائین', 'شبکه به مرکز5', 'شبکه به بهورزی',
-        'شبکه به اعلایی حسین آباد 17شهریور', 'شبکه به درسجین قروه شریف آباد',
-        'صائین قلعه به شبکه', 'صائین قلعه به عمیدآباد', 'صائین قلعه به هیدج',
-        'پایگاه 3 هفده شهریور', 'اعلایی', 'کوه زین', 'سراج',
-    ];
-
+    /**
+     * Seed persons + users from the pre-processed device data.
+     *
+     * The CSV was parsed once and the result (resolved unit paths, semat, radif
+     * and role per person) is hardcoded in data/person_users_from_devices.php,
+     * so this seeder no longer touches the raw CSV at runtime.
+     */
     public function run(): void
     {
-        $csvFile = __DIR__ . '/data/person_devices.csv';
-        $handle = fopen($csvFile, 'r');
-        if ($handle === false) {
-            $this->command->error('Cannot open person_devices.csv');
-            return;
-        }
+        $records = require __DIR__.'/data/person_users_from_devices.php';
 
-        // Skip header (tab-delimited)
-        fgetcsv($handle, 0, "\t");
-
-        $rows = [];
-        while (($row = fgetcsv($handle, 0, "\t")) !== false) {
-            $rows[] = (object) [
-                'n_code' => $row[0],
-                'operator_name' => $row[1] ?: null,
-                'unit' => $row[2] ?: null,
-                'location' => $row[3] ?: null,
-                'location_type' => $row[4] ?: null,
-            ];
-        }
-        fclose($handle);
-
-        $devices = collect($rows)->filter(fn($d) => $d->n_code && trim($d->n_code) !== '');
-        $grouped = $devices->groupBy('n_code');
-        $existingUnits = Unit::pluck('id', 'name')->toArray();
-
-        // Preload existing semat and radif
         foreach (DB::table('semats')->get() as $row) {
             $this->sematCache[$row->name] = $row->id;
         }
@@ -194,109 +36,82 @@ class PersonUserFromDeviceSeeder extends Seeder
             $this->radifCache[$row->name] = $row->id;
         }
 
-        foreach ($grouped as $nCode => $records) {
-            if (Person::where('n_code', $nCode)->exists()) {
+        $roles = Role::all()->keyBy('name');
+        $existingCodes = array_flip(DB::table('persons')->pluck('n_code')->all());
+
+        // Bcrypt is ~200ms per hash — compute once, reuse for every user.
+        $password = Hash::make('12345678');
+
+        DB::transaction(function () use ($records, $roles, $existingCodes, $password) {
+            foreach ($records as $record) {
+                if (isset($existingCodes[$record['n_code']])) {
+                    continue;
+                }
+
+                $unitId = $this->resolveUnitPath($record['unit']);
+                $sematId = $this->findOrCreateSemat($record['semat']);
+                $radifId = $this->findOrCreateRadif($record['radif']);
+
+                Person::create([
+                    'n_code' => $record['n_code'],
+                    'f_name' => $record['f_name'],
+                    'l_name' => $record['l_name'] ?? '',
+                    't_id' => 1,
+                    'e_id' => 1,
+                    's_id' => $sematId,
+                    'r_id' => $radifId,
+                    'u_id' => $unitId,
+                ]);
+
+                $user = User::create([
+                    'n_code' => $record['n_code'],
+                    'password' => $password,
+                ]);
+
+                $user->units()->attach($unitId, [
+                    'role' => 'staff',
+                    'is_primary' => true,
+                ]);
+
+                $role = $roles[$record['role']] ?? null;
+                if ($role) {
+                    $user->assignRole($role);
+                }
+            }
+        });
+    }
+
+    /**
+     * Walk a hardcoded unit path (root → leaf) and return the leaf unit id,
+     * matching each segment scoped to its parent and creating it if missing.
+     */
+    private function resolveUnitPath(array $path): int
+    {
+        $parentId = null;
+
+        foreach ($path as $name) {
+            $key = ($parentId ?? 'root').'|'.$name;
+
+            if (isset($this->unitCache[$key])) {
+                $parentId = $this->unitCache[$key];
+
                 continue;
             }
 
-            // Name
-            $operatorName = $records->firstWhere('operator_name', '!=', '')?->operator_name ?? null;
-            if ($operatorName) {
-                $parts = $this->parseName($operatorName);
-            } else {
-                $record = $records->first();
-                $generated = trim(($record->unit ?? '') . ' ' . ($record->location_type ?? '') . ' ' . ($record->location ?? ''));
-                $parts = $this->parseName($generated ?: 'کاربر ناشناس');
+            $query = DB::table('units')->where('name', $name);
+            $parentId === null ? $query->whereNull('parent_id') : $query->where('parent_id', $parentId);
+
+            $unitId = $query->value('id');
+
+            if (! $unitId) {
+                $unitId = Unit::create(['name' => $name, 'parent_id' => $parentId, 'is_active' => true])->id;
             }
 
-            // Primary location → unit
-            $primaryLocation = $records->pluck('location')
-                ->filter(fn($loc) => $loc && trim($loc) !== '')
-                ->countBy()->sortDesc()->keys()->first() ?? '';
-            $unitId = $this->matchOrCreateUnit(trim($primaryLocation), $existingUnits);
-
-            // Primary unit type → semat + role
-            $primaryUnitType = $records->pluck('unit')
-                ->filter(fn($u) => $u && trim($u) !== '')
-                ->countBy()->sortDesc()->keys()->first() ?? '';
-            $sematName = $this->mapSemat($primaryUnitType);
-            $roleName = $this->mapRole($sematName);
-            $sematId = $this->findOrCreateSemat($sematName);
-
-            // radif = semat (same value for now)
-            $radifId = $this->findOrCreateRadif($sematName);
-
-            Person::create([
-                'n_code' => $nCode,
-                'f_name' => $parts['f_name'],
-                'l_name' => $parts['l_name'] ?? '',
-                't_id' => 1,
-                'e_id' => 1,
-                's_id' => $sematId,
-                'r_id' => $radifId,
-                'u_id' => $unitId,
-            ]);
-
-            $user = User::create([
-                'n_code' => $nCode,
-                'password' => Hash::make('12345678'),
-            ]);
-
-            $user->units()->attach($unitId, [
-                'role' => 'staff',
-                'is_primary' => true,
-            ]);
-
-            $role = Role::where('name', $roleName)->first();
-            if ($role) {
-                $user->assignRole($role);
-            }
-        }
-    }
-
-    private function parseName(string $name): array
-    {
-        $name = trim($name);
-        $parts = preg_split('/\s+/', $name, 2);
-        return [
-            'f_name' => $parts[0] ?? $name,
-            'l_name' => $parts[1] ?? '',
-        ];
-    }
-
-    private function matchOrCreateUnit(string $location, array &$existingUnits): int
-    {
-        if ($location === '') {
-            return 5;
-        }
-        if (isset($this->locationCache[$location])) {
-            return $this->locationCache[$location];
-        }
-        if (isset($existingUnits[$location])) {
-            $this->locationCache[$location] = $existingUnits[$location];
-            return $existingUnits[$location];
-        }
-        foreach ($existingUnits as $unitName => $unitId) {
-            if (str_contains($unitName, $location) || str_contains($location, $unitName)) {
-                $this->locationCache[$location] = $unitId;
-                return $unitId;
-            }
-        }
-        $newUnit = Unit::create(['name' => $location, 'is_active' => true]);
-        $existingUnits[$location] = $newUnit->id;
-        $this->locationCache[$location] = $newUnit->id;
-        return $newUnit->id;
-    }
-
-    private function mapSemat(string $rawUnit): string
-    {
-        $rawUnit = trim($rawUnit);
-
-        if ($rawUnit === '' || in_array($rawUnit, $this->invalidSemat, true)) {
-            return 'سایر';
+            $this->unitCache[$key] = $unitId;
+            $parentId = $unitId;
         }
 
-        return $this->sematMap[$rawUnit] ?? 'سایر';
+        return $parentId;
     }
 
     private function findOrCreateSemat(string $name): int
@@ -314,6 +129,7 @@ class PersonUserFromDeviceSeeder extends Seeder
             'updated_at' => now(),
         ]);
         $this->sematCache[$name] = $id;
+
         return $id;
     }
 
@@ -332,12 +148,7 @@ class PersonUserFromDeviceSeeder extends Seeder
             'updated_at' => now(),
         ]);
         $this->radifCache[$name] = $id;
-        return $id;
-    }
 
-    private function mapRole(string $unitType): string
-    {
-        $unitType = trim($unitType);
-        return $this->roleMap[$unitType] ?? 'user';
+        return $id;
     }
 }

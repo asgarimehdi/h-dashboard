@@ -6,6 +6,7 @@ use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -17,9 +18,13 @@ class HardwareApiTest extends TestCase
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
+
     protected $unit;
 
     protected function setUp(): void
@@ -35,24 +40,28 @@ class HardwareApiTest extends TestCase
         $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
-        $nCode = (string) random_int(1000000000, 2147483647);
+        $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $this->unit->id]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
+        $this->seed(PermissionSeeder::class);
+        $user->givePermissionTo('manage_hardware');
 
         return ['user' => $user, 'unit' => $this->unit];
     }
 
     /**
-     * Verify that /hardware loads for unauthenticated users.
-     * Issue #124: Regression — page was redirecting to /login.
+     * Verify that /hardware redirects unauthenticated users to login.
+     * Issue #216: guests must NOT see sensitive hardware data (regression #124
+     * was intentionally reverted — the redirect is now the expected behavior).
      */
     public function test_hardware_page_loads_without_auth(): void
     {
         $response = $this->get('/hardware');
-        $response->assertStatus(200);
+        $response->assertStatus(302); // redirect to /login
+        $response->assertRedirect(route('login'));
     }
 
     public function test_unauthenticated_user_cannot_access_hardware(): void
@@ -237,7 +246,7 @@ class HardwareApiTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
         $unitB = Unit::create(['name' => 'Unit B']);
-        $nCodeB = (string) random_int(1000000000, 2147483647);
+        $nCodeB = (string) fake()->unique()->numerify('##########');
         $personB = Person::create([
             'n_code' => $nCodeB,
             'f_name' => 'TestB',
@@ -281,5 +290,41 @@ class HardwareApiTest extends TestCase
                     'by_type' => ['server' => 1],
                 ],
             ]);
+    }
+
+    /**
+     * Issue #217: stats are cached, and a hardware write invalidates the cache
+     * so subsequent reads reflect fresh data.
+     */
+    public function test_stats_cache_is_invalidated_on_write(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $person = Person::first();
+
+        // Initial state: 1 device
+        Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-CACHE-1', 'type' => 'desktop', 'shutdown' => false]);
+        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+            ->assertJsonPath('data.total', 1);
+
+        // Create a new device → cache must be invalidated
+        $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-CACHE-2',
+            'type' => 'laptop',
+            'shutdown' => true,
+        ])->assertStatus(201);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.shutdown', 1);
+
+        // Delete one → cache invalidated again
+        $target = Hardware::where('pc_name', 'PC-CACHE-1')->first();
+        $this->actingAs($user, 'sanctum')->deleteJson("/api/hardware/{$target->id}")
+            ->assertStatus(200);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.shutdown', 1);
     }
 }

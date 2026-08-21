@@ -6,6 +6,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +30,11 @@ class UnitApiTest extends TestCase
         $sId = DB::table('semats')->insertGetId(['name' => 'Test Semat']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test Radif']);
 
-        $nCode = (string) rand(1000000000, 9999999999);
+        $unit = Unit::create(array_merge([
+            'name' => 'Test Unit',
+        ], $unitAttrs));
+
+        $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode,
             'f_name' => 'Test',
@@ -38,17 +43,16 @@ class UnitApiTest extends TestCase
             'e_id' => $eId,
             's_id' => $sId,
             'r_id' => $rId,
-            'u_id' => 1,
+            'u_id' => $unit->id,
         ]);
         $user = User::create([
             'n_code' => $nCode,
             'password' => Hash::make('password'),
         ]);
-        $unit = Unit::create(array_merge([
-            'name' => 'Test Unit',
-        ], $unitAttrs));
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
+        $this->seed(PermissionSeeder::class);
+        $user->givePermissionTo('organization');
 
         return ['user' => $user, 'unit' => $unit];
     }
@@ -166,5 +170,25 @@ class UnitApiTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson(['message' => 'Cannot delete unit with children.']);
+    }
+
+    public function test_pagination_per_page_is_limited(): void
+    {
+        $this->createUserWithUnit();
+
+        // Create additional units within the same scope
+        $unit = Unit::where('name', 'Test Unit')->first();
+        for ($i = 0; $i < 150; $i++) {
+            Unit::create([
+                'name' => "Unit {$i}",
+                'parent_id' => $unit->id,
+            ]);
+        }
+
+        $response = $this->actingAs(User::first(), 'sanctum')
+            ->getJson('/api/units?per_page=1000');
+
+        $response->assertStatus(200);
+        $this->assertLessThanOrEqual(100, $response->json('meta.per_page'));
     }
 }

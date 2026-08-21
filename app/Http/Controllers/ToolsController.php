@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\{Ticket, Todo, ActivityLog, Notification};
 use App\Services\AccessService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\{Auth, Cache, DB};
 
 class ToolsController extends Controller
 {
@@ -42,6 +42,11 @@ class ToolsController extends Controller
             ->where('status', 'completed')
             ->where('completed_at', '<', now()->subDays($request->days))
             ->update(['status' => 'archived']);
+
+        // Issue #379/#389: bulk update bypasses Eloquent events — bump caches manually
+        Cache::increment('report_tickets_version');
+        Cache::increment('gis_version');
+        Cache::increment('calendar_version');
 
         return redirect()->back()->with('success', "{$count} تیکت قدیمی آرشیو شد.");
     }
