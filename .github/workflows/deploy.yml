@@ -9,12 +9,28 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
-      - name: Deploy to production
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Install PHP & Composer Dependencies
         run: |
           cd /home/boxd/h-dashboard
-          git pull origin main
+          composer install --no-interaction --optimize-autoloader
+
+      - name: Install Node.js Dependencies & Build Frontend
+        run: |
+          cd /home/boxd/h-dashboard
+          npm install
+          npm run build
+
+      - name: Clear Laravel Caches
+        run: |
+          cd /home/boxd/h-dashboard
           php artisan view:clear
           php artisan config:clear
           php artisan route:clear
           php artisan optimize
+
+      - name: Reload Apache
+        run: |
           sudo systemctl reload apache2
