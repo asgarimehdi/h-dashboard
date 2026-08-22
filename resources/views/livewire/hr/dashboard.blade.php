@@ -16,96 +16,25 @@
         <x-stat title="واحدهای بدون پرسنل" value="{{ count($vacancies) }}" icon="o-exclamation-triangle" color="text-error" />
     </div>
 
+    {{-- Interactive Highcharts bar charts. Each chart is scaled to its own
+         maximum, so a dominant category no longer squashes small rows into
+         unreadable slivers (#494). Charts re-render on Livewire updates via
+         the hook below. --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        @php
-            // Bars are scaled against the MAX of their own chart, not the grand
-            // total — otherwise a dominant category squashes every other bar
-            // into an unreadable sliver. Non-zero values get a minimum visible
-            // width so small counts remain perceptible (#494).
-            $barWidth = function (int $value, int $chartMax): int {
-                if ($chartMax < 1 || $value < 1) {
-                    return 0;
-                }
-
-                return max(3, (int) round($value / $chartMax * 100));
-            };
-            $sortedDesc = fn (array $rows) => collect($rows)->sortByDesc('total')->values();
-        @endphp
-
-        {{-- By Unit --}}
         <x-card shadow title="پرسنل به تفکیک واحد">
-            <div class="space-y-2">
-                @forelse ($sortedDesc($byUnit) as $row)
-                    <div class="flex items-center gap-2">
-                        <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
-                        <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
-                            <div class="bg-primary h-2 rounded-full"
-                                 style="width: {{ $barWidth($row['total'], $sortedDesc($byUnit)->max('total')) }}%"
-                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
-                        </div>
-                        <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
-                    </div>
-                @empty
-                    <p class="text-sm text-base-content/50">داده‌ای موجود نیست</p>
-                @endforelse
-            </div>
+            <div id="hrChartByUnit" class="w-full" style="height: {{ max(240, count($byUnit) * 28) }}px;"></div>
         </x-card>
 
-        {{-- By Semat --}}
         <x-card shadow title="پرسنل به تفکیک سمت">
-            <div class="space-y-2">
-                @forelse ($sortedDesc($bySemat) as $row)
-                    <div class="flex items-center gap-2">
-                        <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
-                        <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
-                            <div class="bg-success h-2 rounded-full"
-                                 style="width: {{ $barWidth($row['total'], $sortedDesc($bySemat)->max('total')) }}%"
-                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
-                        </div>
-                        <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
-                    </div>
-                @empty
-                    <p class="text-sm text-base-content/50">داده‌ای موجود نیست</p>
-                @endforelse
-            </div>
+            <div id="hrChartBySemat" class="w-full" style="height: {{ max(240, count($bySemat) * 28) }}px;"></div>
         </x-card>
 
-        {{-- By Tahsil --}}
-        <x-card shadow title="تحصیلات (Tahsil)">
-            <div class="space-y-2">
-                @forelse ($sortedDesc($byTahsil) as $row)
-                    <div class="flex items-center gap-2">
-                        <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
-                        <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
-                            <div class="bg-info h-2 rounded-full"
-                                 style="width: {{ $barWidth($row['total'], $sortedDesc($byTahsil)->max('total')) }}%"
-                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
-                        </div>
-                        <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
-                    </div>
-                @empty
-                    <p class="text-sm text-base-content/50">داده‌ای موجود نیست</p>
-                @endforelse
-            </div>
+        <x-card shadow title="تحصیلات">
+            <div id="hrChartByTahsil" class="w-full" style="height: {{ max(240, count($byTahsil) * 32) }}px;"></div>
         </x-card>
 
-        {{-- By Estekhdam --}}
-        <x-card shadow title="نوع استخدام (Estekhdam)">
-            <div class="space-y-2">
-                @forelse ($sortedDesc($byEstekhdam) as $row)
-                    <div class="flex items-center gap-2">
-                        <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
-                        <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
-                            <div class="bg-warning h-2 rounded-full"
-                                 style="width: {{ $barWidth($row['total'], $sortedDesc($byEstekhdam)->max('total')) }}%"
-                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
-                        </div>
-                        <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
-                    </div>
-                @empty
-                    <p class="text-sm text-base-content/50">داده‌ای موجود نیست</p>
-                @endforelse
-            </div>
+        <x-card shadow title="نوع استخدام">
+            <div id="hrChartByEstekhdam" class="w-full" style="height: {{ max(240, count($byEstekhdam) * 32) }}px;"></div>
         </x-card>
     </div>
 
@@ -118,3 +47,67 @@
         @endforelse
     </x-card>
 </div>
+
+@script
+<script>
+    function destroyHrChart(id) {
+        const container = document.getElementById(id);
+        if (!container || typeof Highcharts === 'undefined') return;
+        const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
+        if (existing) existing.destroy();
+        container.innerHTML = '';
+    }
+
+    function renderHrBar(id, rows, color) {
+        destroyHrChart(id);
+        const data = (rows || [])
+            .slice()
+            .sort((a, b) => b.total - a.total)
+            .map(r => ({ name: r.name, y: r.total }));
+
+        if (!data.length || typeof Highcharts === 'undefined') return;
+
+        Highcharts.chart(id, {
+            chart: { type: 'bar' },
+            title: { text: '' },
+            xAxis: {
+                type: 'category',
+                labels: { style: { fontSize: '12px' } }
+            },
+            yAxis: {
+                title: { text: 'تعداد' },
+                allowDecimals: false,
+                minRange: 1
+            },
+            legend: { enabled: false },
+            credits: { enabled: false },
+            series: [{
+                name: 'تعداد پرسنل',
+                data: data,
+                color: color,
+                dataLabels: {
+                    enabled: true,
+                    align: 'left',
+                    format: '{y}'
+                }
+            }]
+        });
+    }
+
+    async function renderHrCharts() {
+        const data = await $wire.chartPayload();
+        renderHrBar('hrChartByUnit', data.byUnit, '#6366f1');
+        renderHrBar('hrChartBySemat', data.bySemat, '#10b981');
+        renderHrBar('hrChartByTahsil', data.byTahsil, '#0ea5e9');
+        renderHrBar('hrChartByEstekhdam', data.byEstekhdam, '#f59e0b');
+    }
+
+    function waitForHighcharts(fn) {
+        if (typeof Highcharts !== 'undefined') return fn();
+        setTimeout(() => waitForHighcharts(fn), 100);
+    }
+
+    waitForHighcharts(renderHrCharts);
+    $wire.$on('$refresh', () => renderHrCharts());
+</script>
+@endscript

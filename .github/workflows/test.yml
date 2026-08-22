@@ -69,6 +69,16 @@ jobs:
       - name: Run migrations
         run: php artisan migrate --env=testing --force
 
+      # A stale bootstrap/cache/routes-v7.php built with a DIFFERENT APP_KEY
+      # makes every Livewire ->set()/->call() silently no-op in Pest (all
+      # mutations appear to fail). CI always starts from a fresh checkout,
+      # but keep this guard so the same trap can never fire here either.
+      - name: Clear cached config/routes before tests
+        run: |
+          php artisan config:clear --env=testing
+          php artisan route:clear --env=testing
+          php artisan view:clear
+
       - name: Run tests with coverage
         run: ./vendor/bin/pest --parallel --coverage --min=80 --coverage-report=xml
 

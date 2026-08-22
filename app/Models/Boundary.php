@@ -16,14 +16,6 @@ class Boundary extends Model
     ];
 
     /**
-     * ارتباط با جدول County
-     */
-    public function county(): HasOne
-    {
-        return $this->hasOne(County::class);
-    }
-
-    /**
      * ارتباط با جدول unit
      */
     public function unit(): HasOne

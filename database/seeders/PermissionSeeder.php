@@ -38,6 +38,13 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage_org_chart', 'label' => 'مدیریت چارت سازمانی']);
         // Test permission for SafeRoleOrPermission middleware tests
         Permission::firstOrCreate(['name' => 'test-permission', 'label' => 'تست مجوز']);
+        // The admin ROLE — tests (TicketApiTest, TicketCommentPolicyTest, ...)
+        // each had to firstOrCreate it; centralizing here keeps that convention
+        // in one place. Permissions are synced by RoleSeeder.
+        \Spatie\Permission\Models\Role::firstOrCreate(
+            ['name' => 'admin', 'guard_name' => 'web'],
+            ['label' => 'مدیر سیستم']
+        );
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
