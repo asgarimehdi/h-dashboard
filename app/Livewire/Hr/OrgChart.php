@@ -7,9 +7,11 @@ use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
+use Mary\Traits\Toast;
 
 class OrgChart extends Component
 {
+    use Toast;
     public array $expanded = [];
 
     public string $search = '';
