@@ -22,7 +22,7 @@
                 $out .= '<span class="w-5"></span>';
             }
             $nameEsc = htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8');
-            $out .= '<span class="text-sm flex-1 truncate" :class="isSelected('.$uid.') ? \'font-bold text-primary\' : \'\'">'.$nameEsc.'</span>';
+            $out .= '<span class="text-sm flex-1 truncate rounded" :class="(isSelected('.$uid.') ? \'font-bold text-primary\' : \'\') + (isMatched('.$uid.') ? \'bg-warning/25\' : \'\')">'.$nameEsc.'</span>';
             if ($type) {
                 $typeEsc = htmlspecialchars($type, ENT_QUOTES, 'UTF-8');
                 $out .= '<span class="text-[10px] opacity-50">'.$typeEsc.'</span>';
@@ -53,7 +53,9 @@
         search: '',
         open: {{ $alwaysOpen ? 'true' : 'false' }},
         expanded: {},
-        flat: {{ \Illuminate\Support\Js::from(collect($units)->map(fn ($u) => ['id' => $u['id'], 'name' => $u['name']])->values()->all()) }},
+        matchedIds: [],
+        autoExpanded: [],
+        flat: {{ \Illuminate\Support\Js::from(collect($units)->map(fn ($u) => ['id' => $u['id'], 'name' => $u['name'], 'parent_id' => $u['parent_id'] ?? null])->values()->all()) }},
         multiple: {{ ($multiple ?? false) ? 'true' : 'false' }},
         alwaysOpen: {{ $alwaysOpen ? 'true' : 'false' }},
         selected: $wire.{{ $modelEsc }},
@@ -84,14 +86,38 @@
             }
         },
         nameOf(id) { return this.flat.find((u) => String(u.id) === String(id))?.name ?? '-'; },
+        isMatched(id) {
+            return this.matchedIds.some((m) => String(m) === String(id));
+        },
+        parentOf(id) {
+            const u = this.flat.find((x) => String(x.id) === String(id));
+            return u && u.parent_id !== null && u.parent_id !== undefined ? u.parent_id : null;
+        },
         expandForSearch() {
+            // Undo auto-expansions from the previous query so manual state is preserved
+            this.autoExpanded.forEach((id) => { delete this.expanded[id]; });
+            this.autoExpanded = [];
+            this.matchedIds = [];
             const s = this.search.trim().toLowerCase();
             if (!s) return;
-            this.expanded = {};
-            this.flat.forEach((u) => {
-                if (u.name.toLowerCase().includes(s)) {
-                    this.expanded[u.id] = true;
+            const matches = this.flat.filter((u) => u.name.toLowerCase().includes(s)).map((u) => u.id);
+            this.matchedIds = matches;
+            // Expand every ancestor chain of each match so results are actually visible
+            const ancestors = new Set();
+            matches.forEach((id) => {
+                const guard = new Set([Number(id)]);
+                let cur = id;
+                while (true) {
+                    const p = this.parentOf(cur);
+                    if (p === null || guard.has(Number(p))) break;
+                    guard.add(Number(p));
+                    ancestors.add(p);
+                    cur = p;
                 }
+            });
+            ancestors.forEach((id) => {
+                this.expanded[id] = true;
+                this.autoExpanded.push(id);
             });
         }
     }"
@@ -163,6 +189,11 @@
                 class="input input-bordered input-sm w-full"
                 @click.stop
             />
+            <p class="text-xs mt-1 mb-0"
+               x-show="search.trim()"
+               :class="matchedIds.length ? 'text-base-content/60' : 'text-error'"
+               x-text="matchedIds.length ? matchedIds.length.toLocaleString('fa-IR') + ' مورد یافت شد' : 'موردی یافت نشد'"
+            ></p>
         </div>
 
         <div class="p-2 space-y-0.5">
