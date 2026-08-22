@@ -193,24 +193,20 @@ class Unit extends Model
      */
     public function scopeContainingPoint($query, float $lat, float $lng)
     {
-        return $query->whereExists(function ($q) use ($lat, $lng) {
-            $q->from('boundaries')
-                ->whereColumn('boundaries.unit_id', 'units.id')
-                ->whereRaw('ST_Contains(boundary, ST_GeomFromText(?, 4326))', ["POINT($lng $lat)"]);
+        // The unit↔boundary link is units.boundary_id (boundaries has no unit_id).
+        return $query->whereHas('boundary', function ($q) use ($lat, $lng) {
+            $q->whereRaw('ST_Contains(boundary, ST_GeomFromText(?, 4326))', ["POINT($lng $lat)"]);
         });
     }
 
     /**
      * Scope for spatial queries: find units whose boundary intersects with a polygon
      * Uses the spatial index on boundaries.boundary
-     * Optimized with EXISTS to better utilize spatial index
      */
     public function scopeIntersectsBoundary($query, string $wktPolygon)
     {
-        return $query->whereExists(function ($q) use ($wktPolygon) {
-            $q->from('boundaries')
-                ->whereColumn('boundaries.unit_id', 'units.id')
-                ->whereRaw('ST_Intersects(boundary, ST_GeomFromText(?, 4326))', [$wktPolygon]);
+        return $query->whereHas('boundary', function ($q) use ($wktPolygon) {
+            $q->whereRaw('ST_Intersects(boundary, ST_GeomFromText(?, 4326))', [$wktPolygon]);
         });
     }
 
