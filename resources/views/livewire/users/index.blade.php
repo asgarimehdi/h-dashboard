@@ -225,8 +225,14 @@ return new class extends Component
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
             ->when($this->search, function (Builder $q) {
-                $q->whereHas('person', function ($query) {
-                    $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->search}%"]);
+                // Persian-normalize the raw input (ي/ك variants, ZWNJ,
+                // Persian digits) so «محمدی» typed with Arabic Yeh still
+                // matches the stored name (#494 follow-up).
+                $search = \App\Traits\PersianNormalizer::normalizeForSearch($this->search);
+
+                $q->whereHas('person', function ($query) use ($search) {
+                    $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
+                        ->orWhere('n_code', 'like', "%{$search}%");
                 });
             })
             ->whereNot('id', auth()->id());

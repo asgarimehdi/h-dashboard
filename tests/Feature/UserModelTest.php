@@ -190,7 +190,7 @@ class UserModelTest extends TestCase
     public function test_user_can_be_assigned_role(): void
     {
         ['user' => $user] = $this->createUserWithPerson();
-        \Spatie\Permission\Models\Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
 
         $user->assignRole('admin');
 

@@ -278,7 +278,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->authAsUserA();
         // Ensure the admin role exists (needed for canBeDeletedBy hasRole('admin'))
         if (! Role::where('name', 'admin')->exists()) {
-            Role::create(['name' => 'admin']);
+            Role::firstOrCreate(['name' => 'admin']);
         }
         $this->user->assignRole('admin');
         $comment = $this->makeComment();

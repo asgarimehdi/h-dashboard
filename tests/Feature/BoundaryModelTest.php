@@ -152,3 +152,14 @@ test('scopeWithPersonnelCount counts personnel per unit', function () {
 
     expect($row->personnel_count)->toBe(2);
 });
+
+test('scopeWithinDistance finds units near a point using PostGIS', function () {
+    $b = makeBoundary(); // square around (0,0)
+    Unit::create(['name' => 'نزدیک', 'boundary_id' => $b->id]);
+
+    // ~111 km per degree of latitude: 0.1° ≈ 11 km.
+    $hits = Unit::query()->withinDistance(0.05, 0.05, 20000)->pluck('name');
+
+    expect($hits)->toContain('نزدیک')
+        ->and(Unit::query()->withinDistance(5, 5, 1000)->count())->toBe(0);
+});

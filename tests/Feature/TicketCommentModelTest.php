@@ -305,7 +305,7 @@ class TicketCommentModelTest extends TestCase
         $ticket = $this->createTicket();
         $user = User::first();
 
-        \Spatie\Permission\Models\Role::create(['name' => 'admin', 'guard_name' => 'web']);
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $user->assignRole('admin');
 
         $nCode2 = (string) fake()->unique()->numerify('##########');

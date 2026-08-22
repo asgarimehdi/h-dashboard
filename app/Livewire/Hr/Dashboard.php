@@ -79,6 +79,20 @@ class Dashboard extends Component
             ->toArray();
     }
 
+    /**
+     * Chart data for the JS layer (Highcharts) — called from the blade view
+     * via $wire.chartPayload() so charts re-render without inlining PHP.
+     */
+    public function chartPayload(): array
+    {
+        return [
+            'byUnit' => $this->byUnit,
+            'bySemat' => $this->bySemat,
+            'byTahsil' => $this->byTahsil,
+            'byEstekhdam' => $this->byEstekhdam,
+        ];
+    }
+
     public function render()
     {
         return view('livewire.hr.dashboard');
