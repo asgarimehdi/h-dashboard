@@ -17,15 +17,31 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        @php
+            // Bars are scaled against the MAX of their own chart, not the grand
+            // total — otherwise a dominant category squashes every other bar
+            // into an unreadable sliver. Non-zero values get a minimum visible
+            // width so small counts remain perceptible (#494).
+            $barWidth = function (int $value, int $chartMax): int {
+                if ($chartMax < 1 || $value < 1) {
+                    return 0;
+                }
+
+                return max(3, (int) round($value / $chartMax * 100));
+            };
+            $sortedDesc = fn (array $rows) => collect($rows)->sortByDesc('total')->values();
+        @endphp
+
         {{-- By Unit --}}
         <x-card shadow title="پرسنل به تفکیک واحد">
             <div class="space-y-2">
-                @forelse ($byUnit as $row)
+                @forelse ($sortedDesc($byUnit) as $row)
                     <div class="flex items-center gap-2">
                         <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
                         <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
                             <div class="bg-primary h-2 rounded-full"
-                                 style="width: {{ $stats['total'] ? round($row['total'] / $stats['total'] * 100) : 0 }}%"></div>
+                                 style="width: {{ $barWidth($row['total'], $sortedDesc($byUnit)->max('total')) }}%"
+                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
                         </div>
                         <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
                     </div>
@@ -38,12 +54,13 @@
         {{-- By Semat --}}
         <x-card shadow title="پرسنل به تفکیک سمت">
             <div class="space-y-2">
-                @forelse ($bySemat as $row)
+                @forelse ($sortedDesc($bySemat) as $row)
                     <div class="flex items-center gap-2">
                         <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
                         <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
                             <div class="bg-success h-2 rounded-full"
-                                 style="width: {{ $stats['total'] ? round($row['total'] / $stats['total'] * 100) : 0 }}%"></div>
+                                 style="width: {{ $barWidth($row['total'], $sortedDesc($bySemat)->max('total')) }}%"
+                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
                         </div>
                         <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
                     </div>
@@ -56,12 +73,13 @@
         {{-- By Tahsil --}}
         <x-card shadow title="تحصیلات (Tahsil)">
             <div class="space-y-2">
-                @forelse ($byTahsil as $row)
+                @forelse ($sortedDesc($byTahsil) as $row)
                     <div class="flex items-center gap-2">
                         <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
                         <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
                             <div class="bg-info h-2 rounded-full"
-                                 style="width: {{ $stats['total'] ? round($row['total'] / $stats['total'] * 100) : 0 }}%"></div>
+                                 style="width: {{ $barWidth($row['total'], $sortedDesc($byTahsil)->max('total')) }}%"
+                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
                         </div>
                         <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
                     </div>
@@ -74,12 +92,13 @@
         {{-- By Estekhdam --}}
         <x-card shadow title="نوع استخدام (Estekhdam)">
             <div class="space-y-2">
-                @forelse ($byEstekhdam as $row)
+                @forelse ($sortedDesc($byEstekhdam) as $row)
                     <div class="flex items-center gap-2">
                         <div class="flex-1 text-sm truncate">{{ $row['name'] }}</div>
                         <div class="w-1/2 bg-base-200 rounded-full h-2 overflow-hidden">
                             <div class="bg-warning h-2 rounded-full"
-                                 style="width: {{ $stats['total'] ? round($row['total'] / $stats['total'] * 100) : 0 }}%"></div>
+                                 style="width: {{ $barWidth($row['total'], $sortedDesc($byEstekhdam)->max('total')) }}%"
+                                 title="{{ $row['total'] }} نفر{{ $stats['total'] ? ' (' . round($row['total'] / $stats['total'] * 100) . '% از کل)' : '' }}"></div>
                         </div>
                         <div class="text-sm font-bold w-8 text-left">{{ $row['total'] }}</div>
                     </div>
