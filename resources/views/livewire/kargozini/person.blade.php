@@ -213,9 +213,32 @@ return new class extends Component
 
         if (! empty($this->search)) {
             $search = \App\Traits\PersianNormalizer::normalizeForSearch($this->search);
-            $query->where(function ($q) use ($search) {
-                $q->where('n_code', 'LIKE', '%'.$search.'%')
-                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"]);
+
+            // Convert Persian/Arabic digits to Latin so an n_code typed on a
+            // Persian keyboard matches the Latin digits stored in the database.
+            $search = strtr($search, [
+                '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+                '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+                '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+                '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            ]);
+
+            // Each whitespace-separated term must match (AND); within a term,
+            // any of n_code / "first last" / "last first" / unit name counts,
+            // so "عسگری مهدی" finds «مهدی عسگری» too (#494).
+            $terms = array_values(array_filter(explode(' ', $search), fn ($t) => $t !== ''));
+
+            $query->where(function ($q) use ($terms) {
+                foreach ($terms as $term) {
+                    $q->where(function ($tq) use ($term) {
+                        $tq->where('n_code', 'LIKE', '%'.$term.'%')
+                            ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$term}%"])
+                            ->orWhereRaw("CONCAT(l_name, ' ', f_name) LIKE ?", ["%{$term}%"])
+                            ->orWhereHas('unit', function ($uq) use ($term) {
+                                $uq->where('name', 'LIKE', "%{$term}%");
+                            });
+                    });
+                }
             });
         }
 
