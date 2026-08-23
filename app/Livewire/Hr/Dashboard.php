@@ -5,18 +5,26 @@ namespace App\Livewire\Hr;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Services\AccessService;
-use Livewire\Component;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Component;
 
 class Dashboard extends Component
 {
     public array $stats = [];
+
     public array $byUnit = [];
+
     public array $bySemat = [];
+
     public array $byTahsil = [];
+
     public array $byEstekhdam = [];
+
     public array $byRadif = [];
+
     public array $vacancies = [];
+
+    public bool $showHelpModal = false;
 
     public function mount(): void
     {
@@ -25,7 +33,7 @@ class Dashboard extends Component
         // Cache heavy aggregations (5 min) — Issue #223 perf note
         // Versioned by hr_stats_version so Person saved/deleted invalidates it immediately (#375)
         $version = Cache::get('hr_stats_version', 0);
-        $cacheKey = 'hr:dashboard:v' . $version . ':' . md5(implode(',', $accessibleIds));
+        $cacheKey = 'hr:dashboard:v'.$version.':'.md5(implode(',', $accessibleIds));
         $data = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
             $persons = Person::whereIn('u_id', $accessibleIds);
 
