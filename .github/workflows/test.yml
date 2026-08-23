@@ -113,7 +113,7 @@ jobs:
   mutation:
     name: Mutation Testing
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -188,4 +188,7 @@ jobs:
         run: php artisan migrate --env=testing --force
 
       - name: Run mutation tests
-        run: ./vendor/bin/pest --mutate --min=80 --covered-only --parallel
+        # No covers()/mutates() declarations exist in this codebase, so
+        # scope mutations to everything covered instead (Pest requires
+        # one or the other).
+        run: ./vendor/bin/pest --mutate --parallel --everything --covered-only --min=80
