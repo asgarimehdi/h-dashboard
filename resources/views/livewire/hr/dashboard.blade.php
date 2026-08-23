@@ -50,6 +50,25 @@
 
 @script
 <script>
+    // Palettes keyed by data-theme (see x-theme-selector: fantasy light / dark).
+    // Bars, axis text and grid lines must follow the active DaisyUI theme.
+    const HR_CHART_PALETTES = {
+        fantasy: {
+            colors: ['#6366f1', '#10b981', '#0ea5e9', '#f59e0b'],
+            text: '#3f3f46',
+            grid: '#e4e4e7'
+        },
+        dark: {
+            colors: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24'],
+            text: '#d4d4d8',
+            grid: '#3f3f46'
+        }
+    };
+
+    function hrPalette() {
+        return HR_CHART_PALETTES[document.documentElement.dataset.theme] ?? HR_CHART_PALETTES.fantasy;
+    }
+
     function destroyHrChart(id) {
         const container = document.getElementById(id);
         if (!container || typeof Highcharts === 'undefined') return;
@@ -58,7 +77,7 @@
         container.innerHTML = '';
     }
 
-    function renderHrBar(id, rows, color) {
+    function renderHrBar(id, rows, color, palette) {
         destroyHrChart(id);
         const data = (rows || [])
             .slice()
@@ -72,15 +91,18 @@
             title: { text: '' },
             xAxis: {
                 type: 'category',
-                labels: { style: { fontSize: '12px' } }
+                labels: { style: { fontSize: '12px', color: palette.text } }
             },
             yAxis: {
-                title: { text: 'تعداد' },
+                title: { text: 'تعداد', style: { color: palette.text } },
+                labels: { style: { color: palette.text } },
+                gridLineColor: palette.grid,
                 allowDecimals: false,
                 minRange: 1
             },
             legend: { enabled: false },
             credits: { enabled: false },
+            tooltip: { style: { color: palette.text } },
             series: [{
                 name: 'تعداد پرسنل',
                 data: data,
@@ -88,18 +110,28 @@
                 dataLabels: {
                     enabled: true,
                     align: 'left',
-                    format: '{y}'
+                    format: '{y}',
+                    style: { color: palette.text }
                 }
             }]
         });
     }
 
+    // Cached so a theme switch repaints instantly without a server round-trip.
+    let hrChartData = null;
+
+    function paintHrCharts() {
+        if (!hrChartData) return;
+        const palette = hrPalette();
+        renderHrBar('hrChartByUnit', hrChartData.byUnit, palette.colors[0], palette);
+        renderHrBar('hrChartBySemat', hrChartData.bySemat, palette.colors[1], palette);
+        renderHrBar('hrChartByTahsil', hrChartData.byTahsil, palette.colors[2], palette);
+        renderHrBar('hrChartByEstekhdam', hrChartData.byEstekhdam, palette.colors[3], palette);
+    }
+
     async function renderHrCharts() {
-        const data = await $wire.chartPayload();
-        renderHrBar('hrChartByUnit', data.byUnit, '#6366f1');
-        renderHrBar('hrChartBySemat', data.bySemat, '#10b981');
-        renderHrBar('hrChartByTahsil', data.byTahsil, '#0ea5e9');
-        renderHrBar('hrChartByEstekhdam', data.byEstekhdam, '#f59e0b');
+        hrChartData = await $wire.chartPayload();
+        paintHrCharts();
     }
 
     function waitForHighcharts(fn) {
@@ -109,5 +141,8 @@
 
     waitForHighcharts(renderHrCharts);
     $wire.$on('$refresh', () => renderHrCharts());
+
+    // maryUI x-theme-toggle dispatches this bubbling CustomEvent on switch.
+    window.addEventListener('theme-changed', () => paintHrCharts());
 </script>
 @endscript
