@@ -64,7 +64,7 @@ jobs:
         run: |
           cp .env.example .env.testing
           # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password)
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=//' .env.testing
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env.testing
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -149,7 +149,7 @@ jobs:
         run: |
           cp .env.example .env.testing
           # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password)
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=//' .env.testing
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env.testing
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
