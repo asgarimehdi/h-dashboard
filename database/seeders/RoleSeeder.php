@@ -17,12 +17,19 @@ class RoleSeeder extends Seeder
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         // ۱. ایجاد نقش مدیر کل و اختصاص تمام مجوزها
-        $adminRole = Role::create(['name' => 'admin', 'label' => 'مدیر کل']);
-        $adminRole->givePermissionTo(Permission::all());
+        // firstOrCreate: PermissionSeeder may already have created `admin`
+        $adminRole = Role::firstOrCreate(
+            ['name' => 'admin', 'guard_name' => 'web'],
+            ['label' => 'مدیر کل']
+        );
+        $adminRole->syncPermissions(Permission::all());
 
         // ۲. ایجاد نقش مدیر واحد
-        $managerRole = Role::create(['name' => 'unit_manager', 'label' => 'مدیر واحد']);
-        $managerRole->givePermissionTo([
+        $managerRole = Role::firstOrCreate(
+            ['name' => 'unit_manager', 'guard_name' => 'web'],
+            ['label' => 'مدیر واحد']
+        );
+        $managerRole->syncPermissions([
             'create_ticket',
             'manage_unit_tickets',
             'view_assigned_tickets',
@@ -30,15 +37,21 @@ class RoleSeeder extends Seeder
         ]);
 
         // ۳. ایجاد نقش کارشناس واحد
-        $expertRole = Role::create(['name' => 'expert', 'label' => 'کارشناس واحد']);
-        $expertRole->givePermissionTo([
+        $expertRole = Role::firstOrCreate(
+            ['name' => 'expert', 'guard_name' => 'web'],
+            ['label' => 'کارشناس واحد']
+        );
+        $expertRole->syncPermissions([
             'create_ticket',
             'view_assigned_tickets',
         ]);
 
         // ۴. ایجاد نقش کاربر عادی
-        $userRole = Role::create(['name' => 'user', 'label' => 'کاربر']);
-        $userRole->givePermissionTo([
+        $userRole = Role::firstOrCreate(
+            ['name' => 'user', 'guard_name' => 'web'],
+            ['label' => 'کاربر']
+        );
+        $userRole->syncPermissions([
             'create_ticket',
         ]);
 
