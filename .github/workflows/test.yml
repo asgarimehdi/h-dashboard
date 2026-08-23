@@ -75,9 +75,11 @@ jobs:
         run: |
           cp .env.example .env.testing
           # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # Use non-shared cache/session/queue drivers so parallel test processes
-          # don't read each other's spatie permission cache through Redis.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^CACHE_DRIVER=.*/CACHE_DRIVER=array/; s/^SESSION_DRIVER=.*/SESSION_DRIVER=file/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
+          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
+          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
+          # cache between parallel test processes and cross-pollutes their separate DBs.
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
+          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -173,9 +175,11 @@ jobs:
         run: |
           cp .env.example .env.testing
           # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # Use non-shared cache/session/queue drivers so parallel test processes
-          # don't read each other's spatie permission cache through Redis.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^CACHE_DRIVER=.*/CACHE_DRIVER=array/; s/^SESSION_DRIVER=.*/SESSION_DRIVER=file/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
+          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
+          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
+          # cache between parallel test processes and cross-pollutes their separate DBs.
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
+          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
