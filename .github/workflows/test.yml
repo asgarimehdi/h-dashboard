@@ -74,8 +74,10 @@ jobs:
       - name: Copy .env for testing
         run: |
           cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password)
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env.testing
+          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
+          # Use non-shared cache/session/queue drivers so parallel test processes
+          # don't read each other's spatie permission cache through Redis.
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^CACHE_DRIVER=.*/CACHE_DRIVER=array/; s/^SESSION_DRIVER=.*/SESSION_DRIVER=file/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -170,8 +172,10 @@ jobs:
       - name: Copy .env for testing
         run: |
           cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password)
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env.testing
+          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
+          # Use non-shared cache/session/queue drivers so parallel test processes
+          # don't read each other's spatie permission cache through Redis.
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^CACHE_DRIVER=.*/CACHE_DRIVER=array/; s/^SESSION_DRIVER=.*/SESSION_DRIVER=file/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
