@@ -13,12 +13,9 @@
             <directory>tests/Feature</directory>
         </testsuite>
     </testsuites>
-    <coverage>
-        <report>
-            <clover outputFile="coverage.xml"/>
-            <html outputDirectory="coverage"/>
-        </report>
-    </coverage>
+    <!-- No <coverage> block: PHPUnit 12 treats a configured report as a
+         coverage request on every run and silently aborts (exit 1, zero tests)
+         when no driver is installed. CI passes coverage flags explicitly. -->
     <source>
         <include>
             <directory suffix=".php">app</directory>
@@ -32,9 +29,12 @@
         <env name="DB_DATABASE" value="h_dashboard_test"/>
         <env name="DB_USERNAME" value="postgres"/>
         <env name="DB_PASSWORD" value="secret"/>
-        <env name="CACHE_DRIVER" value="redis"/>
-        <env name="SESSION_DRIVER" value="redis"/>
-        <env name="REDIS_HOST" value="127.0.0.1"/>
-        <env name="REDIS_PASSWORD" value=""/>
+        <!-- Hermetic test env: no live Redis dependency (cache/session on
+             array, queue sync). force=true so shell-exported vars can't
+             leak in; config/cache.php reads CACHE_STORE, not CACHE_DRIVER. -->
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="CACHE_DRIVER" value="array" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
     </php>
 </phpunit>

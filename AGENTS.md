@@ -594,7 +594,7 @@ Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, wh
 docker compose -f docker-compose-pgsql-.yml up -d      # PostGIS on :5432, Redis on :6379
 ```
 - PostGIS must be healthy. Verify: `pg_isready -h 127.0.0.1 -p 5432`
-- Redis must be reachable: `php -r '$r=new Redis(); $r->connect("127.0.0.1",6379); echo $r->ping();'`
+- **Redis is NOT required for tests** — `phpunit.xml` forces `CACHE_STORE=array`, `SESSION_DRIVER=array`, `QUEUE_CONNECTION=sync` (with `force="true"`), so the suite never connects to Redis. Note Laravel 13's `config/cache.php` reads **`CACHE_STORE`** (the legacy `CACHE_DRIVER` env is ignored).
 
 #### 2. Create the test database + role (phpunit.xml hard-codes `postgres`/`secret`/`h_dashboard_test`)
 The committed `phpunit.xml` expects:
@@ -603,8 +603,9 @@ The committed `phpunit.xml` expects:
 <env name="DB_DATABASE"  value="h_dashboard_test"/>
 <env name="DB_USERNAME"  value="postgres"/>
 <env name="DB_PASSWORD"  value="secret"/>
-<env name="REDIS_HOST"   value="127.0.0.1"/>
-<env name="REDIS_PASSWORD" value=""/>          <!-- expects NO password -->
+<env name="CACHE_STORE"  value="array" force="true"/>
+<env name="SESSION_DRIVER" value="array" force="true"/>
+<env name="QUEUE_CONNECTION" value="sync" force="true"/>
 ```
 Create them once (the `postgis` extension must be enabled — build from the `template_postgis` template):
 ```bash
@@ -616,11 +617,8 @@ psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
   "CREATE DATABASE h_dashboard_test WITH OWNER=postgres TEMPLATE=template_postgis;"
 ```
 
-#### 3. Redis must accept connections WITHOUT a password
-The docker Redis runs with `--requirepass $REDIS_PASSWORD`, but `phpunit.xml` sends an empty `REDIS_PASSWORD`. Either:
-- restart the container without a password: `docker run -d --name h-dashboard-redis -p 6379:6379 redis:latest redis-server --requirepass ""`, **or**
-- temporarily edit `phpunit.xml` `<env name="REDIS_PASSWORD" value=""/>` → your actual `REDIS_PASSWORD`.
-- ⚠️ If you see `NOAUTH Authentication required`, the Redis password does not match `phpunit.xml`.
+#### 3. Redis is NOT needed (hermetic suite)
+Since 2026-08-24 `phpunit.xml` forces `CACHE_STORE=array` + `SESSION_DRIVER=array` + `QUEUE_CONNECTION=sync` (`force="true"`), so the suite never connects to Redis — the docker Redis password is irrelevant. ⚠️ Laravel 13's `config/cache.php` reads **`CACHE_STORE`**, not the legacy `CACHE_DRIVER` — setting only `CACHE_DRIVER=array` leaves cache on redis and causes `NOAUTH`/`WRONGPASS` failures.
 
 #### 4. Clear cached config/routes BEFORE running (critical!)
 `.env.testing` ships `DB_CONNECTION=mysql` and a **different `APP_KEY`** than `.env`. If `bootstrap/cache/config.php` or the route cache exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists).
@@ -638,12 +636,12 @@ php artisan test                # runs the FULL suite (Unit + Feature via phpuni
 # For a single file: php artisan test tests/Feature/UsersManagementTest.php
 ```
 - **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
-- Expected: **695 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
+- Expected: **719 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
 
 #### Common failure → cause
 | Symptom | Cause | Fix |
 |---|---|---|
-| `NOAUTH Authentication required` | Redis password ≠ `phpunit.xml` | Step 3 |
+| `NOAUTH`/`WRONGPASS` on Redis | cache still on redis — only `CACHE_DRIVER` was set, or phpunit env overridden | Step 3 + `php artisan config:clear` |
 | `Connection refused (mysql … 3306)` | config cache from `.env.testing` wins over phpunit.xml | `php artisan config:clear` |
 | `404` on every `->set()`/`->call()`, mutations don't persist | Livewire endpoint hash mismatch (cached route from wrong `APP_KEY`) | `php artisan config:clear` + don't `optimize` with local env |
 | `postgres`/`secret`/`h_dashboard_test` auth fail | test DB/role missing | Step 2 |
