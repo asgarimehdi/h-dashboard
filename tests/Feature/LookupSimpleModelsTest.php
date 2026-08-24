@@ -8,11 +8,9 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class LookupSimpleModelsTest extends TestCase
@@ -28,6 +26,15 @@ class LookupSimpleModelsTest extends TestCase
         DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
         DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
         DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+
+        // Explicit-id inserts do not advance Postgres sequences, so a later
+        // auto-increment create would collide with id=1 (sequences survive
+        // RefreshDatabase's per-test rollback). Sync them past max(id).
+        foreach (['tahsils', 'estekhdams', 'semats', 'radifs'] as $table) {
+            DB::unprepared(
+                "SELECT setval(pg_get_serial_sequence('{$table}', 'id'), (SELECT MAX(id) FROM {$table}))"
+            );
+        }
     }
 
     // ==================== Semat ====================
