@@ -48,6 +48,10 @@
     </x-card>
 </div>
 
+@assets
+<script src="{{ asset('js/chart/highcharts.js') }}"></script>
+@endassets
+
 @script
 <script>
     // Palettes keyed by data-theme (see x-theme-selector: fantasy light / dark).

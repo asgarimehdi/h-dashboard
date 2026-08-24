@@ -237,6 +237,103 @@ body {
 /* Keep scrollbar pretty + consistent in both themes */
 
 /* =====================================================================
+   Glassmorphism (حالت شیشه‌ای) — کل محتوای رابط
+   Uses DaisyUI theme tokens (--color-base-100 / --color-base-content) so
+   the theme selector (dark / light / synthwave / fantasy / luxury) keeps
+   working automatically. color-mix() re-tints the glass for every theme.
+   Applied only to the main "surface" elements (not tiny controls) to
+   stay light — backdrop-filter is GPU-accelerated at a moderate 12px.
+   Add class="glass" anywhere for an extra glass panel.
+   ===================================================================== */
+@layer components {
+    .glass {
+        background-color: color-mix(in oklab, var(--color-base-100) 70%, transparent);
+        -webkit-backdrop-filter: blur(12px) saturate(160%);
+        backdrop-filter: blur(12px) saturate(160%);
+        border: 1px solid color-mix(in oklab, var(--color-base-content) 14%, transparent);
+        box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.28);
+    }
+    .glass-strong {
+        background-color: color-mix(in oklab, var(--color-base-100) 55%, transparent);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid color-mix(in oklab, var(--color-base-content) 16%, transparent);
+        box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.34);
+    }
+}
+
+/* Apply glass globally to the major surfaces — no Blade/vendor edits needed.
+   !important overrides maryUI/daisyUI's own bg-base-100 on these elements. */
+.card,
+.modal-box,
+.navbar,
+.dropdown-content,
+.menu,
+.popover,
+.toast,
+.alert,
+.stat,
+.drawer-side {
+    background-color: color-mix(in oklab, var(--color-base-100) 70%, transparent) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+    backdrop-filter: blur(12px) saturate(160%) !important;
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 14%, transparent) !important;
+    box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.28) !important;
+}
+
+/* Keep form controls readable: solid-ish glass, not fully transparent. */
+.input,
+.select,
+.textarea,
+.range,
+.checkbox,
+.radio,
+.toggle,
+.file-input {
+    background-color: color-mix(in oklab, var(--color-base-100) 88%, transparent) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    backdrop-filter: blur(4px) !important;
+}
+
+/* Glass buttons — keep each variant's color identity (primary=emerald,
+   error=red, ...) by glassing the underlying --btn-bg theme var. */
+.btn {
+    background-color: color-mix(in oklab, var(--btn-bg) 72%, transparent) !important;
+    border-color: color-mix(in oklab, var(--btn-bg) 85%, transparent) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
+    backdrop-filter: blur(8px) saturate(140%) !important;
+}
+
+/* Glass badges — same idea: glass the badge's theme color var.
+   Outline badges (--badge-color transparent) stay transparent. */
+.badge {
+    background-color: color-mix(in oklab, var(--badge-color, var(--color-base-200)) 70%, transparent) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+    backdrop-filter: blur(6px) !important;
+}
+
+/* =====================================================================
+   Charts (Highcharts) — follow the theme instead of a white box
+   Highcharts defaults to a hardcoded white background; force transparent
+   so the glassy card + animated background show through on every theme.
+   Also theme the gridlines / axis text so they're readable on dark themes.
+   ===================================================================== */
+.highcharts-background {
+    fill: transparent !important;
+}
+.highcharts-grid-line,
+.highcharts-axis-line,
+.highcharts-tick {
+    stroke: color-mix(in oklab, var(--color-base-content) 16%, transparent) !important;
+}
+.highcharts-axis-title,
+.highcharts-axis-labels text,
+.highcharts-legend-item text,
+.highcharts-tooltip text {
+    fill: var(--color-base-content) !important;
+}
+
+/* =====================================================================
    Stitch-style animated background additions
    Works with DaisyUI theme system (data-theme on <html>)
    ===================================================================== */
