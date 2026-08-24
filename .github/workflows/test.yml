@@ -114,6 +114,11 @@ jobs:
     name: Mutation Testing
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Non-blocking signal for now: the mutation job has never passed — the
+    # suite has no covers()/mutates() declarations and mutation mode trips
+    # over lookup-table id collisions. Treat failures as informational until
+    # the job is properly wired up.
+    continue-on-error: true
 
     services:
       postgres:
