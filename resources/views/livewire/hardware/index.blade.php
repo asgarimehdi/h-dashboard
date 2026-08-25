@@ -711,11 +711,11 @@ return new class extends Component
 
         $restoreData['n_code'] = $nCode;
         $restoreData['id'] = $audit->hardware_id;
-        Hardware::create($restoreData);
+        $restoredHardware = Hardware::create($restoreData);
 
         // Log the restore
         app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
-            Hardware::find($audit->hardware_id),
+            $restoredHardware,
             array_map(
                 fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'],
                 $audit->changes
