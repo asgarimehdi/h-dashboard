@@ -697,9 +697,10 @@ return new class extends Component
             }
         }
 
-        // If n_code not in audit, we cannot restore (old audit format)
+        // If n_code not in audit (old records created before observer fix),
+        // the hardware→person link was lost on delete.
         if ($nCode === null) {
-            $this->error('این رکورد قبل از تغییر ساختار تاریخچه ثبت شده و n_code ندارد - قابل بازگردانی نیست.', position: 'toast-bottom');
+            $this->error('این رکورد قبل از ثبت n_code در تاریخچه ایجاد شده و لینک شخص حذف شده است — لطفاً به صورت دستی ایجاد کنید.', position: 'toast-bottom');
             return;
         }
 
