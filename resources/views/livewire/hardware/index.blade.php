@@ -1006,20 +1006,29 @@ return new class extends Component
                                     <span class="text-xs opacity-50">{{ \Morilog\Jalali\Jalalian::fromDateTime($entry['created_at'])->format('Y/m/d H:i') }}</span>
                                 </div>
                                 @if(!empty($entry['changes']) && is_array($entry['changes']))
-                                    <div class="flex flex-wrap gap-1 mt-1">
+                                    <div class="space-y-1 mt-1">
                                         @foreach($entry['changes'] as $change)
                                             @if(is_array($change) && isset($change['field']))
-                                                <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
-                                                    {{ $change['field'] }}: {{ $change['old'] ?? '—' }} ← {{ $change['new'] ?? '—' }}
+                                                <div class="flex items-center justify-between gap-2 text-xs bg-base-300/30 rounded px-2 py-1"
+                                                     title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
+                                                    <span class="font-mono">
+                                                        <span class="text-error">{{ $change['old'] ?? '—' }}</span>
+                                                        <span class="opacity-50 mx-1">←</span>
+                                                        <span class="text-success">{{ $change['new'] ?? '—' }}</span>
+                                                        <span class="opacity-50 ms-1">({{ $change['field'] }})</span>
+                                                    </span>
                                                     @if(in_array($entry['action'], ['updated', 'rollback']) && ($change['old'] ?? '—') !== '—')
                                                         <button
                                                             wire:click="rollbackHistoryField({{ $entry['id'] }}, '{{ $change['field'] }}')"
                                                             wire:confirm="آیا از بازگردانی فیلد {{ $change['field'] }} به مقدار «{{ $change['old'] ?? '' }}» مطمئن هستید؟"
-                                                            class="text-primary hover:underline ms-1 text-[10px]"
+                                                            class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 shrink-0"
                                                             title="بازگردانی این فیلد"
-                                                        >↺ بازگردانی</button>
+                                                        >
+                                                            <x-icon name="o-arrow-path" class="w-3 h-3" />
+                                                            بازگردانی
+                                                        </button>
                                                     @endif
-                                                </span>
+                                                </div>
                                             @endif
                                         @endforeach
                                     </div>
