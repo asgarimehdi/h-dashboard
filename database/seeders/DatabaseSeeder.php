@@ -39,6 +39,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             PersonUserFromDeviceSeeder::class,
             HardwareSeeder::class,
+            HardwareHistorySeeder::class,
             TodoSeeder::class,
             ActivityLogSeeder::class,
             TicketSeeder::class,
