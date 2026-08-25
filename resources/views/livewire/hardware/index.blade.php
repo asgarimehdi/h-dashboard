@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\Hardware;
+use App\Models\HardwareAudit;
 use App\Models\Person;
+use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -12,21 +14,29 @@ use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use PersianNormalizer;
     use Toast;
     use WithPagination;
-    use PersianNormalizer;
 
     public string $search = '';
+
     public int $perPage = 20;
+
     public bool $showHelpModal = false;
 
     // History modal
     public bool $showHistoryModal = false;
+
     public ?int $historyHardwareId = null;
+
     public array $history = [];
+
     public int $historyCurrentPage = 1;
+
     public int $historyPerPage = 15;
+
     public int $historyTotal = 0;
+
     public ?string $historyActionFilter = null;
 
     /**
@@ -50,28 +60,43 @@ return new class extends Component
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds));
+        return $query->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds));
     }
+
     public bool $showForm = false;
+
     public bool $showEditModal = false;
+
     public bool $showFilters = false;
+
     public bool $showColPanel = false;
+
     public ?int $editingId = null;
+
     public array $sortBy = ['column' => 'id', 'direction' => 'desc'];
 
     // Filter fields
     public ?string $filterType = null;
+
     public ?string $filterOs = null;
+
     public ?string $filterCpu = null;
+
     public ?string $filterRam = null;
+
     public ?string $filterHdd = null;
+
     public ?string $filterShutdown = null;
+
     public ?string $filterNetType = null;
+
     public ?string $filterMark = null;
 
     // Related filters (Person/Unit/Semat)
     public ?string $filterPerson = null;
+
     public ?string $filterUnit = null;
+
     public ?string $filterSemat = null;
 
     // Bulk selection
@@ -90,31 +115,54 @@ return new class extends Component
 
     // Form fields
     public ?string $n_code = null;
+
     public ?string $n_code_status = null; // 'valid', 'invalid', or null
+
     public ?string $n_code_name = null;
+
     public ?string $n_code_unit = null;
+
     public ?string $pc_name = null;
+
     public ?string $type = null;
+
     public ?string $os = null;
+
     public ?string $ip_valid = null;
+
     public ?string $ip_local = null;
+
     public ?string $mac = null;
+
     public ?string $net_type = null;
+
     public ?string $switch = null;
+
     public ?string $port = null;
+
     public bool $shutdown = true;
+
     public ?string $vlan = null;
+
     public ?string $motherboard = null;
+
     public ?string $cpu = null;
+
     public ?string $ram = null;
+
     public ?string $hdd = null;
+
     public ?string $comments = null;
+
     public bool $mark = false;
+
     public ?string $clean_at = null;
 
     // Person search
     public string $personSearch = '';
+
     public array $personResults = [];
+
     public ?string $selectedPersonName = null;
 
     public function updatedPersonSearch(): void
@@ -122,6 +170,7 @@ return new class extends Component
         $normalized = self::normalizeForSearch($this->personSearch);
         if (strlen($normalized) < 2) {
             $this->personResults = [];
+
             return;
         }
 
@@ -130,12 +179,12 @@ return new class extends Component
         $this->personResults = Person::whereIn('u_id', $accessibleIds)
             ->where(function ($q) use ($normalized) {
                 $q->where('n_code', 'LIKE', "%{$normalized}%")
-                  ->orWhere('f_name', 'LIKE', "%{$normalized}%")
-                  ->orWhere('l_name', 'LIKE', "%{$normalized}%");
+                    ->orWhere('f_name', 'LIKE', "%{$normalized}%")
+                    ->orWhere('l_name', 'LIKE', "%{$normalized}%");
             })
             ->limit(10)
             ->get()
-            ->map(fn($p) => ['n_code' => $p->n_code, 'name' => trim($p->f_name . ' ' . $p->l_name)])
+            ->map(fn ($p) => ['n_code' => $p->n_code, 'name' => trim($p->f_name.' '.$p->l_name)])
             ->toArray();
     }
 
@@ -145,6 +194,7 @@ return new class extends Component
             $this->n_code_status = null;
             $this->n_code_name = null;
             $this->n_code_unit = null;
+
             return;
         }
 
@@ -156,7 +206,7 @@ return new class extends Component
 
         if ($person) {
             $this->n_code_status = 'valid';
-            $this->n_code_name = trim($person->f_name . ' ' . $person->l_name);
+            $this->n_code_name = trim($person->f_name.' '.$person->l_name);
             $this->n_code_unit = $person->unit?->name;
         } else {
             $this->n_code_status = 'invalid';
@@ -200,7 +250,7 @@ return new class extends Component
      */
     public function toggleFilter(string $property, string $value): void
     {
-        $this->$property = ($this->$property === $value) ? null : $value;
+        $this->$property = ($value === $this->$property) ? null : $value;
     }
 
     public function hasActiveFilters(): bool
@@ -243,6 +293,7 @@ return new class extends Component
 
         if (! in_array($person->u_id, $accessibleIds)) {
             $this->error('شما به این پرسنل دسترسی ندارید.', position: 'toast-bottom');
+
             return;
         }
 
@@ -264,13 +315,14 @@ return new class extends Component
         $accessibleIds = $this->accessibleUnitIds();
         if (! in_array($hw->person?->u_id, $accessibleIds)) {
             $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
+
             return;
         }
 
         $this->editingId = (int) $id;
         $this->fill($hw->toArray());
         $this->clean_at = $hw->clean_at?->format('Y-m-d');
-        $this->selectedPersonName = $hw->person ? trim($hw->person->f_name . ' ' . $hw->person->l_name) : null;
+        $this->selectedPersonName = $hw->person ? trim($hw->person->f_name.' '.$hw->person->l_name) : null;
         $this->showForm = false;
         $this->showEditModal = true;
     }
@@ -287,6 +339,7 @@ return new class extends Component
         $accessibleIds = $this->accessibleUnitIds();
         if (! in_array($hw->person?->u_id, $accessibleIds)) {
             $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
+
             return;
         }
 
@@ -307,13 +360,14 @@ return new class extends Component
         $accessibleIds = $this->accessibleUnitIds();
         if (! in_array($hardware->person?->u_id, $accessibleIds)) {
             $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
+
             return;
         }
 
         try {
             $hardware->delete();
             $this->warning("سخت افزار {$hardware->pc_name} حذف شد", 'با موفقیت', position: 'toast-bottom');
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->error('امکان حذف وجود ندارد.', position: 'toast-bottom');
         }
     }
@@ -322,17 +376,19 @@ return new class extends Component
     {
         if (empty($this->selected)) {
             $this->error('هیچ ردیفی انتخاب نشده است.', position: 'toast-bottom');
+
             return;
         }
 
         $accessibleIds = $this->accessibleUnitIds();
         $scopedIds = Hardware::whereIn('id', $this->selected)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->pluck('id')
             ->toArray();
 
         if (empty($scopedIds)) {
             $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
+
             return;
         }
 
@@ -353,16 +409,19 @@ return new class extends Component
 
     public function bulkDelete(): void
     {
-        if (empty($this->selected)) return;
+        if (empty($this->selected)) {
+            return;
+        }
 
         $accessibleIds = $this->accessibleUnitIds();
         $scopedIds = Hardware::whereIn('id', $this->selected)
-            ->whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->pluck('id')
             ->toArray();
 
         if (empty($scopedIds)) {
             $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
+
             return;
         }
 
@@ -389,7 +448,7 @@ return new class extends Component
      */
     private function fetchHistory(): void
     {
-        if (!$this->historyHardwareId) {
+        if (! $this->historyHardwareId) {
             return;
         }
 
@@ -397,16 +456,18 @@ return new class extends Component
             ->join('persons', 'hardwares.n_code', '=', 'persons.n_code')
             ->value('persons.u_id');
 
-        if (!$unitId) {
+        if (! $unitId) {
             $this->history = [];
             $this->historyTotal = 0;
+
             return;
         }
 
         $accessibleIds = $this->accessibleUnitIds();
-        if (!in_array($unitId, $accessibleIds)) {
+        if (! in_array($unitId, $accessibleIds)) {
             $this->history = [];
             $this->historyTotal = 0;
+
             return;
         }
 
@@ -414,7 +475,7 @@ return new class extends Component
         // from the related Person (f_name . ' ' . l_name). Eager-load the
         // person relation instead of selecting a nonexistent column. Mirrors
         // the API controller (HardwareAuditController::index).
-        $query = \App\Models\HardwareAudit::with('user.person:id,n_code,f_name,l_name')
+        $query = HardwareAudit::with('user.person:id,n_code,f_name,l_name')
             ->where('hardware_id', $this->historyHardwareId);
 
         if ($this->historyActionFilter) {
@@ -472,13 +533,15 @@ return new class extends Component
     {
         if (! auth()->user()->can('manage_hardware')) {
             $this->error('شما مجوز manage_hardware ندارید.', position: 'toast-bottom');
+
             return;
         }
 
-        $audit = \App\Models\HardwareAudit::find($auditId);
+        $audit = HardwareAudit::find($auditId);
 
         if (! $audit || $audit->hardware_id !== $this->historyHardwareId) {
             $this->error('رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+
             return;
         }
 
@@ -487,12 +550,14 @@ return new class extends Component
 
         if (! $fieldChange) {
             $this->error('فیلد در رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+
             return;
         }
 
         $hw = Hardware::find($this->historyHardwareId);
         if (! $hw) {
             $this->error('سخت افزار یافت نشد.', position: 'toast-bottom');
+
             return;
         }
 
@@ -501,7 +566,7 @@ return new class extends Component
         $hw->update([$field => $restoredValue]);
 
         // Log rollback
-        app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
+        app(HardwareAuditObserver::class)->recordRollbackAudit(
             $hw,
             [[
                 'field' => $field,
@@ -532,6 +597,7 @@ return new class extends Component
         if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) {
             return (int) $displayValue;
         }
+
         return $displayValue;
     }
 
@@ -542,13 +608,13 @@ return new class extends Component
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
             ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
-            ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell ' . ($this->visibleCols['type'] ? '' : 'hidden')],
-            ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell ' . ($this->visibleCols['os'] ? '' : 'hidden')],
-            ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell ' . ($this->visibleCols['ip_local'] ? '' : 'hidden')],
-            ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell ' . ($this->visibleCols['cpu'] ? '' : 'hidden')],
-            ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell ' . ($this->visibleCols['ram'] ? '' : 'hidden')],
-            ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell ' . ($this->visibleCols['hdd'] ? '' : 'hidden')],
-            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24 ' . ($this->visibleCols['status'] ? '' : 'hidden')],
+            ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
+            ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
+            ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_local']],
+            ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['cpu']],
+            ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['ram']],
+            ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['hdd']],
+            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24', 'hidden' => ! $this->visibleCols['status']],
         ];
     }
 
@@ -563,19 +629,19 @@ return new class extends Component
         $query = $this->applyOrgScope(Hardware::with('person'));
 
         // General search
-        if (!empty($this->search)) {
+        if (! empty($this->search)) {
             $s = self::normalizeForSearch($this->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
-                  ->orWhere('n_code', 'LIKE', "%{$s}%")
-                  ->orWhere('ip_valid', 'LIKE', "%{$s}%")
-                  ->orWhere('ip_local', 'LIKE', "%{$s}%")
-                  ->orWhere('mac', 'LIKE', "%{$s}%")
-                  ->orWhere('comments', 'LIKE', "%{$s}%")
-                  ->orWhereHas('person', function ($pq) use ($s) {
-                      $pq->where('f_name', 'LIKE', "%{$s}%")
-                        ->orWhere('l_name', 'LIKE', "%{$s}%");
-                  });
+                    ->orWhere('n_code', 'LIKE', "%{$s}%")
+                    ->orWhere('ip_valid', 'LIKE', "%{$s}%")
+                    ->orWhere('ip_local', 'LIKE', "%{$s}%")
+                    ->orWhere('mac', 'LIKE', "%{$s}%")
+                    ->orWhere('comments', 'LIKE', "%{$s}%")
+                    ->orWhereHas('person', function ($pq) use ($s) {
+                        $pq->where('f_name', 'LIKE', "%{$s}%")
+                            ->orWhere('l_name', 'LIKE', "%{$s}%");
+                    });
             });
         }
 
@@ -614,8 +680,8 @@ return new class extends Component
             $normalized = self::normalizeForSearch($this->filterPerson);
             $query->whereHas('person', function ($q) use ($normalized) {
                 $q->where('f_name', 'LIKE', "%{$normalized}%")
-                  ->orWhere('l_name', 'LIKE', "%{$normalized}%")
-                  ->orWhere('n_code', 'LIKE', "%{$normalized}%");
+                    ->orWhere('l_name', 'LIKE', "%{$normalized}%")
+                    ->orWhere('n_code', 'LIKE', "%{$normalized}%");
             });
         }
         if ($this->filterUnit) {
@@ -639,9 +705,9 @@ return new class extends Component
     public function with(): array
     {
         return [
-            'hardwares' => $this->hardwares()->through(fn($hw) => [
+            'hardwares' => $this->hardwares()->through(fn ($hw) => [
                 ...$hw->toArray(),
-                'person_name' => $hw->person ? trim($hw->person->f_name . ' ' . $hw->person->l_name) : '-',
+                'person_name' => $hw->person ? trim($hw->person->f_name.' '.$hw->person->l_name) : '-',
                 'status' => $hw->mark ? 'mark' : ($hw->shutdown ? 'off' : 'on'),
             ]),
             'headers' => $this->headers(),
