@@ -102,14 +102,25 @@ return new class extends Component
     // Bulk selection
     public array $selected = [];
 
-    // Column visibility
+    // Column visibility — all DB fields available, default hidden (#507)
     public array $visibleCols = [
         'type' => true,
         'os' => true,
+        'ip_valid' => false,
         'ip_local' => true,
+        'mac' => false,
+        'net_type' => false,
+        'switch' => false,
+        'port' => false,
+        'vlan' => false,
+        'motherboard' => false,
         'cpu' => true,
         'ram' => true,
         'hdd' => true,
+        'shutdown' => false,
+        'mark' => false,
+        'comments' => false,
+        'clean_at' => false,
         'status' => true,
     ];
 
@@ -610,10 +621,21 @@ return new class extends Component
             ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
             ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
+            ['key' => 'ip_valid', 'label' => 'IP (مجازی)', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
             ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_local']],
+            ['key' => 'mac', 'label' => 'MAC', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['mac']],
+            ['key' => 'net_type', 'label' => 'نوع اتصال', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['net_type']],
+            ['key' => 'switch', 'label' => 'سوئیچ', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['switch']],
+            ['key' => 'port', 'label' => 'پورت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['port']],
+            ['key' => 'vlan', 'label' => 'VLAN', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['vlan']],
+            ['key' => 'motherboard', 'label' => 'مادربورد', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['motherboard']],
             ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['cpu']],
             ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['ram']],
             ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['hdd']],
+            ['key' => 'shutdown', 'label' => 'خاموشی', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['shutdown']],
+            ['key' => 'mark', 'label' => 'علامت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['mark']],
+            ['key' => 'comments', 'label' => 'توضیحات', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['comments']],
+            ['key' => 'clean_at', 'label' => 'تاریخ نظافت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['clean_at']],
             ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24', 'hidden' => ! $this->visibleCols['status']],
         ];
     }
@@ -708,6 +730,10 @@ return new class extends Component
             'hardwares' => $this->hardwares()->through(fn ($hw) => [
                 ...$hw->toArray(),
                 'person_name' => $hw->person ? trim($hw->person->f_name.' '.$hw->person->l_name) : '-',
+                'shutdown' => $hw->shutdown ? 'بله' : 'خیر',
+                'mark' => $hw->mark ? 'بله' : 'خیر',
+                'clean_at' => $hw->clean_at?->format('Y/m/d') ?? '—',
+                'comments' => $hw->comments ?? '—',
                 'status' => $hw->mark ? 'mark' : ($hw->shutdown ? 'off' : 'on'),
             ]),
             'headers' => $this->headers(),
