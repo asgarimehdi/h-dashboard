@@ -73,7 +73,8 @@ return new class extends Component {
         $query = Unit::query()
             ->withAggregate('unitType', 'name')
             ->withAggregate('region', 'name')
-            ->withAggregate('parent', 'name');
+            ->withAggregate('parent', 'name')
+            ->addSelect('can_receive_tickets', 'is_active');
 
         if (! empty($accessibleIds)) {
             $query->whereIn('id', $accessibleIds);
@@ -307,7 +308,30 @@ return new class extends Component {
             ['key' => 'unit_type_name', 'label' => 'نوع واحد', 'class' => 'w-50 hidden sm:table-cell'],
             ['key' => 'region_name', 'label' => 'منطقه', 'class' => 'w-8 hidden sm:table-cell'],
             ['key' => 'parent_name', 'label' => 'واحد بالادستی', 'class' => 'w-20 hidden xl:table-cell'],
+            ['key' => 'can_receive_tickets', 'label' => 'پذیرش تیکت', 'class' => 'w-5 hidden xl:table-cell'],
         ];
+    }
+
+    public function toggleTicketCapability($unitId): void
+    {
+        if (! auth()->user()->can('manage_unit_tickets')) {
+            $this->error('شما مجوز مدیریت تیکت‌ها را ندارید.', position: 'toast-bottom');
+            return;
+        }
+
+        $unit = Unit::find($unitId);
+        if (! $unit) {
+            $this->error('واحد یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        $unit->can_receive_tickets = ! $unit->can_receive_tickets;
+        $unit->saveQuietly();
+
+        $status = $unit->can_receive_tickets ? 'فعال شد' : 'غیرفعال شد';
+        $this->success("واحد «{$unit->name}» برای پذیرش تیکت {$status}.", position: 'toast-bottom');
+
+        app(\App\Services\AccessService::class)->clearAllCaches();
     }
 
     public function with(): array
@@ -373,6 +397,17 @@ return new class extends Component {
                                   spinner
                                   class="btn-ghost btn-sm text-error" />
                     </div>
+                    @endscope
+                    @scope('can_receive_tickets', $unit)
+                        <button wire:click="toggleTicketCapability({{ $unit->id }})" class="btn btn-ghost btn-sm">
+                            @if($unit->can_receive_tickets)
+                                <x-icon name="o-check-circle" class="w-6 h-6 text-success" />
+                                <span class="text-xs text-success hidden xl:inline">فعال</span>
+                            @else
+                                <x-icon name="o-x-circle" class="w-6 h-6 text-base-content/40" />
+                                <span class="text-xs text-base-content/40 hidden xl:inline">غیرفعال</span>
+                            @endif
+                        </button>
                     @endscope
                 </tr>
             @endforeach

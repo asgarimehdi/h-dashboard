@@ -25,6 +25,21 @@ class Unit extends Model
         'boundary_id',
         'lat',
         'lng',
+        'can_receive_tickets',
+    ];
+
+    protected $casts = [
+        'can_receive_tickets' => 'boolean',
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * Attributes that should be cast.
+     * Using this instead of $attributes default since boolean cast
+     * does not apply when the attribute isn't set by Eloquent.
+     */
+    protected $attributes = [
+        'can_receive_tickets' => false,
     ];
 
     public function person(): HasMany
