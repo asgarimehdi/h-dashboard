@@ -29,8 +29,7 @@ return new class extends Component
 
     public bool $showTrashModal = false;
 
-    // Not serialized to Livewire client (loaded on demand)
-    protected array $deletedHardware = [];
+    public array $deletedHardware = [];
 
     public ?int $historyHardwareId = null;
 
