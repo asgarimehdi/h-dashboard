@@ -10,6 +10,7 @@ use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use Morilog\Jalali\Jalalian;
 
@@ -136,6 +137,73 @@ class HardwareAuditController extends Controller
                 'field' => $request->field,
                 'restored_value' => $oldValue,
             ],
+        ]);
+    }
+
+    /**
+     * Restore a fully-deleted hardware record from its 'created' audit entry.
+     *
+     * Looks up the HardwareAudit row (which survives hard deletes) and
+     * recreates the Hardware with the original field values.
+     */
+    public function restoreRecord(Request $request, HardwareAudit $audit): JsonResponse
+    {
+        if ($audit->action !== 'created') {
+            return response()->json(['message' => 'Only "created" audits can be used to restore a record.'], 422);
+        }
+
+        // Verify the hardware was actually deleted
+        $exists = Hardware::withTrashed()->where('id', $audit->hardware_id)->exists();
+        if ($exists) {
+            return response()->json(['message' => 'This hardware record still exists — use rollback instead.'], 422);
+        }
+
+        // Verify the audit is not orphaned (linked hardware has never existed or no changes)
+        if (! $audit->changes || ! is_array($audit->changes)) {
+            return response()->json(['message' => 'No change data in audit to restore from.'], 422);
+        }
+
+        $user = $request->user();
+        $this->assertAccessibleFromAudit($request, $audit);
+
+        // Build restore data from the 'new' values of the 'created' audit
+        $restoreData = [];
+        foreach ($audit->changes as $change) {
+            if (!isset($change['field'], $change['new'])) {
+                continue;
+            }
+            $restoreData[$change['field']] = $this->parseValueForRestore(
+                $change['new'],
+                $change['field']
+            );
+        }
+
+        if (empty($restoreData)) {
+            return response()->json(['message' => 'No field data found to restore.'], 422);
+        }
+
+        $restoreData['id'] = $audit->hardware_id;
+
+        $hardware = Hardware::create($restoreData);
+
+        // Log a new 'created' audit entry for the restored record
+        app(HardwareAuditObserver::class)->created($hardware);
+
+        // Also log an explicit 'rollback' audit for traceability
+        $rollbackChanges = array_map(
+            fn($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new']],
+            $audit->changes
+        );
+        app(HardwareAuditObserver::class)->recordRollbackAudit(
+            $hardware,
+            $rollbackChanges,
+            $user?->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'سخت‌افزار با موفقیت بازگردانده شد.',
+            'data' => ['hardware_id' => $hardware->id],
         ]);
     }
 
@@ -301,6 +369,23 @@ class HardwareAuditController extends Controller
 
         if (! $unitId || ! in_array($unitId, $accessibleIds)) {
             abort(403, 'Hardware record not accessible.');
+        }
+    }
+
+    /**
+     * Check organizational access from an audit record (hardware may be gone).
+     */
+    private function assertAccessibleFromAudit(Request $request, HardwareAudit $audit): void
+    {
+        $user = $request->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+
+        $hw = DB::table('hardwares')->where('id', $audit->hardware_id)->first();
+        if ($hw && isset($hw->n_code)) {
+            $unitId = DB::table('persons')->where('n_code', $hw->n_code)->value('u_id');
+            if ($unitId && ! in_array($unitId, $accessibleIds)) {
+                abort(403, 'Hardware record not accessible.');
+            }
         }
     }
 }

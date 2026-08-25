@@ -19,7 +19,7 @@ class HardwareAuditObserver
         }
 
         $fields = [
-            'pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type',
+            'n_code', 'pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type',
             'switch', 'port', 'vlan', 'motherboard', 'comments',
             'ip_valid', 'ip_local', 'mac', 'shutdown', 'mark', 'clean_at'
         ];

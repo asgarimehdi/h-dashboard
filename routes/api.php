@@ -81,6 +81,8 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::get('/{hardware}/audits/{audit}', [HardwareAuditController::class, 'show']);
         Route::post('/{hardware}/audits/{audit}/rollback', [HardwareAuditController::class, 'rollback'])
             ->middleware('permission:manage_hardware');
+        Route::post('/audits/{audit}/restore-record', [HardwareAuditController::class, 'restoreRecord'])
+            ->middleware('permission:manage_hardware');
     });
 
     // Ticket API routes — permission-gated (Issue #323)
