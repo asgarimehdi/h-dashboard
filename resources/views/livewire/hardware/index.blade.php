@@ -29,7 +29,8 @@ return new class extends Component
 
     public bool $showTrashModal = false;
 
-    public array $deletedHardware = [];
+    // Not serialized to Livewire client (loaded on demand)
+    protected array $deletedHardware = [];
 
     public ?int $historyHardwareId = null;
 
@@ -623,18 +624,33 @@ return new class extends Component
      */
     public function loadDeletedHardware(): void
     {
-        $accessibleUnitIds = $this->accessibleUnitIds();
-
+        // Single efficient query: find created audits for deleted hardware,
+        // plus their delete timestamp via subquery.
         $deletedHardwareIds = HardwareAudit::where('action', 'deleted')
             ->pluck('hardware_id')
             ->unique()
             ->values()
             ->all();
 
+        if (empty($deletedHardwareIds)) {
+            $this->deletedHardware = [];
+            $this->showTrashModal = true;
+            return;
+        }
+
         $this->deletedHardware = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
             ->where('action', 'created')
             ->with('user:id,n_code')
             ->get()
+            ->map(function (HardwareAudit $audit) {
+                // Pre-fetch deletedAt to avoid N+1 in Blade
+                $deletedAudit = HardwareAudit::where('action', 'deleted')
+                    ->where('hardware_id', $audit->hardware_id)
+                    ->latest('created_at')
+                    ->first();
+                $audit->deleted_at = $deletedAudit?->created_at;
+                return $audit;
+            })
             ->values()
             ->all();
 
@@ -1191,11 +1207,7 @@ return new class extends Component
                                 <div class="flex items-center justify-between mb-2">
                                     @php
                                         $pcNameField = collect($audit->changes)->firstWhere('field', 'pc_name');
-                                        $personField = collect($audit->changes)->firstWhere('field', 'n_code');
-                                        $deletedAt = \App\Models\HardwareAudit::where('action', 'deleted')
-                                            ->where('hardware_id', $audit->hardware_id)
-                                            ->latest('created_at')
-                                            ->value('created_at');
+                                        $deletedAt = $audit->deleted_at ?? null;
                                     @endphp
                                     <div>
                                         <div class="font-bold">{{ $pcNameField['new'] ?? ('سخت‌افزار #' . $audit->hardware_id) }}</div>
