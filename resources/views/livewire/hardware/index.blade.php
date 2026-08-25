@@ -635,16 +635,6 @@ return new class extends Component
             ->where('action', 'created')
             ->with('user:id,n_code')
             ->get()
-            ->filter(function (HardwareAudit $audit) use ($accessibleUnitIds) {
-                // Check person exists and belongs to accessible units
-                foreach ($audit->changes as $change) {
-                    if (($change['field'] ?? '') === 'n_code') {
-                        $personUnitId = \App\Models\Person::where('n_code', $change['new'])->value('u_id');
-                        return $personUnitId && in_array($personUnitId, $accessibleUnitIds);
-                    }
-                }
-                return false;
-            })
             ->values()
             ->all();
 
@@ -878,7 +868,6 @@ return new class extends Component
                     <div class="flex gap-1">
                         <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="$toggle('showColPanel')" />
                         <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
-                        <x-button icon="o-arrow-uturn-left" class="btn-ghost btn-sm text-warning" label="حذف شده‌ها" wire:click="loadDeletedHardware()" />
                         <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
                         <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
                         @if(!empty($selected))
@@ -895,6 +884,7 @@ return new class extends Component
             <x-button icon="o-computer-desktop" :class="$filterHdd === 'SSD' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="فقط SSD" wire:click="toggleFilter('filterHdd', 'SSD')" />
             <x-button icon="o-power" :class="$filterShutdown === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="روشن‌ها" wire:click="toggleFilter('filterShutdown', '1')" />
             <x-button icon="o-check-circle" :class="$filterMark === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="علامت‌دارها" wire:click="toggleFilter('filterMark', '1')" />
+            <x-button icon="o-arrow-uturn-left" class="btn-ghost btn-xs text-warning" label="حذف شده‌ها" wire:click="loadDeletedHardware()" />
             <x-button icon="o-x-mark" class="btn-ghost btn-xs" label="پاکسازی" wire:click="clearFilters" />
         </div>
 
@@ -1214,11 +1204,20 @@ return new class extends Component
                                             توسط {{ $audit->user['n_code'] ?? 'سیستم' }}
                                         </div>
                                     </div>
-                                    <x-button icon="o-arrow-uturn-left"
-                                        class="btn-ghost btn-xs text-warning"
-                                        wire:click="restoreRecord({{ $audit->id }})"
-                                        spinner
-                                        title="بازگردانی این سخت‌افزار" />
+                                    @php
+                                        $canRestore = collect($audit->changes)->contains('field', 'n_code');
+                                    @endphp
+                                    @if($canRestore)
+                                        <x-button icon="o-arrow-uturn-left"
+                                            class="btn-ghost btn-xs text-warning"
+                                            wire:click="restoreRecord({{ $audit->id }})"
+                                            spinner
+                                            title="بازگردانی این سخت‌افزار" />
+                                    @else
+                                        <span class="text-[10px] text-error opacity-70" title="این رکورد n_code ندارد - قابل بازگردانی نیست">
+                                            ⚠ قابل بازگردانی نیست
+                                        </span>
+                                    @endif
                                 </div>
                                 <div class="flex flex-wrap gap-1 mt-1">
                                     @foreach($audit->changes as $change)
