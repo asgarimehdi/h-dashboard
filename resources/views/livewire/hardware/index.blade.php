@@ -27,6 +27,10 @@ return new class extends Component
     // History modal
     public bool $showHistoryModal = false;
 
+    public bool $showTrashModal = false;
+
+    public array $deletedHardware = [];
+
     public ?int $historyHardwareId = null;
 
     public array $history = [];
@@ -612,6 +616,110 @@ return new class extends Component
         return $displayValue;
     }
 
+    // ── Deleted-hardware restore ─────────────────────────────────────
+
+    /**
+     * Fetch all deleted hardware IDs from audit trail and open trash modal.
+     */
+    public function loadDeletedHardware(): void
+    {
+        $accessibleUnitIds = $this->accessibleUnitIds();
+
+        $deletedHardwareIds = HardwareAudit::where('action', 'deleted')
+            ->pluck('hardware_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->deletedHardware = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
+            ->where('action', 'created')
+            ->with('user:id,n_code')
+            ->get()
+            ->filter(function (HardwareAudit $audit) use ($accessibleUnitIds) {
+                // Check person exists and belongs to accessible units
+                foreach ($audit->changes as $change) {
+                    if (($change['field'] ?? '') === 'n_code') {
+                        $personUnitId = \App\Models\Person::where('n_code', $change['new'])->value('u_id');
+                        return $personUnitId && in_array($personUnitId, $accessibleUnitIds);
+                    }
+                }
+                return false;
+            })
+            ->values()
+            ->all();
+
+        $this->showTrashModal = true;
+    }
+
+    /**
+     * Restore a fully-deleted hardware record from its 'created' audit entry.
+     */
+    public function restoreRecord(int $auditId): void
+    {
+        if (! auth()->user()->can('manage_hardware')) {
+            $this->error('شما مجوز manage_hardware ندارید.', position: 'toast-bottom');
+            return;
+        }
+
+        $audit = HardwareAudit::find($auditId);
+        if (! $audit || $audit->action !== 'created') {
+            $this->error('رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        // Check it was actually deleted
+        $exists = Hardware::where('id', $audit->hardware_id)->exists();
+        if ($exists) {
+            $this->error('این سخت‌افزار هنوز وجود دارد — از بازگردانی فیلد استفاده کنید.', position: 'toast-bottom');
+            return;
+        }
+
+        // Build restore data from audit changes
+        $restoreData = [];
+        $pcName = $audit->hardware_id;
+        $nCode = null;
+        foreach ($audit->changes as $change) {
+            if (! isset($change['field'], $change['new'])) {
+                continue;
+            }
+            $restoreData[$change['field']] = $this->restoreAuditValue($change['new'], $change['field']);
+            if ($change['field'] === 'pc_name') {
+                $pcName = $change['new'];
+            }
+            if ($change['field'] === 'n_code') {
+                $nCode = $change['new'];
+            }
+        }
+
+        // If n_code not in audit, we cannot restore (old audit format)
+        if ($nCode === null) {
+            $this->error('این رکورد قبل از تغییر ساختار تاریخچه ثبت شده و n_code ندارد - قابل بازگردانی نیست.', position: 'toast-bottom');
+            return;
+        }
+
+        if (empty($restoreData) || $nCode === null) {
+            $this->error('داده‌ای برای بازگردانی وجود ندارد (n_code یافت نشد).', position: 'toast-bottom');
+            return;
+        }
+
+        $restoreData['n_code'] = $nCode;
+        $restoreData['id'] = $audit->hardware_id;
+        Hardware::create($restoreData);
+
+        // Log the restore
+        app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
+            Hardware::find($audit->hardware_id),
+            array_map(
+                fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'],
+                $audit->changes
+            ),
+            auth()->id()
+        );
+
+        $this->success("سخت‌افزار {$pcName} با موفقیت بازگردانده شد.", position: 'toast-bottom');
+        $this->loadDeletedHardware();
+    }
+
     public function headers(): array
     {
         return [
@@ -770,6 +878,7 @@ return new class extends Component
                     <div class="flex gap-1">
                         <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="$toggle('showColPanel')" />
                         <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
+                        <x-button icon="o-arrow-uturn-left" class="btn-ghost btn-sm text-warning" label="حذف شده‌ها" wire:click="loadDeletedHardware()" />
                         <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
                         <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
                         @if(!empty($selected))
@@ -1077,6 +1186,52 @@ return new class extends Component
                                 wire:click="historyPage({{ $historyCurrentPage + 1 }})" />
                         </div>
                     @endif
+                @endif
+            </x-modal>
+        @endif
+
+        @if($showTrashModal)
+            <x-modal wire:model="showTrashModal" title="سخت‌افزارهای حذف شده" close-on-backdrop>
+                @if(count($deletedHardware) === 0)
+                    <div class="text-center py-8 text-base-content/50">هیچ سخت‌افزار حذف شده‌ای در دسترس شما نیست.</div>
+                @else
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        @foreach($deletedHardware as $audit)
+                            <div class="border rounded-lg p-3 bg-base-200/50">
+                                <div class="flex items-center justify-between mb-2">
+                                    @php
+                                        $pcNameField = collect($audit->changes)->firstWhere('field', 'pc_name');
+                                        $personField = collect($audit->changes)->firstWhere('field', 'n_code');
+                                        $deletedAt = \App\Models\HardwareAudit::where('action', 'deleted')
+                                            ->where('hardware_id', $audit->hardware_id)
+                                            ->latest('created_at')
+                                            ->value('created_at');
+                                    @endphp
+                                    <div>
+                                        <div class="font-bold">{{ $pcNameField['new'] ?? ('سخت‌افزار #' . $audit->hardware_id) }}</div>
+                                        <div class="text-xs opacity-60">
+                                            حذف شده در {{ $deletedAt ? \Morilog\Jalali\Jalalian::fromDateTime($deletedAt)->format('Y/m/d H:i') : 'نامشخص' }}
+                                            توسط {{ $audit->user['n_code'] ?? 'سیستم' }}
+                                        </div>
+                                    </div>
+                                    <x-button icon="o-arrow-uturn-left"
+                                        class="btn-ghost btn-xs text-warning"
+                                        wire:click="restoreRecord({{ $audit->id }})"
+                                        spinner
+                                        title="بازگردانی این سخت‌افزار" />
+                                </div>
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    @foreach($audit->changes as $change)
+                                        @if(isset($change['field']) && $change['field'] !== 'pc_name' && $change['field'] !== 'n_code')
+                                            <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
+                                                {{ $change['field'] }}: {{ $change['new'] ?? '—' }}
+                                            </span>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 @endif
             </x-modal>
         @endif
