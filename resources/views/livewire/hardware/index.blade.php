@@ -709,7 +709,6 @@ return new class extends Component
         }
 
         $restoreData['n_code'] = $nCode;
-        $restoreData['id'] = $audit->hardware_id;
         $restoredHardware = Hardware::create($restoreData);
 
         // Log the restore

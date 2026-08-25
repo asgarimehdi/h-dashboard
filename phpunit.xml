@@ -27,11 +27,6 @@
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="5432"/>
         <env name="DB_DATABASE" value="h_dashboard_test"/>
-        <env name="DB_USERNAME" value="postgres"/>
-        <env name="DB_PASSWORD" value="secret"/>
-        <!-- Hermetic test env: no live Redis dependency (cache/session on
-             array, queue sync). force=true so shell-exported vars can't
-             leak in; config/cache.php reads CACHE_STORE, not CACHE_DRIVER. -->
         <env name="CACHE_STORE" value="array" force="true"/>
         <env name="CACHE_DRIVER" value="array" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
