@@ -93,7 +93,10 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
             $query->whereIn('u_id', $this->accessibleUnitIds);
         }
 
-        $persons = $query->get(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id']);
+        // NOTE: 'id' MUST be selected — records are later updated via these
+        // models; without the PK, update() issues WHERE id IS NULL and
+        // silently persists nothing while counters still report success.
+        $persons = $query->get(['id', 'n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id']);
 
         foreach ($persons as $person) {
             if ($person->n_code) {
