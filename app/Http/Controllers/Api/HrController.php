@@ -242,11 +242,12 @@ class HrController extends Controller
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
+        // Push the empty-unit filter into the query (NOT EXISTS) instead of
+        // loading every scoped unit with a count and filtering in PHP — keeps
+        // this cheap for units with thousands of children.
         $units = Unit::whereIn('id', $accessibleIds)
-            ->withCount('person as personnel_count')
-            ->get()
-            ->filter(fn ($u) => $u->personnel_count === 0)
-            ->values();
+            ->whereDoesntHave('person')
+            ->get();
 
         return response()->json([
             'data' => $units->map(fn ($u) => [
@@ -360,17 +361,39 @@ class HrController extends Controller
             function () use ($accessibleIds, $months) {
                 $since = now()->subMonths($months)->startOfMonth();
 
-                // Fetch created_at dates and group by month in PHP for DB-agnostic behavior
-                $records = Person::whereIn('u_id', $accessibleIds)
-                    ->where('created_at', '>=', $since)
-                    ->select('created_at')
-                    ->get()
-                    ->groupBy(fn ($p) => $p->created_at->format('Y-m'));
+                if (DB::getDriverName() === 'pgsql') {
+                    // Single-pass aggregation: one query groups by month in SQL
+                    // instead of pulling every matching person row into PHP.
+                    $idList = implode(',', array_map('intval', $accessibleIds));
+                    $results = DB::select(
+                        "SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
+                                COUNT(*) AS count
+                         FROM persons
+                         WHERE u_id IN ({$idList})
+                           AND created_at >= ?
+                         GROUP BY date_trunc('month', created_at)
+                         ORDER BY date_trunc('month', created_at) ASC",
+                        [$since]
+                    );
 
-                return $records->map(fn ($group, $month) => [
-                    'month' => $month,
-                    'count' => $group->count(),
-                ])->values();
+                    return collect($results)->map(fn ($row) => [
+                        'month' => $row->month,
+                        'count' => (int) $row->count,
+                    ])->values();
+                }
+
+                // Fallback for non-PgSQL drivers (e.g. SQLite in tests):
+                // still select only the month bucket, not every column.
+                return Person::whereIn('u_id', $accessibleIds)
+                    ->where('created_at', '>=', $since)
+                    ->selectRaw("strftime('%Y-%m', created_at) AS month, COUNT(*) AS count")
+                    ->groupBy('month')
+                    ->orderBy('month')
+                    ->get()
+                    ->map(fn ($row) => [
+                        'month' => $row->month,
+                        'count' => (int) $row->count,
+                    ])->values();
             }
         );
 
@@ -391,7 +414,7 @@ class HrController extends Controller
             function () use ($accessibleIds, $months) {
                 if (DB::getDriverName() === 'pgsql') {
                     // PostgreSQL-optimized: single query with generate_series
-                    $idList = '{' . implode(',', array_map('intval', $accessibleIds)) . '}';
+                    $idList = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
                     $results = DB::select(
                         "WITH accessible_units AS (
                             SELECT id FROM units WHERE id = ANY(?)
