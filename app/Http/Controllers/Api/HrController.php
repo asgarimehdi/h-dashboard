@@ -503,21 +503,59 @@ class HrController extends Controller
             $this->hrAnalyticsCacheKey('staffing_ratio', $accessibleIds),
             now()->addMinutes(5),
             function () use ($accessibleIds) {
+                $idList = implode(',', array_map('intval', $accessibleIds));
+
+                if (DB::getDriverName() === 'pgsql') {
+                    // Single query: UNION ALL of both groupings instead of two
+                    // separate round-trips. A 'kind' column tags each row so we
+                    // can split the result back into the two expected buckets.
+                    $rows = DB::select(
+                        "SELECT 'unit_type' AS kind, COALESCE(ut.name, 'نامشخص') AS label, COUNT(*) AS total
+                         FROM persons p
+                         JOIN units u ON p.u_id = u.id
+                         LEFT JOIN unit_types ut ON u.unit_type_id = ut.id
+                         WHERE p.u_id IN ({$idList})
+                         GROUP BY ut.name
+                         UNION ALL
+                         SELECT 'semat' AS kind, COALESCE(s.name, 'نامشخص') AS label, COUNT(*) AS total
+                         FROM persons p
+                         JOIN semats s ON p.s_id = s.id
+                         WHERE p.u_id IN ({$idList}) AND p.s_id IS NOT NULL
+                         GROUP BY s.name"
+                    );
+
+                    $byUnitType = [];
+                    $bySemat = [];
+                    foreach ($rows as $row) {
+                        if ($row->kind === 'unit_type') {
+                            $byUnitType[$row->label] = (int) $row->total;
+                        } else {
+                            $bySemat[$row->label] = (int) $row->total;
+                        }
+                    }
+
+                    return [
+                        'by_unit_type' => $byUnitType,
+                        'by_semat' => $bySemat,
+                    ];
+                }
+
+                // Fallback for non-PgSQL drivers (e.g. SQLite in tests).
                 $persons = Person::whereIn('u_id', $accessibleIds);
 
                 $byUnitType = (clone $persons)
                     ->join('units', 'persons.u_id', '=', 'units.id')
                     ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
-                    ->selectRaw('unit_types.name as unit_type_name, count(*) as total')
-                    ->groupBy('unit_types.name')
+                    ->selectRaw('COALESCE(unit_types.name, ?) as unit_type_name, count(*) as total', ['نامشخص'])
+                    ->groupBy('unit_type_name')
                     ->pluck('total', 'unit_type_name')
                     ->toArray();
 
                 $bySemat = (clone $persons)
                     ->whereNotNull('s_id')
                     ->join('semats', 'persons.s_id', '=', 'semats.id')
-                    ->selectRaw('semats.name as semat_name, count(*) as total')
-                    ->groupBy('semats.name')
+                    ->selectRaw('COALESCE(semats.name, ?) as semat_name, count(*) as total', ['نامشخص'])
+                    ->groupBy('semat_name')
                     ->pluck('total', 'semat_name')
                     ->toArray();
 
