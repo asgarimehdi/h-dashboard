@@ -63,6 +63,12 @@
         "dev": [
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+        ],
+        "test": [
+            "Composer\\Config::disableProcessTimeout",
+            "php artisan config:clear",
+            "php artisan route:clear",
+            "XDEBUG_MODE=off php artisan test"
         ]
     },
     "extra": {
