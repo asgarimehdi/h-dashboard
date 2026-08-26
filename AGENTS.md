@@ -512,11 +512,12 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **Forms:** Use MaryUI `x-input`, `x-select`, `x-button` components
 - **Modal:** Use `x-modal` with `close-on-backdrop` for edit forms
 - **Components:** Livewire components (`app/Livewire/<Feature>/...`) with Blade views under `resources/views/livewire/<feature>/`
-- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run with `./vendor/bin/pest tests/` (see **Running Tests (Pest)**)
-- **Factories:** use factories with custom states (only `UserFactory` exists; other models have seeders). Don't delete tests without approval.
+- **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run via **`composer test`** (clears caches, disables Xdebug; see **Running Tests (Pest)**)
+- **Factories:** use factories with custom states (only `UserFactory` exists; other models have seeders). Don't delete tests without approval. When seeding rows with **explicit IDs** in tests, resync the table's Postgres sequence afterwards (`SELECT setval(...)`), or later inserts hit duplicate keys — see `LookupSimpleModelsTest`.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL in tinker. Don't create models in tinker without approval.
 - **Laravel Boost (MCP):** prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
+- **Boost from CLI:** when no MCP transport is available, call the same tools via `php scripts/boost_tool.php <tool> '<json-args>'` using the kebab/short aliases (e.g. `php scripts/boost_tool.php application-info '{}'`, `db-schema`, `query`, `docs`, `url`, `tinker`, …). Prints the MCP client output verbatim.
 - **Artisan:** new migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter), not timestamps; pass `--no-interaction` to all Artisan commands.
 - **Frontend rebuild:** after frontend changes run `npm run build` (or `vite build`); Livewire for dynamic UI, Alpine.js for client-side interactions.
 
@@ -682,6 +683,10 @@ codegraph status .
 ### CI/CD
 
 `.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner): pulls `/home/boxd/h-dashboard`, clears views/config/routes cache, runs `php artisan optimize`, reloads apache2.
+
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with two jobs:
+- **Tests & Coverage (blocking)** — PHP **8.5** (matches composer.lock; Symfony 8.1 requires ≥8.4), service containers `postgis/postgis:16-3.4` (:5432) + passwordless `redis`, builds frontend assets (`npm ci && npm run build`), rewrites `.env.testing` to match the containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`** — Laravel 13 ignores legacy `CACHE_DRIVER`; a shared redis store cross-pollutes spatie's permission cache across parallel workers), `key:generate --env=testing`, `migrate --env=testing`, then clears config/routes/views (guard against the stale-`routes-v7.php` Livewire-hash trap above), then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov.
+- **Mutation Testing (non-blocking, `continue-on-error: true`)** — has never passed: the codebase has no `covers()`/`mutates()` declarations (so it runs `--everything --covered-only`) and mutation mode trips over lookup-table id collisions. Treat failures as informational until properly wired up.
 
 ### Storage Permissions (gotcha)
 
