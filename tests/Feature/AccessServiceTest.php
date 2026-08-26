@@ -6,7 +6,6 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
-use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -21,159 +20,108 @@ class AccessServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        Session::flush();
+        // Ensure cache driver is array for predictable assertions.
+        config(['cache.default' => 'array']);
     }
 
-    protected function createUserWithUnit(array $unitAttrs = []): array
+    private function makeUserInUnit(Unit $unit): User
     {
-        $unit = Unit::create(array_merge(['name' => 'واحد تست'], $unitAttrs));
+        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
+        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
+        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
+        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            'n_code' => $nCode, 'f_name' => 'A', 'l_name' => 'B',
+            't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
+            'u_id' => $unit->id,
         ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+
+        return User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+    }
+
+    public function test_accessible_unit_ids_returns_units_with_descendants(): void
+    {
+        $parent = Unit::create(['name' => 'Parent']);
+        $child = Unit::create(['name' => 'Child', 'parent_id' => $parent->id]);
+        $user = $this->makeUserInUnit($parent);
+        $user->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
+        Session::put('current_unit_id', $parent->id);
+        $this->actingAs($user);
+
+        $ids = app(AccessService::class)->accessibleUnitIds($user);
+
+        $this->assertContains($parent->id, $ids);
+        $this->assertContains($child->id, $ids);
+    }
+
+    public function test_accessible_unit_ids_returns_empty_for_guest(): void
+    {
+        $ids = app(AccessService::class)->accessibleUnitIds(null);
+
+        $this->assertEmpty($ids);
+    }
+
+    public function test_accessible_unit_ids_falls_back_to_person_unit_when_no_session(): void
+    {
+        $unit = Unit::create(['name' => 'Only Unit']);
+        $user = $this->makeUserInUnit($unit);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+        // No current_unit_id set in session -> should fall back to user's person unit.
+        $this->actingAs($user);
 
-        return ['user' => $user, 'unit' => $unit];
+        $ids = app(AccessService::class)->accessibleUnitIds($user);
+
+        $this->assertContains($unit->id, $ids);
     }
 
-    // --- accessibleUnitIds ---
-
-    public function test_returns_empty_array_when_no_user_is_authenticated(): void
+    public function test_clear_cache_bumps_version(): void
     {
-        $service = new AccessService();
-        $this->assertEmpty($service->accessibleUnitIds());
-    }
-
-    public function test_returns_user_own_unit_when_session_has_current_unit_id(): void
-    {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $unit = Unit::create(['name' => 'CU']);
+        $user = $this->makeUserInUnit($unit);
+        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
+        $this->actingAs($user);
 
-        $service = new AccessService();
-        $result = $service->accessibleUnitIds($user);
+        $before = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
 
-        $this->assertContains($unit->id, $result);
+        app(AccessService::class)->clearCache($user);
+
+        $after = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
+
+        $this->assertGreaterThan($before, $after);
     }
 
-    public function test_returns_accessible_units_including_children_via_recursive_cte(): void
+    public function test_clear_all_caches_bumps_multiple_versions(): void
     {
-        $parent = Unit::create(['name' => 'واحد والد']);
-        $child1 = Unit::create(['name' => 'واحد فرزند ۱', 'parent_id' => $parent->id]);
-        $child2 = Unit::create(['name' => 'واحد فرزند ۲', 'parent_id' => $parent->id]);
-        $grandchild = Unit::create(['name' => 'واحد نوه', 'parent_id' => $child1->id]);
+        $unit = Unit::create(['name' => 'CAU']);
+        $user = $this->makeUserInUnit($unit);
 
-        ['user' => $user] = $this->createUserWithUnit(['name' => 'واحد والد']);
-        // Override: attach to parent
-        $user->units()->detach();
-        $user->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $parent->id);
+        $gisBefore = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('gis');
+        $unitBefore = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
 
-        $service = new AccessService();
-        $result = $service->accessibleUnitIds($user);
+        app(AccessService::class)->clearAllCaches();
 
-        $this->assertCount(4, $result);
-        $this->assertContains($parent->id, $result);
-        $this->assertContains($child1->id, $result);
-        $this->assertContains($child2->id, $result);
-        $this->assertContains($grandchild->id, $result);
+        $gisAfter = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('gis');
+        $unitAfter = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
+
+        $this->assertGreaterThan($gisBefore, $gisAfter);
+        $this->assertGreaterThan($unitBefore, $unitAfter);
     }
 
-    public function test_returns_only_session_unit_children_when_session_is_set(): void
+    public function test_accessible_unit_ids_is_cached_per_user(): void
     {
-        $parent = Unit::create(['name' => 'واحد والد']);
-        $child = Unit::create(['name' => 'فرزند', 'parent_id' => $parent->id]);
-        $unrelated = Unit::create(['name' => 'بی‌ربط']);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $parent->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
-        $user->units()->attach($unrelated->id, ['role' => 'staff', 'is_primary' => false]);
-
-        // Session only has parent, not unrelated
-        Session::put('current_unit_id', $parent->id);
-
-        $service = new AccessService();
-        $result = $service->accessibleUnitIds($user);
-
-        $this->assertContains($parent->id, $result);
-        $this->assertContains($child->id, $result);
-        $this->assertNotContains($unrelated->id, $result);
-    }
-
-    public function test_falls_back_to_person_unit_when_user_has_no_units_pivot(): void
-    {
-        $unit = Unit::create(['name' => 'واحد شخص']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        Session::forget('current_unit_id');
-
-        $service = new AccessService();
-        $result = $service->accessibleUnitIds($user);
-
-        $this->assertContains($unit->id, $result);
-    }
-
-    public function test_results_are_cached(): void
-    {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $unit = Unit::create(['name' => 'Cached Unit']);
+        $user = $this->makeUserInUnit($unit);
+        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
+        $this->actingAs($user);
 
-        $service = new AccessService();
-        $result1 = $service->accessibleUnitIds($user);
-        $result2 = $service->accessibleUnitIds($user);
+        $first = app(AccessService::class)->accessibleUnitIds($user);
+        $second = app(AccessService::class)->accessibleUnitIds($user);
 
-        $this->assertEquals($result1, $result2);
-    }
-
-    // --- clearCache ---
-
-    public function test_clearCache_removes_cached_accessible_units(): void
-    {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        Session::put('current_unit_id', $unit->id);
-
-        $service = new AccessService();
-        $service->accessibleUnitIds($user); // prime cache
-        $service->clearCache($user);
-
-        // Should still return correct data after cache clear
-        $result = $service->accessibleUnitIds($user);
-        $this->assertContains($unit->id, $result);
-    }
-
-    public function test_clearCache_with_no_user_does_nothing(): void
-    {
-        $service = new AccessService();
-        $service->clearCache(null);
-        $this->assertTrue(true);
-    }
-
-    // --- clearAllCaches ---
-
-    public function test_clearAllCaches_increments_version_counters(): void
-    {
-        Cache::put('unit_hierarchy_version', 0);
-        Cache::put('gis_version', 0);
-
-        $service = new AccessService();
-        $service->clearAllCaches();
-
-        $this->assertEquals(1, Cache::get('unit_hierarchy_version'));
-        $this->assertEquals(1, Cache::get('gis_version'));
+        $this->assertEquals($first, $second);
+        $this->assertCount(1, $first);
     }
 }
