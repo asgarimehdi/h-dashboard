@@ -587,7 +587,7 @@ php artisan db:seed --force
 
 Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** (`postgres`/`secret`/`h_dashboard_test`). The suite is **hermetic** — no Redis dependency (see step 3). Getting the environment right is the most common failure mode — follow these steps exactly.
 
-> **✅ Working as of 2026-08-24:** plain `php artisan test` runs the full suite (**719 passed, 1 skipped**, ~2.5 min) with no arguments and no env vars — the suite is hermetic (array cache/session, sync queue) and `phpunit.xml` has `<testsuites>` for Unit + Feature.
+> **✅ Working as of 2026-08-26:** **`composer test`** is the one-command way to run the full suite (**721 passed, 1 skipped**, ~3–4 min). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
 
 #### 1. Prerequisites (services must be up)
 ```bash
@@ -621,22 +621,25 @@ psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
 Since 2026-08-24 `phpunit.xml` forces `CACHE_STORE=array` + `SESSION_DRIVER=array` + `QUEUE_CONNECTION=sync` (`force="true"`), so the suite never connects to Redis — the docker Redis password is irrelevant. ⚠️ Laravel 13's `config/cache.php` reads **`CACHE_STORE`**, not the legacy `CACHE_DRIVER` — setting only `CACHE_DRIVER=array` leaves cache on redis and causes `NOAUTH`/`WRONGPASS` failures.
 
 #### 4. Clear cached config/routes BEFORE running (critical!)
-`.env.testing` ships `DB_CONNECTION=mysql` and a **different `APP_KEY`** than `.env`. If `bootstrap/cache/config.php` or the route cache exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists).
+`.env.testing` ships `DB_CONNECTION=mysql` and a **different `APP_KEY`** than `.env`. If `bootstrap/cache/config.php` or the route cache (`bootstrap/cache/routes-v7.php`) exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists). Observed 2026-08-26: a stale `routes-v7.php` built from `.env`'s APP_KEY caused **exactly 75 failures** across every Livewire-mutation test — `config:clear` alone does NOT remove `routes-v7.php`, you must also run `route:clear`.
 ```bash
 php artisan config:clear      # must be clear so phpunit.xml can override DB_* 
+php artisan route:clear       # removes routes-v7.php — fixes the Livewire endpoint-hash mismatch
 # Do NOT run `php artisan optimize` / `route:cache` with APP_ENV=local before tests,
 # or the cached route hash (from .env's APP_KEY) won't match the test env's hash.
 ```
 
 #### 5. Run the suite
 ```bash
-php artisan config:clear        # repeat before each run if caches were regenerated
-php artisan test                # runs the FULL suite (Unit + Feature via phpunit.xml <testsuites>)
-# For a single file: php artisan test tests/Feature/UsersManagementTest.php
+composer test                 # RECOMMENDED: clears config+routes, then runs with XDEBUG_MODE=off
+# equivalent manual form:
+php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artisan test
+# For a single file: XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 ```
-- **No `XDEBUG_MODE` / pcov needed** — `phpunit.xml` deliberately has **no `<coverage>` block** (see failure table below). Request coverage explicitly when you want it: `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` (what CI runs, with pcov installed).
+- **Why `XDEBUG_MODE=off`:** Xdebug loads in `develop` mode; when Laravel's date validation (`after_or_equal:start_at` etc.) throws its *expected* parse exception, Xdebug tries to attach a `$xdebug_message` dynamic property to `DateMalformedStringException`, PHP 8.3 turns that into an `Error`, and it escapes Laravel's `catch (Exception)` → HTTP 500. Symptom: `Failed to parse time string (start_at) … timezone could not be found in the database` plus `Cannot create dynamic property DateMalformedStringException::$xdebug_message`. Not a code bug — env only.
+- **No pcov needed for normal runs** — `phpunit.xml` deliberately has **no `<coverage>` block** (see failure table below). Request coverage explicitly when you want it: `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` (what CI runs, with pcov installed).
 - **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
-- Expected: **719 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
+- Expected: **721 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
 
 #### Common failure → cause
 | Symptom | Cause | Fix |
@@ -644,7 +647,8 @@ php artisan test                # runs the FULL suite (Unit + Feature via phpuni
 | `php artisan test` / `vendor/bin/pest` exits **silently**: only the "No code coverage driver available" WARN, zero tests executed, exit 1 | A `<coverage><report>` block in `phpunit.xml` makes PHPUnit 12 treat every serial run as a coverage request; with no pcov/xdebug installed it aborts before executing anything. Parallel (`--parallel`) survives because paratest handles reporting differently | Keep `<coverage>` out of `phpunit.xml`; pass coverage flags on the CLI instead (CI already does). Do NOT re-add the block "for CI's sake" — CI passes its own flags |
 | `NOAUTH`/`WRONGPASS` on Redis | cache still on redis — only `CACHE_DRIVER` was set, or a shell-exported var overrode phpunit env (`force="true"` guards against this) | Step 3 + `php artisan config:clear` |
 | Connection refused (mysql … 3306) | config cache from `.env.testing` wins over phpunit.xml | `php artisan config:clear` |
-| `404` on every `->set()`/`->call()`, mutations don't persist | Livewire endpoint hash mismatch (cached route from wrong `APP_KEY`) | `php artisan config:clear` + don't `optimize` with local env |
+| `404` on every `->set()`/`->call()`, mutations don't persist (~75 failures) | Livewire endpoint hash mismatch (stale `routes-v7.php` built from wrong `APP_KEY`) | `php artisan config:clear && php artisan route:clear`, or just use `composer test`; don't `optimize`/`route:cache` with local env |
+| HTTP 500 on date-compare validation (`after_or_equal:…`): `Failed to parse time string (start_at) … timezone could not be found` + `Cannot create dynamic property DateMalformedStringException::$xdebug_message` | Xdebug `develop` mode decorates the *expected* parse exception with `$xdebug_message`; PHP 8.3 raises `Error` which escapes Laravel's `catch (Exception)` | Run tests as `XDEBUG_MODE=off php artisan test` (`composer test` does this) |
 | postgres/secret/h_dashboard_test auth fail | test DB/role missing | Step 2 |
 | bare `vendor/bin/pest` → usage text | no path argument | pass `tests/` |
 | Parallel run: ~35 flaky failures (`PermissionDoesNotExist`, FK violations on `model_has_permissions`) | spatie permission cache shared across workers — only relevant if `CACHE_STORE=array` got dropped from phpunit.xml again | Keep `<env name="CACHE_STORE" value="array" force="true"/>` in phpunit.xml |
