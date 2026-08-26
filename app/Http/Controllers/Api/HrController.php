@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,36 +109,44 @@ class HrController extends Controller
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
-        $units = Unit::whereIn('id', $accessibleIds)
-            ->subtree($unitId)
-            ->withCount('person as personnel_count')
-            ->with('unitType:id,name')
-            ->get();
+        // Cache the built subtree (versioned by unit_hierarchy so it is invalidated
+        // together with descendantIds when the org tree changes). The subtree query
+        // + recursive tree build is expensive for large units, so serve it from
+        // cache for the 10-minute TTL.
+        $scopeHash = md5(implode(',', $accessibleIds));
+        $result = app(CacheInvalidationServiceInterface::class)
+            ->remember('unit_hierarchy', $scopeHash, function () use ($accessibleIds, $unitId) {
+                $units = Unit::whereIn('id', $accessibleIds)
+                    ->subtree($unitId)
+                    ->withCount('person as personnel_count')
+                    ->with('unitType:id,name')
+                    ->get();
 
-        $byId = $units->keyBy('id');
-        $root = $byId->get($unitId);
+                $byId = $units->keyBy('id');
+                $root = $byId->get($unitId);
 
-        if (! $root) {
-            return response()->json(['data' => []]);
-        }
+                if (! $root) {
+                    return [];
+                }
 
-        $children = $units->filter(fn (Unit $u) => $u->parent_id == $unitId);
+                $children = $units->filter(fn (Unit $u) => $u->parent_id == $unitId);
 
-        $format = function (Unit $unit) use (&$format, $byId) {
-            $childUnits = $byId->filter(fn (Unit $u) => $u->parent_id == $unit->id);
+                $format = function (Unit $unit) use (&$format, $byId) {
+                    $childUnits = $byId->filter(fn (Unit $u) => $u->parent_id == $unit->id);
 
-            return [
-                'id' => $unit->id,
-                'name' => $unit->name,
-                'parent_id' => $unit->parent_id,
-                'unit_type' => $unit->unitType?->name,
-                'personnel_count' => $unit->personnel_count,
-                'has_children' => $childUnits->isNotEmpty(),
-                'children' => $childUnits->map(fn (Unit $c) => $format($c))->values(),
-            ];
-        };
+                    return [
+                        'id' => $unit->id,
+                        'name' => $unit->name,
+                        'parent_id' => $unit->parent_id,
+                        'unit_type' => $unit->unitType?->name,
+                        'personnel_count' => $unit->personnel_count,
+                        'has_children' => $childUnits->isNotEmpty(),
+                        'children' => $childUnits->map(fn (Unit $c) => $format($c))->values(),
+                    ];
+                };
 
-        $result = collect($children)->map(fn (Unit $c) => $format($c))->values();
+                return collect($children)->map(fn (Unit $c) => $format($c))->values();
+            }, 10, ['subtree' => $unitId]);
 
         return response()->json(['data' => $result]);
     }
