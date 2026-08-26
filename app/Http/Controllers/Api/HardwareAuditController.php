@@ -152,8 +152,9 @@ class HardwareAuditController extends Controller
             return response()->json(['message' => 'Only "created" audits can be used to restore a record.'], 422);
         }
 
-        // Verify the hardware was actually deleted
-        $exists = Hardware::withTrashed()->where('id', $audit->hardware_id)->exists();
+        // Verify the hardware was actually deleted. Use a direct query so this
+        // works whether or not the Hardware model uses SoftDeletes.
+        $exists = DB::table('hardwares')->where('id', $audit->hardware_id)->exists();
         if ($exists) {
             return response()->json(['message' => 'This hardware record still exists — use rollback instead.'], 422);
         }
