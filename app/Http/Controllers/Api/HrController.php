@@ -76,21 +76,31 @@ class HrController extends Controller
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
-        $units = Unit::whereIn('id', $accessibleIds)
-            ->withCount(['person as personnel_count', 'children as has_children'])
-            ->with('unitType:id,name')
-            ->orderBy('name')
-            ->limit($initialLimit)
-            ->get()
-            ->map(fn (Unit $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'parent_id' => $u->parent_id,
-                'unit_type' => $u->unitType?->name,
-                'personnel_count' => $u->personnel_count,
-                'has_children' => $u->has_children > 0,
-                'level' => 1,
-            ]);
+        // Sibling of orgChart: the expandable root list is a hot path for the
+        // org-chart UI/Flutter, so cache it under the same hr_stats version
+        // (bumped on Person/Unit writes) for 10 min. Key also includes the
+        // initial_limit so different page sizes don't collide.
+        $scopeHash = md5(implode(',', $accessibleIds));
+        $version = Cache::get('hr_stats_version', 0);
+        $cacheKey = "hr:expandable:v{$version}:{$scopeHash}:{$initialLimit}";
+
+        $units = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds, $initialLimit) {
+            return Unit::whereIn('id', $accessibleIds)
+                ->withCount(['person as personnel_count', 'children as has_children'])
+                ->with('unitType:id,name')
+                ->orderBy('name')
+                ->limit($initialLimit)
+                ->get()
+                ->map(fn (Unit $u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'parent_id' => $u->parent_id,
+                    'unit_type' => $u->unitType?->name,
+                    'personnel_count' => $u->personnel_count,
+                    'has_children' => $u->has_children > 0,
+                    'level' => 1,
+                ]);
+        });
 
         return response()->json([
             'data' => $units->values(),
@@ -251,12 +261,21 @@ class HrController extends Controller
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
 
-        // Push the empty-unit filter into the query (NOT EXISTS) instead of
-        // loading every scoped unit with a count and filtering in PHP — keeps
-        // this cheap for units with thousands of children.
-        $units = Unit::whereIn('id', $accessibleIds)
-            ->whereDoesntHave('person')
-            ->get();
+        // Cache under the hr_stats version (Person writes change headcount,
+        // Unit writes change the tree) for 10 min — siblings orgChart/stats do
+        // the same. Vacancies is a frequently-polled HR-dashboard tile.
+        $scopeHash = md5(implode(',', $accessibleIds));
+        $version = Cache::get('hr_stats_version', 0);
+        $cacheKey = "hr:vacancies:v{$version}:{$scopeHash}";
+
+        $units = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
+            // Push the empty-unit filter into the query (NOT EXISTS) instead of
+            // loading every scoped unit with a count and filtering in PHP — keeps
+            // this cheap for units with thousands of children.
+            return Unit::whereIn('id', $accessibleIds)
+                ->whereDoesntHave('person')
+                ->get();
+        });
 
         return response()->json([
             'data' => $units->map(fn ($u) => [
