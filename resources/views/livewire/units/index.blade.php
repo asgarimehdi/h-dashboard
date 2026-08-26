@@ -403,7 +403,7 @@ return new class extends Component {
                 </div>
             @endscope
 
-            @scope('can_receive_tickets', $unit)
+            @scope('cell_can_receive_tickets', $unit)
                 <button wire:click="toggleTicketCapability({{ $unit->id }})" class="btn btn-ghost btn-sm" title="تغییر وضعیت پذیرش تیکت">
                     @if($unit->can_receive_tickets)
                         <x-icon name="o-check-circle" class="w-6 h-6 text-success" />
