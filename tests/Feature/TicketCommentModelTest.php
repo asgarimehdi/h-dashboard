@@ -385,4 +385,98 @@ class TicketCommentModelTest extends TestCase
         $this->assertIsBool($comment->is_system);
         $this->assertTrue($comment->is_system);
     }
+
+    // Note: the original test_scope_user test above exercised a raw
+    // `->where('is_system', false)` query, so the actual scopeUser()
+    // method body was never invoked. This test calls the scope directly.
+
+    public function test_scope_user_invokes_scope(): void
+    {
+        $ticket = $this->createTicket();
+        $user = User::first();
+
+        TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'body' => 'نظر کاربر',
+            'is_system' => false,
+        ]);
+        TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'body' => 'سیستم',
+            'is_system' => true,
+        ]);
+
+        $this->assertCount(1, TicketComment::query()->user()->get());
+    }
+
+    // --- descendants (recursive) ---
+
+    public function test_comment_descendants_are_recursive(): void
+    {
+        $ticket = $this->createTicket();
+        $user = User::first();
+
+        $root = TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'body' => 'والد',
+        ]);
+        $child = TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'parent_id' => $root->id,
+            'body' => 'فرزند',
+        ]);
+        $grandchild = TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'parent_id' => $child->id,
+            'body' => 'نوه',
+        ]);
+
+        $root->load('descendants');
+
+        $this->assertCount(1, $root->descendants);
+        $this->assertEquals($child->id, $root->descendants->first()->id);
+        $this->assertEquals($grandchild->id, $root->descendants->first()->descendants->first()->id);
+    }
+
+    // --- scopeWithReactionCounts ---
+
+    public function test_scope_with_reaction_counts_groups_by_reaction(): void
+    {
+        $ticket = $this->createTicket();
+        $user = User::first();
+
+        $comment = TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'body' => 'نظر تست',
+        ]);
+
+        $nCode2 = (string) fake()->unique()->numerify('##########');
+        $unit = Unit::first();
+        Person::create([
+            'n_code' => $nCode2, 'f_name' => 'واکنش‌دهنده', 'l_name' => 'دوم',
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        ]);
+        $otherUser = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
+
+        TicketCommentReaction::create([
+            'comment_id' => $comment->id, 'user_id' => $user->id, 'reaction' => '+1',
+        ]);
+        TicketCommentReaction::create([
+            'comment_id' => $comment->id, 'user_id' => $otherUser->id, 'reaction' => '+1',
+        ]);
+
+        $loaded = TicketComment::withReactionCounts()->find($comment->id);
+
+        // The withCount subquery collapses to a single total count of
+        // reactions on the comment (the inner groupBy is not preserved by
+        // withCount), so reaction_counts is an integer here.
+        $this->assertNotNull($loaded->reaction_counts);
+        $this->assertEquals(2, $loaded->reaction_counts);
+    }
 }

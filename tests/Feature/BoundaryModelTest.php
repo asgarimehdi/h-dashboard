@@ -72,6 +72,21 @@ test('geojson returns null when boundary geometry is missing', function () {
     expect($empty->geojson)->toBeNull();
 });
 
+test('geojson returns null when boundary attribute key is present but empty', function () {
+    // `array_key_exists('boundary', ...)` is true (key present) but the value
+    // is falsy → exercises the early-return-null branch inside the first if.
+    $empty = new Boundary;
+    $empty->setRawAttributes(['id' => 1, 'boundary' => null]);
+
+    expect($empty->geojson)->toBeNull();
+
+    // Same branch via an empty-string EWKB value.
+    $empty2 = new Boundary;
+    $empty2->setRawAttributes(['id' => 1, 'boundary' => '']);
+
+    expect($empty2->geojson)->toBeNull();
+});
+
 test('boundary belongs to region through boundary_id', function () {
     $b = makeBoundary();
     $region = Region::create([
