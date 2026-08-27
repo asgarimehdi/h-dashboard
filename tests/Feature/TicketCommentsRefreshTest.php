@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Tickets\TicketComments;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -52,7 +51,7 @@ class TicketCommentsRefreshTest extends TestCase
 
     public function test_new_comment_shows_immediately(): void
     {
-        $component = Livewire::test(TicketComments::class)
+        $component = Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->set('body', 'کامنت جدید');
 
@@ -68,7 +67,7 @@ class TicketCommentsRefreshTest extends TestCase
 
     public function test_reply_shows_immediately(): void
     {
-        $component = Livewire::test(TicketComments::class)
+        $component = Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('startReply', 0); // hmm, no parent yet; add one first
 
@@ -94,7 +93,7 @@ class TicketCommentsRefreshTest extends TestCase
             'body' => 'برای حذف',
         ]);
 
-        $component = Livewire::test(TicketComments::class)
+        $component = Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id);
 
         // Confirm the comment is loaded and visible

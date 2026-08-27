@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Tickets\TicketComments;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -73,7 +72,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
 
     public function test_close_resets_state(): void
     {
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->assertSet('showModal', true)
             ->call('close')
@@ -90,7 +89,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
             'body' => 'Parent',
         ]);
 
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('startReply', $parent->id)
             ->assertSet('replyToId', $parent->id)
@@ -108,7 +107,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
             'body' => 'Editable',
         ]);
 
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('startEdit', $comment->id)
             ->assertSet('editing', true)
@@ -119,7 +118,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
 
     public function test_add_comment_requires_body(): void
     {
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->set('body', '')
             ->call('addComment')
@@ -130,7 +129,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
 
     public function test_load_ticket_with_null_id_sets_ticket_null(): void
     {
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('loadTicket')
             ->assertSet('ticket', null);
     }
@@ -145,7 +144,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
             'body' => 'Not mine',
         ]);
 
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('startEdit', $comment->id)
             ->assertSet('editCommentId', null);
@@ -164,7 +163,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
             ->where('id', $comment->id)
             ->update(['created_at' => now()->subMinutes(20), 'updated_at' => now()->subMinutes(20)]);
 
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('startEdit', $comment->id)
             ->set('editBody', 'Edited late')
@@ -185,7 +184,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
 
         // $this->user is the authenticated user but neither the author nor an
         // admin / manage_unit_tickets holder, so deleteComment must be a no-op.
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('deleteComment', $comment->id);
 
@@ -201,7 +200,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
             'body' => 'Refresh me',
         ]);
 
-        Livewire::test(TicketComments::class)
+        Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('refreshComments')
             ->assertSet('ticket', fn ($ticket) => $ticket && $ticket->comments->count() === 1);
