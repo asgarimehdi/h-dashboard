@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Map\MapDashboard;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -96,7 +95,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         Livewire::actingAs($user)
-            ->test(MapDashboard::class)
+            ->test('map.map-dashboard')
             ->assertSet('mapToken', fn ($v) => is_string($v) && strlen($v) >= 40)
             ->assertSet('mapZoom', 10)
             ->assertSet('mapCenterLat', 36.669343)
@@ -116,7 +115,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $component->dispatch('mapMoved', [
             'center' => [36.9, 48.7],
@@ -136,7 +135,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         // Initial: only 'units'
         $component->assertSet('layers', 'units');
@@ -160,7 +159,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $component->dispatch('filterChanged', [
             'filterHardware' => 'laptop',
@@ -179,7 +178,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         // Should not throw and should not set unknown properties
         $component->dispatch('filterChanged', [
@@ -198,7 +197,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $component->dispatch('unitSelected', unitId: 42);
 
@@ -221,7 +220,7 @@ class MapDashboardTest extends TestCase
         ]);
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $result = $component->instance()->loadUnitDetails($unit->id);
 
@@ -238,7 +237,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $result = $component->instance()->loadUnitDetails(99999);
 
@@ -260,7 +259,7 @@ class MapDashboardTest extends TestCase
         ]);
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $result = $component->instance()->loadUnitDetails($outsideUnit->id);
 
@@ -289,7 +288,7 @@ class MapDashboardTest extends TestCase
         $user = $this->createAuthenticatedUser();
 
         $component = Livewire::actingAs($user)
-            ->test(MapDashboard::class);
+            ->test('map.map-dashboard');
 
         $component->assertSee('mapDashboard()');
         $component->assertSee('initMap()');
