@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Kargozini;
 
-use App\Livewire\Kargozini\Person;
+
 use App\Models\Person as PersonModel;
 use App\Models\Unit;
 use App\Models\User;
@@ -95,7 +95,7 @@ class PersonLivewireTest extends TestCase
 
     public function test_component_renders_with_dropdowns(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->assertOk()
             ->assertViewHas('persons')
             ->assertViewHas('headers')
@@ -109,7 +109,7 @@ class PersonLivewireTest extends TestCase
     public function test_search_finds_by_name_in_either_order(): void
     {
         // "عسگری مهدی" (last first) must find «مهدی عسگری» (#494).
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('search', 'عسگری مهدی')
             ->assertViewHas('persons', fn ($p) => $p->count() === 1);
     }
@@ -125,43 +125,43 @@ class PersonLivewireTest extends TestCase
             ->map(fn ($d) => $persianDigits[(int) $d])
             ->implode('');
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('search', $persianCode)
             ->assertViewHas('persons', fn ($p) => $p->count() === 1);
     }
 
     public function test_search_without_match_returns_empty(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('search', 'ناهمخوان کامل')
             ->assertViewHas('persons', fn ($p) => $p->count() === 0);
     }
 
     public function test_filter_by_unit_narrows_results(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('filter_u_id', $this->unit->id)
             ->assertViewHas('persons', fn ($p) => $p->count() === 1);
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('filter_u_id', $this->otherUnit->id) // no persons there
             ->assertViewHas('persons', fn ($p) => $p->count() === 0);
     }
 
     public function test_filter_by_semat_narrows_results(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('filter_s_id', $this->sId)
             ->assertViewHas('persons', fn ($p) => $p->count() === 1);
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('filter_s_id', 99999) // different semat -> no match
             ->assertViewHas('persons', fn ($p) => $p->count() === 0);
     }
 
     public function test_filter_by_tahsil_estekhdam_radif(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('filter_t_id', $this->tId)
             ->set('filter_e_id', $this->eId)
             ->set('filter_r_id', $this->rId)
@@ -170,7 +170,7 @@ class PersonLivewireTest extends TestCase
 
     public function test_clear_filters_resets_filter_properties(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('filter_u_id', $this->unit->id)
             ->set('filter_s_id', $this->sId)
             ->set('showFilters', true)
@@ -184,7 +184,7 @@ class PersonLivewireTest extends TestCase
 
     public function test_start_create_opens_form_and_resets(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('n_code', '9999999999')
             ->call('startCreate')
             ->assertSet('formOpen', true)
@@ -196,7 +196,7 @@ class PersonLivewireTest extends TestCase
     {
         $data = $this->personData();
 
-        $component = Livewire::test(Person::class);
+        $component = Livewire::test('kargozini.person');
         $this->fillForm($component, $data);
         $component->call('savePerson');
 
@@ -209,7 +209,7 @@ class PersonLivewireTest extends TestCase
     {
         $data = $this->personData(['u_id' => $this->otherUnit->id]); // out of scope
 
-        $component = Livewire::test(Person::class);
+        $component = Livewire::test('kargozini.person');
         $this->fillForm($component, $data);
         $component->call('savePerson');
 
@@ -218,7 +218,7 @@ class PersonLivewireTest extends TestCase
 
     public function test_save_person_validates_required_fields(): void
     {
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->set('n_code', '')
             ->set('f_name', '')
             ->set('l_name', '')
@@ -231,7 +231,7 @@ class PersonLivewireTest extends TestCase
     {
         $person = PersonModel::where('u_id', $this->unit->id)->first();
 
-        $component = Livewire::test(Person::class)
+        $component = Livewire::test('kargozini.person')
             ->call('editPerson', $person->id);
         $this->fillForm($component, [
             'n_code' => $person->n_code,
@@ -260,7 +260,7 @@ class PersonLivewireTest extends TestCase
             'u_id' => $this->otherUnit->id,
         ]);
 
-        $component = Livewire::test(Person::class);
+        $component = Livewire::test('kargozini.person');
         $this->fillForm($component, [
             'n_code' => $otherNCode,
             'f_name' => 'Changed',
@@ -281,7 +281,7 @@ class PersonLivewireTest extends TestCase
     {
         $person = PersonModel::where('u_id', $this->unit->id)->first();
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->call('editPerson', $person->id)
             ->assertSet('editingId', $person->id)
             ->assertSet('n_code', $person->n_code)
@@ -298,7 +298,7 @@ class PersonLivewireTest extends TestCase
             'u_id' => $this->otherUnit->id,
         ]);
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->call('editPerson', $other->id)
             ->assertSet('editingId', null) // not loaded
             ->assertSet('formOpen', false);
@@ -309,7 +309,7 @@ class PersonLivewireTest extends TestCase
         // Fresh person with no dependent rows (no linked user) -> deletable.
         $fresh = PersonModel::create($this->personData());
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->call('delete', $fresh);
 
         $this->assertDatabaseMissing('persons', ['id' => $fresh->id]);
@@ -324,7 +324,7 @@ class PersonLivewireTest extends TestCase
             'u_id' => $this->otherUnit->id,
         ]);
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->call('delete', $other);
 
         $this->assertDatabaseHas('persons', ['id' => $other->id]);
@@ -349,7 +349,7 @@ class PersonLivewireTest extends TestCase
         };
         $throwing = $stub->newQuery()->findOrFail($target->id);
 
-        Livewire::test(Person::class)
+        Livewire::test('kargozini.person')
             ->call('delete', $throwing);
 
         // Row survives (covers the catch branch).
@@ -368,7 +368,7 @@ class PersonLivewireTest extends TestCase
             $linkedUser->units()->where('units.id', $this->unit->id)->exists()
         );
 
-        $component = Livewire::test(Person::class)
+        $component = Livewire::test('kargozini.person')
             ->call('editPerson', $person->id);
         $this->fillForm($component, [
             'n_code' => $userNCode,
