@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Hr\OrgChart;
+
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -42,7 +42,7 @@ beforeEach(function () {
 });
 
 test('loadChildren lazy-loads children for an expanded unit', function () {
-    $component = Livewire::actingAs($this->user)->test(OrgChart::class);
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
 
     $component->call('loadChildren', $this->mid->id);
 
@@ -54,14 +54,14 @@ test('loadChildren lazy-loads children for an expanded unit', function () {
 test('loadChildren ignores units outside organizational scope', function () {
     $outsider = Unit::create(['name' => 'واحد بیرونی']);
 
-    $component = Livewire::actingAs($this->user)->test(OrgChart::class)
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart')
         ->call('loadChildren', $outsider->id);
 
     expect($component->instance()->lazyChildren)->not->toHaveKey($outsider->id);
 });
 
 test('updatedSearch expands full ancestor chain of deep matches', function () {
-    $component = Livewire::actingAs($this->user)->test(OrgChart::class);
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
 
     $component->set('search', 'برگ');
 
@@ -73,7 +73,7 @@ test('updatedSearch expands full ancestor chain of deep matches', function () {
 });
 
 test('updatedSearch clears previous expansion state first', function () {
-    $component = Livewire::actingAs($this->user)->test(OrgChart::class);
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
 
     expect($component->instance()->lazyChildren)->not->toBeEmpty();
 
@@ -93,7 +93,7 @@ test('selectUnit does not select units outside organizational scope', function (
     $otherUser->units()->attach($otherRoot->id, ['role' => 'responsible', 'is_primary' => true]);
     $otherUser->givePermissionTo('view_hr_dashboard');
 
-    $component = Livewire::actingAs($otherUser)->test(OrgChart::class)
+    $component = Livewire::actingAs($otherUser)->test('hr.org-chart')
         ->call('selectUnit', $outsider->id);
 
     expect($component->instance()->selectedUnit)->toBeNull()
@@ -101,7 +101,7 @@ test('selectUnit does not select units outside organizational scope', function (
 });
 
 test('toggle collapses an open unit and expands a closed one', function () {
-    $component = Livewire::actingAs($this->user)->test(OrgChart::class);
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
 
     // Root and mid are expanded by default (first 3 levels).
     expect($component->instance()->expanded)->toContain((string) $this->mid->id);
