@@ -9,7 +9,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 ### Tech Stack
 
 - **Framework:** Laravel 13.x (`laravel/framework ^13.0`, locked at **13.25.0** in `composer.lock`) on PHP ^8.3
-- **Frontend:** Livewire 4 (class-based components under `app/Livewire/`, views under `resources/views/livewire/`), Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
+- **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
@@ -511,7 +511,7 @@ Jalali (Persian) calendar formatting via `Morilog\Jalali\Jalalian` (e.g., in `Re
 - **Pagination:** Use `LengthAwarePaginator` with `WithPagination` trait
 - **Forms:** Use MaryUI `x-input`, `x-select`, `x-button` components
 - **Modal:** Use `x-modal` with `close-on-backdrop` for edit forms
-- **Components:** Livewire components (`app/Livewire/<Feature>/...`) with Blade views under `resources/views/livewire/<feature>/`
+- **Components:** Livewire components are **single-file** — the class is an inline anonymous class at the top of the Blade view under `resources/views/livewire/<feature>/<name>.blade.php` (e.g. `return new class extends Component { ... };` followed by the markup). There are **no** `app/Livewire/*.php` class files. Reference components by their dot-name string (e.g. `'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes (`Route::livewire('/x', 'x.y')`) and in tests (`Livewire::test('x.y')` / `->test('x.y')`). When a removed class previously used `X::class` in a test, switch the test to the string name (and if it reflected a private method, use `$component->instance()` with `ReflectionMethod`).
 - **Testing:** Pest (PHPUnit under the hood) — `tests/Feature/*`, run via **`composer test`** (clears caches, disables Xdebug; see **Running Tests (Pest)**)
 - **Factories:** use factories with custom states (only `UserFactory` exists; other models have seeders). Don't delete tests without approval. When seeding rows with **explicit IDs** in tests, resync the table's Postgres sequence afterwards (`SELECT setval(...)`), or later inserts hit duplicate keys — see `LookupSimpleModelsTest`.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
