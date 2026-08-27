@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Livewire\Hardware\ImportHardware\ImportHardware;
-use App\Livewire\Kargozini\ImportPersons\ImportPersons;
 use App\Models\Estekhdam;
 use App\Models\Person;
 use App\Models\Radif;
@@ -89,7 +88,7 @@ class ImportLivewireComponentTest extends TestCase
     public function test_persons_import_reset_and_cancel(): void
     {
         Livewire::actingAs($this->user)
-            ->test(ImportPersons::class)
+            ->test('kargozini.import-persons.import-persons')
             ->set('previewData', [['n_code' => '111', 'status' => 'create']])
             ->set('showPreview', true)
             ->call('cancelImport')
@@ -99,14 +98,14 @@ class ImportLivewireComponentTest extends TestCase
 
     public function test_persons_import_get_selected_actions(): void
     {
-        $component = Livewire::actingAs($this->user)->test(ImportPersons::class);
+        $component = Livewire::actingAs($this->user)->test('kargozini.import-persons.import-persons');
         $component->set('previewData', [
             ['n_code' => '111', 'status' => 'create'],
             ['n_code' => '222', 'status' => 'update'],
             ['n_code' => '333', 'status' => 'error'],
         ]);
 
-        $method = new ReflectionMethod(ImportPersons::class, 'getSelectedActions');
+        $method = new ReflectionMethod($component->instance(), 'getSelectedActions');
         $method->setAccessible(true);
         $actions = $method->invoke($component->instance());
 
