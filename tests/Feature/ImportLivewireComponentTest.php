@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Hardware\ImportHardware\ImportHardware;
 use App\Models\Estekhdam;
 use App\Models\Person;
 use App\Models\Radif;
@@ -41,7 +40,7 @@ class ImportLivewireComponentTest extends TestCase
     public function test_hardware_import_reset_form_clears_state(): void
     {
         Livewire::actingAs($this->user)
-            ->test(ImportHardware::class)
+            ->test('hardware.import-hardware.import-hardware')
             ->assertSet('showPreview', false)
             ->call('resetForm')
             ->assertSet('showPreview', false)
@@ -51,7 +50,7 @@ class ImportLivewireComponentTest extends TestCase
     public function test_hardware_import_cancel_import_resets(): void
     {
         Livewire::actingAs($this->user)
-            ->test(ImportHardware::class)
+            ->test('hardware.import-hardware.import-hardware')
             ->set('previewData', [['id' => 1, 'status' => 'create']])
             ->set('showPreview', true)
             ->call('cancelImport')
@@ -62,21 +61,21 @@ class ImportLivewireComponentTest extends TestCase
     public function test_hardware_import_confirm_without_results_shows_error(): void
     {
         Livewire::actingAs($this->user)
-            ->test(ImportHardware::class)
+            ->test('hardware.import-hardware.import-hardware')
             ->call('confirmImport')
             ->assertSet('importResults', null);
     }
 
     public function test_hardware_import_get_selected_actions_maps_statuses(): void
     {
-        $component = Livewire::actingAs($this->user)->test(ImportHardware::class);
+        $component = Livewire::actingAs($this->user)->test('hardware.import-hardware.import-hardware');
         $component->set('previewData', [
             ['id' => 10, 'status' => 'create', 'pc_name' => 'X'],
             ['id' => 11, 'status' => 'update', 'pc_name' => 'Y'],
             ['id' => 12, 'status' => 'unchanged', 'pc_name' => 'Z'],
         ]);
 
-        $method = new ReflectionMethod(ImportHardware::class, 'getSelectedActions');
+        $method = new ReflectionMethod($component->instance(), 'getSelectedActions');
         $method->setAccessible(true);
         $actions = $method->invoke($component->instance());
 
