@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Livewire\Auth\Login;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -54,13 +53,13 @@ class LoginLivewireTest extends TestCase
         $user = $this->makeUser();
         $this->actingAs($user);
 
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->assertRedirect('/');
     }
 
     public function test_component_renders_for_guest(): void
     {
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->assertOk();
     }
 
@@ -68,7 +67,7 @@ class LoginLivewireTest extends TestCase
     {
         $this->makeUser('1234567890', 'secret123');
 
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '1234567890')
             ->set('password', 'secret123')
             ->set('remember', true)
@@ -84,7 +83,7 @@ class LoginLivewireTest extends TestCase
     {
         $this->makeUser('1234567890', 'secret123');
 
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '1234567890')
             ->set('password', 'secret123')
             ->call('login');
@@ -98,7 +97,7 @@ class LoginLivewireTest extends TestCase
     {
         $this->makeUser('1234567890', 'secret123');
 
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '1234567890')
             ->set('password', 'wrong-password')
             ->call('login')
@@ -109,7 +108,7 @@ class LoginLivewireTest extends TestCase
 
     public function test_nonexistent_user_throws_validation_error(): void
     {
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '0000000000')
             ->set('password', 'whatever')
             ->call('login')
@@ -120,7 +119,7 @@ class LoginLivewireTest extends TestCase
 
     public function test_missing_fields_fails_validation(): void
     {
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '')
             ->set('password', '')
             ->call('login')
@@ -136,7 +135,7 @@ class LoginLivewireTest extends TestCase
             RateLimiter::hit('1234567890|127.0.0.1');
         }
 
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '1234567890')
             ->set('password', 'wrong-password')
             ->call('login')
@@ -153,7 +152,7 @@ class LoginLivewireTest extends TestCase
         // Pre-seed one failed attempt so we can verify it is cleared on success.
         RateLimiter::hit('1234567890|127.0.0.1');
 
-        Livewire::test(Login::class)
+        Livewire::test('auth.login')
             ->set('n_code', '1234567890')
             ->set('password', 'secret123')
             ->call('login');
