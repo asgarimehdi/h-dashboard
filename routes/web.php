@@ -13,7 +13,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 });
 
 // Volt::route('/login', 'auth.login')->name('login');
-// Volt::route('/register', 'auth.register');
+// Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
 Route::get('/logout', function () {
     $userId = Auth::id();

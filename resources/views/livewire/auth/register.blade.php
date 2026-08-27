@@ -1,25 +1,25 @@
 <?php
 
-use App\Models\User;
-use Livewire\Attributes\Layout;
-use Livewire\Attributes\Rule;
-use Livewire\Attributes\Title;
-use Livewire\Volt\Component;
-use Illuminate\Support\Facades\Hash;
 use App\Models\Person;
-new
-#[Layout('components.layouts.auth')]
-#[Title('Login')]
-class extends Component {
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Livewire\Component;
+use Livewire\Attributes\Rule;
 
-    // #[Rule('required|n_code|unique:persons')]
-     public string $n_code = '';
+return new class extends Component
+{
+    protected $layout = 'components.layouts.auth';
 
-    // #[Rule('required|confirmed')]
-     public string $password = '';
+    public string $title = 'Login';
 
-    // #[Rule('required')]
-     public string $password_confirmation = '';
+    #[Rule('required|string|size:10')]
+    public string $n_code = '';
+
+    #[Rule('required|confirmed')]
+    public string $password = '';
+
+    #[Rule('required')]
+    public string $password_confirmation = '';
 
     public function mount()
     {
@@ -31,29 +31,32 @@ class extends Component {
 
     public function register()
     {
-         // اعتبارسنجی اولیه
-    $this->validate([
-        'n_code' => 'required|string|size:10',
-        'password' => 'required|confirmed',
-    ]);
+        // اعتبارسنجی اولیه
+        $this->validate([
+            'n_code' => 'required|string|size:10',
+            'password' => 'required|confirmed',
+        ]);
 
-    // بررسی اینکه کد ملی در `persons` وجود دارد یا نه
-    $personExists = Person::where('n_code', $this->n_code)->exists();
+        // بررسی اینکه کد ملی در `persons` وجود دارد یا نه
+        $personExists = Person::where('n_code', $this->n_code)->exists();
 
-    if (!$personExists) {
-        $this->addError('n_code', 'کد ملی در سیستم ثبت نشده است.');
-        return;
-    }
+        if (! $personExists) {
+            $this->addError('n_code', 'کد ملی در سیستم ثبت نشده است.');
 
-    // بررسی اینکه کد ملی در `users` تکراری نباشد
-    if (User::where('n_code', $this->n_code)->exists()) {
-        $this->addError('n_code', 'این کد ملی قبلاً ثبت شده است.');
-        return;
-    }
-    $user = User::create([
-        'n_code' => $this->n_code,
-        'password' => Hash::make($this->password),
-    ]);
+            return;
+        }
+
+        // بررسی اینکه کد ملی در `users` تکراری نباشد
+        if (User::where('n_code', $this->n_code)->exists()) {
+            $this->addError('n_code', 'این کد ملی قبلاً ثبت شده است.');
+
+            return;
+        }
+
+        $user = User::create([
+            'n_code' => $this->n_code,
+            'password' => Hash::make($this->password),
+        ]);
 
         auth()->login($user);
 
@@ -61,9 +64,9 @@ class extends Component {
 
         return redirect('/');
     }
-}
+};
 
-; ?>
+?>
 
 <div class="auth-page">
     <h2>ثبت نام</h2>
