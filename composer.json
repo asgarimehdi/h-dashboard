@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "hekmatinasser/verta": "^9.0",
+        "laravel/boost": "^2.7",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
@@ -24,7 +25,6 @@
     "require-dev": {
         "fakerphp/faker": "^1.23",
         "fruitcake/laravel-debugbar": "^4.0",
-        "laravel/boost": "^2.4",
         "laravel/pail": "^1.2.5",
         "laravel/pint": "^1.27",
         "mockery/mockery": "^1.6",
