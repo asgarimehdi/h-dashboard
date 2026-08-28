@@ -32,5 +32,3 @@ cookies.txt
 coverage.xml
 coverage/
 /deploy
-composer.lock
-package-lock.json

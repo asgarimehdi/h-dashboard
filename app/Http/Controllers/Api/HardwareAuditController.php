@@ -170,7 +170,7 @@ class HardwareAuditController extends Controller
         // Build restore data from the 'new' values of the 'created' audit
         $restoreData = [];
         foreach ($audit->changes as $change) {
-            if (!isset($change['field'], $change['new'])) {
+            if (! isset($change['field'], $change['new'])) {
                 continue;
             }
             $restoreData[$change['field']] = $this->parseValueForRestore(
@@ -187,12 +187,13 @@ class HardwareAuditController extends Controller
 
         $hardware = Hardware::create($restoreData);
 
-        // Log a new 'created' audit entry for the restored record
-        app(HardwareAuditObserver::class)->created($hardware);
+        // Note: Hardware::create() already fires HardwareAuditObserver::created()
+        // (registered in AppServiceProvider), which writes the 'created' audit —
+        // so we must NOT call it again here (would duplicate the audit row).
 
-        // Also log an explicit 'rollback' audit for traceability
+        // Log an explicit 'rollback' audit for traceability
         $rollbackChanges = array_map(
-            fn($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new']],
+            fn ($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new']],
             $audit->changes
         );
         app(HardwareAuditObserver::class)->recordRollbackAudit(
@@ -375,16 +376,33 @@ class HardwareAuditController extends Controller
 
     /**
      * Check organizational access from an audit record (hardware may be gone).
+     *
+     * For a live hardware row we read its n_code directly; for a hard-deleted
+     * row (the common case for restoreRecord) we fall back to the n_code stored
+     * in the audit snapshot so the org-scope check is never skipped.
      */
     private function assertAccessibleFromAudit(Request $request, HardwareAudit $audit): void
     {
         $user = $request->user();
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
+        $nCode = null;
+
         $hw = DB::table('hardwares')->where('id', $audit->hardware_id)->first();
         if ($hw && isset($hw->n_code)) {
-            $unitId = DB::table('persons')->where('n_code', $hw->n_code)->value('u_id');
-            if ($unitId && ! in_array($unitId, $accessibleIds)) {
+            $nCode = $hw->n_code;
+        } elseif (is_array($audit->changes)) {
+            foreach ($audit->changes as $change) {
+                if (($change['field'] ?? null) === 'n_code' && isset($change['new'])) {
+                    $nCode = $change['new'];
+                    break;
+                }
+            }
+        }
+
+        if ($nCode !== null) {
+            $unitId = DB::table('persons')->where('n_code', $nCode)->value('u_id');
+            if ($unitId && ! in_array($unitId, $accessibleIds, true)) {
                 abort(403, 'Hardware record not accessible.');
             }
         }
