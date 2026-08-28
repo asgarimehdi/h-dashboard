@@ -31,6 +31,10 @@ DB_ROOT_PASSWORD=example_4be97a3608e27da3
 DB_DEFAULT_EMAIL=admin@...
 DB_DEFAULT_PASSWORD=example_eb4bddfe0a613c1e
 
+# Application timezone (display layer). PostgreSQL keeps UTC for storage;
+# convert to Tehran/Jalali in code via morilog/jalali & hekmatinasser/verta.
+APP_TIMEZONE=Asia/Tehran
+
 SESSION_LIFETIME=120
 SESSION_ENCRYPT=false
 SESSION_PATH=/
