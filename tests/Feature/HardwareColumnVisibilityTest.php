@@ -97,3 +97,20 @@ it('hidden columns are skipped for body cells too so rows stay aligned', functio
 
     expect($hiddenCells)->toBeLessThan($defaultCells);
 });
+
+it('toggleColPanel opens and closes the column management panel', function () {
+    [$user] = makeColVisUser();
+
+    $component = Livewire::actingAs($user)->test('hardware.index');
+
+    // Panel hidden by default
+    expect($component->get('showColPanel'))->toBeFalse();
+
+    // Clicking the "ستون‌ها" button toggles the panel on
+    $component->call('toggleColPanel');
+    expect($component->get('showColPanel'))->toBeTrue();
+
+    // Toggling again closes it (no JS error path)
+    $component->call('toggleColPanel');
+    expect($component->get('showColPanel'))->toBeFalse();
+});
