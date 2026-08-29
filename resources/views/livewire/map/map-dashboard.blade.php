@@ -281,9 +281,24 @@ return new class extends Component
                 }).addTo(this.map);
 
                 this.layers = {
-                    units: L.layerGroup().addTo(this.map),
-                    hardware: L.layerGroup(),
-                    tickets: L.layerGroup(),
+                    units: L.markerClusterGroup({
+                        showCoverageOnHover: false,
+                        maxClusterRadius: 50,
+                        spiderfyOnMaxZoom: true,
+                        chunkedLoading: true,
+                    }).addTo(this.map),
+                    hardware: L.markerClusterGroup({
+                        showCoverageOnHover: false,
+                        maxClusterRadius: 50,
+                        spiderfyOnMaxZoom: true,
+                        chunkedLoading: true,
+                    }).addTo(this.map),
+                    tickets: L.markerClusterGroup({
+                        showCoverageOnHover: false,
+                        maxClusterRadius: 50,
+                        spiderfyOnMaxZoom: true,
+                        chunkedLoading: true,
+                    }).addTo(this.map),
                 };
 
                 this.map.on('moveend', () => this.onMapMove());
@@ -523,4 +538,7 @@ return new class extends Component
 @push('scripts')
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 @endpush
