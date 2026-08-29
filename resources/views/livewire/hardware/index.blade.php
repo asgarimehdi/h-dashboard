@@ -739,7 +739,7 @@ return new class extends Component
             ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
             ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
-            ['key' => 'ip_valid', 'label' => 'IP (مجازی)', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
+            ['key' => 'ip_valid', 'label' => 'IP عمومی', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
             ['key' => 'ip_local', 'label' => 'IP', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_local']],
             ['key' => 'mac', 'label' => 'MAC', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['mac']],
             ['key' => 'net_type', 'label' => 'نوع اتصال', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['net_type']],
