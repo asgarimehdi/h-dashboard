@@ -268,6 +268,11 @@ return new class extends Component
         $this->$property = ($value === $this->$property) ? null : $value;
     }
 
+    public function toggleColPanel(): void
+    {
+        $this->showColPanel = ! $this->showColPanel;
+    }
+
     public function hasActiveFilters(): bool
     {
         return collect([
@@ -865,9 +870,9 @@ return new class extends Component
     <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
-        <div class="flex gap-2 items-center mb-4">
+        <div class="flex flex-wrap gap-2 items-center mb-4">
             <x-button class="btn-success" wire:click="startCreate" label="افزودن" icon="o-plus" responsive />
-            <div class="flex-1">
+            <div class="flex-1 min-w-[180px]">
                 <x-input
                     placeholder="جستجو در تمام فیلدها..."
                     wire:model.live.debounce="search"
@@ -880,15 +885,15 @@ return new class extends Component
                 :class="$showFilters ? 'btn-primary' : 'btn-ghost'"
                 wire:click="$toggle('showFilters')"
                 />
-                    <div class="flex gap-1">
-                        <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="$toggle('showColPanel')" />
-                        <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
-                        <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
-                        <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
-                        @if(!empty($selected))
-                            <x-button icon="o-x-mark" class="btn-ghost btn-sm text-base-content/50" label="{{ count($selected) }} انتخاب" wire:click="clearSelection" title="پاک کردن انتخاب" />
-                        @endif
-                    </div>
+            <div class="flex flex-wrap gap-1">
+                <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="toggleColPanel" />
+                <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
+                <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
+                <x-button icon="o-x-circle" class="btn-ghost btn-sm" label="برداشتن" wire:click="bulkMark(false)" spinner :disabled="empty($selected)" />
+                @if(!empty($selected))
+                    <x-button icon="o-x-mark" class="btn-ghost btn-sm text-base-content/50" label="{{ count($selected) }} انتخاب" wire:click="clearSelection" title="پاک کردن انتخاب" />
+                @endif
+            </div>
                 </div>
 
                 {{-- Quick Presets --}}
