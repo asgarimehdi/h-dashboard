@@ -315,7 +315,8 @@ class HrController extends Controller
             $query->where(function ($q) use ($s, $p) {
                 $q->where($p.'n_code', 'LIKE', "%{$s}%")
                     ->orWhere($p.'f_name', 'LIKE', "%{$s}%")
-                    ->orWhere($p.'l_name', 'LIKE', "%{$s}%");
+                    ->orWhere($p.'l_name', 'LIKE', "%{$s}%")
+                    ->orWhereRaw("CONCAT({$p}f_name, ' ', {$p}l_name) LIKE ?", ["%{$s}%"]);
             });
         }
         foreach (['unit_id' => 'u_id', 'semat_id' => 's_id', 'tahsil_id' => 't_id', 'estekhdam_id' => 'e_id', 'radif_id' => 'r_id', 'status' => 'status'] as $param => $col) {

@@ -91,7 +91,8 @@ class HardwareController extends Controller
                     ->orWhere('mac', 'LIKE', "%{$s}%")
                     ->orWhere('comments', 'LIKE', "%{$s}%")
                     ->orWhere('persons.f_name', 'LIKE', "%{$s}%")
-                    ->orWhere('persons.l_name', 'LIKE', "%{$s}%");
+                    ->orWhere('persons.l_name', 'LIKE', "%{$s}%")
+                    ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$s}%"]);
             });
         }
 
@@ -128,7 +129,8 @@ class HardwareController extends Controller
             $query->where(function ($q) use ($normalized) {
                 $q->where('persons.f_name', 'LIKE', "%{$normalized}%")
                     ->orWhere('persons.l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('persons.n_code', 'LIKE', "%{$normalized}%");
+                    ->orWhere('persons.n_code', 'LIKE', "%{$normalized}%")
+                    ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$normalized}%"]);
             });
         }
         if ($request->filled('unit')) {
