@@ -195,19 +195,10 @@
                 {{-- منابع انسانی --}}
                 @can('kargozini')
                 <x-menu-sub title="منابع انسانی" icon="o-user-group">
-                    <x-menu-item title="پرسنل" icon="o-user-group" link="/kargozini/persons" wire:navigate />
                     <x-menu-item title="استخدام" icon="o-briefcase" link="/kargozini/estekhdams" wire:navigate />
                     <x-menu-item title="ردیف سازمانی" icon="o-bars-3-bottom-right" link="/kargozini/radifs" wire:navigate />
                     <x-menu-item title="تحصیلات" icon="o-academic-cap" link="/kargozini/tahsils" wire:navigate />
                     <x-menu-item title="سمت‌ها" icon="o-clipboard-document-list" link="/kargozini/semats" wire:navigate />
-                </x-menu-sub>
-                @endcan
-
-                {{-- داشبورد منابع انسانی --}}
-                @can('view_hr_dashboard')
-                <x-menu-sub title="داشبورد منابع انسانی" icon="o-chart-bar">
-                    <x-menu-item title="آمار پرسنل" icon="o-chart-bar" link="/hr-dashboard" wire:navigate />
-                    <x-menu-item title="چارت سازمانی" icon="o-beaker" link="/hr/org-chart" wire:navigate />
                 </x-menu-sub>
                 @endcan
 
@@ -229,12 +220,21 @@
                 </x-menu-sub>
                 @endcanany
 
-                {{-- ساختار سازمان --}}
-                @can('organization')
-                <x-menu-sub title="ساختار سازمان" icon="o-building-library">
+                {{-- مدیریت سازمان --}}
+                @canany(['organization', 'kargozini', 'view_hr_dashboard'])
+                <x-menu-sub title="مدیریت سازمان" icon="o-building-library">
+                    @can('organization')
                     <x-menu-item title="مدیریت واحدها" icon="o-building-office-2" link="/units" wire:navigate />
+                    @endcan
+                    @can('kargozini')
+                    <x-menu-item title="پرسنل" icon="o-user-group" link="/kargozini/persons" wire:navigate />
+                    @endcan
+                    @can('view_hr_dashboard')
+                    <x-menu-item title="آمار پرسنل" icon="o-chart-bar" link="/hr-dashboard" wire:navigate />
+                    <x-menu-item title="چارت سازمانی" icon="o-beaker" link="/hr/org-chart" wire:navigate />
+                    @endcan
                 </x-menu-sub>
-                @endcan
+                @endcanany
 
                 {{-- کار با نقشه --}}
                 @can('map')
