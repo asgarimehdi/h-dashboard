@@ -25,7 +25,8 @@ class PersonController extends Controller
             $query->where(function ($q) use ($s) {
                 $q->where('n_code', 'LIKE', "%{$s}%")
                   ->orWhere('f_name', 'LIKE', "%{$s}%")
-                  ->orWhere('l_name', 'LIKE', "%{$s}%");
+                  ->orWhere('l_name', 'LIKE', "%{$s}%")
+                  ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$s}%"]);
             });
         }
 

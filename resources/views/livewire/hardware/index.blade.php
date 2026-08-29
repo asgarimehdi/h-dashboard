@@ -195,7 +195,8 @@ return new class extends Component
             ->where(function ($q) use ($normalized) {
                 $q->where('n_code', 'LIKE', "%{$normalized}%")
                     ->orWhere('f_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('l_name', 'LIKE', "%{$normalized}%");
+                    ->orWhere('l_name', 'LIKE', "%{$normalized}%")
+                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$normalized}%"]);
             })
             ->limit(10)
             ->get()
@@ -780,7 +781,8 @@ return new class extends Component
                     ->orWhere('comments', 'LIKE', "%{$s}%")
                     ->orWhereHas('person', function ($pq) use ($s) {
                         $pq->where('f_name', 'LIKE', "%{$s}%")
-                            ->orWhere('l_name', 'LIKE', "%{$s}%");
+                            ->orWhere('l_name', 'LIKE', "%{$s}%")
+                            ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$s}%"]);
                     });
             });
         }
@@ -821,7 +823,8 @@ return new class extends Component
             $query->whereHas('person', function ($q) use ($normalized) {
                 $q->where('f_name', 'LIKE', "%{$normalized}%")
                     ->orWhere('l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('n_code', 'LIKE', "%{$normalized}%");
+                    ->orWhere('n_code', 'LIKE', "%{$normalized}%")
+                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$normalized}%"]);
             });
         }
         if ($this->filterUnit) {
