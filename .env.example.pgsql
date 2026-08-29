@@ -8,6 +8,8 @@ APP_URL=http://coder1.boxd.sh
 TILE_SERVER_IP=10.100.252.137
 TILE_SERVER_PORT=8080
 TILE_SERVER_SCHEME=http
+# قالب کامل آدرس تایل روی سرور on-prem
+TILE_URL_TEMPLATE=http://10.100.252.137:8080/tile/{z}/{x}/{y}.png
 # مسیریابی (OSRM)
 ROUTING_SERVER_IP=10.100.252.137
 ROUTING_SERVER_PORT=5000
