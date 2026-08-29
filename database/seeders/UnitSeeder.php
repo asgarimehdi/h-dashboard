@@ -6725,16 +6725,6 @@ class UnitSeeder extends Seeder
                 'boundary_id' => null,
             ],
             [
-                'id' => 660,
-                'region_id' => 2,
-                'parent_id' => 45,
-                'name' => 0,
-                'unit_type_id' => 9,
-                'lat' => 5,
-                'lng' => 5,
-                'boundary_id' => null,
-            ],
-            [
                 'id' => 661,
                 'region_id' => 2,
                 'parent_id' => 29,
@@ -7450,8 +7440,8 @@ class UnitSeeder extends Seeder
                 'parent_id' => 68,
                 'name' => 'پایگاه شماره 4 مرکز 6 زنجان',
                 'unit_type_id' => 10,
-                'lat' => 4.872048,
-                'lng' => -13.31543,
+                'lat' => 36.677,
+                'lng' => 48.489,
                 'boundary_id' => null,
             ],
             [
