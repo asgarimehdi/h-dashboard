@@ -128,12 +128,12 @@ return new class extends Component {
 
 @script
 <script>
-    var mapIp = @js(config('map.tile_server_ip', '10.100.252.137'));
+    var mapUrl = @js(config('map.tile_url', 'https://tile.openstreetmap.org'));
 
     function initUnitMap() {
         var unitMap = L.map('unitMap').setView([36.558188, 48.716125], 8);
 
-        L.tileLayer('http://' + mapIp + ':8080/tile/{z}/{x}/{y}.png', {
+        L.tileLayer(mapUrl + '/tile/{z}/{x}/{y}.png', {
             attribution: '&copy; Health-Dashboard',
             className: 'map-tiles'
         }).addTo(unitMap);

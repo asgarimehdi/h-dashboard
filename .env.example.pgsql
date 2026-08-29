@@ -3,7 +3,19 @@ APP_ENV=local
 APP_KEY=base64:aelQP/iruUmruqDr1iZ9XEFB/EgFm3crvwHN1lqnix8=
 APP_DEBUG=false
 APP_URL=http://coder1.boxd.sh
-TILE_SERVER_IP=tile.openstreetmap.org
+# ── Map / routing / geocoding servers ──
+# تایل/نقشه (سرور on-prem روی پورت 8080)
+TILE_SERVER_IP=10.100.252.137
+TILE_SERVER_PORT=8080
+TILE_SERVER_SCHEME=http
+# مسیریابی (OSRM)
+ROUTING_SERVER_IP=10.100.252.137
+ROUTING_SERVER_PORT=5000
+ROUTING_SERVER_SCHEME=http
+# آدرس‌یابی (Nominatim)
+GEOCODING_SERVER_IP=10.100.252.137
+GEOCODING_SERVER_PORT=8088
+GEOCODING_SERVER_SCHEME=http
 
 APP_LOCALE=fa
 APP_FALLBACK_LOCALE=en

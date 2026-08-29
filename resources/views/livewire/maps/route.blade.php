@@ -3,13 +3,15 @@
 use Livewire\Component;
 
 return new class extends Component {
-    public string $map_ip;
+    public string $map_url;
+    public string $routing_url;
     public string $waypoint1;
     public string $waypoint2;
 
     public function mount(): void
     {
-        $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
+        $this->map_url = config('map.tile_url', 'https://tile.openstreetmap.org');
+        $this->routing_url = config('map.routing_url', 'http://127.0.0.1:5000');
         $this->waypoint1 = '36.149617, 49.217189';
         $this->waypoint2 = '36.146862, 49.229586';
     }
@@ -76,7 +78,7 @@ return new class extends Component {
                 L.latLng({{ $waypoint2 }})
             ],
             router: L.Routing.osrmv1({
-                serviceUrl: 'http://{{ $map_ip }}:5000/route/v1'
+                serviceUrl: '{{ $routing_url }}/route/v1'
             }),
             lineOptions: {
                 styles: [{ color: 'blue', weight: 5 }]
