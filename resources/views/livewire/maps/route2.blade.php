@@ -3,13 +3,17 @@
 use Livewire\Component;
 
 return new class extends Component {
-    public string $map_ip;
+    public string $map_url;
+    public string $routing_url;
+    public string $geocoding_url;
     public string $start_point = '';
     public string $end_point = '';
 
     public function mount(): void
     {
-        $this->map_ip = config('map.tile_server_ip', '10.100.252.137');
+        $this->map_url = config('map.tile_url', 'https://tile.openstreetmap.org');
+        $this->routing_url = config('map.routing_url', 'http://127.0.0.1:5000');
+        $this->geocoding_url = config('map.geocoding_url', 'http://127.0.0.1:8088');
     }
 
     public function swapPoints(): void
@@ -85,7 +89,7 @@ return new class extends Component {
     async function geocode(query) {
         if (!query) return null;
         try {
-            var response = await axios.get('http://{{ $map_ip }}:8088/search', {
+            var response = await axios.get('{{ $geocoding_url }}/search', {
                 params: { q: query, format: 'json', limit: 1 }
             });
             if (response.data.length > 0) {
@@ -140,7 +144,7 @@ return new class extends Component {
         routingControl = L.Routing.control({
             waypoints: [],
             router: L.Routing.osrmv1({
-                serviceUrl: 'http://{{ $map_ip }}:5000/route/v1'
+                serviceUrl: '{{ $routing_url }}/route/v1'
             }),
             routeWhileDragging: true,
             show: true
