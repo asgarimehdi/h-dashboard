@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Documentation
 
-> **Doc review (2026-08-17):** Cross-checked against the working tree on branch `feature/mehdi` (Laravel **13.25.0**, Livewire **4.4.0**). Removed stale issue references, the historical "Recent Issues Resolved" / "Recent Changes" sections, and refs to removed components (Boost MCP, openai/AiAgentTest, op-cache permission listing). See **Running Tests (Pest)** and **Code Intelligence (CodeGraph)** for the current setup workflows.
+> **Doc review (2026-08-29):** Cross-checked against the working tree on branch `kimya` (Laravel **13.29.0**, Livewire **4.4.2**). Removed stale issue references, the historical "Recent Issues Resolved" / "Recent Changes" sections, and refs to removed components (Boost MCP, openai/AiAgentTest, op-cache permission listing). See **Running Tests (Pest)** and **Code Intelligence (CodeGraph)** for the current setup workflows.
 
 ## Project Overview
 
@@ -8,7 +8,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x (`laravel/framework ^13.0`, locked at **13.25.0** in `composer.lock`) on PHP ^8.3
+- **Framework:** Laravel 13.x (`laravel/framework ^13.0`, locked at **13.29.0** in `composer.lock`) on PHP ^8.3
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
@@ -120,7 +120,7 @@ User ↔ Unit (user_units pivot)
 
 - **User ↔ Person** are linked by `n_code` (not `id`). `Person.hasOne(User)` / `User.belongsTo(Person)`. `User` uses SoftDeletes; `User.units()` is a BelongsToMany via the `user_units` pivot (`role` enum: `responsible`/`staff`, `is_primary` flag); `primaryUnit()` returns the assignment where `is_primary = true`.
 - **`user_units` pivot** — many-to-many user↔unit assignments (a user can belong to multiple units). Unique on `(user_id, unit_id)`. Seeded from `Person.u_id` via `UserUnitSeeder`.
-- **Migration/style note:** FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). Migration count is **46**. New migrations follow `YYYY_MM_DD_######_description.php`; both a sequential counter (`000001`) and a time-suffixed form (`002725`) appear in the tree. Avoid the classic `YYYY_MM_DD_HHMMSS` Laravel default and pass `--no-interaction`.
+- **Migration/style note:** FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). Migration count is **53**. New migrations follow `YYYY_MM_DD_######_description.php`; both a sequential counter (`000001`) and a time-suffixed form (`002725`) appear in the tree. Avoid the classic `YYYY_MM_DD_HHMMSS` Laravel default and pass `--no-interaction`.
 
 ## Area & Vocabulary
 
@@ -604,9 +604,9 @@ php artisan db:seed --force
 
 ### Running Tests (Pest)
 
-Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** (`postgres`/`secret`/`h_dashboard_test`). The suite is **hermetic** — no Redis dependency (see step 3). Getting the environment right is the most common failure mode — follow these steps exactly.
+Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** named `h_dashboard_test` (DB name is hard-coded; `DB_USERNAME`/`DB_PASSWORD` are NOT set in phpunit.xml, so they fall back to `.env` and the local run uses the `h_dashboard` role). The suite is **hermetic** — no Redis dependency (see step 3). Getting the environment right is the most common failure mode — follow these steps exactly.
 
-> **✅ Working as of 2026-08-26:** **`composer test`** is the one-command way to run the full suite (**721 passed, 1 skipped**, ~3–4 min). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
+> **✅ Working as of 2026-08-29:** **`composer test`** is the one-command way to run the full suite (**849 passed, 1 skipped**, ~4 min). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
 
 #### 1. Prerequisites (services must be up)
 ```bash
@@ -615,7 +615,7 @@ docker compose -f docker-compose-pgsql-.yml up -d      # PostGIS on :5432, Redis
 - PostGIS must be healthy. Verify: `pg_isready -h 127.0.0.1 -p 5432`
 - **Redis is NOT required for tests** — `phpunit.xml` forces `CACHE_STORE=array`, `SESSION_DRIVER=array`, `QUEUE_CONNECTION=sync` (with `force="true"`), so the suite never connects to Redis. Note Laravel 13's `config/cache.php` reads **`CACHE_STORE`** (the legacy `CACHE_DRIVER` env is ignored).
 
-#### 2. Create the test database + role (phpunit.xml hard-codes `postgres`/`secret`/`h_dashboard_test`)
+#### 2. Ensure the `h_dashboard_test` database exists (credentials come from `.env`)
 The committed `phpunit.xml` expects:
 ```xml
 <env name="DB_CONNECTION" value="pgsql"/>
@@ -628,12 +628,14 @@ The committed `phpunit.xml` expects:
 ```
 Create them once (the `postgis` extension must be enabled — build from the `template_postgis` template):
 ```bash
-# as a superuser (e.g. h_dashboard), create the postgres role + test db
+# Local run: phpunit.xml does NOT set DB_USERNAME/PASSWORD, so they come from .env
+# (the `h_dashboard` role). Only the empty test DB (from template_postgis) is needed:
 psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
-  "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='postgres') \
-   THEN CREATE ROLE postgres LOGIN PASSWORD 'secret' SUPERUSER; END IF; END \$\$;"
-psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
-  "CREATE DATABASE h_dashboard_test WITH OWNER=postgres TEMPLATE=template_postgis;"
+  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+# CI only: the runner rewrites .env.testing to postgres/secret, so it ALSO creates that role:
+# psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
+#   "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='postgres') \
+#    THEN CREATE ROLE postgres LOGIN PASSWORD 'secret' SUPERUSER; END IF; END \$\$;"
 ```
 
 #### 3. Redis is NOT needed (hermetic suite)
@@ -658,7 +660,7 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 - **Why `XDEBUG_MODE=off`:** Xdebug loads in `develop` mode; when Laravel's date validation (`after_or_equal:start_at` etc.) throws its *expected* parse exception, Xdebug tries to attach a `$xdebug_message` dynamic property to `DateMalformedStringException`, PHP 8.3 turns that into an `Error`, and it escapes Laravel's `catch (Exception)` → HTTP 500. Symptom: `Failed to parse time string (start_at) … timezone could not be found in the database` plus `Cannot create dynamic property DateMalformedStringException::$xdebug_message`. Not a code bug — env only.
 - **No pcov needed for normal runs** — `phpunit.xml` deliberately has **no `<coverage>` block** (see failure table below). Request coverage explicitly when you want it: `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` (what CI runs, with pcov installed).
 - **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
-- Expected: **721 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
+- Expected: **849 passed, 1 skipped** (the skip is `HardwareAuditMigrationTest`, driver-dependent — not a failure).
 
 #### Common failure → cause
 | Symptom | Cause | Fix |
