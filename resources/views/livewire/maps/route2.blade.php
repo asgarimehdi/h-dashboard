@@ -3,7 +3,7 @@
 use Livewire\Component;
 
 return new class extends Component {
-    public string $map_url;
+    public string $map_tile_template;
     public string $routing_url;
     public string $geocoding_url;
     public string $start_point = '';
@@ -11,7 +11,7 @@ return new class extends Component {
 
     public function mount(): void
     {
-        $this->map_url = config('map.tile_url', 'https://tile.openstreetmap.org');
+        $this->map_tile_template = config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
         $this->routing_url = config('map.routing_url', 'http://127.0.0.1:5000');
         $this->geocoding_url = config('map.geocoding_url', 'http://127.0.0.1:8088');
     }

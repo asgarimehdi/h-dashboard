@@ -12,6 +12,12 @@ return [
         . (env('TILE_SERVER_PORT') ? ':' . env('TILE_SERVER_PORT') : ''),
         '/'
     ),
+    // Full tile URL template (the on-prem server uses /tile/{z}/{x}/{y}.png, OSM uses
+    // https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png). Keep the {z}/{x}/{y} tokens.
+    'tile_url_template'  => env(
+        'TILE_URL_TEMPLATE',
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+    ),
 
     // ── Routing server (OSRM) (سرور مسیریابی) ──
     'routing_server_ip'     => env('ROUTING_SERVER_IP', '127.0.0.1'),

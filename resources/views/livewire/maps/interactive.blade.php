@@ -81,7 +81,7 @@ return new class extends Component
         function initInteractiveMap() {
             const map = L.map('unitsMap').setView([35.6892, 51.3890], 7);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            L.tileLayer('{{ config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png') }}', {
                 attribution: '&copy; OpenStreetMap contributors',
                 maxZoom: 19,
             }).addTo(map);
