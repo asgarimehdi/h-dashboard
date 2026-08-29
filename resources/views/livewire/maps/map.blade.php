@@ -3,13 +3,13 @@
 use Livewire\Component;
 
 return new class extends Component {
-    public string $map_url;
+    public string $map_tile_template;
     public string $setview;
     public string $zoom;
 
     public function mount(): void
     {
-        $this->map_url = config('map.tile_url', 'https://tile.openstreetmap.org');
+        $this->map_tile_template = config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
         $this->setview = '[36.558188, 48.716125]';
         $this->zoom = '8';
     }
@@ -54,7 +54,7 @@ return new class extends Component {
 
         var map = L.map('map').setView({{ $setview }}, {{ $zoom }});
 
-        L.tileLayer('{{ $map_url }}/tile/{z}/{x}/{y}.png', {
+        L.tileLayer('{{ $map_tile_template }}', {
             attribution: '&copy; Health-Dashboard',
             className: 'map-tiles'
         }).addTo(map);

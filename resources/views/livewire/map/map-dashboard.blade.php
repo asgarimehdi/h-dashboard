@@ -26,6 +26,7 @@ return new class extends Component
     public $statsOpenTickets = 0;
     
     public $mapToken = '';
+    public $mapTileTemplate = '';
 
     protected $listeners = [
         'mapMoved' => 'onMapMoved',
@@ -42,6 +43,7 @@ return new class extends Component
         // Delete old map-dashboard tokens first to avoid accumulation.
         $user->tokens()->where('name', 'map-dashboard')->delete();
         $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
+        $this->mapTileTemplate = config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
         $this->loadStats();
     }
 
@@ -273,7 +275,7 @@ return new class extends Component
                     attributionControl: true,
                 });
 
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                L.tileLayer('{{ $mapTileTemplate }}', {
                     maxZoom: 19,
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(this.map);
