@@ -258,4 +258,20 @@ class Unit extends Model
             $q->whereRaw('ST_DistanceSphere(boundary, ST_GeomFromText(?, 4326)) <= ?', [$pointWkt, $radiusMeters]);
         });
     }
+
+    /**
+     * تیکت‌های مرتبط با این واحد.
+     */
+    public function tickets(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * وظایف (todos) مرتبط با این واحد.
+     */
+    public function todos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Todo::class);
+    }
 }
