@@ -75,17 +75,23 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - Helpers: `canBeCompleted()`, `waitingDuration`, `statusName`
 
 **Todo** (`todos` table)
-- `id`, `title`, `is_completed`, `unit_id`
-
-**TaskActivity** (`task_activities` table)
-- `id`, `ticket_id`, `action` — audit trail for ticket lifecycle events (forward, assign, accept, complete)
-
-**Attachment** (`attachments` table)
-- `id`, `ticket_id`, file metadata — uploaded files attached to tickets
+- `id`, `title`, `start_at`, `end_at` (nullable), `is_completed`, `unit_id`, `user_id`
+- `recurrence_rule` (`none`/`daily`/`weekly`/`monthly`, default `none`), `recurrence_interval` (default 1), `last_generated_at` (nullable) — drive `todos:generate-recurring`
+- Helpers: `isRecurring()`, `nextOccurrence()` (Carbon based on `last_generated_at ?? start_at`)
+- `tickets()` → `Ticket` (`task_id`)
 
 **ActivityLog** (`activity_logs` table)
-- `id`, `user_id`, `action`, ... — user action audit trail (login/logout, CRUD), populated via `ActivityLogService`
-- Composite index on `(user_id, created_at)` (performance fix)
+- `id`, `user_id`, `type`, `subject_type`, `subject_id`, `description`, `old_values`/`new_values` (json), `ip_address`, `user_agent`, timestamps
+- User action audit trail (login/logout, CRUD), populated via `ActivityLogService`
+
+**ActivityLogArchive** (`activity_log_archives` table)
+- Mirror of `activity_logs` for cold storage. Adds `original_created_at`, `original_updated_at`, `archived_at`. Populated by `data:archive` (records older than 12 months).
+
+**MaintenanceSchedule** (`maintenance_schedules` table)
+- `id`, `unit_id` (FK, set null), `title`, `frequency` (`daily`/`weekly`/`monthly`), `recurrence_interval`, `last_generated_at`, `next_due_at`. Source for `maintenance:generate-due`.
+
+**DailyReport** (`daily_reports` table)
+- `id`, `unit_id` (FK, set null), `report_date`, `summary`, `payload` (json), `generated_by` (FK, set null), timestamps. One row per unit per day from `reports:generate-daily`.
 
 **Notification** (`notifications` table, custom)
 - `id`, `user_id`, `title`, `body`, `icon`, `color`, `url`, `is_read`, `created_at` — in-app notifications via `NotificationService` (cached bell queries)
@@ -205,11 +211,20 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 | Command | Schedule | Class | Purpose |
 |---|---|---|---|
 | `cache:prune-stale` | hourly | `PruneStaleCache` | Resets all cache version counters (see **Cache Version Namespaces**) so stale versioned keys expire |
-| `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todos |
-| `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance records |
-| `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Archives old records |
-| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds daily reports |
+| `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todo instances from `todos.recurrence_rule` templates |
+| `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
+| `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
+| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per accessible unit |
 | `zabbix:sync` | every 5 min | `SyncZabbix` | Pulls Zabbix traffic/latest values |
+
+**Implemented-command details (was placeholder before 2026-08-29):**
+
+- `todos:generate-recurring` — reads `todos` where `recurrence_rule != 'none'` and `last_generated_at <= now()`. For each due template it creates a fresh instance (`recurrence_rule = 'none'`) and advances `last_generated_at` to `nextOccurrence()` (`daily`/`weekly`/`monthly` × `recurrence_interval`, based on `last_generated_at ?? start_at`). Recurrence fields added in `2026_08_29_000002_add_recurrence_fields_to_todos_table.php`.
+- `maintenance:generate-due` — reads `maintenance_schedules` where `next_due_at <= now()` (or null), creates a `Ticket` (`ticket_code = 'T-'.Str::random(8)`, `status = 'created'`) on the schedule's `unit_id`, then advances `last_generated_at` and `next_due_at` by the schedule frequency.
+- `data:archive` — chunks `activity_logs` older than `--months=12` (default), copies them to `activity_log_archives` (preserving `original_created_at`/`original_updated_at`) and deletes the originals. Supports `--dry-run`.
+- `reports:generate-daily` — iterates `AccessService::accessibleUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`.
+
+> All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
 
 `zabbix:sync` uses `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler. **Do not add `->timeout(N)` to the schedule** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
 
@@ -667,8 +682,8 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 
 ```bash
 npm install -g @colbymchenry/codegraph
-cd /home/runner/workspace/h-dashboard   # or your project root
-codegraph init .                        # builds .codegraph/codegraph.db (~30s, auto-syncs on file change)
+cd /home/runner/h-dashboard   # or your project root
+codegraph init .              # builds .codegraph/codegraph.db (~30s, auto-syncs on file change)
 ```
 
 Once installed, an agent (or a developer in a terminal) answers structural questions directly instead of crawling files:
