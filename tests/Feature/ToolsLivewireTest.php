@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\Ticket::class)]
+covers(\App\Models\Ticket::class);
 
 class ToolsLivewireTest extends TestCase
 {

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Session;
 use Mockery;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\TrafficController::class)]
+covers(\App\Http\Controllers\Api\TrafficController::class);
 
 class TrafficApiTest extends TestCase
 {

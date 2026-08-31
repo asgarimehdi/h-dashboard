@@ -20,7 +20,8 @@ use Tests\TestCase;
  * recording paths (missing fields, unknown unit, bad reference ids),
  * and integer parsing variants (empty cell, \N marker).
  */
-#[CoversClass(\App\Imports\PersonImport::class)]
+covers(\App\Imports\PersonImport::class);
+
 class PersonImportEdgeCasesTest extends TestCase
 {
     use RefreshDatabase;

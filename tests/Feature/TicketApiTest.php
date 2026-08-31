@@ -15,7 +15,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\TicketController::class)]
+covers(\App\Http\Controllers\Api\TicketController::class);
 
 class TicketApiTest extends TestCase
 {

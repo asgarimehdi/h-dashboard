@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Traits\HasOrganizationalScope::class)]
+covers(\App\Traits\HasOrganizationalScope::class);
 
 class HasOrganizationalScopeTest extends TestCase
 {

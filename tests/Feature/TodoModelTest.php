@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\Todo::class)]
+covers(\App\Models\Todo::class);
 
 class TodoModelTest extends TestCase
 {

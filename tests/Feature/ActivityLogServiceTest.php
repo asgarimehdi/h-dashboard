@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Services\ActivityLogService::class)]
+covers(\App\Services\ActivityLogService::class);
 
 class ActivityLogServiceTest extends TestCase
 {

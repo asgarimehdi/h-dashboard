@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\ActivityLog::class)]
+covers(\App\Models\ActivityLog::class);
 
 class ActivityLogModelTest extends TestCase
 {

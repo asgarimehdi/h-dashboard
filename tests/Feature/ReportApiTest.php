@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\ReportController::class)]
+covers(\App\Http\Controllers\Api\ReportController::class);
 
 class ReportApiTest extends TestCase
 {

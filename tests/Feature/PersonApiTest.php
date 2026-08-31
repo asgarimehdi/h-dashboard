@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\PersonController::class)]
+covers(\App\Http\Controllers\Api\PersonController::class);
 
 class PersonApiTest extends TestCase
 {

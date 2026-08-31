@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\HardwareAudit::class)]
+covers(\App\Models\HardwareAudit::class);
 
 class HardwareAuditTest extends TestCase
 {
