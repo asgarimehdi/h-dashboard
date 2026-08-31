@@ -5,6 +5,8 @@ namespace Tests\Unit;
 use Tests\TestCase;
 use Tests\Unit\NormalizerHelper;
 
+/** @covers \App\Traits\PersianNormalizer */
+
 uses(TestCase::class);
 
 test('persian normalizer handles additional mixed characters', function () {

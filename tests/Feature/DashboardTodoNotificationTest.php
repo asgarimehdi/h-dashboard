@@ -16,6 +16,8 @@ use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
 use Tests\TestCase;
 
+/** @covers \App\Models\Todo */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {

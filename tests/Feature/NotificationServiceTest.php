@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
+/** @covers \App\Services\NotificationService */
 class NotificationServiceTest extends TestCase
 {
     use RefreshDatabase;

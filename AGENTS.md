@@ -709,7 +709,7 @@ codegraph status .
 
 `.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with two jobs:
 - **Tests & Coverage (blocking)** — PHP **8.5** (matches composer.lock; Symfony 8.1 requires ≥8.4), service containers `postgis/postgis:16-3.4` (:5432) + passwordless `redis`, builds frontend assets (`npm ci && npm run build`), rewrites `.env.testing` to match the containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`** — Laravel 13 ignores legacy `CACHE_DRIVER`; a shared redis store cross-pollutes spatie's permission cache across parallel workers), `key:generate --env=testing`, `migrate --env=testing`, then clears config/routes/views (guard against the stale-`routes-v7.php` Livewire-hash trap above), then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov.
-- **Mutation Testing (non-blocking, `continue-on-error: true`)** — has never passed: the codebase has no `covers()`/`mutates()` declarations (so it runs `--everything --covered-only`) and mutation mode trips over lookup-table id collisions. Treat failures as informational until properly wired up.
+- **Mutation Testing (non-blocking, `continue-on-error: true`)** — all test files have `@covers` declarations (added 2026-08-31) so mutations are scoped to tested code via `--covered-only`. Previously ran `--everything --covered-only` which was too slow (30 min timeout). The mutation job may still fail due to lookup-table id collisions — treat failures as informational until the job passes consistently.
 
 ### Storage Permissions (gotcha)
 

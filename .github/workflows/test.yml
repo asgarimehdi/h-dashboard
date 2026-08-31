@@ -193,7 +193,6 @@ jobs:
         run: php artisan migrate --env=testing --force
 
       - name: Run mutation tests
-        # No covers()/mutates() declarations exist in this codebase, so
-        # scope mutations to everything covered instead (Pest requires
-        # one or the other).
-        run: ./vendor/bin/pest --mutate --parallel --everything --covered-only --min=80
+        # @covers declarations on all test files scope mutations to tested code.
+        # --covered-only limits mutations to code that has test coverage.
+        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=80

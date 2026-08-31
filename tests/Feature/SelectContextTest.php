@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Models\Unit */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {

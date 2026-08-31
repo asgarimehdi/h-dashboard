@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HardwareController */
 class ChangePasswordTest extends TestCase
 {
     use RefreshDatabase;

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\PersonController */
 class PersonApiTest extends TestCase
 {
     use RefreshDatabase;

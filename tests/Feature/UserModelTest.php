@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
+/** @covers \App\Models\User */
 class UserModelTest extends TestCase
 {
     use RefreshDatabase;

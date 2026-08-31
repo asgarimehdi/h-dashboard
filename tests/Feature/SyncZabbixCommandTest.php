@@ -8,6 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
+/** @covers \App\Console\Commands\SyncZabbix */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 // Coverage gap (#494): the existing ScheduledJobInfrastructureTest only

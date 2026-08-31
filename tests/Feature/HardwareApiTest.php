@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HardwareController */
 class HardwareApiTest extends TestCase
 {
     use RefreshDatabase;

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
+/** @covers \App\Models\Ticket */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 function makeTicketManager(): User
