@@ -429,6 +429,35 @@ return new class extends Component
         $this->selected = [];
     }
 
+    public function exportExcel(): void
+    {
+        $columns = array_keys(array_filter($this->visibleCols));
+        // Always include core columns
+        $columns = array_unique(array_merge(['n_code', 'pc_name'], $columns));
+
+        $state = [
+            'columns' => $columns,
+            'filters' => [
+                'search'        => $this->search,
+                'filterType'    => $this->filterType,
+                'filterOs'      => $this->filterOs,
+                'filterCpu'     => $this->filterCpu,
+                'filterRam'     => $this->filterRam,
+                'filterHdd'     => $this->filterHdd,
+                'filterShutdown'=> $this->filterShutdown,
+                'filterNetType' => $this->filterNetType,
+                'filterMark'    => $this->filterMark,
+                'filterPerson'  => $this->filterPerson,
+                'filterUnit'    => $this->filterUnit,
+                'filterSemat'   => $this->filterSemat,
+            ],
+        ];
+
+        session(['hardware_export_state' => $state]);
+
+        $this->dispatch('download-export', url: route('hardware.export'));
+    }
+
     public function bulkDelete(): void
     {
         if (empty($this->selected)) {
@@ -892,6 +921,7 @@ return new class extends Component
                 wire:click="$toggle('showFilters')"
                 />
             <div class="flex flex-wrap gap-1">
+                <x-button icon="o-arrow-down-tray" class="btn-ghost btn-sm" label="خروجی اکسل" wire:click="exportExcel" spinner />
                 <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="toggleColPanel" />
                 <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
                 <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
@@ -1327,3 +1357,11 @@ return new class extends Component
         </div>
     </x-card>
 </div>
+
+@script
+<script>
+    Livewire.on('download-export', (url) => {
+        window.location.href = url;
+    });
+</script>
+@endscript
