@@ -435,27 +435,26 @@ return new class extends Component
         // Always include core columns
         $columns = array_unique(array_merge(['n_code', 'pc_name'], $columns));
 
-        $state = [
-            'columns' => $columns,
-            'filters' => [
-                'search'        => $this->search,
-                'filterType'    => $this->filterType,
-                'filterOs'      => $this->filterOs,
-                'filterCpu'     => $this->filterCpu,
-                'filterRam'     => $this->filterRam,
-                'filterHdd'     => $this->filterHdd,
-                'filterShutdown'=> $this->filterShutdown,
-                'filterNetType' => $this->filterNetType,
-                'filterMark'    => $this->filterMark,
-                'filterPerson'  => $this->filterPerson,
-                'filterUnit'    => $this->filterUnit,
-                'filterSemat'   => $this->filterSemat,
-            ],
+        $params = [
+            'columns' => implode(',', $columns),
+            'search'  => $this->search,
+            'type'    => $this->filterType,
+            'os'      => $this->filterOs,
+            'cpu'     => $this->filterCpu,
+            'ram'     => $this->filterRam,
+            'hdd'     => $this->filterHdd,
+            'shutdown'=> $this->filterShutdown,
+            'net_type'=> $this->filterNetType,
+            'mark'    => $this->filterMark,
+            'person'  => $this->filterPerson,
+            'unit'    => $this->filterUnit,
+            'semat'   => $this->filterSemat,
         ];
 
-        session(['hardware_export_state' => $state]);
+        // Remove empty values
+        $params = array_filter($params, fn ($v) => $v !== null && $v !== '');
 
-        $this->dispatch('download-export', url: route('hardware.export'));
+        $this->dispatch('download-export', route('hardware.export', $params));
     }
 
     public function bulkDelete(): void

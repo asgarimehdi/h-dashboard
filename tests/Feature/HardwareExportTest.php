@@ -113,12 +113,12 @@ class HardwareExportTest extends TestCase
     }
 
     #[Test]
-    public function export_route_returns_404_without_session_state(): void
+    public function export_route_returns_valid_excel_without_params(): void
     {
-        // No session state set
+        // Without query params, defaults to n_code + pc_name columns
         $response = $this->get(route('hardware.export'));
 
-        $response->assertStatus(404);
+        $response->assertStatus(200);
     }
 
     #[Test]
