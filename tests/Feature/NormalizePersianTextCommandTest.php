@@ -6,7 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-/** @covers \App\Console\Commands\NormalizePersianText */
+covers(\App\Console\Commands\NormalizePersianText::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

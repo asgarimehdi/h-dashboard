@@ -6,7 +6,8 @@ use App\Services\ZabbixService;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
-/** @covers \App\Services\ZabbixService */
+#[CoversClass(\App\Services\ZabbixService::class)]
+
 class ZabbixServiceTest extends TestCase
 {
     protected function setUp(): void

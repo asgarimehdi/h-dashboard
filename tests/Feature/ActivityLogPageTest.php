@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-/** @covers \App\Models\ActivityLog */
+covers(\App\Models\ActivityLog::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

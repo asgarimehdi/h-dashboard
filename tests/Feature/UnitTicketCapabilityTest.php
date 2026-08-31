@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-/** @covers \App\Models\Ticket */
+covers(\App\Models\Ticket::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

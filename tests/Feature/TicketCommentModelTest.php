@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-/** @covers \App\Models\TicketComment */
+#[CoversClass(\App\Models\TicketComment::class)]
+
 class TicketCommentModelTest extends TestCase
 {
     use RefreshDatabase;

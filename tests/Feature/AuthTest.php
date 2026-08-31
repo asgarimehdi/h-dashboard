@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-/** @covers \App\Http\Controllers\Api\HardwareController */
+covers(\App\Http\Controllers\Api\HardwareController::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

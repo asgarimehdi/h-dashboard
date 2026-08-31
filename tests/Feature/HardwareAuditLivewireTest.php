@@ -13,7 +13,7 @@ use Spatie\Permission\Models\Permission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Models\HardwareAudit */
+covers(\App\Models\HardwareAudit::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

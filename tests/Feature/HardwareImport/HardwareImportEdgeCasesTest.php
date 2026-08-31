@@ -21,7 +21,7 @@ use Tests\TestCase;
  * unknown person), mac-based match updates, unchanged-row skipping,
  * clean_at parsing variants and the rules() contract.
  */
-/** @covers \App\Imports\HardwareImport */
+#[CoversClass(\App\Imports\HardwareImport::class)]
 class HardwareImportEdgeCasesTest extends TestCase
 {
     use RefreshDatabase;

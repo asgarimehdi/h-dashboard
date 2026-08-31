@@ -10,7 +10,7 @@ use Livewire\Livewire;
 use Mockery;
 use Tests\TestCase;
 
-/** @covers \App\Services\ZabbixService */
+covers(\App\Services\ZabbixService::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
