@@ -454,7 +454,7 @@ return new class extends Component
         // Remove empty values
         $params = array_filter($params, fn ($v) => $v !== null && $v !== '');
 
-        $this->dispatch('download-export', url: route('hardware.export', $params));
+        $this->dispatch('download-export', route('hardware.export', $params));
     }
 
     public function bulkDelete(): void
