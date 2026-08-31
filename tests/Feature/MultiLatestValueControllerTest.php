@@ -8,7 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-/** @covers \App\Http\Controllers\Api\MultiLatestValueController */
+#[CoversClass(\App\Http\Controllers\Api\MultiLatestValueController::class)]
+
 class MultiLatestValueControllerTest extends TestCase
 {
     use RefreshDatabase;

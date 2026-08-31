@@ -7,7 +7,8 @@ use App\Models\ActivityLogArchive;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Console\Commands\ArchiveOldRecords */
+#[CoversClass(\App\Console\Commands\ArchiveOldRecords::class)]
+
 class ArchiveOldRecordsCommandTest extends TestCase
 {
     use RefreshDatabase;

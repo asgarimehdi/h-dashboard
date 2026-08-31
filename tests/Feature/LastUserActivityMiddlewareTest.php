@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
-/** @covers \App\Http\Middleware\LastUserActivity */
+covers(\App\Http\Middleware\LastUserActivity::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

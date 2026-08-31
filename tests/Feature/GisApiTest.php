@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-/** @covers \App\Http\Controllers\Api\GisController */
+#[CoversClass(\App\Http\Controllers\Api\GisController::class)]
+
 class GisApiTest extends TestCase
 {
     use RefreshDatabase;

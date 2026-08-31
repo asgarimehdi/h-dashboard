@@ -5,7 +5,7 @@ namespace Tests\Unit;
 use Tests\TestCase;
 use Tests\Unit\NormalizerHelper;
 
-/** @covers \App\Traits\PersianNormalizer */
+covers(\App\Traits\PersianNormalizer::class);
 
 uses(TestCase::class);
 

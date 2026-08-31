@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-/** @covers \App\Models\Ticket */
+#[CoversClass(\App\Models\Ticket::class)]
+
 class TicketModelTest extends TestCase
 {
     use RefreshDatabase;

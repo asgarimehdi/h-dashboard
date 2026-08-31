@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Services\CacheInvalidationService */
+covers(\App\Services\CacheInvalidationService::class);
 
 uses(\Tests\Support\Concerns\InteractsWithTestSetup::class);
 uses(TestCase::class, RefreshDatabase::class);

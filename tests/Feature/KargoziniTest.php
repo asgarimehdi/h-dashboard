@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-/** @covers \App\Models\Person */
+covers(\App\Models\Person::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

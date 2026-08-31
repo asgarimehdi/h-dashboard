@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-/** @covers \App\Models\ActivityLog */
+#[CoversClass(\App\Models\ActivityLog::class)]
+
 class ActivityLogPageLivewireTest extends TestCase
 {
     use RefreshDatabase;

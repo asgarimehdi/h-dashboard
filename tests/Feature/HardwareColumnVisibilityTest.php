@@ -13,7 +13,7 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-/** @covers \App\Models\Hardware */
+covers(\App\Models\Hardware::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

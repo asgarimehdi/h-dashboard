@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-/** @covers \App\Http\Controllers\Api\HrController */
+#[CoversClass(\App\Http\Controllers\Api\HrController::class)]
+
 class HrApiTest extends TestCase
 {
     use RefreshDatabase;

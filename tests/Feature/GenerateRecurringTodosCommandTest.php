@@ -6,7 +6,8 @@ use App\Models\Todo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Console\Commands\GenerateRecurringTodos */
+#[CoversClass(\App\Console\Commands\GenerateRecurringTodos::class)]
+
 class GenerateRecurringTodosCommandTest extends TestCase
 {
     use RefreshDatabase;

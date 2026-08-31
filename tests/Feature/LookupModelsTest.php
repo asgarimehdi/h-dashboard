@@ -13,7 +13,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-/** @covers \App\Models\Person */
+#[CoversClass(\App\Models\Person::class)]
+
 class LookupModelsTest extends TestCase
 {
     use RefreshDatabase;

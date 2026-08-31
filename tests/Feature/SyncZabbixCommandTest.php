@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
-/** @covers \App\Console\Commands\SyncZabbix */
+covers(\App\Console\Commands\SyncZabbix::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
