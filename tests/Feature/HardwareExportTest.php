@@ -21,7 +21,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\HardwareExportController::class)]
+covers(\App\Http\Controllers\Api\HardwareExportController::class);
 
 class HardwareExportTest extends TestCase
 {

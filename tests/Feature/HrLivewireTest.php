@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\HrController::class)]
+covers(\App\Http\Controllers\Api\HrController::class);
 
 class HrLivewireTest extends TestCase
 {

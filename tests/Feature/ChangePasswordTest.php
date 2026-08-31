@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\HardwareController::class)]
+covers(\App\Http\Controllers\Api\HardwareController::class);
 
 class ChangePasswordTest extends TestCase
 {

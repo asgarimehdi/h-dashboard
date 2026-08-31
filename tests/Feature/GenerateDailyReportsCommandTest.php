@@ -9,7 +9,7 @@ use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-#[CoversClass(\App\Console\Commands\GenerateDailyReports::class)]
+covers(\App\Console\Commands\GenerateDailyReports::class);
 
 class GenerateDailyReportsCommandTest extends TestCase
 {

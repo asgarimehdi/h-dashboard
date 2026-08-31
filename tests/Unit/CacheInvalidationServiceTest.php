@@ -6,7 +6,7 @@ use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
-#[CoversClass(\App\Services\CacheInvalidationService::class)]
+covers(\App\Services\CacheInvalidationService::class);
 
 class CacheInvalidationServiceTest extends TestCase
 {

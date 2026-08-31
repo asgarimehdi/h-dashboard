@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\User::class)]
+covers(\App\Models\User::class);
 
 class UserModelTest extends TestCase
 {

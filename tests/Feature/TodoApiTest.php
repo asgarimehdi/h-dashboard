@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\TodoController::class)]
+covers(\App\Http\Controllers\Api\TodoController::class);
 
 class TodoApiTest extends TestCase
 {

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-#[CoversClass(\App\Console\Commands\PruneStaleCache::class)]
+covers(\App\Console\Commands\PruneStaleCache::class);
 
 class ScheduledJobInfrastructureTest extends TestCase
 {

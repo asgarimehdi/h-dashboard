@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\TicketComment::class)]
+covers(\App\Models\TicketComment::class);
 
 class TicketCommentsLivewireTest extends TestCase
 {

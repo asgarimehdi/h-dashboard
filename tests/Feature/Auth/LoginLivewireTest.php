@@ -17,7 +17,8 @@ use Tests\TestCase;
  * (session regenerate + redirect + activity log), invalid credentials,
  * validation errors, and the rate-limit lockout branch.
  */
-#[CoversClass(\App\Http\Controllers\Api\HardwareController::class)]
+covers(\App\Http\Controllers\Api\HardwareController::class);
+
 class LoginLivewireTest extends TestCase
 {
     use RefreshDatabase;

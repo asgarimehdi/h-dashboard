@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\HardwareController::class)]
+covers(\App\Http\Controllers\Api\HardwareController::class);
 
 class HardwareBulkOperationsTest extends TestCase
 {

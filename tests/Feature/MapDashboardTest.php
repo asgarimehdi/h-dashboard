@@ -13,7 +13,7 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\Unit::class)]
+covers(\App\Models\Unit::class);
 
 class MapDashboardTest extends TestCase
 {

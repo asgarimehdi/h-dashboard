@@ -16,7 +16,7 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-#[CoversClass(\App\Http\Controllers\Api\TicketCommentController::class)]
+covers(\App\Http\Controllers\Api\TicketCommentController::class);
 
 class TicketCommentsEdgeCasesTest extends TestCase
 {

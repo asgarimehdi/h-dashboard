@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\HardwareAudit::class)]
+covers(\App\Models\HardwareAudit::class);
 
 class HardwareAuditModelTest extends TestCase
 {
