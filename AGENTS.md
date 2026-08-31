@@ -193,6 +193,7 @@ The application uses **Laravel Sanctum** with two authentication modes:
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
+    Route::get('/hardware/export', [\\App\\Http\\Controllers\\Api\\HardwareExportController::class, 'export'])->name('hardware.export');
 });
 ```
 
@@ -401,6 +402,8 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - **Advanced Filters:** Toggle panel with 12+ filter fields (type, OS, CPU, RAM, HDD, net type, shutdown status, mark, person, unit, semat)
 - **Bulk Actions:** Multi-select checkboxes — delete, mark/unmark devices in bulk
 - **Status Badges:** Visual indicators (active 🟢, shutdown ⬛, marked ⚑)
+- **Unit Column (واحد):** Displays the organizational unit for each hardware record, sourced from `person.unit.name`. Visible by default, toggleable via column panel.
+- **Export to Excel:** Button exports current filtered data as `.xlsx` — respects active filters (type, OS, CPU, RAM, HDD, shutdown, mark, person, unit, semat, search) and visible columns. Uses session-based state transfer from Livewire to controller (`HardwareExportController`). Route: `GET /hardware/export`.
 - **Column Visibility:** Toggle columns on/off via a panel
 - **Mobile Card Layout:** Table auto-converts to cards on small screens
 - **Real-time n_code Validation:** Live validation against `persons` table with name/unit display
