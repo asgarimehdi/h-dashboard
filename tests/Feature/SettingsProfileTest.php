@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\User::class)]
+covers(\App\Models\User::class);
 
 class SettingsProfileTest extends TestCase
 {

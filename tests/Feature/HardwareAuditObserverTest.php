@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\HardwareAudit::class)]
+covers(\App\Models\HardwareAudit::class);
 
 class HardwareAuditObserverTest extends TestCase
 {

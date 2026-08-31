@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\ActivityLog::class)]
+covers(\App\Models\ActivityLog::class);
 
 class ActivityLogPageLivewireTest extends TestCase
 {

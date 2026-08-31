@@ -23,7 +23,8 @@ use Tests\TestCase;
  * scope enforcement, validation, thread depth, markdown, notifications,
  * reactions listing/idempotency, admin delete, 15-min edit window.
  */
-#[CoversClass(\App\Http\Controllers\Api\TicketCommentController::class)]
+covers(\App\Http\Controllers\Api\TicketCommentController::class);
+
 class TicketCommentApiComprehensiveTest extends TestCase
 {
     use RefreshDatabase;

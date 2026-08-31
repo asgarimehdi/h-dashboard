@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-#[CoversClass(\App\Services\AccessService::class)]
+covers(\App\Services\AccessService::class);
 
 class AccessServiceTest extends TestCase
 {

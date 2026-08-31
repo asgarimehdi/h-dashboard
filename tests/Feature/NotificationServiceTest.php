@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Services\NotificationService::class)]
+covers(\App\Services\NotificationService::class);
 
 class NotificationServiceTest extends TestCase
 {

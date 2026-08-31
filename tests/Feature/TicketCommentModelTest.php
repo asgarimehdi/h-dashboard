@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\TicketComment::class)]
+covers(\App\Models\TicketComment::class);
 
 class TicketCommentModelTest extends TestCase
 {

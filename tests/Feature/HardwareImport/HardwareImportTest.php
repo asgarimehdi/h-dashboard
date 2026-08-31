@@ -14,7 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
-#[CoversClass(\App\Imports\HardwareImport::class)]
+covers(\App\Imports\HardwareImport::class);
 
 class HardwareImportTest extends TestCase
 {

@@ -12,7 +12,8 @@ use Tests\TestCase;
  * legacy `hardware_histories` rows are copied into `hardware_audits`
  * and the legacy table is dropped.
  */
-#[CoversClass(\App\Models\HardwareAudit::class)]
+covers(\App\Models\HardwareAudit::class);
+
 class HardwareAuditMigrationTest extends TestCase
 {
     use RefreshDatabase;

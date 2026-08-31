@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-#[CoversClass(\App\Models\Notification::class)]
+covers(\App\Models\Notification::class);
 
 class NotificationModelTest extends TestCase
 {

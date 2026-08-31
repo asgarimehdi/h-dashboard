@@ -17,7 +17,7 @@ use PHPUnit\Framework\Assert;
 use ReflectionMethod;
 use Tests\TestCase;
 
-#[CoversClass(\App\Imports\HardwareImport::class)]
+covers(\App\Imports\HardwareImport::class);
 
 class ImportLivewireComponentTest extends TestCase
 {
