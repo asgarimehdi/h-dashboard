@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Models\TicketComment */
 class TicketCommentsLivewireTest extends TestCase
 {
     use RefreshDatabase;

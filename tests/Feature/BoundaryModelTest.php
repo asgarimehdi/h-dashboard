@@ -10,6 +10,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
+/** @covers \App\Models\Boundary */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 // Coverage gap (#494): Boundary::geojson has two execution paths — the

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HrController */
 class HrLivewireTest extends TestCase
 {
     use RefreshDatabase;

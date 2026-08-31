@@ -15,6 +15,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\TicketController */
 class TicketControllerEdgeCasesTest extends TestCase
 {
     use RefreshDatabase;

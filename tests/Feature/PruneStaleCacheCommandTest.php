@@ -6,6 +6,7 @@ use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/** @covers \App\Console\Commands\PruneStaleCache */
 class PruneStaleCacheCommandTest extends TestCase
 {
     use RefreshDatabase;

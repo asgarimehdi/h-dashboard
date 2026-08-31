@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\TodoController */
 class TodoApiTest extends TestCase
 {
     use RefreshDatabase;

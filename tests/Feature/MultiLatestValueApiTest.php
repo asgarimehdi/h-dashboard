@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Session;
 use Mockery;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\MultiLatestValueController */
 class MultiLatestValueApiTest extends TestCase
 {
     use RefreshDatabase;

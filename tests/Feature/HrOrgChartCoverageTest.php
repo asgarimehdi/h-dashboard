@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HrController */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 // Coverage gap (#494): HrLivewireTest covers mount/render/expand/collapse and

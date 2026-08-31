@@ -7,6 +7,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
+/** @covers \App\Http\Middleware\LastUserActivity */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 test('LastUserActivity middleware sets cache key for authenticated users', function () {

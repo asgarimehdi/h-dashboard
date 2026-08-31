@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HardwareController */
 class ApiLoginTest extends TestCase
 {
     use RefreshDatabase;

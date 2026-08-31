@@ -13,6 +13,8 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
+/** @covers \App\Models\Hardware */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 function makeColVisUser(): array

@@ -13,6 +13,8 @@ use Spatie\Permission\Models\Permission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/** @covers \App\Models\HardwareAudit */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 function makeAuditLivewireUser(): array

@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
+/** @covers \App\Http\Middleware\ValidateUnitContext */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
