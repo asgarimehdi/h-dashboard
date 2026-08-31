@@ -110,6 +110,7 @@ return new class extends Component
     public array $visibleCols = [
         'type' => true,
         'os' => true,
+        'unit_name' => true,
         'ip_valid' => false,
         'ip_local' => true,
         'mac' => false,
@@ -738,6 +739,7 @@ return new class extends Component
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
             ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
+            ['key' => 'unit_name', 'label' => 'واحد', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['unit_name']],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
             ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
             ['key' => 'ip_valid', 'label' => 'IP عمومی', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
@@ -767,7 +769,7 @@ return new class extends Component
             return $this->hardwaresCache;
         }
 
-        $query = $this->applyOrgScope(Hardware::with('person'));
+        $query = $this->applyOrgScope(Hardware::with('person.unit'));
 
         // General search
         if (! empty($this->search)) {
@@ -851,6 +853,7 @@ return new class extends Component
             'hardwares' => $this->hardwares()->through(fn ($hw) => [
                 ...$hw->toArray(),
                 'person_name' => $hw->person ? trim($hw->person->f_name.' '.$hw->person->l_name) : '-',
+                'unit_name' => $hw->person?->unit?->name ?? '-',
                 'shutdown_display' => $hw->shutdown ? 'بله' : 'خیر',
                 'mark_display' => $hw->mark ? 'بله' : 'خیر',
                 'clean_at_display' => $hw->clean_at?->format('Y/m/d') ?? '—',
@@ -1262,6 +1265,7 @@ return new class extends Component
                         <div>
                             <div class="font-bold text-lg">{{ $hw['pc_name'] }}</div>
                             <div class="text-xs text-base-content/60">{{ $hw['person_name'] }}</div>
+                            <div class="text-xs text-base-content/40">{{ $hw['unit_name'] }}</div>
                         </div>
                         <div class="flex gap-2">
                              @if($hw['status'] === 'mark')
