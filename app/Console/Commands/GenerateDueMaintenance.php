@@ -35,6 +35,31 @@ class GenerateDueMaintenance extends Command
 
         $created = 0;
         foreach ($schedules as $schedule) {
+            // Issue #533: idempotency guard — skip if an open ticket already exists
+            // for this schedule (prevents duplicates on scheduler overlap or crash)
+            $existingTicket = Ticket::where('unit_id', $schedule->unit_id)
+                ->where('subject', $schedule->title)
+                ->where('status', '!=', 'completed')
+                ->where('created_at', '>=', now()->subDay())
+                ->exists();
+
+            if ($existingTicket) {
+                $this->warn("  Skipping schedule #{$schedule->id} — open ticket already exists.");
+                // Still advance the schedule to avoid getting stuck
+                $interval = max(1, (int) $schedule->recurrence_interval);
+                $next = match ($schedule->frequency) {
+                    'daily' => now()->addDays($interval),
+                    'weekly' => now()->addWeeks($interval),
+                    'monthly' => now()->addMonths($interval),
+                    default => now()->addMonths($interval),
+                };
+                $schedule->update([
+                    'last_generated_at' => now(),
+                    'next_due_at' => $next,
+                ]);
+                continue;
+            }
+
             $ticket = Ticket::create([
                 'ticket_code' => 'T-'.strtoupper(\Illuminate\Support\Str::random(8)),
                 'subject' => $schedule->title,
