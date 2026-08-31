@@ -9,7 +9,8 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Models\Ticket */
+#[CoversClass(\App\Models\Ticket::class)]
+
 class TicketWorkflowTest extends TestCase
 {
     use RefreshDatabase;

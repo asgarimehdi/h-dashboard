@@ -22,7 +22,7 @@ use Tests\TestCase;
  * Covers: create, threaded reply, list, author-only edit (15 min window),
  * authorization (403 for non-author), reactions add/remove, soft delete.
  */
-/** @covers \App\Models\TicketComment */
+#[CoversClass(\App\Models\TicketComment::class)]
 class TicketCommentTest extends TestCase
 {
     use RefreshDatabase;

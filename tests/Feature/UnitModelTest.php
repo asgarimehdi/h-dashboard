@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-/** @covers \App\Models\Unit */
+#[CoversClass(\App\Models\Unit::class)]
+
 class UnitModelTest extends TestCase
 {
     use RefreshDatabase;

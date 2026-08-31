@@ -13,7 +13,8 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-/** @covers \App\Models\Unit */
+#[CoversClass(\App\Models\Unit::class)]
+
 class MapDashboardTest extends TestCase
 {
     use RefreshDatabase;

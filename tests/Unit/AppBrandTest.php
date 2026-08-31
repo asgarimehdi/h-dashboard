@@ -3,7 +3,7 @@
 use App\View\Components\AppBrand;
 use Tests\TestCase;
 
-/** @covers \App\View\Components\AppBrand */
+covers(\App\View\Components\AppBrand::class);
 
 uses(TestCase::class);
 

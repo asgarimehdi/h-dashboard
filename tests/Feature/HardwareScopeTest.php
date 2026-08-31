@@ -10,7 +10,7 @@ use Livewire\Livewire;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Traits\HasOrganizationalScope */
+covers(\App\Traits\HasOrganizationalScope::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

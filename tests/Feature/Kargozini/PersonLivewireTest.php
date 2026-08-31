@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Kargozini;
 
-
 use App\Models\Person as PersonModel;
 use App\Models\Unit;
 use App\Models\User;
@@ -19,7 +18,7 @@ use Tests\TestCase;
  * create/update/delete with organizational-scope enforcement, the
  * FK-violation guard on delete, and linked-user unit sync.
  */
-/** @covers \App\Models\Person */
+#[CoversClass(\App\Models\Person::class)]
 class PersonLivewireTest extends TestCase
 {
     use RefreshDatabase;

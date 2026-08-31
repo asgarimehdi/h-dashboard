@@ -8,7 +8,8 @@ use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** @covers \App\Console\Commands\GenerateDueMaintenance */
+#[CoversClass(\App\Console\Commands\GenerateDueMaintenance::class)]
+
 class GenerateDueMaintenanceCommandTest extends TestCase
 {
     use RefreshDatabase;

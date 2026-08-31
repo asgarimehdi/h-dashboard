@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-/** @covers \App\Models\Hardware */
+#[CoversClass(\App\Models\Hardware::class)]
+
 class HardwareModelTest extends TestCase
 {
     use RefreshDatabase;

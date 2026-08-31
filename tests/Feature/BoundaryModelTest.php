@@ -10,7 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-/** @covers \App\Models\Boundary */
+covers(\App\Models\Boundary::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-/** @covers \App\Services\ZabbixService */
+covers(\App\Services\ZabbixService::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

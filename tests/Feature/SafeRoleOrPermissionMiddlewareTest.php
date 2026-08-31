@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-/** @covers \App\Http\Middleware\SafeRoleOrPermission */
+covers(\App\Http\Middleware\SafeRoleOrPermission::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
