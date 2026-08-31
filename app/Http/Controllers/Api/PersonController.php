@@ -113,11 +113,8 @@ class PersonController extends Controller
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
-        // Check organizational scope for new u_id if present in request
-        if ($request->has('u_id') && ! in_array($request->input('u_id'), $accessibleIds)) {
-            return response()->json(['message' => 'New unit not accessible.'], 403);
-        }
-
+        // Issue #532: validate FIRST, then check scope — prevents information
+        // disclosure through differential error responses (403 vs 422).
         $validated = $request->validate([
             'n_code' => 'sometimes|required|string|size:10|unique:persons,n_code,' . $person->n_code . ',n_code',
             'f_name' => 'sometimes|required|string|max:255',
@@ -128,6 +125,10 @@ class PersonController extends Controller
             'r_id' => 'sometimes|required|exists:radifs,id',
             'u_id' => 'sometimes|required|exists:units,id',
         ]);
+
+        if (isset($validated['u_id']) && ! in_array($validated['u_id'], $accessibleIds)) {
+            return response()->json(['message' => 'Unit not accessible.'], 403);
+        }
 
         $person->update($validated);
 
