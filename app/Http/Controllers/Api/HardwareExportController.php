@@ -13,15 +13,10 @@ class HardwareExportController extends Controller
 {
     public function export(Request $request)
     {
-        $sessionKey = 'hardware_export_state';
-        $state = session($sessionKey);
-
-        if (! $state) {
-            abort(404, 'داده‌ای برای خروجی وجود ندارد.');
+        $columns = array_filter(explode(',', $request->input('columns', '')));
+        if (empty($columns)) {
+            $columns = ['n_code', 'pc_name'];
         }
-
-        $columns = $state['columns'] ?? [];
-        $filters = $state['filters'] ?? [];
 
         // Build query — same logic as Livewire component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
@@ -34,9 +29,9 @@ class HardwareExportController extends Controller
             $query->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds));
         }
 
-        // Apply filters (same as Livewire hardwares() method)
-        if (! empty($filters['search'])) {
-            $s = $filters['search'];
+        // Apply filters from query parameters
+        if ($request->filled('search')) {
+            $s = $request->search;
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                     ->orWhere('n_code', 'LIKE', "%{$s}%")
@@ -52,34 +47,34 @@ class HardwareExportController extends Controller
             });
         }
 
-        if (! empty($filters['filterType'])) {
+        if ($request->filled('type')) {
             $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
-            $type = $typeAliases[$filters['filterType']] ?? $filters['filterType'];
+            $type = $typeAliases[$request->type] ?? $request->type;
             $query->where('type', 'LIKE', "%{$type}%");
         }
-        if (! empty($filters['filterOs'])) {
-            $query->where('os', 'LIKE', "%{$filters['filterOs']}%");
+        if ($request->filled('os')) {
+            $query->where('os', 'LIKE', "%{$request->os}%");
         }
-        if (! empty($filters['filterCpu'])) {
-            $query->where('cpu', 'LIKE', "%{$filters['filterCpu']}%");
+        if ($request->filled('cpu')) {
+            $query->where('cpu', 'LIKE', "%{$request->cpu}%");
         }
-        if (! empty($filters['filterRam'])) {
-            $query->where('ram', 'LIKE', "%{$filters['filterRam']}%");
+        if ($request->filled('ram')) {
+            $query->where('ram', 'LIKE', "%{$request->ram}%");
         }
-        if (! empty($filters['filterHdd'])) {
-            $query->where('hdd', 'LIKE', "%{$filters['filterHdd']}%");
+        if ($request->filled('hdd')) {
+            $query->where('hdd', 'LIKE', "%{$request->hdd}%");
         }
-        if (isset($filters['filterShutdown']) && $filters['filterShutdown'] !== '') {
-            $query->where('shutdown', $filters['filterShutdown'] === '1');
+        if ($request->filled('shutdown')) {
+            $query->where('shutdown', $request->shutdown === '1');
         }
-        if (! empty($filters['filterNetType'])) {
-            $query->where('net_type', 'LIKE', "%{$filters['filterNetType']}%");
+        if ($request->filled('net_type')) {
+            $query->where('net_type', 'LIKE', "%{$request->net_type}%");
         }
-        if (isset($filters['filterMark']) && $filters['filterMark'] !== '') {
-            $query->where('mark', $filters['filterMark'] === '1');
+        if ($request->filled('mark')) {
+            $query->where('mark', $request->mark === '1');
         }
-        if (! empty($filters['filterPerson'])) {
-            $normalized = $filters['filterPerson'];
+        if ($request->filled('person')) {
+            $normalized = $request->person;
             $query->whereHas('person', function ($q) use ($normalized) {
                 $q->where('f_name', 'LIKE', "%{$normalized}%")
                     ->orWhere('l_name', 'LIKE', "%{$normalized}%")
@@ -87,14 +82,14 @@ class HardwareExportController extends Controller
                     ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$normalized}%"]);
             });
         }
-        if (! empty($filters['filterUnit'])) {
-            $normalized = $filters['filterUnit'];
+        if ($request->filled('unit')) {
+            $normalized = $request->unit;
             $query->whereHas('person.unit', function ($q) use ($normalized) {
                 $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
-        if (! empty($filters['filterSemat'])) {
-            $normalized = $filters['filterSemat'];
+        if ($request->filled('semat')) {
+            $normalized = $request->semat;
             $query->whereHas('person.semat', function ($q) use ($normalized) {
                 $q->where('name', 'LIKE', "%{$normalized}%");
             });
