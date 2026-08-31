@@ -110,6 +110,7 @@ return new class extends Component
     public array $visibleCols = [
         'type' => true,
         'os' => true,
+        'unit_name' => true,
         'ip_valid' => false,
         'ip_local' => true,
         'mac' => false,
@@ -428,6 +429,34 @@ return new class extends Component
         $this->selected = [];
     }
 
+    public function exportExcel(): void
+    {
+        $columns = array_keys(array_filter($this->visibleCols));
+        // Always include core columns
+        $columns = array_unique(array_merge(['n_code', 'pc_name'], $columns));
+
+        $params = [
+            'columns' => implode(',', $columns),
+            'search'  => $this->search,
+            'type'    => $this->filterType,
+            'os'      => $this->filterOs,
+            'cpu'     => $this->filterCpu,
+            'ram'     => $this->filterRam,
+            'hdd'     => $this->filterHdd,
+            'shutdown'=> $this->filterShutdown,
+            'net_type'=> $this->filterNetType,
+            'mark'    => $this->filterMark,
+            'person'  => $this->filterPerson,
+            'unit'    => $this->filterUnit,
+            'semat'   => $this->filterSemat,
+        ];
+
+        // Remove empty values
+        $params = array_filter($params, fn ($v) => $v !== null && $v !== '');
+
+        $this->dispatch('download-export', route('hardware.export', $params));
+    }
+
     public function bulkDelete(): void
     {
         if (empty($this->selected)) {
@@ -738,6 +767,7 @@ return new class extends Component
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
             ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
+            ['key' => 'unit_name', 'label' => 'واحد', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['unit_name']],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
             ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
             ['key' => 'ip_valid', 'label' => 'IP عمومی', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
@@ -767,7 +797,7 @@ return new class extends Component
             return $this->hardwaresCache;
         }
 
-        $query = $this->applyOrgScope(Hardware::with('person'));
+        $query = $this->applyOrgScope(Hardware::with('person.unit'));
 
         // General search
         if (! empty($this->search)) {
@@ -851,6 +881,7 @@ return new class extends Component
             'hardwares' => $this->hardwares()->through(fn ($hw) => [
                 ...$hw->toArray(),
                 'person_name' => $hw->person ? trim($hw->person->f_name.' '.$hw->person->l_name) : '-',
+                'unit_name' => $hw->person?->unit?->name ?? '-',
                 'shutdown_display' => $hw->shutdown ? 'بله' : 'خیر',
                 'mark_display' => $hw->mark ? 'بله' : 'خیر',
                 'clean_at_display' => $hw->clean_at?->format('Y/m/d') ?? '—',
@@ -889,6 +920,7 @@ return new class extends Component
                 wire:click="$toggle('showFilters')"
                 />
             <div class="flex flex-wrap gap-1">
+                <x-button icon="o-arrow-down-tray" class="btn-ghost btn-sm" label="خروجی اکسل" wire:click="exportExcel" spinner />
                 <x-button icon="o-archive-box" class="btn-ghost btn-sm" label="ستون‌ها" wire:click="toggleColPanel" />
                 <x-button icon="o-trash" class="btn-error btn-ghost btn-sm" label="حذف" wire:click="bulkDelete" spinner :disabled="empty($selected)" wire:confirm="آیا مطمئن هستید؟" />
                 <x-button icon="o-check-circle" class="btn-success btn-ghost btn-sm" label="علامت" wire:click="bulkMark(true)" spinner :disabled="empty($selected)" />
@@ -1262,6 +1294,7 @@ return new class extends Component
                         <div>
                             <div class="font-bold text-lg">{{ $hw['pc_name'] }}</div>
                             <div class="text-xs text-base-content/60">{{ $hw['person_name'] }}</div>
+                            <div class="text-xs text-base-content/40">{{ $hw['unit_name'] }}</div>
                         </div>
                         <div class="flex gap-2">
                              @if($hw['status'] === 'mark')
@@ -1323,3 +1356,11 @@ return new class extends Component
         </div>
     </x-card>
 </div>
+
+@script
+<script>
+    Livewire.on('download-export', (url) => {
+        window.location.href = url;
+    });
+</script>
+@endscript
