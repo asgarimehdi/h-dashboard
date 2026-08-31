@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Morilog\Jalali\Jalalian;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -79,7 +80,7 @@ test('todo page allows creating new todo', function () {
     Livewire::actingAs($this->user)
         ->test('todo.todo')
         ->set('title', 'کار جدید')
-        ->set('start_date_picker', now()->format('Y/m/d'))
+        ->set('start_date_picker', Jalalian::now()->format('Y/m/d'))
         ->call('save');
 
     $this->assertDatabaseHas('todos', [
