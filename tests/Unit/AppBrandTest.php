@@ -3,6 +3,8 @@
 use App\View\Components\AppBrand;
 use Tests\TestCase;
 
+/** @covers \App\View\Components\AppBrand */
+
 uses(TestCase::class);
 
 test('app brand component class exists', function () {

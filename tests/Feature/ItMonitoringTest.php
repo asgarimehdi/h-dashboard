@@ -10,6 +10,8 @@ use Livewire\Livewire;
 use Mockery;
 use Tests\TestCase;
 
+/** @covers \App\Services\ZabbixService */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {

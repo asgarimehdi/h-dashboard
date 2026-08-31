@@ -10,6 +10,8 @@ use Livewire\Livewire;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/** @covers \App\View\Components\AppBrand */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 /**

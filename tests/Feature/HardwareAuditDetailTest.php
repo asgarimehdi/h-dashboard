@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HardwareAuditController */
 class HardwareAuditDetailTest extends TestCase
 {
     use RefreshDatabase;

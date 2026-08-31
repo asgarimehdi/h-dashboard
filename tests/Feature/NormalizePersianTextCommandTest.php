@@ -6,6 +6,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
+/** @covers \App\Console\Commands\NormalizePersianText */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 test('normalize:persian-text command normalizes Arabic characters in database', function () {

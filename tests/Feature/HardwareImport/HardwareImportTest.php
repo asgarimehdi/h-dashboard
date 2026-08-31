@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
+/** @covers \App\Imports\HardwareImport */
 class HardwareImportTest extends TestCase
 {
     use RefreshDatabase;

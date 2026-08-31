@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Session;
 use Mockery;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\TrafficController */
 class TrafficApiTest extends TestCase
 {
     use RefreshDatabase;

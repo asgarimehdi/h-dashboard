@@ -17,6 +17,7 @@ use PHPUnit\Framework\Assert;
 use ReflectionMethod;
 use Tests\TestCase;
 
+/** @covers \App\Imports\HardwareImport */
 class ImportLivewireComponentTest extends TestCase
 {
     use RefreshDatabase;

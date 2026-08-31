@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\ReportController */
 class ReportsApiTest extends TestCase
 {
     use RefreshDatabase;

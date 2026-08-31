@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Models\User */
 class SettingsProfileTest extends TestCase
 {
     use RefreshDatabase;

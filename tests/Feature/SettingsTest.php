@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Models\User */
+
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {

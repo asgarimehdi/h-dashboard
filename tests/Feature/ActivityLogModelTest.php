@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
+/** @covers \App\Models\ActivityLog */
 class ActivityLogModelTest extends TestCase
 {
     use RefreshDatabase;

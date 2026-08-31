@@ -19,6 +19,7 @@ use Tests\TestCase;
  * create/update/delete with organizational-scope enforcement, the
  * FK-violation guard on delete, and linked-user unit sync.
  */
+/** @covers \App\Models\Person */
 class PersonLivewireTest extends TestCase
 {
     use RefreshDatabase;

@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
+/** @covers \App\Models\Ticket */
 class ToolsLivewireTest extends TestCase
 {
     use RefreshDatabase;

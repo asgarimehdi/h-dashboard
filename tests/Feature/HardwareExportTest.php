@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
+/** @covers \App\Http\Controllers\Api\HardwareExportController */
 class HardwareExportTest extends TestCase
 {
     use RefreshDatabase;
