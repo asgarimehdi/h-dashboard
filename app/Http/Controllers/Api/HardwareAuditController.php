@@ -202,6 +202,17 @@ class HardwareAuditController extends Controller
 
         $hardware = Hardware::create($restoreData);
 
+        // Advance the Postgres sequence past the restored id so the next
+        // auto-increment does not collide (duplicate key on hardwares_pkey).
+        // pg_get_serial_sequence resolves the sequence name regardless of
+        // SERIAL vs IDENTITY column definition.
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
+            if ($seq && $seq->seq) {
+                DB::statement('SELECT setval(?, (SELECT COALESCE(MAX(id), 0) FROM hardwares))', [$seq->seq]);
+            }
+        }
+
         // Note: Hardware::create() already fires HardwareAuditObserver::created()
         // (registered in AppServiceProvider), which writes the 'created' audit —
         // so we must NOT call it again here (would duplicate the audit row).
@@ -409,17 +420,23 @@ class HardwareAuditController extends Controller
         } elseif (is_array($audit->changes)) {
             foreach ($audit->changes as $change) {
                 if (($change['field'] ?? null) === 'n_code' && isset($change['new'])) {
-                    $nCode = $change['new'];
+                    // The observer stores formatted display value; guard against
+                    // the em-dash placeholder which is not a valid national code.
+                    $nCode = is_string($change['new']) && $change['new'] !== '—' ? $change['new'] : null;
                     break;
                 }
             }
         }
 
-        if ($nCode !== null) {
-            $unitId = DB::table('persons')->where('n_code', $nCode)->value('u_id');
-            if ($unitId && ! in_array($unitId, $accessibleIds, true)) {
-                abort(403, 'Hardware record not accessible.');
-            }
+        // Deny by default when scope cannot be proven — prevents IDOR when
+        // audit data is missing n_code (legacy/corrupted/manual inserts).
+        if ($nCode === null) {
+            abort(403, 'Hardware record not accessible.');
+        }
+
+        $unitId = DB::table('persons')->where('n_code', $nCode)->value('u_id');
+        if (! $unitId || ! in_array($unitId, $accessibleIds, true)) {
+            abort(403, 'Hardware record not accessible.');
         }
     }
 }
