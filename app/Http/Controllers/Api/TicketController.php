@@ -172,6 +172,11 @@ class TicketController extends Controller
             return response()->json(['message' => 'Ticket not accessible.'], 403);
         }
 
+        // Issue #529: only the assigned user can accept the ticket
+        if ($ticket->current_assignee_id !== $request->user()->id) {
+            return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
+        }
+
         $ticket->update([
             'status' => 'accepted',
             'accepted_at' => now(),
@@ -189,6 +194,11 @@ class TicketController extends Controller
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             return response()->json(['message' => 'Ticket not accessible.'], 403);
+        }
+
+        // Issue #530: only the assigned user can complete the ticket
+        if ($ticket->current_assignee_id !== $request->user()->id) {
+            return response()->json(['message' => 'Only the assigned user can complete this ticket.'], 403);
         }
 
         if ($ticket->status !== 'accepted') {

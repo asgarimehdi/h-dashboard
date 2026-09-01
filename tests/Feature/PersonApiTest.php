@@ -134,4 +134,43 @@ class PersonApiTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id']);
     }
+
+    /**
+     * Issue #532: scope check must happen AFTER validation, not before.
+     * Sending an invalid u_id should get a 422 (validation), not a 403 (scope).
+     */
+    public function test_update_person_with_invalid_unit_returns_validation_error_not_scope_error(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $person = Person::first();
+
+        // u_id=999999 doesn't exist in units table → should be 422 (validation)
+        // Before the fix, this could return 403 (scope check ran first, leaking info)
+        $response = $this->actingAs($user, 'sanctum')->putJson("/api/persons/{$person->n_code}", [
+            'u_id' => 999999,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['u_id']);
+    }
+
+    /**
+     * Issue #532: updating person to a unit outside accessible scope → 403,
+     * but only AFTER validation passes.
+     */
+    public function test_update_person_to_inaccessible_unit_returns_403(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $person = Person::first();
+
+        // Create a unit that EXISTS but is NOT in the user's accessible scope
+        $otherUnit = Unit::create(['name' => 'Inaccessible Unit']);
+
+        $response = $this->actingAs($user, 'sanctum')->putJson("/api/persons/{$person->n_code}", [
+            'u_id' => $otherUnit->id,
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Unit not accessible.']);
+    }
 }

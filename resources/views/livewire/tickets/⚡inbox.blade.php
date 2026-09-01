@@ -240,6 +240,10 @@ new class extends Component
         }
 
         DB::transaction(function () use ($ticketIds, $count, $now, $userId, $bulkNote) {
+            // Issue #531: capture old statuses BEFORE the bulk update
+            $oldStatuses = Ticket::whereIn('id', $ticketIds)
+                ->pluck('status', 'id');
+
             if ($this->bulkAction === 'complete') {
                 // ۲. یک UPDATE برای همه
                 Ticket::whereIn('id', $ticketIds)->update([
@@ -262,10 +266,11 @@ new class extends Component
                 ])->toArray();
                 TaskActivity::insert($activityRows);
 
-                // ActivityLogService - برای هر تیکت جداگانه (جدول activity_logs جداگانه است)
+                // ActivityLogService - با استفاده از وضعیت قبل از آپدیت
                 $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status']);
                 foreach ($tickets as $ticket) {
-                    \App\Services\ActivityLogService::updated($ticket, ['status' => $ticket->status], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
+                    $oldStatus = $oldStatuses->get($ticket->id, $ticket->status);
+                    \App\Services\ActivityLogService::updated($ticket, ['status' => $oldStatus], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
                 }
             }
 
@@ -289,9 +294,11 @@ new class extends Component
                 ])->toArray();
                 TaskActivity::insert($activityRows);
 
+                // Issue #531: use actual old status instead of hardcoded 'accepted'
                 $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status']);
                 foreach ($tickets as $ticket) {
-                    \App\Services\ActivityLogService::updated($ticket, ['status' => 'accepted'], ['status' => 'forwarded'], "ارجاع دسته‌ای تیکت {$ticket->ticket_code}");
+                    $oldStatus = $oldStatuses->get($ticket->id, $ticket->status);
+                    \App\Services\ActivityLogService::updated($ticket, ['status' => $oldStatus], ['status' => 'forwarded'], "ارجاع دسته‌ای تیکت {$ticket->ticket_code}");
                 }
             }
         });
