@@ -32,3 +32,4 @@ cookies.txt
 coverage.xml
 coverage/
 /deploy
+*.lock

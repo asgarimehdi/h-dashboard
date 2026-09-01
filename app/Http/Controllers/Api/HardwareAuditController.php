@@ -6,11 +6,13 @@ use App\Exports\HardwareAuditsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
+use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use Morilog\Jalali\Jalalian;
 
@@ -90,8 +92,9 @@ class HardwareAuditController extends Controller
             return response()->json(['message' => 'Audit not found for this hardware.'], 404);
         }
 
+        $allowed = (new Hardware)->getFillable();
         $request->validate([
-            'field' => 'required|string',
+            'field' => ['required', 'string', Rule::in($allowed)],
         ]);
 
         $changes = $audit->changes;
@@ -116,6 +119,18 @@ class HardwareAuditController extends Controller
 
         // Parse the old value back to its original type
         $restoredValue = $this->parseValueForRestore($oldValue, $request->field);
+
+        // Verify target unit is accessible when restoring n_code
+        if ($request->field === 'n_code' && $restoredValue !== null) {
+            $person = Person::where('n_code', $restoredValue)->first();
+            if (! $person) {
+                return response()->json(['message' => 'Person not found.'], 422);
+            }
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+            if (! in_array($person->u_id, $accessibleIds, true)) {
+                return response()->json(['message' => 'Cannot restore hardware to a person in an inaccessible unit.'], 403);
+            }
+        }
 
         // Update the hardware record
         $hardware->update([$request->field => $restoredValue]);

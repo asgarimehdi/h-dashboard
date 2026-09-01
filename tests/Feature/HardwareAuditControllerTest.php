@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\HardwareAuditController;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
@@ -14,18 +15,24 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HardwareAuditController::class);
+covers(HardwareAuditController::class);
 
 class HardwareAuditControllerTest extends TestCase
 {
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
+
     protected $unit;
+
     protected $user;
+
     protected $hardware;
 
     protected function setUp(): void
@@ -132,9 +139,10 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'created')
             ->first();
 
+        // 'switch' is fillable but not in the created audit's changes (hardware has no switch set)
         $response = $this->withHeaders($this->authHeaders())
             ->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
-                'field' => 'nonexistent_field',
+                'field' => 'switch',
             ]);
 
         $response->assertStatus(422)
