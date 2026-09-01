@@ -33,3 +33,4 @@ coverage.xml
 coverage/
 /deploy
 *.lock
+package-lock.json
