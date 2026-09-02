@@ -78,7 +78,7 @@ class User extends Authenticatable
         return $this->person?->unit?->name ?? '-'; // استفاده از nullsafe operator
     }
 
-    public function unit()
+    public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
     }

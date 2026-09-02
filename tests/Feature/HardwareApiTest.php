@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\HardwareController;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HardwareController::class);
+covers(HardwareController::class);
 
 class HardwareApiTest extends TestCase
 {
@@ -328,5 +329,50 @@ class HardwareApiTest extends TestCase
         $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.shutdown', 1);
+    }
+
+    public function test_hardware_validation_rules_store_requires_n_code_and_pc_name(): void
+    {
+        $controller = new HardwareController;
+        $reflection = new \ReflectionMethod($controller, 'hardwareValidationRules');
+
+        $storeRules = $reflection->invoke($controller, required: true);
+
+        $this->assertArrayHasKey('n_code', $storeRules);
+        $this->assertArrayHasKey('pc_name', $storeRules);
+        $this->assertStringContainsString('required', $storeRules['n_code']);
+        $this->assertStringContainsString('required', $storeRules['pc_name']);
+        $this->assertArrayNotHasKey('shutdown', $storeRules);
+    }
+
+    public function test_hardware_validation_rules_update_uses_sometimes_and_includes_shutdown(): void
+    {
+        $controller = new HardwareController;
+        $reflection = new \ReflectionMethod($controller, 'hardwareValidationRules');
+
+        $updateRules = $reflection->invoke($controller, required: false, includeShutdown: true);
+
+        $this->assertStringContainsString('sometimes|required', $updateRules['n_code']);
+        $this->assertStringContainsString('sometimes|required', $updateRules['pc_name']);
+        $this->assertArrayHasKey('shutdown', $updateRules);
+        $this->assertEquals('boolean', $updateRules['shutdown']);
+    }
+
+    public function test_hardware_validation_rules_has_all_expected_fields(): void
+    {
+        $controller = new HardwareController;
+        $reflection = new \ReflectionMethod($controller, 'hardwareValidationRules');
+
+        $rules = $reflection->invoke($controller, required: true);
+
+        $expectedFields = [
+            'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
+            'net_type', 'switch', 'port', 'vlan', 'motherboard', 'cpu', 'ram',
+            'hdd', 'comments', 'mark', 'clean_at',
+        ];
+
+        foreach ($expectedFields as $field) {
+            $this->assertArrayHasKey($field, $rules, "Missing rule for field: {$field}");
+        }
     }
 }

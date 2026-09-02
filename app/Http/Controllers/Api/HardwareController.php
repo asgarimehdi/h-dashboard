@@ -18,6 +18,45 @@ class HardwareController extends Controller
     use PersianNormalizer;
 
     /**
+     * Shared hardware validation rules.
+     *
+     * @param  bool  $required  true = store (n_code/pc_name required), false = update (sometimes|required)
+     * @param  bool  $includeShutdown  true = include shutdown boolean (update only)
+     */
+    private function hardwareValidationRules(bool $required = true, bool $includeShutdown = false): array
+    {
+        $nCodeRule = $required ? 'required|string|exists:persons,n_code' : 'sometimes|required|string|exists:persons,n_code';
+        $pcNameRule = $required ? 'required|string|max:255' : 'sometimes|required|string|max:255';
+
+        $rules = [
+            'n_code' => $nCodeRule,
+            'pc_name' => $pcNameRule,
+            'type' => 'nullable|string|max:50',
+            'os' => 'nullable|string|max:100',
+            'ip_valid' => 'nullable|string|max:45',
+            'ip_local' => 'nullable|string|max:45',
+            'mac' => 'nullable|string|max:17',
+            'net_type' => 'nullable|string|max:50',
+            'switch' => 'nullable|string|max:100',
+            'port' => 'nullable|string|max:50',
+            'vlan' => 'nullable|string|max:50',
+            'motherboard' => 'nullable|string|max:100',
+            'cpu' => 'nullable|string|max:100',
+            'ram' => 'nullable|string|max:50',
+            'hdd' => 'nullable|string|max:100',
+            'comments' => 'nullable|string',
+            'mark' => 'boolean',
+            'clean_at' => 'nullable|date',
+        ];
+
+        if ($includeShutdown) {
+            $rules['shutdown'] = 'boolean';
+        }
+
+        return $rules;
+    }
+
+    /**
      * Check if the given hardware record is within the user's accessible organizational scope.
      */
     private function assertAccessible(Request $request, Hardware $hardware): void
@@ -193,26 +232,7 @@ class HardwareController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'n_code' => 'required|string|exists:persons,n_code',
-            'pc_name' => 'required|string|max:255',
-            'type' => 'nullable|string|max:50',
-            'os' => 'nullable|string|max:100',
-            'ip_valid' => 'nullable|string|max:45',
-            'ip_local' => 'nullable|string|max:45',
-            'mac' => 'nullable|string|max:17',
-            'net_type' => 'nullable|string|max:50',
-            'switch' => 'nullable|string|max:100',
-            'port' => 'nullable|string|max:50',
-            'vlan' => 'nullable|string|max:50',
-            'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|string|max:100',
-            'ram' => 'nullable|string|max:50',
-            'hdd' => 'nullable|string|max:100',
-            'comments' => 'nullable|string',
-            'mark' => 'boolean',
-            'clean_at' => 'nullable|date',
-        ]);
+        $validated = $request->validate($this->hardwareValidationRules(required: true));
 
         // Verify the person's unit is within the user's accessible scope
         $person = Person::where('n_code', $validated['n_code'])->firstOrFail();
@@ -247,27 +267,7 @@ class HardwareController extends Controller
     {
         $this->assertAccessible($request, $hardware);
 
-        $validated = $request->validate([
-            'n_code' => 'sometimes|required|string|exists:persons,n_code',
-            'pc_name' => 'sometimes|required|string|max:255',
-            'type' => 'nullable|string|max:50',
-            'os' => 'nullable|string|max:100',
-            'ip_valid' => 'nullable|string|max:45',
-            'ip_local' => 'nullable|string|max:45',
-            'mac' => 'nullable|string|max:17',
-            'net_type' => 'nullable|string|max:50',
-            'switch' => 'nullable|string|max:100',
-            'port' => 'nullable|string|max:50',
-            'vlan' => 'nullable|string|max:50',
-            'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|string|max:100',
-            'ram' => 'nullable|string|max:50',
-            'hdd' => 'nullable|string|max:100',
-            'comments' => 'nullable|string',
-            'mark' => 'boolean',
-            'clean_at' => 'nullable|date',
-            'shutdown' => 'boolean',
-        ]);
+        $validated = $request->validate($this->hardwareValidationRules(required: false, includeShutdown: true));
 
         // Verify the new person's unit is within the user's accessible scope (if n_code is being changed)
         if (isset($validated['n_code'])) {
