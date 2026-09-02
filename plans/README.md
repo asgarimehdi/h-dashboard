@@ -9,11 +9,11 @@ Each plan follows a consistent format: Problem → Proposal → Files → Risk.
 
 | # | Title | Risk | Status |
 |---|-------|------|--------|
-| 001 | Extract Hardware Validation Rules (DRY) | Low | ✅ Ready (store/update asymmetries documented: `shutdown` + `sometimes|required`) |
-| 002 | Add Missing Livewire Component Tests | Low | ✅ Ready (Livewire 4 single-file string-name conventions added) |
-| 003 | Add Return Types to Model Relationships | Very Low | ✅ Ready (scope narrowed to 9 models; Ticket/Hardware already typed) |
-| 004 | Hardware Search Query Scopes | Medium | ✅ Ready (join/whereExists/normalizer constraints + ILIKE caveat documented) |
-| 005 | API Rate Limiting | Low | ✅ Ready (mostly already implemented — `throttle:60,1` exists; docs + test only) |
+| 001 | Extract Hardware Validation Rules (DRY) | Low | ✅ DONE (`HardwareValidationRules` trait) |
+| 002 | Add Missing Livewire Component Tests | Low | ✅ DONE (Networks, Wireless, Bell, Reports, Maps tests) |
+| 003 | Add Return Types to Model Relationships | Very Low | ✅ DONE (Relationships & scope return types on 9 models) |
+| 004 | Hardware Search Query Scopes | Medium | ✅ DONE (`scopeFilterSearch`, `scopeFilterAttributes`, etc.) |
+| 005 | API Rate Limiting | Low | ✅ DONE (API & login throttle verified + tests) |
 
 ## Priority Order
 
