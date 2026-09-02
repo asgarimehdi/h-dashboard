@@ -345,7 +345,7 @@ class HardwareAuditController extends Controller
     {
         $summary = [];
         foreach ($changes as $change) {
-            $summary[] = "فیلد <strong>{$change['field']}</strong>: از <span class='text-error'>{$change['old']}</span> به <span class='text-success'>{$change['new']}</span> تغییر یافت.";
+            $summary[] = 'فیلد <strong>'.e($change['field'])."</strong>: از <span class='text-error'>".e($change['old'])."</span> به <span class='text-success'>".e($change['new']).'</span> تغییر یافت.';
         }
 
         return $summary;
