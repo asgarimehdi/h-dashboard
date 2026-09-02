@@ -156,14 +156,6 @@ class UnitApiTest extends TestCase
     {
         ['unit' => $unit] = $this->createUserWithUnit();
 
-        // Delete persons referencing this unit (FK restrict blocks delete)
-        // Must delete user first (users.n_code → persons.n_code is restrict)
-        $person = DB::table('persons')->where('u_id', $unit->id)->first();
-        if ($person) {
-            DB::table('users')->where('n_code', $person->n_code)->delete();
-            DB::table('persons')->where('u_id', $unit->id)->delete();
-        }
-
         $response = $this->actingAs(User::first(), 'sanctum')->deleteJson("/api/units/{$unit->id}");
 
         $response->assertStatus(200)
