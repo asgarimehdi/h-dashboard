@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\UnitController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\UnitType;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\UnitController::class);
+covers(UnitController::class);
 
 class UnitApiTest extends TestCase
 {
@@ -154,6 +155,14 @@ class UnitApiTest extends TestCase
     public function test_user_can_delete_accessible_unit(): void
     {
         ['unit' => $unit] = $this->createUserWithUnit();
+
+        // Delete persons referencing this unit (FK restrict blocks delete)
+        // Must delete user first (users.n_code → persons.n_code is restrict)
+        $person = DB::table('persons')->where('u_id', $unit->id)->first();
+        if ($person) {
+            DB::table('users')->where('n_code', $person->n_code)->delete();
+            DB::table('persons')->where('u_id', $unit->id)->delete();
+        }
 
         $response = $this->actingAs(User::first(), 'sanctum')->deleteJson("/api/units/{$unit->id}");
 
