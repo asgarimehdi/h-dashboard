@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\HardwareAuditController;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HardwareAuditController::class);
+covers(HardwareAuditController::class);
 
 class HardwareAuditDetailTest extends TestCase
 {
@@ -238,9 +239,10 @@ class HardwareAuditDetailTest extends TestCase
         $this->hardware->update(['cpu' => 'Intel i7']);
         $audit = HardwareAudit::where('hardware_id', $this->hardware->id)->where('action', 'updated')->first();
 
+        // 'switch' is fillable but not in the updated audit (only cpu changed)
         $response = $this->withHeaders($this->headers())
             ->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
-                'field' => 'nonexistent_field',
+                'field' => 'switch',
             ]);
 
         $response->assertStatus(422)

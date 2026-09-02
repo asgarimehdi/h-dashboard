@@ -18,6 +18,45 @@ class HardwareController extends Controller
     use PersianNormalizer;
 
     /**
+     * Shared hardware validation rules.
+     *
+     * @param  bool  $required  true = store (n_code/pc_name required), false = update (sometimes|required)
+     * @param  bool  $includeShutdown  true = include shutdown boolean (update only)
+     */
+    private function hardwareValidationRules(bool $required = true, bool $includeShutdown = false): array
+    {
+        $nCodeRule = $required ? 'required|string|exists:persons,n_code' : 'sometimes|required|string|exists:persons,n_code';
+        $pcNameRule = $required ? 'required|string|max:255' : 'sometimes|required|string|max:255';
+
+        $rules = [
+            'n_code' => $nCodeRule,
+            'pc_name' => $pcNameRule,
+            'type' => 'nullable|string|max:50',
+            'os' => 'nullable|string|max:100',
+            'ip_valid' => 'nullable|string|max:45',
+            'ip_local' => 'nullable|string|max:45',
+            'mac' => 'nullable|string|max:17',
+            'net_type' => 'nullable|string|max:50',
+            'switch' => 'nullable|string|max:100',
+            'port' => 'nullable|string|max:50',
+            'vlan' => 'nullable|string|max:50',
+            'motherboard' => 'nullable|string|max:100',
+            'cpu' => 'nullable|string|max:100',
+            'ram' => 'nullable|string|max:50',
+            'hdd' => 'nullable|string|max:100',
+            'comments' => 'nullable|string',
+            'mark' => 'boolean',
+            'clean_at' => 'nullable|date',
+        ];
+
+        if ($includeShutdown) {
+            $rules['shutdown'] = 'boolean';
+        }
+
+        return $rules;
+    }
+
+    /**
      * Check if the given hardware record is within the user's accessible organizational scope.
      */
     private function assertAccessible(Request $request, Hardware $hardware): void
@@ -80,77 +119,19 @@ class HardwareController extends Controller
             ->select('hardwares.*')
             ->distinct();
 
-        // Filters
-        if ($request->filled('search')) {
-            $s = self::normalizeForSearch($request->search);
-            $query->where(function ($q) use ($s) {
-                $q->where('pc_name', 'LIKE', "%{$s}%")
-                    ->orWhere('hardwares.n_code', 'LIKE', "%{$s}%")
-                    ->orWhere('ip_valid', 'LIKE', "%{$s}%")
-                    ->orWhere('ip_local', 'LIKE', "%{$s}%")
-                    ->orWhere('mac', 'LIKE', "%{$s}%")
-                    ->orWhere('comments', 'LIKE', "%{$s}%")
-                    ->orWhere('persons.f_name', 'LIKE', "%{$s}%")
-                    ->orWhere('persons.l_name', 'LIKE', "%{$s}%")
-                    ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$s}%"]);
-            });
-        }
-
-        if ($request->filled('type')) {
-            $type = $request->type;
-            // Map common aliases to actual database values
-            $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
-            $type = $typeAliases[$type] ?? $type;
-            $query->where('type', 'LIKE', "%{$type}%");
-        }
-        if ($request->filled('os')) {
-            $query->where('os', 'LIKE', "%{$request->os}%");
-        }
-        if ($request->filled('cpu')) {
-            $query->where('cpu', 'LIKE', "%{$request->cpu}%");
-        }
-        if ($request->filled('ram')) {
-            $query->where('ram', 'LIKE', "%{$request->ram}%");
-        }
-        if ($request->filled('hdd')) {
-            $query->where('hdd', 'LIKE', "%{$request->hdd}%");
-        }
-        if ($request->filled('shutdown')) {
-            $query->where('shutdown', $request->shutdown === 'true' || $request->shutdown === '1');
-        }
-        if ($request->filled('net_type')) {
-            $query->where('net_type', 'LIKE', "%{$request->net_type}%");
-        }
-        if ($request->filled('mark')) {
-            $query->where('mark', $request->mark === 'true' || $request->mark === '1');
-        }
-        if ($request->filled('person')) {
-            $normalized = self::normalizeForSearch($request->person);
-            $query->where(function ($q) use ($normalized) {
-                $q->where('persons.f_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('persons.l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('persons.n_code', 'LIKE', "%{$normalized}%")
-                    ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$normalized}%"]);
-            });
-        }
-        if ($request->filled('unit')) {
-            $normalized = self::normalizeForSearch($request->unit);
-            $query->whereExists(function ($q) use ($normalized) {
-                $q->selectRaw('1')
-                    ->from('units')
-                    ->whereColumn('units.id', 'persons.u_id')
-                    ->where('units.name', 'LIKE', "%{$normalized}%");
-            });
-        }
-        if ($request->filled('semat')) {
-            $normalized = self::normalizeForSearch($request->semat);
-            $query->whereExists(function ($q) use ($normalized) {
-                $q->selectRaw('1')
-                    ->from('semats')
-                    ->whereColumn('semats.id', 'persons.s_id')
-                    ->where('semats.name', 'LIKE', "%{$normalized}%");
-            });
-        }
+        // Apply query scopes for filters
+        $query->filterSearch($request->input('search'))
+            ->filterType($request->input('type'))
+            ->filterOs($request->input('os'))
+            ->filterCpu($request->input('cpu'))
+            ->filterRam($request->input('ram'))
+            ->filterHdd($request->input('hdd'))
+            ->filterShutdown($request->input('shutdown'))
+            ->filterNetType($request->input('net_type'))
+            ->filterMark($request->input('mark'))
+            ->filterPerson($request->input('person'))
+            ->filterUnit($request->input('unit'))
+            ->filterSemat($request->input('semat'));
 
         $allowedSortColumns = ['id', 'n_code', 'pc_name', 'type', 'os', 'created_at', 'shutdown', 'mark', 'ip_valid', 'ip_local', 'mac', 'cpu', 'ram', 'hdd'];
         $sortBy = $request->get('sort_by', 'id');
@@ -193,26 +174,7 @@ class HardwareController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'n_code' => 'required|string|exists:persons,n_code',
-            'pc_name' => 'required|string|max:255',
-            'type' => 'nullable|string|max:50',
-            'os' => 'nullable|string|max:100',
-            'ip_valid' => 'nullable|string|max:45',
-            'ip_local' => 'nullable|string|max:45',
-            'mac' => 'nullable|string|max:17',
-            'net_type' => 'nullable|string|max:50',
-            'switch' => 'nullable|string|max:100',
-            'port' => 'nullable|string|max:50',
-            'vlan' => 'nullable|string|max:50',
-            'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|string|max:100',
-            'ram' => 'nullable|string|max:50',
-            'hdd' => 'nullable|string|max:100',
-            'comments' => 'nullable|string',
-            'mark' => 'boolean',
-            'clean_at' => 'nullable|date',
-        ]);
+        $validated = $request->validate($this->hardwareValidationRules(required: true));
 
         // Verify the person's unit is within the user's accessible scope
         $person = Person::where('n_code', $validated['n_code'])->firstOrFail();
@@ -247,27 +209,7 @@ class HardwareController extends Controller
     {
         $this->assertAccessible($request, $hardware);
 
-        $validated = $request->validate([
-            'n_code' => 'sometimes|required|string|exists:persons,n_code',
-            'pc_name' => 'sometimes|required|string|max:255',
-            'type' => 'nullable|string|max:50',
-            'os' => 'nullable|string|max:100',
-            'ip_valid' => 'nullable|string|max:45',
-            'ip_local' => 'nullable|string|max:45',
-            'mac' => 'nullable|string|max:17',
-            'net_type' => 'nullable|string|max:50',
-            'switch' => 'nullable|string|max:100',
-            'port' => 'nullable|string|max:50',
-            'vlan' => 'nullable|string|max:50',
-            'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|string|max:100',
-            'ram' => 'nullable|string|max:50',
-            'hdd' => 'nullable|string|max:100',
-            'comments' => 'nullable|string',
-            'mark' => 'boolean',
-            'clean_at' => 'nullable|date',
-            'shutdown' => 'boolean',
-        ]);
+        $validated = $request->validate($this->hardwareValidationRules(required: false, includeShutdown: true));
 
         // Verify the new person's unit is within the user's accessible scope (if n_code is being changed)
         if (isset($validated['n_code'])) {
@@ -358,13 +300,13 @@ class HardwareController extends Controller
 
         // Suppress individual audit entries during bulk operations
         Hardware::$suppressAudit = true;
-
-        // Single update query on the verified IDs
-        $count = Hardware::whereIn('id', $accessibleHardwareIds)
-            ->update(['mark' => $request->mark]);
-
-        // Restore audit logging
-        Hardware::$suppressAudit = false;
+        try {
+            // Single update query on the verified IDs
+            $count = Hardware::whereIn('id', $accessibleHardwareIds)
+                ->update(['mark' => $request->mark]);
+        } finally {
+            Hardware::$suppressAudit = false;
+        }
 
         // Batch insert audit entries
         $this->batchInsertAudits($hardwares, 'bulk_mark', [
@@ -405,11 +347,11 @@ class HardwareController extends Controller
 
         // Suppress individual audit entries during bulk operations
         Hardware::$suppressAudit = true;
-
-        $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
-
-        // Restore audit logging
-        Hardware::$suppressAudit = false;
+        try {
+            $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
+        } finally {
+            Hardware::$suppressAudit = false;
+        }
 
         app(GisController::class)::invalidateCache();
         Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
