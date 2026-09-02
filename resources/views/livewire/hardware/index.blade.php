@@ -675,14 +675,18 @@ return new class extends Component
         $this->deletedHardware = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
             ->where('action', 'created')
             ->with('user:id,n_code')
+            ->get();
+
+        // Batch-load all delete timestamps in one query to avoid N+1
+        $deleteTimestamps = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
+            ->where('action', 'deleted')
+            ->select('hardware_id', 'created_at')
             ->get()
-            ->map(function (HardwareAudit $audit) {
-                // Pre-fetch deletedAt to avoid N+1 in Blade
-                $deletedAudit = HardwareAudit::where('action', 'deleted')
-                    ->where('hardware_id', $audit->hardware_id)
-                    ->latest('created_at')
-                    ->first();
-                $audit->deleted_at = $deletedAudit?->created_at;
+            ->mapWithKeys(fn($d) => [$d->hardware_id => $d->created_at]);
+
+        $this->deletedHardware = $this->deletedHardware
+            ->map(function (HardwareAudit $audit) use ($deleteTimestamps) {
+                $audit->deleted_at = $deleteTimestamps->get($audit->hardware_id);
                 return $audit;
             })
             ->values()
