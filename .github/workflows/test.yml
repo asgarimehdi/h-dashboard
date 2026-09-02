@@ -197,3 +197,32 @@ jobs:
         # No --min threshold: the job is informational (continue-on-error: true)
         # and reports the mutation score without blocking PRs.
         run: ./vendor/bin/pest --mutate --parallel --covered-only
+
+  phpstan:
+    name: PHPStan Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress
