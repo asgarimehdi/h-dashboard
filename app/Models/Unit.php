@@ -76,7 +76,7 @@ class Unit extends Model
     }
 
     // برای بارگذاری تمام سطوح زیرمجموعه به صورت خودکار
-    public function childrenRecursive()
+    public function childrenRecursive(): HasMany
     {
         return $this->children()->with('childrenRecursive');
     }
@@ -262,7 +262,7 @@ class Unit extends Model
     /**
      * تیکت‌های مرتبط با این واحد.
      */
-    public function tickets(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
     }
@@ -270,7 +270,7 @@ class Unit extends Model
     /**
      * وظایف (todos) مرتبط با این واحد.
      */
-    public function todos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function todos(): HasMany
     {
         return $this->hasMany(Todo::class);
     }

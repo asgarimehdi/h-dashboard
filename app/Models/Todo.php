@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Todo extends Model
 {
@@ -43,7 +45,7 @@ class Todo extends Model
     }
 
     // تیکت‌های مرتبط با این وظیفه
-    public function tickets()
+    public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class, 'task_id');
     }
@@ -59,7 +61,7 @@ class Todo extends Model
     /**
      * تاریخ سررسید بعدی برای تولید نمونه تکرارشونده.
      */
-    public function nextOccurrence(): ?\Carbon\Carbon
+    public function nextOccurrence(): ?Carbon
     {
         if (! $this->isRecurring()) {
             return null;
