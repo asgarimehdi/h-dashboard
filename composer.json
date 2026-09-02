@@ -73,7 +73,10 @@
             "XDEBUG_MODE=off php artisan test"
         ],
         "phpstan": "phpstan analyse --no-progress",
-        "phpstan-baseline": "phpstan analyse --generate-baseline"
+        "phpstan-baseline": "phpstan analyse --generate-baseline",
+        "pint": "pint --dirty --format agent",
+        "pint:test": "pint --test",
+        "pint:fix": "pint"
     },
     "extra": {
         "laravel": {
