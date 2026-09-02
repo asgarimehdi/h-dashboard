@@ -3,18 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Http\Resources\TodoResource;
 use App\Models\Todo;
-use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class TodoController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $query = Todo::whereIn('unit_id', $accessibleIds)->with('unit:id,name');
 
@@ -37,7 +36,7 @@ class TodoController extends Controller
         return TodoResource::collection($todos);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(UnitScopedRequest $request): JsonResponse
     {
         $validated = $request->validate([
             'title' => 'required|string|min:3',
@@ -53,8 +52,7 @@ class TodoController extends Controller
         // then to the person's unit — never silently null (#431)
         $unitId = $validated['unit_id'] ?? $user->primaryUnit()?->id ?? $user->person?->u_id;
 
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-        if (! $unitId || ! in_array($unitId, $accessibleIds)) {
+        if (! $unitId || ! in_array($unitId, $request->accessibleIds())) {
             return response()->json(['message' => 'Unauthorized to create todo in this unit.'], 403);
         }
 
@@ -72,11 +70,9 @@ class TodoController extends Controller
         ], 201);
     }
 
-    public function show(Request $request, Todo $todo): JsonResponse
+    public function show(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -86,11 +82,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function update(Request $request, Todo $todo): JsonResponse
+    public function update(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
             return response()->json(['message' => 'Unauthorized to update this todo.'], 403);
         }
 
@@ -109,11 +103,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Todo $todo): JsonResponse
+    public function destroy(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
             return response()->json(['message' => 'Unauthorized to delete this todo.'], 403);
         }
 
@@ -125,11 +117,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function toggleComplete(Request $request, Todo $todo): JsonResponse
+    public function toggleComplete(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $accessibleIds)) {
+        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
             return response()->json(['message' => 'Unauthorized to modify this todo.'], 403);
         }
 
