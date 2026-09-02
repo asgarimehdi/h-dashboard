@@ -16,7 +16,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 // Volt::route('/login', 'auth.login')->name('login');
 // Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
-Route::get('/logout', function () {
+Route::post('/logout', function () {
     $userId = Auth::id();
     $userName = Auth::user()?->name ?? 'نامشخص';
 
@@ -31,7 +31,7 @@ Route::get('/logout', function () {
     request()->session()->regenerateToken();
 
     return redirect('/');
-});
+})->name('logout');
 
 // Test route for SafeRoleOrPermission middleware
 if (app()->isLocal() || app()->environment('testing')) {

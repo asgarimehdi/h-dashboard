@@ -145,6 +145,25 @@ return new class extends Component {
         $this->modal = true;
     }
 
+    public function updateTodoDates(string $todoId, string $startDate, ?string $endDate = null): void
+    {
+        $todo = Todo::find($todoId);
+
+        if (! $todo || ! $this->isTodoAccessible($todo)) {
+            return;
+        }
+
+        $todo->update([
+            'start_at' => $startDate,
+            'end_at' => $endDate ?? $startDate,
+        ]);
+
+        \Cache::increment('calendar_version');
+
+        $this->dispatch('swal', ['title' => 'تاریخ وظیفه به‌روزرسانی شد', 'icon' => 'success']);
+        $this->mount();
+    }
+
     public function editEvent($id): void
     {
         $todo = Todo::find($id);
@@ -498,7 +517,8 @@ return new class extends Component {
                     eventDrop: function(info) {
                         const type = info.event.extendedProps.type;
                         if (type === 'todo') {
-                            @this.openCreateModal(info.event.startStr, info.event.endStr);
+                            const todoId = info.event.id.replace('todo-', '');
+                            @this.updateTodoDates(todoId, info.event.startStr, info.event.endStr);
                         }
                     }
                 });
