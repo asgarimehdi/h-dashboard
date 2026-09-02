@@ -672,7 +672,7 @@ return new class extends Component
             return;
         }
 
-        $this->deletedHardware = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
+        $createdAudits = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
             ->where('action', 'created')
             ->with('user:id,n_code')
             ->get();
@@ -684,7 +684,7 @@ return new class extends Component
             ->get()
             ->mapWithKeys(fn($d) => [$d->hardware_id => $d->created_at]);
 
-        $this->deletedHardware = $this->deletedHardware
+        $this->deletedHardware = $createdAudits
             ->map(function (HardwareAudit $audit) use ($deleteTimestamps) {
                 $audit->deleted_at = $deleteTimestamps->get($audit->hardware_id);
                 return $audit;
