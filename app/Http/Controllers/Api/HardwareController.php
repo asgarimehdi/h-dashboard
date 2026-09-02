@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\HardwareUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
@@ -185,7 +186,7 @@ class HardwareController extends Controller
 
         $hardware = Hardware::create($validated);
         $hardware->load('person.unit');
-        GisController::invalidateCache();
+        event(new HardwareUpdated($hardware, 'created'));
 
         return response()->json([
             'success' => true,
@@ -222,7 +223,7 @@ class HardwareController extends Controller
 
         $hardware->update($validated);
         $hardware->load('person.unit');
-        GisController::invalidateCache();
+        event(new HardwareUpdated($hardware, 'updated'));
 
         return response()->json([
             'success' => true,
@@ -235,7 +236,7 @@ class HardwareController extends Controller
         $this->assertAccessible($request, $hardware);
 
         $hardware->delete();
-        GisController::invalidateCache();
+        event(new HardwareUpdated($hardware, 'deleted'));
 
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
@@ -313,7 +314,7 @@ class HardwareController extends Controller
             ['field' => 'mark', 'old' => ! $request->mark, 'new' => $request->mark],
         ]);
 
-        app(GisController::class)::invalidateCache();
+        event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
         Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
 
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
@@ -353,7 +354,7 @@ class HardwareController extends Controller
             Hardware::$suppressAudit = false;
         }
 
-        app(GisController::class)::invalidateCache();
+        event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
         Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
