@@ -119,77 +119,19 @@ class HardwareController extends Controller
             ->select('hardwares.*')
             ->distinct();
 
-        // Filters
-        if ($request->filled('search')) {
-            $s = self::normalizeForSearch($request->search);
-            $query->where(function ($q) use ($s) {
-                $q->where('pc_name', 'LIKE', "%{$s}%")
-                    ->orWhere('hardwares.n_code', 'LIKE', "%{$s}%")
-                    ->orWhere('ip_valid', 'LIKE', "%{$s}%")
-                    ->orWhere('ip_local', 'LIKE', "%{$s}%")
-                    ->orWhere('mac', 'LIKE', "%{$s}%")
-                    ->orWhere('comments', 'LIKE', "%{$s}%")
-                    ->orWhere('persons.f_name', 'LIKE', "%{$s}%")
-                    ->orWhere('persons.l_name', 'LIKE', "%{$s}%")
-                    ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$s}%"]);
-            });
-        }
-
-        if ($request->filled('type')) {
-            $type = $request->type;
-            // Map common aliases to actual database values
-            $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
-            $type = $typeAliases[$type] ?? $type;
-            $query->where('type', 'LIKE', "%{$type}%");
-        }
-        if ($request->filled('os')) {
-            $query->where('os', 'LIKE', "%{$request->os}%");
-        }
-        if ($request->filled('cpu')) {
-            $query->where('cpu', 'LIKE', "%{$request->cpu}%");
-        }
-        if ($request->filled('ram')) {
-            $query->where('ram', 'LIKE', "%{$request->ram}%");
-        }
-        if ($request->filled('hdd')) {
-            $query->where('hdd', 'LIKE', "%{$request->hdd}%");
-        }
-        if ($request->filled('shutdown')) {
-            $query->where('shutdown', $request->shutdown === 'true' || $request->shutdown === '1');
-        }
-        if ($request->filled('net_type')) {
-            $query->where('net_type', 'LIKE', "%{$request->net_type}%");
-        }
-        if ($request->filled('mark')) {
-            $query->where('mark', $request->mark === 'true' || $request->mark === '1');
-        }
-        if ($request->filled('person')) {
-            $normalized = self::normalizeForSearch($request->person);
-            $query->where(function ($q) use ($normalized) {
-                $q->where('persons.f_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('persons.l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('persons.n_code', 'LIKE', "%{$normalized}%")
-                    ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$normalized}%"]);
-            });
-        }
-        if ($request->filled('unit')) {
-            $normalized = self::normalizeForSearch($request->unit);
-            $query->whereExists(function ($q) use ($normalized) {
-                $q->selectRaw('1')
-                    ->from('units')
-                    ->whereColumn('units.id', 'persons.u_id')
-                    ->where('units.name', 'LIKE', "%{$normalized}%");
-            });
-        }
-        if ($request->filled('semat')) {
-            $normalized = self::normalizeForSearch($request->semat);
-            $query->whereExists(function ($q) use ($normalized) {
-                $q->selectRaw('1')
-                    ->from('semats')
-                    ->whereColumn('semats.id', 'persons.s_id')
-                    ->where('semats.name', 'LIKE', "%{$normalized}%");
-            });
-        }
+        // Apply query scopes for filters
+        $query->filterSearch($request->input('search'))
+            ->filterType($request->input('type'))
+            ->filterOs($request->input('os'))
+            ->filterCpu($request->input('cpu'))
+            ->filterRam($request->input('ram'))
+            ->filterHdd($request->input('hdd'))
+            ->filterShutdown($request->input('shutdown'))
+            ->filterNetType($request->input('net_type'))
+            ->filterMark($request->input('mark'))
+            ->filterPerson($request->input('person'))
+            ->filterUnit($request->input('unit'))
+            ->filterSemat($request->input('semat'));
 
         $allowedSortColumns = ['id', 'n_code', 'pc_name', 'type', 'os', 'created_at', 'shutdown', 'mark', 'ip_valid', 'ip_local', 'mac', 'cpu', 'ram', 'hdd'];
         $sortBy = $request->get('sort_by', 'id');
