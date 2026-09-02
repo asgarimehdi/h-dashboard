@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Models\ActivityLog;
 use App\Models\ActivityLogArchive;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class ArchiveOldRecords extends Command
 {

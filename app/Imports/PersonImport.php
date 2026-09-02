@@ -11,21 +11,28 @@ use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSettings
+class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
     private array $accessibleUnitIds = [];
+
     private array $existingRecords = [];
+
     private string $compareKey = 'n_code'; // always match by n_code for persons
+
     private array $selectedActions = [];
-    
+
     // Pre-loaded related models to avoid N+1 queries
     private array $units = [];
+
     private array $tahsils = [];
+
     private array $estekhdams = [];
+
     private array $radifs = [];
+
     private array $semats = [];
 
     private array $importResults = [
@@ -61,7 +68,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
     {
         // Pre-load existing person records by n_code for comparison
         $this->loadExistingRecords();
-        
+
         // Pre-load all related reference data to avoid N+1 queries
         $this->loadReferenceData();
 
@@ -71,7 +78,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         }
 
         // Second pass: apply selected actions if provided
-        if (!empty($this->selectedActions)) {
+        if (! empty($this->selectedActions)) {
             // Reset counters since they were incremented during preview pass
             $this->importResults['created'] = 0;
             $this->importResults['updated'] = 0;
@@ -89,7 +96,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         $query = Person::query();
 
         // Apply organizational scope
-        if (!empty($this->accessibleUnitIds)) {
+        if (! empty($this->accessibleUnitIds)) {
             $query->whereIn('u_id', $this->accessibleUnitIds);
         }
 
@@ -113,7 +120,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
     {
         // Load units
         $unitQuery = Unit::query();
-        if (!empty($this->accessibleUnitIds)) {
+        if (! empty($this->accessibleUnitIds)) {
             $unitQuery->whereIn('id', $this->accessibleUnitIds);
         }
         foreach ($unitQuery->get(['id', 'name']) as $unit) {
@@ -145,7 +152,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
     {
         // Check if this row has a selected action
         $actionKey = "row_{$rowNumber}";
-        if (!isset($this->selectedActions[$actionKey])) {
+        if (! isset($this->selectedActions[$actionKey])) {
             return;
         }
 
@@ -171,13 +178,14 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
         // Verify unit exists and is in accessible units (using pre-loaded data)
-        if (!empty($data['u_id'])) {
+        if (! empty($data['u_id'])) {
             $unit = $this->units[$data['u_id']] ?? null;
-            if (!$unit) {
+            if (! $unit) {
                 $this->importResults['preview'][] = [
                     'row' => $rowNumber,
                     'status' => 'error',
@@ -185,10 +193,11 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                     'data' => $data,
                 ];
                 $this->importResults['skipped']++;
+
                 return;
             }
 
-            if (!empty($this->accessibleUnitIds) && !in_array($unit->id, $this->accessibleUnitIds)) {
+            if (! empty($this->accessibleUnitIds) && ! in_array($unit->id, $this->accessibleUnitIds)) {
                 $this->importResults['preview'][] = [
                     'row' => $rowNumber,
                     'status' => 'error',
@@ -196,6 +205,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                     'data' => $data,
                 ];
                 $this->importResults['skipped']++;
+
                 return;
             }
         } else {
@@ -206,6 +216,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
@@ -219,6 +230,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
@@ -229,14 +241,14 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         if ($existing) {
             $changes = $this->detectChanges($existing['record'], $data);
 
-            if (!empty($changes)) {
+            if (! empty($changes)) {
                 $this->importResults['preview'][] = [
                     'row' => $rowNumber,
                     'status' => 'update',
                     'n_code' => $existing['record']->n_code,
                     'match_key' => $matchKey,
                     'changes' => $changes,
-                    'person' => $existing['record']->f_name . ' ' . $existing['record']->l_name,
+                    'person' => $existing['record']->f_name.' '.$existing['record']->l_name,
                     'data' => $data,
                 ];
                 $this->importResults['updated']++;
@@ -247,7 +259,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                     'n_code' => $existing['record']->n_code,
                     'match_key' => $matchKey,
                     'message' => 'بدون تغییر',
-                    'person' => $existing['record']->f_name . ' ' . $existing['record']->l_name,
+                    'person' => $existing['record']->f_name.' '.$existing['record']->l_name,
                     'data' => $data,
                 ];
                 $this->importResults['skipped']++;
@@ -257,7 +269,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                 'row' => $rowNumber,
                 'status' => 'create',
                 'n_code' => $data['n_code'],
-                'person' => $data['f_name'] . ' ' . $data['l_name'],
+                'person' => $data['f_name'].' '.$data['l_name'],
                 'data' => $data,
             ];
             $this->importResults['created']++;
@@ -269,7 +281,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         $existing = null;
         $matchKey = null;
 
-        if (!empty($data['n_code']) && isset($this->existingRecords['n_code'][$data['n_code']])) {
+        if (! empty($data['n_code']) && isset($this->existingRecords['n_code'][$data['n_code']])) {
             $existing = $this->existingRecords['n_code'][$data['n_code']];
             $matchKey = 'n_code';
         }
@@ -298,18 +310,19 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
 
     private function validateRelatedModels(array $data): ?string
     {
-        if (!empty($data['t_id']) && !isset($this->tahsils[$data['t_id']])) {
+        if (! empty($data['t_id']) && ! isset($this->tahsils[$data['t_id']])) {
             return "تحصیلات با شناسه {$data['t_id']} یافت نشد";
         }
-        if (!empty($data['e_id']) && !isset($this->estekhdams[$data['e_id']])) {
+        if (! empty($data['e_id']) && ! isset($this->estekhdams[$data['e_id']])) {
             return "نوع استخدام با شناسه {$data['e_id']} یافت نشد";
         }
-        if (!empty($data['r_id']) && !isset($this->radifs[$data['r_id']])) {
+        if (! empty($data['r_id']) && ! isset($this->radifs[$data['r_id']])) {
             return "ردیف سازمانی با شناسه {$data['r_id']} یافت نشد";
         }
-        if (!empty($data['s_id']) && !isset($this->semats[$data['s_id']])) {
+        if (! empty($data['s_id']) && ! isset($this->semats[$data['s_id']])) {
             return "سمت با شناسه {$data['s_id']} یافت نشد";
         }
+
         return null;
     }
 
@@ -325,28 +338,31 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
         // Verify unit exists and is in accessible units (using pre-loaded data)
         $unit = $this->units[$data['u_id']] ?? null;
-        if (!$unit) {
+        if (! $unit) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
                 'error' => "Unit with id {$data['u_id']} not found",
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
-        if (!empty($this->accessibleUnitIds) && !in_array($unit->id, $this->accessibleUnitIds)) {
+        if (! empty($this->accessibleUnitIds) && ! in_array($unit->id, $this->accessibleUnitIds)) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
                 'error' => "Unit {$data['u_id']} is not in your accessible units",
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
@@ -359,6 +375,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
+
             return;
         }
 
@@ -370,7 +387,7 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
             // Check for changes
             $changes = $this->detectChanges($existing['record'], $data);
 
-            if (!empty($changes)) {
+            if (! empty($changes)) {
                 $this->importResults['changes'][] = [
                     'row' => $rowNumber,
                     'n_code' => $existing['record']->n_code,
@@ -424,7 +441,8 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         if ($value === null || $value === '' || $value === '\\N') {
             return null;
         }
-        return trim((string)$value);
+
+        return trim((string) $value);
     }
 
     private function parseInt($value): ?int
@@ -432,19 +450,21 @@ class PersonImport implements ToCollection, WithHeadingRow, WithCustomCsvSetting
         if ($value === null || $value === '' || $value === '\\N') {
             return null;
         }
-        $val = trim((string)$value);
+        $val = trim((string) $value);
         if ($val === '' || $val === '\\N') {
             return null;
         }
-        return (int)$val;
+
+        return (int) $val;
     }
 
     private function clean($value): ?string
     {
-        if ($value === null || $value === '' || $value === '\\N' || trim((string)$value) === '') {
+        if ($value === null || $value === '' || $value === '\\N' || trim((string) $value) === '') {
             return null;
         }
-        return trim((string)$value);
+
+        return trim((string) $value);
     }
 
     public function getImportResults(): array

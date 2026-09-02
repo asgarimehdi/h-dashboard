@@ -3,9 +3,11 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class LastUserActivity
 {
@@ -22,9 +24,8 @@ class LastUserActivity
     /**
      * Handle an incoming request.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse)  $next
-     * @return \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+     * @param  Closure(Request): (Response|RedirectResponse)  $next
+     * @return Response|RedirectResponse
      */
     public function handle(Request $request, Closure $next)
     {
@@ -40,7 +41,7 @@ class LastUserActivity
      */
     protected function updateLastActivity(int $userId): void
     {
-        $key = self::CACHE_KEY_PREFIX . $userId;
+        $key = self::CACHE_KEY_PREFIX.$userId;
 
         // Skip write if key already exists — reduces cache writes to once per ONLINE_DURATION
         if (Cache::has($key)) {
@@ -59,7 +60,7 @@ class LastUserActivity
      */
     public static function isOnline(int $userId): bool
     {
-        return Cache::has(self::CACHE_KEY_PREFIX . $userId);
+        return Cache::has(self::CACHE_KEY_PREFIX.$userId);
     }
 
     /**
@@ -67,6 +68,6 @@ class LastUserActivity
      */
     public static function getLastActivity(int $userId): ?string
     {
-        return Cache::get(self::CACHE_KEY_PREFIX . $userId);
+        return Cache::get(self::CACHE_KEY_PREFIX.$userId);
     }
 }

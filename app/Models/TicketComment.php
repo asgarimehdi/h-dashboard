@@ -104,7 +104,7 @@ class TicketComment extends Model
     {
         return $query->withCount(['reactions as reaction_counts' => function ($q) {
             $q->selectRaw('reaction, count(*)')
-              ->groupBy('reaction');
+                ->groupBy('reaction');
         }]);
     }
 
@@ -116,6 +116,7 @@ class TicketComment extends Model
         if ($this->user_id !== $user->id) {
             return false;
         }
+
         return $this->created_at->diffInMinutes(now()) <= 15;
     }
 
@@ -127,6 +128,7 @@ class TicketComment extends Model
         if ($this->user_id === $user->id) {
             return true;
         }
+
         return $user->can('manage_unit_tickets') || $user->hasRole('admin');
     }
 }

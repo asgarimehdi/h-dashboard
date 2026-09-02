@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Radif;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class RadifSeeder extends Seeder

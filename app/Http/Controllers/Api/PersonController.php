@@ -24,9 +24,9 @@ class PersonController extends Controller
             $s = self::normalizeForSearch($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('n_code', 'LIKE', "%{$s}%")
-                  ->orWhere('f_name', 'LIKE', "%{$s}%")
-                  ->orWhere('l_name', 'LIKE', "%{$s}%")
-                  ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$s}%"]);
+                    ->orWhere('f_name', 'LIKE', "%{$s}%")
+                    ->orWhere('l_name', 'LIKE', "%{$s}%")
+                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$s}%"]);
             });
         }
 
@@ -116,7 +116,7 @@ class PersonController extends Controller
         // Issue #532: validate FIRST, then check scope — prevents information
         // disclosure through differential error responses (403 vs 422).
         $validated = $request->validate([
-            'n_code' => 'sometimes|required|string|size:10|unique:persons,n_code,' . $person->n_code . ',n_code',
+            'n_code' => 'sometimes|required|string|size:10|unique:persons,n_code,'.$person->n_code.',n_code',
             'f_name' => 'sometimes|required|string|max:255',
             'l_name' => 'sometimes|required|string|max:255',
             't_id' => 'sometimes|required|exists:tahsils,id',

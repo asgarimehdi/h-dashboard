@@ -2191,12 +2191,6 @@ parameters:
 			path: app/Models/DailyReport.php
 
 		-
-			message: '#^Class Illuminate\\Database\\Eloquent\\Relations\\HasMany referenced with incorrect case\: Illuminate\\Database\\Eloquent\\Relations\\hasMany\.$#'
-			identifier: class.nameCase
-			count: 1
-			path: app/Models/Estekhdam.php
-
-		-
 			message: '#^Method App\\Models\\Estekhdam\:\:person\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2449,12 +2443,6 @@ parameters:
 			path: app/Models/Person.php
 
 		-
-			message: '#^Class Illuminate\\Database\\Eloquent\\Relations\\HasMany referenced with incorrect case\: Illuminate\\Database\\Eloquent\\Relations\\hasMany\.$#'
-			identifier: class.nameCase
-			count: 1
-			path: app/Models/Radif.php
-
-		-
 			message: '#^Method App\\Models\\Radif\:\:person\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2485,22 +2473,10 @@ parameters:
 			path: app/Models/Region.php
 
 		-
-			message: '#^Class Illuminate\\Database\\Eloquent\\Relations\\HasMany referenced with incorrect case\: Illuminate\\Database\\Eloquent\\Relations\\hasMany\.$#'
-			identifier: class.nameCase
-			count: 1
-			path: app/Models/Semat.php
-
-		-
 			message: '#^Method App\\Models\\Semat\:\:person\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
 			path: app/Models/Semat.php
-
-		-
-			message: '#^Class Illuminate\\Database\\Eloquent\\Relations\\HasMany referenced with incorrect case\: Illuminate\\Database\\Eloquent\\Relations\\hasMany\.$#'
-			identifier: class.nameCase
-			count: 1
-			path: app/Models/Tahsil.php
 
 		-
 			message: '#^Method App\\Models\\Tahsil\:\:person\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
@@ -3797,12 +3773,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/dashboard.blade.php
-
-		-
-			message: '#^Expression "new class extends \\Livewire\\Volt\\Component…" on a separate line does not do anything\.$#'
-			identifier: expr.resultUnused
-			count: 1
-			path: resources/views/livewire/glowingcard.blade.php
 
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'

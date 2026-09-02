@@ -2,16 +2,17 @@
 
 namespace Tests\Feature;
 
-use App\Models\Boundary;
+use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Models\Unit::class);
+covers(Unit::class);
 
 class UnitModelTest extends TestCase
 {
@@ -53,7 +54,7 @@ class UnitModelTest extends TestCase
         DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        \App\Models\Person::create([
+        Person::create([
             'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
         ]);
@@ -71,11 +72,11 @@ class UnitModelTest extends TestCase
         DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        \App\Models\Person::create([
+        Person::create([
             'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
         ]);
-        $user = User::create(['n_code' => $nCode, 'password' => \Illuminate\Support\Facades\Hash::make('password')]);
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
 
         $this->assertCount(1, $unit->assignedUsers);
@@ -83,7 +84,7 @@ class UnitModelTest extends TestCase
 
     // --- ancestorIds ---
 
-    public function test_ancestorIds_returns_parent_ids(): void
+    public function test_ancestor_ids_returns_parent_ids(): void
     {
         $grandparent = Unit::create(['name' => 'پدربزرگ']);
         $parent = Unit::create(['name' => 'والد', 'parent_id' => $grandparent->id]);
@@ -97,7 +98,7 @@ class UnitModelTest extends TestCase
         $this->assertNotContains($child->id, $ancestors);
     }
 
-    public function test_ancestorIds_returns_multiple_parents_for_multiple_children(): void
+    public function test_ancestor_ids_returns_multiple_parents_for_multiple_children(): void
     {
         $parent1 = Unit::create(['name' => 'والد ۱']);
         $parent2 = Unit::create(['name' => 'والد ۲']);
@@ -110,13 +111,13 @@ class UnitModelTest extends TestCase
         $this->assertContains($parent2->id, $ancestors);
     }
 
-    public function test_ancestorIds_returns_empty_for_empty_input(): void
+    public function test_ancestor_ids_returns_empty_for_empty_input(): void
     {
         $result = Unit::ancestorIds([]);
         $this->assertTrue($result->isEmpty());
     }
 
-    public function test_ancestorIds_returns_empty_for_root_unit(): void
+    public function test_ancestor_ids_returns_empty_for_root_unit(): void
     {
         $root = Unit::create(['name' => 'ریشه']);
 
@@ -125,7 +126,7 @@ class UnitModelTest extends TestCase
         $this->assertTrue($ancestors->isEmpty());
     }
 
-    public function test_ancestorIds_caches_results(): void
+    public function test_ancestor_ids_caches_results(): void
     {
         $unit = Unit::create(['name' => 'واحد']);
         $parent = Unit::create(['name' => 'والد', 'parent_id' => $unit->id]);
@@ -140,7 +141,7 @@ class UnitModelTest extends TestCase
 
     // --- descendantIds ---
 
-    public function test_descendantIds_returns_all_descendants(): void
+    public function test_descendant_ids_returns_all_descendants(): void
     {
         $parent = Unit::create(['name' => 'والد']);
         $child1 = Unit::create(['name' => 'فرزند ۱', 'parent_id' => $parent->id]);
@@ -155,7 +156,7 @@ class UnitModelTest extends TestCase
         $this->assertContains($grandchild->id, $descendants);
     }
 
-    public function test_descendantIds_with_single_id(): void
+    public function test_descendant_ids_with_single_id(): void
     {
         $unit = Unit::create(['name' => 'واحد']);
         $child = Unit::create(['name' => 'فرزند', 'parent_id' => $unit->id]);
@@ -166,13 +167,13 @@ class UnitModelTest extends TestCase
         $this->assertContains($child->id, $descendants);
     }
 
-    public function test_descendantIds_returns_empty_for_empty_input(): void
+    public function test_descendant_ids_returns_empty_for_empty_input(): void
     {
         $result = Unit::descendantIds([]);
         $this->assertTrue($result->isEmpty());
     }
 
-    public function test_descendantIds_caches_results(): void
+    public function test_descendant_ids_caches_results(): void
     {
         $parent = Unit::create(['name' => 'والد']);
         $child = Unit::create(['name' => 'فرزند', 'parent_id' => $parent->id]);
@@ -187,7 +188,7 @@ class UnitModelTest extends TestCase
 
     // --- withinBounds scope ---
 
-    public function test_withinBounds_returns_units_in_bounding_box(): void
+    public function test_within_bounds_returns_units_in_bounding_box(): void
     {
         $inBounds = Unit::create(['name' => 'داخل', 'lat' => 35.5, 'lng' => 51.5]);
         $outOfBounds = Unit::create(['name' => 'خارج', 'lat' => 40.0, 'lng' => 60.0]);
@@ -230,7 +231,7 @@ class UnitModelTest extends TestCase
 
     // --- childrenRecursive ---
 
-    public function test_childrenRecursive_eager_loads_hierarchy(): void
+    public function test_children_recursive_eager_loads_hierarchy(): void
     {
         $parent = Unit::create(['name' => 'والد']);
         $child = Unit::create(['name' => 'فرزند', 'parent_id' => $parent->id]);

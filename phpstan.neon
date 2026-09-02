@@ -11,7 +11,7 @@ parameters:
         - resources/views/livewire
     excludePaths:
         - vendor
-        - node_modules
+        - node_modules (?)
         - storage
         - bootstrap/cache
         - tests

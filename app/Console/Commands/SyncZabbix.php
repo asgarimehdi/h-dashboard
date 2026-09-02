@@ -2,12 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Services\ZabbixService;
+use Illuminate\Console\Command;
 
 class SyncZabbix extends Command
 {
     protected $signature = 'zabbix:sync';
+
     protected $description = 'Sync metrics from Zabbix monitoring system';
 
     public function handle(ZabbixService $zabbix): int
@@ -27,7 +28,7 @@ class SyncZabbix extends Command
             $out = $zabbix->getInterfaceTraffic($outItemId);
             $in = $zabbix->getInterfaceTraffic($inItemId);
             $traffic = array_merge($out, $in);
-            $this->line("  Fetched ".count($traffic)." traffic records.");
+            $this->line('  Fetched '.count($traffic).' traffic records.');
         } catch (\Throwable $e) {
             $this->warn('Zabbix sync failed: '.$e->getMessage());
 

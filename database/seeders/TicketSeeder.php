@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\TaskActivity;
 use App\Models\Ticket;
+use App\Models\Unit;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -18,7 +19,7 @@ class TicketSeeder extends Seeder
             return;
         }
 
-        $units = \App\Models\Unit::where('is_active', true)->get();
+        $units = Unit::where('is_active', true)->get();
 
         if ($units->isEmpty()) {
             return;
@@ -57,14 +58,14 @@ class TicketSeeder extends Seeder
             $priority = $priorities[array_rand($priorities)];
 
             $createdAt = $startDate->copy()->addDays(rand(0, 90))->setTime(rand(8, 16), rand(0, 59));
-            $ticketCode = 'TCK-' . $now->format('Ymd') . '-' . str_pad($i + 1, 4, '0', STR_PAD_LEFT);
+            $ticketCode = 'TCK-'.$now->format('Ymd').'-'.str_pad($i + 1, 4, '0', STR_PAD_LEFT);
 
             $ticket = Ticket::create([
                 'ticket_code' => $ticketCode,
                 'user_id' => $creator->id,
                 'unit_id' => $unit->id,
                 'subject' => $subjects[array_rand($subjects)],
-                'content' => 'توضیحات مربوط به تیکت: ' . $subjects[array_rand($subjects)] . '. لطفاً بررسی و اقدام لازم صورت گیرد.',
+                'content' => 'توضیحات مربوط به تیکت: '.$subjects[array_rand($subjects)].'. لطفاً بررسی و اقدام لازم صورت گیرد.',
                 'priority' => $priority,
                 'status' => $status,
                 'current_assignee_id' => in_array($status, ['accepted', 'forwarded']) ? $assignedUser->id : null,
@@ -84,7 +85,7 @@ class TicketSeeder extends Seeder
             'ticket_id' => $ticket->id,
             'user_id' => $creator->id,
             'action' => 'created',
-            'description' => 'تیکت توسط ' . ($creator->person?->f_name ?? '') . ' ' . ($creator->person?->l_name ?? '') . ' ایجاد شد.',
+            'description' => 'تیکت توسط '.($creator->person?->f_name ?? '').' '.($creator->person?->l_name ?? '').' ایجاد شد.',
             'is_internal' => false,
             'to_unit_id' => $unit->id,
             'created_at' => $createdAt,
@@ -97,7 +98,7 @@ class TicketSeeder extends Seeder
                 'ticket_id' => $ticket->id,
                 'user_id' => $creator->id,
                 'action' => 'forwarded',
-                'description' => 'تیکت به واحد ' . $unit->name . ' ارجاع داده شد.',
+                'description' => 'تیکت به واحد '.$unit->name.' ارجاع داده شد.',
                 'is_internal' => false,
                 'to_unit_id' => $unit->id,
                 'to_user_id' => $assignee->id,
@@ -112,7 +113,7 @@ class TicketSeeder extends Seeder
                 'ticket_id' => $ticket->id,
                 'user_id' => $assignee->id,
                 'action' => 'accepted',
-                'description' => 'تیکت توسط ' . ($assignee->person?->f_name ?? '') . ' ' . ($assignee->person?->l_name ?? '') . ' پذیرفته شد.',
+                'description' => 'تیکت توسط '.($assignee->person?->f_name ?? '').' '.($assignee->person?->l_name ?? '').' پذیرفته شد.',
                 'is_internal' => false,
                 'to_unit_id' => $unit->id,
                 'to_user_id' => $assignee->id,

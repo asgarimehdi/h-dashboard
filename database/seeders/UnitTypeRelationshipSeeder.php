@@ -2,9 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\UnitTypeRelationship;
+use Illuminate\Database\Seeder;
 
 class UnitTypeRelationshipSeeder extends Seeder
 {
@@ -45,7 +44,7 @@ class UnitTypeRelationshipSeeder extends Seeder
 
         foreach ($relationships as [$childId, $parentId]) {
             UnitTypeRelationship::create([
-                'child_unit_type_id'         => $childId,
+                'child_unit_type_id' => $childId,
                 'allowed_parent_unit_type_id' => $parentId,
             ]);
         }

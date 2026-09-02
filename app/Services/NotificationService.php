@@ -2,7 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Notification;
 use App\Models\Notification as NotificationModel;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class NotificationService
 {
@@ -28,14 +32,14 @@ class NotificationService
         ]);
 
         // Issue #393: invalidate the bell component cache for the recipient
-        \Illuminate\Support\Facades\Cache::forget("notifications:user:{$userId}");
+        Cache::forget("notifications:user:{$userId}");
 
         return $notification;
     }
 
     public static function notifyUnit(int $unitId, string $type, string $title, ?string $body = null, ?string $url = null): void
     {
-        $userIds = \App\Models\User::whereHas('units', fn($q) => $q->where('units.id', $unitId))
+        $userIds = User::whereHas('units', fn ($q) => $q->where('units.id', $unitId))
             ->pluck('id');
 
         if ($userIds->isEmpty()) {
@@ -43,8 +47,8 @@ class NotificationService
         }
 
         // Batch insert for better performance (must include UUID since insert() bypasses model boot)
-        $notifications = $userIds->map(fn($userId) => [
-            'id' => \Illuminate\Support\Str::uuid(),
+        $notifications = $userIds->map(fn ($userId) => [
+            'id' => Str::uuid(),
             'user_id' => $userId,
             'type' => $type,
             'title' => $title,
@@ -56,11 +60,11 @@ class NotificationService
             'updated_at' => now(),
         ])->toArray();
 
-        \App\Models\Notification::insert($notifications);
+        Notification::insert($notifications);
 
         // Issue #393: invalidate bell cache for all recipients
         foreach ($userIds as $userId) {
-            \Illuminate\Support\Facades\Cache::forget("notifications:user:{$userId}");
+            Cache::forget("notifications:user:{$userId}");
         }
     }
 }

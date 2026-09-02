@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Models\User::class);
+covers(User::class);
 
 class UsersPageTest extends TestCase
 {

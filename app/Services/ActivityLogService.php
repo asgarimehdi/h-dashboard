@@ -33,18 +33,21 @@ class ActivityLogService
     public static function created(object $subject, string $description = ''): ActivityLog
     {
         $name = method_exists($subject, 'getTitle') ? $subject->getTitle() : class_basename($subject);
+
         return self::log('created', $subject, $description ?: "ایجاد {$name}");
     }
 
     public static function updated(object $subject, array $oldValues, array $newValues, string $description = ''): ActivityLog
     {
         $name = method_exists($subject, 'getTitle') ? $subject->getTitle() : class_basename($subject);
+
         return self::log('updated', $subject, $description ?: "ویرایش {$name}", $oldValues, $newValues);
     }
 
     public static function deleted(object $subject, string $description = ''): ActivityLog
     {
         $name = method_exists($subject, 'getTitle') ? $subject->getTitle() : class_basename($subject);
+
         return self::log('deleted', $subject, $description ?: "حذف {$name}");
     }
 

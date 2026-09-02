@@ -82,7 +82,7 @@ class TicketController extends Controller
 
         $ticket = Ticket::create([
             ...$validated,
-            'ticket_code' => 'T-' . strtoupper(Str::random(8)),
+            'ticket_code' => 'T-'.strtoupper(Str::random(8)),
             'user_id' => $request->user()->id,
             'status' => 'created',
         ]);

@@ -2,11 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\GenerateRecurringTodos;
 use App\Models\Todo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-covers(\App\Console\Commands\GenerateRecurringTodos::class);
+covers(GenerateRecurringTodos::class);
 
 class GenerateRecurringTodosCommandTest extends TestCase
 {

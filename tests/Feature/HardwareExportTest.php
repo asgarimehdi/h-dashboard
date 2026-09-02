@@ -3,35 +3,39 @@
 namespace Tests\Feature;
 
 use App\Exports\HardwareExport;
+use App\Http\Controllers\Api\HardwareExportController;
 use App\Models\Hardware;
-use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
-use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
-use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Facades\Excel;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HardwareExportController::class);
+covers(HardwareExportController::class);
 
 class HardwareExportTest extends TestCase
 {
     use RefreshDatabase;
 
     protected int $tId;
+
     protected int $eId;
+
     protected int $sId;
+
     protected int $rId;
+
     protected Unit $unit;
+
     protected User $user;
 
     protected function setUp(): void
@@ -72,15 +76,15 @@ class HardwareExportTest extends TestCase
         $nCode = $this->user->n_code;
 
         return Hardware::create(array_merge([
-            'n_code'  => $nCode,
+            'n_code' => $nCode,
             'pc_name' => 'TEST-PC',
-            'type'    => 'pc',
-            'os'      => 'Windows 11',
-            'cpu'     => 'Intel i5',
-            'ram'     => '8192',
-            'hdd'     => '512GB SSD',
-            'mac'     => 'AA:BB:CC:DD:EE:FF',
-            'ip_local'=> '192.168.1.100',
+            'type' => 'pc',
+            'os' => 'Windows 11',
+            'cpu' => 'Intel i5',
+            'ram' => '8192',
+            'hdd' => '512GB SSD',
+            'mac' => 'AA:BB:CC:DD:EE:FF',
+            'ip_local' => '192.168.1.100',
         ], $overrides));
     }
 
@@ -144,8 +148,8 @@ class HardwareExportTest extends TestCase
             'r_id' => $this->rId, 'u_id' => $this->unit->id,
         ]);
         $basicUser = User::create([
-            'n_code'    => $basicNCode,
-            'password'  => Hash::make('password'),
+            'n_code' => $basicNCode,
+            'password' => Hash::make('password'),
         ]);
         $this->actingAs($basicUser);
         $this->setExportState(['n_code', 'pc_name']);
@@ -164,9 +168,9 @@ class HardwareExportTest extends TestCase
     {
         $hw = $this->createHardware([
             'pc_name' => 'PC-EXPORT-001',
-            'type'    => 'laptop',
-            'cpu'     => 'AMD Ryzen 7',
-            'ram'     => '16384',
+            'type' => 'laptop',
+            'cpu' => 'AMD Ryzen 7',
+            'ram' => '16384',
         ]);
 
         $this->setExportState(['n_code', 'pc_name', 'type']);

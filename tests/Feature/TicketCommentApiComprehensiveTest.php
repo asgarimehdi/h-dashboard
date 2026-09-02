@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\TicketCommentController;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -23,7 +24,7 @@ use Tests\TestCase;
  * scope enforcement, validation, thread depth, markdown, notifications,
  * reactions listing/idempotency, admin delete, 15-min edit window.
  */
-covers(\App\Http\Controllers\Api\TicketCommentController::class);
+covers(TicketCommentController::class);
 
 class TicketCommentApiComprehensiveTest extends TestCase
 {

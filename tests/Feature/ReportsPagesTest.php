@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Boundary;
 use App\Models\Person;
+use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Models\Ticket::class);
+covers(Ticket::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

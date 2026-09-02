@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
+use App\Traits\HasOrganizationalScope;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Traits\HasOrganizationalScope::class);
+covers(HasOrganizationalScope::class);
 
 class HasOrganizationalScopeTest extends TestCase
 {
