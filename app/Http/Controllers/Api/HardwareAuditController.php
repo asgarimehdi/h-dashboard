@@ -6,11 +6,13 @@ use App\Exports\HardwareAuditsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
+use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use Morilog\Jalali\Jalalian;
 
@@ -90,8 +92,9 @@ class HardwareAuditController extends Controller
             return response()->json(['message' => 'Audit not found for this hardware.'], 404);
         }
 
+        $allowed = (new Hardware)->getFillable();
         $request->validate([
-            'field' => 'required|string',
+            'field' => ['required', 'string', Rule::in($allowed)],
         ]);
 
         $changes = $audit->changes;
@@ -116,6 +119,18 @@ class HardwareAuditController extends Controller
 
         // Parse the old value back to its original type
         $restoredValue = $this->parseValueForRestore($oldValue, $request->field);
+
+        // Verify target unit is accessible when restoring n_code
+        if ($request->field === 'n_code' && $restoredValue !== null) {
+            $person = Person::where('n_code', $restoredValue)->first();
+            if (! $person) {
+                return response()->json(['message' => 'Person not found.'], 422);
+            }
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+            if (! in_array($person->u_id, $accessibleIds, true)) {
+                return response()->json(['message' => 'Cannot restore hardware to a person in an inaccessible unit.'], 403);
+            }
+        }
 
         // Update the hardware record
         $hardware->update([$request->field => $restoredValue]);
@@ -186,6 +201,17 @@ class HardwareAuditController extends Controller
         $restoreData['id'] = $audit->hardware_id;
 
         $hardware = Hardware::create($restoreData);
+
+        // Advance the Postgres sequence past the restored id so the next
+        // auto-increment does not collide (duplicate key on hardwares_pkey).
+        // pg_get_serial_sequence resolves the sequence name regardless of
+        // SERIAL vs IDENTITY column definition.
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
+            if ($seq && $seq->seq) {
+                DB::statement('SELECT setval(?, (SELECT COALESCE(MAX(id), 0) FROM hardwares))', [$seq->seq]);
+            }
+        }
 
         // Note: Hardware::create() already fires HardwareAuditObserver::created()
         // (registered in AppServiceProvider), which writes the 'created' audit —
@@ -394,17 +420,23 @@ class HardwareAuditController extends Controller
         } elseif (is_array($audit->changes)) {
             foreach ($audit->changes as $change) {
                 if (($change['field'] ?? null) === 'n_code' && isset($change['new'])) {
-                    $nCode = $change['new'];
+                    // The observer stores formatted display value; guard against
+                    // the em-dash placeholder which is not a valid national code.
+                    $nCode = is_string($change['new']) && $change['new'] !== '—' ? $change['new'] : null;
                     break;
                 }
             }
         }
 
-        if ($nCode !== null) {
-            $unitId = DB::table('persons')->where('n_code', $nCode)->value('u_id');
-            if ($unitId && ! in_array($unitId, $accessibleIds, true)) {
-                abort(403, 'Hardware record not accessible.');
-            }
+        // Deny by default when scope cannot be proven — prevents IDOR when
+        // audit data is missing n_code (legacy/corrupted/manual inserts).
+        if ($nCode === null) {
+            abort(403, 'Hardware record not accessible.');
+        }
+
+        $unitId = DB::table('persons')->where('n_code', $nCode)->value('u_id');
+        if (! $unitId || ! in_array($unitId, $accessibleIds, true)) {
+            abort(403, 'Hardware record not accessible.');
         }
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class UnitType extends Model
 {
@@ -12,7 +13,7 @@ class UnitType extends Model
      * رابطه برای دریافت نوع‌های والد مجاز برای یک نوع واحد.
      * این رابطه از جدول pivot unit_type_relationships استفاده می‌کند.
      */
-    public function allowedParentTypes()
+    public function allowedParentTypes(): BelongsToMany
     {
         return $this->belongsToMany(
             UnitType::class,
