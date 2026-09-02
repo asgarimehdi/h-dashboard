@@ -29,6 +29,14 @@ Add Livewire tests for the top-priority components:
 
 Each test: `Livewire::test('component.name')->assertOk()` + functional assertions.
 
+### Conventions (per AGENTS.md — must be followed)
+- Livewire 4 **single-file components**: test by string dot-name (`Livewire::test('reports.advanced')`), no class import.
+- Tests must be hermetic: no Redis (`CACHE_STORE=array` is forced in `phpunit.xml`), Postgres test DB `h_dashboard_test`.
+- Zabbix-dependent components (`it.*`) — mock `ZabbixService` or expect graceful failure; never hit the real Zabbix URL.
+- Respect organizational scope: authenticate a user + seed unit(s) via factories/seeders; map components (`maps.*`) need seeded lat/lng or boundary data.
+- `maps.interactive` renders Leaflet in JS — assert only server-side state (mount data, markers payload), not DOM map rendering.
+- Before writing `maps.*` tests, check `MapsVoltTest.php` for existing coverage to avoid duplication.
+
 ## Files
 - `resources/views/livewire/reports/advanced.blade.php`
 - `resources/views/livewire/maps/interactive.blade.php`
