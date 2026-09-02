@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('activity_logs', function (Blueprint $table) {
             $table->dropForeign('activity_logs_user_id_foreign');
-            $table->nullableBigInteger('user_id')->change();
+            $table->unsignedBigInteger('user_id')->nullable()->change();
             $table->foreign('user_id', 'activity_logs_user_id_foreign')
                 ->references('id')->on('users')
                 ->onDelete('set null');
