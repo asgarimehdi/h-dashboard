@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
@@ -58,7 +59,7 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
     /**
      * Fallback for small datasets (used by FromCollection).
      */
-    public function collection(): \Illuminate\Support\Collection
+    public function collection(): Collection
     {
         return $this->query->get();
     }
@@ -67,7 +68,7 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
      * Chunked export for large datasets — processes records in batches of $chunkSize
      * to avoid loading the entire result set into memory at once.
      */
-    public function chunkCollection(): \Illuminate\Support\Collection
+    public function chunkCollection(): Collection
     {
         $chunk = $this->query
             ->where('id', '>', $this->lastId)
