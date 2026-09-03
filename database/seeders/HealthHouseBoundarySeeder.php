@@ -29,6 +29,6 @@ class HealthHouseBoundarySeeder extends Seeder
 
     private function getBoundaries(): array
     {
-        return require __DIR__ . '/health_house_boundaries_data.php';
+        return require __DIR__.'/health_house_boundaries_data.php';
     }
 }

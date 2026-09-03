@@ -14,7 +14,7 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-covers(\App\Models\User::class);
+covers(User::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

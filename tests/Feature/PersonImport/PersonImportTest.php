@@ -14,7 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
-covers(\App\Imports\PersonImport::class);
+covers(PersonImport::class);
 
 class PersonImportTest extends TestCase
 {

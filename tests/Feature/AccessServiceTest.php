@@ -6,6 +6,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Services\AccessService::class);
+covers(AccessService::class);
 
 class AccessServiceTest extends TestCase
 {
@@ -86,11 +87,11 @@ class AccessServiceTest extends TestCase
         Session::put('current_unit_id', $unit->id);
         $this->actingAs($user);
 
-        $before = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
+        $before = app(CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
 
         app(AccessService::class)->clearCache($user);
 
-        $after = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
+        $after = app(CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
 
         $this->assertGreaterThan($before, $after);
     }
@@ -100,13 +101,13 @@ class AccessServiceTest extends TestCase
         $unit = Unit::create(['name' => 'CAU']);
         $user = $this->makeUserInUnit($unit);
 
-        $gisBefore = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('gis');
-        $unitBefore = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
+        $gisBefore = app(CacheInvalidationServiceInterface::class)->getVersion('gis');
+        $unitBefore = app(CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
 
         app(AccessService::class)->clearAllCaches();
 
-        $gisAfter = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('gis');
-        $unitAfter = app(\App\Services\CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
+        $gisAfter = app(CacheInvalidationServiceInterface::class)->getVersion('gis');
+        $unitAfter = app(CacheInvalidationServiceInterface::class)->getVersion('unit_hierarchy');
 
         $this->assertGreaterThan($gisBefore, $gisAfter);
         $this->assertGreaterThan($unitBefore, $unitAfter);

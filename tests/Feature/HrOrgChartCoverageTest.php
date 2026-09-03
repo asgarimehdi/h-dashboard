@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\HrAnalyticsController;
+use App\Http\Controllers\Api\HrStatsController;
+use App\Http\Controllers\Api\OrgChartController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -11,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HrController::class);
+covers(OrgChartController::class, HrStatsController::class, HrAnalyticsController::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\HardwareAudit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -12,7 +13,7 @@ use Tests\TestCase;
  * legacy `hardware_histories` rows are copied into `hardware_audits`
  * and the legacy table is dropped.
  */
-covers(\App\Models\HardwareAudit::class);
+covers(HardwareAudit::class);
 
 class HardwareAuditMigrationTest extends TestCase
 {

@@ -12,9 +12,10 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-covers(\App\Models\TicketComment::class);
+covers(TicketComment::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
@@ -23,7 +24,7 @@ beforeEach(function () {
 
     // The seeder only creates permissions; the admin ROLE is created on demand
     // by tests that need it (same convention as TicketApiTest).
-    \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+    Role::firstOrCreate(['name' => 'admin']);
 
     DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
@@ -65,7 +66,7 @@ test('comment policy allows author when accessible unit check passes', function 
         'body' => 'Test comment',
     ]);
 
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
     expect($policy->update($author, $comment))->toBeTrue();
 });
 
@@ -87,14 +88,14 @@ test('comment policy denies non-author even with accessible unit', function () {
         'body' => 'Test comment',
     ]);
 
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
     expect($policy->update($other, $comment))->toBeFalse();
 });
 
 test('comment policy denies user without accessible unit', function () {
     $author = User::factory()->create();
     $other = User::factory()->create();
-    $otherUnit = \App\Models\Unit::create(['name' => 'واحد دیگر']);
+    $otherUnit = Unit::create(['name' => 'واحد دیگر']);
     $other->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => false]);
 
     $ticket = Ticket::create([
@@ -112,7 +113,7 @@ test('comment policy denies user without accessible unit', function () {
         'body' => 'Test comment',
     ]);
 
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
     expect($policy->update($other, $comment))->toBeFalse();
 });
 
@@ -153,7 +154,7 @@ test('policy view follows organizational scope', function () {
     $outScope->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => false]);
 
     $comment = policyComment(policyTicket($this->unit->id, $author->id), $author->id);
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->view($inScope, $comment))->toBeTrue()
         ->and($policy->view($outScope, $comment))->toBeFalse();
@@ -170,7 +171,7 @@ test('policy update blocks author outside window and never grants editors', func
     // Age the comment past the 15-minute edit window.
     $comment->forceFill(['created_at' => now()->subMinutes(16)])->save();
 
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->update($author, $comment))->toBeFalse()
         ->and($policy->update($editor, $comment))->toBeFalse();
@@ -189,7 +190,7 @@ test('policy delete allows author, managers and admins only inside scope', funct
 
     $comment = policyComment(policyTicket($this->unit->id, $author->id), $author->id);
     $comment->forceFill(['created_at' => now()->subHour()])->save(); // beyond edit window
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->delete($author, $comment))->toBeTrue()
         ->and($policy->delete($admin, $comment))->toBeTrue()
@@ -208,7 +209,7 @@ test('policy delete denies privileged users outside organizational scope', funct
     $outManager->units()->attach($otherUnit->id, ['role' => 'responsible', 'is_primary' => false]);
 
     $comment = policyComment(policyTicket($this->unit->id, $author->id), $author->id);
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->delete($outAdmin, $comment))->toBeFalse()
         ->and($policy->delete($outManager, $comment))->toBeFalse();
@@ -230,7 +231,7 @@ test('policy restore requires manager or admin inside scope', function () {
     $outAdmin->units()->attach($otherUnit->id, ['role' => 'responsible', 'is_primary' => false]);
 
     $comment = policyComment(policyTicket($this->unit->id, $author->id), $author->id);
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->restore($admin, $comment))->toBeTrue()
         ->and($policy->restore($manager, $comment))->toBeTrue()
@@ -247,7 +248,7 @@ test('policy forceDelete is admin-only regardless of scope or permissions', func
     $manager->givePermissionTo('manage_unit_tickets');
 
     $comment = policyComment(policyTicket($this->unit->id, $author->id), $author->id);
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->forceDelete($admin, $comment))->toBeTrue()
         ->and($policy->forceDelete($manager, $comment))->toBeFalse()
@@ -256,7 +257,7 @@ test('policy forceDelete is admin-only regardless of scope or permissions', func
 
 test('policy viewAny and create are open by design', function () {
     $user = User::factory()->create();
-    $policy = new TicketCommentPolicy();
+    $policy = new TicketCommentPolicy;
 
     expect($policy->viewAny($user))->toBeTrue()
         ->and($policy->create($user))->toBeTrue();

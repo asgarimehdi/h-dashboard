@@ -5,15 +5,15 @@ use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-covers(\App\Models\HardwareAudit::class);
+covers(HardwareAudit::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

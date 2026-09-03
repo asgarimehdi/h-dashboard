@@ -3,18 +3,19 @@
 namespace Tests\Feature\HardwareImport;
 
 use App\Imports\HardwareImport;
+use App\Models\Estekhdam;
 use App\Models\Hardware;
 use App\Models\Person;
-use App\Models\Unit;
+use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
-use App\Models\Estekhdam;
-use App\Models\Radif;
+use App\Models\Unit;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
-covers(\App\Imports\HardwareImport::class);
+covers(HardwareImport::class);
 
 class HardwareImportTest extends TestCase
 {
@@ -23,7 +24,7 @@ class HardwareImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\PermissionSeeder::class);
+        $this->seed(PermissionSeeder::class);
     }
 
     protected function createTestData(): array
@@ -71,23 +72,23 @@ class HardwareImportTest extends TestCase
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-NEW\tpc\tWindows 11\tIntel i7\t\"16384\"\tSSD 512GB\t11:22:33:44:55:66\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport();
+        $import = new HardwareImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
-        
+
         // Debug output
-        error_log('Test results: ' . json_encode($results, JSON_PRETTY_PRINT));
+        error_log('Test results: '.json_encode($results, JSON_PRETTY_PRINT));
 
         $this->assertEquals(1, $results['created']);
         $this->assertEquals(0, $results['updated']);
         $this->assertEquals(0, $results['skipped']);
         $this->assertCount(1, $results['preview']);
         $this->assertEquals('create', $results['preview'][0]['status']);
-        
+
         @unlink($file);
     }
 
@@ -98,10 +99,10 @@ class HardwareImportTest extends TestCase
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-001\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport();
+        $import = new HardwareImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -111,7 +112,7 @@ class HardwareImportTest extends TestCase
         $this->assertCount(1, $results['preview']);
         $this->assertEquals('update', $results['preview'][0]['status']);
         $this->assertNotEmpty($results['preview'][0]['changes']);
-        
+
         @unlink($file);
     }
 
@@ -123,10 +124,10 @@ class HardwareImportTest extends TestCase
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\tshutdown\tmark\n";
         $csvContent .= "1234567890\tPC-001\tpc\tWindows 10\tIntel i5\t8192\tSSD 256GB\tAA:BB:CC:DD:EE:FF\t1\t0\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport();
+        $import = new HardwareImport;
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -136,46 +137,46 @@ class HardwareImportTest extends TestCase
         $this->assertEquals(1, $results['skipped']);
         $this->assertCount(1, $results['preview']);
         $this->assertEquals('unchanged', $results['preview'][0]['status']);
-        
+
         @unlink($file);
     }
 
     public function test_import_respects_organizational_scope(): void
-        {
-            $data = $this->createTestData();
+    {
+        $data = $this->createTestData();
 
-            // Create another unit and person not accessible
-            $otherUnit = Unit::create(['name' => 'واحد دیگر']);
-            $otherPerson = Person::create([
-                'n_code' => '9876543210',
-                'f_name' => 'علی',
-                'l_name' => 'رضایی',
-                'u_id' => $otherUnit->id,
-                's_id' => $data['semat']->id,
-                't_id' => $data['tahsil']->id,
-                'e_id' => $data['estekhdam']->id,
-                'r_id' => $data['radif']->id,
-            ]);
+        // Create another unit and person not accessible
+        $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+        $otherPerson = Person::create([
+            'n_code' => '9876543210',
+            'f_name' => 'علی',
+            'l_name' => 'رضایی',
+            'u_id' => $otherUnit->id,
+            's_id' => $data['semat']->id,
+            't_id' => $data['tahsil']->id,
+            'e_id' => $data['estekhdam']->id,
+            'r_id' => $data['radif']->id,
+        ]);
 
-            $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
-            $csvContent .= "9876543210\tPC-OTHER\tpc\tWindows 10\tIntel i5\t8192\tSSD 256GB\t22:33:44:55:66:77\n";
+        $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
+        $csvContent .= "9876543210\tPC-OTHER\tpc\tWindows 10\tIntel i5\t8192\tSSD 256GB\t22:33:44:55:66:77\n";
 
-            $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
-            file_put_contents($file, $csvContent);
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
+        file_put_contents($file, $csvContent);
 
-            // Import with only the first unit's accessible IDs
-            $import = new HardwareImport();
-            $import->setAccessibleUnitIds([$data['unit']->id]);
-            Excel::import($import, $file);
+        // Import with only the first unit's accessible IDs
+        $import = new HardwareImport;
+        $import->setAccessibleUnitIds([$data['unit']->id]);
+        Excel::import($import, $file);
 
-            $results = $import->getImportResults();
+        $results = $import->getImportResults();
 
-            // Should be skipped due to organizational scope
-            $this->assertEquals(1, $results['skipped']);
-            $this->assertEquals(0, $results['created']);
-        
-            @unlink($file);
-        }
+        // Should be skipped due to organizational scope
+        $this->assertEquals(1, $results['skipped']);
+        $this->assertEquals(0, $results['created']);
+
+        @unlink($file);
+    }
 
     public function test_import_creates_records_with_confirmation(): void
     {
@@ -184,10 +185,10 @@ class HardwareImportTest extends TestCase
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-CONFIRM\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t33:44:55:66:77:88\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport();
+        $import = new HardwareImport;
         $import->setSelectedActions([
             'row_2' => 'create',
         ]);
@@ -200,7 +201,7 @@ class HardwareImportTest extends TestCase
             'pc_name' => 'PC-CONFIRM',
             'n_code' => '1234567890',
         ]);
-        
+
         @unlink($file);
     }
 
@@ -211,10 +212,10 @@ class HardwareImportTest extends TestCase
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-RENAMED\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
 
-        $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport();
+        $import = new HardwareImport;
         $import->setCompareKey('mac');
         Excel::import($import, $file);
 
@@ -224,59 +225,59 @@ class HardwareImportTest extends TestCase
         $this->assertEquals(0, $results['created']);
         $this->assertEquals(1, $results['updated']);
         $this->assertEquals('mac', $results['preview'][0]['match_key']);
-        
+
         @unlink($file);
     }
 
     public function test_import_handles_validation_errors(): void
-        {
-            $this->createTestData();
+    {
+        $this->createTestData();
 
-            $csvContent = "n_code\tpc_name\ttype\tos\n";
-            $csvContent .= "\t\tpc\tWindows 10\n"; // Missing required fields
+        $csvContent = "n_code\tpc_name\ttype\tos\n";
+        $csvContent .= "\t\tpc\tWindows 10\n"; // Missing required fields
 
-            $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
-            file_put_contents($file, $csvContent);
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
+        file_put_contents($file, $csvContent);
 
-            $import = new HardwareImport();
-            Excel::import($import, $file);
+        $import = new HardwareImport;
+        Excel::import($import, $file);
 
-            $results = $import->getImportResults();
+        $results = $import->getImportResults();
 
-            $this->assertEquals(1, $results['skipped']);
-            $this->assertEquals(0, $results['created']);
-            $this->assertCount(1, $results['preview']);
-            $this->assertEquals('error', $results['preview'][0]['status']);
-        
-            @unlink($file);
-        }
+        $this->assertEquals(1, $results['skipped']);
+        $this->assertEquals(0, $results['created']);
+        $this->assertCount(1, $results['preview']);
+        $this->assertEquals('error', $results['preview'][0]['status']);
+
+        @unlink($file);
+    }
 
     public function test_import_detects_changes_correctly(): void
-        {
-            $this->createTestData();
+    {
+        $this->createTestData();
 
-            $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
-            $csvContent .= "1234567890\tPC-001\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
+        $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
+        $csvContent .= "1234567890\tPC-001\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
 
-            $file = tempnam(sys_get_temp_dir(), 'import_') . '.csv';
-            file_put_contents($file, $csvContent);
+        $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
+        file_put_contents($file, $csvContent);
 
-            $import = new HardwareImport();
-            Excel::import($import, $file);
+        $import = new HardwareImport;
+        Excel::import($import, $file);
 
-            $results = $import->getImportResults();
+        $results = $import->getImportResults();
 
-            $this->assertEquals(1, $results['updated']);
-            $changes = $results['preview'][0]['changes'] ?? [];
+        $this->assertEquals(1, $results['updated']);
+        $changes = $results['preview'][0]['changes'] ?? [];
 
-            // Should detect changes in os, cpu, ram, hdd
-            $this->assertArrayHasKey('os', $changes);
-            $this->assertArrayHasKey('cpu', $changes);
-            $this->assertArrayHasKey('ram', $changes);
-            $this->assertArrayHasKey('hdd', $changes);
-            $this->assertEquals('Windows 10', $changes['os']['old']);
-            $this->assertEquals('Windows 11', $changes['os']['new']);
-        
-            @unlink($file);
-        }
+        // Should detect changes in os, cpu, ram, hdd
+        $this->assertArrayHasKey('os', $changes);
+        $this->assertArrayHasKey('cpu', $changes);
+        $this->assertArrayHasKey('ram', $changes);
+        $this->assertArrayHasKey('hdd', $changes);
+        $this->assertEquals('Windows 10', $changes['os']['old']);
+        $this->assertEquals('Windows 11', $changes['os']['new']);
+
+        @unlink($file);
+    }
 }

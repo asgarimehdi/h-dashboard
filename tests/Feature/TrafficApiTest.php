@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\TrafficController;
 use App\Models\Person;
+use App\Models\Unit;
 use App\Models\User;
 use App\Services\ZabbixService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -12,7 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Mockery;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\TrafficController::class);
+covers(TrafficController::class);
 
 class TrafficApiTest extends TestCase
 {
@@ -97,7 +99,7 @@ class TrafficApiTest extends TestCase
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-        $unit = \App\Models\Unit::create(['name' => 'واحد تست']);
+        $unit = Unit::create(['name' => 'واحد تست']);
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
 

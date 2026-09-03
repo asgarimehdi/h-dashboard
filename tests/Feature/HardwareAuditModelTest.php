@@ -10,10 +10,9 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Models\HardwareAudit::class);
+covers(HardwareAudit::class);
 
 class HardwareAuditModelTest extends TestCase
 {

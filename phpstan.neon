@@ -1,0 +1,18 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 6
+    paths:
+        - app
+        - config
+        - database
+        - routes
+        - resources/views/livewire
+    excludePaths:
+        - vendor
+        - node_modules (?)
+        - storage
+        - bootstrap/cache
+        - tests
+        - resources/views/livewire/glowingcard.blade.php

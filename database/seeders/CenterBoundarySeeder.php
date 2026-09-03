@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Unit;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Unit;
 
 class CenterBoundarySeeder extends Seeder
 {
@@ -136,6 +136,6 @@ class CenterBoundarySeeder extends Seeder
             Unit::where('id', $unitId)->update(['boundary_id' => $boundaryId]);
         }
 
-        $this->command?->info("Created " . count($boundaries) . " boundaries for center units.");
+        $this->command?->info('Created '.count($boundaries).' boundaries for center units.');
     }
 }

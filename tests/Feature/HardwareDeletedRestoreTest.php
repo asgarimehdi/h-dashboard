@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\HardwareController;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Observers\HardwareAuditObserver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -13,7 +15,7 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HardwareController::class);
+covers(HardwareController::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
@@ -22,10 +24,19 @@ uses(TestCase::class, RefreshDatabase::class);
  */
 function simulateRestoreAuditValue(string $displayValue, string $field): mixed
 {
-    if ($displayValue === '—') return null;
-    if ($displayValue === 'بله') return true;
-    if ($displayValue === 'خیر') return false;
-    if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) return (int) $displayValue;
+    if ($displayValue === '—') {
+        return null;
+    }
+    if ($displayValue === 'بله') {
+        return true;
+    }
+    if ($displayValue === 'خیر') {
+        return false;
+    }
+    if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) {
+        return (int) $displayValue;
+    }
+
     return $displayValue;
 }
 
@@ -43,6 +54,7 @@ function makeRestoreTestUser(): array
     $user->givePermissionTo('manage_hardware');
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $unit->id);
+
     return [$user, $nCode, $unit];
 }
 
@@ -81,7 +93,9 @@ it('deleted hardware can be restored from audit trail (unit logic)', function ()
     // Simulate the restoreRecord logic (core unit test)
     $restoreData = [];
     foreach ($audit->changes as $change) {
-        if (!isset($change['field'], $change['new'])) continue;
+        if (! isset($change['field'], $change['new'])) {
+            continue;
+        }
         $restoreData[$change['field']] = simulateRestoreAuditValue($change['new'], $change['field']);
     }
     $restoreData['n_code'] = $nCodeField['new'];
@@ -96,9 +110,9 @@ it('deleted hardware can be restored from audit trail (unit logic)', function ()
     expect($restored->n_code)->toBe($nCode);
 
     // Log rollback audit
-    app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
+    app(HardwareAuditObserver::class)->recordRollbackAudit(
         $restored,
-        array_map(fn($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'], $audit->changes),
+        array_map(fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'], $audit->changes),
         $user->id
     );
 
@@ -135,7 +149,9 @@ it('restore preserves original hardware id', function () {
 
     $restoreData = [];
     foreach ($audit->changes as $change) {
-        if (!isset($change['field'], $change['new'])) continue;
+        if (! isset($change['field'], $change['new'])) {
+            continue;
+        }
         $restoreData[$change['field']] = simulateRestoreAuditValue($change['new'], $change['field']);
     }
     $restoreData['n_code'] = $nCode;
@@ -171,7 +187,9 @@ it('restore boolean fields correctly', function () {
     // Simulate restore
     $restoreData = [];
     foreach ($audit->changes as $change) {
-        if (!isset($change['field'], $change['new'])) continue;
+        if (! isset($change['field'], $change['new'])) {
+            continue;
+        }
         $restoreData[$change['field']] = simulateRestoreAuditValue($change['new'], $change['field']);
     }
     $restoreData['n_code'] = $nCode;
@@ -221,7 +239,7 @@ it('observer records rollback via recordRollbackAudit', function () {
     ]);
 
     $changes = [['field' => 'os', 'old' => '11 Windows', 'new' => '10 Windows']];
-    app(\App\Observers\HardwareAuditObserver::class)
+    app(HardwareAuditObserver::class)
         ->recordRollbackAudit($hw, $changes, $user->id);
 
     $rollbackAudit = HardwareAudit::where('hardware_id', $hw->id)->where('action', 'rollback')->first();

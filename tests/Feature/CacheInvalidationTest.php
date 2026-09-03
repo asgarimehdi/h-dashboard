@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\Cache;
+use App\Models\Hardware;
+use App\Models\User;
+use App\Services\CacheInvalidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-covers(\App\Services\CacheInvalidationService::class);
+covers(CacheInvalidationService::class);
 
-uses(\Tests\Support\Concerns\InteractsWithTestSetup::class);
+uses(InteractsWithTestSetup::class);
 uses(TestCase::class, RefreshDatabase::class);
 
 it('increments cache version on hardware create', function () {
@@ -18,7 +22,7 @@ it('increments cache version on hardware create', function () {
 
 it('invalidates GIS cache on hardware import', function () {
     Cache::set('gis_version', 1);
-    \App\Models\Hardware::flushStatsCache();
+    Hardware::flushStatsCache();
     expect(Cache::get('gis_version'))->toBeGreaterThan(1);
 });
 
@@ -26,7 +30,7 @@ it('detects N+1 queries in hardware list', function () {
     // Build the user outside the measured closure: factory setup issues its
     // own queries (unit/lookup seeds, person, user) which must not count toward
     // the N+1 assertion for the hardware list endpoint itself.
-    $user = \App\Models\User::factory()->create();
+    $user = User::factory()->create();
 
     // Expected: 1) accessible-units lookup, 2) hardware list (paginated count +
     // data), 3) eager-loaded person/unit. No per-row query => no N+1.

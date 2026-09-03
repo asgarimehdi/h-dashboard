@@ -6,15 +6,13 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Models\Hardware::class);
+covers(Hardware::class);
 
 class HardwareModelTest extends TestCase
 {
@@ -124,7 +122,7 @@ class HardwareModelTest extends TestCase
 
     // --- flushStatsCache ---
 
-    public function test_flushStatsCache_increments_hardware_stats_version(): void
+    public function test_flush_stats_cache_increments_hardware_stats_version(): void
     {
         Cache::put('hardware_stats_version', 0);
 
@@ -133,7 +131,7 @@ class HardwareModelTest extends TestCase
         $this->assertGreaterThan(0, Cache::get('hardware_stats_version'));
     }
 
-    public function test_flushStatsCache_increments_gis_version(): void
+    public function test_flush_stats_cache_increments_gis_version(): void
     {
         Cache::put('gis_version', 0);
 
@@ -142,7 +140,7 @@ class HardwareModelTest extends TestCase
         $this->assertGreaterThan(0, Cache::get('gis_version'));
     }
 
-    public function test_flushStatsCache_increments_maps_version(): void
+    public function test_flush_stats_cache_increments_maps_version(): void
     {
         Cache::put('maps_version', 0);
 
@@ -151,7 +149,7 @@ class HardwareModelTest extends TestCase
         $this->assertGreaterThan(0, Cache::get('maps_version'));
     }
 
-    public function test_flushStatsCache_increments_dashboard_version(): void
+    public function test_flush_stats_cache_increments_dashboard_version(): void
     {
         Cache::put('dashboard_version', 0);
 

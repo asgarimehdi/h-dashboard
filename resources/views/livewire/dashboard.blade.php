@@ -38,36 +38,75 @@ return new class extends Component {
         $scopeKey = md5(implode(',', $accessibleIds));
         $v = Cache::get('dashboard_version', 0);
 
-        // آمارهای سراسری (به واحد کاربر وابسته نیست) — TTL 5 دقیقه
-        $this->totalUsers = Cache::remember("dashboard:total_users:v{$v}", 300, fn() => User::count());
-        $this->totalRoles = Cache::remember("dashboard:total_roles:v{$v}", 300, fn() => Role::count());
-
-        // آمار واحد (وابسته به scope کاربر) — TTL 5 دقیقه
-        $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
+        // Global stats (not scoped) — 1 query
+        $globalStats = Cache::remember("dashboard:global:v{$v}", 300, function () {
             return [
-                'totalPersons' => Person::whereIn('u_id', $accessibleIds)->count(),
-                'totalUnits' => Unit::whereIn('id', $accessibleIds)->count(),
-                'totalTickets' => Ticket::whereIn('unit_id', $accessibleIds)->count(),
-                'openTickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->whereIn('status', ['created', 'forwarded'])->count(),
-                'completedTickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->where('status', 'completed')->count(),
-                'totalTodos' => Todo::whereIn('unit_id', $accessibleIds)->count(),
-                'pendingTodos' => Todo::whereIn('unit_id', $accessibleIds)
-                    ->where('is_completed', false)->count(),
-                'completedTodos' => Todo::whereIn('unit_id', $accessibleIds)
-                    ->where('is_completed', true)->count(),
-                'linkedTodos' => Todo::whereIn('unit_id', $accessibleIds)
-                    ->has('tickets')->count(),
+                'totalUsers' => User::count(),
+                'totalRoles' => Role::count(),
+            ];
+        });
+        $this->totalUsers = $globalStats['totalUsers'];
+        $this->totalRoles = $globalStats['totalRoles'];
+
+        // Scoped stats — consolidated with PostgreSQL FILTER
+        $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
+            $ids = implode(',', $accessibleIds);
+
+            // Persons + Units in one shot
+            $row = DB::selectOne("
+                SELECT
+                    (SELECT COUNT(*) FROM persons WHERE u_id IN ({$ids})) AS total_persons,
+                    (SELECT COUNT(*) FROM units WHERE id IN ({$ids})) AS total_units
+            ");
+
+            // Tickets: total, open, completed
+            $ticketRow = DB::selectOne("
+                SELECT
+                    COUNT(*) AS total_tickets,
+                    COUNT(*) FILTER (WHERE status IN ('created','forwarded')) AS open_tickets,
+                    COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets
+                FROM tickets WHERE unit_id IN ({$ids})
+            ");
+
+            // Todos: total, pending, completed
+            $todoRow = DB::selectOne("
+                SELECT
+                    COUNT(*) AS total_todos,
+                    COUNT(*) FILTER (WHERE is_completed = false) AS pending_todos,
+                    COUNT(*) FILTER (WHERE is_completed = true) AS completed_todos
+                FROM todos WHERE unit_id IN ({$ids})
+            ");
+
+            // Linked todos (tickets.task_id -> todos.id)
+            $linkedTodos = DB::selectOne("
+                SELECT COUNT(DISTINCT t.id) AS cnt
+                FROM todos t
+                WHERE t.unit_id IN ({$ids})
+                  AND EXISTS (SELECT 1 FROM tickets WHERE task_id = t.id)
+            ");
+
+            return [
+                'totalPersons'     => (int) ($row->total_persons ?? 0),
+                'totalUnits'       => (int) ($row->total_units ?? 0),
+                'totalTickets'     => (int) ($ticketRow->total_tickets ?? 0),
+                'openTickets'      => (int) ($ticketRow->open_tickets ?? 0),
+                'completedTickets' => (int) ($ticketRow->completed_tickets ?? 0),
+                'totalTodos'       => (int) ($todoRow->total_todos ?? 0),
+                'pendingTodos'     => (int) ($todoRow->pending_todos ?? 0),
+                'completedTodos'   => (int) ($todoRow->completed_todos ?? 0),
+                'linkedTodos'      => (int) ($linkedTodos->cnt ?? 0),
             ];
         });
 
-        // آمار امروز (حساس‌تر به زمان) — TTL 2 دقیقه
+        // Today stats — 1 consolidated query
         $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
-            $today = now()->startOfDay();
-            $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
-                ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))
+            $today = now()->startOfDay()->toDateTimeString();
+            $ids = implode(',', $accessibleIds);
+            $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+                ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
+            $userIdStr = $userIds ? implode(',', $userIds) : '0';
+
             return [
                 'todayTickets' => Ticket::whereIn('unit_id', $accessibleIds)
                     ->where('created_at', '>=', $today)->count(),
@@ -78,30 +117,31 @@ return new class extends Component {
             ];
         });
 
-        // آمار تفصیلی تیکت‌ها — TTL 3 دقیقه
+        // Ticket details — 1 consolidated query
         $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
+            $ids = implode(',', $accessibleIds);
             $diffExpr = match (DB::getDriverName()) {
                 'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
                 'sqlite' => 'julianday(completed_at) - julianday(created_at)',
                 default => 'DATEDIFF(completed_at, created_at)',
             };
+
+            $row = DB::selectOne("
+                SELECT
+                    COUNT(*) FILTER (WHERE priority = 'urgent' AND status IN ('created','forwarded')) AS urgent,
+                    COUNT(*) FILTER (WHERE priority = 'normal' AND status IN ('created','forwarded')) AS normal,
+                    COUNT(*) FILTER (WHERE priority = 'low' AND status IN ('created','forwarded')) AS low,
+                    COUNT(*) FILTER (WHERE status IN ('created','forwarded') AND deadline < NOW()) AS overdue,
+                    AVG(CASE WHEN status = 'completed' AND completed_at IS NOT NULL THEN {$diffExpr} END) AS avg_days
+                FROM tickets WHERE unit_id IN ({$ids})
+            ");
+
             return [
-                'urgentTickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->where('priority', 'urgent')
-                    ->whereIn('status', ['created', 'forwarded'])->count(),
-                'normalTickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->where('priority', 'normal')
-                    ->whereIn('status', ['created', 'forwarded'])->count(),
-                'lowTickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->where('priority', 'low')
-                    ->whereIn('status', ['created', 'forwarded'])->count(),
-                'overdueTickets' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->whereIn('status', ['created', 'forwarded'])
-                    ->where('deadline', '<', now())->count(),
-                'avgResolutionDays' => Ticket::whereIn('unit_id', $accessibleIds)
-                    ->where('status', 'completed')
-                    ->whereNotNull('completed_at')
-                    ->avg(DB::raw($diffExpr)) ?? 0,
+                'urgentTickets'    => (int) ($row->urgent ?? 0),
+                'normalTickets'    => (int) ($row->normal ?? 0),
+                'lowTickets'       => (int) ($row->low ?? 0),
+                'overdueTickets'   => (int) ($row->overdue ?? 0),
+                'avgResolutionDays' => (float) ($row->avg_days ?? 0),
             ];
         });
 

@@ -5,7 +5,6 @@ namespace App\Policies;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Services\AccessService;
-use Illuminate\Auth\Access\Response;
 
 class TicketCommentPolicy
 {
@@ -23,6 +22,7 @@ class TicketCommentPolicy
     public function view(User $user, TicketComment $comment): bool
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+
         return in_array($comment->ticket->unit_id, $accessibleIds);
     }
 
@@ -40,7 +40,7 @@ class TicketCommentPolicy
     public function update(User $user, TicketComment $comment): bool
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-        
+
         if (! in_array($comment->ticket->unit_id, $accessibleIds)) {
             return false;
         }
@@ -54,7 +54,7 @@ class TicketCommentPolicy
     public function delete(User $user, TicketComment $comment): bool
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-        
+
         if (! in_array($comment->ticket->unit_id, $accessibleIds)) {
             return false;
         }
@@ -68,7 +68,7 @@ class TicketCommentPolicy
     public function restore(User $user, TicketComment $comment): bool
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
-        
+
         if (! in_array($comment->ticket->unit_id, $accessibleIds)) {
             return false;
         }

@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 use App\Services\CacheInvalidationServiceInterface;
+use Illuminate\Console\Command;
 
 class PruneStaleCache extends Command
 {
     protected $signature = 'cache:prune-stale {--dry-run : Show what would be pruned without actually removing}';
+
     protected $description = 'Prune stale cache entries from expired versioned keys';
 
     public function handle(CacheInvalidationServiceInterface $cache): int
@@ -31,7 +31,7 @@ class PruneStaleCache extends Command
         if ($this->option('dry-run')) {
             $this->info('Dry run complete. No entries were removed.');
         } else {
-            $this->info("Cache prune check complete. Stale keys will expire via TTL.");
+            $this->info('Cache prune check complete. Stale keys will expire via TTL.');
         }
 
         return 0;

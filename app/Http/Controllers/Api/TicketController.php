@@ -69,7 +69,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
             'content' => 'required|string',
-            'priority' => 'required|in:urgent,high,normal,medium,low',
+            'priority' => 'required|in:low,normal,urgent',
             'unit_id' => 'required|exists:units,id',
             'deadline' => 'nullable|date',
         ]);
@@ -82,7 +82,7 @@ class TicketController extends Controller
 
         $ticket = Ticket::create([
             ...$validated,
-            'ticket_code' => 'T-' . strtoupper(Str::random(8)),
+            'ticket_code' => 'T-'.strtoupper(Str::random(8)),
             'user_id' => $request->user()->id,
             'status' => 'created',
         ]);

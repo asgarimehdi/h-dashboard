@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Models\Person::class);
+covers(Person::class);
 
 class PersonModelTest extends TestCase
 {
@@ -32,6 +32,7 @@ class PersonModelTest extends TestCase
     protected function createPerson(array $attrs = []): Person
     {
         $unit = Unit::firstOrCreate(['name' => 'واحد تست']);
+
         return Person::create(array_merge([
             'n_code' => (string) fake()->unique()->numerify('##########'),
             'f_name' => 'علی',

@@ -8,10 +8,10 @@ use App\Models\TicketComment;
 use App\Models\TicketCommentReaction;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 
 class TicketCommentController extends Controller
 {
@@ -268,14 +268,14 @@ class TicketCommentController extends Controller
     private function getThreadDepth(TicketComment $comment): int
     {
         $depth = DB::selectOne(
-            "WITH RECURSIVE cte AS (
+            'WITH RECURSIVE cte AS (
                 SELECT id, parent_id, 0 AS depth FROM ticket_comments WHERE id = ?
                 UNION ALL
                 SELECT tc.id, tc.parent_id, cte.depth + 1
                 FROM ticket_comments tc
                 INNER JOIN cte ON tc.id = cte.parent_id
             )
-            SELECT MAX(depth) AS max_depth FROM cte",
+            SELECT MAX(depth) AS max_depth FROM cte',
             [$comment->id]
         );
 
@@ -298,7 +298,7 @@ class TicketCommentController extends Controller
         }
 
         // Only allow http, https, mailto, tel
-        if (!preg_match('/^(https?|mailto|tel):/i', $url)) {
+        if (! preg_match('/^(https?|mailto|tel):/i', $url)) {
             return '#';
         }
 
@@ -321,13 +321,14 @@ class TicketCommentController extends Controller
             // Issue #425: URL goes through sanitizeUrl() which strips any character that could
             // break out of the href="..." attribute (quotes, angle brackets, control chars).
             // Note: $body is e()-escaped before this, so this is an extra defense-in-depth layer.
-            fn($m) => '<a href="' . $this->sanitizeUrl($m[2]) . '" target="_blank" rel="noopener">' . $m[1] . '</a>',
+            fn ($m) => '<a href="'.$this->sanitizeUrl($m[2]).'" target="_blank" rel="noopener">'.$m[1].'</a>',
             $html
         );
         $html = preg_replace('/^> (.+)$/m', '<blockquote>$1</blockquote>', $html);
         $html = preg_replace('/^- (.+)$/m', '<li>$1</li>', $html);
         $html = preg_replace('/(<li>.*<\/li>)/s', '<ul>$1</ul>', $html);
         $html = nl2br($html);
+
         return $html;
     }
 
@@ -338,7 +339,7 @@ class TicketCommentController extends Controller
     {
         preg_match_all('/@(\w+)/', $body, $matches);
         $usernames = array_unique($matches[1] ?? []);
-        
+
         if (empty($usernames)) {
             return [];
         }
@@ -352,9 +353,11 @@ class TicketCommentController extends Controller
     private function notifyMentions(array $mentions, TicketComment $comment, User $author): void
     {
         foreach ($mentions as $username => $userId) {
-            if ($userId === $author->id) continue;
+            if ($userId === $author->id) {
+                continue;
+            }
 
-            \App\Services\NotificationService::send(
+            NotificationService::send(
                 $userId,
                 'mention',
                 "شما در یک نظر به تیکت {$comment->ticket->ticket_code} منشن شدید",
@@ -371,7 +374,7 @@ class TicketCommentController extends Controller
      */
     private function notifyReply(TicketComment $parentComment, TicketComment $reply, User $author): void
     {
-        \App\Services\NotificationService::send(
+        NotificationService::send(
             $parentComment->user_id,
             'reply',
             "{$author->n_code} به نظر شما در تیکت {$reply->ticket->ticket_code} پاسخ داد",
@@ -387,7 +390,9 @@ class TicketCommentController extends Controller
      */
     private function notifyReaction(TicketComment $comment, User $reactor, string $reaction): void
     {
-        if ($comment->user_id === $reactor->id) return;
+        if ($comment->user_id === $reactor->id) {
+            return;
+        }
 
         $emojiMap = [
             '+1' => '👍',
@@ -400,7 +405,7 @@ class TicketCommentController extends Controller
 
         $emoji = $emojiMap[$reaction] ?? $reaction;
 
-        \App\Services\NotificationService::send(
+        NotificationService::send(
             $comment->user_id,
             'reaction',
             "{$reactor->n_code} واکنش {$emoji} را به نظر شما در تیکت {$comment->ticket->ticket_code} اضافه کرد",

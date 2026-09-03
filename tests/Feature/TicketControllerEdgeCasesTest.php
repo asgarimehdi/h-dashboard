@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\TicketController;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
@@ -15,7 +16,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\TicketController::class);
+covers(TicketController::class);
 
 class TicketControllerEdgeCasesTest extends TestCase
 {

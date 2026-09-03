@@ -14,18 +14,24 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Models\HardwareAudit::class);
+covers(HardwareAudit::class);
 
 class HardwareAuditObserverTest extends TestCase
 {
     use RefreshDatabase;
 
     protected $tId;
+
     protected $eId;
+
     protected $sId;
+
     protected $rId;
+
     protected $unit;
+
     protected $user;
+
     protected $hardware;
 
     protected function setUp(): void

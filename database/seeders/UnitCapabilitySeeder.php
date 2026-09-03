@@ -13,7 +13,7 @@ class UnitCapabilitySeeder extends Seeder
             ->whereBetween('id', [1, 10])
             ->update([
                 'can_receive_tickets' => true,
-                'updated_at' => now(), 
+                'updated_at' => now(),
             ]);
     }
 }

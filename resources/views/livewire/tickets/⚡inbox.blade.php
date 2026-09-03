@@ -270,10 +270,22 @@ new class extends Component
                 TaskActivity::insert($activityRows);
 
                 // ActivityLogService - با استفاده از وضعیت قبل از آپدیت
-                $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status']);
+                $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status', 'task_id']);
+                $completedTaskIds = $tickets->pluck('task_id')->filter()->unique();
+
                 foreach ($tickets as $ticket) {
                     $oldStatus = $oldStatuses->get($ticket->id, $ticket->status);
                     \App\Services\ActivityLogService::updated($ticket, ['status' => $oldStatus], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
+                }
+
+                // Plan 005: Auto-complete parent tasks where all child tickets are completed
+                foreach ($completedTaskIds as $taskId) {
+                    $incompleteCount = Ticket::where('task_id', $taskId)
+                        ->where('status', '!=', 'completed')
+                        ->count();
+                    if ($incompleteCount === 0) {
+                        \App\Models\Todo::where('id', $taskId)->update(['is_completed' => true]);
+                    }
                 }
             }
 
@@ -398,10 +410,33 @@ new class extends Component
     public function acceptTicket($ticketId): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($ticketId);
-        
-        DB::transaction(function () use ($ticket) {
+
+        // Capture old status BEFORE any changes (Plan 003: dynamic, not hardcoded)
+        $oldStatus = $ticket->status;
+
+        // Plan 002: Only allow accepting from 'created' or 'forwarded' status
+        if ($oldStatus !== 'created' && $oldStatus !== 'forwarded') {
+            $this->dispatch('swal', [
+                'title' => 'تیکت قبلاً پذیرفته شده است',
+                'icon' => 'warning',
+            ]);
+            return;
+        }
+
+        DB::transaction(function () use ($ticket, $oldStatus) {
+            // Plan 002: Pessimistic lock to prevent concurrent accept
+            $locked = DB::select('SELECT id, status FROM tickets WHERE id = ? FOR UPDATE', [$ticket->id]);
+
+            if ($locked[0]->status !== $oldStatus) {
+                $this->dispatch('swal', [
+                    'title' => 'تیکت قبلاً پذیرفته شده است',
+                    'icon' => 'warning',
+                ]);
+                return;
+            }
+
             $ticket->update([
                 'status' => 'accepted',
                 'current_assignee_id' => auth()->id(),
@@ -411,17 +446,17 @@ new class extends Component
             $ticket->activities()->create([
                 'user_id' => auth()->id(),
                 'action' => 'accepted',
-                'description' => 'تیکت توسط کارشناس تایید شد و مسئولیت آن پذیرفته شد.'
+                'description' => 'تیکت توسط کارشناس تایید شد و مسئولیت آن پذیرفته شد.',
             ]);
-        });
 
-        // ثبت فعالیت
-        \App\Services\ActivityLogService::updated(
-            $ticket,
-            ['status' => 'created'],
-            ['status' => 'accepted'],
-            "پذیرش تیکت {$ticket->ticket_code}"
-        );
+            // Plan 003: Use dynamic old status, not hardcoded 'created'
+            \App\Services\ActivityLogService::updated(
+                $ticket,
+                ['status' => $oldStatus],
+                ['status' => 'accepted'],
+                "پذیرش تیکت {$ticket->ticket_code}"
+            );
+        });
 
         $this->dispatch('swal', ['title' => 'تیکت پذیرفته شد', 'icon' => 'success']);
         $this->closeDetail();

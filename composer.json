@@ -18,6 +18,7 @@
         "maatwebsite/excel": "^4.0",
         "morilog/jalali": "3.5",
         "robsontenorio/mary": "^2.8.1",
+        "sentry/sentry-laravel": "^4.27",
         "spatie/laravel-permission": "^8.0"
     },
     "require-dev": {
@@ -29,7 +30,8 @@
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "pestphp/pest": "^4.7",
-        "pestphp/pest-plugin-laravel": "^4.1"
+        "pestphp/pest-plugin-laravel": "^4.1",
+        "phpstan/phpstan": "^2.2"
     },
     "autoload": {
         "psr-4": {
@@ -68,7 +70,12 @@
             "php artisan config:clear",
             "php artisan route:clear",
             "XDEBUG_MODE=off php artisan test"
-        ]
+        ],
+        "phpstan": "phpstan analyse --no-progress",
+        "phpstan-baseline": "phpstan analyse --generate-baseline",
+        "pint": "pint --dirty --format agent",
+        "pint:test": "pint --test",
+        "pint:fix": "pint"
     },
     "extra": {
         "laravel": {

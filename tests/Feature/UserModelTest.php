@@ -10,9 +10,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-covers(\App\Models\User::class);
+covers(User::class);
 
 class UserModelTest extends TestCase
 {
@@ -74,7 +75,7 @@ class UserModelTest extends TestCase
         $this->assertCount(2, $user->units);
     }
 
-    public function test_user_primaryUnit_returns_primary_unit(): void
+    public function test_user_primary_unit_returns_primary_unit(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithPerson();
         $secondUnit = Unit::create(['name' => 'واحد دوم']);
@@ -83,7 +84,7 @@ class UserModelTest extends TestCase
         $this->assertEquals($unit->id, $user->primaryUnit()->id);
     }
 
-    public function test_user_primaryUnit_returns_null_when_no_primary(): void
+    public function test_user_primary_unit_returns_null_when_no_primary(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithPerson();
         // Detach existing unit and re-attach without primary
@@ -141,14 +142,14 @@ class UserModelTest extends TestCase
 
     // --- unitName accessor ---
 
-    public function test_user_unitName_returns_person_unit_name(): void
+    public function test_user_unit_name_returns_person_unit_name(): void
     {
         ['user' => $user] = $this->createUserWithPerson();
 
         $this->assertEquals('واحد تست', $user->unit_name);
     }
 
-    public function test_user_unitName_returns_dash_when_no_person(): void
+    public function test_user_unit_name_returns_dash_when_no_person(): void
     {
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
@@ -192,7 +193,7 @@ class UserModelTest extends TestCase
     public function test_user_can_be_assigned_role(): void
     {
         ['user' => $user] = $this->createUserWithPerson();
-        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
 
         $user->assignRole('admin');
 

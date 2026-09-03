@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\HardwareController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -9,10 +10,9 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\HardwareController::class);
+covers(HardwareController::class);
 
 class LogoutTest extends TestCase
 {

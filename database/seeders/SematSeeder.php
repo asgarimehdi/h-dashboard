@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Semat;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class SematSeeder extends Seeder

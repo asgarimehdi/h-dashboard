@@ -113,7 +113,7 @@ new class extends Component
             'content' => 'required|string|min:10',
         ]);
 
-        $ticketCode = 'TK-' . strtoupper(substr(uniqid(), -6));
+        $ticketCode = 'TK-' . strtoupper(Str::random(8));
 
         $ticket = Ticket::create([
             'ticket_code' => $ticketCode,

@@ -2,14 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\GenerateDailyReports;
 use App\Models\DailyReport;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
-covers(\App\Console\Commands\GenerateDailyReports::class);
+covers(GenerateDailyReports::class);
 
 class GenerateDailyReportsCommandTest extends TestCase
 {
@@ -19,7 +21,7 @@ class GenerateDailyReportsCommandTest extends TestCase
     {
         $unit = Unit::create(['name' => 'Ward A']);
         Ticket::create([
-            'ticket_code' => 'T-'.strtoupper(\Illuminate\Support\Str::random(8)),
+            'ticket_code' => 'T-'.strtoupper(Str::random(8)),
             'subject' => 't',
             'content' => 'c',
             'status' => 'created',

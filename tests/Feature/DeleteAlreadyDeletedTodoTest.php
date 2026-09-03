@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\TodoController;
 use App\Models\Person;
 use App\Models\Todo;
 use App\Models\Unit;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\TodoController::class);
+covers(TodoController::class);
 
 class DeleteAlreadyDeletedTodoTest extends TestCase
 {

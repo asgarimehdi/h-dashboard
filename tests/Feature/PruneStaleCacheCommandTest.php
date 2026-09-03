@@ -2,11 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\PruneStaleCache;
 use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-covers(\App\Console\Commands\PruneStaleCache::class);
+covers(PruneStaleCache::class);
 
 class PruneStaleCacheCommandTest extends TestCase
 {

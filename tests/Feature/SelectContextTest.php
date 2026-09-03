@@ -7,11 +7,10 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Models\Unit::class);
+covers(Unit::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

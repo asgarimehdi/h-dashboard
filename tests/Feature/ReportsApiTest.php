@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\ReportController;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\ReportController::class);
+covers(ReportController::class);
 
 class ReportsApiTest extends TestCase
 {

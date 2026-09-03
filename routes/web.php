@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\HardwareExportController;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Route;
 
@@ -10,13 +11,13 @@ Route::livewire('/login', 'auth.login')->name('login');
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
-    Route::get('/hardware/export', [\App\Http\Controllers\Api\HardwareExportController::class, 'export'])->name('hardware.export');
+    Route::get('/hardware/export', [HardwareExportController::class, 'export'])->name('hardware.export');
 });
 
 // Volt::route('/login', 'auth.login')->name('login');
 // Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
-Route::get('/logout', function () {
+Route::post('/logout', function () {
     $userId = Auth::id();
     $userName = Auth::user()?->name ?? 'نامشخص';
 
@@ -31,7 +32,7 @@ Route::get('/logout', function () {
     request()->session()->regenerateToken();
 
     return redirect('/');
-});
+})->name('logout');
 
 // Test route for SafeRoleOrPermission middleware
 if (app()->isLocal() || app()->environment('testing')) {

@@ -2,13 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\SyncZabbix;
 use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
-covers(\App\Console\Commands\SyncZabbix::class);
+covers(SyncZabbix::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

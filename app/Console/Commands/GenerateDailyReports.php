@@ -49,6 +49,7 @@ class GenerateDailyReports extends Command
 
             if ($dryRun) {
                 $this->line("  [dry-run] {$summary}");
+
                 continue;
             }
 
