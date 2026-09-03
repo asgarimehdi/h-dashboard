@@ -68,10 +68,10 @@ Independent of code changes; can be parallelized.
 | Plan | Finding | Category | Status | Depends on |
 |------|---------|----------|--------|------------|
 | [024](PLAN-024-add-phpstan-level-6.md) | No static analysis configured | DX | ✅ DONE | — |
-| [025](PLAN-025-enforce-pint-ci-precommit.md) | Pint not enforced in CI or pre-commit | DX | ⚠️ PARTIAL | — |
+| [025](PLAN-025-enforce-pint-ci-precommit.md) | Pint not enforced in CI or pre-commit | DX | ✅ DONE | — |
 | [026](PLAN-026-gate-deploy-on-tests.md) | Deploy doesn't gate on tests | DX | ✅ DONE | — |
 | [027](PLAN-027-rewrite-readme-bilingual.md) | README Persian-only, broken references | Docs | ✅ DONE | — |
-| [028](PLAN-028-add-sentry-error-tracking.md) | No error tracking in production | DX | ⚠️ PARTIAL | — |
+| [028](PLAN-028-add-sentry-error-tracking.md) | No error tracking in production | DX | ✅ DONE | — |
 
 ---
 
@@ -79,14 +79,12 @@ Independent of code changes; can be parallelized.
 
 | Status | Count | Plans |
 |--------|-------|-------|
-| ✅ DONE | 30 | 001–006, 007–012, 013–019, 020, 021, 022, 024, 026, 027, 029 |
-| ⚠️ PARTIAL | 3 | 023, 025, 028 |
+| ✅ DONE | 32 | 001–006, 007–012, 013–022, 024–029 |
+| ⚠️ PARTIAL | 1 | 023 |
 | 🚫 REJECTED | 0 | — |
 
 ------|-----|
 | **023** Decompose hardware/index | Sub-components created (filters, table, trash-modal, audit-modal) but parent `index.blade.php` still 1103 lines — not fully refactored. |
-| **025** Enforce Pint pre-commit | CI lint ✅, script exists ✅ — but `.git/hooks/pre-commit` symlink never installed on developer machines. |
-| **028** Sentry error tracking | Package + config + env present — `Integration::handles()` registered in bootstrap/app.php. Only gap: DSN may not be set in production env. |
 
 ---
 
