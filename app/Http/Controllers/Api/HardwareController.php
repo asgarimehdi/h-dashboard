@@ -271,7 +271,7 @@ class HardwareController extends Controller
 
     public function bulkMark(UnitScopedRequest $request): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
             'mark' => 'required|boolean',
@@ -281,12 +281,12 @@ class HardwareController extends Controller
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
-            ->whereIn('hardwares.id', $request->ids)
+            ->whereIn('hardwares.id', $validated['ids'])
             ->whereIn('persons.u_id', $accessibleIds)
             ->select('hardwares.*')
             ->get();
 
-        if ($hardwares->count() !== count($request->ids)) {
+        if ($hardwares->count() !== count($validated['ids'])) {
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
@@ -297,14 +297,14 @@ class HardwareController extends Controller
         try {
             // Single update query on the verified IDs
             $count = Hardware::whereIn('id', $accessibleHardwareIds)
-                ->update(['mark' => $request->mark]);
+                ->update(['mark' => $validated['mark']]);
         } finally {
             Hardware::$suppressAudit = false;
         }
 
         // Batch insert audit entries
         $this->batchInsertAudits($hardwares, 'bulk_mark', [
-            ['field' => 'mark', 'old' => ! $request->mark, 'new' => $request->mark],
+            ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
         ]);
 
         event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
@@ -315,7 +315,7 @@ class HardwareController extends Controller
 
     public function bulkDelete(UnitScopedRequest $request): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
@@ -324,12 +324,12 @@ class HardwareController extends Controller
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
-            ->whereIn('hardwares.id', $request->ids)
+            ->whereIn('hardwares.id', $validated['ids'])
             ->whereIn('persons.u_id', $accessibleIds)
             ->select('hardwares.*')
             ->get();
 
-        if ($hardwares->count() !== count($request->ids)) {
+        if ($hardwares->count() !== count($validated['ids'])) {
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
