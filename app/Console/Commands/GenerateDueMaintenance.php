@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\MaintenanceSchedule;
 use App\Models\Ticket;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 
 class GenerateDueMaintenance extends Command
 {
@@ -57,11 +58,12 @@ class GenerateDueMaintenance extends Command
                     'last_generated_at' => now(),
                     'next_due_at' => $next,
                 ]);
+
                 continue;
             }
 
             $ticket = Ticket::create([
-                'ticket_code' => 'T-'.strtoupper(\Illuminate\Support\Str::random(8)),
+                'ticket_code' => 'T-'.strtoupper(Str::random(8)),
                 'subject' => $schedule->title,
                 'content' => 'Generated from maintenance schedule #'.$schedule->id,
                 'status' => 'created',

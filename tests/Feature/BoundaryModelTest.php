@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Boundary;
+use App\Models\Person;
 use App\Models\Region;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
@@ -10,7 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-covers(\App\Models\Boundary::class);
+covers(Boundary::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
@@ -159,7 +160,7 @@ test('scopeWithPersonnelCount counts personnel per unit', function () {
     $unit = Unit::create(['name' => 'پرنفر', 'boundary_id' => $b->id]);
 
     foreach (['2222222222', '3333333333'] as $i => $n) {
-        \App\Models\Person::create([
+        Person::create([
             'n_code' => $n, 'f_name' => 'الف'.$i, 'l_name' => 'ب',
             'u_id' => $unit->id, 's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
         ]);

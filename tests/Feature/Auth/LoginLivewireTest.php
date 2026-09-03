@@ -2,6 +2,12 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Http\Controllers\Api\HardwareController;
+use App\Models\Estekhdam;
+use App\Models\Person;
+use App\Models\Radif;
+use App\Models\Semat;
+use App\Models\Tahsil;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +23,7 @@ use Tests\TestCase;
  * (session regenerate + redirect + activity log), invalid credentials,
  * validation errors, and the rate-limit lockout branch.
  */
-covers(\App\Http\Controllers\Api\HardwareController::class);
+covers(HardwareController::class);
 
 class LoginLivewireTest extends TestCase
 {
@@ -33,14 +39,14 @@ class LoginLivewireTest extends TestCase
     protected function makeUser(string $nCode = '1234567890', string $password = 'secret123'): User
     {
         // users.n_code has a FK to persons.n_code -> create the person first.
-        \App\Models\Person::create([
+        Person::create([
             'n_code' => $nCode,
             'f_name' => 'کاربر',
             'l_name' => 'تستی',
-            't_id' => \App\Models\Tahsil::create(['name' => 'T-'.$nCode])->id,
-            'e_id' => \App\Models\Estekhdam::create(['name' => 'E-'.$nCode])->id,
-            's_id' => \App\Models\Semat::create(['name' => 'S-'.$nCode])->id,
-            'r_id' => \App\Models\Radif::create(['name' => 'R-'.$nCode])->id,
+            't_id' => Tahsil::create(['name' => 'T-'.$nCode])->id,
+            'e_id' => Estekhdam::create(['name' => 'E-'.$nCode])->id,
+            's_id' => Semat::create(['name' => 'S-'.$nCode])->id,
+            'r_id' => Radif::create(['name' => 'R-'.$nCode])->id,
             'u_id' => 1, // not enforced for login
         ]);
 

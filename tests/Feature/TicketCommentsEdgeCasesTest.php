@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\TicketCommentController;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -12,18 +13,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\TicketCommentController::class);
+covers(TicketCommentController::class);
 
 class TicketCommentsEdgeCasesTest extends TestCase
 {
     use RefreshDatabase;
 
     protected $unit;
+
     protected $user;
+
     protected $ticket;
 
     protected function setUp(): void
@@ -161,7 +162,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
             'body' => 'Old comment',
         ]);
         // Simulate the comment being 20 minutes old directly in the DB.
-        \Illuminate\Support\Facades\DB::table('ticket_comments')
+        DB::table('ticket_comments')
             ->where('id', $comment->id)
             ->update(['created_at' => now()->subMinutes(20), 'updated_at' => now()->subMinutes(20)]);
 

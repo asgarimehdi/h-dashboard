@@ -5,6 +5,7 @@ namespace Database\Seeders;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 class PermissionSeeder extends Seeder
@@ -41,7 +42,7 @@ class PermissionSeeder extends Seeder
         // The admin ROLE — tests (TicketApiTest, TicketCommentPolicyTest, ...)
         // each had to firstOrCreate it; centralizing here keeps that convention
         // in one place. Permissions are synced by RoleSeeder.
-        \Spatie\Permission\Models\Role::firstOrCreate(
+        Role::firstOrCreate(
             ['name' => 'admin', 'guard_name' => 'web'],
             ['label' => 'مدیر سیستم']
         );

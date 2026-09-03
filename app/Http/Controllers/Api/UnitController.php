@@ -56,7 +56,7 @@ class UnitController extends Controller
 
         // Check organizational scope for parent_id and region_id
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-        
+
         if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
         }
@@ -94,7 +94,7 @@ class UnitController extends Controller
 
         // Check organizational scope for parent_id
         $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-        
+
         if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
         }

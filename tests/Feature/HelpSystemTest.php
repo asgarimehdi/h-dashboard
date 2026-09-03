@@ -3,14 +3,15 @@
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\View\Components\AppBrand;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-covers(\App\View\Components\AppBrand::class);
+covers(AppBrand::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

@@ -1,0 +1,283 @@
+# Plan 026: Gate deploy.yml on Passing Tests
+
+> **Branch:** tannaz · **Planned at:** cf3cf9c · **Date:** 2026-09-02
+
+## Problem
+
+The `deploy.yml` workflow runs on every push to `main` with only a PHP syntax check — no test gate. This means broken code can be deployed to production.
+
+### Current Code (Bug)
+
+**File:** `.github/workflows/deploy.yml`
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# ...
+
+jobs:
+  deploy:
+    name: Deploy Production
+    runs-on: self-hosted
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://h-dashboard.ir
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PHP syntax
+        run: find app bootstrap config routes src -name "*.php" -exec php -l {} \;
+```
+
+The only quality gate is `php -l` (syntax check). No Pest tests, no Pint, no PHPStan.
+
+### Current test.yml
+
+**File:** `.github/workflows/test.yml`
+
+```yaml
+name: Tests
+
+on:
+  pull_request:
+    branches: [main, beta, test]
+```
+
+Tests only run on PRs, not on push to main. A direct push to main (or merged PR) bypasses tests.
+
+---
+
+## Solution
+
+Two changes:
+1. Add `needs: [test]` to the deploy job, making it depend on a test job in the same workflow.
+2. Add a `test` job to `deploy.yml` that runs the full test suite.
+
+### Changes
+
+**File:** `.github/workflows/deploy.yml`
+
+Replace the entire file with:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          coverage: pcov
+          tools: composer:latest
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for testing
+        run: |
+          cp .env.example .env.testing
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/' .env.testing
+          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+
+      - name: Generate application key
+        run: php artisan key:generate --env=testing
+
+      - name: Run migrations
+        run: php artisan migrate --env=testing --force
+
+      - name: Clear cached config/routes
+        run: |
+          php artisan config:clear --env=testing
+          php artisan route:clear --env=testing
+
+      - name: Run tests
+        run: ./vendor/bin/pest --parallel
+
+  deploy:
+    name: Deploy Production
+    needs: [test]
+    runs-on: self-hosted
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://h-dashboard.ir
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PHP syntax
+        run: find app bootstrap config routes src -name "*.php" -exec php -l {} \;
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction
+
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: npm-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Node dependencies & build frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Clear Laravel caches
+        run: |
+          php artisan view:clear
+          php artisan config:clear
+          php artisan route:clear
+          php artisan cache:clear
+
+      - name: Optimize Laravel
+        run: |
+          php artisan optimize
+          php artisan optimize:queues
+
+      - name: Run pending migrations
+        run: php artisan migrate --force --no-interaction
+
+      - name: Reload Apache
+        run: sudo systemctl reload apache2
+
+      - name: Verify deployment
+        run: curl -f https://h-dashboard.ir/health || exit 1
+        continue-on-error: true
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed"
+          exit 1
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Deployment successful"
+```
+
+### Key Change
+
+```yaml
+deploy:
+  needs: [test]  # ← NEW: won't run until test job passes
+```
+
+This is the standard GitHub Actions pattern for gating a deploy on tests.
+
+---
+
+## Verification
+
+1. **Syntax check the workflow:**
+   ```bash
+   cat .github/workflows/deploy.yml | grep 'needs:'
+   ```
+   Expected: `needs: [test]` present under deploy job.
+
+2. **Push to main:**
+   - The test job runs first
+   - Deploy job waits for test job to pass
+   - If test fails, deploy is skipped
+
+3. **Manual deploy (workflow_dispatch):**
+   - Even manual triggers run tests first
+   - Tests must pass before deploy proceeds
+
+---
+
+## STOP Conditions
+
+- If the self-hosted runner can't run tests (different environment than ubuntu-latest), simplify the test job to only run syntax checks on self-hosted and full tests on ubuntu-latest.
+- If the test job significantly delays deployment (>10 minutes), consider using reusable workflows or caching.
+
+---
+
+## Out of Scope
+
+- Adding Pint/PHPStan checks to deploy workflow (covered in Plans 024-025).
+- Adding automatic rollback on failed deployment.
+- Adding deployment notifications (Slack, email).
+- Caching Redis service in deploy test job (tests use array cache).
+
+---
+
+## Test Plan
+
+| # | Test | Expected |
+|---|------|----------|
+| 1 | `grep -A2 'deploy:' .github/workflows/deploy.yml \| grep needs` | `needs: [test]` |
+| 2 | Push broken code to main | test job fails → deploy skipped |
+| 3 | Push passing code to main | test passes → deploy runs |
+| 4 | workflow_dispatch with failing tests | Deploy doesn't run |
+
+---
+
+## Maintenance Notes
+
+- **Concurrency:** The `cancel-in-progress: false` prevents cancelling an in-progress deploy. This is intentional for production safety.
+- **Test duplication:** The test job in deploy.yml mirrors test.yml. Consider using GitHub Actions' `workflow_call` to reuse test.yml as a reusable workflow to avoid duplication.
+- **Self-hosted runner:** The deploy job still runs on self-hosted. Tests run on ubuntu-latest (GitHub-hosted) for speed and isolation.

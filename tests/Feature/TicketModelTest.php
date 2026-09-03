@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Person;
+use App\Models\TaskActivity;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -12,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Models\Ticket::class);
+covers(Ticket::class);
 
 class TicketModelTest extends TestCase
 {
@@ -153,7 +155,7 @@ class TicketModelTest extends TestCase
     public function test_waiting_duration_between_24_and_48_hours(): void
     {
         ['ticket' => $ticket] = $this->createTicketWithRelations();
-        \Illuminate\Support\Facades\DB::table('tickets')
+        DB::table('tickets')
             ->where('id', $ticket->id)
             ->update(['created_at' => now()->subHours(30)]);
         $ticket->refresh();
@@ -167,7 +169,7 @@ class TicketModelTest extends TestCase
     public function test_waiting_duration_more_than_48_hours(): void
     {
         ['ticket' => $ticket] = $this->createTicketWithRelations();
-        \Illuminate\Support\Facades\DB::table('tickets')
+        DB::table('tickets')
             ->where('id', $ticket->id)
             ->update(['created_at' => now()->subHours(72)]);
         $ticket->refresh();
@@ -201,7 +203,7 @@ class TicketModelTest extends TestCase
     {
         ['ticket' => $ticket, 'user' => $user] = $this->createTicketWithRelations();
 
-        \App\Models\TaskActivity::create([
+        TaskActivity::create([
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'action' => 'created',
@@ -215,7 +217,7 @@ class TicketModelTest extends TestCase
     {
         ['ticket' => $ticket, 'user' => $user] = $this->createTicketWithRelations();
 
-        \App\Models\TicketComment::create([
+        TicketComment::create([
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'body' => 'نظر تست',

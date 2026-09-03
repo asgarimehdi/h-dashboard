@@ -2,13 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Models\User;
 use App\Services\ZabbixService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\MultiLatestValueController::class);
+covers(MultiLatestValueController::class);
 
 class MultiLatestValueControllerTest extends TestCase
 {

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Person;
+use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-covers(\App\Models\Ticket::class);
+covers(Ticket::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

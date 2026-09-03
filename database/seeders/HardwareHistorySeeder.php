@@ -65,6 +65,7 @@ class HardwareHistorySeeder extends Seeder
             if (! $hardware) {
                 // Device not seeded (e.g. filtered out) — skip silently.
                 $skipped++;
+
                 continue;
             }
 

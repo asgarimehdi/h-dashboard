@@ -12,9 +12,10 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-covers(\App\Models\TicketComment::class);
+covers(TicketComment::class);
 
 class TicketCommentModelTest extends TestCase
 {
@@ -48,6 +49,7 @@ class TicketCommentModelTest extends TestCase
     protected function createTicket(): Ticket
     {
         $user = $this->createUserWithUnit();
+
         return Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $user->id,
@@ -232,7 +234,7 @@ class TicketCommentModelTest extends TestCase
 
     // --- canBeEditedBy ---
 
-    public function test_canBeEditedBy_author_within_15_minutes(): void
+    public function test_can_be_edited_by_author_within_15_minutes(): void
     {
         $ticket = $this->createTicket();
         $user = User::first();
@@ -246,7 +248,7 @@ class TicketCommentModelTest extends TestCase
         $this->assertTrue($comment->canBeEditedBy($user));
     }
 
-    public function test_cannotBeEditedBy_different_user(): void
+    public function test_cannot_be_edited_by_different_user(): void
     {
         $ticket = $this->createTicket();
         $user = User::first();
@@ -268,7 +270,7 @@ class TicketCommentModelTest extends TestCase
         $this->assertFalse($comment->canBeEditedBy($otherUser));
     }
 
-    public function test_cannotBeEditedBy_author_after_15_minutes(): void
+    public function test_cannot_be_edited_by_author_after_15_minutes(): void
     {
         $ticket = $this->createTicket();
         $user = User::first();
@@ -278,7 +280,7 @@ class TicketCommentModelTest extends TestCase
             'user_id' => $user->id,
             'body' => 'نظر تست',
         ]);
-        \Illuminate\Support\Facades\DB::table('ticket_comments')
+        DB::table('ticket_comments')
             ->where('id', $comment->id)
             ->update(['created_at' => now()->subMinutes(20)]);
         $comment->refresh();
@@ -288,7 +290,7 @@ class TicketCommentModelTest extends TestCase
 
     // --- canBeDeletedBy ---
 
-    public function test_canBeDeletedBy_author(): void
+    public function test_can_be_deleted_by_author(): void
     {
         $ticket = $this->createTicket();
         $user = User::first();
@@ -302,12 +304,12 @@ class TicketCommentModelTest extends TestCase
         $this->assertTrue($comment->canBeDeletedBy($user));
     }
 
-    public function test_canBeDeletedBy_admin(): void
+    public function test_can_be_deleted_by_admin(): void
     {
         $ticket = $this->createTicket();
         $user = User::first();
 
-        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $user->assignRole('admin');
 
         $nCode2 = (string) fake()->unique()->numerify('##########');
@@ -327,7 +329,7 @@ class TicketCommentModelTest extends TestCase
         $this->assertTrue($comment->canBeDeletedBy($user));
     }
 
-    public function test_cannotBeDeletedBy_regular_user(): void
+    public function test_cannot_be_deleted_by_regular_user(): void
     {
         $ticket = $this->createTicket();
         $user = User::first();

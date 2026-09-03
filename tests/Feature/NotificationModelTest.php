@@ -8,11 +8,12 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Models\Notification::class);
+covers(Notification::class);
 
 class NotificationModelTest extends TestCase
 {
@@ -61,7 +62,7 @@ class NotificationModelTest extends TestCase
 
     public function test_notification_is_not_auto_incrementing(): void
     {
-        $notification = new Notification();
+        $notification = new Notification;
 
         $this->assertFalse($notification->getIncrementing());
         $this->assertEquals('string', $notification->getKeyType());
@@ -85,7 +86,7 @@ class NotificationModelTest extends TestCase
 
     // --- markAsRead ---
 
-    public function test_markAsRead_sets_is_read_and_read_at(): void
+    public function test_mark_as_read_sets_is_read_and_read_at(): void
     {
         $user = $this->createUserWithUnit();
         $notification = Notification::create([
@@ -104,7 +105,7 @@ class NotificationModelTest extends TestCase
 
     // --- markAllAsRead ---
 
-    public function test_markAllAsRead_marks_all_unread_for_current_user(): void
+    public function test_mark_all_as_read_marks_all_unread_for_current_user(): void
     {
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
@@ -121,7 +122,7 @@ class NotificationModelTest extends TestCase
         $this->assertEquals(0, Notification::where('user_id', $user->id)->where('is_read', false)->count());
     }
 
-    public function test_markAllAsRead_does_not_affect_other_users(): void
+    public function test_mark_all_as_read_does_not_affect_other_users(): void
     {
         $user1 = $this->createUserWithUnit();
         $this->actingAs($user1);
@@ -145,7 +146,7 @@ class NotificationModelTest extends TestCase
         $this->assertEquals(1, Notification::where('user_id', $user2->id)->where('is_read', false)->count());
     }
 
-    public function test_markAllAsRead_does_not_mark_already_read(): void
+    public function test_mark_all_as_read_does_not_mark_already_read(): void
     {
         $user = $this->createUserWithUnit();
         $this->actingAs($user);
@@ -227,6 +228,6 @@ class NotificationModelTest extends TestCase
             'read_at' => now(),
         ]);
 
-        $this->assertInstanceOf(\Illuminate\Support\Carbon::class, $notification->read_at);
+        $this->assertInstanceOf(Carbon::class, $notification->read_at);
     }
 }

@@ -27,7 +27,7 @@ class NormalizePersianText extends Command
                 $fields = ['pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type', 'switch', 'vlan', 'motherboard', 'comments'];
 
                 foreach ($fields as $field) {
-                    if (!empty($hardware->$field) && is_string($hardware->$field)) {
+                    if (! empty($hardware->$field) && is_string($hardware->$field)) {
                         $normalized = PersianNormalizer::normalize($hardware->$field);
                         if ($normalized !== $hardware->$field) {
                             $hardware->$field = $normalized;
@@ -54,7 +54,7 @@ class NormalizePersianText extends Command
                 $fields = ['f_name', 'l_name'];
 
                 foreach ($fields as $field) {
-                    if (!empty($person->$field) && is_string($person->$field)) {
+                    if (! empty($person->$field) && is_string($person->$field)) {
                         $normalized = PersianNormalizer::normalize($person->$field);
                         if ($normalized !== $person->$field) {
                             $person->$field = $normalized;

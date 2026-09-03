@@ -2,28 +2,24 @@
 
 namespace Tests\Feature;
 
-use App\Models\Estekhdam;
-use App\Models\Person;
-use App\Models\Radif;
-use App\Models\Semat;
-use App\Models\Tahsil;
+use App\Imports\HardwareImport;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use PHPUnit\Framework\Assert;
 use ReflectionMethod;
 use Tests\TestCase;
 
-covers(\App\Imports\HardwareImport::class);
+covers(HardwareImport::class);
 
 class ImportLivewireComponentTest extends TestCase
 {
     use RefreshDatabase;
 
     protected $user;
+
     protected $unit;
 
     protected function setUp(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\GenerateDueMaintenance;
 use App\Models\MaintenanceSchedule;
 use App\Models\Ticket;
 use App\Models\Unit;
@@ -9,7 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-covers(\App\Console\Commands\GenerateDueMaintenance::class);
+covers(GenerateDueMaintenance::class);
 
 class GenerateDueMaintenanceCommandTest extends TestCase
 {

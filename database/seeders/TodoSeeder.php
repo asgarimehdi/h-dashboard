@@ -81,7 +81,7 @@ class TodoSeeder extends Seeder
         while ($todosCreated < $totalTodos) {
             $day = rand(0, 27); // First 28 days of month
             $date = $startOfMonth->copy()->addDays($day);
-            
+
             // Don't create future todos
             if ($date->isFuture()) {
                 continue;
@@ -90,12 +90,12 @@ class TodoSeeder extends Seeder
             $creator = $users->random();
             $hour = rand(8, 16);
             $minute = rand(0, 1) ? 0 : 30;
-            
+
             $startAt = $date->copy()->setTime($hour, $minute);
             $endAt = $startAt->copy()->addHours(rand(1, 3));
-            
+
             $title = $titles[array_rand($titles)];
-            
+
             // Add variation to title for uniqueness
             $variations = ['', ' - ادامه', ' - جلسه دوم', ' - پیگیری', ' - بررسی نهایی', ' - فوران', ' - اولویت بالا', ' - معمولی'];
             $title .= $variations[array_rand($variations)];

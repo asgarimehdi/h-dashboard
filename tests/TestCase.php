@@ -2,9 +2,9 @@
 
 namespace Tests;
 
+use Closure;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
-use Closure;
 
 abstract class TestCase extends BaseTestCase
 {

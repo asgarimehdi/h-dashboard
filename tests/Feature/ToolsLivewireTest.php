@@ -6,7 +6,6 @@ use App\Models\ActivityLog;
 use App\Models\Notification;
 use App\Models\Person;
 use App\Models\Ticket;
-use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -16,7 +15,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Models\Ticket::class);
+covers(Ticket::class);
 
 class ToolsLivewireTest extends TestCase
 {

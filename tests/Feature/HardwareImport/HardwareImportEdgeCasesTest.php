@@ -10,7 +10,6 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
-use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
@@ -21,7 +20,7 @@ use Tests\TestCase;
  * unknown person), mac-based match updates, unchanged-row skipping,
  * clean_at parsing variants and the rules() contract.
  */
-covers(\App\Imports\HardwareImport::class);
+covers(HardwareImport::class);
 
 class HardwareImportEdgeCasesTest extends TestCase
 {

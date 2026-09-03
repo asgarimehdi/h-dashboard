@@ -2,12 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\ArchiveOldRecords;
 use App\Models\ActivityLog;
-use App\Models\ActivityLogArchive;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-covers(\App\Console\Commands\ArchiveOldRecords::class);
+covers(ArchiveOldRecords::class);
 
 class ArchiveOldRecordsCommandTest extends TestCase
 {
@@ -15,7 +16,7 @@ class ArchiveOldRecordsCommandTest extends TestCase
 
     public function test_archive_moves_old_records_to_archive_table(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $old = ActivityLog::create([
             'user_id' => $user->id,
             'type' => 'login',
@@ -40,7 +41,7 @@ class ArchiveOldRecordsCommandTest extends TestCase
 
     public function test_archive_dry_run_moves_nothing(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $old = ActivityLog::create([
             'user_id' => $user->id,
             'type' => 'login',

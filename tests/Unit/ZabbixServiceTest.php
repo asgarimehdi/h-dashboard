@@ -6,7 +6,7 @@ use App\Services\ZabbixService;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
-covers(\App\Services\ZabbixService::class);
+covers(ZabbixService::class);
 
 class ZabbixServiceTest extends TestCase
 {

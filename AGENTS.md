@@ -8,12 +8,12 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x (locked at **13.29.0** in composer.lock) on PHP ^8.3
+- **Framework:** Laravel 13.x on PHP ^8.3
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
-- **Package Manager:** Composer (backend); `package-lock.json` only (no pnpm-lock.yaml) → use **npm**: `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
+- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 
 > **Detailed data model, relationships, FK behavior:** see `references/data-model.md`
 > **API endpoints, UI features, scheduler, deployment, performance:** see `references/api-endpoints.md`
@@ -130,7 +130,7 @@ php scripts/boost_tool.php <tool> '<json-args>'
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-01:** **`composer test`** is the one-command way (**928 passed**, ~4 min). It bakes in the three environment gotchas.
+> **✅ Working as of 2026-09-02:** **`composer test`** is the one-command way (**928 passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
 
 ### Prerequisites
 ```bash

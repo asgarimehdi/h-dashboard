@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\ZabbixService;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\Session;
 use Mockery;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\MultiLatestValueController::class);
+covers(MultiLatestValueController::class);
 
 class MultiLatestValueApiTest extends TestCase
 {

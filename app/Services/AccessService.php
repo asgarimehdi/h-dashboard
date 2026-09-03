@@ -73,7 +73,7 @@ class AccessService
                 : $user->units()->pluck('units.id')->toArray();
 
             // Forget the legacy unversioned key too.
-            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:" . md5(json_encode($baseUnitIds));
+            $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
             Cache::forget($cacheKey);
         }
     }

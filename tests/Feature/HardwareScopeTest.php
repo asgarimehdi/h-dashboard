@@ -1,16 +1,18 @@
 <?php
 
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Traits\HasOrganizationalScope;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-covers(\App\Traits\HasOrganizationalScope::class);
+covers(HasOrganizationalScope::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
@@ -148,7 +150,7 @@ it('general search matches the full person name (f_name + l_name)', function () 
     $user = makeUserInUnit($unit);
 
     // Hardware must exist so the row is returned
-    \App\Models\Hardware::create([
+    Hardware::create([
         'n_code' => '1234567890',
         'pc_name' => 'PC-MEHDI-01',
         'type' => 'pc',

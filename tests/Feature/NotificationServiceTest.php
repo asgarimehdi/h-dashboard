@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-covers(\App\Services\NotificationService::class);
+covers(NotificationService::class);
 
 class NotificationServiceTest extends TestCase
 {
@@ -136,7 +136,7 @@ class NotificationServiceTest extends TestCase
 
     // --- notifyUnit ---
 
-    public function test_notifyUnit_sends_to_all_unit_members(): void
+    public function test_notify_unit_sends_to_all_unit_members(): void
     {
         $unit = Unit::create(['name' => 'واحد تست']);
 
@@ -156,7 +156,7 @@ class NotificationServiceTest extends TestCase
         $this->assertEquals(2, DB::table('notifications')->where('type', 'test')->count());
     }
 
-    public function test_notifyUnit_does_nothing_when_no_members(): void
+    public function test_notify_unit_does_nothing_when_no_members(): void
     {
         $unit = Unit::create(['name' => 'واحد خالی']);
 
@@ -165,7 +165,7 @@ class NotificationServiceTest extends TestCase
         $this->assertEquals(0, DB::table('notifications')->count());
     }
 
-    public function test_notifyUnit_uses_ticket_icon_and_info_color(): void
+    public function test_notify_unit_uses_ticket_icon_and_info_color(): void
     {
         $user = $this->createUserWithUnit();
         $unit = $user->units()->first();
@@ -177,7 +177,7 @@ class NotificationServiceTest extends TestCase
         $this->assertEquals('text-info', $notification->color);
     }
 
-    public function test_notifyUnit_invalidates_bell_cache_for_recipients(): void
+    public function test_notify_unit_invalidates_bell_cache_for_recipients(): void
     {
         $user = $this->createUserWithUnit();
         $unit = $user->units()->first();

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\PersonController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\TestCase;
 
-covers(\App\Http\Controllers\Api\PersonController::class);
+covers(PersonController::class);
 
 class PersonApiTest extends TestCase
 {

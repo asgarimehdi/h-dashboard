@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Models\TicketComment::class);
+covers(TicketComment::class);
 
 class TicketCommentsRefreshTest extends TestCase
 {
