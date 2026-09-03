@@ -1,21 +1,25 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::unprepared(
-            'ALTER TABLE persons ADD CONSTRAINT persons_u_id_foreign_units FOREIGN KEY (u_id) REFERENCES units(id) ON DELETE SET NULL ON UPDATE CASCADE;'
-        );
+        Schema::table('persons', function (Blueprint $table) {
+            $table->foreign('u_id', 'persons_u_id_foreign_units')
+                ->references('id')->on('units')
+                ->onDelete('set null')
+                ->onUpdate('cascade');
+        });
     }
 
     public function down(): void
     {
-        DB::unprepared(
-            'ALTER TABLE persons DROP CONSTRAINT persons_u_id_foreign_units;'
-        );
+        Schema::table('persons', function (Blueprint $table) {
+            $table->dropForeign('persons_u_id_foreign_units');
+        });
     }
 };

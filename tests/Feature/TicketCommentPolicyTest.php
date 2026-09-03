@@ -58,7 +58,7 @@ test('comment policy allows author when accessible unit check passes', function 
         'subject' => 'Test',
         'content' => 'Test',
         'status' => 'created',
-        'priority' => 'medium',
+        'priority' => 'urgent',
     ]);
     $comment = TicketComment::create([
         'ticket_id' => $ticket->id,
@@ -80,7 +80,7 @@ test('comment policy denies non-author even with accessible unit', function () {
         'subject' => 'Test',
         'content' => 'Test',
         'status' => 'created',
-        'priority' => 'medium',
+        'priority' => 'urgent',
     ]);
     $comment = TicketComment::create([
         'ticket_id' => $ticket->id,
@@ -105,7 +105,7 @@ test('comment policy denies user without accessible unit', function () {
         'subject' => 'Test',
         'content' => 'Test',
         'status' => 'created',
-        'priority' => 'medium',
+        'priority' => 'urgent',
     ]);
     $comment = TicketComment::create([
         'ticket_id' => $ticket->id,
@@ -132,7 +132,7 @@ function policyTicket(int $unitId, int $authorId): Ticket
         'subject' => 'Policy test',
         'content' => 'Policy test',
         'status' => 'created',
-        'priority' => 'medium',
+        'priority' => 'urgent',
     ]);
 }
 

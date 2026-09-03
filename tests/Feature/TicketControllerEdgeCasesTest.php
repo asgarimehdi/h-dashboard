@@ -157,10 +157,10 @@ class TicketControllerEdgeCasesTest extends TestCase
         $ticket = Ticket::create(['ticket_code' => 'T-207', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'S', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
 
         $response = $this->actingAs($user, 'sanctum')->putJson("/api/tickets/{$ticket->id}", [
-            'priority' => 'high',
+            'priority' => 'urgent',
         ]);
 
         $response->assertStatus(200);
-        $this->assertDatabaseHas('tickets', ['id' => $ticket->id, 'priority' => 'high', 'subject' => 'S']);
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id, 'priority' => 'urgent', 'subject' => 'S']);
     }
 }

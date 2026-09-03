@@ -117,16 +117,16 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/tickets', [
-            'subject' => 'Medium Priority',
+            'subject' => 'Urgent Priority',
             'content' => 'Description',
-            'priority' => 'medium',
+            'priority' => 'urgent',
             'unit_id' => $unit->id,
         ]);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
 
-        $this->assertDatabaseHas('tickets', ['subject' => 'Medium Priority', 'priority' => 'medium']);
+        $this->assertDatabaseHas('tickets', ['subject' => 'Urgent Priority', 'priority' => 'urgent']);
     }
 
     public function test_user_can_update_ticket(): void
