@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\HardwareUpdated;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
-use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -60,10 +59,9 @@ class HardwareController extends Controller
     /**
      * Check if the given hardware record is within the user's accessible organizational scope.
      */
-    private function assertAccessible(Request $request, Hardware $hardware): void
+    private function assertAccessible(UnitScopedRequest $request, Hardware $hardware): void
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         $unitId = $hardware->relationLoaded('person')
             ? $hardware->person?->u_id
@@ -110,10 +108,9 @@ class HardwareController extends Controller
         ];
     }
 
-    public function index(Request $request): array
+    public function index(UnitScopedRequest $request): array
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         $query = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
             ->whereIn('persons.u_id', $accessibleIds)
@@ -173,14 +170,13 @@ class HardwareController extends Controller
         ];
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(UnitScopedRequest $request): JsonResponse
     {
         $validated = $request->validate($this->hardwareValidationRules(required: true));
 
         // Verify the person's unit is within the user's accessible scope
         $person = Person::where('n_code', $validated['n_code'])->firstOrFail();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-        if (! in_array($person->u_id, $accessibleIds)) {
+        if (! in_array($person->u_id, $request->accessibleIds())) {
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
@@ -194,7 +190,7 @@ class HardwareController extends Controller
         ], 201);
     }
 
-    public function show(Request $request, Hardware $hardware): JsonResponse
+    public function show(UnitScopedRequest $request, Hardware $hardware): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
 
@@ -206,7 +202,7 @@ class HardwareController extends Controller
         ]);
     }
 
-    public function update(Request $request, Hardware $hardware): JsonResponse
+    public function update(UnitScopedRequest $request, Hardware $hardware): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
 
@@ -215,8 +211,7 @@ class HardwareController extends Controller
         // Verify the new person's unit is within the user's accessible scope (if n_code is being changed)
         if (isset($validated['n_code'])) {
             $newPerson = Person::where('n_code', $validated['n_code'])->firstOrFail();
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-            if (! in_array($newPerson->u_id, $accessibleIds)) {
+            if (! in_array($newPerson->u_id, $request->accessibleIds())) {
                 return response()->json(['message' => 'Cannot assign hardware to a person in an inaccessible unit.'], 403);
             }
         }
@@ -231,7 +226,7 @@ class HardwareController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Hardware $hardware): JsonResponse
+    public function destroy(UnitScopedRequest $request, Hardware $hardware): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
 
@@ -241,10 +236,9 @@ class HardwareController extends Controller
         return response()->json(['success' => true, 'message' => 'حذف شد']);
     }
 
-    public function stats(Request $request): JsonResponse
+    public function stats(UnitScopedRequest $request): JsonResponse
     {
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         // Issue #217: cache stats to avoid 3 heavy queries per request.
         // Key is scoped by (version, accessible units): the version counter is
@@ -275,7 +269,7 @@ class HardwareController extends Controller
         ]);
     }
 
-    public function bulkMark(Request $request): JsonResponse
+    public function bulkMark(UnitScopedRequest $request): JsonResponse
     {
         $request->validate([
             'ids' => 'required|array',
@@ -283,8 +277,7 @@ class HardwareController extends Controller
             'mark' => 'required|boolean',
         ]);
 
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
@@ -320,15 +313,14 @@ class HardwareController extends Controller
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
     }
 
-    public function bulkDelete(Request $request): JsonResponse
+    public function bulkDelete(UnitScopedRequest $request): JsonResponse
     {
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
 
-        $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
