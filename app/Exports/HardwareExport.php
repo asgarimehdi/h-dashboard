@@ -3,7 +3,6 @@
 namespace App\Exports;
 
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
@@ -17,6 +16,10 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
     protected Builder $query;
 
     protected array $columns;
+
+    protected int $lastId = 0;
+
+    protected int $chunkSize = 500;
 
     /**
      * Column definitions: key => ['label' => Persian, 'accessor' => callable|null]
@@ -49,23 +52,39 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
     public function __construct(Builder $query, array $columns)
     {
         $this->query = $query;
-        // Only keep columns that exist in columnDefs
         $this->columns = array_intersect($columns, array_keys($this->columnDefs));
     }
 
-    public function collection(): Collection
+    /**
+     * Fallback for small datasets (used by FromCollection).
+     */
+    public function collection(): \Illuminate\Support\Collection
     {
         return $this->query->get();
     }
 
-    public function chunkCollection(): Collection
+    /**
+     * Chunked export for large datasets — processes records in batches of $chunkSize
+     * to avoid loading the entire result set into memory at once.
+     */
+    public function chunkCollection(): \Illuminate\Support\Collection
     {
-        return $this->query->get();
+        $chunk = $this->query
+            ->where('id', '>', $this->lastId)
+            ->orderBy('id')
+            ->take($this->chunkSize)
+            ->get();
+
+        if ($chunk->isNotEmpty()) {
+            $this->lastId = $chunk->last()->id;
+        }
+
+        return $chunk;
     }
 
     public function chunkSize(): int
     {
-        return 500;
+        return $this->chunkSize;
     }
 
     public function headings(): array
