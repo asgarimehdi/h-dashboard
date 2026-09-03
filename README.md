@@ -1,78 +1,138 @@
-# H-Dashboard
+# Health Dashboard (داشبورد سلامت)
 
-&#x20; &#x20;
+> 🏥 Hospital/healthcare center hardware inventory, organizational units, tickets, and analytics dashboard.
 
-## معرفی
+[![Tests](https://github.com/asgarimehdi/h-dashboard/actions/workflows/test.yml/badge.svg)](https://github.com/asgarimehdi/h-dashboard/actions/workflows/test.yml)
 
-داشبورد مدیریت سلامت بر پایه لاراول لایووایر و مری یو و لیفلت که اطلاعات مدیریتی روی نقشه و چارت ارائه میدهد
-## ویژگی‌ها
+## English
 
+### Overview
+
+Health Dashboard is a Laravel application for managing hospital/healthcare center hardware inventory, organizational units, tickets, and todos. Built with Livewire, MaryUI, and Tailwind CSS.
+
+**Key features:**
+- User management with role-based access (Spatie)
+- Hardware inventory tracking with audit history
+- Interactive GIS map with PostGIS spatial queries
+- Ticket system with assignment and workflow
+- Todo management with recurring tasks
+- HR dashboard with org charts and analytics
+- Bilingual UI (RTL Persian/English)
+
+### Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Backend | Laravel 13, PHP 8.5 |
+| Frontend | Livewire 4, MaryUI (DaisyUI 5), Tailwind CSS 4, Alpine.js |
+| Database | PostgreSQL 16 (PostGIS) |
+| Cache/Queue | Redis |
+| Auth | Laravel Sanctum |
+| Tests | Pest |
+| Mobile | Flutter (Sanctum API tokens) |
+
+### Quick Start
+
+**Prerequisites:** Docker, PHP 8.5, Composer, Node.js 24+
+
+```bash
+# 1. Clone
+git clone https://github.com/asgarimehdi/h-dashboard.git
+cd h-dashboard
+
+# 2. Start database
+docker compose -f docker-compose-pgsql-.yml up -d
+
+# 3. Install dependencies
+composer install
+npm install
+
+# 4. Configure environment
+cp .env.example .env
+php artisan key:generate
+
+# 5. Run migrations
+php artisan migrate
+
+# 6. Build frontend
+npm run build
+
+# 7. Start development server
+php artisan serve
+```
+
+### Testing
+
+```bash
+# Run all tests
+composer test
+
+# Run specific test suite
+composer test -- --filter=Hardware
+```
+
+### Contributing
+
+See [AGENTS.md](AGENTS.md) for development guidelines and conventions.
+
+```bash
+# Format code before committing
+vendor/bin/pint --dirty --format agent
+
+# Run tests
+composer test
+```
+
+---
+
+## فارسی (Persian)
+
+### معرفی
+
+داشبورد مدیریت سلامت بر پایه لاراول لایووایر و مری یو و لیفلت که اطلاعات مدیریتی روی نقشه و چارت ارائه میدهد.
+
+**ویژگی‌ها:**
 - مدیریت کاربران با سطوح دسترسی مختلف
 - مدیریت شهرستان‌ها و واحدها با قابلیت سیدینگ
 - طراحی واکنشگرا برای نمایش در دستگاه‌های مختلف
 - نقشه تعاملی و متصل به پایگاه داده
 
-## نصب و راه‌اندازی
+### نصب و راه‌اندازی
 
-1. کلون کردن مخزن:
+پیش‌نیاز: Docker، PHP 8.5، Composer، Node.js 24+
 
-   ```bash
-   git clone https://github.com/asgarimehdi/h-dashboard.git
-   ```
+```bash
+# ۱. کلون کردن مخزن
+git clone https://github.com/asgarimehdi/h-dashboard.git
+cd h-dashboard
 
-2. نصب وابستگی‌ها:
+# ۲. راه‌اندازی پایگاه داده
+docker compose -f docker-compose-pgsql-.yml up -d
 
-   ```bash
-   cd h-dashboard
-   composer install
-   npm install
-   ```
+# ۳. نصب وابستگی‌ها
+composer install
+npm install
 
-3. تنظیم فایل محیطی:
+# ۴. تنظیم فایل محیطی
+cp .env.example .env
+php artisan key:generate
 
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
+# ۵. اجرای مایگریشن‌ها
+php artisan migrate
 
-4. مایگریشن و سید:
+# ۶. بیلد فرانت‌اند
+npm run build
 
-   ```bash
-   php artisan migrate --seed
-   ```
+# ۷. اجرای سرور توسعه
+php artisan serve
+```
 
-5. راه‌اندازی سرور:
+### تست‌ها
 
-   ```bash
-   php artisan serve
-   ```
-6. در لینوکس
-   ```bash
-   chmod +x linux-composer.sh
-   ``` 
-7. پیشنیاز لینوکس فرانکین و ...
-   ```bash
-   chmod +x linux-composer.sh
-   ``` 
+```bash
+composer test
+```
 
-## مشارکت
+### مشارکت
 
-1. Fork کردن مخزن
-2. ساخت شاخه جدید:
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-3. کامیت تغییرات:
-   ```bash
-   git commit -m "Add some feature"
-   ```
-4. Push کردن به شاخه:
-   ```bash
-   git push origin feature/YourFeature
-   ```
-5. ایجاد Pull Request
-
-## مجوز
-
-این پروژه تحت مجوز [MIT](LICENSE) منتشر شده است.
-
+راهنمای توسعه: [AGENTS.md](AGENTS.md)
