@@ -54,13 +54,12 @@ Fix real logic bugs. Some are interdependent.
 | [020](PLAN-020-deduplicate-accessibleIds-unitScopedRequest.md) | 35× duplicated accessibleIds auth pattern | TechDebt | ✅ DONE | — |
 
 ### Phase 5 — Architecture (M-L effort)
-⚠️ Plan 021 should land before 023 and 022 (reduces merge conflicts).
 
 | Plan | Finding | Category | Status | Depends on |
 |------|---------|----------|--------|------------|
 | [021](PLAN-021-split-HrController.md) | HrController God class (596 lines) | TechDebt | ✅ DONE | — |
 | [022](PLAN-022-fix-gis-cross-controller-coupling.md) | GisController cross-controller coupling | TechDebt | ✅ DONE | — |
-| [023](PLAN-023-decompose-hardware-index.md) | hardware/index.blade.php 1366 lines | TechDebt | ⚠️ PARTIAL | ⚠️ after 020 |
+| [023](PLAN-023-decompose-hardware-index.md) | hardware/index.blade.php 1366 lines | TechDebt | ✅ DONE | — |
 
 ### Phase 6 — DX & Tooling (M effort)
 Independent of code changes; can be parallelized.
@@ -79,12 +78,8 @@ Independent of code changes; can be parallelized.
 
 | Status | Count | Plans |
 |--------|-------|-------|
-| ✅ DONE | 32 | 001–006, 007–012, 013–022, 024–029 |
-| ⚠️ PARTIAL | 1 | 023 |
+| ✅ DONE | 33 | All plans |
 | 🚫 REJECTED | 0 | — |
-
-------|-----|
-| **023** Decompose hardware/index | Sub-components created (filters, table, trash-modal, audit-modal) but parent `index.blade.php` still 1103 lines — not fully refactored. |
 
 ---
 
