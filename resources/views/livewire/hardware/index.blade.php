@@ -437,18 +437,18 @@ return new class extends Component
 
         $params = [
             'columns' => implode(',', $columns),
-            'search' => $this->search,
-            'type' => $this->filterType,
-            'os' => $this->filterOs,
-            'cpu' => $this->filterCpu,
-            'ram' => $this->filterRam,
-            'hdd' => $this->filterHdd,
-            'shutdown' => $this->filterShutdown,
-            'net_type' => $this->filterNetType,
-            'mark' => $this->filterMark,
-            'person' => $this->filterPerson,
-            'unit' => $this->filterUnit,
-            'semat' => $this->filterSemat,
+            'search'  => $this->search,
+            'type'    => $this->filterType,
+            'os'      => $this->filterOs,
+            'cpu'     => $this->filterCpu,
+            'ram'     => $this->filterRam,
+            'hdd'     => $this->filterHdd,
+            'shutdown'=> $this->filterShutdown,
+            'net_type'=> $this->filterNetType,
+            'mark'    => $this->filterMark,
+            'person'  => $this->filterPerson,
+            'unit'    => $this->filterUnit,
+            'semat'   => $this->filterSemat,
         ];
 
         // Remove empty values
@@ -645,7 +645,7 @@ return new class extends Component
             return false;
         }
         if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) {
-            return $displayValue;
+            return (int) $displayValue;
         }
 
         return $displayValue;
@@ -669,22 +669,24 @@ return new class extends Component
         if (empty($deletedHardwareIds)) {
             $this->deletedHardware = [];
             $this->showTrashModal = true;
-
             return;
         }
 
-        $this->deletedHardware = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
+        $createdAudits = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
             ->where('action', 'created')
             ->with('user:id,n_code')
-            ->get()
-            ->map(function (HardwareAudit $audit) {
-                // Pre-fetch deletedAt to avoid N+1 in Blade
-                $deletedAudit = HardwareAudit::where('action', 'deleted')
-                    ->where('hardware_id', $audit->hardware_id)
-                    ->latest('created_at')
-                    ->first();
-                $audit->deleted_at = $deletedAudit?->created_at;
+            ->get();
 
+        // Batch-load all delete timestamps in one query to avoid N+1
+        $deleteTimestamps = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
+            ->where('action', 'deleted')
+            ->select('hardware_id', 'created_at')
+            ->get()
+            ->mapWithKeys(fn($d) => [$d->hardware_id => $d->created_at]);
+
+        $this->deletedHardware = $createdAudits
+            ->map(function (HardwareAudit $audit) use ($deleteTimestamps) {
+                $audit->deleted_at = $deleteTimestamps->get($audit->hardware_id);
                 return $audit;
             })
             ->values()
@@ -700,14 +702,12 @@ return new class extends Component
     {
         if (! auth()->user()->can('manage_hardware')) {
             $this->error('شما مجوز manage_hardware ندارید.', position: 'toast-bottom');
-
             return;
         }
 
         $audit = HardwareAudit::find($auditId);
         if (! $audit || $audit->action !== 'created') {
             $this->error('رکورد تاریخچه یافت نشد.', position: 'toast-bottom');
-
             return;
         }
 
@@ -715,7 +715,6 @@ return new class extends Component
         $exists = Hardware::where('id', $audit->hardware_id)->exists();
         if ($exists) {
             $this->error('این سخت‌افزار هنوز وجود دارد — از بازگردانی فیلد استفاده کنید.', position: 'toast-bottom');
-
             return;
         }
 
@@ -740,13 +739,11 @@ return new class extends Component
         // the hardware→person link was lost on delete.
         if ($nCode === null) {
             $this->error('این رکورد قبل از ثبت n_code در تاریخچه ایجاد شده و لینک شخص حذف شده است — لطفاً به صورت دستی ایجاد کنید.', position: 'toast-bottom');
-
             return;
         }
 
         if (empty($restoreData) || $nCode === null) {
             $this->error('داده‌ای برای بازگردانی وجود ندارد (n_code یافت نشد).', position: 'toast-bottom');
-
             return;
         }
 
@@ -754,7 +751,7 @@ return new class extends Component
         $restoredHardware = Hardware::create($restoreData);
 
         // Log the restore
-        app(HardwareAuditObserver::class)->recordRollbackAudit(
+        app(\App\Observers\HardwareAuditObserver::class)->recordRollbackAudit(
             $restoredHardware,
             array_map(
                 fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'],
@@ -938,7 +935,66 @@ return new class extends Component
             </div>
                 </div>
 
-        @include('livewire.hardware.filters')
+                {{-- Quick Presets --}}
+        <div class="flex flex-wrap gap-2 mb-4">
+            <x-button icon="o-cpu-chip" :class="$filterType === 'laptop' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="لپ‌تاپ‌ها" wire:click="toggleFilter('filterType', 'laptop')" />
+            <x-button icon="o-server" :class="$filterType === 'server' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="سرورها" wire:click="toggleFilter('filterType', 'server')" />
+            <x-button icon="o-server-stack" :class="$filterRam === '16384' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="رم 16GB+" wire:click="toggleFilter('filterRam', '16384')" />
+            <x-button icon="o-computer-desktop" :class="$filterHdd === 'SSD' ? 'btn-primary btn-xs' : 'btn-outline btn-xs'" label="فقط SSD" wire:click="toggleFilter('filterHdd', 'SSD')" />
+            <x-button icon="o-power" :class="$filterShutdown === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="روشن‌ها" wire:click="toggleFilter('filterShutdown', '1')" />
+            <x-button icon="o-check-circle" :class="$filterMark === '1' ? 'btn-success btn-xs' : 'btn-outline btn-xs'" label="علامت‌دارها" wire:click="toggleFilter('filterMark', '1')" />
+            <x-button icon="o-arrow-uturn-left" class="btn-ghost btn-xs text-warning" label="حذف شده‌ها" wire:click="loadDeletedHardware()" />
+            <x-button icon="o-x-mark" class="btn-ghost btn-xs" label="پاکسازی" wire:click="clearFilters" />
+        </div>
+
+        {{-- Filters --}}
+        @if($showFilters)
+            <div class="mb-4 p-4 bg-base-200 rounded-lg">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div class="{{ $filterType ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterType" label="نوع دستگاه" placeholder="pc, laptop..." clearable />
+                        </div>
+                        <div class="{{ $filterOs ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterOs" label="سیستم عامل" placeholder="Windows 10..." clearable />
+                        </div>
+                        <div class="{{ $filterCpu ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterCpu" label="CPU" placeholder="Intel, AMD..." clearable />
+                        </div>
+                        <div class="{{ $filterRam ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterRam" label="RAM" placeholder="4096, 8192..." clearable />
+                        </div>
+                        <div class="{{ $filterHdd ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterHdd" label="HDD/SSD" placeholder="SSD, 500GB..." clearable />
+                        </div>
+                        <div class="{{ $filterNetType ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterNetType" label="نوع شبکه" placeholder="wired, wireless..." clearable />
+                        </div>
+                        <div class="{{ $filterShutdown !== null && $filterShutdown !== '' ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-select wire:model.live="filterShutdown" label="وضعیت روشن/خاموش"
+                                :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'روشن'], ['id' => '0', 'name' => 'خاموش']])" />
+                        </div>
+                        <div class="{{ $filterMark !== null && $filterMark !== '' ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-select wire:model.live="filterMark" label="علامت‌دار"
+                                :options="collect([['id' => '', 'name' => 'همه'], ['id' => '1', 'name' => 'علامت‌دار'], ['id' => '0', 'name' => 'بدون علامت']])" />
+                        </div>
+                        <div class="{{ $filterPerson ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterPerson" label="پرسنل (نام/کد ملی)" placeholder="جستجو..." clearable />
+                        </div>
+                        <div class="{{ $filterUnit ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterUnit" label="مرکز/واحد" placeholder="نام واحد..." clearable />
+                        </div>
+                        <div class="{{ $filterSemat ? 'ring-2 ring-primary rounded-lg p-1 -m-1' : '' }}">
+                            <x-input wire:model.live.debounce="filterSemat" label="سمت" placeholder="پزشک، ممرض..." clearable />
+                        </div>
+                    </div>
+                @if($this->hasActiveFilters())
+                    <div class="mt-3 flex items-center gap-2">
+                        <x-button icon="o-x-mark" label="پاک کردن فیلترها" class="btn-ghost btn-sm" wire:click="clearFilters" />
+                        <span class="text-xs text-base-content/50">فیلترهای فعال اعمال شده</span>
+                    </div>
+                @endif
+            </div>
+        @endif
 
         @if($showColPanel)
             <div class="mb-4 p-4 bg-base-200 rounded-lg border-l-4 border-primary">
@@ -1081,11 +1137,227 @@ return new class extends Component
             </x-modal>
         @endif
 
-        @include('livewire.hardware.audit-modal')
+        {{-- History Modal --}}
+        @if($showHistoryModal)
+            <x-modal wire:model="showHistoryModal" title="تاریخچه تغییرات" close-on-backdrop>
+                <div class="mb-3 flex flex-wrap gap-2">
+                    <x-button :class="$historyActionFilter === null ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory(null)" label="همه" />
+                    <x-button :class="$historyActionFilter === 'created' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('created')" label="ایجاد" />
+                    <x-button :class="$historyActionFilter === 'updated' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('updated')" label="ویرایش" />
+                    <x-button :class="$historyActionFilter === 'deleted' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('deleted')" label="حذف" />
+                    <x-button :class="$historyActionFilter === 'bulk_mark' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_mark')" label="علامت گروهی" />
+                    <x-button :class="$historyActionFilter === 'bulk_delete' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('bulk_delete')" label="حذف گروهی" />
+                    <x-button :class="$historyActionFilter === 'rollback' ? 'btn-primary btn-sm' : 'btn-ghost btn-sm'" wire:click="filterHistory('rollback')" label="بازگردانی" />
+                </div>
 
-        @include('livewire.hardware.trash-modal')
+                @if(count($history) === 0)
+                    <div class="text-center py-8 text-base-content/50">تاریخچه‌ای ثبت نشده است.</div>
+                @else
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        @foreach($history as $entry)
+                            <div class="border rounded-lg p-3 bg-base-200/50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        @php
+                                            $badgeClass = match($entry['action']) {
+                                                'created' => 'badge-success',
+                                                'updated' => 'badge-info',
+                                                'deleted', 'bulk_delete' => 'badge-error',
+                                                'bulk_mark' => 'badge-warning',
+                                                'rollback' => 'badge-secondary',
+                                                default => 'badge-neutral',
+                                            };
+                                            $actionLabel = match($entry['action']) {
+                                                'created' => 'ایجاد',
+                                                'updated' => 'ویرایش',
+                                                'deleted' => 'حذف',
+                                                'bulk_mark' => 'علامت گروهی',
+                                                'bulk_delete' => 'حذف گروهی',
+                                                'rollback' => 'بازگردانی',
+                                                default => $entry['action'],
+                                            };
+                                            $sourceLabel = match($entry['source'] ?? '') {
+                                                'api' => 'API',
+                                                'import' => 'ایمپورت',
+                                                'bulk' => 'گروهی',
+                                                default => 'وب',
+                                            };
+                                        @endphp
+                                        <x-badge :value="$actionLabel" :class="$badgeClass" />
+                                        <x-badge value="{{ $sourceLabel }}" class="badge-outline badge-xs" />
+                                        <span class="text-xs opacity-60">{{ $entry['user']['name'] ?? $entry['user']['n_code'] ?? 'سیستم' }}</span>
+                                    </div>
+                                    <span class="text-xs opacity-50">{{ \Morilog\Jalali\Jalalian::fromDateTime($entry['created_at'])->format('Y/m/d H:i') }}</span>
+                                </div>
+                                @if(!empty($entry['changes']) && is_array($entry['changes']))
+                                    <div class="space-y-1 mt-1">
+                                        @foreach($entry['changes'] as $change)
+                                            @if(is_array($change) && isset($change['field']))
+                                                <div class="flex items-center justify-between gap-2 text-xs bg-base-300/30 rounded px-2 py-1"
+                                                     title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
+                                                    <span class="font-mono">
+                                                        <span class="text-error">{{ $change['old'] ?? '—' }}</span>
+                                                        <span class="opacity-50 mx-1">←</span>
+                                                        <span class="text-success">{{ $change['new'] ?? '—' }}</span>
+                                                        <span class="opacity-50 ms-1">({{ $change['field'] }})</span>
+                                                    </span>
+                                                    @if(in_array($entry['action'], ['updated', 'rollback']) && ($change['old'] ?? '—') !== '—')
+                                                        <button
+                                                            wire:click="rollbackHistoryField({{ $entry['id'] }}, '{{ $change['field'] }}')"
+                                                            wire:confirm="آیا از بازگردانی فیلد {{ $change['field'] }} به مقدار «{{ $change['old'] ?? '' }}» مطمئن هستید؟"
+                                                            class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 shrink-0"
+                                                            title="بازگردانی این فیلد"
+                                                        >
+                                                            <x-icon name="o-arrow-path" class="w-3 h-3" />
+                                                            بازگردانی
+                                                        </button>
+                                                    @endif
+                                                </div>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                @endif
+                                @if($entry['ip_address'])
+                                    <div class="text-[10px] opacity-40 mt-1">IP: {{ $entry['ip_address'] }}</div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
 
-        @include('livewire.hardware.table')
+                    @if($historyTotal > $historyPerPage)
+                        <div class="flex justify-center items-center gap-2 mt-4">
+                            <x-button icon="o-chevron-right" class="btn-circle btn-sm"
+                                :disabled="$historyCurrentPage <= 1"
+                                wire:click="historyPage({{ $historyCurrentPage - 1 }})" />
+                            <span class="text-sm">صفحه {{ $historyCurrentPage }} از {{ ceil($historyTotal / $historyPerPage) }}</span>
+                            <x-button icon="o-chevron-left" class="btn-circle btn-sm"
+                                :disabled="$historyCurrentPage >= ceil($historyTotal / $historyPerPage)"
+                                wire:click="historyPage({{ $historyCurrentPage + 1 }})" />
+                        </div>
+                    @endif
+                @endif
+            </x-modal>
+        @endif
+
+        @if($showTrashModal)
+            <x-modal wire:model="showTrashModal" title="سخت‌افزارهای حذف شده" close-on-backdrop>
+                @if(count($deletedHardware) === 0)
+                    <div class="text-center py-8 text-base-content/50">هیچ سخت‌افزار حذف شده‌ای در دسترس شما نیست.</div>
+                @else
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                        @foreach($deletedHardware as $audit)
+                            <div class="border rounded-lg p-3 bg-base-200/50">
+                                <div class="flex items-center justify-between mb-2">
+                                    @php
+                                        $pcNameField = collect($audit->changes)->firstWhere('field', 'pc_name');
+                                        $deletedAt = $audit->deleted_at ?? null;
+                                    @endphp
+                                    <div>
+                                        <div class="font-bold">{{ $pcNameField['new'] ?? ('سخت‌افزار #' . $audit->hardware_id) }}</div>
+                                        <div class="text-xs opacity-60">
+                                            حذف شده در {{ $deletedAt ? \Morilog\Jalali\Jalalian::fromDateTime($deletedAt)->format('Y/m/d H:i') : 'نامشخص' }}
+                                            توسط {{ $audit->user['n_code'] ?? 'سیستم' }}
+                                        </div>
+                                    </div>
+                                    @php
+                                        $canRestore = collect($audit->changes)->contains('field', 'n_code');
+                                    @endphp
+                                    @if($canRestore)
+                                        <x-button icon="o-arrow-uturn-left"
+                                            class="btn-ghost btn-xs text-warning"
+                                            wire:click="restoreRecord({{ $audit->id }})"
+                                            spinner
+                                            title="بازگردانی این سخت‌افزار" />
+                                    @else
+                                        <span class="text-[10px] text-error opacity-70" title="این رکورد n_code ندارد - قابل بازگردانی نیست">
+                                            ⚠ قابل بازگردانی نیست
+                                        </span>
+                                    @endif
+                                </div>
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    @foreach($audit->changes as $change)
+                                        @if(isset($change['field']) && $change['field'] !== 'pc_name' && $change['field'] !== 'n_code')
+                                            <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
+                                                {{ $change['field'] }}: {{ $change['new'] ?? '—' }}
+                                            </span>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </x-modal>
+        @endif
+
+        {{-- Mobile Card Layout --}}
+        <div class="grid grid-cols-1 gap-4 md:hidden">
+            @foreach($hardwares as $hw)
+                <div class="p-4 bg-base-100 border rounded-xl shadow-sm {{ $hw['mark'] ? 'border-r-4 border-r-warning bg-warning/10' : '' }}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="font-bold text-lg">{{ $hw['pc_name'] }}</div>
+                            <div class="text-xs text-base-content/60">{{ $hw['person_name'] }}</div>
+                            <div class="text-xs text-base-content/40">{{ $hw['unit_name'] }}</div>
+                        </div>
+                        <div class="flex gap-2">
+                             @if($hw['status'] === 'mark')
+                                <x-badge value="علامت" class="badge-warning" />
+                            @elseif($hw['status'] === 'off')
+                                <x-badge value="خاموش" class="badge-neutral" />
+                            @else
+                                <x-badge value="فعال" class="badge-success" />
+                            @endif
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs mb-4">
+                        <div class="flex justify-between">
+                            <span class="opacity-50">نوع:</span> <span>{{ $hw['type'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="opacity-50">OS:</span> <span>{{ $hw['os'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="opacity-50">IP:</span> <span>{{ $hw['ip_local'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="opacity-50">RAM:</span> <span>{{ $hw['ram'] }}</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-xs text-primary flex-1" label="ویرایش" />
+                        <x-button icon="o-clock" wire:click="loadHistory({{ $hw['id'] }})" class="btn-ghost btn-xs text-info flex-1" label="تاریخچه" />
+                        <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-xs text-error flex-1" label="حذف" />
+                    </div>
+                </div>
+            @endforeach
+        </div>
+
+        {{-- Desktop Table --}}
+        <div class="hidden md:block">
+            <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
+                    :per-page-values="[10, 20, 50, 100]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
+                @scope('cell_checkbox', $hw)
+                    <input type="checkbox" wire:model.live="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
+                @endscope
+                @scope('cell_status', $hw)
+                    @if($hw['status'] === 'mark')
+                        <x-badge value="علامت" class="badge-warning" />
+                    @elseif($hw['status'] === 'off')
+                        <x-badge value="خاموش" class="badge-neutral" />
+                    @else
+                        <x-badge value="فعال" class="badge-success" />
+                    @endif
+                @endscope
+                @scope('actions', $hw)
+                    <div class="flex gap-1">
+                        <x-button icon="o-pencil" wire:click="editHardware({{ $hw['id'] }})" class="btn-ghost btn-sm text-primary" />
+                        <x-button icon="o-clock" wire:click="loadHistory({{ $hw['id'] }})" class="btn-ghost btn-sm text-info" />
+                        <x-button icon="o-trash" wire:click="delete({{ $hw['id'] }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+                    </div>
+                @endscope
+            </x-table>
+        </div>
     </x-card>
 </div>
 

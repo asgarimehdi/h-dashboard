@@ -10,7 +10,6 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
-        "hekmatinasser/verta": "^9.0",
         "laravel/boost": "^2.7",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
@@ -18,7 +17,6 @@
         "livewire/livewire": "^4.0",
         "maatwebsite/excel": "^4.0",
         "morilog/jalali": "3.5",
-        "openai-php/client": "^0.20.1",
         "robsontenorio/mary": "^2.8.1",
         "sentry/sentry-laravel": "^4.27",
         "spatie/laravel-permission": "^8.0"
