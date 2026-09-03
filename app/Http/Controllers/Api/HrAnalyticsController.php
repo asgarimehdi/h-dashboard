@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
 use App\Models\Unit;
-use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -22,9 +21,9 @@ class HrAnalyticsController extends Controller
     /**
      * GET /api/hr/analytics/headcount-trend — monthly headcount for last N months.
      */
-    public function headcountTrend(Request $request): JsonResponse
+    public function headcountTrend(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $months = min((int) $request->get('months', 12), 24);
 
         $data = Cache::remember(
@@ -72,9 +71,9 @@ class HrAnalyticsController extends Controller
     /**
      * GET /api/hr/analytics/vacancy-trend — monthly vacancy count (units with zero personnel).
      */
-    public function vacancyTrend(Request $request): JsonResponse
+    public function vacancyTrend(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $months = min((int) $request->get('months', 12), 24);
 
         $data = Cache::remember(
@@ -153,9 +152,9 @@ class HrAnalyticsController extends Controller
     /**
      * GET /api/hr/analytics/staffing-ratio — personnel count per unit_type and per semat.
      */
-    public function staffingRatio(Request $request): JsonResponse
+    public function staffingRatio(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $data = Cache::remember(
             $this->hrAnalyticsCacheKey('staffing_ratio', $accessibleIds),
