@@ -3,10 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exports\HardwareExport;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
-use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -14,7 +13,7 @@ class HardwareExportController extends Controller
 {
     use PersianNormalizer;
 
-    public function export(Request $request)
+    public function export(UnitScopedRequest $request)
     {
         $columns = array_filter(explode(',', $request->input('columns', '')));
         if (empty($columns)) {
@@ -22,7 +21,7 @@ class HardwareExportController extends Controller
         }
 
         // Build query — same logic as Livewire component
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = $request->accessibleIds();
         $query = Hardware::with('person.unit');
 
         // Org scope

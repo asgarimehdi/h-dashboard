@@ -295,25 +295,25 @@ parameters:
 			path: app/Exports/HardwareExport.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$bbox\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$bbox\.$#'
 			identifier: property.notFound
 			count: 4
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$priority\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$priority\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$status\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$type\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/GisController.php
@@ -379,6 +379,42 @@ parameters:
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$action\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$date_from\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$date_to\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$field\.$#'
+			identifier: property.notFound
+			count: 9
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$user_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 4
@@ -442,42 +478,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$user_agent\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$action\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$date_from\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$date_to\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$field\.$#'
-			identifier: property.notFound
-			count: 9
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$source\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 2
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
@@ -678,8 +678,6 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/Api/HardwareController.php
 
-
-
 		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
@@ -753,73 +751,73 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$cpu\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$cpu\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$hdd\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$hdd\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$mark\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$mark\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$net_type\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$net_type\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$os\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$os\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$person\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$person\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$ram\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$ram\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$semat\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$shutdown\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$shutdown\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$type\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$unit\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
@@ -849,49 +847,49 @@ parameters:
 			path: app/Http/Controllers/Api/HrAnalyticsController.php
 
 		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$estekhdam_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$radif_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$semat_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$tahsil_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$unit_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/HrStatsController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$estekhdam_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$radif_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$tahsil_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit_id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HrStatsController.php
@@ -1005,6 +1003,24 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PersonController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$semat_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PersonController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$unit_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PersonController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1014,24 +1030,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
 			identifier: property.notFound
 			count: 3
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Http/Controllers/Api/PersonController.php
 
 		-

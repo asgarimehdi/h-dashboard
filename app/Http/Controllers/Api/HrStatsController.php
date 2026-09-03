@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
 use App\Models\Unit;
-use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -22,9 +21,9 @@ class HrStatsController extends Controller
     /**
      * GET /api/hr/stats — aggregated HR stats.
      */
-    public function stats(Request $request): JsonResponse
+    public function stats(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $data = Cache::remember(
             $this->hrStatsCacheKey($accessibleIds),
@@ -105,9 +104,9 @@ class HrStatsController extends Controller
     /**
      * GET /api/hr/vacancies — units with no assigned semat holders.
      */
-    public function vacancies(Request $request): JsonResponse
+    public function vacancies(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $scopeHash = md5(implode(',', $accessibleIds));
         $version = Cache::get('hr_stats_version', 0);
@@ -132,9 +131,9 @@ class HrStatsController extends Controller
     /**
      * GET /api/hr/personnel — paginated personnel list with filters.
      */
-    public function personnel(Request $request): JsonResponse
+    public function personnel(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $query = Person::leftJoin('units', 'persons.u_id', '=', 'units.id')
             ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
@@ -203,9 +202,9 @@ class HrStatsController extends Controller
     /**
      * GET /api/hr/personnel/{n_code} — personnel detail with full HR profile.
      */
-    public function personDetail(Request $request, string $nCode): JsonResponse
+    public function personDetail(UnitScopedRequest $request, string $nCode): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $person = Person::with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name'])
             ->where('n_code', $nCode)

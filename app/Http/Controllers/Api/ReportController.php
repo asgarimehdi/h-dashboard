@@ -3,21 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
-use App\Services\AccessService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Morilog\Jalali\Jalalian;
 
 class ReportController extends Controller
 {
-    public function units(Request $request): JsonResponse
+    public function units(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $version = Cache::get('report_units_version', 0);
         $cacheKey = "report_units:v{$version}:".md5(json_encode($accessibleIds));
 
@@ -50,9 +49,9 @@ class ReportController extends Controller
         return response()->json($data);
     }
 
-    public function todos(Request $request): JsonResponse
+    public function todos(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $version = Cache::get('report_todos_version', 0);
         $cacheKey = "report_todos:v{$version}:".md5(json_encode($accessibleIds));
 
@@ -99,9 +98,9 @@ class ReportController extends Controller
         return response()->json($data);
     }
 
-    public function tickets(Request $request): JsonResponse
+    public function tickets(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $version = Cache::get('report_tickets_version', 0);
         $cacheKey = "report_tickets:v{$version}:".md5(json_encode($accessibleIds));
 

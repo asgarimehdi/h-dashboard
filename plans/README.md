@@ -51,7 +51,7 @@ Fix real logic bugs. Some are interdependent.
 | Plan | Finding | Category | Status | Depends on |
 |------|---------|----------|--------|------------|
 | [019](PLAN-019-optimize-dashboard-queries.md) | Dashboard runs 14+ queries on cold cache | Perf | ✅ DONE | — |
-| [020](PLAN-020-deduplicate-accessibleIds-unitScopedRequest.md) | 35× duplicated accessibleIds auth pattern | TechDebt | ⚠️ PARTIAL | — |
+| [020](PLAN-020-deduplicate-accessibleIds-unitScopedRequest.md) | 35× duplicated accessibleIds auth pattern | TechDebt | ✅ DONE | — |
 
 ### Phase 5 — Architecture (M-L effort)
 ⚠️ Plan 021 should land before 023 and 022 (reduces merge conflicts).
@@ -79,16 +79,14 @@ Independent of code changes; can be parallelized.
 
 | Status | Count | Plans |
 |--------|-------|-------|
-| ✅ DONE | 29 | 001–006, 007–012, 013–018, 019, 021, 022, 024, 026, 027, 029 |
-| ✅ DONE | 29 | All plans |
-
+| ✅ DONE | 30 | 001–006, 007–012, 013–019, 020, 021, 022, 024, 026, 027, 029 |
+| ⚠️ PARTIAL | 3 | 023, 025, 028 |
 | 🚫 REJECTED | 0 | — |
 
 ------|-----|
-| **020** Deduplicate accessibleIds | `HardwareController` not migrated — still 8 occurrences of old `app(AccessService::class)->accessibleUnitIds()` pattern. TodoController + TicketController done. |
-| **023** Decompose hardware/index | Sub-components created (filters, table, trash-modal, audit-modal) but parent `index.blade.php` still 1366 lines — not refactored to use `<livewire:hardware.*>` includes. |
+| **023** Decompose hardware/index | Sub-components created (filters, table, trash-modal, audit-modal) but parent `index.blade.php` still 1103 lines — not fully refactored. |
 | **025** Enforce Pint pre-commit | CI lint ✅, script exists ✅ — but `.git/hooks/pre-commit` symlink never installed on developer machines. |
-| **028** Sentry error tracking | Package + config + env present — but no explicit `\Sentry\Laravel\captureException` registration in `bootstrap/app.php`. |
+| **028** Sentry error tracking | Package + config + env present — `Integration::handles()` registered in bootstrap/app.php. Only gap: DSN may not be set in production env. |
 
 ---
 
