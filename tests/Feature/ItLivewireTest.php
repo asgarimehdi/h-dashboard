@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(\App\Services\ZabbixService::class);
+covers(ZabbixService::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

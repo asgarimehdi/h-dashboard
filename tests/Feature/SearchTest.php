@@ -74,7 +74,7 @@ test('search page filters tickets by query', function () {
         'subject' => 'تست جستجو',
         'content' => 'محتوا',
         'status' => 'created',
-        'priority' => 'medium',
+        'priority' => 'urgent',
     ]);
 
     Livewire::test('search.index')

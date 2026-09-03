@@ -69,7 +69,7 @@ test('web login fails with invalid credentials', function () {
 test('logout invalidates session and redirects', function () {
     $this->actingAs($this->user);
 
-    $this->get('/logout')
+    $this->post('/logout')
         ->assertRedirect('/');
 
     $this->assertGuest();

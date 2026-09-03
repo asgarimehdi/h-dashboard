@@ -45,12 +45,12 @@ class TicketApiTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
+        $unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->assignRole('admin');
         $user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
-        $unit = Unit::create(['name' => 'Test Unit']);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 
@@ -117,16 +117,16 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/tickets', [
-            'subject' => 'Medium Priority',
+            'subject' => 'Urgent Priority',
             'content' => 'Description',
-            'priority' => 'medium',
+            'priority' => 'urgent',
             'unit_id' => $unit->id,
         ]);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
 
-        $this->assertDatabaseHas('tickets', ['subject' => 'Medium Priority', 'priority' => 'medium']);
+        $this->assertDatabaseHas('tickets', ['subject' => 'Urgent Priority', 'priority' => 'urgent']);
     }
 
     public function test_user_can_update_ticket(): void

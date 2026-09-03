@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Models\Person;
+use App\Models\Unit;
 use App\Models\User;
 use App\Services\ZabbixService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,7 +94,8 @@ class MultiLatestValueApiTest extends TestCase
         $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
         $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
+        $unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
 
         return User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
     }
