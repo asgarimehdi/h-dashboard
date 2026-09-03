@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Http\Controllers\Api\HardwareController;
 use App\Models\Estekhdam;
 use App\Models\Person;
+use App\Models\Unit;
 use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
@@ -39,6 +40,7 @@ class LoginLivewireTest extends TestCase
     protected function makeUser(string $nCode = '1234567890', string $password = 'secret123'): User
     {
         // users.n_code has a FK to persons.n_code -> create the person first.
+        $unit = Unit::create(['name' => 'Test Unit']);
         Person::create([
             'n_code' => $nCode,
             'f_name' => 'کاربر',
@@ -47,7 +49,7 @@ class LoginLivewireTest extends TestCase
             'e_id' => Estekhdam::create(['name' => 'E-'.$nCode])->id,
             's_id' => Semat::create(['name' => 'S-'.$nCode])->id,
             'r_id' => Radif::create(['name' => 'R-'.$nCode])->id,
-            'u_id' => 1, // not enforced for login
+            'u_id' => $unit->id,
         ]);
 
         return User::create([

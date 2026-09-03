@@ -644,10 +644,6 @@ return new class extends Component
         if ($displayValue === 'خیر') {
             return false;
         }
-        if (in_array($field, ['ram', 'vlan', 'port'], true) && is_numeric($displayValue)) {
-            return (int) $displayValue;
-        }
-
         return $displayValue;
     }
 
