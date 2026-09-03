@@ -45,8 +45,9 @@ class TicketController extends Controller
 
     public function show(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        if ($request->assertAccessibleUnit($ticket->unit_id) !== true) {
-            return $request->assertAccessibleUnit($ticket->unit_id);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         return response()->json([
@@ -70,8 +71,9 @@ class TicketController extends Controller
             'deadline' => 'nullable|date',
         ]);
 
-        if ($request->assertAccessibleUnit($validated['unit_id']) !== true) {
-            return $request->assertAccessibleUnit($validated['unit_id']);
+        $result = $request->assertAccessibleUnit($validated['unit_id']);
+        if ($result !== true) {
+            return $result;
         }
 
         $ticket = Ticket::create([
@@ -89,8 +91,9 @@ class TicketController extends Controller
 
     public function update(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        if ($request->assertAccessibleUnit($ticket->unit_id) !== true) {
-            return $request->assertAccessibleUnit($ticket->unit_id);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         $validated = $request->validate([
@@ -110,8 +113,9 @@ class TicketController extends Controller
 
     public function destroy(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        if ($request->assertAccessibleUnit($ticket->unit_id) !== true) {
-            return $request->assertAccessibleUnit($ticket->unit_id);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         $ticket->delete();
@@ -121,8 +125,9 @@ class TicketController extends Controller
 
     public function assign(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        if ($request->assertAccessibleUnit($ticket->unit_id) !== true) {
-            return $request->assertAccessibleUnit($ticket->unit_id);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         $validated = $request->validate([
@@ -152,8 +157,9 @@ class TicketController extends Controller
 
     public function accept(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        if ($request->assertAccessibleUnit($ticket->unit_id) !== true) {
-            return $request->assertAccessibleUnit($ticket->unit_id);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         // Issue #529: only the assigned user can accept the ticket
@@ -174,8 +180,9 @@ class TicketController extends Controller
 
     public function complete(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        if ($request->assertAccessibleUnit($ticket->unit_id) !== true) {
-            return $request->assertAccessibleUnit($ticket->unit_id);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         // Issue #530: only the assigned user can complete the ticket
