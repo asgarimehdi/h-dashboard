@@ -1,45 +1,43 @@
-# Plan 009: Add Livewire coverage for auth.register (route disabled, component-only)
+# Plan 009: Add Livewire coverage for auth.register
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `git diff --stat af29080..HEAD -- tests/`
-> If any test file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
 
 ## Status
 
-- **Priority**: P2
+- **Priority**: P1
 - **Effort**: S
 - **Risk**: LOW
 - **Depends on**: none
 - **Category**: tests
-- **Planned at**: commit `af29080`, 2026-09-03
-- **Issue**: https://github.com/asgarimehdi/h-dashboard/issues/569
+- **Planned at**: commit `HEAD`, 2026-09-04
+- **Issue**: https://github.com/asgarimehdi/h-dashboard/issues/568
 
 ## Why this matters
 
 The `auth.register` Livewire component currently has **no dedicated Livewire test
-coverage**. Adding Pest tests via `Livewire::test()` ensures that auth gates,
-scope filtering, interactions, and edge cases are verified — preventing
-regressions and documenting expected behavior for future contributors.
+coverage**. Adding Pest tests via `Livewire::test()` ensures that validation rules,
+auth gates, user creation, session regeneration, and error branches are verified —
+preventing regressions and documenting expected behavior for future contributors.
 
 ## Current state
 
 - **Component**: `auth.register` — single-file anonymous Livewire 4 class under
-  `resources/views/livewire/` (see AGENTS.md: no `app/Livewire/*.php` files).
-- **Route**: `/register (COMMENTED OUT in routes/web.php:18)` — protected by `none - component only` (see `routes/web.php`).
+  `resources/views/livewire/auth/register.blade.php` (see AGENTS.md: no
+  `app/Livewire/*.php` files).
+- **Route**: COMMENTED OUT in `routes/web.php:18`. The component is tested directly
+  via `Livewire::test('auth.register')` — no HTTP route needed.
 - **Conventions**: Pest tests under `tests/Feature/`, run via `composer test`.
-  Model after `tests/Feature/ActivityLogPageLivewireTest.php` and
-  `tests/Feature/HrLivewireTest.php`.
-- **Key services**: `AccessService::accessibleUnitIds()` for org-scope
-  filtering (recursive CTE, cached, version-invalidated).
+  Model after `tests/Feature/Auth/LoginLivewireTest.php`.
 - **Auth**: session-based for Livewire (`actingAs`); Sanctum Bearer tokens NOT
   accepted for Livewire pages.
+- **Known quirk**: The component uses `request()->session()->regenerate()` (not
+  the `Session` facade). Livewire tests skip the `StartSession` middleware via
+  `withoutMiddleware()`, so the test kernel must be wrapped to attach the session
+  store to every request. See setUp in the test file.
 
 ## Commands you will need
 
@@ -47,14 +45,14 @@ regressions and documenting expected behavior for future contributors.
 |---------|---------|-------------------|
 | Start DB | `docker compose -f docker-compose-pgsql-.yml up -d` | PostGIS healthy on :5432 |
 | Config clear | `php artisan config:clear && php artisan route:clear` | No stale caches |
-| Run focused | `XDEBUG_MODE=off php artisan test tests/Feature/AuthRegisterLivewireTest.php` | All pass |
-| Full suite | `composer test` | All pass (928 baseline) |
+| Run focused | `XDEBUG_MODE=off php artisan test tests/Feature/AuthRegisterLivewireTest.php` | 7 passed |
 | Format | `vendor/bin/pint --dirty --format agent` | Clean |
 
 ## Scope
 
 **In scope** (the ONLY file you may create/modify):
 - `tests/Feature/AuthRegisterLivewireTest.php` (CREATE)
+- `plans/009-auth-register.md` (CREATE)
 
 **Out of scope** (do NOT touch, even though they look related):
 - Any production source file (`app/`, `resources/views/`, `routes/`)
@@ -65,85 +63,58 @@ regressions and documenting expected behavior for future contributors.
 
 ### Step 1: Verify current state on disk
 
-Open the component file and the route definition yourself; confirm paths and
-middleware match "Current state" above. Record any drift as a STOP.
-
 ```bash
 ls resources/views/livewire/auth/register.blade.php
-grep -n "auth.register" routes/web.php
-grep -rn "Livewire::test(\"auth.register\")" tests/ | head -5
+grep -n "auth.register" routes/web.php | head -5
+grep -rn 'Livewire::test("auth.register")' tests/ | head -5
 ```
 
-**Verify**: component file exists; route line matches; no existing dedicated
+**Verify**: component file exists; route is commented out; no existing dedicated
 test file for this component.
 
-### Step 2: Write the test file skeleton with setUp helper
+### Step 2: Write the test file
 
-Create `tests/Feature/AuthRegisterLivewireTest.php` following the exemplar pattern below
-(adapted from `tests/Feature/ActivityLogPageLivewireTest.php`):
+Create `tests/Feature/AuthRegisterLivewireTest.php` following the exemplar
+pattern (adapted from `tests/Feature/Auth/LoginLivewireTest.php`):
 
 - `use RefreshDatabase;`
-- `setUp()`: seed `PermissionSeeder::class`, then insert lookup rows with
-  explicit ids into `tahsils`, `estekhdams`, `semats`, `radifs`
-  (id=1, name='Test' each)
-- helper `createUserWithUnit(string $perm)`: create `Unit`, create `Person`
-  (n_code = 10-digit unique string, f_name/l_name, t_id/e_id/s_id/r_id = 1,
-  u_id = unit id), create `User` (n_code + hashed password),
-  `$user->givePermissionTo($perm)`, attach unit via `user_units` pivot with
-  `['role' => 'staff', 'is_primary' => true]`
-- where the route needs it: `Session::put('current_unit_id', $unit->id)`
+- `setUp()`: seed lookup rows (`tahsils`, `estekhdams`, `semats`, `radifs`)
+  with explicit `id=1`; resync Postgres sequences; wrap HTTP kernel to attach
+  session store (see known quirk above).
+- helper `createPerson(string $nCode)`: create `Unit`, `Person` with the given
+  `n_code` and all required FKs.
+- 7 test methods:
 
-NOTE: When seeding rows with explicit IDs, resync the Postgres sequence
-afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
+| Method | What it tests |
+|--------|---------------|
+| `test_guest_renders` | Guest can mount component, sees form fields |
+| `test_authed_redirects` | Authenticated user → redirect to `/` |
+| `test_registers_valid` | Valid n_code + matching passwords → User created, logged in, redirected `/` |
+| `test_session_regenerated` | After register, session token changes |
+| `test_validation_errors` | Empty/short/mismatched → validation errors |
+| `test_person_missing` | n_code not in persons → error on n_code |
+| `test_user_duplicate` | n_code already in users → error on n_code |
 
-**Verify**: `XDEBUG_MODE=off php artisan test tests/Feature/AuthRegisterLivewireTest.php`
-→ file loads (may have 0 tests yet, but no fatal).
-
-### Step 3: Add smoke tests
-
-Write test methods for:
-- guest request → 302 to `/login`
-- authenticated user WITHOUT the required permission → 403
-- authenticated user WITH permission (+ `current_unit_id` session where
-  required) → 200 and component-specific content visible (`assertSee`)
-
-**Verify**: focused test run → all smoke tests pass.
-
-### Step 4: Add interaction tests
-
-- S1: Guest renders component + 3 fields (n_code, password, password_confirmation)
-- S2: Authenticated mount redirects to /
-- S3: Valid n_code (Person exists) + matching passwords -> User created, logged in, redirected /, session regenerated.
-
-Use `Livewire::test('auth.register')` with `actingAs($user)`; assert state with
-`assertSet`, events with `assertDispatched`, validation with
-`assertHasErrors`, DB effects with `assertDatabaseHas`/`assertDatabaseMissing`.
-
-**Verify**: focused test run → all interaction tests pass.
-
-### Step 5: Add edge-case tests
-
-- E1: Empty n_code/password, n_code not size 10, password mismatch
-- E2: n_code not in persons -> Persian 'not registered' error
-- E3: n_code already in users -> 'already registered' error
-- E4: Special-char password hashes
-- E5: Non-digit 10-char n_code accepted (no numeric rule).
-
-**Verify**: focused test run → all edge tests pass.
-
-### Step 6: Format and run the full gate
+### Step 3: Format and run
 
 ```bash
+XDEBUG_MODE=off php artisan test tests/Feature/AuthRegisterLivewireTest.php
 vendor/bin/pint --dirty --format agent
-composer test
 ```
 
-**Verify**: both commands exit 0; no regressions in the full suite.
+**Verify**: 7 tests pass; pint clean.
+
+### Step 4: Commit and push
+
+```bash
+git add tests/Feature/AuthRegisterLivewireTest.php plans/009-auth-register.md
+git commit -m 'test(009): add AuthRegisterLivewireTest for auth.register component'
+git push origin bahar
+```
 
 ## Test plan
 
-New tests to write in `tests/Feature/AuthRegisterLivewireTest.php` (model structure on
-`tests/Feature/ActivityLogPageLivewireTest.php`):
+New tests in `tests/Feature/AuthRegisterLivewireTest.php`:
 
 - `test_guest_renders`
 - `test_authed_redirects`
@@ -157,11 +128,11 @@ New tests to write in `tests/Feature/AuthRegisterLivewireTest.php` (model struct
 
 Machine-checkable. ALL must hold:
 
-- [ ] Focused run `XDEBUG_MODE=off php artisan test tests/Feature/AuthRegisterLivewireTest.php` exits 0
+- [ ] Focused run exits 0
 - [ ] Every method in "Test plan" exists and passes
 - [ ] `vendor/bin/pint --dirty` reports no changes
 - [ ] `git status -- tests/` shows ONLY the new test file
-- [ ] `plans/README.md` status row updated to DONE
+- [ ] Committed and pushed to `bahar`
 
 ## STOP conditions
 
@@ -174,10 +145,3 @@ Stop and report back (do not improvise) if:
   state" — report, do not guess.
 - A step's verification fails twice after a reasonable fix attempt.
 - The work appears to require touching an out-of-scope file.
-
-## Maintenance notes
-
-- For the owner of this code afterwards: if filters/actions are added to the
-  component, add the matching `Livewire::test` method in the same file.
-- A reviewer should scrutinize: auth/permission branches, scope assertions
-  (`accessibleUnitIds`), and that no production file was modified.
