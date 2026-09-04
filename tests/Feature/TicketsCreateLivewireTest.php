@@ -188,7 +188,7 @@ class TicketsCreateLivewireTest extends TestCase
             ->assertSet('showDropdown', true);
 
         $units = $component->get('units');
-        $this->assertCount(2, $units, 'Expected 2 units, got ' . count($units) . ': ' . json_encode(array_column($units, 'id')));
+        $this->assertCount(2, $units, 'Expected 2 units, got '.count($units).': '.json_encode(array_column($units, 'id')));
         $ids = array_column($units, 'id');
         $this->assertContains($targetA->id, $ids);
         $this->assertContains($targetB->id, $ids);

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Attachment;
 use App\Models\Person;
-use App\Models\TaskActivity;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
@@ -14,7 +13,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
@@ -61,7 +59,7 @@ class TicketsInboxLivewireTest extends TestCase
         $user = $overrides['user'] ?? User::first();
 
         return Ticket::create(array_merge([
-            'ticket_code' => 'T' . fake()->unique()->numerify('######'),
+            'ticket_code' => 'T'.fake()->unique()->numerify('######'),
             'user_id' => $user->id,
             'unit_id' => $unit->id,
             'subject' => 'تیکت تست',

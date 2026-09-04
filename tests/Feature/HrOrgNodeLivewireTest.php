@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -244,7 +245,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
         $rootUnits = $component->get('rootUnits');
         foreach ($rootUnits as $unit) {
-            $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             $this->assertContains($unit->id, $accessibleIds);
         }
     }
