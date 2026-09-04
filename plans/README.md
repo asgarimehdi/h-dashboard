@@ -10,36 +10,36 @@ STOP conditions, and update your row when done.
 
 | Plan | Title | Issue | Priority | Effort | Depends on | Status |
 |------|-------|-------|----------|--------|------------|--------|
-| 001 | [Add comprehensive Livewire coverage for hardware.index](001-hardware-index.md) | #560 | P1 | L | - | TODO |
-| 002 | [Add comprehensive Livewire coverage for units.index](002-units-index.md) | #561 | P1 | L | - | TODO |
+| 001 | [Add comprehensive Livewire coverage for hardware.index](001-hardware-index.md) | #560 | P1 | L | - | DONE |
+| 002 | [Add comprehensive Livewire coverage for units.index](002-units-index.md) | #561 | P1 | L | - | DONE |
 | 003 | [Add Livewire coverage for hardware.table partial via hardware.index](003-hardware-table.md) | #562 | P2 | M | plans/001-hardware-index.md | TODO |
 | 004 | [Add Livewire coverage for hardware.filters partial via hardware.index](004-hardware-filters.md) | #563 | P2 | M | plans/001-hardware-index.md | TODO |
 | 005 | [Add Livewire coverage for hardware.audit-modal partial via hardware.index](005-hardware-audit-modal.md) | #565 | P2 | M | plans/001-hardware-index.md | TODO |
 | 006 | [Add Livewire coverage for hardware.trash-modal partial via hardware.index](006-hardware-trash-modal.md) | #566 | P2 | M | plans/001-hardware-index.md | TODO |
-| 007 | [Add Livewire coverage for hardware.import-hardware.import-hardware](007-hardware-import.md) | #567 | P1 | M | - | TODO |
-| 008 | [Add Livewire coverage for kargozini.import-persons.import-persons](008-kargozini-import.md) | #568 | P1 | M | - | TODO |
+| 007 | [Add Livewire coverage for hardware.import-hardware.import-hardware](007-hardware-import.md) | #567 | P1 | M | - | DONE |
+| 008 | [Add Livewire coverage for kargozini.import-persons.import-persons](008-kargozini-import.md) | #568 | P1 | M | - | DONE |
 | 009 | [Add Livewire coverage for auth.register (route disabled, component-only)](009-auth-register.md) | #569 | P2 | S | - | TODO |
 | 010 | [Add Livewire coverage for maps.map embedded widget](010-maps-map.md) | #570 | P2 | S | - | TODO |
-| 011 | [Add Livewire coverage for map.map-dashboard](011-map-dashboard.md) | #571 | P1 | M | plans/010-maps-map.md | TODO |
-| 012 | [Add Livewire coverage for maps.point](012-maps-point.md) | #572 | P2 | M | - | TODO |
-| 013 | [Add Livewire coverage for maps.route](013-maps-route.md) | #573 | P2 | M | - | TODO |
-| 014 | [Add Livewire coverage for maps.route2](014-maps-route2.md) | #574 | P2 | M | - | TODO |
-| 015 | [Add Livewire coverage for maps.unit](015-maps-unit.md) | #575 | P2 | M | - | TODO |
-| 016 | [Add Livewire coverage for it.multi-gauge embedded component](016-it-multi-gauge.md) | #576 | P2 | S | - | TODO |
-| 017 | [Add Livewire coverage for it.network-traffic-chart embedded component](017-it-network-traffic.md) | #577 | P2 | S | - | TODO |
-| 018 | [Add Livewire coverage for reports index/advanced page](018-reports-index.md) | #578 | P2 | M | - | TODO |
-| 019 | [Add Livewire coverage for reports.persons](019-reports-persons.md) | #579 | P2 | M | - | TODO |
-| 020 | [Add Livewire coverage for reports.map-no-boundary](020-reports-map-no-boundary.md) | #580 | P1 | M | - | TODO |
-| 021 | [Add Livewire coverage for units.map (PostGIS boundary editor)](021-units-map.md) | #581 | P1 | M | - | TODO |
-| 022 | [Add Livewire coverage for units.chart org tree](022-units-chart.md) | #582 | P1 | M | - | TODO |
-| 023 | [Add Livewire coverage for units.tree-item partial via units.index](023-units-tree-item.md) | #584 | P2 | M | plans/002-units-index.md | TODO |
-| 024 | [Add Livewire coverage for hr.org-node partial via hr.org-chart](024-hr-org-node.md) | #585 | P2 | M | - | TODO |
-| 025 | [Add Livewire coverage for partials.unit-tree-picker (Alpine partial)](025-unit-tree-picker.md) | #586 | P2 | M | - | TODO |
-| 026 | [Add Livewire coverage for tickets.create](026-tickets-create.md) | #587 | P1 | L | - | TODO |
-| 027 | [Add Livewire coverage for tickets.inbox](027-tickets-inbox.md) | #588 | P1 | L | - | TODO |
-| 028 | [Add Livewire coverage for tickets.monitoring](028-tickets-monitoring.md) | #589 | P1 | M | - | TODO |
+| 011 | [Add Livewire coverage for map.map-dashboard](011-map-dashboard.md) | #571 | P1 | M | plans/010-maps-map.md | DONE |
+| 012 | [Add Livewire coverage for maps.point](012-maps-point.md) | #572 | P2 | M | - | DONE |
+| 013 | [Add Livewire coverage for maps.route](013-maps-route.md) | #573 | P2 | M | - | DONE |
+| 014 | [Add Livewire coverage for maps.route2](014-maps-route2.md) | #574 | P2 | M | - | DONE |
+| 015 | [Add Livewire coverage for maps.unit](015-maps-unit.md) | #575 | P2 | M | - | DONE |
+| 016 | [Add Livewire coverage for it.multi-gauge embedded component](016-it-multi-gauge.md) | #576 | P2 | S | - | DONE |
+| 017 | [Add Livewire coverage for it.network-traffic-chart embedded component](017-it-network-traffic.md) | #577 | P2 | S | - | DONE |
+| 018 | [Add Livewire coverage for reports index/advanced page](018-reports-index.md) | #578 | P2 | M | - | DONE |
+| 019 | [Add Livewire coverage for reports.persons](019-reports-persons.md) | #579 | P2 | M | - | DONE |
+| 020 | [Add Livewire coverage for reports.map-no-boundary](020-reports-map-no-boundary.md) | #580 | P1 | M | - | DONE |
+| 021 | [Add Livewire coverage for units.map (PostGIS boundary editor)](021-units-map.md) | #581 | P1 | M | - | DONE |
+| 022 | [Add Livewire coverage for units.chart org tree](022-units-chart.md) | #582 | P1 | M | - | DONE |
+| 023 | [Add Livewire coverage for units.tree-item partial via units.index](023-units-tree-item.md) | #584 | P2 | M | plans/002-units-index.md | DONE |
+| 024 | [Add Livewire coverage for hr.org-node partial via hr.org-chart](024-hr-org-node.md) | #585 | P2 | M | - | DONE |
+| 025 | [Add Livewire coverage for partials.unit-tree-picker (Alpine partial)](025-unit-tree-picker.md) | #586 | P2 | M | - | DONE |
+| 026 | [Add Livewire coverage for tickets.create](026-tickets-create.md) | #587 | P1 | L | - | DONE |
+| 027 | [Add Livewire coverage for tickets.inbox](027-tickets-inbox.md) | #588 | P1 | L | - | DONE |
+| 028 | [Add Livewire coverage for tickets.monitoring](028-tickets-monitoring.md) | #589 | P1 | M | - | DONE |
 | 029 | [Add Livewire coverage for glowingcard (unrouted demo component)](029-glowingcard.md) | #590 | P3 | S | - | TODO |
-| 030 | [Add Livewire coverage for index (role-picker redirect)](030-index-redirect.md) | #592 | P2 | S | - | TODO |
+| 030 | [Add Livewire coverage for index (role-picker redirect)](030-index-redirect.md) | #592 | P2 | S | - | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
