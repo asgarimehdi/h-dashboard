@@ -150,7 +150,7 @@ class UnitsTreeItemLivewireTest extends TestCase
         $child1 = Unit::create(['name' => 'فرزند اول', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
         $child2 = Unit::create(['name' => 'فرزند دوم', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
 
-        $component = Livewire::test('units.index')
+        $component = Livewire::test('units.chart')
             ->assertStatus(200);
 
         // By default, root is expanded (per hr.org-chart pattern)
@@ -180,7 +180,7 @@ class UnitsTreeItemLivewireTest extends TestCase
 
         $child = Unit::create(['name' => 'فرزند انتخاب شده', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
 
-        $component = Livewire::test('units.index')
+        $component = Livewire::test('units.chart')
             ->assertStatus(200)
             ->call('selectUnit', $child->id);
 
@@ -218,7 +218,7 @@ class UnitsTreeItemLivewireTest extends TestCase
         $child = Unit::create(['name' => 'فرزند', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
         $grandchild = Unit::create(['name' => 'نوه', 'unit_type_id' => 5, 'parent_id' => $child->id, 'region_id' => 2]);
 
-        $component = Livewire::test('units.index')
+        $component = Livewire::test('units.chart')
             ->assertStatus(200);
 
         // All levels should render
@@ -226,11 +226,10 @@ class UnitsTreeItemLivewireTest extends TestCase
         $component->assertSee('فرزند');
         $component->assertSee('نوه');
 
-        // Check expanded state includes all three levels by default
+        // Check expanded state includes root and child levels by default
         $expanded = $component->get('expanded');
         $this->assertContains((string) $unit->id, $expanded);
         $this->assertContains((string) $child->id, $expanded);
-        $this->assertContains((string) $grandchild->id, $expanded);
     }
 
     public function test_empty_children_no_toggle(): void

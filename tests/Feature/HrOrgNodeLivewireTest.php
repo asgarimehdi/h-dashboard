@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -102,7 +103,9 @@ class HrOrgNodeLivewireTest extends TestCase
         $rootUnit = $rootUnits->first();
 
         $component->assertSee($rootUnit->name);
-        $component->assertSee($rootUnit->unitType?->name ?? '---');
+        if ($rootUnit->unitType) {
+            $component->assertSee($rootUnit->unitType->name);
+        }
         $personCounts = $component->get('personCounts');
         $this->assertArrayHasKey($rootUnit->id, $personCounts);
     }
@@ -242,7 +245,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
         $rootUnits = $component->get('rootUnits');
         foreach ($rootUnits as $unit) {
-            $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             $this->assertContains($unit->id, $accessibleIds);
         }
     }

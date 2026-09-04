@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Morilog\Jalali\Jalalian;
 use Tests\TestCase;
 
 covers(Ticket::class);
@@ -231,8 +232,8 @@ class TicketsMonitoringLivewireTest extends TestCase
         $new->forceFill(['created_at' => now(), 'updated_at' => now()])->save();
 
         // Window covering only recent tickets
-        $from = now()->subDays(5)->format('Y/m/d');
-        $to = now()->addDay()->format('Y/m/d');
+        $from = Jalalian::fromCarbon(now()->subDays(5))->format('Y/m/d');
+        $to = Jalalian::fromCarbon(now()->addDay())->format('Y/m/d');
 
         Livewire::test('tickets.monitoring')
             ->set('dateFrom', $from)
@@ -294,6 +295,7 @@ class TicketsMonitoringLivewireTest extends TestCase
 
         // User A (in scope) can open the modal
         $this->actingAs($dataA['user']);
+        Session::put('current_unit_id', $dataA['unit']->id);
         Livewire::test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)

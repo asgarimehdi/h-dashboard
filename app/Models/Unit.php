@@ -25,6 +25,7 @@ class Unit extends Model
         'boundary_id',
         'lat',
         'lng',
+        'is_active',
         'can_receive_tickets',
     ];
 

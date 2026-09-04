@@ -1,29 +1,60 @@
 <?php
 
 use App\Models\Unit;
+use App\Models\User;
 use App\Services\AccessService;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 use Mary\Traits\Toast;
 
-return new class extends Component {
+return new class extends Component
+{
     use Toast;
-    
+
     public string $search = '';
+
     public array $expanded = [];
+
     public $rootUnits;
+
     public $selectedUnit = null;
+
     public int $descendantUserCount = 0;
+
     public int $directUserCount = 0;
 
     public function mount(): void
     {
         $this->loadData();
+
+        if (empty($this->expanded)) {
+            $this->expanded = $this->expandFirstNLevels($this->rootUnits->all(), 3);
+        }
+    }
+
+    /**
+     * Expand root units and their children up to maxLevel.
+     */
+    /** @param  Collection<int, Unit>  $nodes  @return  list<string> */
+    protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
+    {
+        $ids = [];
+        foreach ($nodes as $node) {
+            if ($level <= $maxLevel) {
+                $ids[] = (string) $node->id;
+            }
+            if ($level < $maxLevel && $node->childrenRecursive->isNotEmpty()) {
+                $ids = array_merge($ids, $this->expandFirstNLevels($node->childrenRecursive, $maxLevel, $level + 1));
+            }
+        }
+
+        return $ids;
     }
 
     public function loadData(): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $this->rootUnits = Unit::whereNull('parent_id')
             ->whereIn('id', $accessibleIds)
             ->with(['childrenRecursive', 'unitType'])
@@ -51,14 +82,14 @@ return new class extends Component {
     protected function expandParents($unit): void
     {
         if ($unit->parent_id) {
-            $this->expanded[] = (string)$unit->parent_id;
+            $this->expanded[] = (string) $unit->parent_id;
             $parent = Unit::find($unit->parent_id);
             if ($parent) {
                 $this->expandParents($parent);
             }
         }
     }
-    
+
     public function toggle($id): void
     {
         if (in_array($id, $this->expanded)) {
@@ -71,18 +102,18 @@ return new class extends Component {
     public function selectUnit(int $id): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         if (! in_array($id, $accessibleIds)) {
             $this->error('شما مجاز به مشاهده این واحد نیستید.', position: 'toast-bottom');
+
             return;
         }
 
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
-        $descendantIds = Unit::descendantIds($id);
-        $this->descendantUserCount = \App\Models\User::whereHas('units', fn($q) => $q->whereIn('unit_id', $descendantIds))->count();
+        $descendantIds = Unit::descendantIds($id)->filter(fn ($did) => $did != $id)->values();
+        $this->descendantUserCount = User::whereHas('units', fn ($q) => $q->whereIn('unit_id', $descendantIds))->count();
         $this->directUserCount = $this->selectedUnit->assignedUsers->count();
     }
-
 }; ?>
 
 <div>

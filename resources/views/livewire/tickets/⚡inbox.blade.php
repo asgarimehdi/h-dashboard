@@ -69,7 +69,7 @@ new class extends Component
         $user = auth()->user();
         $units = [];
 
-        if (strlen($this->unitSearch) > 1) {
+        if (mb_strlen($this->unitSearch) > 1) {
             $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
                 ->where('can_receive_tickets', true)
                 ->where('id', '!=', auth()->user()->person?->u_id)
@@ -105,12 +105,20 @@ new class extends Component
         }
 
         if ($this->dateFrom) {
-            $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-            $query->where('created_at', '>=', $miladiFrom);
+            try {
+                $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
+                $query->where('created_at', '>=', $miladiFrom);
+            } catch (\Throwable) {
+                // Invalid Jalali date string — ignore filter
+            }
         }
         if ($this->dateTo) {
-            $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-            $query->where('created_at', '<=', $miladiTo);
+            try {
+                $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
+                $query->where('created_at', '<=', $miladiTo);
+            } catch (\Throwable) {
+                // Invalid Jalali date string — ignore filter
+            }
         }
         if (!empty($this->search)) {
             $query->where(function ($q) {
@@ -347,11 +355,15 @@ new class extends Component
     public function showTicket($id): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $ticket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
             ->whereIn('unit_id', $accessibleIds)
-            ->findOrFail($id);
-            
+            ->find($id);
+
+        if (! $ticket) {
+            return;
+        }
+
         $this->showingTicket = $ticket;
         $this->showModal = true;
     }
@@ -411,7 +423,11 @@ new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($ticketId);
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
+
+        if (! $ticket) {
+            return;
+        }
 
         // Capture old status BEFORE any changes (Plan 003: dynamic, not hardcoded)
         $oldStatus = $ticket->status;
