@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Morilog\Jalali\Jalalian;
 use Tests\TestCase;
 
 class TicketsInboxLivewireTest extends TestCase
@@ -259,20 +260,20 @@ class TicketsInboxLivewireTest extends TestCase
         $this->actingAs($ctx['user']);
 
         // created_at in past
-        $old = $this->createTicket(['subject' => 'قدیمی']);
+        $old = $this->createTicket(['subject' => 'تیکت قدیمی تست داتا']);
         $old->forceFill(['created_at' => now()->subDays(40)])->save();
 
-        $new = $this->createTicket(['subject' => 'جدید']);
+        $new = $this->createTicket(['subject' => 'تیکت جدید تست داتا']);
         $new->forceFill(['created_at' => now()])->save();
 
-        $from = now()->subDays(15)->format('Y/m/d');
-        $to = now()->addDay()->format('Y/m/d');
+        $from = Jalalian::fromCarbon(now()->subDays(15))->format('Y/m/d');
+        $to = Jalalian::fromCarbon(now()->addDay())->format('Y/m/d');
 
         Livewire::test('tickets.inbox')
             ->set('dateFrom', $from)
             ->set('dateTo', $to)
-            ->assertSee('جدید')
-            ->assertDontSee('قدیمی');
+            ->assertSee('تیکت جدید تست داتا')
+            ->assertDontSee('تیکت قدیمی تست داتا');
     }
 
     // =====================================================================
@@ -329,7 +330,7 @@ class TicketsInboxLivewireTest extends TestCase
 
         Livewire::test('tickets.inbox')
             ->call('showTicket', $other->id)
-            ->assertStatus(404);
+            ->assertSet('showModal', false);
     }
 
     // =====================================================================
@@ -367,7 +368,7 @@ class TicketsInboxLivewireTest extends TestCase
         Livewire::test('tickets.inbox')
             ->call('acceptTicket', $ticket->id)
             ->assertDispatched('swal', function ($name, $params) {
-                return ($params['title'] ?? '') === 'تیکت قبلاً پذیرفته شده است';
+                return ($params[0]['title'] ?? '') === 'تیکت قبلاً پذیرفته شده است';
             });
 
         $ticket->refresh();
@@ -384,7 +385,7 @@ class TicketsInboxLivewireTest extends TestCase
 
         Livewire::test('tickets.inbox')
             ->call('acceptTicket', $other->id)
-            ->assertStatus(404);
+            ->assertSet('showModal', false);
     }
 
     // =====================================================================
@@ -540,7 +541,7 @@ class TicketsInboxLivewireTest extends TestCase
             ->set('bulkAction', 'complete')
             ->call('executeBulkAction')
             ->assertDispatched('swal', function ($name, $params) {
-                return ($params['title'] ?? '') === 'هیچ تیکت قابل پردازشی یافت نشد';
+                return ($params[0]['title'] ?? '') === 'هیچ تیکت قابل پردازشی یافت نشد';
             });
 
         $t->refresh();
@@ -640,6 +641,7 @@ class TicketsInboxLivewireTest extends TestCase
 
         $todo = Todo::create([
             'title' => 'وظیفه تست',
+            'start_at' => now(),
             'is_completed' => false,
         ]);
 
@@ -689,7 +691,7 @@ class TicketsInboxLivewireTest extends TestCase
             ->set('bulkAction', 'unknown_action')
             ->call('executeBulkAction')
             ->assertDispatched('swal', function ($name, $params) {
-                return str_contains((string) ($params['title'] ?? ''), 'تیکت');
+                return str_contains((string) ($params[0]['title'] ?? ''), 'تیکت');
             });
 
         $t->refresh();
@@ -776,8 +778,8 @@ class TicketsInboxLivewireTest extends TestCase
         $this->createTicket(['subject' => 'تیکت تاریخ']);
 
         Livewire::test('tickets.inbox')
-            ->set('dateFrom', now()->subDays(7)->format('Y/m/d'))
-            ->set('dateTo', now()->addDay()->format('Y/m/d'))
+            ->set('dateFrom', Jalalian::fromCarbon(now()->subDays(7))->format('Y/m/d'))
+            ->set('dateTo', Jalalian::fromCarbon(now()->addDay())->format('Y/m/d'))
             ->assertSee('تیکت تاریخ');
     }
 

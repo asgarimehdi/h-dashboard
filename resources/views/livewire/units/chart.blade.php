@@ -18,12 +18,33 @@ return new class extends Component {
     public function mount(): void
     {
         $this->loadData();
+
+        if (empty($this->expanded)) {
+            $this->expanded = $this->expandFirstNLevels($this->rootUnits->all(), 3);
+        }
+    }
+
+    /**
+     * Expand root units and their children up to maxLevel.
+     */
+    protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
+    {
+        $ids = [];
+        foreach ($nodes as $node) {
+            if ($level <= $maxLevel) {
+                $ids[] = (string) $node->id;
+            }
+            if ($level < $maxLevel && $node->childrenRecursive->isNotEmpty()) {
+                $ids = array_merge($ids, $this->expandFirstNLevels($node->childrenRecursive, $maxLevel, $level + 1));
+            }
+        }
+        return $ids;
     }
 
     public function loadData(): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $this->rootUnits = Unit::whereNull('parent_id')
             ->whereIn('id', $accessibleIds)
             ->with(['childrenRecursive', 'unitType'])
@@ -78,7 +99,7 @@ return new class extends Component {
         }
 
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
-        $descendantIds = Unit::descendantIds($id);
+        $descendantIds = Unit::descendantIds($id)->filter(fn($did) => $did != $id)->values();
         $this->descendantUserCount = \App\Models\User::whereHas('units', fn($q) => $q->whereIn('unit_id', $descendantIds))->count();
         $this->directUserCount = $this->selectedUnit->assignedUsers->count();
     }

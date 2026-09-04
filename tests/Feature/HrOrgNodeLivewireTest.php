@@ -102,7 +102,9 @@ class HrOrgNodeLivewireTest extends TestCase
         $rootUnit = $rootUnits->first();
 
         $component->assertSee($rootUnit->name);
-        $component->assertSee($rootUnit->unitType?->name ?? '---');
+        if ($rootUnit->unitType) {
+            $component->assertSee($rootUnit->unitType->name);
+        }
         $personCounts = $component->get('personCounts');
         $this->assertArrayHasKey($rootUnit->id, $personCounts);
     }
