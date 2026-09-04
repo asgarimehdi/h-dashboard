@@ -12,14 +12,14 @@ STOP conditions, and update your row when done.
 |------|-------|-------|----------|--------|------------|--------|
 | 001 | [Add comprehensive Livewire coverage for hardware.index](001-hardware-index.md) | #560 | P1 | L | - | TODO |
 | 002 | [Add comprehensive Livewire coverage for units.index](002-units-index.md) | #561 | P1 | L | - | TODO |
-| 003 | [Add Livewire coverage for hardware.table partial via hardware.index](003-hardware-table.md) | #562 | P2 | M | plans/001-hardware-index.md | TODO |
-| 004 | [Add Livewire coverage for hardware.filters partial via hardware.index](004-hardware-filters.md) | #563 | P2 | M | plans/001-hardware-index.md | TODO |
-| 005 | [Add Livewire coverage for hardware.audit-modal partial via hardware.index](005-hardware-audit-modal.md) | #565 | P2 | M | plans/001-hardware-index.md | TODO |
-| 006 | [Add Livewire coverage for hardware.trash-modal partial via hardware.index](006-hardware-trash-modal.md) | #566 | P2 | M | plans/001-hardware-index.md | TODO |
+| 003 | [Add Livewire coverage for hardware.table partial via hardware.index](003-hardware-table.md) | #562 | P2 | M | plans/001-hardware-index.md | DONE |
+| 004 | [Add Livewire coverage for hardware.filters partial via hardware.index](004-hardware-filters.md) | #563 | P2 | M | plans/001-hardware-index.md | DONE |
+| 005 | [Add Livewire coverage for hardware.audit-modal partial via hardware.index](005-hardware-audit-modal.md) | #565 | P2 | M | plans/001-hardware-index.md | DONE |
+| 006 | [Add Livewire coverage for hardware.trash-modal partial via hardware.index](006-hardware-trash-modal.md) | #566 | P2 | M | plans/001-hardware-index.md | DONE |
 | 007 | [Add Livewire coverage for hardware.import-hardware.import-hardware](007-hardware-import.md) | #567 | P1 | M | - | TODO |
 | 008 | [Add Livewire coverage for kargozini.import-persons.import-persons](008-kargozini-import.md) | #568 | P1 | M | - | TODO |
-| 009 | [Add Livewire coverage for auth.register (route disabled, component-only)](009-auth-register.md) | #569 | P2 | S | - | TODO |
-| 010 | [Add Livewire coverage for maps.map embedded widget](010-maps-map.md) | #570 | P2 | S | - | TODO |
+| 009 | [Add Livewire coverage for auth.register (route disabled, component-only)](009-auth-register.md) | #569 | P2 | S | - | DONE |
+| 010 | [Add Livewire coverage for maps.map embedded widget](010-maps-map.md) | #570 | P2 | S | - | DONE |
 | 011 | [Add Livewire coverage for map.map-dashboard](011-map-dashboard.md) | #571 | P1 | M | plans/010-maps-map.md | TODO |
 | 012 | [Add Livewire coverage for maps.point](012-maps-point.md) | #572 | P2 | M | - | TODO |
 | 013 | [Add Livewire coverage for maps.route](013-maps-route.md) | #573 | P2 | M | - | TODO |
