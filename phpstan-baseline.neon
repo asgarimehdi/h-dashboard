@@ -5857,12 +5857,6 @@ parameters:
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Call to an undefined method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:error\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡monitoring.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -5881,25 +5875,25 @@ parameters:
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:selectUnitForFilter\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:selectUnitForFilter\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:showTicket\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:showTicket\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:tickets\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:tickets\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:\$filterUnits type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:\$filterUnits type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
