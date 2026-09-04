@@ -8,10 +8,12 @@ use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Attributes\Computed;
+use Mary\Traits\Toast;
 
 new class extends Component
 {
     use WithPagination;
+    use Toast;
 
     public bool $showHelpModal = false;
 

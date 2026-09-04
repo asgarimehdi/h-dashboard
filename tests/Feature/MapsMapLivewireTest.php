@@ -58,6 +58,8 @@ class MapsMapLivewireTest extends TestCase
 
     public function test_mount_defaults(): void
     {
+        Config::set('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+
         Livewire::test('maps.map')
             ->assertStatus(200)
             ->assertSet('map_tile_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
@@ -79,6 +81,8 @@ class MapsMapLivewireTest extends TestCase
 
     public function test_parent_embedding(): void
     {
+        Config::set('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+
         // maps.map is embedded via <livewire:maps.map/> in multiple parents
         // (maps.point, maps.county, maps.route, maps.route2,
         //  reports.map-no-boundary, maps.unit).
