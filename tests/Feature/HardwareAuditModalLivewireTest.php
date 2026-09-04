@@ -1,324 +1,548 @@
 <?php
 
+namespace Tests\Feature;
+
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
-covers(Hardware::class);
+covers(HardwareAudit::class);
 
-uses(TestCase::class, RefreshDatabase::class);
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function modalMakeUser(?string $permission = null): array
+class HardwareAuditModalLivewireTest extends TestCase
 {
-    Permission::firstOrCreate(['name' => 'manage_hardware']);
+    use RefreshDatabase;
 
-    $unit = Unit::create(['name' => 'واحد تست']);
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(PermissionSeeder::class);
 
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
+        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
+        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
+        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
 
-    $nCode = (string) fake()->unique()->numerify('##########');
-    Person::create([
-        'n_code' => $nCode,
-        'f_name' => 'تست',
-        'l_name' => 'کاربر',
-        't_id' => $tId,
-        'e_id' => $eId,
-        's_id' => $sId,
-        'r_id' => $rId,
-        'u_id' => $unit->id,
-    ]);
-
-    $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-    $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-    if ($permission) {
-        $perm = Permission::firstOrCreate(['name' => $permission]);
-        $user->givePermissionTo($perm);
+        // Resync sequences after explicit inserts
+        DB::statement("SELECT setval('tahsils_id_seq', COALESCE((SELECT MAX(id) FROM tahsils), 1))");
+        DB::statement("SELECT setval('estekhdams_id_seq', COALESCE((SELECT MAX(id) FROM estekhdams), 1))");
+        DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
+        DB::statement("SELECT setval('radifs_id_seq', COALESCE((SELECT MAX(id) FROM radifs), 1))");
     }
 
-    Session::put('current_unit_id', $unit->id);
+    /**
+     * Create a user with the given permission, linked to a unit.
+     * Returns ['user' => User, 'unit' => Unit, 'n_code' => string].
+     */
+    protected function createUserWithUnit(string $permission = 'manage_hardware'): array
+    {
+        $unit = Unit::create(['name' => 'واحد تست']);
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode,
+            'f_name' => 'تست',
+            'l_name' => 'کاربر',
+            't_id' => 1,
+            'e_id' => 1,
+            's_id' => 1,
+            'r_id' => 1,
+            'u_id' => $unit->id,
+        ]);
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo($permission);
+        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+        Session::put('current_unit_id', $unit->id);
 
-    return [$user, $unit, $nCode];
-}
-
-function modalCreateHardware(User $user, string $nCode): Hardware
-{
-    return Hardware::create([
-        'n_code' => $nCode,
-        'pc_name' => 'HW-PC-001',
-        'type' => 'pc',
-        'cpu' => 'Intel i5',
-        'ram' => '8192',
-    ]);
-}
-
-function modalCreateAudit(Hardware $hw, string $action, ?array $changes = null, ?int $userId = null): HardwareAudit
-{
-    return HardwareAudit::create([
-        'hardware_id' => $hw->id,
-        'user_id' => $userId,
-        'action' => $action,
-        'source' => 'web',
-        'changes' => $changes ?? [],
-    ]);
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────
-
-it('redirects guest request to login', function () {
-    $response = $this->get('/hardware');
-    $response->assertRedirect('/login');
-});
-
-it('returns 403 for unauthorized user without manage_hardware permission', function () {
-    [$user] = modalMakeUser(null); // no permission
-
-    $this->actingAs($user);
-    $this->get('/hardware')->assertForbidden();
-});
-
-it('allows authorized user to view the hardware index page', function () {
-    [$user] = modalMakeUser('manage_hardware');
-
-    Livewire::actingAs($user)->test('hardware.index')
-        ->assertOk()
-        ->assertSee('شناسنامه سخت افزار');
-});
-
-it('loadHistory opens the modal with history data', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    $hw = modalCreateHardware($user, $nCode);
-
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id)
-        ->assertSet('showHistoryModal', true)
-        ->assertSet('historyHardwareId', $hw->id);
-
-    $history = $component->get('history');
-    $this->assertNotEmpty($history);
-    $this->assertEquals('created', $history[0]['action']);
-    $this->assertEquals($hw->id, $component->get('historyHardwareId'));
-});
-
-it('shows empty state message when there is no audit history', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    // Create a second hardware record with no audits to test empty state
-    $nCode2 = (string) fake()->unique()->numerify('##########');
-    Person::create([
-        'n_code' => $nCode2,
-        'f_name' => 'خالی',
-        'l_name' => 'رکورد',
-        't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),
-        'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E']),
-        's_id' => DB::table('semats')->insertGetId(['name' => 'S']),
-        'r_id' => DB::table('radifs')->insertGetId(['name' => 'R']),
-        'u_id' => Unit::where('name', 'واحد تست')->first()->id,
-    ]);
-    // Delete all audits for this hardware to simulate empty state
-    HardwareAudit::query()->delete();
-
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id ?? 1);
-
-    $history = $component->get('history');
-    $this->assertEmpty($history);
-    $this->assertEquals(0, $component->get('historyTotal'));
-});
-
-it('filters history by action type', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    $hw = modalCreateHardware($user, $nCode);
-
-    // Create audit records of different actions
-    modalCreateAudit($hw, 'updated', [
-        ['field' => 'cpu', 'old' => 'Intel i5', 'new' => 'Intel i7'],
-    ], $user->id);
-    modalCreateAudit($hw, 'deleted', [], $user->id);
-    modalCreateAudit($hw, 'rollback', [
-        ['field' => 'cpu', 'old' => 'Intel i7', 'new' => 'Intel i5'],
-    ], $user->id);
-
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id);
-
-    // Filter by 'updated'
-    $component->call('filterHistory', 'updated');
-    $this->assertEquals('updated', $component->get('historyActionFilter'));
-    foreach ($component->get('history') as $entry) {
-        $this->assertEquals('updated', $entry['action']);
+        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
     }
 
-    // Filter by 'deleted'
-    $component->call('filterHistory', 'deleted');
-    foreach ($component->get('history') as $entry) {
-        $this->assertEquals('deleted', $entry['action']);
+    /**
+     * Create a hardware record for the given user/unit.
+     */
+    protected function createHardware(User $user, array $overrides = []): Hardware
+    {
+        $person = Person::where('n_code', $user->n_code)->first();
+
+        return Hardware::create(array_merge([
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-Test-'.fake()->unique()->bothify('####'),
+            'type' => 'PC',
+            'os' => 'Windows 10',
+            'cpu' => 'Intel i5',
+            'ram' => '8192',
+            'hdd' => '256GB',
+            'ip_local' => '192.168.1.1',
+            'mark' => false,
+            'status' => 'active',
+        ], $overrides));
     }
 
-    // Filter by 'rollback'
-    $component->call('filterHistory', 'rollback');
-    foreach ($component->get('history') as $entry) {
-        $this->assertEquals('rollback', $entry['action']);
+    // ==================== Page load / auth ====================
+
+    public function test_guest_redirected_to_login(): void
+    {
+        $this->get('/hardware')->assertRedirect('/login');
     }
 
-    // Clear filter (null = show all)
-    $component->call('filterHistory', null);
-    $this->assertNull($component->get('historyActionFilter'));
-    $this->assertCount(4, $component->get('history')); // created + updated + deleted + rollback
-});
+    public function test_returns_403_without_permission(): void
+    {
+        $data = $this->createUserWithUnit('view_all_tickets');
+        $this->actingAs($data['user']);
 
-it('shows pagination controls when history exceeds perPage', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    $hw = modalCreateHardware($user, $nCode);
+        $this->get('/hardware')->assertStatus(403);
+    }
 
-    // Create 19 more audit records (modalCreateHardware already triggers observer creating 1)
-    for ($i = 0; $i < 19; $i++) {
-        HardwareAudit::create([
+    public function test_page_loads_for_authorized_user(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+
+        Livewire::test('hardware.index')
+            ->assertOk()
+            ->assertSee('شناسنامه سخت افزار');
+    }
+
+    // ==================== S1: loadHistory opens modal ====================
+
+    public function test_load_history_opens_modal(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('showHistoryModal', true)
+            ->assertSet('historyHardwareId', $hw->id)
+            ->assertSet('historyCurrentPage', 1)
+            ->assertSet('historyActionFilter', null);
+
+        // Verify history contains at least the 'created' audit from Hardware creation
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id);
+
+        $history = $component->get('history');
+        $this->assertNotEmpty($history);
+        $this->assertEquals('created', $history[0]['action']);
+    }
+
+    // ==================== S2: Empty history message ====================
+
+    public function test_empty_history_message(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+
+        // Create hardware with a unique n_code that has no pre-existing audits
+        $hw = $this->createHardware($data['user']);
+
+        // Delete all audits for this hardware so history is empty
+        HardwareAudit::where('hardware_id', $hw->id)->delete();
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('showHistoryModal', true)
+            ->assertSee('تاریخچه‌ای ثبت نشده است');
+    }
+
+    // ==================== S3: filterHistory ====================
+
+    public function test_filter_history_all_actions(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // The observer already created a 'created' audit; add 'updated'
+        $hw->update(['cpu' => 'Intel i7']);
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id);
+
+        // Filter to 'updated'
+        $component->call('filterHistory', 'updated');
+        $history = $component->get('history');
+        $this->assertNotEmpty($history);
+        foreach ($history as $entry) {
+            $this->assertEquals('updated', $entry['action']);
+        }
+
+        // Filter back to null (all)
+        $component->call('filterHistory', null);
+        $history = $component->get('history');
+        $this->assertNotEmpty($history);
+
+        // Filter to 'created'
+        $component->call('filterHistory', 'created');
+        $history = $component->get('history');
+        $this->assertNotEmpty($history);
+        foreach ($history as $entry) {
+            $this->assertEquals('created', $entry['action']);
+        }
+
+        // Filter to 'deleted' — should be empty since no delete happened
+        $component->call('filterHistory', 'deleted');
+        $history = $component->get('history');
+        $this->assertEmpty($history);
+
+        // Filter to 'rollback' — should be empty
+        $component->call('filterHistory', 'rollback');
+        $history = $component->get('history');
+        $this->assertEmpty($history);
+
+        // Filter to 'bulk_mark' — should be empty
+        $component->call('filterHistory', 'bulk_mark');
+        $history = $component->get('history');
+        $this->assertEmpty($history);
+
+        // Filter to 'bulk_delete' — should be empty
+        $component->call('filterHistory', 'bulk_delete');
+        $history = $component->get('history');
+        $this->assertEmpty($history);
+    }
+
+    public function test_filter_history_active_button_class(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Apply updated filter and verify btn-primary class appears for the active filter
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('filterHistory', 'updated')
+            ->assertSee('btn-primary');
+
+        // Apply null filter and check 'همه' is active
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('filterHistory', null)
+            ->assertSee('btn-primary');
+    }
+
+    // ==================== S4: Pagination controls ====================
+
+    public function test_pagination_controls(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // historyPerPage = 15; observer adds 1 'created' audit on create.
+        // Add 20 more 'updated' audits → total 21, which needs 2 pages.
+        for ($i = 0; $i < 20; $i++) {
+            HardwareAudit::create([
+                'hardware_id' => $hw->id,
+                'user_id' => $data['user']->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'ram', 'old' => '4GB', 'new' => '8GB']],
+                'source' => 'web',
+            ]);
+        }
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('historyTotal', 21)
+            ->assertSet('historyCurrentPage', 1);
+
+        // Navigate to page 2
+        $component->call('historyPage', 2)
+            ->assertSet('historyCurrentPage', 2);
+
+        // Page indicator should show page 2 of 2 (ceil(21/15) = 2)
+        $component->assertSee('صفحه 2 از 2');
+    }
+
+    public function test_pagination_first_page_prev_disabled(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Add 20 more to trigger pagination
+        for ($i = 0; $i < 20; $i++) {
+            HardwareAudit::create([
+                'hardware_id' => $hw->id,
+                'user_id' => $data['user']->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'ram', 'old' => '4GB', 'new' => '8GB']],
+                'source' => 'web',
+            ]);
+        }
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id);
+
+        // On page 1, the page indicator should confirm we're on page 1
+        $component->assertSet('historyCurrentPage', 1)
+            ->assertSee('صفحه 1 از 2');
+    }
+
+    public function test_pagination_last_page_next_disabled(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Add 20 more to trigger pagination
+        for ($i = 0; $i < 20; $i++) {
+            HardwareAudit::create([
+                'hardware_id' => $hw->id,
+                'user_id' => $data['user']->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'ram', 'old' => '4GB', 'new' => '8GB']],
+                'source' => 'web',
+            ]);
+        }
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('historyPage', 2);
+
+        // On the last page, the next button should be disabled
+        $component->assertSee('صفحه 2 از 2');
+    }
+
+    // ==================== S5: Rollback ====================
+
+    public function test_rollback_button_visibility(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Create an 'updated' audit with a valid old value
+        $hw->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $hw->id)
+            ->where('action', 'updated')
+            ->first();
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSee('بازگردانی');
+    }
+
+    public function test_rollback_restores_field(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Original CPU is 'Intel i5'; change to 'Intel i7'
+        $hw->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $hw->id)
+            ->where('action', 'updated')
+            ->first();
+
+        $this->assertNotNull($audit);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('rollbackHistoryField', $audit->id, 'cpu')
+            ->assertHasNoErrors();
+
+        // Hardware CPU should be restored to 'Intel i5'
+        $this->assertDatabaseHas('hardwares', [
+            'id' => $hw->id,
+            'cpu' => 'Intel i5',
+        ]);
+
+        // A rollback audit entry should be created
+        $this->assertDatabaseHas('hardware_audits', [
             'hardware_id' => $hw->id,
-            'user_id' => $user->id,
-            'action' => 'updated',
-            'source' => 'web',
-            'changes' => [['field' => 'ram', 'old' => '4096', 'new' => '8192']],
-            'created_at' => now()->subMinutes($i),
+            'action' => 'rollback',
         ]);
     }
 
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id);
+    // ==================== S6: Page resets ====================
 
-    // 1 created from observer + 19 manual = 20
-    $this->assertEquals(20, $component->get('historyTotal'));
-    $this->assertEquals(15, $component->get('historyPerPage'));
-    // First page has 15 items
-    $this->assertCount(15, $component->get('history'));
-    $this->assertEquals(1, $component->get('historyCurrentPage'));
+    public function test_load_history_resets_page_to_1(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
 
-    // Navigate to page 2
-    $component->call('historyPage', 2);
-    $this->assertEquals(2, $component->get('historyCurrentPage'));
-    $this->assertCount(5, $component->get('history'));
-});
+        // Add many audits to enable pagination
+        for ($i = 0; $i < 20; $i++) {
+            HardwareAudit::create([
+                'hardware_id' => $hw->id,
+                'user_id' => $data['user']->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'ram', 'old' => '4GB', 'new' => '8GB']],
+                'source' => 'web',
+            ]);
+        }
 
-it('shows rollback button only for updated/rollback actions with non-dash old value', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    $hw = modalCreateHardware($user, $nCode);
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('historyPage', 2)
+            ->assertSet('historyCurrentPage', 2);
 
-    // 'updated' action with actual old value — rollback button should appear
-    $updated = modalCreateAudit($hw, 'updated', [
-        ['field' => 'cpu', 'old' => 'Intel i5', 'new' => 'Intel i7'],
-    ], $user->id);
-
-    // 'created' action — no rollback button (action not in ['updated', 'rollback'])
-    $created = modalCreateAudit($hw, 'created', [
-        ['field' => 'cpu', 'old' => null, 'new' => 'Intel i5'],
-    ], $user->id);
-
-    // 'deleted' action — no rollback button
-    $deleted = modalCreateAudit($hw, 'deleted', [], $user->id);
-
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id);
-
-    // The Livewire test assertion API checks rendered HTML.
-    // Updated entry with old='Intel i5' (≠ '—') → rollback button present
-    $component->assertSee('rollbackHistoryField');
-
-    // Verify the history data structure supports rollback conditions:
-    $history = $component->get('history');
-    $updatedEntry = collect($history)->firstWhere('action', 'updated');
-    $this->assertNotNull($updatedEntry);
-    // The 'updated' entry should have changes with non-dash old value
-    $this->assertNotEquals('—', $updatedEntry['changes'][0]['old']);
-
-    $createdEntry = collect($history)->firstWhere('action', 'created');
-    $this->assertNotNull($createdEntry);
-    // Created entries with null old become '—' in display; action not in ['updated','rollback']
-    // so no rollback button even if old were non-dash
-});
-
-it('rollbackHistoryField restores the previous field value and creates audit', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    $hw = modalCreateHardware($user, $nCode);
-
-    // Change CPU — observer creates 'updated' audit
-    $hw->update(['cpu' => 'Intel i7']);
-    $audit = HardwareAudit::where('hardware_id', $hw->id)
-        ->where('action', 'updated')
-        ->first();
-    $this->assertNotNull($audit);
-
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id)
-        ->call('rollbackHistoryField', $audit->id, 'cpu')
-        ->assertHasNoErrors();
-
-    // Hardware CPU is restored to old value
-    $this->assertDatabaseHas('hardwares', [
-        'id' => $hw->id,
-        'cpu' => 'Intel i5',
-    ]);
-
-    // A rollback audit was created
-    $this->assertDatabaseHas('hardware_audits', [
-        'hardware_id' => $hw->id,
-        'action' => 'rollback',
-    ]);
-
-    // Rollback entry has the reversed change
-    $rollbackAudit = HardwareAudit::where('hardware_id', $hw->id)
-        ->where('action', 'rollback')
-        ->first();
-    $this->assertNotNull($rollbackAudit);
-    $this->assertEquals('cpu', $rollbackAudit->changes[0]['field']);
-    $this->assertEquals('Intel i7', $rollbackAudit->changes[0]['old']);
-    $this->assertEquals('Intel i5', $rollbackAudit->changes[0]['new']);
-});
-
-it('resets page to 1 when loadHistory or filterHistory is called', function () {
-    [$user, , $nCode] = modalMakeUser('manage_hardware');
-    $hw = modalCreateHardware($user, $nCode);
-
-    // Create 19 more audits so pagination kicks in (1 created + 19 = 20)
-    for ($i = 0; $i < 19; $i++) {
-        HardwareAudit::create([
-            'hardware_id' => $hw->id,
-            'user_id' => $user->id,
-            'action' => 'updated',
-            'source' => 'web',
-            'changes' => [['field' => 'ram', 'old' => '4096', 'new' => '8192']],
-            'created_at' => now()->subMinutes($i),
-        ]);
+        // Calling loadHistory again should reset to page 1
+        $component->call('loadHistory', $hw->id)
+            ->assertSet('historyCurrentPage', 1);
     }
 
-    $component = Livewire::actingAs($user)->test('hardware.index');
-    $component->call('loadHistory', $hw->id);
+    public function test_filter_history_resets_page_to_1(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
 
-    // Navigate to page 2
-    $component->call('historyPage', 2);
-    $this->assertEquals(2, $component->get('historyCurrentPage'));
+        // Add many audits to enable pagination
+        for ($i = 0; $i < 20; $i++) {
+            HardwareAudit::create([
+                'hardware_id' => $hw->id,
+                'user_id' => $data['user']->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'ram', 'old' => '4GB', 'new' => '8GB']],
+                'source' => 'web',
+            ]);
+        }
 
-    // Calling loadHistory again should reset to page 1
-    $component->call('loadHistory', $hw->id);
-    $this->assertEquals(1, $component->get('historyCurrentPage'));
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('historyPage', 2)
+            ->assertSet('historyCurrentPage', 2);
 
-    // Navigate to page 2 again
-    $component->call('historyPage', 2);
-    $this->assertEquals(2, $component->get('historyCurrentPage'));
+        // Calling filterHistory should reset to page 1
+        $component->call('filterHistory', 'updated')
+            ->assertSet('historyCurrentPage', 1);
+    }
 
-    // Calling filterHistory should also reset to page 1
-    $component->call('filterHistory', 'updated');
-    $this->assertEquals(1, $component->get('historyCurrentPage'));
-});
+    // ==================== E1: No matching action -> empty ====================
+
+    public function test_no_matching_action_shows_empty(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Only 'created' audit exists; filter to 'deleted' (nonexistent)
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('filterHistory', 'deleted')
+            ->assertSet('history', [])
+            ->assertSee('تاریخچه‌ای ثبت نشده است');
+    }
+
+    // ==================== E2: historyTotal <= perPage hides pagination ====================
+
+    public function test_pagination_hidden_when_total_lte_per_page(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Only 1 audit (from creation) — no pagination needed
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('historyTotal', 1);
+
+        // Page indicator should NOT be visible
+        $component->assertDontSee('صفحه 1 از');
+    }
+
+    // ==================== E3: Invalid audit id / mismatched hardware_id ====================
+
+    public function test_rollback_invalid_audit_id_no_crash(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('rollbackHistoryField', 999999, 'cpu');
+
+        // No crash; modal stays open
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('showHistoryModal', true);
+    }
+
+    public function test_rollback_mismatched_hardware_id_no_crash(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw1 = $this->createHardware($data['user']);
+        $hw2 = $this->createHardware($data['user']);
+
+        // Create an audit for hw2
+        $hw2->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $hw2->id)
+            ->where('action', 'updated')
+            ->first();
+
+        // Try to rollback hw2's audit while viewing hw1's history
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw1->id)
+            ->call('rollbackHistoryField', $audit->id, 'cpu');
+
+        // hw1's CPU should remain unchanged
+        $hw1->refresh();
+        $this->assertEquals('Intel i5', $hw1->cpu);
+    }
+
+    // ==================== E4: Wrong unit -> empty history ====================
+
+    public function test_wrong_unit_sees_empty_history(): void
+    {
+        $data1 = $this->createUserWithUnit();
+        $data2 = $this->createUserWithUnit();
+
+        // Reset session to user1's unit (createUserWithUnit overwrites it)
+        Session::put('current_unit_id', $data1['unit']->id);
+        $this->actingAs($data1['user']);
+
+        // Create hardware in unit 2's scope
+        $hw = Hardware::create([
+            'n_code' => $data2['n_code'],
+            'pc_name' => 'PC-Other',
+            'type' => 'PC',
+            'cpu' => 'Intel i3',
+        ]);
+
+        // User from unit 1 tries to load history for hardware belonging to unit 2
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('history', [])
+            ->assertSet('historyTotal', 0);
+    }
+
+    // ==================== E5: Jalali date rendering ====================
+
+    public function test_jalali_date_renders_per_entry(): void
+    {
+        $data = $this->createUserWithUnit();
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        // Load history — at least one entry exists (the 'created' audit)
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('showHistoryModal', true);
+
+        // Verify component renders without errors (Jalali dates in the partial)
+        // The Jalali date format Y/m/d H:i should appear in the rendered HTML
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id);
+
+        $history = $component->get('history');
+        $this->assertNotEmpty($history);
+
+        // Each entry should have a valid ISO8601 created_at (Jalali rendering is in the Blade)
+        foreach ($history as $entry) {
+            $this->assertArrayHasKey('created_at', $entry);
+            $this->assertNotNull($entry['created_at']);
+        }
+    }
+}

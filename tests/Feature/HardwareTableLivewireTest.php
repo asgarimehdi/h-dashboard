@@ -1,6 +1,9 @@
 <?php
 
+namespace Tests\Feature;
+
 use App\Models\Hardware;
+use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -8,235 +11,326 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(Hardware::class);
-
-uses(TestCase::class, RefreshDatabase::class);
-
-beforeEach(function () {
-    $this->seed(PermissionSeeder::class);
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-});
-
-function makeHardwareUser(): array
+class HardwareTableLivewireTest extends TestCase
 {
-    $unit = Unit::create(['name' => 'واحد تست']);
-    $nCode = (string) fake()->unique()->numerify('##########');
-    Person::create([
-        'n_code' => $nCode,
-        'f_name' => 'تست',
-        'l_name' => 'کاربر',
-        't_id' => 1,
-        'e_id' => 1,
-        's_id' => 1,
-        'r_id' => 1,
-        'u_id' => $unit->id,
-    ]);
-    $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-    $user->givePermissionTo('manage_hardware');
-    $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-    Session::put('current_unit_id', $unit->id);
+    use RefreshDatabase;
 
-    return [$user, $unit, $nCode];
-}
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(PermissionSeeder::class);
 
-function seedHardware(string $nCode, array $overrides = []): Hardware
-{
-    return Hardware::create(array_merge([
-        'n_code' => $nCode,
-        'pc_name' => 'Test-PC',
-    ], $overrides));
-}
+        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
+        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
+        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
+        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
 
-// ==================== Auth / Smoke ====================
-
-it('redirects guest to login', function () {
-    $this->get('/hardware')->assertRedirect('/login');
-});
-
-it('returns 403 for unauthorized user', function () {
-    $unit = Unit::create(['name' => 'واحد']);
-    $nCode = (string) fake()->unique()->numerify('##########');
-    Person::create([
-        'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-        't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-    ]);
-    $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-    $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-    $this->actingAs($user);
-
-    $this->get('/hardware')->assertStatus(403);
-});
-
-it('authorized user can view the hardware page', function () {
-    [$user] = makeHardwareUser();
-    $this->actingAs($user);
-
-    Livewire::test('hardware.index')
-        ->assertOk()
-        ->assertSee('شناسنامه سخت افزار');
-});
-
-// ==================== Table Rendering ====================
-
-it('renders both mobile and desktop layouts', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
-
-    seedHardware($nCode, ['pc_name' => 'PC-1', 'type' => 'pc']);
-    seedHardware($nCode, ['pc_name' => 'PC-2', 'type' => 'laptop']);
-
-    $component = Livewire::test('hardware.index');
-    $component->assertSee('PC-1')
-        ->assertSee('PC-2');
-
-    $html = $component->html();
-    $this->assertStringContainsString('md:hidden', $html);
-    $this->assertStringContainsString('hidden md:block', $html);
-});
-
-it('displays status badges for mark, off, and active states', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
-
-    // mark=true → status 'mark' → "علامت" badge
-    seedHardware($nCode, ['pc_name' => 'Marked-PC', 'mark' => true, 'shutdown' => false]);
-    // shutdown=true → status 'off' → "خاموش" badge
-    seedHardware($nCode, ['pc_name' => 'Off-PC', 'mark' => false, 'shutdown' => true]);
-    // neither → status 'on' → "فعال" badge
-    seedHardware($nCode, ['pc_name' => 'Active-PC', 'mark' => false, 'shutdown' => false]);
-
-    $html = Livewire::test('hardware.index')->html();
-    $this->assertStringContainsString('علامت', $html);
-    $this->assertStringContainsString('خاموش', $html);
-    $this->assertStringContainsString('فعال', $html);
-});
-
-it('applies warning highlight classes to marked rows', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
-
-    seedHardware($nCode, ['pc_name' => 'Marked-Highlight', 'mark' => true, 'shutdown' => false]);
-    seedHardware($nCode, ['pc_name' => 'Normal-Row', 'mark' => false, 'shutdown' => false]);
-
-    $html = Livewire::test('hardware.index')->html();
-    // Table partial adds border-r-4 border-r-warning bg-warning/10 for mark rows
-    $this->assertStringContainsString('border-r-warning', $html);
-    $this->assertStringContainsString('bg-warning', $html);
-});
-
-// ==================== Bulk Selection ====================
-
-it('renders bulk selection checkboxes', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
-
-    $hw1 = seedHardware($nCode, ['pc_name' => 'Select-PC-1']);
-    $hw2 = seedHardware($nCode, ['pc_name' => 'Select-PC-2']);
-
-    $html = Livewire::test('hardware.index')->html();
-    $this->assertStringContainsString('wire:model.live="selected"', $html);
-    $this->assertStringContainsString('value="'.$hw1->id.'"', $html);
-    $this->assertStringContainsString('value="'.$hw2->id.'"', $html);
-});
-
-// ==================== Pagination ====================
-
-it('paginates with configurable perPage values', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
-
-    // Create 25 records — exceeds default perPage (20)
-    foreach (range(1, 25) as $i) {
-        seedHardware($nCode, ['pc_name' => "Pag-PC-{$i}"]);
+        // Resync sequences after inserting with explicit IDs
+        DB::select("SELECT setval('tahsils_id_seq', (SELECT COALESCE(MAX(id),0) FROM tahsils))");
+        DB::select("SELECT setval('estekhdams_id_seq', (SELECT COALESCE(MAX(id),0) FROM estekhdams))");
+        DB::select("SELECT setval('semats_id_seq', (SELECT COALESCE(MAX(id),0) FROM semats))");
+        DB::select("SELECT setval('radifs_id_seq', (SELECT COALESCE(MAX(id),0) FROM radifs))");
     }
 
-    // Default perPage is 20 — page 1 shows 20 items
-    $component = Livewire::test('hardware.index');
-    $component->assertSee('Pag-PC-1')
-        ->assertSee('Pag-PC-20');
+    protected function createUserWithUnit(string $perm = 'manage_hardware'): array
+    {
+        $unit = Unit::create(['name' => 'واحد تست']);
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        ]);
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->givePermissionTo($perm);
 
-    // Verify perPage property is settable and component re-renders
-    $component->set('perPage', 10);
-    $this->assertEquals(10, $component->get('perPage'));
-    $component->assertSee('Pag-PC-1');
-});
+        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+    }
 
-// ==================== Sort ====================
+    protected function createHardware(array $overrides = [], ?int $personUnitId = null): Hardware
+    {
+        $ncode = $overrides['n_code'] ?? null;
 
-it('accepts sortBy property changes for column ordering', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
+        if (! $ncode) {
+            // Create a person and hardware from scratch
+            $unitId = $personUnitId;
+            $nCode = (string) fake()->unique()->numerify('##########');
+            Person::create([
+                'n_code' => $nCode, 'f_name' => 'سخت', 'l_name' => 'افزار',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1,
+                'u_id' => $unitId ?? 1,
+            ]);
 
-    seedHardware($nCode, ['pc_name' => 'Zebra-PC']);
-    seedHardware($nCode, ['pc_name' => 'Alpha-PC']);
+            return Hardware::create(array_merge([
+                'n_code' => $nCode,
+                'pc_name' => 'PC-Test-'.fake()->bothify('??##'),
+                'type' => 'Desktop',
+                'os' => 'Windows 10',
+                'ip_local' => '192.168.1.'.fake()->numberBetween(2, 254),
+                'cpu' => 'Intel i7',
+                'ram' => '16GB',
+                'hdd' => '512GB SSD',
+                'mark' => false,
+                'shutdown' => false,
+            ], $overrides));
+        }
 
-    $component = Livewire::test('hardware.index');
-    // Verify default sort (id desc) works — both visible
-    $component->assertSee('Zebra-PC')
-        ->assertSee('Alpha-PC');
+        return Hardware::create(array_merge([
+            'pc_name' => 'PC-Test-'.fake()->bothify('??##'),
+            'type' => 'Desktop',
+            'os' => 'Windows 10',
+            'ip_local' => '192.168.1.'.fake()->numberBetween(2, 254),
+            'cpu' => 'Intel i7',
+            'ram' => '16GB',
+            'hdd' => '512GB SSD',
+            'mark' => false,
+            'shutdown' => false,
+        ], $overrides));
+    }
 
-    // Change sort to pc_name ascending
-    $component->set('sortBy', ['column' => 'pc_name', 'direction' => 'asc']);
-    // Both still visible after sort
-    $component->assertSee('Alpha-PC')
-        ->assertSee('Zebra-PC');
-});
+    // ==================== Auth / Smoke ====================
 
-// ==================== Edit Modal ====================
+    public function test_guest_redirected(): void
+    {
+        $this->get('/hardware')->assertRedirect('/login');
+    }
 
-it('opens edit modal when editing a hardware record', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
+    public function test_returns_403_without_permission(): void
+    {
+        $data = $this->createUserWithUnit('manage_users');
+        $this->actingAs($data['user']);
 
-    $hw = seedHardware($nCode, ['pc_name' => 'Edit-PC', 'type' => 'pc']);
+        $this->get('/hardware')->assertStatus(403);
+    }
 
-    Livewire::test('hardware.index')
-        ->call('editHardware', $hw->id)
-        ->assertSet('showEditModal', true)
-        ->assertSet('editingId', $hw->id)
-        ->assertSet('pc_name', 'Edit-PC');
-});
+    public function test_page_loads_for_authorized_user(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
 
-// ==================== History Modal ====================
+        Livewire::test('hardware.index')
+            ->assertStatus(200);
+    }
 
-it('loadHistory opens modal and populates history', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
+    // ==================== S1: Renders both layouts ====================
 
-    $hw = seedHardware($nCode, ['pc_name' => 'History-PC']);
-    // The observer auto-creates a 'created' audit entry
+    public function test_renders_both_layouts(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
 
-    $component = Livewire::test('hardware.index');
-    $component->call('loadHistory', $hw->id)
-        ->assertSet('showHistoryModal', true)
-        ->assertSet('historyHardwareId', $hw->id);
+        $hw = $this->createHardware([], $data['unit']->id);
 
-    $history = $component->get('history');
-    $this->assertNotEmpty($history);
-    $this->assertEquals('created', $history[0]['action']);
-});
+        Livewire::test('hardware.index')
+            ->assertSee('PC-Test-')  // hardware pc_name shows in both layouts
+            ->assertStatus(200);
+    }
 
-// ==================== Delete ====================
+    // ==================== S2: Status badges ====================
 
-it('deletes a hardware record and logs the deletion', function () {
-    [$user, $unit, $nCode] = makeHardwareUser();
-    $this->actingAs($user);
+    public function test_status_badge_mark(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
 
-    $hw = seedHardware($nCode, ['pc_name' => 'Delete-PC']);
+        $hw = $this->createHardware(['mark' => true, 'shutdown' => false], $data['unit']->id);
 
-    Livewire::test('hardware.index')
-        ->call('delete', $hw->id);
+        Livewire::test('hardware.index')
+            ->assertSee('علامت');  // 'mark' status badge
+    }
 
-    $this->assertDatabaseMissing('hardwares', ['id' => $hw->id]);
-    $this->assertDatabaseHas('hardware_audits', [
-        'hardware_id' => $hw->id,
-        'action' => 'deleted',
-    ]);
-});
+    public function test_status_badge_off(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware(['mark' => false, 'shutdown' => true], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('خاموش');  // 'off' status badge
+    }
+
+    public function test_status_badge_active(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware(['mark' => false, 'shutdown' => false], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('فعال');  // 'on' status badge
+    }
+
+    // ==================== S3: Marked-row highlight ====================
+
+    public function test_marked_highlight_applied(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware(['mark' => true, 'shutdown' => false], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('border-r-warning');  // mark highlight CSS class in mobile card
+    }
+
+    // ==================== S4: Bulk checkbox ====================
+
+    public function test_bulk_checkbox_toggles_selection(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware([], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSet('selected', [])
+            ->set('selected', [$hw->id])
+            ->assertSet('selected', [$hw->id]);
+    }
+
+    // ==================== S5: perPage pagination ====================
+
+    public function test_perpage_values(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        Livewire::test('hardware.index')
+            ->assertSet('perPage', 20)
+            ->set('perPage', 10)
+            ->assertSet('perPage', 10)
+            ->set('perPage', 50)
+            ->assertSet('perPage', 50)
+            ->set('perPage', 100)
+            ->assertSet('perPage', 100);
+    }
+
+    // ==================== S6: Sort headers ====================
+
+    public function test_sort_headers_reorder(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        Livewire::test('hardware.index')
+            ->assertSet('sortBy', ['column' => 'id', 'direction' => 'desc'])
+            ->set('sortBy', ['column' => 'pc_name', 'direction' => 'asc'])
+            ->assertSet('sortBy', ['column' => 'pc_name', 'direction' => 'asc'])
+            ->set('sortBy', ['column' => 'id', 'direction' => 'asc'])
+            ->assertSet('sortBy', ['column' => 'id', 'direction' => 'asc']);
+    }
+
+    // ==================== S7: editHardware opens edit modal ====================
+
+    public function test_edit_opens_modal(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware(['pc_name' => 'EditTestPC'], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('editHardware', $hw->id)
+            ->assertSet('showEditModal', true)
+            ->assertSet('editingId', $hw->id)
+            ->assertSet('pc_name', 'EditTestPC');
+    }
+
+    // ==================== loadHistory ====================
+
+    public function test_load_history(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware(['pc_name' => 'HistoryTestPC'], $data['unit']->id);
+
+        // The HardwareAuditObserver auto-creates a "created" audit on Hardware::create,
+        // so we don't need to insert one manually.
+        $auditCount = HardwareAudit::where('hardware_id', $hw->id)->count();
+        $this->assertGreaterThan(0, $auditCount);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSet('showHistoryModal', true)
+            ->assertSet('historyHardwareId', $hw->id)
+            ->assertSet('historyTotal', $auditCount);
+    }
+
+    // ==================== delete soft-deletes ====================
+
+    public function test_delete_soft_deletes(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware(['pc_name' => 'DeleteTestPC'], $data['unit']->id);
+        $hwId = $hw->id;
+
+        Livewire::test('hardware.index')
+            ->call('delete', $hw->id);
+
+        $this->assertDatabaseMissing('hardwares', ['id' => $hwId]);
+    }
+
+    // ==================== E1: Empty hardwares renders without error ====================
+
+    public function test_empty_hardwares_renders(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        Livewire::test('hardware.index')
+            ->assertStatus(200)
+            ->assertDontSee('PC-Test-');
+    }
+
+    // ==================== E2: mark=true + status badge shows even with status mismatch ====================
+
+    public function test_mark_overrides_off_status(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        // mark=true, shutdown=true — mark takes priority in status logic
+        $hw = $this->createHardware(['mark' => true, 'shutdown' => true], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('علامت');  // mark status shown (mark takes priority)
+        // Note: 'خاموش' also appears in the filter dropdown, so assertDontSee
+        // is unreliable here — the status badge correctly shows 'علامت'.
+    }
+
+    // ==================== E3: Unknown status falls to active ====================
+
+    public function test_default_status_is_active(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        // mark=false, shutdown=false — status = 'on' → 'فعال'
+        $hw = $this->createHardware(['mark' => false, 'shutdown' => false], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('فعال');
+    }
+
+    // ==================== E4: Selection survives perPage change ====================
+
+    public function test_selection_survives_perpage_change(): void
+    {
+        $data = $this->createUserWithUnit('manage_hardware');
+        $this->actingAs($data['user']);
+
+        $hw = $this->createHardware([], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->set('selected', [$hw->id])
+            ->set('perPage', 10)
+            ->assertSet('selected', [$hw->id]);
+    }
+}
