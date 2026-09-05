@@ -34,9 +34,9 @@ class ReportApiTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 

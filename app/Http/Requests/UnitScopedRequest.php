@@ -28,7 +28,7 @@ class UnitScopedRequest extends FormRequest
     public function assertAccessibleUnit(int $unitId): JsonResponse|true
     {
         if (! in_array($unitId, $this->accessibleIds())) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
         return true;

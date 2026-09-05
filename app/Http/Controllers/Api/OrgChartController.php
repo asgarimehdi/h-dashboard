@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
-use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -18,9 +17,9 @@ class OrgChartController extends Controller
     /**
      * GET /api/hr/org-chart — full org tree with personnel counts per unit.
      */
-    public function orgChart(Request $request): JsonResponse
+    public function orgChart(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $data = Cache::remember(
             $this->hrStatsCacheKey($accessibleIds, 'orgchart'),
@@ -65,9 +64,9 @@ class OrgChartController extends Controller
      * GET /api/hr/org-chart/expandable — expandable org chart with initial_limit.
      * Returns first N root units; children loaded on-demand via loadSubtree.
      */
-    public function orgChartExpandable(Request $request): JsonResponse
+    public function orgChartExpandable(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
         $scopeHash = md5(implode(',', $accessibleIds));
@@ -101,9 +100,9 @@ class OrgChartController extends Controller
     /**
      * GET /api/hr/org-chart/subtree/{unitId} — load entire subtree for a unit.
      */
-    public function loadSubtree(Request $request, int $unitId): JsonResponse
+    public function loadSubtree(UnitScopedRequest $request, int $unitId): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! in_array($unitId, $accessibleIds)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);

@@ -295,25 +295,25 @@ parameters:
 			path: app/Exports/HardwareExport.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$bbox\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$bbox\.$#'
 			identifier: property.notFound
 			count: 4
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$priority\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$priority\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$status\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$type\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/GisController.php
@@ -379,6 +379,42 @@ parameters:
 			path: app/Http/Controllers/Api/GisController.php
 
 		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$action\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$date_from\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$date_to\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$field\.$#'
+			identifier: property.notFound
+			count: 9
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$user_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/HardwareAuditController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 4
@@ -442,42 +478,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$user_agent\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$action\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$date_from\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$date_to\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$field\.$#'
-			identifier: property.notFound
-			count: 9
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$source\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 2
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
@@ -679,18 +679,6 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$ids\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$mark\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -763,73 +751,73 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$cpu\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$cpu\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$hdd\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$hdd\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$mark\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$mark\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$net_type\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$net_type\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$os\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$os\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$person\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$person\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$ram\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$ram\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$semat\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$shutdown\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$shutdown\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$type\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$unit\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareExportController.php
@@ -859,193 +847,49 @@ parameters:
 			path: app/Http/Controllers/Api/HrAnalyticsController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$estekhdam_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$has_children\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$radif_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$parent_id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$personnel_count\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$unitType\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$estekhdam_id\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$radif_id\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$semat_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat_id\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$tahsil_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$status\.$#'
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$unit_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$tahsil_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:leftJoin\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 4
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 5
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Method App\\Http\\Controllers\\Api\\HrController\:\:hrAnalyticsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Method App\\Http\\Controllers\\Api\\HrController\:\:hrStatsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\(int\|string\),array\<string, mixed\>\>\:\:values\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Unable to resolve the template type TKey in call to function collect$#'
-			identifier: argument.templateType
-			count: 2
-			path: app/Http/Controllers/Api/HrController.php
-
-		-
-			message: '#^Unable to resolve the template type TValue in call to function collect$#'
-			identifier: argument.templateType
-			count: 2
-			path: app/Http/Controllers/Api/HrController.php
+			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$estekhdam_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$radif_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$tahsil_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit_id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HrStatsController.php
@@ -1159,6 +1003,24 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PersonController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$semat_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PersonController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$unit_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/PersonController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1168,24 +1030,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
 			identifier: property.notFound
 			count: 3
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$search\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$semat_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Http/Controllers/Api/PersonController.php
 
 		-
@@ -1345,6 +1189,18 @@ parameters:
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
 		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$priority\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TicketController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/TicketController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$current_assignee_id\.$#'
 			identifier: property.notFound
 			count: 2
@@ -1360,18 +1216,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
 			identifier: property.notFound
 			count: 6
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$priority\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Http/Controllers/Api/TicketController.php
 
 		-
@@ -3277,6 +3121,12 @@ parameters:
 			path: app/Services/ZabbixService.php
 
 		-
+			message: '#^Strict comparison using \=\=\= between mixed and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Traits/HardwareIndexHelpers.php
+
+		-
 			message: '#^Variable \$unitColumn on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.variable
 			count: 1
@@ -3927,13 +3777,13 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 1
+			count: 2
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
@@ -3949,92 +3799,86 @@ parameters:
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:applyOrgScope\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:applyOrgScope\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:applyOrgScope\(\) has parameter \$query with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:applyOrgScope\(\) has parameter \$query with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:editHardware\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:editHardware\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:hardwares\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:hardwares\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:updatedNCode\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:updatedNCode\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$deletedHardware type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$deletedHardware type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$hardwaresCache with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$hardwaresCache with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$history type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$history type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$personResults type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$personResults type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$selected type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$selected type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:15\:\:\$visibleCols type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:16\:\:\$visibleCols type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between mixed and null will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
@@ -5749,6 +5593,12 @@ parameters:
 			path: resources/views/livewire/tickets/⚡create.blade.php
 
 		-
+			message: '#^Call to static method random\(\) on an unknown class Str\.$#'
+			identifier: class.notFound
+			count: 1
+			path: resources/views/livewire/tickets/⚡create.blade.php
+
+		-
 			message: '#^Expression "new class extends \\Livewire\\Component…" on a separate line does not do anything\.$#'
 			identifier: expr.resultUnused
 			count: 1
@@ -5821,8 +5671,8 @@ parameters:
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:findOrFail\(\)\.$#'
-			identifier: method.notFound
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:\$showingTicket \(App\\Models\\Ticket|null\) does not accept stdClass\.$#'
+			identifier: assign.propertyType
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
@@ -5835,13 +5685,19 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 3
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 10
+			path: resources/views/livewire/tickets/⚡inbox.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\Todo\:\:where\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
@@ -5863,121 +5719,121 @@ parameters:
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:acceptTicket\(\) has parameter \$ticketId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:acceptTicket\(\) has parameter \$ticketId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:getAccessibleUnitIds\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:getAccessibleUnitIds\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:openBulkModal\(\) has parameter \$action with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:openBulkModal\(\) has parameter \$action with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:openCommentsFor\(\) has parameter \$ticketId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:openCommentsFor\(\) has parameter \$ticketId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:openCompletionModal\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:openCompletionModal\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:rejectTicket\(\) has parameter \$ticketId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:rejectTicket\(\) has parameter \$ticketId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:removeFile\(\) has parameter \$index with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:removeFile\(\) has parameter \$index with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:selectTargetUnit\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:selectTargetUnit\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:selectTargetUnit\(\) has parameter \$name with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:selectTargetUnit\(\) has parameter \$name with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:setTab\(\) has parameter \$tab with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:setTab\(\) has parameter \$tab with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:showTicket\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:showTicket\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:submitAction\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:submitAction\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:switchView\(\) has parameter \$mode with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:switchView\(\) has parameter \$mode with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:tickets\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:tickets\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:toggleTicketSelection\(\) has parameter \$ticketId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:toggleTicketSelection\(\) has parameter \$ticketId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:updateFilter\(\) has parameter \$statusFilter with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:updateFilter\(\) has parameter \$statusFilter with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:updateFilter\(\) has parameter \$viewMode with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:updateFilter\(\) has parameter \$viewMode with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:\$completionFiles type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:\$completionFiles type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:\$selectedTickets type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:\$selectedTickets type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:16\:\:\$units type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡inbox\.blade\.php\:17\:\:\$units type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
@@ -6001,12 +5857,6 @@ parameters:
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Call to an undefined method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:error\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡monitoring.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -6025,25 +5875,25 @@ parameters:
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:selectUnitForFilter\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:selectUnitForFilter\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:showTicket\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:showTicket\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:tickets\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:tickets\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:12\:\:\$filterUnits type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/⚡monitoring\.blade\.php\:13\:\:\$filterUnits type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
@@ -6099,12 +5949,18 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Todo\:\:find\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 4
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Todo\:\:updateOrCreate\(\)\.$#'
 			identifier: staticMethod.notFound
+			count: 1
+			path: resources/views/livewire/todo/todo.blade.php
+
+		-
+			message: '#^Call to static method increment\(\) on an unknown class Cache\.$#'
+			identifier: class.notFound
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
@@ -6283,31 +6139,49 @@ parameters:
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:8\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:8\:\:toggle\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:toggle\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:8\:\:\$expanded type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:\$expanded type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:8\:\:\$rootUnits has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:\$rootUnits has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:8\:\:\$selectedUnit has no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:expandFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/units/chart.blade.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: resources/views/livewire/units/chart.blade.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$childrenRecursive\.$#'
+			identifier: property.notFound
+			count: 2
+			path: resources/views/livewire/units/chart.blade.php
+
+		-
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:\$selectedUnit has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php

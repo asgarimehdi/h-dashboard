@@ -3,19 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
-use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class PersonController extends Controller
 {
     use PersianNormalizer;
 
-    public function index(Request $request): JsonResponse
+    public function index(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         $query = Person::whereIn('u_id', $accessibleIds)
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
@@ -65,9 +64,9 @@ class PersonController extends Controller
         ]);
     }
 
-    public function show(Request $request, Person $person): JsonResponse
+    public function show(UnitScopedRequest $request, Person $person): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
@@ -78,7 +77,7 @@ class PersonController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(UnitScopedRequest $request): JsonResponse
     {
         $validated = $request->validate([
             'n_code' => 'required|string|size:10|unique:persons,n_code',
@@ -91,7 +90,7 @@ class PersonController extends Controller
             'u_id' => 'required|exists:units,id',
         ]);
 
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! in_array($validated['u_id'], $accessibleIds)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -105,9 +104,9 @@ class PersonController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, Person $person): JsonResponse
+    public function update(UnitScopedRequest $request, Person $person): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
@@ -138,9 +137,9 @@ class PersonController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Person $person): JsonResponse
+    public function destroy(UnitScopedRequest $request, Person $person): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);

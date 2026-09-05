@@ -57,9 +57,10 @@ class UserModelTest extends TestCase
     public function test_user_person_returns_null_when_no_person(): void
     {
         $nCode = (string) fake()->unique()->numerify('##########');
+        $unit = Unit::create(['name' => 'واحد تست']);
         Person::create([
             'n_code' => $nCode, 'f_name' => 'بی‌پروفایل', 'l_name' => 'تست',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => 1,
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
 
@@ -110,10 +111,11 @@ class UserModelTest extends TestCase
     public function test_user_name_accessor_returns_fallback_when_no_person(): void
     {
         $nCode = (string) fake()->unique()->numerify('##########');
+        $unit = Unit::create(['name' => 'واحد تست']);
         // Create person then delete it to break the relation
         Person::create([
             'n_code' => $nCode, 'f_name' => 'حذف', 'l_name' => 'شده',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => 1,
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
 
@@ -152,9 +154,10 @@ class UserModelTest extends TestCase
     public function test_user_unit_name_returns_dash_when_no_person(): void
     {
         $nCode = (string) fake()->unique()->numerify('##########');
+        $unit = Unit::create(['name' => 'واحد تست']);
         Person::create([
             'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'بدون واحد',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => 1,
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
 

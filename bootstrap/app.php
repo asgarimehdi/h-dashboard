@@ -8,6 +8,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Sentry\Laravel\Integration;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
@@ -83,4 +84,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
         });
+
+        // Register Sentry exception handler — captures unhandled exceptions and sends them to Sentry
+        Integration::handles($exceptions);
     })->create();

@@ -8,10 +8,12 @@ use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Attributes\Computed;
+use Mary\Traits\Toast;
 
 new class extends Component
 {
     use WithPagination;
+    use Toast;
 
     public bool $showHelpModal = false;
 
@@ -51,7 +53,7 @@ new class extends Component
     public function loadData(): void
     {
         $units = [];
-        if (strlen($this->unitSearch) > 1) {
+        if (mb_strlen($this->unitSearch) > 1) {
             $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
                 ->where('can_receive_tickets', true)
                 ->limit(10)->get()->toArray();
@@ -84,13 +86,21 @@ new class extends Component
         }
 
         if ($this->dateFrom) {
-            $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-            $query->where('created_at', '>=', $miladiFrom);
+            try {
+                $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
+                $query->where('created_at', '>=', $miladiFrom);
+            } catch (\Throwable) {
+                // Invalid Jalali date string — ignore filter
+            }
         }
 
         if ($this->dateTo) {
-            $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-            $query->where('created_at', '<=', $miladiTo);
+            try {
+                $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
+                $query->where('created_at', '<=', $miladiTo);
+            } catch (\Throwable) {
+                // Invalid Jalali date string — ignore filter
+            }
         }
 
         return $query->latest()->paginate(20);

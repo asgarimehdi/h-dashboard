@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Exports\HardwareAuditsExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
-use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
@@ -21,7 +20,7 @@ class HardwareAuditController extends Controller
     /**
      * Display a paginated list of audits for a hardware item.
      */
-    public function index(Request $request, Hardware $hardware): JsonResponse
+    public function index(UnitScopedRequest $request, Hardware $hardware): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
 
@@ -66,7 +65,7 @@ class HardwareAuditController extends Controller
     /**
      * Display a single audit record with full diff.
      */
-    public function show(Request $request, Hardware $hardware, HardwareAudit $audit): JsonResponse
+    public function show(UnitScopedRequest $request, Hardware $hardware, HardwareAudit $audit): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
 
@@ -84,7 +83,7 @@ class HardwareAuditController extends Controller
     /**
      * Rollback a specific field to its previous value.
      */
-    public function rollback(Request $request, Hardware $hardware, HardwareAudit $audit): JsonResponse
+    public function rollback(UnitScopedRequest $request, Hardware $hardware, HardwareAudit $audit): JsonResponse
     {
         $this->assertAccessible($request, $hardware);
 
@@ -126,7 +125,7 @@ class HardwareAuditController extends Controller
             if (! $person) {
                 return response()->json(['message' => 'Person not found.'], 422);
             }
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+            $accessibleIds = $request->accessibleIds();
             if (! in_array($person->u_id, $accessibleIds, true)) {
                 return response()->json(['message' => 'Cannot restore hardware to a person in an inaccessible unit.'], 403);
             }
@@ -161,7 +160,7 @@ class HardwareAuditController extends Controller
      * Looks up the HardwareAudit row (which survives hard deletes) and
      * recreates the Hardware with the original field values.
      */
-    public function restoreRecord(Request $request, HardwareAudit $audit): JsonResponse
+    public function restoreRecord(UnitScopedRequest $request, HardwareAudit $audit): JsonResponse
     {
         if ($audit->action !== 'created') {
             return response()->json(['message' => 'Only "created" audits can be used to restore a record.'], 422);
@@ -238,7 +237,7 @@ class HardwareAuditController extends Controller
     /**
      * Export audit trail as CSV/Excel for compliance.
      */
-    public function export(Request $request, Hardware $hardware)
+    public function export(UnitScopedRequest $request, Hardware $hardware)
     {
         $this->assertAccessible($request, $hardware);
 
@@ -386,10 +385,10 @@ class HardwareAuditController extends Controller
     /**
      * Check if the hardware is within user's organizational scope.
      */
-    private function assertAccessible(Request $request, Hardware $hardware): void
+    private function assertAccessible(UnitScopedRequest $request, Hardware $hardware): void
     {
         $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         $unitId = $hardware->relationLoaded('person')
             ? $hardware->person?->u_id
@@ -407,10 +406,10 @@ class HardwareAuditController extends Controller
      * row (the common case for restoreRecord) we fall back to the n_code stored
      * in the audit snapshot so the org-scope check is never skipped.
      */
-    private function assertAccessibleFromAudit(Request $request, HardwareAudit $audit): void
+    private function assertAccessibleFromAudit(UnitScopedRequest $request, HardwareAudit $audit): void
     {
         $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
+        $accessibleIds = $request->accessibleIds();
 
         $nCode = null;
 

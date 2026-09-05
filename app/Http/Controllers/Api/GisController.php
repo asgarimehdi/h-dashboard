@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\Ticket;
 use App\Models\Unit;
-use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class GisController extends Controller
@@ -21,7 +20,7 @@ class GisController extends Controller
     /**
      * Apply bbox spatial filter using lat/lng columns (works without geom column).
      */
-    protected function applyBbox($query, Request $request)
+    protected function applyBbox($query, UnitScopedRequest $request)
     {
         if (! $request->filled('bbox')) {
             return $query;
@@ -43,7 +42,7 @@ class GisController extends Controller
     /**
      * Bbox filter for queries with prefixed/aliased columns (JOINs) — Issue #404.
      */
-    protected function applyBboxAliased($query, Request $request)
+    protected function applyBboxAliased($query, UnitScopedRequest $request)
     {
         if (! $request->filled('bbox')) {
             return $query;
@@ -66,7 +65,7 @@ class GisController extends Controller
      * Build a normalized bbox string for cache keys (4 decimal places ≈ 11m precision).
      * Fixes Issue #456: GIS bbox rounding caused incorrect map data display.
      */
-    protected function normalizedBbox(Request $request): string
+    protected function normalizedBbox(UnitScopedRequest $request): string
     {
         if (! $request->filled('bbox')) {
             return 'all';
@@ -102,9 +101,9 @@ class GisController extends Controller
      * Get units as GeoJSON FeatureCollection within spatial bounds.
      * Query params: bbox (minLon,minLat,maxLon,maxLat)
      */
-    public function units(Request $request): JsonResponse
+    public function units(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
         $cacheKey = $this->gisCacheKey('units', $accessibleIds, $bbox);
 
@@ -149,9 +148,9 @@ class GisController extends Controller
      * Get hardware as GeoJSON FeatureCollection with parent unit location.
      * Query params: bbox, type, shutdown, mark
      */
-    public function hardware(Request $request): JsonResponse
+    public function hardware(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
         $extra = array_filter([
             'type' => $request->filled('type') ? $request->type : null,
@@ -242,9 +241,9 @@ class GisController extends Controller
      * Get tickets as GeoJSON FeatureCollection with unit location.
      * Query params: bbox, priority, status
      */
-    public function tickets(Request $request): JsonResponse
+    public function tickets(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
         $extra = array_filter([
             'priority' => $request->filled('priority') ? $request->priority : null,
@@ -304,9 +303,9 @@ class GisController extends Controller
      * Get summary stats for current viewport.
      * Query params: bbox
      */
-    public function stats(Request $request): JsonResponse
+    public function stats(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
         $cacheKey = $this->gisCacheKey('stats', $accessibleIds, $bbox);
 
@@ -362,9 +361,9 @@ class GisController extends Controller
      * Get clustered units for low zoom levels.
      * Query params: zoom, bbox
      */
-    public function clusters(Request $request): JsonResponse
+    public function clusters(UnitScopedRequest $request): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
         $zoom = (int) $request->get('zoom', 10);
         $cacheKey = $this->gisCacheKey('clusters', $accessibleIds, $bbox, ['zoom' => $zoom]);

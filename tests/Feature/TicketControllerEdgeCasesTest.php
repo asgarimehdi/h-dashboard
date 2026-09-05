@@ -43,12 +43,12 @@ class TicketControllerEdgeCasesTest extends TestCase
         $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => 1]);
+        $unit = Unit::create(['name' => 'Test Unit']);
+        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->assignRole('admin');
         $user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
-        $unit = Unit::create(['name' => 'Test Unit']);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $unit->id);
 
@@ -157,10 +157,10 @@ class TicketControllerEdgeCasesTest extends TestCase
         $ticket = Ticket::create(['ticket_code' => 'T-207', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'S', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
 
         $response = $this->actingAs($user, 'sanctum')->putJson("/api/tickets/{$ticket->id}", [
-            'priority' => 'high',
+            'priority' => 'urgent',
         ]);
 
         $response->assertStatus(200);
-        $this->assertDatabaseHas('tickets', ['id' => $ticket->id, 'priority' => 'high', 'subject' => 'S']);
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id, 'priority' => 'urgent', 'subject' => 'S']);
     }
 }

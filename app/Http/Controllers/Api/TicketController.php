@@ -3,21 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class TicketController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(UnitScopedRequest $request): JsonResponse
     {
         $user = $request->user();
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($user);
 
-        $query = Ticket::whereIn('unit_id', $accessibleIds)
+        $query = Ticket::whereIn('unit_id', $request->accessibleIds())
             ->with(['unit:id,name', 'user:id,n_code', 'assignee:id,n_code']);
 
         if ($request->filled('status')) {
@@ -45,12 +43,11 @@ class TicketController extends Controller
         ]);
     }
 
-    public function show(Request $request, Ticket $ticket): JsonResponse
+    public function show(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            return response()->json(['message' => 'Ticket not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         return response()->json([
@@ -64,7 +61,7 @@ class TicketController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(UnitScopedRequest $request): JsonResponse
     {
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
@@ -74,10 +71,9 @@ class TicketController extends Controller
             'deadline' => 'nullable|date',
         ]);
 
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($validated['unit_id'], $accessibleIds)) {
-            return response()->json(['message' => 'Unit not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($validated['unit_id']);
+        if ($result !== true) {
+            return $result;
         }
 
         $ticket = Ticket::create([
@@ -93,18 +89,17 @@ class TicketController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, Ticket $ticket): JsonResponse
+    public function update(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            return response()->json(['message' => 'Ticket not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         $validated = $request->validate([
             'subject' => 'sometimes|required|string|max:255',
             'content' => 'sometimes|required|string',
-            'priority' => 'sometimes|required|in:urgent,high,normal,medium,low',
+            'priority' => 'sometimes|required|in:low,normal,urgent',
             'deadline' => 'nullable|date',
         ]);
 
@@ -116,12 +111,11 @@ class TicketController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Ticket $ticket): JsonResponse
+    public function destroy(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            return response()->json(['message' => 'Ticket not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         $ticket->delete();
@@ -129,12 +123,11 @@ class TicketController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function assign(Request $request, Ticket $ticket): JsonResponse
+    public function assign(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            return response()->json(['message' => 'Ticket not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         $validated = $request->validate([
@@ -144,12 +137,10 @@ class TicketController extends Controller
         $assignee = User::find($validated['assignee_id']);
 
         // Issue #205: the assignee must belong to the ticket's organizational scope
-        // (same unit or a descendant). Assigning to an out-of-scope user would leak
-        // ticket data across units and bypass organizational access control.
         $assigneeUnitIds = $assignee->units()->pluck('units.id')->toArray();
         $assigneeUnitIds[] = $assignee->person?->u_id;
 
-        if (empty(array_intersect($assigneeUnitIds, $accessibleIds))) {
+        if (empty(array_intersect($assigneeUnitIds, $request->accessibleIds()))) {
             return response()->json(['message' => 'Assignee is not in an accessible unit.'], 403);
         }
 
@@ -164,12 +155,11 @@ class TicketController extends Controller
         ]);
     }
 
-    public function accept(Request $request, Ticket $ticket): JsonResponse
+    public function accept(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            return response()->json(['message' => 'Ticket not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         // Issue #529: only the assigned user can accept the ticket
@@ -188,12 +178,11 @@ class TicketController extends Controller
         ]);
     }
 
-    public function complete(Request $request, Ticket $ticket): JsonResponse
+    public function complete(UnitScopedRequest $request, Ticket $ticket): JsonResponse
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
-
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            return response()->json(['message' => 'Ticket not accessible.'], 403);
+        $result = $request->assertAccessibleUnit($ticket->unit_id);
+        if ($result !== true) {
+            return $result;
         }
 
         // Issue #530: only the assigned user can complete the ticket

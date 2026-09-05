@@ -35,7 +35,7 @@ new class extends Component
         $units = [];
         $todos = [];
 
-        if (strlen($this->search) >= 2) {
+        if (mb_strlen($this->search) >= 2) {
             $userUnitId = auth()->user()->person?->u_id;
 
             $query = Unit::where('can_receive_tickets', true)->where('is_active', true);

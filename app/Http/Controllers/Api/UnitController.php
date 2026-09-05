@@ -3,16 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class UnitController extends Controller
 {
-    public function index(Request $request): array
+    public function index(UnitScopedRequest $request): array
     {
-        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+        $ids = $request->accessibleIds();
         $perPage = min($request->integer('per_page', 15), 100);
         $units = Unit::whereIn('id', $ids)
             ->with('unitType:id,name')
@@ -29,9 +29,9 @@ class UnitController extends Controller
         ];
     }
 
-    public function show(Request $request, Unit $unit): JsonResponse
+    public function show(UnitScopedRequest $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+        $ids = $request->accessibleIds();
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -42,7 +42,7 @@ class UnitController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(UnitScopedRequest $request): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -55,7 +55,7 @@ class UnitController extends Controller
         ]);
 
         // Check organizational scope for parent_id and region_id
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
@@ -74,9 +74,9 @@ class UnitController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, Unit $unit): JsonResponse
+    public function update(UnitScopedRequest $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+        $ids = $request->accessibleIds();
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
@@ -93,7 +93,7 @@ class UnitController extends Controller
         ]);
 
         // Check organizational scope for parent_id
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds($request->user());
+        $accessibleIds = $request->accessibleIds();
 
         if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
@@ -126,9 +126,9 @@ class UnitController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Unit $unit): JsonResponse
+    public function destroy(UnitScopedRequest $request, Unit $unit): JsonResponse
     {
-        $ids = app(AccessService::class)->accessibleUnitIds($request->user());
+        $ids = $request->accessibleIds();
 
         if (! in_array($unit->id, $ids)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);
