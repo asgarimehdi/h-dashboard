@@ -34,3 +34,4 @@ coverage/
 /deploy
 *.lock
 package-lock.json
+/.claude
