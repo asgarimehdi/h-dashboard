@@ -38,7 +38,7 @@ return [
     |
     */
 
-    'error_types' => E_ALL & ~E_DEPRECATED & ~E_STRICT,
+    'error_types' => E_ALL & ~E_DEPRECATED,
 
     /*
     |--------------------------------------------------------------------------
