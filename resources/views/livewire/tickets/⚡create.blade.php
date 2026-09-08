@@ -180,7 +180,6 @@ new class extends Component
             description: "کد پیگیری شما: {$ticketCode}",
             position: 'toast-top toast-left',
             icon: 'o-check-circle',
-            css: 'alert-success font-bold',
             timeout: 5000,
             redirectTo: null
         );
