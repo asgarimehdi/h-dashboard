@@ -9,6 +9,7 @@ Route::livewire('/login', 'auth.login')->name('login');
 // Docs routes
 Route::get('/docs/{page?}', function ($page = 'index') {
     $page = str_replace('-', '/', $page);
+
     return view('docs.user-guide', ['page' => $page]);
 })->name('docs.user-guide');
 
