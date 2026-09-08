@@ -180,8 +180,7 @@ new class extends Component
             description: "کد پیگیری شما: {$ticketCode}",
             position: 'toast-top toast-left',
             icon: 'o-check-circle',
-            css: 'alert-success font-bold',
-            timeout: 0,
+            timeout: 5000,
             redirectTo: null
         );
 
@@ -203,6 +202,7 @@ new class extends Component
         <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
+        <x-errors :only="['unit_id', 'subject', 'content', 'files']" title="خطا در ثبت تیکت" />
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">
             <div class="relative">
                 <x-input

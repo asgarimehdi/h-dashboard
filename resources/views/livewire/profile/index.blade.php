@@ -213,7 +213,7 @@ return new class extends Component
 
                         {{-- Time --}}
                         <span class="text-[10px] text-base-content/40 whitespace-nowrap">
-                            {{ $ticket->created_at->diffForHumans() }}
+                            {{ $ticket->created_at?->diffForHumans() ?? '' }}
                         </span>
                     </div>
                 @empty
@@ -321,7 +321,7 @@ return new class extends Component
                         </div>
 
                         <span class="text-[10px] text-base-content/40 whitespace-nowrap">
-                            {{ $activity->created_at->diffForHumans() }}
+                            {{ $activity->created_at?->diffForHumans() ?? '' }}
                         </span>
                     </div>
                 @empty
