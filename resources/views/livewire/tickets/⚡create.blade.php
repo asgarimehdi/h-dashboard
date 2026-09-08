@@ -202,6 +202,7 @@ new class extends Component
         <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
+        <x-errors :only="['unit_id', 'subject', 'content', 'files']" title="خطا در ثبت تیکت" />
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">
             <div class="relative">
                 <x-input
