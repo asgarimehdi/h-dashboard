@@ -425,137 +425,137 @@ return new class extends Component {
     </x-modal>
 
 
-    <script>
-        if (!window.__todoCalendarInitialized) {
-            window.__todoCalendarInitialized = true;
+@script
+<script>
+    if (window.calendarInstance) {
+        window.calendarInstance.destroy();
+        window.calendarInstance = null;
+    }
+
+    function initTodoJdp() {
+        if (typeof jalaliDatepicker !== 'undefined') {
+            jalaliDatepicker.startWatch({
+                time: false,
+                hasSecond: false,
+                format: 'YYYY/MM/DD',
+                separatorChars: {
+                    date: '/',
+                    between: ' ',
+                    time: ':'
+                }
+            });
+        }
+    }
+
+    function initTodoCalendar() {
+        const calendarEl = document.getElementById('calendar');
+        if (!calendarEl) return;
+
+        if (window.calendarInstance) {
+            window.calendarInstance.destroy();
             window.calendarInstance = null;
         }
 
-        function initTodoJdp() {
-            if (typeof jalaliDatepicker !== 'undefined') {
-                jalaliDatepicker.startWatch({
-                    time: false,
-                    hasSecond: false,
-                    format: 'YYYY/MM/DD',
-                    separatorChars: {
-                        date: '/',
-                        between: ' ',
-                        time: ':'
-                    }
-                });
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', initTodoJdp);
-        document.addEventListener('livewire:navigated', initTodoJdp);
-
-        function initTodoCalendar() {
-            const calendarEl = document.getElementById('calendar');
-            if (calendarEl && !window.calendarInstance) {
-                window.calendarInstance = new FullCalendar.Calendar(calendarEl, {
-                    initialView: 'dayGridMonth',
-                    locale: 'fa',
-                    direction: 'rtl',
-                    firstDay: 6,
-                    headerToolbar: {
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                    },
-                    buttonText: {
-                        today: 'امروز',
-                        month: 'ماهانه',
-                        week: 'هفتگی',
-                        day: 'روزانه',
-                        list: 'لیست'
-                    },
-                    allDayText: 'تمام روز',
-                    moreLinkText: 'بیشتر',
-                    noEventsText: 'رویدادی برای نمایش وجود ندارد',
-                    views: {
-                        dayGridMonth: {
-                            titleFormat: { year: 'numeric', month: 'long' }
-                        },
-                        timeGridWeek: {
-                            titleFormat: { year: 'numeric', month: 'long', day: 'numeric' }
-                        },
-                        timeGridDay: {
-                            titleFormat: { year: 'numeric', month: 'long', day: 'numeric' }
-                        }
-                    },
-                    selectable: true,
-                    editable: true,
-                    eventContent: function(arg) {
-                        const type = arg.event.extendedProps.type || 'todo';
-                        if (type === 'ticket') {
-                            const status = arg.event.extendedProps.status || '';
-                            return { html: '<div class="flex items-center gap-1"><span class="text-sm">🎫</span><span class="fc-event-title text-xs">' + arg.event.title.replace('🎫 ', '') + ' <span class="badge badge-xs badge-ghost">' + status + '</span></span></div>' };
-                        }
-                        const todoId = arg.event.id.replace('todo-', '');
-                        const checkIcon = arg.event.extendedProps.is_completed
-                            ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
-                            : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
-                        return { html: '<div class="flex items-center gap-1">' + checkIcon + '<span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span></div>' };
-                    },
-                    events: @json($events),
-                    datesSet: function(info) {
-                        if (window.calendarInstance.hasPubliclyVisibleDates) {
-                            @this.fetchEvents(info.startStr, info.endStr);
-                        }
-                    },
-                    select: function(info) {
-                        @this.openCreateModal(info.startStr, info.endStr);
-                    },
-                    eventClick: function(info) {
-                        const type = info.event.extendedProps.type;
-                        if (type === 'ticket') {
-                            window.location.href = '/tickets/inbox';
-                        } else {
-                            @this.editEvent(info.event.id.replace('todo-', ''));
-                        }
-                    },
-                    eventDrop: function(info) {
-                        const type = info.event.extendedProps.type;
-                        if (type === 'todo') {
-                            const todoId = info.event.id.replace('todo-', '');
-                            @this.updateTodoDates(todoId, info.event.startStr, info.event.endStr);
-                        }
-                    }
-                });
-
-                window.calendarInstance.render();
-            }
-        }
-
-        document.addEventListener('livewire:init', initTodoCalendar);
-        document.addEventListener('livewire:navigated', () => {
-            if (!window.calendarInstance) {
-                initTodoCalendar();
+        window.calendarInstance = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: 'fa',
+            direction: 'rtl',
+            firstDay: 6,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            buttonText: {
+                today: 'امروز',
+                month: 'ماهانه',
+                week: 'هفتگی',
+                day: 'روزانه',
+                list: 'لیست'
+            },
+            allDayText: 'تمام روز',
+            moreLinkText: 'بیشتر',
+            noEventsText: 'رویدادی برای نمایش وجود ندارد',
+            views: {
+                dayGridMonth: {
+                    titleFormat: { year: 'numeric', month: 'long' }
+                },
+                timeGridWeek: {
+                    titleFormat: { year: 'numeric', month: 'long', day: 'numeric' }
+                },
+                timeGridDay: {
+                    titleFormat: { year: 'numeric', month: 'long', day: 'numeric' }
+                }
+            },
+            selectable: true,
+            editable: true,
+            eventContent: function(arg) {
+                const type = arg.event.extendedProps.type || 'todo';
+                if (type === 'ticket') {
+                    const status = arg.event.extendedProps.status || '';
+                    return { html: '<div class="flex items-center gap-1"><span class="text-sm">🎫</span><span class="fc-event-title text-xs">' + arg.event.title.replace('🎫 ', '') + ' <span class="badge badge-xs badge-ghost">' + status + '</span></span></div>' };
+                }
+                const todoId = arg.event.id.replace('todo-', '');
+                const checkIcon = arg.event.extendedProps.is_completed
+                    ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
+                    : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
+                return { html: '<div class="flex items-center gap-1">' + checkIcon + '<span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span></div>' };
+            },
+            events: @json($events),
+            datesSet: function(info) {
+                if (window.calendarInstance.hasPubliclyVisibleDates) {
+                    @this.fetchEvents(info.startStr, info.endStr);
+                }
+            },
+            select: function(info) {
+                @this.openCreateModal(info.startStr, info.endStr);
+            },
+            eventClick: function(info) {
+                const type = info.event.extendedProps.type;
+                if (type === 'ticket') {
+                    window.location.href = '/tickets/inbox';
+                } else {
+                    @this.editEvent(info.event.id.replace('todo-', ''));
+                }
+            },
+            eventDrop: function(info) {
+                const type = info.event.extendedProps.type;
+                if (type === 'todo') {
+                    const todoId = info.event.id.replace('todo-', '');
+                    @this.updateTodoDates(todoId, info.event.startStr, info.event.endStr);
+                }
             }
         });
 
-            Livewire.on('calendar-updated', (...args) => {
-                const events = Array.isArray(args[0]) ? args[0] : (args[0]?.events || []);
-                if (window.calendarInstance && events.length) {
-                    window.calendarInstance.removeAllEvents();
-                    events.forEach(event => window.calendarInstance.addEvent(event));
-                }
-            });
+        window.calendarInstance.render();
+    }
 
-            Livewire.hook('element.initialized', (el, component) => {
-                if (el.id === 'start_date_picker' || el.id === 'end_date_picker') {
-                    setTimeout(() => {
-                        if (typeof jalaliDatepicker !== 'undefined') {
-                            const inputs = document.querySelectorAll('[data-jdp]');
-                            inputs.forEach(input => {
-                                input.removeAttribute('data-jdp-initialized');
-                            });
-                            jalaliDatepicker.startWatch();
-                        }
-                    }, 200);
+    Livewire.on('calendar-updated', (...args) => {
+        const events = Array.isArray(args[0]) ? args[0] : (args[0]?.events || []);
+        if (window.calendarInstance && events.length) {
+            window.calendarInstance.removeAllEvents();
+            events.forEach(event => window.calendarInstance.addEvent(event));
+        }
+    });
+
+    Livewire.hook('element.initialized', (el, component) => {
+        if (el.id === 'start_date_picker' || el.id === 'end_date_picker') {
+            setTimeout(() => {
+                if (typeof jalaliDatepicker !== 'undefined') {
+                    const inputs = document.querySelectorAll('[data-jdp]');
+                    inputs.forEach(input => {
+                        input.removeAttribute('data-jdp-initialized');
+                    });
+                    jalaliDatepicker.startWatch();
                 }
-            });
-    </script>
+            }, 200);
+        }
+    });
+
+    initTodoCalendar();
+    initTodoJdp();
+</script>
+@endscript
 
 
 </div>
