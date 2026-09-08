@@ -181,7 +181,7 @@ new class extends Component
             position: 'toast-top toast-left',
             icon: 'o-check-circle',
             css: 'alert-success font-bold',
-            timeout: 0,
+            timeout: 5000,
             redirectTo: null
         );
 
