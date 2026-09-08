@@ -6,6 +6,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
+// Docs routes
+Route::get('/docs/{page?}', function ($page = 'index') {
+    $page = str_replace('-', '/', $page);
+    return view('docs.user-guide', ['page' => $page]);
+})->name('docs.user-guide');
+
 // Hardware routes — require authentication and manage_hardware permission
 // (Issue #216: guests must NOT see sensitive hardware data)
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
