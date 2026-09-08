@@ -234,8 +234,7 @@ return new class extends Component
 
                 {{-- Footer --}}
                 <p class="text-center text-sm text-base-content/50">
-                    حساب کاربری ندارید؟
-                    <a href="/register" class="text-primary font-medium hover:underline">ثبت‌نام کنید</a>
+                    برای ثبت‌نام با مدیر سیستم تماس بگیرید
                 </p>
             </div>
 
