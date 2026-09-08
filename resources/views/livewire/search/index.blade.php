@@ -35,11 +35,18 @@ return new class extends Component
         $cacheKey = 'global_search:' . md5($q . ':' . implode(',', $accessibleIds) . ':' . implode(',', $userIds));
 
         $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $userIds) {
+            // Split query into words for multi-word search (e.g. "مهدی عسگری")
+            $words = preg_split('/\s+/', trim($q), -1, PREG_SPLIT_NO_EMPTY);
+
             return [
                 'tickets' => Ticket::accessible()
-                    ->where(function ($query) use ($q) {
-                        $query->where('subject', 'like', "%{$q}%")
-                              ->orWhere('ticket_code', 'like', "%{$q}%");
+                    ->where(function ($query) use ($words) {
+                        foreach ($words as $word) {
+                            $query->where(function ($inner) use ($word) {
+                                $inner->where('subject', 'like', "%{$word}%")
+                                      ->orWhere('ticket_code', 'like', "%{$word}%");
+                            });
+                        }
                     })
                     ->with(['user.person', 'unit'])
                     ->latest()
@@ -48,7 +55,11 @@ return new class extends Component
                     ->toArray(),
 
                 'todos' => Todo::accessible()
-                    ->where('title', 'like', "%{$q}%")
+                    ->where(function ($query) use ($words) {
+                        foreach ($words as $word) {
+                            $query->where('title', 'like', "%{$word}%");
+                        }
+                    })
                     ->latest()
                     ->take(10)
                     ->get()
@@ -56,16 +67,24 @@ return new class extends Component
 
                 'users' => User::with('person')
                     ->whereIn('id', $userIds)
-                    ->whereHas('person', function ($query) use ($q) {
-                        $query->where('f_name', 'like', "%{$q}%")
-                              ->orWhere('l_name', 'like', "%{$q}%");
+                    ->whereHas('person', function ($query) use ($words) {
+                        foreach ($words as $word) {
+                            $query->where(function ($inner) use ($word) {
+                                $inner->where('f_name', 'like', "%{$word}%")
+                                      ->orWhere('l_name', 'like', "%{$word}%");
+                            });
+                        }
                     })
                     ->take(10)
                     ->get()
                     ->toArray(),
 
                 'units' => Unit::whereIn('id', $accessibleIds)
-                    ->where('name', 'like', "%{$q}%")
+                    ->where(function ($query) use ($words) {
+                        foreach ($words as $word) {
+                            $query->where('name', 'like', "%{$word}%");
+                        }
+                    })
                     ->take(10)
                     ->get()
                     ->toArray(),
