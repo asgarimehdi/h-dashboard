@@ -11,31 +11,22 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 covers(User::class);
-
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
-
     DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
         'n_code' => '1234567890',
-        'f_name' => 'تست',
-        'l_name' => 'کاربر',
+        'f_name' => 'تست', 'l_name' => 'کاربر',
         'u_id' => $this->unit->id,
-        's_id' => 1,
-        't_id' => 1,
-        'e_id' => 1,
-        'r_id' => 1,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
     ]);
-
     $this->user = User::factory()->create([
-        'n_code' => '1234567890',
         'password' => Hash::make('password'),
     ]);
 });
@@ -50,8 +41,6 @@ test('authenticated user can load settings page', function () {
 });
 
 test('settings page loads user defaults', function () {
-    $this->actingAs($this->user);
-
     Livewire::test('settings.index')
         ->assertSet('emailNotifications', true)
         ->assertSet('browserNotifications', false)
@@ -61,7 +50,6 @@ test('settings page loads user defaults', function () {
 
 test('settings page persists saved settings', function () {
     $this->actingAs($this->user);
-
     Livewire::test('settings.index')
         ->set('emailNotifications', false)
         ->set('browserNotifications', true)

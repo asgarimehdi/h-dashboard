@@ -480,3 +480,4 @@ body {
     z-index: 1;
 }
 
+@import "./compact.css";

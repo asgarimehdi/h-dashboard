@@ -25,7 +25,6 @@ class SettingsProfileTest extends TestCase
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
         DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
         DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
         DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
@@ -137,7 +136,6 @@ class SettingsProfileTest extends TestCase
         $user = $this->createUserWithUnit();
         $unit = Unit::first();
 
-        // Create tickets for this user
         Ticket::create([
             'ticket_code' => 'TKT-001', 'user_id' => $user->id, 'unit_id' => $unit->id,
             'subject' => 'تست', 'content' => 'متن', 'priority' => 'normal', 'status' => 'created',

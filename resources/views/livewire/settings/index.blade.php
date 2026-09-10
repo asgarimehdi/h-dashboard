@@ -2,6 +2,7 @@
 
 use Livewire\Component;
 use Livewire\Attributes\Layout;
+use App\Services\EmailNotificationService;
 use Mary\Traits\Toast;
 
 return new class extends Component
@@ -36,7 +37,60 @@ return new class extends Component
         $this->success('تنظیمات ذخیره شد!', position: 'toast-bottom');
     }
 
-}; ?>
+    public function sendTestEmail(): void
+    {
+        $user = auth()->user();
+        if (empty($user->email)) {
+            $this->error('ایمیلی برای کاربر تنظیم نشده', position: 'toast-bottom');
+            return;
+        }
+
+        app(EmailNotificationService::class)->send(
+            $user,
+            'تست اعلان ایمیلی',
+            'این یک ایمیل تستی از داشبورد سلامت است.',
+            url('/dashboard')
+        );
+
+        $this->success('ایمیل تستی ارسال شد!', position: 'toast-bottom');
+    }
+
+    public function sendTestNotification(): void
+    {
+        if (! $this->browserNotifications) {
+            $this->error('اعلان مرورگر غیرفعال است', position: 'toast-bottom');
+            return;
+        }
+
+        $this->dispatch('browser-notification', [
+            'title' => 'تست اعلان',
+            'body' => 'این یک اعلان تستی از داشبورد سلامت است.',
+            'url' => '/dashboard',
+        ]);
+
+        $this->success('اعلان ارسال شد!', position: 'toast-bottom');
+    }
+
+    public function testDashboardRefresh(): void
+    {
+        if ($this->dashboardRefresh === 0) {
+            $this->error('بروزرسانی خودکار غیرفعال است', position: 'toast-bottom');
+            return;
+        }
+
+        $this->success("داشبورد هر {$this->dashboardRefresh} ثانیه بروزرسانی می‌شود", position: 'toast-bottom');
+    }
+
+    public function testCompactMode(): void
+    {
+        if ($this->compactMode) {
+            $this->success('حالت فشرده فعال شد', position: 'toast-bottom');
+        } else {
+            $this->success('حالت عادی فعال شد', position: 'toast-bottom');
+        }
+    }
+
+}; ?> 
 
     <div class="max-w-2xl mx-auto p-6" dir="rtl">
         <x-header title="تنظیمات" separator progress-indicator>
@@ -57,7 +111,8 @@ return new class extends Component
                 </label>
                 <label class="flex items-center justify-between cursor-pointer">
                     <span>اعلان مرورگر</span>
-                    <input type="checkbox" class="toggle toggle-primary" wire:model.live="browserNotifications" />
+                    <input type="checkbox" class="toggle toggle-primary" wire:model.live="browserNotifications"
+                           x-on:change="if($event.target.checked && 'Notification' in window) { Notification.requestPermission().then(p => { if(p !== 'granted') { $wire.set('browserNotifications', false) } }) }" />
                 </label>
             </div>
         </x-card>
@@ -81,7 +136,11 @@ return new class extends Component
             </div>
         </x-card>
 
-        <div class="mt-6 flex justify-end">
+        <div class="mt-6 flex justify-end gap-2">
+            <x-button label="تست ایمیل" icon="o-paper-airplane" wire:click="sendTestEmail" class="btn-outline btn-sm" spinner />
+            <x-button label="تست اعلان" icon="o-bell" wire:click="sendTestNotification" class="btn-outline btn-sm" spinner />
+            <x-button label="تست بروزرسانی" icon="o-arrow-path" wire:click="testDashboardRefresh" class="btn-outline btn-sm" spinner />
+            <x-button label="تست نما" icon="o-eye" wire:click="testCompactMode" class="btn-outline btn-sm" spinner />
             <x-button label="ذخیره تنظیمات" icon="o-check" wire:click="save" class="btn-primary" spinner />
         </div>
     </div>

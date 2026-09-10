@@ -34,6 +34,12 @@ class NotificationService
         // Issue #393: invalidate the bell component cache for the recipient
         Cache::forget("notifications:user:{$userId}");
 
+        // Send email notification if enabled
+        $user = \App\Models\User::query()->find($userId);
+        if ($user && app(EmailNotificationService::class)->shouldSendEmail($user)) {
+            app(EmailNotificationService::class)->send($user, $title, $body, $url);
+        }
+
         return $notification;
     }
 
