@@ -35,7 +35,7 @@ class NotificationService
         Cache::forget("notifications:user:{$userId}");
 
         // Send email notification if enabled
-        $user = User::find($userId);
+        $user = \App\Models\User::query()->find($userId);
         if ($user && app(EmailNotificationService::class)->shouldSendEmail($user)) {
             app(EmailNotificationService::class)->send($user, $title, $body, $url);
         }
