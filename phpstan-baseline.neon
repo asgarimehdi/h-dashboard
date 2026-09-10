@@ -1117,7 +1117,7 @@ parameters:
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Support\\HigherOrderCollectionProxy<.*>::\$user\.$#'
+			message: '#^Access to an undefined property Illuminate\\Support\\HigherOrderCollectionProxy\<string, Illuminate\\Database\\Eloquent\\Model, Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\>\:\:\$user\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/TicketCommentController.php
@@ -6457,24 +6457,6 @@ parameters:
 			path: resources/views/livewire/units/map.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$f_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$l_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 2
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
@@ -6547,12 +6529,6 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:getFilteredPersonsProperty\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -6579,12 +6555,6 @@ parameters:
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Person\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
@@ -6681,12 +6651,6 @@ parameters:
 		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$user_permissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Person\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
