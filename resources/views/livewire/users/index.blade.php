@@ -249,18 +249,33 @@ return new class extends Component
             ->paginate($this->perPage);
     }
 
-    public function getFilteredPersonsProperty()
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function getFilteredPersonsProperty(): array
     {
+        // Only search when the form is open AND at least 2 characters typed.
+        // Without this guard every Livewire update loaded every Person row
+        // into the view, causing slowness, missing renders, and Edit/New
+        // failing to open (no errors in console — just silent timeouts).
+        if (! $this->formOpen || mb_strlen($this->person_search) < 2) {
+            return [];
+        }
+
+        $search = \App\Traits\PersianNormalizer::normalizeForSearch($this->person_search);
+
         return Person::query()
-            ->when($this->person_search, function ($query) {
-                $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$this->person_search}%"])
-                    ->orWhere('n_code', 'like', "%{$this->person_search}%");
+            ->where(function ($query) use ($search) {
+                $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
+                    ->orWhere('n_code', 'like', "%{$search}%");
             })
+            ->limit(20)
             ->get()
             ->map(fn ($person) => [
                 'value' => $person->n_code,
                 'label' => "{$person->f_name} {$person->l_name} ({$person->n_code})",
-            ])->toArray();
+            ])
+            ->toArray();
     }
 
     public function with(): array
@@ -323,7 +338,7 @@ return new class extends Component
                 <x-form wire:submit.prevent="{{ $editing_user_id ? 'updateUser' : 'createUser' }}"
                         class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="relative">
-                        <x-input wire:model.live="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
+                        <x-input wire:model.live.debounce.500ms="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
                                  placeholder="جستجوی نام یا کد ملی"/>
                         @error('n_code') <span class="text-error text-sm">{{ $message }}</span> @enderror
                         @if($person_search)
