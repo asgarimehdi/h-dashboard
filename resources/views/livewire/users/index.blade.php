@@ -335,7 +335,7 @@ return new class extends Component
                 <x-form wire:submit.prevent="{{ $editing_user_id ? 'updateUser' : 'createUser' }}"
                         class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="relative">
-                        <x-input wire:model.live="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
+                        <x-input wire:model.live.debounce.500ms="person_search" type="text" class="input input-bordered w-full" label="کد ملی"
                                  placeholder="جستجوی نام یا کد ملی"/>
                         @error('n_code') <span class="text-error text-sm">{{ $message }}</span> @enderror
                         @if($person_search)
