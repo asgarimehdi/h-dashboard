@@ -37,9 +37,12 @@
         font-family: 'Vazirmatn', sans-serif !important;
     }
 </style>
+@php
+    $compactMode = auth()->user()->settings['compact_mode'] ?? false;
+@endphp
 </head>
 
-<body class="min-h-screen font-sans antialiased stitch-bg">
+<body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
     <!-- Stitch-style animated background JavaScript -->
     <script>
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
@@ -314,9 +317,14 @@
     <x-toast />
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
+    // Register service worker for browser notifications
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
     document.addEventListener('livewire:init', () => {
        Livewire.on('swal', (event) => {
-           const data = event[0]; // در لاووایر ۳ داده‌ها در اولین ایندکس آرایه هستند
+           const data = event[0];
            Swal.fire({
                title: data.title,
                icon: data.icon,
@@ -325,6 +333,13 @@
                toast: true,
                position: 'top-end'
            });
+       });
+
+       // Browser notification listener
+       Livewire.on('browser-notification', (data) => {
+           if ('Notification' in window && Notification.permission === 'granted') {
+               new Notification(data[0].title, { body: data[0].body });
+           }
        });
     });
 </script>
