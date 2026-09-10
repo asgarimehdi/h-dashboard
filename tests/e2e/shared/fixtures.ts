@@ -20,16 +20,12 @@ async function login(page: Page, nCode = TEST_USER.nCode, password = TEST_USER.p
 }
 
 /**
- * Logout helper
+ * Logout helper — the real logout is a POST form in the sidebar:
+ * <form method="POST" action="/logout"> with a submit button (icon o-power, tooltip "logoff").
  */
 async function logout(page: Page) {
-  // Click user menu in header
-  await page.click('[data-theme-toggle], .dropdown:has-text("مهدی")');
-  // Click logout
-  const logoutBtn = page.locator('text=خروج').first();
-  if (await logoutBtn.isVisible()) {
-    await logoutBtn.click();
-  }
+  const logoutBtn = page.locator('form[action*="logout"] button[type="submit"]').first();
+  await logoutBtn.click();
   await page.waitForURL('**/login', { timeout: 10000 });
 }
 
