@@ -249,6 +249,9 @@ return new class extends Component
             ->paginate($this->perPage);
     }
 
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
     public function getFilteredPersonsProperty(): array
     {
         // Only search when the form is open AND at least 2 characters typed.
