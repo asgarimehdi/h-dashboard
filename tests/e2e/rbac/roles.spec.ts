@@ -1,10 +1,10 @@
-import { test, expect } from '../shared/fixtures';
+import { test, expect, TEST_USER, ROLE_ACCOUNTS } from '../shared/fixtures';
 
 /**
  * Plan 003 — RBAC & Authorization E2E
  *
  * Spatie roles/permissions gate every module from the browser. We log in as each
- * of the 4 seeded roles (all share password 12345678 — see PersonUserFromDeviceSeeder)
+ * of the 4 seeded roles (all share the same password — see PersonUserFromDeviceSeeder)
  * and assert (1) the sidebar menu is filtered per role and (2) direct navigation to
  * forbidden routes yields HTTP 403, never a data leak.
  *
@@ -13,14 +13,6 @@ import { test, expect } from '../shared/fixtures';
  * - Forbidden navigation returns HTTP 403 with body "403 ... access rights"
  * - admin sidebar has 8 sections; unit_manager 4; expert/user 3
  */
-
-const ROLE_ACCOUNTS = {
-  admin: '4411015056',
-  unit_manager: '6275537615',
-  expert: '0023548258',
-  user: '0041368464',
-};
-const PASSWORD = '12345678';
 
 // Sidebar section titles each role should see (subset of the admin's 8).
 const EXPECTED_SECTIONS: Record<string, string[]> = {
@@ -41,7 +33,7 @@ const ADMIN_ONLY_ITEMS = ['/users', '/roles', '/permissions', '/hardware', '/too
 async function loginAs(page, nCode: string) {
   await page.goto('/login');
   await page.fill('#n_code', nCode);
-  await page.fill('#password', PASSWORD);
+  await page.fill('#password', TEST_USER.password);
   await page.click('button[type="submit"]');
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
 }

@@ -1,7 +1,7 @@
-import { test, expect } from '../shared/fixtures';
+import { test, expect, TEST_USER } from '../shared/fixtures';
 
-const VALID_N_CODE = '4411015056';
-const VALID_PASSWORD = '12345678';
+const VALID_N_CODE = TEST_USER.nCode;
+const VALID_PASSWORD = TEST_USER.password;
 
 test.describe('Authentication — login', () => {
   test('login page loads correctly', async ({ page }) => {

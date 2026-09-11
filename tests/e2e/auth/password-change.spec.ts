@@ -1,6 +1,7 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, TEST_USER } from '../shared/fixtures';
+import * as crypto from 'crypto';
 
-const NEW_PASSWORD = 'newpass12345';
+const NEW_PASSWORD = crypto.randomBytes(12).toString('base64url').slice(0, 16);
 
 async function gotoChangePassword(page) {
   await page.goto('/users/changepassword');
@@ -15,7 +16,7 @@ test.describe('Authentication — change password', () => {
   test('valid current + matching new password shows success toast', async ({ page }) => {
     await gotoChangePassword(page);
 
-    await page.locator('input[wire\\:model="currentPassword"]').fill('12345678');
+    await page.locator('input[wire\\:model="currentPassword"]').fill(TEST_USER.password);
     await page.locator('input[wire\\:model="newPassword"]').fill(NEW_PASSWORD);
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill(NEW_PASSWORD);
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
@@ -24,8 +25,8 @@ test.describe('Authentication — change password', () => {
 
     // Change it back so the shared admin account's password is not left altered.
     await page.locator('input[wire\\:model="currentPassword"]').fill(NEW_PASSWORD);
-    await page.locator('input[wire\\:model="newPassword"]').fill('12345678');
-    await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill('12345678');
+    await page.locator('input[wire\\:model="newPassword"]').fill(TEST_USER.password);
+    await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill(TEST_USER.password);
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
     await expect(page.locator('.toast').first()).toContainText('رمز با موفقیت تغییر یافت', { timeout: 10000 });
   });
@@ -45,7 +46,7 @@ test.describe('Authentication — change password', () => {
   test('mismatched confirmation shows error', async ({ page }) => {
     await gotoChangePassword(page);
 
-    await page.locator('input[wire\\:model="currentPassword"]').fill('12345678');
+    await page.locator('input[wire\\:model="currentPassword"]').fill(TEST_USER.password);
     await page.locator('input[wire\\:model="newPassword"]').fill(NEW_PASSWORD);
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill('differentthing99x');
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
@@ -56,7 +57,7 @@ test.describe('Authentication — change password', () => {
   test('weak new password shows validation error', async ({ page }) => {
     await gotoChangePassword(page);
 
-    await page.locator('input[wire\\:model="currentPassword"]').fill('12345678');
+    await page.locator('input[wire\\:model="currentPassword"]').fill(TEST_USER.password);
     await page.locator('input[wire\\:model="newPassword"]').fill('short');
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill('short');
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
