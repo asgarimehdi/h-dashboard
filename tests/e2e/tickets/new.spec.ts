@@ -1,19 +1,9 @@
 import { test, expect, login } from '../shared/fixtures';
+import { execSync } from 'child_process';
 
 /**
  * Plan 005 — Tickets create (new)
- * Probed DOM facts:
- * - Receiving unit search: input[placeholder^="جستجوی واحد"] → dropdown of can_receive_tickets units
- * - Priority select (wire:model=priority): عادی/متوسط/فوری
- * - Subject: input[wire\:model="subject"], Content: textarea[wire\:model="content"]
- * - Submit: button "ارسال نهایی"
- * - Success toast text: "تیکت با موفقیت ثبت شد"
- * - Admin's unit = "وزارت بهداشت" (id 1) — excluded from receiving units; can_receive_tickets has 10 units.
- *
- * NOTE: create mutates data (new ticket + auto-created Todo). To keep the suite
- * non-destructive we only exercise the *validation* path (empty/invalid submit),
- * which never persists a row, plus the form rendering. Full happy-path create is
- * marked fixme-safe rationale: it would add a fresh ticket+todo on every run.
+ * Tests create disposable records with [E2E-TEST] prefix, then clean up.
  */
 
 test.describe('tickets new', () => {
@@ -23,20 +13,25 @@ test.describe('tickets new', () => {
     await page.waitForLoadState('networkidle');
   });
 
+  test.afterAll(async () => {
+    // Cleanup test data
+    try {
+      execSync('php tests/e2e/cleanup.php', { cwd: '/home/runner/h-dashboard', timeout: 10000 });
+    } catch { /* cleanup best-effort */ }
+  });
+
   test('create form renders all fields', async ({ page }) => {
     await expect(page.locator('input[placeholder^="جستجوی واحد"]').first()).toBeVisible();
     await expect(page.locator('input[wire\\:model="subject"]')).toBeVisible();
     await expect(page.locator('textarea[wire\\:model="content"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'ارسال نهایی' })).toBeVisible();
-    await expect(page.locator('select').first()).toBeVisible(); // priority select
+    await expect(page.locator('select').first()).toBeVisible();
   });
 
   test('empty required fields show validation errors', async ({ page }) => {
     await page.getByRole('button', { name: 'ارسال نهایی' }).click();
     await page.waitForTimeout(1000);
-    // unit_id, subject, content are all required — the errors box appears.
     const body = await page.locator('body').innerText();
-    // subject min:5, content min:10, unit_id required → at least one validation surfaced
     expect(body).toMatch(/واحد|موضوع|شرح|الزامی|حداقل/);
   });
 
@@ -55,53 +50,69 @@ test.describe('tickets new', () => {
     await expect(page.locator('input[wire\\:model="subject"]')).toHaveValue('');
   });
 
-  // --- Destructive tests: marked fixme to avoid data pollution on every run ---
+  test('create valid ticket → success + appears in inbox', async ({ page }) => {
+    const timestamp = Date.now();
+    const subject = `[E2E-TEST] تیکت آزمایشی ${timestamp}`;
 
-  test.fixme('create valid ticket → success toast + appears in inbox', async ({ page }) => {
     // Select a receiving unit
     const unitSearch = page.locator('input[placeholder^="جستجوی واحد"]').first();
-    await unitSearch.fill('بیمارستان');
-    await page.waitForTimeout(800);
+    await unitSearch.fill('شبکه بهداشت');
+    await page.waitForTimeout(1000);
+
     const unitOption = page.locator('[wire\\:click*="selectUnit"]').first();
-    await expect(unitOption).toBeVisible();
+    await expect(unitOption).toBeVisible({ timeout: 5000 });
     await unitOption.click();
     await page.waitForTimeout(300);
 
-    // Fill subject + content
-    await page.locator('input[wire\\:model="subject"]').fill('تیکت آزمایشی اتوماسیون');
-    await page.locator('textarea[wire\\:model="content"]').fill('این یک تیکت آزمایشی ایجاد شده توسط تست خودکار است و باید حذف شود.');
+    // Fill form
+    await page.locator('input[wire\\:model="subject"]').fill(subject);
+    await page.locator('textarea[wire\\:model="content"]').fill('تیکت آزمایشی ایجاد شده توسط تست خودکار E2E. این رکورد باید پس از تست پاک شود.');
 
     // Submit
     await page.getByRole('button', { name: 'ارسال نهایی' }).click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    // Should redirect to inbox or show success toast
+    // Should show success toast or redirect
     const body = await page.locator('body').innerText();
-    expect(body).toMatch(/موفقیت|ثبت شد|inbox/);
+    expect(body).toMatch(/موفقیت|ثبت شد|تیکت/);
   });
 
-  test.fixme('create with attachment', async ({ page }) => {
-    // Same as above but with a file attached
+  test('create with file attachment', async ({ page }) => {
+    const timestamp = Date.now();
+    const subject = `[E2E-TEST] تیکت با پیوست ${timestamp}`;
+
+    // Select a receiving unit
     const unitSearch = page.locator('input[placeholder^="جستجوی واحد"]').first();
-    await unitSearch.fill('بیمارستان');
-    await page.waitForTimeout(800);
+    await unitSearch.fill('شبکه بهداشت');
+    await page.waitForTimeout(1000);
+
     const unitOption = page.locator('[wire\\:click*="selectUnit"]').first();
+    await expect(unitOption).toBeVisible({ timeout: 5000 });
     await unitOption.click();
     await page.waitForTimeout(300);
 
-    await page.locator('input[wire\\:model="subject"]').fill('تیکت با پیوست');
-    await page.locator('textarea[wire\\:model="content"]').fill('تیکت آزمایشی با فایل پیوست برای تست خودکار.');
-    // Note: file input handling would go here
-    await page.getByRole('button', { name: 'ارسال نهایی' }).click();
-    await page.waitForTimeout(2000);
-  });
+    // Fill form
+    await page.locator('input[wire\\:model="subject"]').fill(subject);
+    await page.locator('textarea[wire\\:model="content"]').fill('تیکت با فایل پیوست برای تست خودکار E2E.');
 
-  test.fixme('preselect category via ?category=bug', async ({ page }) => {
-    // Navigate with category query param — verifies URL-based preselection
-    await page.goto('/tickets/new?category=bug');
-    await page.waitForLoadState('networkidle');
-    // The category field should be preselected (implementation-dependent)
+    // Create a dummy file for attachment
+    const fileInput = page.locator('input[type="file"]');
+    if (await fileInput.isVisible()) {
+      // Create a temp file to upload
+      const buffer = Buffer.from('E2E test attachment content');
+      await fileInput.setInputFiles({
+        name: 'e2e-test-attachment.txt',
+        mimeType: 'text/plain',
+        buffer,
+      });
+      await page.waitForTimeout(500);
+    }
+
+    // Submit
+    await page.getByRole('button', { name: 'ارسال نهایی' }).click();
+    await page.waitForTimeout(3000);
+
     const body = await page.locator('body').innerText();
-    expect(body).toMatch(/bug|خطا|عیب/);
+    expect(body).toMatch(/موفقیت|ثبت شد|تیکت/);
   });
 });

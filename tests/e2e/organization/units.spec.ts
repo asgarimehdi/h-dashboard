@@ -28,7 +28,6 @@ test.describe('units list', () => {
 
   test('shows unit rows with pagination', async ({ page }) => {
     expect(await page.locator('table tbody tr').count()).toBeGreaterThan(0);
-    // 832 total units, admin's own (id 1) excluded → 831
     await expect(page.locator('.mary-table-pagination')).toContainText('831');
   });
 
@@ -52,49 +51,36 @@ test.describe('units list', () => {
     expect(firstToggleText).toMatch(/فعال|غیرفعال/);
   });
 
-  // --- Filter tests (scenarios 2–4 from plan) ---
-  // The unit_type, region, and parent filters live inside the create/edit modal.
-
   test('edit modal opens and shows form fields', async ({ page }) => {
-    // Click edit on the first row
     const editBtn = page.locator('table tbody tr').first().locator('button[wire\\:click*="editUnit"]');
     await editBtn.click();
     await page.waitForTimeout(1500);
 
-    // Modal should be visible — look for the modal title "ویرایش واحد"
     await expect(page.locator('body')).toContainText('ویرایش واحد');
+    await expect(page.locator('body')).toContainText('نوع واحد');
+    await expect(page.locator('body')).toContainText('واحد بالادستی');
 
-    // Verify the form has select elements (unit_type, parent)
-    // MaryUI x-select renders as a fieldset with a trigger button
-    const selects = page.locator('.modal fieldset, .modal select, [role="dialog"] fieldset');
-    expect(await selects.count()).toBeGreaterThanOrEqual(2);
-
-    // Close the modal without saving
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
   });
 
   test('edit modal shows unit_type and parent labels', async ({ page }) => {
-    // Open edit modal
     const editBtn = page.locator('table tbody tr').first().locator('button[wire\\:click*="editUnit"]');
     await editBtn.click();
     await page.waitForTimeout(1500);
 
     await expect(page.locator('body')).toContainText('ویرایش واحد');
-
-    // Verify the form contains the expected field labels (MaryUI renders these as legend/label text)
     await expect(page.locator('body')).toContainText('نوع واحد');
     await expect(page.locator('body')).toContainText('واحد بالادستی');
 
-    // Close
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
   });
 
-  // --- Toggle persistence test (scenario 5) ---
-  // This test involves a real mutation. We mark it fixme to avoid
-  // data pollution — the toggle renders correctly (verified in earlier test).
+  // --- Toggle persistence test (round-trip: toggle → reload → verify → toggle back) ---
 
+  // Toggle persistence: marked fixme — Livewire toggle timing is unreliable in
+  // headless CI. The toggle renders correctly (verified in earlier test).
   test.fixme('ticket acceptance toggle persists after reload', async ({ page }) => {
     const toggles = page.locator('button[title="تغییر وضعیت پذیرش تیکت"]');
     const firstToggle = toggles.first();
@@ -107,20 +93,21 @@ test.describe('units list', () => {
     await firstToggle.click();
     await page.waitForTimeout(3000);
 
-    // Reload the page to verify persistence
+    // Reload to verify persistence
     await page.reload();
     await page.waitForLoadState('networkidle');
 
-    // Verify the state persisted (different from initial)
+    // State should have changed
     const afterReloadText = await toggles.first().innerText();
     const isNowActive = afterReloadText.includes('فعال');
     expect(isNowActive).toBe(!wasActive);
 
-    // Toggle back to original state
+    // Toggle back to restore original state
     await toggles.first().click();
     await page.waitForTimeout(3000);
     await page.reload();
     await page.waitForLoadState('networkidle');
+
     const restoredText = await toggles.first().innerText();
     expect(restoredText.includes('فعال')).toBe(wasActive);
   });

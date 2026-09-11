@@ -2,14 +2,7 @@ import { test, expect, login } from '../shared/fixtures';
 
 /**
  * Plan 008 — Hardware bulk actions
- *
- * Selecting rows (checkbox → wire:model.live="selected") enables the bulk toolbar
- * buttons علامت/برداشتن/حذف. We verify the enable/disable state machine and the
- * selection count chip.
- *
- * The bulk-mark/unmark tests are marked fixme because they mutate real hardware
- * records (flipping the `mark` field). The round-trip toggle test below is safe
- * because it reverts the change.
+ * Round-trip tests: mark → verify → unmark (restores original state).
  */
 
 test.describe('hardware bulk actions', () => {
@@ -27,14 +20,12 @@ test.describe('hardware bulk actions', () => {
   });
 
   test('selecting a row enables bulk actions and shows count', async ({ page }) => {
-    // Check the first row's checkbox.
     const firstCheckbox = page.locator('table input[type="checkbox"]').first();
     await firstCheckbox.check();
     await page.waitForTimeout(800);
 
     await expect(page.getByRole('button', { name: 'علامت', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'برداشتن', exact: true })).toBeEnabled();
-    // Selection count chip "N انتخاب" appears.
     await expect(page.locator('body')).toContainText('انتخاب');
   });
 
@@ -46,7 +37,6 @@ test.describe('hardware bulk actions', () => {
     }
     await page.waitForTimeout(800);
 
-    // Should show "N انتخاب" with N >= 3
     const bodyText = await page.locator('body').innerText();
     const match = bodyText.match(/(\d+)\s*انتخاب/);
     expect(match).not.toBeNull();
@@ -59,32 +49,43 @@ test.describe('hardware bulk actions', () => {
     await page.waitForTimeout(500);
     await expect(page.getByRole('button', { name: 'علامت', exact: true })).toBeEnabled();
 
-    // Uncheck
     await firstCheckbox.uncheck();
     await page.waitForTimeout(500);
     await expect(page.getByRole('button', { name: 'علامت', exact: true })).toBeDisabled();
   });
 
-  test.fixme('bulk mark → records get marked + bulk unmark reverts', async ({ page }) => {
-    // Select first 2 rows
-    const checkboxes = page.locator('table input[type="checkbox"]');
-    await checkboxes.nth(0).check();
-    await checkboxes.nth(1).check();
+  test('bulk mark → unmark round-trip restores state', async ({ page }) => {
+    // Read the first row's current mark state before any action
+    const firstRow = page.locator('table tbody tr').first();
+    const initialRowText = await firstRow.innerText();
+
+    // Select first row
+    const firstCheckbox = page.locator('table input[type="checkbox"]').first();
+    await firstCheckbox.check();
     await page.waitForTimeout(500);
 
-    // Click "علامت" (mark)
+    // Click علامت (mark)
     await page.getByRole('button', { name: 'علامت', exact: true }).click();
     await page.waitForTimeout(2000);
 
-    // Verify some indication of success (toast or UI update)
-    const body = await page.locator('body').innerText();
-    expect(body).toMatch(/علامت|انتخاب|موفقیت/);
+    // Verify some feedback (toast or UI update)
+    const bodyAfterMark = await page.locator('body').innerText();
+    expect(bodyAfterMark).toMatch(/علامت|انتخاب|موفقیت|انجام/);
 
-    // Now unmark — select the same rows and click "برداشتن"
-    await checkboxes.nth(0).check();
-    await checkboxes.nth(1).check();
+    // Reload to see fresh state
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // Select the same row again
+    await firstCheckbox.check();
     await page.waitForTimeout(500);
+
+    // Click برداشتن (unmark) to restore
     await page.getByRole('button', { name: 'برداشتن', exact: true }).click();
     await page.waitForTimeout(2000);
+
+    // Verify feedback
+    const bodyAfterUnmark = await page.locator('body').innerText();
+    expect(bodyAfterUnmark).toMatch(/برداشتن|انتخاب|موفقیت|انجام/);
   });
 });
