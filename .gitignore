@@ -35,3 +35,9 @@ coverage/
 *.lock
 package-lock.json
 /.claude
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.env.testing
+/tests/Browser/Screenshots/

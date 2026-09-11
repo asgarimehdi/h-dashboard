@@ -23,10 +23,26 @@ use Tests\TestCase;
 
 /*
 |--------------------------------------------------------------------------
+| Browser Tests
+|--------------------------------------------------------------------------
+|
+| Browser tests (tests/Browser/) need the Laravel TestCase to properly
+| bootstrap the application for Playwright-based browser testing.
+|
+*/
+uses(TestCase::class)->in('Browser');
+
+// Browser test helpers (shared setup/login helpers).
+require_once __DIR__.'/Browser/helpers.php';
+require_once __DIR__.'/Browser/hardware/helpers.php';
+require_once __DIR__.'/Browser/tickets/helpers.php';
+require_once __DIR__.'/Browser/todo/helpers.php';
+
+/*
+|--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------
 */
-
 expect()->extend('toBeOne', function () {
     return $this->toBe(1);
 });
@@ -36,7 +52,6 @@ expect()->extend('toBeOne', function () {
 | Functions
 |--------------------------------------------------------------------------
 */
-
 function something()
 {
     // ..

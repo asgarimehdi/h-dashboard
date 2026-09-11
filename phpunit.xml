@@ -12,6 +12,9 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="Browser">
+            <directory>tests/Browser</directory>
+        </testsuite>
     </testsuites>
     <!-- No <coverage> block: PHPUnit 12 treats a configured report as a
          coverage request on every run and silently aborts (exit 1, zero tests)
