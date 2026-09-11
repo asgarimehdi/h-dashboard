@@ -1,5 +1,4 @@
 import { test, expect, login } from '../shared/fixtures';
-
 /**
  * Plan 008 — Hardware bulk actions (non-destructive)
  *
@@ -28,7 +27,8 @@ test.describe('hardware bulk actions', () => {
     // Check the first row's checkbox.
     const firstCheckbox = page.locator('table input[type="checkbox"]').first();
     await firstCheckbox.check();
-    await page.waitForTimeout(800);
+    // Wait for Livewire to process the selection
+    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
 
     await expect(page.getByRole('button', { name: 'علامت', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'برداشتن', exact: true })).toBeEnabled();
@@ -39,11 +39,13 @@ test.describe('hardware bulk actions', () => {
   test('bulk mark persists and unmark reverts', async ({ page }) => {
     // Isolate one stable row so bulk actions touch exactly one record.
     await page.locator('input[placeholder*="جستجو"]').first().fill('AB-17SH-EZDEVAJ');
-    await page.waitForTimeout(1500);
+    // Wait for Livewire search to complete
+    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
     await expect(page.locator('table tbody tr')).toHaveCount(1);
 
     await page.locator('table input[type="checkbox"]').first().check();
-    await page.waitForTimeout(800);
+    // Wait for Livewire to process the selection
+    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
 
     const markBtn = page.getByRole('button', { name: 'علامت', exact: true });
     await expect(markBtn).toBeEnabled();
