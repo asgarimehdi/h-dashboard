@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type BrowserContext } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 
 // Test credentials — read from environment variables with fallback defaults
 const TEST_USER = {
@@ -66,24 +66,6 @@ async function waitForToast(page: Page, text?: string) {
   return toast;
 }
 
-// Custom test fixture
-type TestFixtures = {
-  authenticatedPage: Page;
-  adminPage: Page;
-};
-
-export const test = base.extend<TestFixtures>({
-  authenticatedPage: async ({ page }, use) => {
-    await login(page);
-    await use(page);
-  },
-
-  adminPage: async ({ page }, use) => {
-    await login(page);
-    // Verify we're on dashboard (admin should have full access)
-    await page.waitForURL('**/dashboard');
-    await use(page);
-  },
-});
+export const test = base;
 
 export { expect, login, logout, waitForLivewire, waitForSearchResults, waitForToast, TEST_USER, ROLE_ACCOUNTS };
