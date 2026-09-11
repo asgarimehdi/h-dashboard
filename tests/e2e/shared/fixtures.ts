@@ -1,10 +1,18 @@
 import { test as base, expect, type Page, type BrowserContext } from '@playwright/test';
 
-// Test credentials (from database seeders)
+// Test credentials — read from environment variables with fallback defaults
 const TEST_USER = {
-  nCode: '4411015056',
-  password: '12345678',
-  name: 'مهدی عسگری',
+  nCode: process.env.TEST_N_CODE || '4411015056',
+  password: process.env.TEST_PASSWORD || '12345678',
+  name: process.env.TEST_USER_NAME || 'مهدی عسگری',
+};
+
+// Role-specific national codes (all share the same password)
+const ROLE_ACCOUNTS: Record<string, string> = {
+  admin: TEST_USER.nCode,
+  unit_manager: process.env.TEST_UNIT_MANAGER_N_CODE || '6275537615',
+  expert: process.env.TEST_EXPERT_N_CODE || '0023548258',
+  user: process.env.TEST_REGULAR_USER_N_CODE || '0041368464',
 };
 
 /**
@@ -41,6 +49,13 @@ async function waitForLivewire(page: Page) {
 }
 
 /**
+ * Wait for a Livewire-debounced search result to appear
+ */
+async function waitForSearchResults(page: Page, selector: string) {
+  await page.waitForSelector(selector, { state: 'visible', timeout: 10000 });
+}
+
+/**
  * Wait for toast notification
  */
 async function waitForToast(page: Page, text?: string) {
@@ -71,4 +86,4 @@ export const test = base.extend<TestFixtures>({
   },
 });
 
-export { expect, login, logout, waitForLivewire, waitForToast, TEST_USER };
+export { expect, login, logout, waitForLivewire, waitForSearchResults, waitForToast, TEST_USER, ROLE_ACCOUNTS };
