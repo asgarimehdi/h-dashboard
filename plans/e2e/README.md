@@ -40,7 +40,7 @@ Phase 4 — Peripheral Modules (dependency: 003)
 | 001 | Auth Login | P0 | ✅ done | none |
 | 002 | Navigation Sidebar | P0 | ✅ done | none |
 | 003 | RBAC Authorization | P0 | ✅ done | none |
-| 004 | Users CRUD | P0 | ✅ done (tests: fixme) | none — bugs resolved, fixme tests pending |
+| 004 | Users CRUD | P0 | ✅ done (tests: fixme) | delete round-trip fixme (wire:confirm CI timing) |
 | 005 | Tickets CRUD | P0 | ✅ done | destructive create runs with cleanup |
 | 006 | Personnel CRUD | P0 | ✅ done | none |
 | 007 | Units CRUD | P0 | ✅ done (tests: fixme) | toggle persistence fixme (CI timing) |
@@ -55,7 +55,12 @@ Phase 4 — Peripheral Modules (dependency: 003)
 
 ## Test Inventory (actual, from `tests/e2e/`)
 
-> **Last updated:** 2026-09-11 — 155+ passing tests, 2 skipped (`.fixme`).
+> **Last updated:** 2026-09-11 — 160+ passing tests, 2 skipped (`.fixme`).
+
+### ✅ 004 — Users CRUD
+- `list.spec.ts` — columns / rows / search-by-name / search-by-n_code / status-filter / page-size / pagination / expand-row. ✅
+- `crud.spec.ts` — redirect-create / redirect-edit / create-form-opens / create-validation-empty / create-validation-duplicate / edit-form-opens. ✅
+- ❌ **delete + restore round-trip** — marked `test.fixme` (wire:confirm timing unreliable in CI)
 
 ### ✅ 005 — Tickets CRUD
 - `inbox.spec.ts` — fully implemented (load/tabs/filters/row-fields). ✅
