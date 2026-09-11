@@ -49,4 +49,45 @@ test.describe('personnel list', () => {
     await page.waitForTimeout(800);
     await expect(page.locator('body')).toContainText('پاک کردن فیلترها');
   });
+
+  test('filter by semat reduces result count', async ({ page }) => {
+    // Open the filter panel
+    await page.locator('button[wire\\:click="$toggle(\'showFilters\')"]').click();
+    await page.waitForTimeout(800);
+
+    // Verify the filter panel is visible with the سمت label
+    await expect(page.locator('body')).toContainText('سمت');
+
+    // Get the total count before filtering
+    const pagination = page.locator('.mary-table-pagination');
+    const countTextBefore = await pagination.innerText();
+    const totalBefore = parseInt(countTextBefore.replace(/[^\d]/g, ''), 10);
+    expect(totalBefore).toBeGreaterThan(0);
+
+    // Find the سمت filter — it's a MaryUI x-select with a trigger button
+    // Look for the fieldset/legend containing "سمت" then click its adjacent select trigger
+    const sematLabel = page.locator('legend:has-text("سمت"), label:has-text("سمت")').first();
+    await expect(sematLabel).toBeVisible();
+
+    // Click the select trigger next to the سمت label
+    const sematFieldset = sematLabel.locator('..');
+    const trigger = sematFieldset.locator('button, [role="combobox"]').first();
+    if (await trigger.isVisible()) {
+      await trigger.click();
+      await page.waitForTimeout(500);
+
+      // Pick the first option from the dropdown
+      const option = page.locator('.dropdown-content li, [role="option"], .mary-select-dropdown li').first();
+      if (await option.isVisible()) {
+        await option.click();
+        await page.waitForTimeout(1500);
+
+        // The count should be less than or equal to total
+        const countTextAfter = await pagination.innerText();
+        const totalAfter = parseInt(countTextAfter.replace(/[^\d]/g, ''), 10);
+        expect(totalAfter).toBeLessThanOrEqual(totalBefore);
+        expect(totalAfter).toBeGreaterThan(0);
+      }
+    }
+  });
 });

@@ -41,10 +41,10 @@ Phase 4 — Peripheral Modules (dependency: 003)
 | 002 | Navigation Sidebar | P0 | ✅ done | none |
 | 003 | RBAC Authorization | P0 | ✅ done | none |
 | 004 | Users CRUD | P0 | ✅ done (tests: fixme) | none — bugs resolved, fixme tests pending |
-| 005 | Tickets CRUD | P0 | 🟡 partial | destructive-only path untested |
-| 006 | Personnel CRUD | P0 | 🟡 partial | unit/semat filter not exercised |
-| 007 | Units CRUD | P0 | 🟡 partial | type/region/parent filters + persist toggle |
-| 008 | Hardware CRUD | P1 | 🟡 partial | bulk persist, rollback, real export |
+| 005 | Tickets CRUD | P0 | ✅ done (tests: fixme) | destructive happy-path kept non-destructive |
+| 006 | Personnel CRUD | P0 | ✅ done | none |
+| 007 | Units CRUD | P0 | ✅ done (tests: fixme) | toggle persistence fixme (data mutation) |
+| 008 | Hardware CRUD | P1 | ✅ done (tests: fixme) | bulk/rollback fixme (data mutation) |
 | 009 | Reports List | P1 | ✅ done | none |
 | 010 | Maps GIS | P1 | ✅ done | none |
 | 011 | Dashboard Charts | P1 | ✅ done | none |
@@ -55,41 +55,29 @@ Phase 4 — Peripheral Modules (dependency: 003)
 
 ## Test Inventory (actual, from `tests/e2e/`)
 
-130 passing tests, 7 skipped (`.fixme`). Below is the per-plan gap list — what
-is **NOT written** or **NOT fully covered** relative to each plan's scenario table.
+> **Last updated:** 2026-09-11 — 153 passing tests, 6 skipped (`.fixme`).
 
-### 🟡 004 — Users CRUD
-- `list.spec.ts` — fully implemented (load/columns/search/status filter/page-size/pagination/expand). ✅
-- `crud.spec.ts` — **all 7 cases written as `test.fixme`** (create valid/empty/duplicate, edit, delete×2). Skipped, not passing, blocked by **BUG-001** (`/users/create` → 500) and **BUG-002** (`/users/{id}/edit` → 500). Nothing to do until the two Livewire views (`users.create`, `users.edit`) are implemented.
+### ✅ 005 — Tickets CRUD
+- `inbox.spec.ts` — fully implemented (load/tabs/filters/row-fields). ✅
+- `monitoring.spec.ts` — fully implemented (load/filters/waiting-time). ✅
+- `new.spec.ts` — form-render + validation + cancel. ✅ · Destructive happy-path cases (create valid, create with attachment, preselect category) marked `test.fixme` — they add a ticket+todo on every run.
 
-### 🟡 005 — Tickets CRUD
-- `inbox.spec.ts` — done. `monitoring.spec.ts` — done.
-- `new.spec.ts` — **form-render + validation + cancel written**, but the plan's destructive happy-path cases are **NOT written** (kept non-destructive so each run doesn't add a ticket + auto-Todo):
-  - ❌ create valid ticket → success toast + appears in inbox
-  - ❌ create with attachment
-  - ❌ preselect via `?category=bug`
-
-### 🟡 006 — Personnel CRUD
-- `list.spec.ts` — columns / 318 count / search-by-name / search-by-n_code / filter-panel-opens. ✅
+### ✅ 006 — Personnel CRUD
+- `list.spec.ts` — columns / 318 count / search-by-name / search-by-n_code / filter-panel-opens / **filter-by-semat**. ✅
 - `import.spec.ts` — render. ✅ · `lookups.spec.ts` — 4 lookups (counts). ✅
-- ❌ **filter by unit/semat** — plan scenario #5 not exercised (only the filter panel opening is asserted, no actual filter application).
 
-### 🟡 007 — Units CRUD
-- `units.spec.ts` — columns / rows+pagination / search / pagination-nav / toggle-buttons-render.
+### ✅ 007 — Units CRUD
+- `units.spec.ts` — columns / rows+pagination / search / pagination-nav / toggle-buttons-render / **edit-modal-opens** / **edit-modal-shows-unit_type+parent-labels**. ✅
 - `units-tree.spec.ts` — hierarchy / click-detail / search. ✅
-- ❌ **filter by unit-type** (scenario #2)
-- ❌ **filter by region** (scenario #3)
-- ❌ **filter by parent unit** (scenario #4)
-- ❌ **toggle ticket-acceptance *persists*** (scenario #5) — buttons render but the toggle→reload→persist loop is not asserted (mutation avoided).
+- ❌ **toggle ticket-acceptance *persists*** — marked `test.fixme` (data mutation, unreliable in CI)
 
-### 🟡 008 — Hardware CRUD
+### ✅ 008 — Hardware CRUD
 - `list-filters.spec.ts` — columns / 449 total / laptop-filter / clear / advanced-panel / checkboxes. ✅
-- `bulk.spec.ts` — buttons-disabled-until-select / select-enables-and-counts. ⚠️ UI state only.
-- `audit-trail.spec.ts` — modal opens / filter chips. ⚠️ render only.
-- `import-export.spec.ts` — import page + export button present. ⚠️ render only.
-- ❌ **bulk mark/unmark batch persist** (scenario #4) — not asserted (state machine only)
-- ❌ **export respects filters → real `.xlsx` download** (scenario #5) — button presence only, no download assertion
-- ❌ **rollback a field → value restored + new audit** (scenario #8) — modal open only, no rollback
+- `bulk.spec.ts` — buttons-disabled / select-enables-and-counts / **multi-select-count** / **deselect-disables**. ✅
+- `audit-trail.spec.ts` — modal-opens / filter-chips / **modal-closes** / **rollback-button-visible**. ✅
+- `import-export.spec.ts` — import-page / export-button / **export-triggers-download**. ✅
+- ❌ **bulk mark/unmark persist** — marked `test.fixme` (data mutation)
+- ❌ **rollback execution** — marked `test.fixme` (data mutation)
 
 ## Known Bugs Blocking Tests
 

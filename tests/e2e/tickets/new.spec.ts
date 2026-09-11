@@ -54,4 +54,54 @@ test.describe('tickets new', () => {
     await page.waitForTimeout(600);
     await expect(page.locator('input[wire\\:model="subject"]')).toHaveValue('');
   });
+
+  // --- Destructive tests: marked fixme to avoid data pollution on every run ---
+
+  test.fixme('create valid ticket → success toast + appears in inbox', async ({ page }) => {
+    // Select a receiving unit
+    const unitSearch = page.locator('input[placeholder^="جستجوی واحد"]').first();
+    await unitSearch.fill('بیمارستان');
+    await page.waitForTimeout(800);
+    const unitOption = page.locator('[wire\\:click*="selectUnit"]').first();
+    await expect(unitOption).toBeVisible();
+    await unitOption.click();
+    await page.waitForTimeout(300);
+
+    // Fill subject + content
+    await page.locator('input[wire\\:model="subject"]').fill('تیکت آزمایشی اتوماسیون');
+    await page.locator('textarea[wire\\:model="content"]').fill('این یک تیکت آزمایشی ایجاد شده توسط تست خودکار است و باید حذف شود.');
+
+    // Submit
+    await page.getByRole('button', { name: 'ارسال نهایی' }).click();
+    await page.waitForTimeout(2000);
+
+    // Should redirect to inbox or show success toast
+    const body = await page.locator('body').innerText();
+    expect(body).toMatch(/موفقیت|ثبت شد|inbox/);
+  });
+
+  test.fixme('create with attachment', async ({ page }) => {
+    // Same as above but with a file attached
+    const unitSearch = page.locator('input[placeholder^="جستجوی واحد"]').first();
+    await unitSearch.fill('بیمارستان');
+    await page.waitForTimeout(800);
+    const unitOption = page.locator('[wire\\:click*="selectUnit"]').first();
+    await unitOption.click();
+    await page.waitForTimeout(300);
+
+    await page.locator('input[wire\\:model="subject"]').fill('تیکت با پیوست');
+    await page.locator('textarea[wire\\:model="content"]').fill('تیکت آزمایشی با فایل پیوست برای تست خودکار.');
+    // Note: file input handling would go here
+    await page.getByRole('button', { name: 'ارسال نهایی' }).click();
+    await page.waitForTimeout(2000);
+  });
+
+  test.fixme('preselect category via ?category=bug', async ({ page }) => {
+    // Navigate with category query param — verifies URL-based preselection
+    await page.goto('/tickets/new?category=bug');
+    await page.waitForLoadState('networkidle');
+    // The category field should be preselected (implementation-dependent)
+    const body = await page.locator('body').innerText();
+    expect(body).toMatch(/bug|خطا|عیب/);
+  });
 });
