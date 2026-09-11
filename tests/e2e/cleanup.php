@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Cleanup E2E test data.
  * Run after Playwright tests: php tests/e2e/cleanup.php
@@ -9,12 +10,13 @@
  * - Users with name starting with [E2E-TEST]
  */
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__.'/../../vendor/autoload.php';
 
-$app = require_once __DIR__ . '/../../bootstrap/app.php';
-$kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
+$app = require_once __DIR__.'/../../bootstrap/app.php';
+$kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 
 // Cleanup tickets

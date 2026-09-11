@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\HardwareExportController;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Route;
+use League\CommonMark\CommonMarkConverter;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
@@ -12,7 +13,7 @@ Route::get('/docs/{page?}', function ($page = 'index') {
 
     $path = resource_path("docs/{$page}.md");
     $content = file_exists($path)
-        ? app(\League\CommonMark\CommonMarkConverter::class)->convert(file_get_contents($path))->getContent()
+        ? app(CommonMarkConverter::class)->convert(file_get_contents($path))->getContent()
         : '';
 
     return view('docs.user-guide', ['page' => $page, 'content' => $content]);
