@@ -27,4 +27,15 @@ test.describe('hardware import/export', () => {
     await expect(exportBtn).toBeVisible();
     await expect(exportBtn).toBeEnabled();
   });
+
+  test('export downloads real xlsx', async ({ page }) => {
+    await page.goto('/hardware');
+    await page.waitForLoadState('networkidle');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15000 }),
+      page.getByRole('button', { name: 'خروجی اکسل' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.xlsx?$/i);
+    await expect.poll(async () => download.path(), { timeout: 15000 }).not.toBeNull();
+  });
 });

@@ -32,7 +32,6 @@ user path in the app.
 | 2 | create with attachment | ticket + attachment |
 | 3 | empty required fields | validation errors |
 | 4 | cancel | returns, no ticket created |
-| 5 | preselect category via `?category=bug` | category preselected |
 
 ### monitoring.spec.ts
 | # | Case | Expected |

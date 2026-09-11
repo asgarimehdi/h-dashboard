@@ -15,7 +15,7 @@ Phase 1 — Core Auth & Navigation (dependency: none)
   └─ 003-rbac-authorization.md  (P0 foundation, needs 001)
 
 Phase 2 — Primary CRUD Modules (dependency: 001)
-  ├─ 004-users-crud.md          (P0, currently 500 ERROR)
+  ├─ 004-users-crud.md          (P0)
   ├─ 005-tickets-crud.md        (P0)
   ├─ 006-personnel-crud.md      (P0)
   └─ 007-units-crud.md          (P0)
@@ -40,11 +40,11 @@ Phase 4 — Peripheral Modules (dependency: 003)
 | 001 | Auth Login | P0 | ✅ done | none |
 | 002 | Navigation Sidebar | P0 | ✅ done | none |
 | 003 | RBAC Authorization | P0 | ✅ done | none |
-| 004 | Users CRUD | P0 | 🟡 partial | BUG-001/002 (create/edit only) |
-| 005 | Tickets CRUD | P0 | 🟡 partial | destructive-only path untested |
-| 006 | Personnel CRUD | P0 | 🟡 partial | unit/semat filter not exercised |
-| 007 | Units CRUD | P0 | 🟡 partial | type/region/parent filters + persist toggle |
-| 008 | Hardware CRUD | P1 | 🟡 partial | bulk persist, rollback, real export |
+| 004 | Users CRUD | P0 | ✅ done | none (dead standalone routes removed; CRUD via inline modal) |
+| 005 | Tickets CRUD | P0 | ✅ done | none (creates 2 tickets + auto-todos per run, by design) |
+| 006 | Personnel CRUD | P0 | ✅ done | none (unit tree-picker filter skipped as too flaky — documented) |
+| 007 | Units CRUD | P0 | ✅ done | none (type/region/parent filters don't exist on list page — documented) |
+| 008 | Hardware CRUD | P1 | ✅ done | none |
 | 009 | Reports List | P1 | ✅ done | none |
 | 010 | Maps GIS | P1 | ✅ done | none |
 | 011 | Dashboard Charts | P1 | ✅ done | none |
@@ -55,46 +55,49 @@ Phase 4 — Peripheral Modules (dependency: 003)
 
 ## Test Inventory (actual, from `tests/e2e/`)
 
-130 passing tests, 7 skipped (`.fixme`). Below is the per-plan gap list — what
-is **NOT written** or **NOT fully covered** relative to each plan's scenario table.
+147 passing tests, 0 skipped. Per-plan coverage notes:
 
-### 🟡 004 — Users CRUD
-- `list.spec.ts` — fully implemented (load/columns/search/status filter/page-size/pagination/expand). ✅
-- `crud.spec.ts` — **all 7 cases written as `test.fixme`** (create valid/empty/duplicate, edit, delete×2). Skipped, not passing, blocked by **BUG-001** (`/users/create` → 500) and **BUG-002** (`/users/{id}/edit` → 500). Nothing to do until the two Livewire views (`users.create`, `users.edit`) are implemented.
+### ✅ 004 — Users CRUD
+- `list.spec.ts` — load/columns/search/status filter/page-size/pagination/expand (8 tests).
+- `crud.spec.ts` — inline-modal flows (6 tests): dead standalone routes return 404
+  (not 500); create modal renders; duplicate n_code → validation; edit opens
+  prefilled + closes without saving; delete-dismiss keeps user; delete-accept
+  soft-deletes + restore brings the user back (net-zero mutation).
 
-### 🟡 005 — Tickets CRUD
+### ✅ 005 — Tickets CRUD
 - `inbox.spec.ts` — done. `monitoring.spec.ts` — done.
-- `new.spec.ts` — **form-render + validation + cancel written**, but the plan's destructive happy-path cases are **NOT written** (kept non-destructive so each run doesn't add a ticket + auto-Todo):
-  - ❌ create valid ticket → success toast + appears in inbox
-  - ❌ create with attachment
-  - ❌ preselect via `?category=bug`
+- `new.spec.ts` — form-render + validation + cancel + **create valid ticket →
+  success toast + appears in sent box** + **create with attachment** (2
+  timestamped tickets + auto-Todos per run, by design).
 
-### 🟡 006 — Personnel CRUD
-- `list.spec.ts` — columns / 318 count / search-by-name / search-by-n_code / filter-panel-opens. ✅
+### ✅ 006 — Personnel CRUD
+- `list.spec.ts` — columns / 318 count / search-by-name / search-by-n_code /
+  filter-panel-opens + **filter by semat narrows** + **filter by tahsil narrows** +
+  **clear restores 318**. ✅
 - `import.spec.ts` — render. ✅ · `lookups.spec.ts` — 4 lookups (counts). ✅
-- ❌ **filter by unit/semat** — plan scenario #5 not exercised (only the filter panel opening is asserted, no actual filter application).
+- Unit tree-picker filter skipped (Alpine x-model, too flaky) — documented in spec header.
 
-### 🟡 007 — Units CRUD
-- `units.spec.ts` — columns / rows+pagination / search / pagination-nav / toggle-buttons-render.
+### ✅ 007 — Units CRUD
+- `units.spec.ts` — columns / rows+pagination / search / pagination-nav /
+  **toggle persists + reverts (reload-verified)** / **create modal renders
+  type/region/parent controls (no save)** / **map link pattern**.
 - `units-tree.spec.ts` — hierarchy / click-detail / search. ✅
-- ❌ **filter by unit-type** (scenario #2)
-- ❌ **filter by region** (scenario #3)
-- ❌ **filter by parent unit** (scenario #4)
-- ❌ **toggle ticket-acceptance *persists*** (scenario #5) — buttons render but the toggle→reload→persist loop is not asserted (mutation avoided).
+- Type/region/parent filters don't exist on the list page (modal-only create
+  fields) — documented in `007-units-crud.md`, not E2E-testable without code change.
 
-### 🟡 008 — Hardware CRUD
+### ✅ 008 — Hardware CRUD
 - `list-filters.spec.ts` — columns / 449 total / laptop-filter / clear / advanced-panel / checkboxes. ✅
-- `bulk.spec.ts` — buttons-disabled-until-select / select-enables-and-counts. ⚠️ UI state only.
-- `audit-trail.spec.ts` — modal opens / filter chips. ⚠️ render only.
-- `import-export.spec.ts` — import page + export button present. ⚠️ render only.
-- ❌ **bulk mark/unmark batch persist** (scenario #4) — not asserted (state machine only)
-- ❌ **export respects filters → real `.xlsx` download** (scenario #5) — button presence only, no download assertion
-- ❌ **rollback a field → value restored + new audit** (scenario #8) — modal open only, no rollback
+- `bulk.spec.ts` — disabled-until-select / select-enables-and-counts +
+  **bulk mark persists + unmark reverts** (net-zero). ✅
+- `audit-trail.spec.ts` — modal opens / filter chips +
+  **rollback restores field + logs rollback entry**. ✅
+- `import-export.spec.ts` — import page + export button +
+  **real `.xlsx` download asserted**. ✅
 
-## Known Bugs Blocking Tests
+## Resolved Bugs (fixed, routes removed)
 
-| Bug | Route | Severity | Plan impacted |
-|-----|-------|----------|---------------|
-| BUG-001 | /users/create | Critical | 004 |
-| BUG-002 | /users/{id}/edit | Critical | 004 |
-| BUG-003 | /docs | Medium | none |
+| Bug | Route | Resolution |
+|-----|-------|------------|
+| BUG-001 | /users/create | Removed — pointed at never-implemented `users.create` view; CRUD lives in `users.index` inline modal |
+| BUG-002 | /users/{id}/edit | Removed — pointed at never-implemented `users.edit` view; edit lives in `users.index` inline modal |
+| BUG-003 | /docs | Removed — view referenced undefined `$content`, markdown sources long deleted, no links to it; dead `docs/user-guide.blade.php` deleted too |

@@ -10,10 +10,9 @@ import { test, expect, login } from '../shared/fixtures';
  * - Success toast text: "تیکت با موفقیت ثبت شد"
  * - Admin's unit = "وزارت بهداشت" (id 1) — excluded from receiving units; can_receive_tickets has 10 units.
  *
- * NOTE: create mutates data (new ticket + auto-created Todo). To keep the suite
- * non-destructive we only exercise the *validation* path (empty/invalid submit),
- * which never persists a row, plus the form rendering. Full happy-path create is
- * marked fixme-safe rationale: it would add a fresh ticket+todo on every run.
+ * NOTE: the two create tests below intentionally mutate data (new ticket +
+ * auto-created Todo) — allowed per plan 005. Subjects use a timestamp so runs
+ * don't collide; created tickets remain in the sent box (no cheap UI delete).
  */
 
 test.describe('tickets new', () => {
@@ -53,5 +52,59 @@ test.describe('tickets new', () => {
     await page.getByRole('button', { name: 'لغو' }).click();
     await page.waitForTimeout(600);
     await expect(page.locator('input[wire\\:model="subject"]')).toHaveValue('');
+  });
+
+  test('create valid ticket appears in inbox', async ({ page }) => {
+    const ts = Date.now();
+    const subject = `تست خودکار E2E ${ts}`;
+    await page.locator('input[placeholder^="جستجوی واحد"]').first().fill('زنجان');
+    await page.waitForTimeout(1500);
+    await page.locator('[wire\\:click*="selectUnit"]').first().click();
+    await page.waitForTimeout(1000);
+    await page.locator('select').first().selectOption('urgent');
+    await page.waitForTimeout(500);
+    await page.locator('input[wire\\:model="subject"]').fill(subject);
+    await page
+      .locator('textarea[wire\\:model="content"]')
+      .fill('این یک متن تستی برای بررسی ثبت تیکت به صورت خودکار است که بیش از بیست کاراکتر دارد');
+    await page.getByRole('button', { name: 'ارسال نهایی' }).click();
+    await expect(page.locator('.toast').first()).toContainText('تیکت با موفقیت ثبت شد', {
+      timeout: 10000,
+    });
+    // created tickets land in the sent box, not the received inbox
+    await page.goto('/tickets/inbox?viewMode=sent');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    const search = page.locator('input[placeholder*="جستجوی کد یا موضوع"]');
+    await search.clear();
+    await search.pressSequentially(String(ts), { delay: 80 });
+    await page.waitForTimeout(2500);
+    const rows = page.locator('table tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    await expect(rows.first()).toContainText('تست خودکار E2E');
+  });
+
+  test('create with attachment', async ({ page }) => {
+    const ts = Date.now();
+    const subject = `تست فایل E2E ${ts}`;
+    await page.locator('input[placeholder^="جستجوی واحد"]').first().fill('زنجان');
+    await page.waitForTimeout(1500);
+    await page.locator('[wire\\:click*="selectUnit"]').first().click();
+    await page.waitForTimeout(1000);
+    await page.locator('select').first().selectOption('urgent');
+    await page.locator('input[wire\\:model="subject"]').fill(subject);
+    await page
+      .locator('textarea[wire\\:model="content"]')
+      .fill('متن تستی برای بررسی ثبت تیکت همراه با فایل پیوست که به اندازه کافی طولانی است');
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'e2e-attach.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF'),
+    });
+    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'ارسال نهایی' }).click();
+    await expect(page.locator('.toast').first()).toContainText('تیکت با موفقیت ثبت شد', {
+      timeout: 15000,
+    });
   });
 });

@@ -11,9 +11,9 @@ tree + filters + ticket-acceptance toggle are load-bearing for org scope.
 | # | Case | Expected |
 |---|------|----------|
 | 1 | units list loads | columns incl. parent, type, region, ticket acceptance |
-| 2 | filter by unit type | filters |
-| 3 | filter by region | filters |
-| 4 | filter by parent unit | filters |
+| 2 | filter by unit type | filters | **Not E2E-testable without code change:** the list page has no type filter — only a name search. Type select exists only in the create/edit modal (unit_type_id), which creates records, so it is not exercised here. |
+| 3 | filter by region | filters | **Not E2E-testable without code change:** the list page has no region filter. Province/county selects exist only in the create/edit modal (province_id/region_id), which creates records, so they are not exercised here. |
+| 4 | filter by parent unit | filters | **Not E2E-testable without code change:** the list page has no parent filter. Parent select exists only in the create/edit modal (parent_id), which creates records, so it is not exercised here. |
 | 5 | toggle ticket acceptance | status toggles + persists |
 | 6 | paginate 42 pages | navigation works |
 | 7 | `/units/chart` tree view | hierarchy renders + unit select |
