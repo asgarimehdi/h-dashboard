@@ -40,7 +40,7 @@ Phase 4 — Peripheral Modules (dependency: 003)
 | 001 | Auth Login | P0 | ✅ done | none |
 | 002 | Navigation Sidebar | P0 | ✅ done | none |
 | 003 | RBAC Authorization | P0 | ✅ done | none |
-| 004 | Users CRUD | P0 | 🟡 partial | BUG-001/002 (create/edit only) |
+| 004 | Users CRUD | P0 | ✅ done (tests: fixme) | none — bugs resolved, fixme tests pending |
 | 005 | Tickets CRUD | P0 | 🟡 partial | destructive-only path untested |
 | 006 | Personnel CRUD | P0 | 🟡 partial | unit/semat filter not exercised |
 | 007 | Units CRUD | P0 | 🟡 partial | type/region/parent filters + persist toggle |
@@ -93,8 +93,10 @@ is **NOT written** or **NOT fully covered** relative to each plan's scenario tab
 
 ## Known Bugs Blocking Tests
 
-| Bug | Route | Severity | Plan impacted |
-|-----|-------|----------|---------------|
-| BUG-001 | /users/create | Critical | 004 |
-| BUG-002 | /users/{id}/edit | Critical | 004 |
-| BUG-003 | /docs | Medium | none |
+> **All resolved 2026-09-11.**
+
+| Bug | Route | Severity | Plan impacted | Resolution |
+|-----|-------|----------|---------------|------------|
+| ~~BUG-001~~ | /users/create | Critical | 004 | Redirect to /users (shared form) |
+| ~~BUG-002~~ | /users/{id}/edit | Critical | 004 | Redirect to /users (shared form) |
+| ~~BUG-003~~ | /docs | Medium | none | Pass $content to view + self-contained layout |
