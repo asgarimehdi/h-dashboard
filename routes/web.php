@@ -10,7 +10,12 @@ Route::livewire('/login', 'auth.login')->name('login');
 Route::get('/docs/{page?}', function ($page = 'index') {
     $page = str_replace('-', '/', $page);
 
-    return view('docs.user-guide', ['page' => $page]);
+    $path = resource_path("docs/{$page}.md");
+    $content = file_exists($path)
+        ? app(\League\CommonMark\CommonMarkConverter::class)->convert(file_get_contents($path))->getContent()
+        : '';
+
+    return view('docs.user-guide', ['page' => $page, 'content' => $content]);
 })->name('docs.user-guide');
 
 // Hardware routes — require authentication and manage_hardware permission
@@ -64,8 +69,8 @@ Route::middleware('auth')->group(function () {
 
         Route::middleware('role_or_permission:manage_users')->group(function () {
             Route::livewire('/users', 'users.index');
-            Route::livewire('/users/create', 'users.create');
-            Route::livewire('/users/{user}/edit', 'users.edit');
+            Route::get('/users/create', fn () => redirect('/users'));
+            Route::get('/users/{user}/edit', fn () => redirect('/users'));
         });
         Route::livewire('/users/changepassword', 'auth.changepassword');
 
