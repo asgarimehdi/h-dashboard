@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use App\Mail\NotificationMail;
+use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 
 class EmailNotificationService
