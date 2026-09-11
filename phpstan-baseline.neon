@@ -3631,6 +3631,12 @@ parameters:
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
+			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: resources/views/livewire/dashboard.blade.php
+
+		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -5517,7 +5523,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
-			count: 2
+			count: 3
 			path: resources/views/livewire/settings/index.blade.php
 
 		-
@@ -6675,7 +6681,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 46
+			count: 44
 			path: routes/web.php
 
 		-
