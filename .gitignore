@@ -35,3 +35,12 @@ coverage/
 *.lock
 package-lock.json
 /.claude
+
+# E2E test credentials
+.env.test
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
