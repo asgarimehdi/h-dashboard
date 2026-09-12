@@ -11,6 +11,13 @@
 | Branch     | celin                              |
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** ۳ assertTrue(true) پنهان. ۱۲۲ فایل setup تکراری.
+
+**ریسک:** 🟡 متوسط
+
+---
 
 ## 1. Problem
 

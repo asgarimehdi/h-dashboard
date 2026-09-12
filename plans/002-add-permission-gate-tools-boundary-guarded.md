@@ -12,6 +12,15 @@
 - **Category**: security
 - **Planned at**: commit `5f9c24e`, 2026-09-12
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** صفحه ابزارها فقط auth داره — هر کاربری می‌تونه حذف دسته‌جمعی کنه. Boundary $guarded=[].
+
+**راه‌حل:** middleware role_or_permission + $fillable.
+
+**ریسک:** 🟡 متوسط — permission اشتباه = قفل کاربران
+
+
 ## Why this matters
 Two independent security issues compound: (1) The `/tools` route that allows bulk deletion of tickets, activity logs, and notifications is protected only by `auth` — any logged-in user can access it regardless of role, enabling data destruction. (2) The `Boundary` model uses `$guarded = []` which disables mass-assignment protection entirely, meaning any field (including `id`) can be mass-assigned.
 

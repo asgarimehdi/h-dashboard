@@ -8,6 +8,15 @@
 - **Depends on:** none
 - **Base SHA:** 5f9c24e
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** بازیابی سخت‌افزار ID جدید می‌گیره. Audit trail لینک شکسته.
+
+**راه‌حل:** forceFill ID اصلی بعد از create.
+
+**ریسک:** 🟡 متوسط
+
+
 ## Why this matters
 
 When a deleted hardware record is restored, the audit trail (all `HardwareAudit` rows) still references the original `hardware_id`. The current code attempts to set the PK via `$restoreData['id'] = $audit->hardware_id` then calls `Hardware::create($restoreData)`, but Eloquent ignores `id` in mass assignment because it is not in `$fillable` (see `app/Models/Hardware.php:25-45`). The restored hardware gets a **new auto-incremented ID**, breaking every audit row that references the old one. The Livewire path in `HardwareIndexHelpers` doesn't even attempt to set the ID at all.

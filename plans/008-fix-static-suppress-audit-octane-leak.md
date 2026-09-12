@@ -8,6 +8,15 @@
 - **Depends on:** none
 - **Base SHA:** 5f9c24e
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** Hardware suppressAudit static → crash = audit غیرفعال برای همه.
+
+**راه‌حل:** request-scoped attribute.
+
+**ریسک:** 🟢 کم
+
+
 ## Why this matters
 
 `Hardware::$suppressAudit` is a `public static bool` property (line 21 of `app/Models/Hardware.php`). Under Laravel Octane, PHP processes persist across requests. If a bulk operation crashes after setting `Hardware::$suppressAudit = true` but before the `finally` block can reset it, the static flag remains `true` for all subsequent requests. This silently suppresses ALL hardware audit logging — every create, update, and delete goes unrecorded until the Octane worker is restarted.

@@ -3,6 +3,13 @@
 **Category:** direction | **Effort:** M/L | **Risk:** LOW | **Priority:** P3 | **Depends on:** none
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** ۴ فیچر ناقص: UI نگهداری، export پرسنل، API reject، export گزارش.
+
+**ریسک:** 🟢 کم
+
+---
 
 ## Problem
 

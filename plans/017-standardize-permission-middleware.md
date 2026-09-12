@@ -8,6 +8,13 @@
 - **Depends on:** none
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** web: role_or_permission، API: bare permission → دسترسی متفاوت.
+
+**ریسک:** 🟢 کم
+
+---
 
 ## Problem
 

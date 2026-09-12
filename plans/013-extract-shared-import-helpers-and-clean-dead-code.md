@@ -11,6 +11,15 @@
 | Branch     | celin                              |
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** clean/normalizeForComparison تکراری. فایل‌های مرده.
+
+**⚠️ نکته:** normalizeForComparison HardwareImport logic اضافی داره.
+
+**ریسک:** 🟢 کم
+
+---
 
 ## 1. Problem
 

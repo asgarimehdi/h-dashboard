@@ -12,6 +12,15 @@
 - **Category**: tests
 - **Planned at**: commit `5f9c24e`, 2026-09-12
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** ۷ تست فقط اسم‌شون `ticket_` هست نه `test_` — PHPUnit نمی‌بینه. SecurityHeaders تست نداره.
+
+**راه‌حل:** rename + ۲ فایل تست جدید.
+
+**ریسک:** 🟢 صفر
+
+
 ## Why this matters
 `TicketWorkflowTest` contains 7 test methods that are never discovered or executed by PHPUnit/Pest because they use the `ticket_*` naming convention instead of `test_*`. This means zero test coverage for the core ticket lifecycle (create → forward → accept → complete → reject). Additionally, the `SecurityHeaders` middleware and `UnitScopedRequest` form request have zero test coverage, despite being security-critical components.
 

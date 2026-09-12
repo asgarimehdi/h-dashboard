@@ -8,6 +8,15 @@
 - **Depends on:** none
 - **Base SHA:** 5f9c24e
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** گزارش پرسنل ۳۱۸ رکورد یکجا (OOM). واحدها بدون scope.
+
+**⚠️ بررسی:** Blade template pagination link داره؟ اگه نه اول template.
+
+**ریسک:** 🟡 متوسط
+
+
 ## Why this matters
 
 Two performance / correctness problems in the persons report page:

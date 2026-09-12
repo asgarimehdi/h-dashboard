@@ -3,6 +3,15 @@
 **Category:** direction | **Effort:** M | **Risk:** LOW | **Priority:** P3 | **Depends on:** none
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** اعلان فقط کامنت/منشن. واگذاری بی‌اعلان. Todo بدون یادآوری.
+
+**⚠️ نکته:** فیلتر تقویم نباید overdue حذف کنه.
+
+**ریسک:** 🟢 کم
+
+---
 
 ## Problem
 

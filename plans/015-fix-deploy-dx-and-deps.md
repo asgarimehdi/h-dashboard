@@ -11,6 +11,13 @@
 | Branch     | celin                              |
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** /health نیست. Apache2 به جای Nginx. composer.lock ایگنور. boost در prod.
+
+**ریسک:** 🟡 متوسط
+
+---
 
 ## 1. Problem
 

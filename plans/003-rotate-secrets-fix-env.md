@@ -12,6 +12,15 @@
 - **Category**: security
 - **Planned at**: commit `5f9c24e`, 2026-09-12
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** .env.testing رمز واقعی در repo. .gitignore فقط .env.test رو می‌گیره.
+
+**راه‌حل:** placeholder + gitignore + چرخش رمزها.
+
+**ریسک:** 🟢 صفر
+
+
 ## Why this matters
 `.env.testing` is committed to the repository with real credential-like values: a database password, root password, default admin password, Redis password, and an application key. The `.gitignore` only covers `.env.test` (line 40) but not `.env.testing`, so this file is tracked. Anyone with repo read access has these credentials. Additionally, `.env.example` is missing `CACHE_STORE` and `APP_LOCALE`, has a duplicate `SESSION_DRIVER` (lines 20 and 53), and there is only one `.env.example` file (contrary to the task's claim of 4 variants).
 

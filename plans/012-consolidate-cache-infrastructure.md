@@ -7,6 +7,15 @@
 - **Depends on:** none
 - **Status:** proposed
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** کلید کش ۱۵ بار تکرار. Namespace ۴ فایل hardcoded. PruneStaleCache بی‌فایده.
+
+**⚠️ نکته:** تغییر فرمت کلید = cold cache spike.
+
+**ریسک:** 🟡 متوسط
+
+
 ## Problem
 
 The cache versioning system has a well-designed `CacheInvalidationService` with `remember()` and `versioned` key construction, but most consumers bypass it — constructing keys manually with raw `Cache::get('namespace_version', 0)`. Additionally, the cache pruning command is a no-op, and cache namespace names are duplicated across 4+ files.

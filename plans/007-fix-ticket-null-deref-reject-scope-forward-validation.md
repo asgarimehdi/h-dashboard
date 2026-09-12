@@ -8,6 +8,13 @@
 - **Depends on:** none
 - **Base SHA:** 5f9c24e
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** ۴ باگ تیکت: null deref، scope ناقص reject، forwarding بدون اعتبارسنجی، status غیرمجاز.
+
+**ریسک:** 🟡 متوسط
+
+
 ## Why this matters
 
 Four related correctness issues in the ticket system:

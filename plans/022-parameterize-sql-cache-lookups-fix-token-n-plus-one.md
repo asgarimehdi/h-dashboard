@@ -3,6 +3,15 @@
 **Category:** perf | **Effort:** M | **Risk:** MED | **Priority:** P2 | **Depends on:** none
 
 ---
+## ⚠️ TL;DR فارسی
+
+**مشکل:** SQL string concat. Lookup ثابت هر render. توکن هر بار. N+1.
+
+**⚠️ نکته:**  با implode(array_fill) نه ? ساده.
+
+**ریسک:** 🟡 متوسط
+
+---
 
 ## Problem
 

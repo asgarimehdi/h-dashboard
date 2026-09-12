@@ -7,6 +7,15 @@
 - **Depends on:** none
 - **Status:** proposed
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** داشبورد ۵۸۰ خط + ۵ SQL خام در Blade. غیرقابل تست.
+
+**راه‌حل:** DashboardService + DTO.
+
+**ریسک:** 🔴 بالا — بزرگ‌ترین refactor
+
+
 ## Problem
 
 `resources/views/livewire/dashboard.blade.php` is a 580-line anonymous-class Livewire component that owns all data fetching, caching, and query logic directly inline. This makes it hard to test, reuse, or reason about independently.

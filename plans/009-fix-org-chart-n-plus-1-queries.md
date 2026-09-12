@@ -7,6 +7,15 @@
 - **Depends on:** none
 - **Status:** proposed
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** org-chart ۵۰-۱۰۰+ کوئری با ۳ سطح باز.
+
+**⚠️ نکته:** orderBy فعلی حفظ بشه.
+
+**ریسک:** 🟡 متوسط
+
+
 ## Problem
 
 The org-chart page fires individual DB queries for every visible node at every level, causing O(n) queries where n = total expanded nodes. Three distinct N+1 hotspots exist:

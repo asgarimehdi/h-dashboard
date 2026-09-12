@@ -12,6 +12,15 @@
 - **Category**: security
 - **Planned at**: commit `5f9c24e`, 2026-09-12
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** نام واحد مستقیماً در JavaScript تزریق می‌شه → XSS ذخیره‌شده.
+
+**راه‌حل:** `@js()` اضافه کن. ۲ خط کد.
+
+**ریسک:** 🟢 صفر
+
+
 ## Why this matters
 User-controlled unit names are interpolated directly into `wire:click` JavaScript string attributes without escaping. An attacker who creates a unit with a name like `'); alert(1);//` achieves stored XSS that fires for every user who opens the ticket create or inbox pages. This is a P1 because it is stored XSS — the payload persists in the database and executes in other users' browsers with no further interaction.
 

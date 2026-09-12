@@ -7,6 +7,15 @@
 - **Depends on:** none
 - **Status:** proposed
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** ۴ صفحه کارگزینی ~۲۰۰ خط × ۴ تکراری.
+
+**⚠️ نکته:** نام delete() ممکنه با Livewire تداخل کنه.
+
+**ریسک:** 🟡 متوسط
+
+
 ## Problem
 
 Four kargozini CRUD pages contain nearly identical code (~200 lines each) with only the Model class name, table name, and display label differing. Any bug fix or feature addition must be replicated 4 times.
