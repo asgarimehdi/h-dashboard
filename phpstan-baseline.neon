@@ -5523,7 +5523,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/settings/index.blade.php
 
 		-

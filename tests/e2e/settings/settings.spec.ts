@@ -3,7 +3,7 @@ import { test, expect, login } from '../shared/fixtures';
 /**
  * Plans 012 — Settings & Profile
  * Probed DOM facts:
- * - /settings: toggle checkboxes (اعلان ایمیلی/اعلان مرورگر/حالت فشرده) +
+ * - /settings: toggle checkboxes (اعلان مرورگر/حالت فشرده) +
  *   "بروزرسانی خودکار" select (غیرفعال/۱۵ثانیه/۳۰ثانیه/۱دقیقه) + "ذخیره تنظیمات".
  * - /profile: renders "پروفایل من" with کاربر name/n_code/unit + "تغییر رمز عبور".
  * NOTE: toggling persists to the shared admin account — assert presence + toggles
@@ -18,11 +18,11 @@ test.describe('settings', () => {
   });
 
   test('renders notification + dashboard toggles', async ({ page }) => {
-    await expect(page.locator('body')).toContainText('اعلان ایمیلی');
     await expect(page.locator('body')).toContainText('اعلان مرورگر');
     await expect(page.locator('body')).toContainText('حالت فشرده');
-    // 3 toggle checkboxes (email/browser/compact)
-    expect(await page.locator('input[type="checkbox"].toggle').count()).toBe(3);
+    await expect(page.locator('body')).not.toContainText('اعلان ایمیلی');
+    // 2 toggle checkboxes (browser/compact)
+    expect(await page.locator('input[type="checkbox"].toggle').count()).toBe(2);
   });
 
   test('dashboard refresh select offers 4 options', async ({ page }) => {
