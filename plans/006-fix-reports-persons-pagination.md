@@ -12,7 +12,8 @@
 
 **مشکل:** گزارش پرسنل ۳۱۸ رکورد یکجا (OOM). واحدها بدون scope.
 
-**⚠️ بررسی:** Blade template pagination link داره؟ اگه نه اول template.
+**⚠️ تأیید شد:** Blade template هیچ pagination link نداره! باید Livewire paginator اضافه بشه.
+`accessibleUnits` property از قبل exists ولی mount() هنوز `Unit::all()` می‌خونه (بی‌فایده).
 
 **ریسک:** 🟡 متوسط
 

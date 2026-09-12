@@ -7,7 +7,10 @@
 
 **مشکل:** SQL string concat. Lookup ثابت هر render. توکن هر بار. N+1.
 
-**⚠️ نکته:**  با implode(array_fill) نه ? ساده.
+**⚠️ تأیید شد:** `$ids` از `AccessService::accessibleUnitIds()` type: `array<int>` — امن در عمل ولی الگو شکننده.
+**فرمت کش:** اکثر key‌ها سازگارن. map از underscore (`_`) به جای colon (`:`) استفاده می‌کنه.
+calendar از `CacheInvalidationServiceInterface` عبور می‌کنه — bypass مستقیم.
+**راه‌حل SQL:** `DB::select('...IN ('.str_repeat('?,', count($ids)-1).')', $ids)` یا Eloquent `whereIn()`.
 
 **ریسک:** 🟡 متوسط
 

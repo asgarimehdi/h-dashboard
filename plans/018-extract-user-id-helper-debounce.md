@@ -21,6 +21,20 @@
 - **Category**: tech-debt
 - **Planned at**: commit `5f9c24e`, 2026-09-12
 
+## ⚠️ TL;DR فارسی
+
+**مشکل:** query user ~۶ بار تکرار. debounce 150/300/500ms ناسازگار.
+
+**⚠️ تأیید شد:** همه ۲۸ binding search/filter هستن — هیچ regular input نیست.
+**۲۲ تا bare debounce (150ms)** → همه search: hardware, roles, tickets, kargozini, units, permissions
+**۴ تا explicit 300ms** → maps, ticket create, org-chart, global search
+**۲ تا explicit 500ms** → person_search (heavy), units/chart
+**نتیجه:** 300ms برای همه bare debounce مناسبه. 500ms برای person_search منطقیه.
+
+**ریسک:** 🟢 کم
+
+---
+
 ## Why this matters
 
 The query `User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')` is copy-pasted in at least 10 locations across blade components and controllers. This means every bug fix or optimization to this query must be applied N times. Additionally, `wire:model.live.debounce` (default 150ms) is used in ~22 components while 4 use explicit 300ms and 2 use 500ms — the inconsistency creates unpredictable search responsiveness.

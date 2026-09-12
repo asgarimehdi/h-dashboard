@@ -11,7 +11,8 @@
 
 **مشکل:** org-chart ۵۰-۱۰۰+ کوئری با ۳ سطح باز.
 
-**⚠️ نکته:** orderBy فعلی حفظ بشه.
+**⚠️ تأیید شد:** هیچ orderBy‌ای وجود نداره! ترتیب بر اساس insertion order پستگره.
+**راه‌حل:** اضافه کردن `->orderBy('name')` به `Unit::children()` relation (canonical) + هر ۴ کوئری مستقیم در org-chart.
 
 **ریسک:** 🟡 متوسط
 

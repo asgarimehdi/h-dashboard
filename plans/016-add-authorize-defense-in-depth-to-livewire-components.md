@@ -15,9 +15,13 @@
 
 **مشکل:** ۳۰+ کامپوننت فقط middleware — دفاع عمیق نیست.
 
-**⚠️ نکته:** اول PermissionSeeder بررسی بشه.
+**⚠️ تأیید شد — بحرانی:** مسیر tools و reports **صفر محافظت** دارن!
+**مجوزهای جدید لازم:** `view_tools` + `view_reports` (یا `manage_tools`/`manage_reports`)
+**activity-log:** الان `manage_users` داره (خیلی محدود) — باید `view_activity_log` جداگانه بسازه.
+**فقط ۳ کامپوننت authorize دارن:** roles, users, permissions.
+**ابزارها:** `tools/tools.blade.php:19` — هیچ middleware + هیچ authorize = هر کاربر لاگین‌کرده.
 
-**ریسک:** 🟡 متوسط
+**ریسک:** 🔴 بالا — اگه permission اشتباه بذاری کاربران مجاز قفل می‌شن
 
 ---
 
