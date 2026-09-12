@@ -61,6 +61,16 @@ return new class extends Component {
 
         window.map = map;
 
+        // Reset any global layers that depended on the previous map instance
+        // (SPA navigation reuses window.map but marker/line layers from the prior
+        // page would otherwise stay attached to a stale Leaflet instance).
+        ['markersLayer', 'linesLayer', 'geojsonLayers', 'countyLayers'].forEach(function (name) {
+            if (window[name]) {
+                try { window[name].remove?.(); } catch (e) {}
+                delete window[name];
+            }
+        });
+
         // Issue (map width): after init, force Leaflet to measure the real
         // container size. Leaflet captures dimensions at construction; if the
         // page/layout was still settling (SPA navigation, fonts, hidden

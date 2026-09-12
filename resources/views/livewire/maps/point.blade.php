@@ -161,7 +161,6 @@ return new class extends Component
 
 @script
 <script>
-    // تابع کمکی برای چک کردن آماده بودن نقشه
     function waitForMap(callback) {
         var tries = 0;
         function check() {
@@ -176,24 +175,23 @@ return new class extends Component
         check();
     }
 
-    // آیکن‌ها بر اساس unit_type_id و نام واحدها
     const typeIcons = {
-        4: '/icons/network.svg',      // شبکه بهداشت
-        5: '/icons/urban-health.svg',  // مرکز خدمات جامع سلامت شهری
-        6: '/icons/urban-rural.svg',   // مرکز خدمات جامع سلامت شهری روستایی
-        7: '/icons/rural-health.svg',  // مرکز خدمات جامع سلامت روستایی
-        8: '/icons/attached-base.svg',// پایگاه سلامت ضمیمه
-        9: '/icons/health-house.svg',  // خانه بهداشت
-        10: '/icons/base.svg',         // پایگاه سلامت غیر ضمیمه
-        11: '/icons/block.svg',        // بلوک
-        12: '/icons/satellite.svg',    // قمر
-        13: '/icons/rabies.svg',       // مرکز هاری
-        14: '/icons/dental.svg',       // تجمیع دندانپزشکی
-        15: '/icons/lab.svg',           // آزمایشگاه
-        16: '/icons/school.svg',       // آموزشگاه
-        17: '/icons/emergency.svg',    // فوریت
-        18: '/icons/worker-house.svg',  // خانه بهداشت کارگری
-        19: '/icons/hospital.svg',     // بیمارستان
+        4: '/icons/network.svg',
+        5: '/icons/urban-health.svg',
+        6: '/icons/urban-rural.svg',
+        7: '/icons/rural-health.svg',
+        8: '/icons/attached-base.svg',
+        9: '/icons/health-house.svg',
+        10: '/icons/base.svg',
+        11: '/icons/block.svg',
+        12: '/icons/satellite.svg',
+        13: '/icons/rabies.svg',
+        14: '/icons/dental.svg',
+        15: '/icons/lab.svg',
+        16: '/icons/school.svg',
+        17: '/icons/emergency.svg',
+        18: '/icons/worker-house.svg',
+        19: '/icons/hospital.svg',
     };
 
     const defaultIcon = '/icons/default.svg';
@@ -207,7 +205,6 @@ return new class extends Component
         });
     }
 
-    // عمق سلسله‌مراتبی واحد را محاسبه می‌کند
     function getDepth(loc, allLocations) {
         let depth = 0;
         let current = loc;
@@ -218,52 +215,57 @@ return new class extends Component
         return depth;
     }
 
-    // رنگ خطوط اتصال بر اساس عمق سلسله‌مراتبی
     const lineColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
 
-    // تنظیم markers layer وقتی نقشه آماده است
-    waitForMap(function() {
-        window.markersLayer = L.layerGroup().addTo(window.map);
-        window.linesLayer = L.layerGroup().addTo(window.map);
+    function renderMarkers(locations) {
+        if (!window.markersLayer) return;
 
-        // رندر اولیه مارکرها و خطوط اتصال
-        function renderMarkers(locations) {
-            if (!window.markersLayer) return;
+        window.markersLayer.clearLayers();
+        window.linesLayer.clearLayers();
 
-            window.markersLayer.clearLayers();
-            window.linesLayer.clearLayers();
-
-            // رسم خطوط اتصال بین والد و فرزند
-            locations.forEach(loc => {
-                if (loc.parent_id && loc.lat && loc.lng) {
-                    const parent = locations.find(u => u.id === loc.parent_id);
-                    if (parent && parent.lat && parent.lng) {
-                        const depth = getDepth(parent, locations);
-                        const color = lineColors[Math.min(depth, lineColors.length - 1)];
-                        L.polyline(
-                            [[loc.lat, loc.lng], [parent.lat, parent.lng]],
-                            { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
-                        ).addTo(window.linesLayer);
-                    }
+        locations.forEach(loc => {
+            if (loc.parent_id && loc.lat && loc.lng) {
+                const parent = locations.find(u => u.id === loc.parent_id);
+                if (parent && parent.lat && parent.lng) {
+                    const depth = getDepth(parent, locations);
+                    const color = lineColors[Math.min(depth, lineColors.length - 1)];
+                    L.polyline(
+                        [[loc.lat, loc.lng], [parent.lat, parent.lng]],
+                        { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
+                    ).addTo(window.linesLayer);
                 }
-            });
+            }
+        });
 
-            // رسم مارکرها
-            locations.forEach(loc => {
-                L.marker(
-                    [loc.lat, loc.lng],
-                    { icon: getIcon(loc.unit_type_id) }
-                )
-                    .bindPopup(loc.name)
-                    .addTo(window.markersLayer);
-            });
+        locations.forEach(loc => {
+            L.marker(
+                [loc.lat, loc.lng],
+                { icon: getIcon(loc.unit_type_id) }
+            )
+                .bindPopup(loc.name)
+                .addTo(window.markersLayer);
+        });
+    }
+
+    waitForMap(function() {
+        // Always bind layers to the CURRENT map instance. Stale layers from a
+        // previous page (bound to an older Leaflet instance) are useless here.
+        if (window.markersLayer && window.map.hasLayer(window.markersLayer)) {
+            window.markersLayer.clearLayers();
+        } else {
+            window.markersLayer = L.layerGroup().addTo(window.map);
+        }
+        if (window.linesLayer && window.map.hasLayer(window.linesLayer)) {
+            window.linesLayer.clearLayers();
+        } else {
+            window.linesLayer = L.layerGroup().addTo(window.map);
         }
 
-        // رندر مارکرهای اولیه
+        // Render initial locations
         var initialLocations = {{ Js::from($location) }};
         renderMarkers(initialLocations);
 
-        // گوش دادن به event بروزرسانی
+        // Listen for future updates from Livewire
         Livewire.on('locations-updated', ({ locations }) => {
             renderMarkers(locations);
         });
