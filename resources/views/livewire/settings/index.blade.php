@@ -1,17 +1,22 @@
 <?php
 
-use Livewire\Component;
-use Livewire\Attributes\Layout;
 use App\Services\EmailNotificationService;
+use Livewire\Attributes\Layout;
+use Livewire\Component;
 use Mary\Traits\Toast;
 
 return new class extends Component
 {
     use Toast;
+
     public bool $emailNotifications = true;
+
     public bool $browserNotifications = false;
+
     public int $dashboardRefresh = 0; // 0 = off
+
     public bool $compactMode = false;
+
     public bool $showHelpModal = false;
 
     public function mount(): void
@@ -42,6 +47,7 @@ return new class extends Component
         $user = auth()->user();
         if (empty($user->email)) {
             $this->error('ایمیلی برای کاربر تنظیم نشده', position: 'toast-bottom');
+
             return;
         }
 
@@ -55,10 +61,21 @@ return new class extends Component
         $this->success('ایمیل تستی ارسال شد!', position: 'toast-bottom');
     }
 
+    public function notifyPermissionDenied(): void
+    {
+        $this->error('دسترسی اعلان مرورگر رد شد. لطفاً از تنظیمات مرورگر اعلان را فعال کنید.', position: 'toast-bottom');
+    }
+
+    public function notifyUnsupported(): void
+    {
+        $this->error('مرورگر شما از اعلان‌ها پشتیبانی نمی‌کند.', position: 'toast-bottom');
+    }
+
     public function sendTestNotification(): void
     {
         if (! $this->browserNotifications) {
             $this->error('اعلان مرورگر غیرفعال است', position: 'toast-bottom');
+
             return;
         }
 
@@ -75,6 +92,7 @@ return new class extends Component
     {
         if ($this->dashboardRefresh === 0) {
             $this->error('بروزرسانی خودکار غیرفعال است', position: 'toast-bottom');
+
             return;
         }
 
@@ -89,7 +107,6 @@ return new class extends Component
             $this->success('حالت عادی فعال شد', position: 'toast-bottom');
         }
     }
-
 }; ?> 
 
     <div class="max-w-2xl mx-auto p-6" dir="rtl">
@@ -112,7 +129,7 @@ return new class extends Component
                 <label class="flex items-center justify-between cursor-pointer">
                     <span>اعلان مرورگر</span>
                     <input type="checkbox" class="toggle toggle-primary" wire:model.live="browserNotifications"
-                           x-on:change="if($event.target.checked && 'Notification' in window) { Notification.requestPermission().then(p => { if(p !== 'granted') { $wire.set('browserNotifications', false) } }) }" />
+                           x-on:change="if($event.target.checked && 'Notification' in window) { Notification.requestPermission().then(p => { if(p !== 'granted') { $wire.set('browserNotifications', false); $wire.notifyPermissionDenied(); } }) } else if($event.target.checked && !('Notification' in window)) { $wire.set('browserNotifications', false); $wire.notifyUnsupported(); }" />
                 </label>
             </div>
         </x-card>
