@@ -134,7 +134,6 @@
             <x-app-brand />
         </x-slot:brand>
         <x-slot:actions>
-            <livewire:notifications.bell />
             <a href="/search" wire:navigate class="btn btn-ghost btn-sm">
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">جستجو</span>
@@ -156,7 +155,6 @@
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="text-sm">جستجو</span>
             </a>
-            <livewire:notifications.bell />
         </div>
 
         {{-- SIDEBAR --}}

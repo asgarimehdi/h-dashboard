@@ -42,7 +42,6 @@ test('authenticated user can load settings page', function () {
 
 test('settings page loads user defaults', function () {
     Livewire::test('settings.index')
-        ->assertSet('emailNotifications', true)
         ->assertSet('browserNotifications', false)
         ->assertSet('dashboardRefresh', 0)
         ->assertSet('compactMode', false);
@@ -51,7 +50,6 @@ test('settings page loads user defaults', function () {
 test('settings page persists saved settings', function () {
     $this->actingAs($this->user);
     Livewire::test('settings.index')
-        ->set('emailNotifications', false)
         ->set('browserNotifications', true)
         ->set('dashboardRefresh', 30)
         ->set('compactMode', true)
@@ -59,7 +57,6 @@ test('settings page persists saved settings', function () {
         ->assertSuccessful();
 
     $this->user->refresh();
-    expect($this->user->settings['email_notifications'])->toBeFalse();
     expect($this->user->settings['browser_notifications'])->toBeTrue();
     expect($this->user->settings['dashboard_refresh'])->toBe(30);
     expect($this->user->settings['compact_mode'])->toBeTrue();
