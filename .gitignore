@@ -44,3 +44,6 @@ playwright-report/
 test-results/
 blob-report/
 playwright/.cache/
+
+# Hermes agent instance rules
+.hermes.md
