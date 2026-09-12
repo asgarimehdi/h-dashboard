@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
-> **Doc review (2026-09-02):** Split AGENTS.md into 3 files (this + `references/data-model.md` + `references/api-endpoints.md`). This file stays under 20K chars to avoid truncation.
+> **Doc review (2026-09-11):** Updated after 27+ commits since 2026-09-02. Added E2E testing, settings features, security, performance, and refactoring sections.
 
 ## Project Overview
 
@@ -14,6 +14,8 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
 - **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
+- **E2E Testing:** Playwright (Chromium, `tests/e2e/`, `npx playwright test`)
+- **Code Quality:** PHPStan level 6 with baseline, Laravel Pint (enforced in CI + pre-commit hook)
 
 > **Detailed data model, relationships, FK behavior:** see `references/data-model.md`
 > **API endpoints, UI features, scheduler, deployment, performance:** see `references/api-endpoints.md`
@@ -69,6 +71,16 @@ Uses **Spatie Permission** package:
 
 ---
 
+## Settings Features
+
+Settings page (`/settings`) includes 4 user-configurable features:
+- **Email notifications** — toggle email alerts via `EmailNotificationService`
+- **Browser notifications** — push notification toggle
+- **Auto-refresh** — dashboard auto-refresh interval (configurable via `dashboard_refresh` setting)
+- **Compact mode** — denser UI layout toggle
+
+---
+
 ## Scheduler & Console Commands
 
 | Command | Schedule | Purpose |
@@ -107,7 +119,7 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Factories:** Only `UserFactory` exists; other models have seeders. When seeding rows with **explicit IDs** in tests, resync Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
-- **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
+- **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
@@ -130,7 +142,7 @@ php scripts/boost_tool.php <tool> '<json-args>'
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-02:** **`composer test`** is the one-command way (**928 passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Working as of 2026-09-11:** **`composer test`** is the one-command way (**928+ passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
 
 ### Prerequisites
 ```bash
@@ -168,6 +180,42 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | HTTP 500 on date validation: `Cannot create dynamic property DateMalformedStringException::$xdebug_message` | Xdebug `develop` mode | `XDEBUG_MODE=off` |
 | bare `vendor/bin/pest` → usage text | no path argument | pass `tests/` |
 | Parallel: ~35 flaky `PermissionDoesNotExist` | spatie cache shared across workers | Keep `CACHE_STORE=array` in phpunit.xml |
+
+---
+
+## E2E Testing (Playwright)
+
+**147 tests** across **32 spec files** in `tests/e2e/`. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+
+### Setup
+```bash
+npm install                   # includes @playwright/test + dotenv
+npx playwright install chromium  # one-time browser install
+```
+
+### Credentials
+Test credentials live in `.env.test` (gitignored). Read by `playwright.config.ts` via `dotenv`. Fallback defaults in `tests/e2e/shared/fixtures.ts`.
+
+### Run
+```bash
+npx playwright test                    # all tests
+npx playwright test tests/e2e/auth     # single suite
+npx playwright test --reporter=list    # list reporter
+```
+
+### Key helpers (in `tests/e2e/shared/fixtures.ts`)
+- `login(page, nCode?, password?)` — fills login form, waits for redirect
+- `logout(page)` — submits the real `<form action="/logout">`
+- `waitForLivewire(page)` — waits for `.wire-loading` to disappear
+- `waitForSearchResults(page, selector)` — waits for Livewire debounced results
+- `waitForToast(page, text?)` — waits for toast notification
+- `TEST_USER` / `ROLE_ACCOUNTS` — credentials from env vars
+
+### Config highlights
+- `baseURL`: `process.env.BASE_URL || 'http://localhost:8000'`
+- `locale`: `fa-IR`, `timezoneId`: `Asia/Tehran`
+- Retries: 2 in CI, 0 locally
+- Trace/screenshot/video on failure
 
 ---
 
@@ -222,3 +270,8 @@ When code fails or tests break, follow this order:
 | Hardware auth | Must be 302 → /login for guests; do NOT "fix" back to 200 |
 | Postgres sequence | After seeding with explicit IDs in tests, `SELECT setval(...)` to avoid dup keys |
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
+| Dead routes removed | `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — views never existed or were deleted |
+| Todo calendar | Must use `@script` block (not inline JS) for wire:navigate compatibility |
+| Person search | 500ms debounce applied — do not remove, causes Livewire update floods |
+| Toast auto-dismiss | Default 5s timeout; `timeout: 0` means never dismiss |
+| Search | Multi-word queries split and matched independently via `scopeFilterSearch` |
