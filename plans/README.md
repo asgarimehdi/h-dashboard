@@ -7,6 +7,14 @@
 
 Plans are numbered by priority. Plans within the same tier can be executed in parallel.
 
+### Tier 0 — Critical Infrastructure (P0)
+
+| # | Plan | Category | Effort | Risk | Status |
+|---|------|----------|--------|------|--------|
+| 024 | [E2E Data Independence (خودکفایی تست‌ها)](024-e2e-data-independence.md) | tests | L | MED | ⬜ |
+
+> Adopted from PR #625 (nashenas7:candle) — complementary to Plan 014 (Pest test infra) and Plan 019 (E2E hardware CRUD).
+
 ### Tier 1 — Security & Critical Bugs (P1)
 
 | # | Plan | Category | Effort | Risk | Status |
@@ -53,6 +61,8 @@ Plans are numbered by priority. Plans within the same tier can be executed in pa
 ## Dependency Graph
 
 ```
+024 (E2E data)   ─── standalone (should be first — other E2E plans depend on fixtures)
+019 (E2E hw CRUD)─── after 024 (fixtures must exist)
 001 (XSS)         ─── standalone
 002 (Tools gate)   ─── standalone
 003 (Secrets)      ─── standalone
@@ -80,11 +90,12 @@ Plans are numbered by priority. Plans within the same tier can be executed in pa
 
 ## Summary
 
-- **Total plans:** 23
+- **Total plans:** 24
+- **P0 (infrastructure):** 1 plan — E2E data independence (from PR #625)
 - **P1 (critical):** 7 plans — security, data loss, secret exposure, dead tests, deploy breakage
 - **P2 (important):** 10 plans — bugs, performance, tech debt
 - **P3 (nice-to-have):** 6 plans — missing features, direction improvements
-- **Estimated total effort:** ~15-20 developer-days
+- **Estimated total effort:** ~18-22 developer-days
 - **Quick wins (S effort, < 1 hour each):** 001, 002, 003, 004, 005, 006, 013, 015, 017, 018
 
 ## Conventions
