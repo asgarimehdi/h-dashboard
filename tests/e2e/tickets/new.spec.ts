@@ -23,8 +23,8 @@ test.describe('tickets new', () => {
 
   test('create form renders all fields', async ({ page }) => {
     await expect(page.locator('input[placeholder^="جستجوی واحد"]').first()).toBeVisible();
-    await expect(page.locator('input[wire\\\\:model="subject"]')).toBeVisible();
-    await expect(page.locator('textarea[wire\\\\:model="content"]')).toBeVisible();
+    await expect(page.locator('input[wire\\:model="subject"]')).toBeVisible();
+    await expect(page.locator('textarea[wire\\:model="content"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'ارسال نهایی' })).toBeVisible();
     await expect(page.locator('select').first()).toBeVisible(); // priority select
   });
@@ -40,8 +40,8 @@ test.describe('tickets new', () => {
   });
 
   test('invalid subject (too short) shows validation', async ({ page }) => {
-    await page.locator('input[wire\\\\:model="subject"]').fill('abc');
-    await page.locator('textarea[wire\\\\:model="content"]').fill('this is long enough content for the description field');
+    await page.locator('input[wire\\:model="subject"]').fill('abc');
+    await page.locator('textarea[wire\\:model="content"]').fill('this is long enough content for the description field');
     await page.getByRole('button', { name: 'ارسال نهایی' }).click();
     // Wait for Livewire validation response
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
@@ -49,11 +49,11 @@ test.describe('tickets new', () => {
   });
 
   test('cancel resets the form without creating a ticket', async ({ page }) => {
-    await page.locator('input[wire\\\\:model="subject"]').fill('موضوع آزمایشی تست');
+    await page.locator('input[wire\\:model="subject"]').fill('موضوع آزمایشی تست');
     await page.getByRole('button', { name: 'لغو' }).click();
     // Wait for Livewire to reset the form
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
-    await expect(page.locator('input[wire\\\\:model="subject"]')).toHaveValue('');
+    await expect(page.locator('input[wire\\:model="subject"]')).toHaveValue('');
   });
 
   test('create valid ticket appears in inbox', async ({ page }) => {
@@ -61,14 +61,14 @@ test.describe('tickets new', () => {
     const subject = `تست خودکار E2E ${ts}`;
     await page.locator('input[placeholder^="جستجوی واحد"]').first().fill('زنجان');
     // Wait for unit search results to appear (reactive instead of arbitrary timeout)
-    await page.waitForSelector('[wire\\\\:click*="selectUnit"]', { state: 'visible', timeout: 10000 });
-    await page.locator('[wire\\\\:click*="selectUnit"]').first().click();
+    await page.waitForSelector('[wire\\:click*="selectUnit"]', { state: 'visible', timeout: 10000 });
+    await page.locator('[wire\\:click*="selectUnit"]').first().click();
     // Wait for Livewire to process the unit selection
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
     await page.locator('select').first().selectOption('urgent');
-    await page.locator('input[wire\\\\:model="subject"]').fill(subject);
+    await page.locator('input[wire\\:model="subject"]').fill(subject);
     await page
-      .locator('textarea[wire\\\\:model="content"]')
+      .locator('textarea[wire\\:model="content"]')
       .fill('این یک متن تستی برای بررسی ثبت تیکت به صورت خودکار است که بیش از بیست کاراکتر دارد');
     await page.getByRole('button', { name: 'ارسال نهایی' }).click();
     await expect(page.locator('.toast').first()).toContainText('تیکت با موفقیت ثبت شد', {
@@ -94,14 +94,14 @@ test.describe('tickets new', () => {
     const subject = `تست فایل E2E ${ts}`;
     await page.locator('input[placeholder^="جستجوی واحد"]').first().fill('زنجان');
     // Wait for unit search results to appear
-    await page.waitForSelector('[wire\\\\:click*="selectUnit"]', { state: 'visible', timeout: 10000 });
-    await page.locator('[wire\\\\:click*="selectUnit"]').first().click();
+    await page.waitForSelector('[wire\\:click*="selectUnit"]', { state: 'visible', timeout: 10000 });
+    await page.locator('[wire\\:click*="selectUnit"]').first().click();
     // Wait for Livewire to process the unit selection
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
     await page.locator('select').first().selectOption('urgent');
-    await page.locator('input[wire\\\\:model="subject"]').fill(subject);
+    await page.locator('input[wire\\:model="subject"]').fill(subject);
     await page
-      .locator('textarea[wire\\\\:model="content"]')
+      .locator('textarea[wire\\:model="content"]')
       .fill('متن تستی برای بررسی ثبت تیکت همراه با فایل پیوست که به اندازه کافی طولانی است');
     await page.locator('input[type="file"]').setInputFiles({
       name: 'e2e-attach.pdf',
