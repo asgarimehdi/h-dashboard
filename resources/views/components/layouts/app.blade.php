@@ -177,6 +177,9 @@
                         </form>
                     </x-slot:actions>
                 </x-list-item>
+                <div class="px-4 py-1">
+                    <livewire:notifications.bell />
+                </div>
                 <x-menu-separator />
                 @endif
 
