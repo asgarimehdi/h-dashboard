@@ -292,20 +292,24 @@ class HardwareController extends Controller
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
-        // Suppress individual audit entries during bulk operations
-        request()->attributes->set('suppress_audit', true);
-        try {
-            // Single update query on the verified IDs
-            $count = Hardware::whereIn('id', $accessibleHardwareIds)
-                ->update(['mark' => $validated['mark']]);
-        } finally {
-            request()->attributes->remove('suppress_audit');
-        }
+        $count = DB::transaction(function () use ($accessibleHardwareIds, $validated, $hardwares) {
+            // Suppress individual audit entries during bulk operations
+            request()->attributes->set('suppress_audit', true);
+            try {
+                // Single update query on the verified IDs
+                $count = Hardware::whereIn('id', $accessibleHardwareIds)
+                    ->update(['mark' => $validated['mark']]);
+            } finally {
+                request()->attributes->remove('suppress_audit');
+            }
 
-        // Batch insert audit entries
-        $this->batchInsertAudits($hardwares, 'bulk_mark', [
-            ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
-        ]);
+            // Batch insert audit entries — atomic with the update above.
+            $this->batchInsertAudits($hardwares, 'bulk_mark', [
+                ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
+            ]);
+
+            return $count;
+        });
 
         event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
         Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
@@ -333,18 +337,22 @@ class HardwareController extends Controller
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
-        // Batch insert audit entries before deletion
-        $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn ($hw) => $hw->getAttributes());
-
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
-        // Suppress individual audit entries during bulk operations
-        request()->attributes->set('suppress_audit', true);
-        try {
-            $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
-        } finally {
-            request()->attributes->remove('suppress_audit');
-        }
+        $count = DB::transaction(function () use ($accessibleHardwareIds, $hardwares) {
+            // Batch insert audit entries before deletion — atomic with the delete.
+            $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn ($hw) => $hw->getAttributes());
+
+            // Suppress individual audit entries during bulk operations
+            request()->attributes->set('suppress_audit', true);
+            try {
+                $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
+            } finally {
+                request()->attributes->remove('suppress_audit');
+            }
+
+            return $count;
+        });
 
         event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
         Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events

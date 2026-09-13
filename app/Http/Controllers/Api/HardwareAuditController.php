@@ -199,33 +199,37 @@ class HardwareAuditController extends Controller
 
         $restoreData['id'] = $audit->hardware_id;
 
-        $hardware = Hardware::create($restoreData);
+        $hardware = DB::transaction(function () use ($restoreData, $audit, $user) {
+            $hardware = Hardware::create($restoreData);
 
-        // Advance the Postgres sequence past the restored id so the next
-        // auto-increment does not collide (duplicate key on hardwares_pkey).
-        // pg_get_serial_sequence resolves the sequence name regardless of
-        // SERIAL vs IDENTITY column definition.
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
-            if ($seq && $seq->seq) {
-                DB::statement('SELECT setval(?, (SELECT COALESCE(MAX(id), 0) FROM hardwares))', [$seq->seq]);
+            // Advance the Postgres sequence past the restored id so the next
+            // auto-increment does not collide (duplicate key on hardwares_pkey).
+            // pg_get_serial_sequence resolves the sequence name regardless of
+            // SERIAL vs IDENTITY column definition.
+            if (DB::connection()->getDriverName() === 'pgsql') {
+                $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
+                if ($seq && $seq->seq) {
+                    DB::statement('SELECT setval(?, (SELECT COALESCE(MAX(id), 0) FROM hardwares))', [$seq->seq]);
+                }
             }
-        }
 
-        // Note: Hardware::create() already fires HardwareAuditObserver::created()
-        // (registered in AppServiceProvider), which writes the 'created' audit —
-        // so we must NOT call it again here (would duplicate the audit row).
+            // Note: Hardware::create() already fires HardwareAuditObserver::created()
+            // (registered in AppServiceProvider), which writes the 'created' audit —
+            // so we must NOT call it again here (would duplicate the audit row).
 
-        // Log an explicit 'rollback' audit for traceability
-        $rollbackChanges = array_map(
-            fn ($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new']],
-            $audit->changes
-        );
-        app(HardwareAuditObserver::class)->recordRollbackAudit(
-            $hardware,
-            $rollbackChanges,
-            $user?->id
-        );
+            // Log an explicit 'rollback' audit for traceability
+            $rollbackChanges = array_map(
+                fn ($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new']],
+                $audit->changes
+            );
+            app(HardwareAuditObserver::class)->recordRollbackAudit(
+                $hardware,
+                $rollbackChanges,
+                $user?->id
+            );
+
+            return $hardware;
+        });
 
         return response()->json([
             'success' => true,

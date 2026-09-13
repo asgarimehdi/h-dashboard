@@ -340,4 +340,40 @@ class PersonImportEdgeCasesTest extends TestCase
 
         @unlink($file);
     }
+
+    public function test_over_length_n_code_is_rejected_on_preview(): void
+    {
+        // 11-digit n_code must be rejected (mirrors PersonController size:10).
+        $file = $this->csv([['98765432101', 'علی', 'رضایی', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $this->radif->id, $this->unit->id]]);
+
+        $import = new PersonImport;
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertCount(1, $results['preview']);
+        $this->assertEquals('error', $results['preview'][0]['status']);
+        $this->assertEquals('n_code باید دقیقاً ۱۰ رقم باشد', $results['preview'][0]['message']);
+        $this->assertEquals(1, $results['skipped']);
+        $this->assertDatabaseCount('persons', 0);
+
+        @unlink($file);
+    }
+
+    public function test_over_length_n_code_is_rejected_on_confirmation(): void
+    {
+        $file = $this->csv([['12345', 'علی', 'رضایی', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $this->radif->id, $this->unit->id]]);
+
+        $import = new PersonImport;
+        $import->setSelectedActions(['row_2' => 'create']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertCount(1, $results['errors']);
+        $this->assertEquals('n_code must be exactly 10 digits', $results['errors'][0]['error']);
+        $this->assertDatabaseCount('persons', 0);
+
+        @unlink($file);
+    }
 }

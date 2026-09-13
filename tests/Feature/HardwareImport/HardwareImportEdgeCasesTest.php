@@ -313,7 +313,8 @@ class HardwareImportEdgeCasesTest extends TestCase
     {
         $rules = (new HardwareImport)->rules();
 
-        $this->assertSame('required', $rules['n_code']);
+        $this->assertStringContainsString('required', $rules['n_code']);
+        $this->assertStringContainsString('size:10', $rules['n_code']);
         $this->assertStringContainsString('required', $rules['pc_name']);
         $this->assertStringContainsString('boolean', $rules['shutdown']);
         $this->assertStringContainsString('date_format:Y-m-d', $rules['clean_at']);

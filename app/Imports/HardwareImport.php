@@ -153,6 +153,20 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             return;
         }
 
+        // Per-row n_code format validation (mirrors processRow).
+        $nCode = $data['n_code'];
+        if (! is_string($nCode) || strlen($nCode) !== 10 || ! ctype_digit($nCode)) {
+            $this->importResults['preview'][] = [
+                'row' => $rowNumber,
+                'status' => 'error',
+                'message' => 'n_code باید دقیقاً ۱۰ رقم باشد',
+                'data' => $data,
+            ];
+            $this->importResults['skipped']++;
+
+            return;
+        }
+
         // Verify person exists and is in accessible units
         $person = $this->existingPersons[$data['n_code']] ?? null;
         if (! $person) {
@@ -277,6 +291,20 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
                 'error' => 'Missing required fields: n_code and pc_name are required',
+                'data' => $data,
+            ];
+            $this->importResults['skipped']++;
+
+            return;
+        }
+
+        // Per-row field validation (issue: WithValidation would break the
+        // two-pass preview/confirm flow; see plans/003).
+        $nCode = $data['n_code'];
+        if (! is_string($nCode) || strlen($nCode) !== 10 || ! ctype_digit($nCode)) {
+            $this->importResults['errors'][] = [
+                'row' => $rowNumber,
+                'error' => 'n_code must be exactly 10 digits',
                 'data' => $data,
             ];
             $this->importResults['skipped']++;
@@ -424,7 +452,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     public function rules(): array
     {
         return [
-            'n_code' => 'required',
+            'n_code' => 'required|string|size:10',
             'pc_name' => 'required|string|max:255',
             'type' => 'nullable|string|max:50',
             'os' => 'nullable|string|max:100',

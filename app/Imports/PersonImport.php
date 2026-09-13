@@ -182,6 +182,20 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             return;
         }
 
+        // Per-row n_code format validation (mirrors PersonController store: size:10).
+        $nCode = $data['n_code'];
+        if (! is_string($nCode) || strlen($nCode) !== 10 || ! ctype_digit($nCode)) {
+            $this->importResults['preview'][] = [
+                'row' => $rowNumber,
+                'status' => 'error',
+                'message' => 'n_code باید دقیقاً ۱۰ رقم باشد',
+                'data' => $data,
+            ];
+            $this->importResults['skipped']++;
+
+            return;
+        }
+
         // Verify unit exists and is in accessible units (using pre-loaded data)
         if (! empty($data['u_id'])) {
             $unit = $this->units[$data['u_id']] ?? null;
@@ -342,6 +356,19 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             return;
         }
 
+        // Per-row n_code format validation (mirrors PersonController store: size:10).
+        $nCode = $data['n_code'];
+        if (! is_string($nCode) || strlen($nCode) !== 10 || ! ctype_digit($nCode)) {
+            $this->importResults['errors'][] = [
+                'row' => $rowNumber,
+                'error' => 'n_code must be exactly 10 digits',
+                'data' => $data,
+            ];
+            $this->importResults['skipped']++;
+
+            return;
+        }
+
         // Verify unit exists and is in accessible units (using pre-loaded data)
         $unit = $this->units[$data['u_id']] ?? null;
         if (! $unit) {
@@ -470,6 +497,27 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     public function getImportResults(): array
     {
         return $this->importResults;
+    }
+
+    /**
+     * Row field rules, mirroring PersonController::store validation.
+     *
+     * NOTE: these are the documented contract for importers but are applied
+     * per-row inside processRow/buildPreview (the two-pass preview/confirm
+     * design cannot use Maatwebsite WithValidation without breaking previews).
+     */
+    public function rules(): array
+    {
+        return [
+            'n_code' => 'required|string|size:10',
+            'f_name' => 'required|string|max:255',
+            'l_name' => 'required|string|max:255',
+            't_id' => 'nullable|integer|exists:tahsils,id',
+            'e_id' => 'nullable|integer|exists:estekhdams,id',
+            'r_id' => 'nullable|integer|exists:radifs,id',
+            's_id' => 'nullable|integer|exists:semats,id',
+            'u_id' => 'required|integer|exists:units,id',
+        ];
     }
 
     public function getCsvSettings(): array
