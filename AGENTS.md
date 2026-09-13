@@ -118,6 +118,7 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
+- **Test Review Rule:** Every code change MUST include test review. Before finalizing any change: (1) check if existing tests cover the changed code, (2) add/update tests if the change introduces new behavior, fixes a bug, or alters an existing contract. No code change ships without corresponding test coverage verification.
 - **Factories:** Only `UserFactory` exists; other models have seeders. When seeding rows with **explicit IDs** in tests, resync Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.

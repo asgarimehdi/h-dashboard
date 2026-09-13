@@ -50,7 +50,6 @@ $guestProtectedRoutes = [
     '/search' => 'search.index',
     '/settings' => 'settings.index',
     '/profile' => 'profile.index',
-    '/tools' => 'tools.tools',
     '/dashboard' => 'dashboard',
     '/maps/route' => 'maps/route',
     '/maps/route2' => 'maps/route2',
@@ -114,6 +113,7 @@ $permissionRoutes = [
     '/activity-log' => 'activity-log.index',
     '/permissions' => 'permissions/index',
     '/roles' => 'roles/index',
+    '/tools' => 'tools.tools',
 ];
 
 foreach ($permissionRoutes as $route => $component) {
@@ -143,4 +143,10 @@ test('/roles loads for authorized user', function () {
     $this->actingAs($this->user);
     $this->user->givePermissionTo('manage_roles');
     Livewire::test('roles/index')->assertStatus(200);
+});
+
+test('/tools loads for authorized user', function () {
+    $this->actingAs($this->user);
+    $this->user->givePermissionTo('manage_users');
+    Livewire::test('tools.tools')->assertStatus(200);
 });

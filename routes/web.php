@@ -154,6 +154,8 @@ Route::middleware('auth')->group(function () {
         // پروفایل کاربر (نیاز به لاگین)
         Route::livewire('/profile', 'profile.index')->name('profile');
         // ابزارهای مدیریتی
-        Route::livewire('/tools', 'tools.tools')->name('tools');
+        Route::middleware('role_or_permission:manage_users')->group(function () {
+            Route::livewire('/tools', 'tools.tools')->name('tools');
+        });
     }); // unit_context
 });

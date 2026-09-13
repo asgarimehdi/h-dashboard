@@ -63,4 +63,35 @@ class SettingsBrowserNotificationTest extends TestCase
         $user->refresh();
         $this->assertTrue($user->settings['browser_notifications']);
     }
+
+    public function test_notify_permission_denied_runs_without_error(): void
+    {
+        $user = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        Livewire::test('settings.index')
+            ->call('notifyPermissionDenied')
+            ->assertStatus(200);
+    }
+
+    public function test_notify_unsupported_runs_without_error(): void
+    {
+        $user = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        Livewire::test('settings.index')
+            ->call('notifyUnsupported')
+            ->assertStatus(200);
+    }
+
+    public function test_send_test_notification_when_disabled_shows_error(): void
+    {
+        $user = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        Livewire::test('settings.index')
+            ->assertSet('browserNotifications', false)
+            ->call('sendTestNotification')
+            ->assertStatus(200);
+    }
 }

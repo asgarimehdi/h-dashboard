@@ -1,23 +1,24 @@
 <?php
 
-use Livewire\Component;
 use Livewire\Attributes\Layout;
-use App\Services\EmailNotificationService;
+use Livewire\Component;
 use Mary\Traits\Toast;
 
 return new class extends Component
 {
     use Toast;
-    public bool $emailNotifications = true;
+
     public bool $browserNotifications = false;
+
     public int $dashboardRefresh = 0; // 0 = off
+
     public bool $compactMode = false;
+
     public bool $showHelpModal = false;
 
     public function mount(): void
     {
         $settings = auth()->user()->settings ?? [];
-        $this->emailNotifications = $settings['email_notifications'] ?? true;
         $this->browserNotifications = $settings['browser_notifications'] ?? false;
         $this->dashboardRefresh = $settings['dashboard_refresh'] ?? 0;
         $this->compactMode = $settings['compact_mode'] ?? false;
@@ -27,7 +28,6 @@ return new class extends Component
     {
         $user = auth()->user();
         $user->settings = [
-            'email_notifications' => $this->emailNotifications,
             'browser_notifications' => $this->browserNotifications,
             'dashboard_refresh' => $this->dashboardRefresh,
             'compact_mode' => $this->compactMode,
@@ -37,28 +37,21 @@ return new class extends Component
         $this->success('تنظیمات ذخیره شد!', position: 'toast-bottom');
     }
 
-    public function sendTestEmail(): void
+    public function notifyPermissionDenied(): void
     {
-        $user = auth()->user();
-        if (empty($user->email)) {
-            $this->error('ایمیلی برای کاربر تنظیم نشده', position: 'toast-bottom');
-            return;
-        }
+        $this->error('دسترسی اعلان مرورگر رد شد. لطفاً از تنظیمات مرورگر اعلان را فعال کنید.', position: 'toast-bottom');
+    }
 
-        app(EmailNotificationService::class)->send(
-            $user,
-            'تست اعلان ایمیلی',
-            'این یک ایمیل تستی از داشبورد سلامت است.',
-            url('/dashboard')
-        );
-
-        $this->success('ایمیل تستی ارسال شد!', position: 'toast-bottom');
+    public function notifyUnsupported(): void
+    {
+        $this->error('مرورگر شما از اعلان‌ها پشتیبانی نمی‌کند.', position: 'toast-bottom');
     }
 
     public function sendTestNotification(): void
     {
         if (! $this->browserNotifications) {
             $this->error('اعلان مرورگر غیرفعال است', position: 'toast-bottom');
+
             return;
         }
 
@@ -75,6 +68,7 @@ return new class extends Component
     {
         if ($this->dashboardRefresh === 0) {
             $this->error('بروزرسانی خودکار غیرفعال است', position: 'toast-bottom');
+
             return;
         }
 
@@ -89,8 +83,7 @@ return new class extends Component
             $this->success('حالت عادی فعال شد', position: 'toast-bottom');
         }
     }
-
-}; ?> 
+}; ?>
 
     <div class="max-w-2xl mx-auto p-6" dir="rtl">
         <x-header title="تنظیمات" separator progress-indicator>
@@ -106,13 +99,9 @@ return new class extends Component
             <h2 class="font-bold mb-4">اعلان‌ها</h2>
             <div class="space-y-4">
                 <label class="flex items-center justify-between cursor-pointer">
-                    <span>اعلان ایمیلی</span>
-                    <input type="checkbox" class="toggle toggle-primary" wire:model.live="emailNotifications" />
-                </label>
-                <label class="flex items-center justify-between cursor-pointer">
                     <span>اعلان مرورگر</span>
                     <input type="checkbox" class="toggle toggle-primary" wire:model.live="browserNotifications"
-                           x-on:change="if($event.target.checked && 'Notification' in window) { Notification.requestPermission().then(p => { if(p !== 'granted') { $wire.set('browserNotifications', false) } }) }" />
+                           x-on:change="if($event.target.checked && 'Notification' in window) { Notification.requestPermission().then(p => { if(p !== 'granted') { $wire.set('browserNotifications', false); $wire.notifyPermissionDenied(); } }) } else if($event.target.checked && !('Notification' in window)) { $wire.set('browserNotifications', false); $wire.notifyUnsupported(); }" />
                 </label>
             </div>
         </x-card>
@@ -137,7 +126,6 @@ return new class extends Component
         </x-card>
 
         <div class="mt-6 flex justify-end gap-2">
-            <x-button label="تست ایمیل" icon="o-paper-airplane" wire:click="sendTestEmail" class="btn-outline btn-sm" spinner />
             <x-button label="تست اعلان" icon="o-bell" wire:click="sendTestNotification" class="btn-outline btn-sm" spinner />
             <x-button label="تست بروزرسانی" icon="o-arrow-path" wire:click="testDashboardRefresh" class="btn-outline btn-sm" spinner />
             <x-button label="تست نما" icon="o-eye" wire:click="testCompactMode" class="btn-outline btn-sm" spinner />

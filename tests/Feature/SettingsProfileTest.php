@@ -61,7 +61,6 @@ class SettingsProfileTest extends TestCase
     {
         $user = $this->createUserWithUnit();
         $user->update(['settings' => [
-            'email_notifications' => false,
             'browser_notifications' => true,
             'dashboard_refresh' => 30,
             'compact_mode' => true,
@@ -69,7 +68,6 @@ class SettingsProfileTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test('settings.index')
-            ->assertSet('emailNotifications', false)
             ->assertSet('browserNotifications', true)
             ->assertSet('dashboardRefresh', 30)
             ->assertSet('compactMode', true);
@@ -81,7 +79,6 @@ class SettingsProfileTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test('settings.index')
-            ->assertSet('emailNotifications', true)
             ->assertSet('browserNotifications', false)
             ->assertSet('dashboardRefresh', 0)
             ->assertSet('compactMode', false);
@@ -93,14 +90,12 @@ class SettingsProfileTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test('settings.index')
-            ->set('emailNotifications', false)
             ->set('browserNotifications', true)
             ->set('dashboardRefresh', 60)
             ->set('compactMode', true)
             ->call('save');
 
         $user->refresh();
-        $this->assertEquals(false, $user->settings['email_notifications']);
         $this->assertEquals(true, $user->settings['browser_notifications']);
         $this->assertEquals(60, $user->settings['dashboard_refresh']);
         $this->assertEquals(true, $user->settings['compact_mode']);

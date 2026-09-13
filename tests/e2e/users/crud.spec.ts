@@ -42,24 +42,24 @@ test.describe('users CRUD (inline modal)', () => {
   });
 
   test('open create modal renders the full form', async ({ page }) => {
-    await page.locator('button[wire\\\\:click="openFormForCreate"]').click();
+    await page.locator('button[wire\\:click="openFormForCreate"]').click();
     // Wait for the modal content to appear (reactive check instead of arbitrary timeout)
     await expect(page.locator('body')).toContainText('ثبت کاربر جدید', { timeout: 10000 });
 
-    await expect(page.locator('input[wire\\\\:model\\\\.live\\\\.debounce\\\\.500ms="person_search"]')).toBeVisible();
-    await expect(page.locator('input[wire\\\\:model="password"]')).toBeVisible();
+    await expect(page.locator('input[wire\\:model\\.live\\.debounce\\.500ms="person_search"]')).toBeVisible();
+    await expect(page.locator('input[wire\\:model="password"]')).toBeVisible();
     await expect(page.locator('body')).toContainText('نقش‌ها');
     await expect(page.locator('body')).toContainText('واحدها');
     await expect(page.getByRole('button', { name: 'ذخیره' })).toBeVisible();
   });
 
   test('create with duplicate n_code shows validation error', async ({ page }) => {
-    await page.locator('button[wire\\\\:click="openFormForCreate"]').click();
+    await page.locator('button[wire\\:click="openFormForCreate"]').click();
     // Wait for the modal to open before interacting
     await expect(page.locator('body')).toContainText('ثبت کاربر جدید', { timeout: 10000 });
 
     // Pick a person that already has a user account.
-    const search = page.locator('input[wire\\\\:model\\\\.live\\\\.debounce\\\\.500ms="person_search"]');
+    const search = page.locator('input[wire\\:model\\.live\\.debounce\\.500ms="person_search"]');
     await search.fill('هادیلو');
     // Wait for search results dropdown to appear (reactive instead of waitForTimeout)
     await page.waitForSelector('div.max-h-40 div.p-2', { state: 'visible', timeout: 10000 });
@@ -67,7 +67,7 @@ test.describe('users CRUD (inline modal)', () => {
     // Wait for Livewire to process the person selection
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
 
-    await page.locator('input[wire\\\\:model="password"]').fill('12345678');
+    await page.locator('input[wire\\:model="password"]').fill('12345678');
     await page.getByRole('button', { name: 'ذخیره' }).click();
     // Keep waitForTimeout here: dialog/submit response has no reliable DOM signal for validation errors
     // that appear asynchronously after form submission
@@ -81,16 +81,16 @@ test.describe('users CRUD (inline modal)', () => {
     const firstRow = page.locator('table tbody tr').first();
     const before = await firstRow.innerText();
 
-    await page.locator('button[wire\\\\:click^="edit("]').first().click();
+    await page.locator('button[wire\\:click^="edit("]').first().click();
     // Wait for edit modal text to appear (reactive instead of arbitrary timeout)
     await expect(page.locator('body')).toContainText('ویرایش کاربر', { timeout: 10000 });
     const searchValue = await page
-      .locator('input[wire\\\\:model\\\\.live\\\\.debounce\\\\.500ms="person_search"]')
+      .locator('input[wire\\:model\\.live\\.debounce\\.500ms="person_search"]')
       .inputValue();
     expect(searchValue.length).toBeGreaterThan(0);
 
     // Close without saving (the X button calls resetForm).
-    await page.locator('button[wire\\\\:click="resetForm"]').first().click();
+    await page.locator('button[wire\\:click="resetForm"]').first().click();
     // Wait for modal to close (reactive instead of arbitrary timeout)
     await expect(page.locator('body')).not.toContainText('ویرایش کاربر', { timeout: 5000 });
 
@@ -104,7 +104,7 @@ test.describe('users CRUD (inline modal)', () => {
     const firstCode = await page.locator('table tbody tr').first().innerText();
 
     page.on('dialog', (dialog) => dialog.dismiss());
-    await page.locator('button[wire\\\\:click^="delete("]').first().click();
+    await page.locator('button[wire\\:click^="delete("]').first().click();
     // Keep waitForTimeout: dialog dismiss + Livewire refresh has no single reliable DOM signal
     await page.waitForTimeout(1200);
 
@@ -123,7 +123,7 @@ test.describe('users CRUD (inline modal)', () => {
 
     // Accept the native confirm → soft delete.
     page.on('dialog', (dialog) => dialog.accept());
-    await page.locator('button[wire\\\\:click^="delete("]').first().click();
+    await page.locator('button[wire\\:click^="delete("]').first().click();
     // Wait for Livewire to process the deletion
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
     await expect(page.locator('table tbody')).not.toContainText(nCode);
@@ -135,7 +135,7 @@ test.describe('users CRUD (inline modal)', () => {
     await expect(page.locator('table tbody')).toContainText(nCode);
 
     // Restore → back to active (reverts the mutation in the same test).
-    await page.locator('button[wire\\\\:click^="restore("]').first().click();
+    await page.locator('button[wire\\:click^="restore("]').first().click();
     // Wait for Livewire to process the restore
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
 

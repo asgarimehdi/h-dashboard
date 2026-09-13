@@ -4,6 +4,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\View\Components\AppBrand;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -42,7 +43,9 @@ function makeHelpUser(): User
 }
 
 it('tools page renders with help button', function () {
+    $this->seed(PermissionSeeder::class);
     $user = makeHelpUser();
+    $user->givePermissionTo('manage_users');
     Livewire::actingAs($user)->test('tools.tools')
         ->assertOk()
         ->assertSee('ابزارهای مدیریتی');
