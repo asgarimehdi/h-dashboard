@@ -1,7 +1,7 @@
 import { test, expect, login } from '../shared/fixtures';
 
 /**
- * Plan 013 — Global Search
+ * Global Search
  * Probed DOM facts:
  * - /search: input placeholder "حداقل ۲ کاراکتر وارد کنید..." (wire:model.live.debounce.300ms="query")
  * - Empty state: "جستجو در تیکت‌ها..." + "حداقل ۲ کاراکتر تایپ کنید"
@@ -26,14 +26,13 @@ test.describe('global search', () => {
     const input = page.locator('input[placeholder^="حداقل"]');
     await input.fill('م');
     await page.waitForTimeout(1200);
-    // Verified: 1-char query returns results (the placeholder says min-2 but Livewire
-    // debounce does not enforce it).
     await expect(page.locator('body')).toContainText('نتیجه یافت شد');
   });
 
   test('valid query renders result sections', async ({ page }) => {
     const input = page.locator('input[placeholder^="حداقل"]');
-    await input.fill('هادیلو');
+    // عسگری is always present in seeded data (مهدی عسگری, the admin)
+    await input.fill('عسگری');
     await page.waitForTimeout(1800);
     await expect(page.locator('body')).toContainText('نتیجه یافت شد');
     await expect(page.locator('body')).toContainText('کاربران');
@@ -43,7 +42,6 @@ test.describe('global search', () => {
     const input = page.locator('input[placeholder^="حداقل"]');
     await input.fill('اشتبزنفراصلاوجودندارد12345');
     await page.waitForTimeout(1800);
-    // either "نتیجه‌ای یافت نشد" (no results) or a result count — assert the search completed
     await expect(page.locator('body')).toContainText(/نتیجه‌ای یافت نشد|نتیجه یافت شد/);
   });
 });

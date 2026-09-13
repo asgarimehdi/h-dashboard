@@ -60,10 +60,10 @@ test.describe('users CRUD (inline modal)', () => {
 
     // Pick a person that already has a user account.
     const search = page.locator('input[wire\\:model\\.live\\.debounce\\.500ms="person_search"]');
-    await search.fill('هادیلو');
+    await search.fill('عسگری');
     // Wait for search results dropdown to appear (reactive instead of waitForTimeout)
     await page.waitForSelector('div.max-h-40 div.p-2', { state: 'visible', timeout: 10000 });
-    await page.locator('div.max-h-40 div.p-2', { hasText: 'مهدی هادیلو' }).first().click();
+    await page.locator('div.max-h-40 div.p-2', { hasText: 'مهدی عسگری' }).first().click();
     // Wait for Livewire to process the person selection
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
 
