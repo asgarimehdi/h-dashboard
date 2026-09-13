@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Ticket extends Model
 {
+    use HasFactory;
     use HasOrganizationalScope;
 
     protected $fillable = [
@@ -24,6 +26,11 @@ class Ticket extends Model
         'current_assignee_id',
         'accepted_at',
         'completed_at',
+    ];
+
+    protected $casts = [
+        'accepted_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     public function canBeCompleted()

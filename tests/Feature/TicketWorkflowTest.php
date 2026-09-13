@@ -15,7 +15,7 @@ class TicketWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function ticket_has_created_status_by_default(): void
+    public function test_ticket_has_created_status_by_default(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -25,7 +25,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertEquals('created', $ticket->status);
     }
 
-    public function ticket_can_be_forwarded(): void
+    public function test_ticket_can_be_forwarded(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -36,7 +36,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertEquals('forwarded', $ticket->fresh()->status);
     }
 
-    public function ticket_accepted_sets_accepted_at(): void
+    public function test_ticket_accepted_sets_accepted_at(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -54,7 +54,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $ticket->accepted_at);
     }
 
-    public function ticket_completed_sets_completed_at(): void
+    public function test_ticket_completed_sets_completed_at(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -73,7 +73,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $ticket->completed_at);
     }
 
-    public function ticket_rejected_status_works(): void
+    public function test_ticket_rejected_status_works(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -84,7 +84,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertEquals('rejected', $ticket->fresh()->status);
     }
 
-    public function ticket_timestamps_are_cast(): void
+    public function test_ticket_timestamps_are_cast(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -100,7 +100,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $ticket->completed_at);
     }
 
-    public function ticket_factory_produces_valid_data(): void
+    public function test_ticket_factory_produces_valid_data(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();

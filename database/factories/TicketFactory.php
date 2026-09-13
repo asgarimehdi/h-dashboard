@@ -19,7 +19,7 @@ class TicketFactory extends Factory
             'subject' => fake('fa_IR')->sentence(4),
             'content' => fake('fa_IR')->paragraph(3),
             'priority' => fake()->randomElement(['low', 'normal', 'urgent']),
-            'status' => fake()->randomElement(['created', 'forwarded', 'accepted', 'completed', 'rejected']),
+            'status' => 'created',
             'task_id' => null,
             'current_assignee_id' => null,
             'accepted_at' => null,
