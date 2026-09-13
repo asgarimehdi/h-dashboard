@@ -1,5 +1,4 @@
-import { test, expect, login, getRunPrefix } from '../shared/fixtures';
-import { createE2EUser } from '../shared/helpers';
+import { test, expect, login, TEST_USER } from '../shared/fixtures';
 
 /**
  * Plan 013 — Global Search
@@ -10,18 +9,11 @@ import { createE2EUser } from '../shared/helpers';
  *   (تیکت‌ها / کاربران / واحدها / کارهای روزانه) + "N نتیجه یافت شد"
  * - No results → "نتیجه‌ای یافت نشد"
  *
- * NOTE: searches use E2E-created records (unique per run) instead of seeded names.
+ * NOTE: uses seeded admin name (deterministic with migrate:fresh --seed)
+ * instead of E2E-created records — global search scope is wider than user search.
  */
 
-let e2eSearchName: string;
-
 test.describe('global search', () => {
-  test.beforeAll(async () => {
-    const runPrefix = getRunPrefix();
-    createE2EUser(runPrefix, 'search');
-    e2eSearchName = runPrefix;
-  });
-
   test.beforeEach(async ({ page }) => {
     await login(page);
     await page.goto('/search');
@@ -33,17 +25,18 @@ test.describe('global search', () => {
     await expect(page.locator('body')).toContainText('حداقل ۲ کاراکتر');
   });
 
-  test('search triggers with a single character (min-2 is a placeholder hint, not enforced)', async ({ page }) => {
+  test('search triggers with results', async ({ page }) => {
     const input = page.locator('input[placeholder^="حداقل"]');
-    // Use first char of the run prefix (e.g., 'E' from 'E2E-...')
-    await input.fill(e2eSearchName.charAt(0));
-    await page.waitForTimeout(1200);
+    // Search for admin's last name (seeded, always present with fresh seed)
+    await input.fill('عسگری');
+    await page.waitForTimeout(1800);
     await expect(page.locator('body')).toContainText('نتیجه یافت شد');
   });
 
   test('valid query renders result sections', async ({ page }) => {
     const input = page.locator('input[placeholder^="حداقل"]');
-    await input.fill(e2eSearchName);
+    // Search by admin n_code (seeded, always present with fresh seed)
+    await input.fill('عسگری');
     await page.waitForTimeout(1800);
     await expect(page.locator('body')).toContainText('نتیجه یافت شد');
     await expect(page.locator('body')).toContainText('کاربران');

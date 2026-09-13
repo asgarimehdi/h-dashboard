@@ -1,11 +1,15 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ---------------------------------------------------------------------------
 // Run-scoped state (written by global-setup.ts, removed by global-teardown.ts)
 // ---------------------------------------------------------------------------
-const RUN_STATE_PATH = path.join(__dirname, '..', '..', 'tests', 'e2e', '.run-state.json');
+const RUN_STATE_PATH = path.join(__dirname, '..', '.run-state.json');
 
 function readRunState(): { runId: string; pwdNCode: string } {
   if (!fs.existsSync(RUN_STATE_PATH)) {
