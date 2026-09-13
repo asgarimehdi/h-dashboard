@@ -1,18 +1,25 @@
 <?php
+
 /**
  * Create a dedicated password-mutation user for E2E tests.
  * Usage: php tests/e2e/create-pwd-user.php <n_code> <password> <unit_name>
  */
+
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+
 require __DIR__.'/../../vendor/autoload.php';
 $app = require_once __DIR__.'/../../bootstrap/app.php';
-$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
 $nCode = $argv[1] ?? null;
 $password = $argv[2] ?? null;
 $unitName = $argv[3] ?? null;
 
-if (!$nCode || !$password || !$unitName) {
-    echo "Usage: php create-pwd-user.php <n_code> <password> <unit_name>\n";
+if (! $nCode || ! $password || ! $unitName) {
+    echo 'Usage: php create-pwd-user.php <n_code> <password> <unit_name>'."\n";
     exit(1);
 }
 
@@ -46,7 +53,6 @@ try {
     ]);
     $userId = DB::getPdo()->lastInsertId();
 
-    // user_units uses user_id (bigint FK to users.id), not user_n_code
     DB::table('user_units')->insert([
         'user_id' => $userId,
         'unit_id' => $unitId,
@@ -56,13 +62,13 @@ try {
         'updated_at' => now(),
     ]);
 
-    $user = App\Models\User::where('n_code', $nCode)->first();
+    $user = User::where('n_code', $nCode)->first();
     $user->assignRole('admin');
 
     DB::commit();
     echo "OK: created user $nCode (id=$userId) with unit $unitId\n";
 } catch (Throwable $e) {
     DB::rollBack();
-    echo "ERROR: " . $e->getMessage() . "\n";
+    echo 'ERROR: '.$e->getMessage()."\n";
     exit(1);
 }
