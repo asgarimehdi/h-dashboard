@@ -4903,12 +4903,6 @@ parameters:
 			path: resources/views/livewire/maps/unit.blade.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\*NEVER\*,\*NEVER\*\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/unit\.blade\.php\:10\:\:\$centerTypes has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
@@ -4948,18 +4942,6 @@ parameters:
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/unit\.blade\.php\:10\:\:\$units has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\*NEVER\*,\*NEVER\*\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
-			message: '#^Unable to resolve the template type TMergeValue in call to method Illuminate\\Support\\Collection\<\*NEVER\*,\*NEVER\*\>\:\:merge\(\)$#'
-			identifier: argument.templateType
-			count: 2
 			path: resources/views/livewire/maps/unit.blade.php
 
 		-
