@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.test' });
+dotenv.config({ path: process.env.PLAYWRIGHT_ENV || '.env.e2e' });
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -31,5 +31,6 @@ export default defineConfig({
     },
   ],
   // Global setup to ensure server is running
-  globalSetup: undefined,
+  globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
 });
