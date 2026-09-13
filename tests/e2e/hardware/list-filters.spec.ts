@@ -17,7 +17,7 @@ test.describe('hardware list & filters', () => {
   });
 
   test('list loads with hardware columns', async ({ page }) => {
-    const headers = await page.locator('div.hidden.md\\\\\\:block table thead th').evaluateAll((th) =>
+    const headers = await page.locator('div.hidden.md\\:block table thead th').evaluateAll((th) =>
       th.map((x) => x.textContent!.trim()),
     );
     for (const col of ['نام دستگاه', 'صاحب', 'واحد', 'نوع', 'OS', 'IP', 'CPU', 'RAM', 'HDD', 'وضعیت']) {
@@ -49,7 +49,7 @@ test.describe('hardware list & filters', () => {
   });
 
   test('advanced filter panel opens with نوع دستگاه field', async ({ page }) => {
-    await page.locator('button[wire\\\\\\:click*="showFilters"]').click();
+    await page.locator('button[wire\\:click*="showFilters"]').click();
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
     await expect(page.locator('body')).toContainText('نوع دستگاه');
     await expect(page.locator('body')).toContainText('سیستم عامل');
