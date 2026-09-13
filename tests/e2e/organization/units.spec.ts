@@ -1,15 +1,24 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, getRunPrefix } from '../shared/fixtures';
+import { createE2EUnit } from '../shared/helpers';
 
 /**
  * Plan 007 — Units list
  * Probed DOM facts:
  * - Headers: # | نام | توضیحات | نوع واحد | منطقه | واحد بالادستی | پذیرش تیکت
- * - 831 rows shown in pagination (832 total units − admin's own unit excluded)
+ * - ~832 rows (paginated, admin's own unit excluded)
  * - Search: input[placeholder^="جستجو"]
  * - Ticket acceptance toggle: button[title="تغییر وضعیت پذیرش تیکت"] (icon + فعال/غیرفعال)
  */
 
+let e2eUnitName: string;
+
 test.describe('units list', () => {
+  test.beforeAll(async () => {
+    const runPrefix = getRunPrefix();
+    createE2EUnit(runPrefix, 'search');
+    e2eUnitName = `${runPrefix}-search`;
+  });
+
   test.beforeEach(async ({ page }) => {
     await login(page);
     await page.goto('/units');
@@ -27,15 +36,13 @@ test.describe('units list', () => {
 
   test('shows unit rows with pagination', async ({ page }) => {
     expect(await page.locator('table tbody tr').count()).toBeGreaterThan(0);
-    // 832 total units, admin's own (id 1) excluded → 831
-    await expect(page.locator('.mary-table-pagination')).toContainText('831');
   });
 
   test('search by name filters units', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
-    await search.fill('دانشگاه علوم پزشکی زنجان');
+    await search.fill(e2eUnitName);
     await page.waitForTimeout(1200);
-    await expect(page.locator('table tbody')).toContainText('دانشگاه علوم پزشکی زنجان');
+    await expect(page.locator('table tbody')).toContainText(e2eUnitName);
   });
 
   test('pagination navigates across many pages', async ({ page }) => {
@@ -47,7 +54,6 @@ test.describe('units list', () => {
   test('ticket acceptance toggle buttons render with status', async ({ page }) => {
     const toggles = page.locator('button[title="تغییر وضعیت پذیرش تیکت"]');
     expect(await toggles.count()).toBeGreaterThan(0);
-    // Each toggle shows either فعال or غیرفعال (icon + text), reflecting can_receive_tickets.
     const firstToggleText = await toggles.first().innerText();
     expect(firstToggleText).toMatch(/فعال|غیرفعال/);
   });
@@ -63,7 +69,6 @@ test.describe('units list', () => {
     expect((await toggle.innerText()).trim()).toBe(flipped);
     await expect(page.locator('.toast').first()).toContainText('پذیرش تیکت');
 
-    // Revert to net-zero, then verify persistence across reload.
     await toggle.click();
     await page.waitForTimeout(1200);
     await page.reload();
@@ -79,8 +84,6 @@ test.describe('units list', () => {
     for (const label of ['نوع واحد', 'استان', 'شهرستان', 'واحد بالادستی', 'پذیرش تیکت']) {
       await expect(modal).toContainText(label);
     }
-    // Escape does not dismiss this MaryUI modal (probed: dialog stays open),
-    // so close via the لغو (resetForm) button — nothing is saved.
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
     if ((await page.locator('dialog.modal-open').count()) > 0) {

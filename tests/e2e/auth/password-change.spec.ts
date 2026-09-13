@@ -1,16 +1,30 @@
-import { test, expect, login, TEST_USER } from '../shared/fixtures';
+import { test, expect, login, TEST_USER, getPwdNCode } from '../shared/fixtures';
 import * as crypto from 'crypto';
 
 const NEW_PASSWORD = crypto.randomBytes(12).toString('base64url').slice(0, 16);
 
-async function gotoChangePassword(page) {
+/**
+ * Login as a specific n_code (not the default TEST_USER).
+ * Used to log in as the dedicated password-mutation user.
+ */
+async function loginAsNC(page: any, nCode: string, password: string) {
+  await page.goto('/login');
+  await page.fill('#n_code', nCode);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+  await page.waitForURL((url: any) => !url.pathname.includes('/login'), { timeout: 15000 });
+}
+
+async function gotoChangePassword(page: any) {
   await page.goto('/users/changepassword');
   await expect(page.locator('input[wire\\:model="currentPassword"]')).toBeVisible();
 }
 
 test.describe('Authentication — change password', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page);
+    // Use the dedicated per-run password-mutation user instead of the shared admin
+    const pwdNC = getPwdNCode();
+    await loginAsNC(page, pwdNC, TEST_USER.password);
   });
 
   test('valid current + matching new password shows success toast', async ({ page }) => {
@@ -23,7 +37,7 @@ test.describe('Authentication — change password', () => {
 
     await expect(page.locator('.toast').first()).toContainText('رمز با موفقیت تغییر یافت', { timeout: 10000 });
 
-    // Change it back so the shared admin account's password is not left altered.
+    // Change it back so the dedicated user's password is not left altered
     await page.locator('input[wire\\:model="currentPassword"]').fill(NEW_PASSWORD);
     await page.locator('input[wire\\:model="newPassword"]').fill(TEST_USER.password);
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill(TEST_USER.password);
@@ -39,7 +53,6 @@ test.describe('Authentication — change password', () => {
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill(NEW_PASSWORD);
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
 
-    // Error appears both inline under the field and in the x-errors box.
     await expect(page.locator('text=رمز فعلی اشتباه است.').first()).toBeVisible();
   });
 
