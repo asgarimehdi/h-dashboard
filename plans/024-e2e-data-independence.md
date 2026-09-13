@@ -2,7 +2,7 @@
 
 > **Executor instructions**: Follow this plan step by step. Run every verification command and confirm the expected result before moving to the next step. If anything in the STOP conditions occurs, stop and report — do not improvise.
 >
-> **Drift check (run first)**: `git diff --stat f8dcb21..HEAD -- tests/e2e/ playwright.config.ts .env.e2e.example app/Console/Commands/ database/seeders/` → expect no output (files untouched since review).
+> **Drift check (run first)**: `git diff --stat 142b478..HEAD -- tests/e2e/ playwright.config.ts .env.e2e.example app/Console/Commands/ database/seeders/` → expect no output (files untouched since review).
 >
 > **Scope note**: This is the ONLY remaining plan in `plans/` (all plans 001–023 were deleted by owner decision 2026-09-13). It is self-contained — no dependencies.
 
@@ -15,7 +15,7 @@
 | Risk       | MED                            |
 | Priority   | P0                             |
 | Depends on | none (branch-independent — run from any branch) |
-| Verified on | `f8dcb21` (2026-09-13, any branch) |
+| Verified on | `142b478` (2026-09-13, any branch) |
 | Branch     | any (branch-independent)           |
 
 ## ⚠️ TL;DR فارسی
@@ -33,7 +33,7 @@
 E2E tests currently hit the **dev database** (`playwright.config.ts` → `BASE_URL localhost:8000` → `.env` → `DB_DATABASE=h_dashboard`). Three fragile couplings to real data:
 
 1. **رکورد واقعی** — `tests/e2e/users/list.spec.ts:39` + `users/crud.spec.ts:63` + `search/global.spec.ts:36` search `هادیلو`; `personnel/list.spec.ts:46` searches `4411015056`; `organization/units.spec.ts:36` searches `دانشگاه علوم پزشکی زنجان`. Deleting/renaming that person breaks them.
-2. **عدد ثابت** — `reports/map-no-boundary.spec.ts` asserts `290/241/49`; `dashboard/stats.spec.ts` matches `/3\d\d|8\d\d/`. Any insert/delete breaks them.
+2. **عدد ثابت** — `personnel/list.spec.ts:34,63,76,85,88` asserts `318`; `users/list.spec.ts:34,74` asserts `317`/`32`; `hardware/list-filters.spec.ts:29,48` asserts `449`; `organization/units.spec.ts:31` asserts `831`; `reports/map-no-boundary.spec.ts:38-40` asserts `290/241/49`; `dashboard/stats.spec.ts:36` matches `/3\d\d|8\d\d/`. Any insert/delete breaks them.
 3. **اکانت مشترک + جهش** — `auth/password-change.spec.ts` changes the shared seeded account's password and changes it back (dies mid-way → broken password). Under `fullyParallel: true` it also races with every other spec logging in as the same user.
 
 Supporting facts:
@@ -67,6 +67,7 @@ What a dedicated DB does **not** fix (handled in Phase 2): absolute-count assert
 | No hardcoded counts | `grep -rEn "toContainText\((['\"])[0-9]{2,}" tests/e2e/` | 0 results |
 | No real-record searches | `grep -rn "هادیلو\|4411015056\|دانشگاه علوم پزشکی زنجان" tests/e2e/` | 0 results |
 | No hardcoded password | `grep -rn "12345678" tests/e2e/` | 0 results |
+| No hardcoded n_codes | `grep -rn "0023548258\|0041368464\|6275537615" tests/e2e/` | 0 results |
 
 ## 4. Steps
 
@@ -122,25 +123,26 @@ Rule: count → before/after or `>0` + presence of the `E2E-<runId>` record; sea
 
 | File | Problem | Fix |
 |---|---|---|
-| `users/list.spec.ts` | `هادیلو`, `0023548258` | search `E2E-<runId>` person; count before/after create |
-| `users/crud.spec.ts` | `هادیلو` | full lifecycle on `E2E-<runId>` user (create→edit→delete) |
-| `personnel/list.spec.ts` | `4411015056`, count `318` | `>0` + filter behavior on seeded data; select by value not index |
-| `organization/units.spec.ts` | `دانشگاه علوم پزشکی زنجان`, count `831` | search unit created in setup (`E2E-<runId>`) |
-| `hardware/list-filters.spec.ts` | count `449` | filter on hardware with unique serial created in setup |
-| `reports/map-no-boundary.spec.ts` | `290/241/49` | create unit without boundary → count increases by exactly 1 |
-| `dashboard/stats.spec.ts` | `/3\d\d\|8\d\d/` | presence of 7 labels + internal consistency (parts sum = total) |
-| `tickets/new.spec.ts` | `تست خودکار E2E` leftovers | subject `E2E-<runId>-<ts>` (fresh DB per run needs no delete) |
-| `auth/password-change.spec.ts` | mutates shared account | run ONLY on the dedicated `pwdNCode` user from run-state |
+| `users/list.spec.ts` | `هادیلو` (line 39), `0023548258` (line 50), `317` (line 34), `32` (line 74) | search `E2E-<runId>` person; count before/after create; relative page count based on filtered rows |
+| `users/crud.spec.ts` | `هادیلو` (line 63), `12345678` (line 70) | full lifecycle on `E2E-<runId>` user (create→edit→delete); password from `TEST_USER.password` |
+| `personnel/list.spec.ts` | `4411015056` (lines 46,48), `318` (lines 34,63,76,85,88) | `>0` + filter behavior on seeded data; select by value not index; assert count changes relative |
+| `organization/units.spec.ts` | `دانشگاه علوم پزشکی زنجان` (line 36), `831` (line 31) | search unit created in setup (`E2E-<runId>`) |
+| `hardware/list-filters.spec.ts` | `449` (lines 29,48) | filter on hardware with unique serial created in setup |
+| `reports/map-no-boundary.spec.ts` | `290/241/49` (lines 38-40) | create unit without boundary → count increases by exactly 1 |
+| `dashboard/stats.spec.ts` | `/3\d\d\|8\d\d/` (line 36) | assert all 7 stat labels (کاربران/پرسنل/...) are present; verify numeric values are > 0; no exact count matching |
+| `tickets/new.spec.ts` | subject uses `Date.now()` (already good) | subject `E2E-<runId>-<ts>` (fresh DB per run needs no delete) — verify pattern is consistent |
+| `auth/password-change.spec.ts` | mutates shared account (lines 22-28) | run ONLY on the dedicated `pwdNCode` user from run-state |
 | `rbac/roles.spec.ts` | 4 seeded accounts | keep seeded logins (fresh DB guarantees them) — assert menus/403s only |
-| `search/global.spec.ts` | `هادیلو` | search `E2E-<runId>` record |
+| `search/global.spec.ts` | `هادیلو` (line 36) | search `E2E-<runId>` record |
 
 ### Phase 3 — Stability proof
 
 1. `grep -rEn "toContainText\((['\"])[0-9]{2,}" tests/e2e/` → 0
 2. `grep -rn "هادیلو\|4411015056\|دانشگاه علوم پزشکی زنجان\|12345678" tests/e2e/` → 0
-3. Full suite green twice in a row (second run proves `fresh` self-heals).
-4. ضربه: add/remove a manual user+person in dev DB → E2E still green (proves dev-independence).
-5. `git status --short` → no file with real credentials tracked (`.env.e2e` ignored, `.run-state.json` ignored).
+3. `grep -rn "0023548258\|0041368464\|6275537615" tests/e2e/` → 0
+4. Full suite green twice in a row (second run proves `fresh` self-heals).
+5. ضربه: add/remove a manual user+person in dev DB → E2E still green (proves dev-independence).
+6. `git status --short` → no file with real credentials tracked (`.env.e2e` ignored, `.run-state.json` ignored).
 
 ## 5. Test plan
 

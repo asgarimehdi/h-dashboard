@@ -1,6 +1,6 @@
 # h-dashboard Improvement Plans
 
-> Base: `f8dcb21` (bahar) · Updated: 2026-09-13
+> Base: `142b478` (kimya after upstream sync) · Updated: 2026-09-13
 > Plans 001–023 were removed by owner decision — E2E data independence is the sole active track.
 
 | # | Plan | Category | Effort | Risk | Status |
