@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.test' });
+dotenv.config({ path: '.env.e2e' });
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -30,6 +30,6 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Global setup to ensure server is running
-  globalSetup: undefined,
+  // Global setup handled by scripts/e2e-test.sh (swaps .env, migrates, starts server)
+  // No globalSetup/globalTeardown here — the shell script manages the full lifecycle
 });
