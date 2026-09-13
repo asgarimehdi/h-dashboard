@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Cache;
 
 return new class extends Component {
     use Toast;
+    use \Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
     public array $stats = [];
     public int $archiveDays = 30;
@@ -18,6 +19,7 @@ return new class extends Component {
 
     public function mount(): void
     {
+        $this->authorize('manage_users');
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
         $cacheKey = 'tools:stats:' . md5(implode(',', $accessibleIds) . ':' . implode(',', $userIds));

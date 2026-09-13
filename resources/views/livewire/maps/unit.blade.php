@@ -104,10 +104,13 @@ return new class extends Component
         }
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $units = collect();
+
+        // Collect query results first, then combine — avoids merge()/map()
+        // on an empty untyped collect() (Collection<NEVER,NEVER>).
+        $unitLists = [];
 
         // Centers (types 5, 6, 7) — filtered by selected center types
-        $centers = collect();
+        $parentIds = collect();
         if (!empty($this->selectedCenterTypes)) {
             $centers = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
                 ->whereNotNull('boundary_id')
@@ -116,17 +119,17 @@ return new class extends Component
                 ->select('id', 'name', 'unit_type_id', 'boundary_id')
                 ->with('boundary:id,boundary')
                 ->get();
-            $units = $units->merge($centers);
+            $unitLists[] = $centers;
+
+            // Get IDs of selected centers from the already-loaded collection (in-memory, no extra query)
+            $parentIds = $centers->pluck('id');
         }
 
         // Sub-types (خانه بهداشت, پایگاه, قمر) — only if their parent center type is selected
         if (!empty($this->selectedSubTypes) && !empty($this->selectedCenterTypes)) {
             $subTypeIds = $this->resolveSubTypeIds();
 
-            // Get IDs of selected centers from the already-loaded collection (in-memory, no extra query)
-            $parentIds = $centers->pluck('id');
-
-            $subUnits = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
+            $unitLists[] = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
                 ->whereNotNull('boundary_id')
                 ->whereIn('region_id', $this->selectedRegions)
                 ->whereIn('unit_type_id', $subTypeIds)
@@ -134,8 +137,9 @@ return new class extends Component
                 ->select('id', 'name', 'unit_type_id', 'boundary_id')
                 ->with('boundary:id,boundary')
                 ->get();
-            $units = $units->merge($subUnits);
         }
+
+        $units = collect($unitLists)->collapse();
 
         $this->units = $units->map(fn($u) => [
             'id' => $u->id,

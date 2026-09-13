@@ -42,6 +42,7 @@ class ToolsLivewireTest extends TestCase
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->givePermissionTo('manage_users');
 
         return $user;
     }

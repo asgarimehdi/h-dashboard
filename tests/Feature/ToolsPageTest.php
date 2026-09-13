@@ -39,6 +39,7 @@ beforeEach(function () {
         'n_code' => '1234567890',
         'password' => Hash::make('password'),
     ]);
+    $this->user->givePermissionTo('manage_users');
 });
 
 test('guest is redirected from tools page', function () {
