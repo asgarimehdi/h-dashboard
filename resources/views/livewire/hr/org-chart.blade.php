@@ -34,6 +34,9 @@ return new class extends Component
     /** Units currently loading their children. */
     public array $loadingUnits = [];
 
+    /** All accessible units with unitType, grouped by parent_id (single load). */
+    public array $unitMap = [];
+
     public function mount(): void
     {
         $this->loadData();
@@ -45,6 +48,16 @@ return new class extends Component
     public function loadData(): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        // Preload ALL accessible units (with unitType) in one query and group
+        // them by parent_id so child-node resolution never issues a per-node
+        // query (Single-pass tree; avoids N+1 on deep/wide trees).
+        $this->unitMap = Unit::whereIn('id', $accessibleIds)
+            ->with('unitType')
+            ->get()
+            ->groupBy(fn ($u) => $u->parent_id ?? 0)
+            ->map(fn ($group) => $group->values()->all())
+            ->all();
 
         // Root units = accessible units whose parent is NOT accessible (or has no parent).
         // This way a user with access to a child unit (but not its parent) still sees it.
@@ -74,23 +87,28 @@ return new class extends Component
     }
 
     /**
+     * Children of a unit, resolved from the preloaded in-memory map.
+     */
+    protected function childrenOf(int $id): \Illuminate\Support\Collection
+    {
+        return collect($this->unitMap[$id] ?? []);
+    }
+
+    /**
      * Expand root units and their children up to maxLevel, loading children from DB as needed.
      */
     protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
     {
         $ids = [];
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         foreach ($nodes as $node) {
             if ($level <= $maxLevel) {
                 $ids[] = (string) $node->id;
             }
 
-            // Load children for nodes that should be expanded
+            // Load children for nodes that should be expanded (from in-memory map).
             if ($level < $maxLevel) {
-                $children = Unit::where('parent_id', $node->id)
-                    ->whereIn('id', $accessibleIds)
-                    ->get();
+                $children = $this->childrenOf((int) $node->id);
 
                 $this->lazyChildren[(int) $node->id] = $children;
 
@@ -108,17 +126,10 @@ return new class extends Component
      */
     public function loadExpandedChildren(): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
         foreach ($this->expanded as $unitId) {
             $id = (int) $unitId;
             if (! isset($this->lazyChildren[$id])) {
-                $children = Unit::where('parent_id', $id)
-                    ->whereIn('id', $accessibleIds)
-                    ->with(['unitType'])
-                    ->get();
-
-                $this->lazyChildren[$id] = $children;
+                $this->lazyChildren[$id] = $this->childrenOf($id);
             }
         }
     }
@@ -135,12 +146,7 @@ return new class extends Component
         }
 
         if (! isset($this->lazyChildren[$unitId])) {
-            $children = Unit::where('parent_id', $unitId)
-                ->whereIn('id', $accessibleIds)
-                ->with(['unitType'])
-                ->get();
-
-            $this->lazyChildren[$unitId] = $children;
+            $this->lazyChildren[$unitId] = $this->childrenOf($unitId);
         }
     }
 
