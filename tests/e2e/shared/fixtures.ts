@@ -1,18 +1,42 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Test credentials — read from environment variables with fallback defaults
+// --- Run state (written by global-setup.ts) ---
+const RUN_STATE_PATH = path.join(process.cwd(), 'tests', 'e2e', '.run-state.json');
+
+function readRunState(): { runId: string; pwdNCode: string } {
+  if (!fs.existsSync(RUN_STATE_PATH)) {
+    throw new Error(
+      '.run-state.json not found. Run globalSetup first (it generates this file).',
+    );
+  }
+  return JSON.parse(fs.readFileSync(RUN_STATE_PATH, 'utf-8'));
+}
+
+const runState = readRunState();
+export const runId = runState.runId;
+export const pwdNCode = runState.pwdNCode;
+
+// --- Test credentials — STRICT from env, no fallbacks ---
+function requireEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) throw new Error(`${name} env var is required. Set it in .env.e2e`);
+  return val;
+}
+
 const TEST_USER = {
-  nCode: process.env.TEST_N_CODE || '4411015056',
-  password: process.env.TEST_PASSWORD || '12345678',
-  name: process.env.TEST_USER_NAME || 'مهدی عسگری',
+  nCode: requireEnv('TEST_N_CODE'),
+  password: requireEnv('TEST_PASSWORD'),
+  name: process.env.TEST_USER_NAME || '',
 };
 
 // Role-specific national codes (all share the same password)
 const ROLE_ACCOUNTS: Record<string, string> = {
   admin: TEST_USER.nCode,
-  unit_manager: process.env.TEST_UNIT_MANAGER_N_CODE || '6275537615',
-  expert: process.env.TEST_EXPERT_N_CODE || '0023548258',
-  user: process.env.TEST_REGULAR_USER_N_CODE || '0041368464',
+  unit_manager: requireEnv('TEST_UNIT_MANAGER_N_CODE'),
+  expert: requireEnv('TEST_EXPERT_N_CODE'),
+  user: requireEnv('TEST_REGULAR_USER_N_CODE'),
 };
 
 /**
@@ -23,13 +47,11 @@ async function login(page: Page, nCode = TEST_USER.nCode, password = TEST_USER.p
   await page.fill('#n_code', nCode);
   await page.fill('#password', password);
   await page.click('button[type="submit"]');
-  // Wait for redirect away from login page
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
 }
 
 /**
- * Logout helper — the real logout is a POST form in the sidebar:
- * <form method="POST" action="/logout"> with a submit button (icon o-power, tooltip "logoff").
+ * Logout helper
  */
 async function logout(page: Page) {
   const logoutBtn = page.locator('form[action*="logout"] button[type="submit"]').first();
@@ -41,7 +63,6 @@ async function logout(page: Page) {
  * Wait for Livewire request to complete
  */
 async function waitForLivewire(page: Page) {
-  // Livewire adds .wire-loading class during requests
   await page.waitForFunction(() => {
     return !document.querySelector('.wire-loading') ||
            document.querySelectorAll('.wire-loading[style*="display: none"]').length > 0;
