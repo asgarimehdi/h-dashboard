@@ -152,4 +152,27 @@ class HasOrganizationalScopeTest extends TestCase
         $this->assertCount(1, $tickets);
         $this->assertTrue($tickets->first()->relationLoaded('unit'));
     }
+
+    public function test_accessible_scope_accepts_explicit_unit_ids(): void
+    {
+        $user = $this->createUserWithUnit();
+        $unit = $user->units()->first();
+        $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+
+        $myTicket = Ticket::create([
+            'ticket_code' => 'TKT-011', 'user_id' => $user->id, 'unit_id' => $unit->id,
+            'subject' => 'تیکت', 'content' => 'متن', 'priority' => 'normal', 'status' => 'created',
+        ]);
+        Ticket::create([
+            'ticket_code' => 'TKT-012', 'user_id' => $user->id, 'unit_id' => $otherUnit->id,
+            'subject' => 'تیکت دیگر', 'content' => 'متن', 'priority' => 'normal', 'status' => 'created',
+        ]);
+
+        // Explicit IDs path (used by API controllers, which resolve the user via
+        // $request->user() rather than the session guard). Should not rely on auth().
+        $tickets = Ticket::accessible('unit_id', unitIds: [$unit->id])->get();
+
+        $this->assertCount(1, $tickets);
+        $this->assertEquals($myTicket->id, $tickets->first()->id);
+    }
 }

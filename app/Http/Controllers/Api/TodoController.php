@@ -15,7 +15,7 @@ class TodoController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
-        $query = Todo::whereIn('unit_id', $accessibleIds)->with('unit:id,name');
+        $query = Todo::accessible('unit_id', unitIds: $accessibleIds)->with('unit:id,name');
 
         if ($request->filled('date')) {
             $query->whereDate('start_at', $request->date);

@@ -16,7 +16,7 @@ class PersonController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
-        $query = Person::whereIn('u_id', $accessibleIds)
+        $query = Person::accessible('u_id', unitIds: $accessibleIds)
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
 
         if ($request->filled('search')) {

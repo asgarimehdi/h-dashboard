@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Exceptions\UnitNotAccessibleException;
 use App\Services\AccessService;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Http\JsonResponse;
 
 class UnitScopedRequest extends FormRequest
 {
@@ -23,14 +23,14 @@ class UnitScopedRequest extends FormRequest
 
     /**
      * Assert the given unit ID is within the caller's accessible scope.
-     * Returns 403 JSON response if not authorized.
+     *
+     * Throws UnitNotAccessibleException (rendered as a JSON 403) when the unit
+     * is out of scope.
      */
-    public function assertAccessibleUnit(int $unitId): JsonResponse|true
+    public function assertAccessibleUnit(int $unitId): void
     {
-        if (! in_array($unitId, $this->accessibleIds())) {
-            return response()->json(['message' => 'Unit not accessible.'], 403);
+        if (! in_array($unitId, $this->accessibleIds(), true)) {
+            throw new UnitNotAccessibleException;
         }
-
-        return true;
     }
 }
