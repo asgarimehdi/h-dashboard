@@ -5,6 +5,6 @@
 
 | # | Plan | Category | Effort | Risk | Status |
 |---|------|----------|--------|------|--------|
-| 024 | [E2E Data Independence (خودکفایی تست‌ها)](024-e2e-data-independence.md) | tests | L | MED | ⬜ not started |
+| 024 | [E2E Data Independence (خودکفایی تست‌ها)](024-e2e-data-independence.md) | tests | L | MED | 🟡 Phase 0-2 done, Phase 3 partial |
 
 Execution: Phase 0 (isolated `h_dashboard_e2e` + `:8001`) → Phase 1 (run-scoped fixtures) → Phase 2 (relative asserts) → Phase 3 (stability proof). Do NOT execute without explicit owner approval.
