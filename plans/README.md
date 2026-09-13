@@ -4,6 +4,11 @@
 > Audited by 4 parallel inspectors: security/correctness, performance, test-coverage, tech-debt.
 > These plans are handoff specs for executors — each is fully self-contained.
 
+> **Status (2026-09-13):** all six plans executed and merged to `rebecca`.
+> Plan 005 was executed partially (Step 3 access-check unification + Step 1–2 for the
+> Ticket/Todo/Person controllers); the Livewire blade raw-scope queries were left in
+> place to avoid flattening distinct scope semantics (see the plan's STOP condition).
+
 ## Priority order
 
 | Plan | Finding | Category | Priority | Effort | Risk |
