@@ -137,4 +137,25 @@ class ReportsIndexLivewireTest extends TestCase
         Livewire::test('reports.index')
             ->assertSet('reportData.total', 1);
     }
+
+    public function test_unit_selector_does_not_leak_out_of_scope_units(): void
+    {
+        $user = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $inScope = Unit::whereHas('assignedUsers', fn ($q) => $q->whereKey($user->id))->first();
+        $outOfScope = Unit::create(['name' => 'واحد خارج از دسترس']);
+
+        // out-of-scope unit exists but must not appear in the dropdown options.
+        $this->assertDatabaseHas('units', ['id' => $outOfScope->id]);
+
+        $component = Livewire::test('reports.index');
+
+        $units = $component->get('units');
+        $unitIds = collect($units)->pluck('id')->all();
+
+        $this->assertContains($inScope->id, $unitIds);
+        $this->assertNotContains($outOfScope->id, $unitIds);
+        $component->assertDontSee('واحد خارج از دسترس');
+    }
 }

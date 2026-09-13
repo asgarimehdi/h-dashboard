@@ -24,7 +24,7 @@ return new class extends Component
     {
         $this->dateFrom = Jalalian::fromCarbon(now()->subDays(30))->format('Y/m/d');
         $this->dateTo = Jalalian::fromCarbon(now())->format('Y/m/d');
-        $this->units = Unit::all();
+        $this->units = $this->getUnitsProperty();
     }
 
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon

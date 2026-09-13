@@ -34,6 +34,15 @@ return new class extends Component
         $data = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
             $persons = Person::whereIn('u_id', $accessibleIds);
 
+            // Vacancies: units with zero personnel, computed in SQL (single query).
+            $vacancies = Unit::whereIn('id', $accessibleIds)
+                ->whereDoesntHave('person')
+                ->orderBy('name')
+                ->limit(10)
+                ->get(['id', 'name'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
+                ->toArray();
+
             return [
                 'total' => (clone $persons)->count(),
                 'active' => (clone $persons)->where('status', 'active')->count(),
@@ -63,6 +72,7 @@ return new class extends Component
                         'name' => $p->radif?->name ?? '—',
                         'total' => $p->total,
                     ])->values()->toArray(),
+                'vacancies' => $vacancies,
             ];
         });
 
@@ -72,16 +82,7 @@ return new class extends Component
         $this->byTahsil = $data['by_tahsil'];
         $this->byEstekhdam = $data['by_estekhdam'];
         $this->byRadif = $data['by_radif'];
-
-        // Vacancies: units with zero personnel
-        $this->vacancies = Unit::whereIn('id', $accessibleIds)
-            ->withCount('person as personnel_count')
-            ->get()
-            ->filter(fn ($u) => $u->personnel_count === 0)
-            ->take(10)
-            ->values()
-            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
-            ->toArray();
+        $this->vacancies = $data['vacancies'];
     }
 
     /**
