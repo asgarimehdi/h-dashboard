@@ -61,8 +61,10 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
     });
 
-    Route::get('/zabbix/traffic', [TrafficController::class, 'index']);
-    Route::get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
+    Route::get('/zabbix/traffic', [TrafficController::class, 'index'])
+        ->middleware('role_or_permission:bw');
+    Route::get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index'])
+        ->middleware('role_or_permission:bw');
 
     // Hardware API routes — write gated (Issue #396)
     Route::prefix('hardware')->group(function () {

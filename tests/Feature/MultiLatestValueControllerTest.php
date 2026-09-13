@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Models\User;
 use App\Services\ZabbixService;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Mockery;
 use Tests\TestCase;
 
 covers(MultiLatestValueController::class);
@@ -15,9 +17,22 @@ class MultiLatestValueControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(PermissionSeeder::class);
+    }
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+        parent::tearDown();
+    }
+
     private function authUser()
     {
         $user = User::factory()->create(['password' => Hash::make('password')]);
+        $user->givePermissionTo('bw');
 
         return $this->actingAs($user, 'sanctum');
     }
@@ -27,14 +42,15 @@ class MultiLatestValueControllerTest extends TestCase
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
-                ->andReturn(['item1' => 12.5, 'item2' => 8.0]);
+                ->with(['1', '2'])
+                ->andReturn(['1' => 12.5, '2' => 8.0]);
         });
 
         $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?item_ids[]=item1&item_ids[]=item2');
+            ->getJson('/api/zabbix/multi-latest?item_ids[]=1&item_ids[]=2');
 
         $response->assertStatus(200)
-            ->assertJson(['item1' => 12.5, 'item2' => 8.0]);
+            ->assertJson(['1' => 12.5, '2' => 8.0]);
     }
 
     public function test_validates_item_ids_is_required_array(): void
@@ -53,19 +69,42 @@ class MultiLatestValueControllerTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_returns_500_when_zabbix_fails(): void
+    public function test_rejects_non_integer_item_id_entries(): void
+    {
+        $response = $this->authUser()
+            ->getJson('/api/zabbix/multi-latest?item_ids[]=abc');
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['item_ids.0']);
+    }
+
+    public function test_returns_500_with_generic_message_when_zabbix_fails(): void
     {
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
-                ->andThrow(new \Exception('Zabbix connection failed'));
+                ->andThrow(new \Exception('Internal secret connection string'));
         });
 
         $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?item_ids[]=item1');
+            ->getJson('/api/zabbix/multi-latest?item_ids[]=1');
 
         $response->assertStatus(500)
             ->assertJsonStructure(['error', 'message'])
-            ->assertJsonPath('error', 'Zabbix connection failed');
+            ->assertJsonPath('error', 'Zabbix connection failed')
+            ->assertJsonPath('message', 'Zabbix unavailable');
+
+        // The raw exception text must NOT leak to the client.
+        $this->assertStringNotContainsString('Internal secret', $response->getContent());
+    }
+
+    public function test_user_without_bw_permission_gets_403(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('password')]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/zabbix/multi-latest?item_ids[]=1');
+
+        $response->assertStatus(403);
     }
 }

@@ -15,7 +15,7 @@ class MultiLatestValueController extends Controller
     {
         $request->validate([
             'item_ids' => 'required|array',
-            'item_ids.*' => 'required|string',
+            'item_ids.*' => 'required|integer',
         ]);
 
         $itemIds = $request->item_ids;
@@ -30,9 +30,11 @@ class MultiLatestValueController extends Controller
 
             return response()->json($values);
         } catch (Throwable $e) {
+            report($e);
+
             return response()->json([
                 'error' => 'Zabbix connection failed',
-                'message' => $e->getMessage(),
+                'message' => 'Zabbix unavailable',
             ], 500);
         }
     }

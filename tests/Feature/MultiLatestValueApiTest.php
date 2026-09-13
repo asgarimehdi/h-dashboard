@@ -7,6 +7,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\ZabbixService;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
@@ -23,6 +24,7 @@ class MultiLatestValueApiTest extends TestCase
     {
         parent::setUp();
         Session::flush();
+        $this->seed(PermissionSeeder::class);
     }
 
     protected function tearDown(): void
@@ -38,9 +40,18 @@ class MultiLatestValueApiTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_multi_latest_requires_item_ids(): void
+    public function test_user_without_bw_permission_gets_403(): void
     {
         $user = $this->createUser();
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest?item_ids[]=1');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_multi_latest_requires_item_ids(): void
+    {
+        $user = $this->createUser(true);
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest');
 
         $response->assertStatus(422)
@@ -49,16 +60,26 @@ class MultiLatestValueApiTest extends TestCase
 
     public function test_multi_latest_requires_item_ids_to_be_array(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest?item_ids=notanarray');
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['item_ids']);
     }
 
+    public function test_multi_latest_rejects_non_integer_item_ids(): void
+    {
+        $user = $this->createUser(true);
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest?item_ids[]=abc');
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['item_ids.0']);
+    }
+
     public function test_multi_latest_returns_values(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
 
         $mock = Mockery::mock(ZabbixService::class);
         $mock->shouldReceive('getLatestValues')->once()->with(['100', '200'])->andReturn([
@@ -75,7 +96,7 @@ class MultiLatestValueApiTest extends TestCase
 
     public function test_multi_latest_returns_null_for_missing_items(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
 
         $mock = Mockery::mock(ZabbixService::class);
         $mock->shouldReceive('getLatestValues')->once()->with(['999'])->andReturn(['999' => null]);
@@ -87,7 +108,7 @@ class MultiLatestValueApiTest extends TestCase
             ->assertJson(['999' => null]);
     }
 
-    protected function createUser(): User
+    protected function createUser(bool $withBw = false): User
     {
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
@@ -97,6 +118,12 @@ class MultiLatestValueApiTest extends TestCase
         $unit = Unit::create(['name' => 'Test Unit']);
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
 
-        return User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+        $user = User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+
+        if ($withBw) {
+            $user->givePermissionTo('bw');
+        }
+
+        return $user;
     }
 }

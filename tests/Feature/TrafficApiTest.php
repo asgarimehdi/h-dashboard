@@ -7,6 +7,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\ZabbixService;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ class TrafficApiTest extends TestCase
     {
         parent::setUp();
         Session::flush();
+        $this->seed(PermissionSeeder::class);
 
         // Bind a mock ZabbixService up-front so the TrafficController (resolved
         // during the first request of any test) receives the mocked instance
@@ -46,9 +48,18 @@ class TrafficApiTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_traffic_requires_out_item_id(): void
+    public function test_user_without_bw_permission_gets_403(): void
     {
         $user = $this->createUser();
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=1&in_item_id=2');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_traffic_requires_out_item_id(): void
+    {
+        $user = $this->createUser(true);
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?in_item_id=2');
 
         $response->assertStatus(422)
@@ -57,16 +68,26 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_requires_in_item_id(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=1');
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['in_item_id']);
     }
 
+    public function test_traffic_rejects_non_integer_item_ids(): void
+    {
+        $user = $this->createUser(true);
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=abc&in_item_id=2');
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['out_item_id']);
+    }
+
     public function test_traffic_returns_out_and_in_data(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
 
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200');
 
@@ -76,7 +97,7 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_respects_duration_parameter(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
 
         $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200&duration=7200');
 
@@ -85,7 +106,7 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_caches_results(): void
     {
-        $user = $this->createUser();
+        $user = $this->createUser(true);
 
         $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200');
         $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200');
@@ -93,7 +114,7 @@ class TrafficApiTest extends TestCase
         $this->assertNotEmpty(Cache::get('traffic_100_200_3600'));
     }
 
-    protected function createUser(): User
+    protected function createUser(bool $withBw = false): User
     {
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
@@ -103,6 +124,12 @@ class TrafficApiTest extends TestCase
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
 
-        return User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+        $user = User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+
+        if ($withBw) {
+            $user->givePermissionTo('bw');
+        }
+
+        return $user;
     }
 }

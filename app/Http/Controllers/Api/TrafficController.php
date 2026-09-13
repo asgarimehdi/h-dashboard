@@ -12,8 +12,8 @@ class TrafficController extends Controller
     public function index(Request $request, ZabbixService $zabbix)
     {
         $validated = $request->validate([
-            'out_item_id' => 'required',
-            'in_item_id' => 'required',
+            'out_item_id' => 'required|integer',
+            'in_item_id' => 'required|integer',
             'duration' => 'nullable|integer|min:60|max:86400',
         ]);
 
