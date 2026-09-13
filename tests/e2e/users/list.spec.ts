@@ -43,10 +43,10 @@ test.describe('users list', () => {
 
   test('search by n_code filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
-    await search.fill(TEST_USER.nCode);
+    await search.fill('0023548258');
     // Wait for Livewire debounce + request to complete
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('table tbody')).toContainText(TEST_USER.nCode);
+    await expect(page.locator('table tbody')).toContainText('0023548258');
   });
 
   test('status filter switches active/inactive', async ({ page }) => {
