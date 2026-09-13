@@ -5,10 +5,10 @@
  * Usage: php tests/e2e/create-pwd-user.php <n_code> <password> <unit_name>
  */
 
+use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 
 require __DIR__.'/../../vendor/autoload.php';
 $app = require_once __DIR__.'/../../bootstrap/app.php';
