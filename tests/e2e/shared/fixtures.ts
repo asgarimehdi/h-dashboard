@@ -1,9 +1,20 @@
 import { test as base, expect, type Page } from '@playwright/test';
 
-// Test credentials — read from environment variables with fallback defaults
+// Test credentials — MUST come from environment (.env.test, gitignored).
+// No fallbacks: hardcoded credentials in a tracked file would leak real accounts.
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing ${name} — copy .env.test.example to .env.test and fill it in.`
+    );
+  }
+  return value;
+}
+
 const TEST_USER = {
   nCode: process.env.TEST_N_CODE || '4411015056',
-  password: process.env.TEST_PASSWORD || '12345678',
+  password: requiredEnv('TEST_PASSWORD'),
   name: process.env.TEST_USER_NAME || 'مهدی عسگری',
 };
 

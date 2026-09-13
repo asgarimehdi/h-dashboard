@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, TEST_USER } from '../shared/fixtures';
 
 /**
  * Plan 004 — Users CRUD via the inline modal on /users (users.index).
@@ -67,7 +67,7 @@ test.describe('users CRUD (inline modal)', () => {
     // Wait for Livewire to process the person selection
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
 
-    await page.locator('input[wire\\:model="password"]').fill('12345678');
+    await page.locator('input[wire\\:model="password"]').fill(TEST_USER.password);
     await page.getByRole('button', { name: 'ذخیره' }).click();
     // Keep waitForTimeout here: dialog/submit response has no reliable DOM signal for validation errors
     // that appear asynchronously after form submission
