@@ -1,18 +1,63 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Test credentials — read from environment variables with fallback defaults
+// ---------------------------------------------------------------------------
+// Run-scoped state (written by global-setup.ts, removed by global-teardown.ts)
+// ---------------------------------------------------------------------------
+const RUN_STATE_PATH = path.join(__dirname, '..', '..', 'tests', 'e2e', '.run-state.json');
+
+function readRunState(): { runId: string; pwdNCode: string } {
+  if (!fs.existsSync(RUN_STATE_PATH)) {
+    throw new Error(
+      '.run-state.json not found. global-setup.ts must run before any spec. ' +
+      'Ensure playwright.config.ts has globalSetup configured.',
+    );
+  }
+  return JSON.parse(fs.readFileSync(RUN_STATE_PATH, 'utf-8'));
+}
+
+/**
+ * Per-run unique prefix for creating records that won't collide across
+ * parallel workers sharing the same E2E database.
+ */
+export function getRunPrefix(): string {
+  return `E2E-${readRunState().runId}`;
+}
+
+/**
+ * Dedicated n_code for password-change tests. Each run creates its own
+ * Person + User + Unit, so password-change.spec.ts never touches shared accounts.
+ */
+export function getPwdNCode(): string {
+  return readRunState().pwdNCode;
+}
+
+// ---------------------------------------------------------------------------
+// Test credentials — read strictly from environment, throw if missing
+// ---------------------------------------------------------------------------
+function requireEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) {
+    throw new Error(
+      `Required env var ${name} is not set. Copy .env.e2e.example to .env.e2e and fill credentials.`,
+    );
+  }
+  return val;
+}
+
 const TEST_USER = {
-  nCode: process.env.TEST_N_CODE || '4411015056',
-  password: process.env.TEST_PASSWORD || '12345678',
+  nCode: requireEnv('TEST_N_CODE'),
+  password: requireEnv('TEST_PASSWORD'),
   name: process.env.TEST_USER_NAME || 'مهدی عسگری',
 };
 
-// Role-specific national codes (all share the same password)
+// Role-specific national codes (all share the same password from seeders)
 const ROLE_ACCOUNTS: Record<string, string> = {
   admin: TEST_USER.nCode,
-  unit_manager: process.env.TEST_UNIT_MANAGER_N_CODE || '6275537615',
-  expert: process.env.TEST_EXPERT_N_CODE || '0023548258',
-  user: process.env.TEST_REGULAR_USER_N_CODE || '0041368464',
+  unit_manager: requireEnv('TEST_UNIT_MANAGER_N_CODE'),
+  expert: requireEnv('TEST_EXPERT_N_CODE'),
+  user: requireEnv('TEST_REGULAR_USER_N_CODE'),
 };
 
 /**
@@ -68,4 +113,13 @@ async function waitForToast(page: Page, text?: string) {
 
 export const test = base;
 
-export { expect, login, logout, waitForLivewire, waitForSearchResults, waitForToast, TEST_USER, ROLE_ACCOUNTS };
+export {
+  expect,
+  login,
+  logout,
+  waitForLivewire,
+  waitForSearchResults,
+  waitForToast,
+  TEST_USER,
+  ROLE_ACCOUNTS,
+};
