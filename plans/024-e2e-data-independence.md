@@ -1,179 +1,183 @@
 # Plan 024: E2E Data Independence (خودکفایی تست‌های E2E)
 
-> **Source**: PR #625 by nashenas7 — `plans/e2e/016-e2e-data-independence.md`
-> **Adopted into**: plans/ root for unified execution tracking.
+> **Executor instructions**: Follow this plan step by step. Run every verification command and confirm the expected result before moving to the next step. If anything in the STOP conditions occurs, stop and report — do not improvise.
+>
+> **Drift check (run first)**: `git diff --stat f8dcb21..HEAD -- tests/e2e/ playwright.config.ts .env.e2e.example app/Console/Commands/ database/seeders/` → expect no output (files untouched since review).
+>
+> **Scope note**: This is the ONLY remaining plan in `plans/` (all plans 001–023 were deleted by owner decision 2026-09-13). It is self-contained — no dependencies.
 
----
+## Status
+
+| Field      | Value                          |
+|------------|--------------------------------|
+| Category   | tests (E2E)                    |
+| Effort     | L                              |
+| Risk       | MED                            |
+| Priority   | P0                             |
+| Depends on | none (branch-independent — run from any branch) |
+| Verified on | `f8dcb21` (2026-09-13, any branch) |
+| Branch     | any (branch-independent)           |
+
 ## ⚠️ TL;DR فارسی
 
-**مشکل:** E2E به داده واقعی وابسته: اعداد مطلق، رکوردهای واقعی، اکانت مشترک.
+**مشکل:** E2E به دیتای dev چسبیده (سرور `:8000` همون DB اصلی رو می‌خونه): جستجوی رکورد واقعی (`هادیلو`، `4411015056`)، assert عدد ثابت (`290/241/49`)، جهش رمز روی اکانت مشترک.
 
-**راه‌حل:** fixtures یکتا + assert نسبی + teardown.
+**راه‌حل:** DB اختصاصی `h_dashboard_e2e` + سرور جدا `:8001` + `migrate:fresh --seed` اول هر ران (خودترمیم‌شونده) + پیشوند یکتا `E2E-<runId>` برای collision موازی + assert نسبی.
 
-**ریسک:** 🟡 متوسط
-
----
-
-| Field      | Value                              |
-|------------|------------------------------------|
-| Category   | tests (E2E)                        |
-| Effort     | L                                  |
-| Risk       | MED                                |
-| Priority   | P0                                 |
-| Depends on | none (infrastructure first)        |
-| Base SHA   | 5f9c24e                            |
-| Branch     | celin                              |
+**ریسک:** 🟡 متوسط (حجم کار بالا ولی مکانیکی؛ ریسک آلودگی dev صفر می‌شود)
 
 ---
 
-## 1. Problem
+## 1. Problem (verified 2026-09-13 on `f8dcb21`)
 
-تست‌های E2E فعلی رفتار اپ را تست نمی‌کنند؛ اسنپ‌شات دیتای امروزند. سه وابستگی
-شکننده به دیتای واقعی دارند:
+E2E tests currently hit the **dev database** (`playwright.config.ts` → `BASE_URL localhost:8000` → `.env` → `DB_DATABASE=h_dashboard`). Three fragile couplings to real data:
 
-1. **عدد مabsolute** — `317` یوزر، `318` پرسنل، `831` واحد، `449` سخت‌افزار،
-   `290/241/49` در گزارش‌ها. هر insert/delete ساده می‌شکندشان.
-2. **رکورد واقعی** — جستجوی `هادیلو`، `عسگری`، کدهای ملی واقعی. حذف یا تغییر
-   آن شخص = شکست تست.
-3. **اکانت مشترک** — همه تست‌ها با ۴ اکانت سیدشده لاگین می‌کنند؛
-   `password-change.spec.ts` رمز اکانت مشترک را عوض می‌کند و برمی‌گرداند
-   (اگر وسطش بمیرد، رمز خراب می‌ماند).
+1. **رکورد واقعی** — `tests/e2e/users/list.spec.ts:39` + `users/crud.spec.ts:63` + `search/global.spec.ts:36` search `هادیلو`; `personnel/list.spec.ts:46` searches `4411015056`; `organization/units.spec.ts:36` searches `دانشگاه علوم پزشکی زنجان`. Deleting/renaming that person breaks them.
+2. **عدد ثابت** — `reports/map-no-boundary.spec.ts` asserts `290/241/49`; `dashboard/stats.spec.ts` matches `/3\d\d|8\d\d/`. Any insert/delete breaks them.
+3. **اکانت مشترک + جهش** — `auth/password-change.spec.ts` changes the shared seeded account's password and changes it back (dies mid-way → broken password). Under `fullyParallel: true` it also races with every other spec logging in as the same user.
 
-نتیجه: با هر تغییر دیتا، تست‌ها می‌شکنند و به‌مرور نادیده گرفته می‌شوند.
-هدف این پلن: هر ران دیتای خودش را بسازد، آخرش پاک کند، و assertها نسبی باشند.
+Supporting facts:
+- `tests/e2e/shared/fixtures.ts:5-6` — hardcoded fallbacks `4411015056` / `12345678`; `ROLE_ACCOUNTS` pins 4 seeded n_codes.
+- `tests/e2e/users/crud.spec.ts:70` — `fill('12345678')` hardcoded.
+- No `.env.test` / `.env.test.example` on disk (an earlier draft claimed this done — it was NOT).
+- `playwright.config.ts` — `globalSetup: undefined`, `fullyParallel: true`.
+- Seeded credentials live in `UsersTableSeeder` + `PersonUserFromDeviceSeeder` (password `12345678`); the 4 role accounts resolve to real seed rows (`4411015056` in `UsersTableSeeder`/`PersonsTableSeeder` — مهدی عسگری; `6275537615`/`0023548258`/`0041368464` in `seeders/data/person_users_from_devices.php` with roles unit_manager/expert/user).
+- `migrate:fresh` is safe on a new DB: PostGIS/pg_trgm are enabled with `CREATE EXTENSION IF NOT EXISTS` in migrations.
 
-## 2. Current State
+## 2. Decision: dedicated E2E database (owner-approved)
 
+Instead of row-level teardown on the dev DB, each run rebuilds its own world:
+
+- **DB جدا:** `h_dashboard_e2e` (same PostGIS server, new database). `migrate:fresh --seed --env=e2e` at the start of every run → a crashed run can never poison the next one. Row-level teardown is therefore NOT required (teardown only deletes the run-state file).
+- **سرور جدا:** `php artisan serve --env=e2e --port=8001`, Playwright `BASE_URL=http://localhost:8001`. Dev on `:8000` stays untouched.
+- **کش جدا:** `CACHE_PREFIX=h_dashboard_e2e` + `REDIS_DB=1` + `QUEUE_CONNECTION=sync` in `.env.e2e` (never share Spatie permission cache with dev).
+- **پیشوند یکتا همچنان لازم است:** `fullyParallel: true` means specs share the one e2e DB concurrently → created records use `E2E-<runId>-...` so parallel workers don't collide with each other. DB isolation removes dev pollution, not intra-run races.
+
+What a dedicated DB does **not** fix (handled in Phase 2): absolute-count asserts, real-record searches, shared-password mutation.
+
+## 3. Commands you will need
+
+| Purpose | Command | Expected on success |
+|---------|---------|---------------------|
+| Drift check | `git diff --stat f8dcb21..HEAD -- tests/e2e/ playwright.config.ts` | No output |
+| Create e2e DB | `createdb -h 127.0.0.1 -U <user> h_dashboard_e2e` (or via psql) | DB exists |
+| Fresh seed | `php artisan migrate:fresh --seed --env=e2e --force` | All migrations + seeders green |
+| Serve e2e | `php artisan serve --env=e2e --port=8001` | Listening on :8001 |
+| Run E2E | `BASE_URL=http://localhost:8001 npx playwright test` | Green |
+| No hardcoded counts | `grep -rEn "toContainText\((['\"])[0-9]{2,}" tests/e2e/` | 0 results |
+| No real-record searches | `grep -rn "هادیلو\|4411015056\|دانشگاه علوم پزشکی زنجان" tests/e2e/` | 0 results |
+| No hardcoded password | `grep -rn "12345678" tests/e2e/` | 0 results |
+
+## 4. Steps
+
+### Phase 0 — Isolated environment (no test changes)
+
+**Step 0.1**: Create `.env.e2e.example` (tracked, no real secrets):
 ```
-tests/e2e/
-├── shared/fixtures.ts          # hardcoded fallback 12345678, 4 seeded accounts
-├── auth/password-change.spec.ts # mutates shared account password
-├── tickets/new.spec.ts         # searches "زنجان" (real unit), hardcoded CWD
-├── users/crud.spec.ts          # searches "هادیلو" (real person)
-├── personnel/list.spec.ts      # asserts count=318, searches "4411015056"
-├── organization/units.spec.ts  # asserts count=831, searches "دانشگاه علوم پزشکی زنجان"
-├── hardware/list-filters.spec.ts # asserts count=449
-├── reports/map-no-boundary.spec.ts # asserts 290/241/49
-└── dashboard/stats.spec.ts     # hardcoded count assertions
+APP_ENV=local
+APP_URL=http://localhost:8001
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=h_dashboard_e2e
+DB_USERNAME=<same as dev>
+DB_PASSWORD=
+CACHE_PREFIX=h_dashboard_e2e
+REDIS_DB=1
+QUEUE_CONNECTION=sync
+TEST_PASSWORD=12345678
+BASE_URL=http://localhost:8001
 ```
+(`TEST_PASSWORD` equals the seeded password — it is a throwaway local credential, not a secret. Do NOT touch the seeders: Pest/dev depend on `12345678`.)
 
-Key pattern (duplicated in ~20 files):
-```typescript
-// Before: hardcoded absolute counts
-await expect(page.locator('.mary-table-pagination')).toContainText('از 449');
+**Step 0.2**: Add `.env.e2e` to `.gitignore` (next to the existing `.env.test` line). Copy `.env.e2e.example` → `.env.e2e` locally and fill `DB_USERNAME`/`DB_PASSWORD`.
 
-// After: relative assertion
-const count = await page.locator('.mary-table-pagination').innerText();
-const match = count.match(/(\d+)/);
-expect(parseInt(match[1])).toBeGreaterThan(0);
-```
-
-## 3. Principles
-
-- هر ران دیتای خودش را با **پیشوند یکتا** (`E2E-<runId>-...`) بسازد، آخرش پاک کند.
-- assertها **نسبی** باشند (قبل/بعد، وجود رکورد ساخته‌شده) نه عدد ثابت.
-- هیچ کر دن شل واقعی در فایل ترک‌شده نباشد؛ فقط از `.env.test` (ایگنورشده).
-- تست‌های Pest دست نخورند؛ رمز سیدرها (`12345678`) هم عوض نشود.
-
-## 4. Architecture
-
-```
-playwright.config.ts
-  ├── globalSetup → ساخت یوزرها + دیتای حداقلی (runId یکتا)
-  ├── تست‌ها → فقط با دیتای runId خودشان کار می‌کنند
-  └── globalTeardown → حذف همه رکوردهای E2E-<runId>
-```
-
-- کامند آرتیزان جدید `e2e:fixtures {runId} {action=up|down}` که منطق
-  ساخت/حذف در PHP بماند (مدل‌ها، ولیدیشن، نقش‌ها = همان منطق واقعی).
-  صدا زدن از `globalSetup` با `execSync`.
-- رمز یوزرهای موقت از `TEST_PASSWORD` در `.env.test` بیاید، نه هاردکد.
-- `fixtures.ts` فقط لاگین با همین یوزرهای موقت.
-
-## 5. Steps
-
-### Phase 1 — زیرساخت (بدون تغییر تست‌ها)
-
-**Step 1**: `app/Console/Commands/E2eFixturesCommand.php`
-- با `runId` چهار یوزر (admin/unit_manager/expert/user) + یک واحد تستی + چند پرسنل تستی با
-  نام‌های `E2E-<runId>-...` می‌سازد
-- با `down` همه را پاک می‌کند
-- رمز از `TEST_PASSWORD` env می‌خواند
-
-**Step 2**: `tests/e2e/global-setup.ts` و `global-teardown.ts`
-- تولید `runId`، صدا زدن کامند، ذخیره `runId` در فایل موقت
-
-**Step 3**: `playwright.config.ts`
-- وصل کردن setup/teardown + fail-fast اگر `TEST_PASSWORD` ست نباشد
-
-**Verify**:
-```bash
-npx playwright test  # باید مثل قبل سبز شود (هنوز assertها قدیمی‌اند)
+**Step 0.3**: Point `playwright.config.ts` at the new env file (`dotenv.config({ path: '.env.e2e' })`) and wire setup/teardown (files land in Phase 1):
+```ts
+globalSetup: './tests/e2e/global-setup.ts',
+globalTeardown: './tests/e2e/global-teardown.ts',
 ```
 
-### Phase 2 — نسبی کردن assertها (فایل به فایل)
+**Verify**: `php artisan migrate:fresh --seed --env=e2e --force` → green; `BASE_URL=http://localhost:8001 npx playwright test tests/e2e/auth/login.spec.ts` → green (old asserts still pass against fresh seed).
 
-| فایل | مشکل | راه‌حل |
+### Phase 1 — Run-scoped fixtures (no test changes)
+
+**Step 1.1**: `tests/e2e/global-setup.ts`
+- Generate `runId` (`Date.now().toString(36)`), `execSync('php artisan migrate:fresh --seed --env=e2e --force')`.
+- Create ONE dedicated password-mutation user (`E2E-<runId>-pwd`, own Person+Unit+pivot rows) via `artisan tinker`/a tiny `--env=e2e` command call; store `{ runId, pwdNCode }` in `tests/e2e/.run-state.json` (gitignored).
+- Fail fast if `TEST_PASSWORD` is unset.
+
+**Step 1.2**: `tests/e2e/global-teardown.ts` — delete `.run-state.json`. (Data cleanup happens via next run's `fresh`; document this explicitly in the file header so nobody "fixes" it into row deletion.)
+
+**Step 1.3**: `tests/e2e/shared/fixtures.ts`
+- Remove ALL hardcoded fallbacks (`|| '12345678'`, `|| '4411015056'`, …) → read strictly from env, throw if missing.
+- Export `runId`/`pwdNCode` readers from `.run-state.json`.
+- `crud.spec.ts:70` `fill('12345678')` → `TEST_USER.password`.
+
+**Verify**: `npx playwright test` → green with old asserts (proves infra parity before touching asserts).
+
+### Phase 2 — Relative asserts (file by file)
+
+Rule: count → before/after or `>0` + presence of the `E2E-<runId>` record; search → the run's own record; never a seeded name/code.
+
+| File | Problem | Fix |
 |---|---|---|
-| `users/list.spec.ts` | `317`، `32`، `هادیلو`، `0023548258` | شمارش قبل/بعد؛ جستجو روی پرسنل `E2E-<runId>` |
-| `personnel/list.spec.ts` | `318`، `4411015056`، select index | `318` → `>0` + رفتار فیلتر؛ select با value نه index |
-| `organization/units.spec.ts` | `831`، `دانشگاه علوم پزشکی زنجان` | جستجو روی واحد `E2E-<runId>` |
-| `hardware/list-filters.spec.ts` | `449` | فیلتر روی سخت‌افزار ساخته‌شده با سریال یکتا |
-| `reports/map-no-boundary.spec.ts` | `290/241/49` | ساخت واحد بدون مرز → عدد یکی زیاد شود |
-| `dashboard/stats.spec.ts` | کامنت اعداد ثابت | فقط presence و سازگاری (جمع اجزا = کل) |
-| `tickets/new.spec.ts` | تیکت `تست خودکار E2E` بدون پاکسازی | subject یکتا با runId + حذف در teardown |
-| `auth/password-change.spec.ts` | جهش روی اکانت مشترک | اجرا روی یوزر موقت اختصاصی همین اسپک |
-| `rbac/roles.spec.ts` | وابسته به ۴ اکانت سیدشده | لاگین با ۴ یوزر ساخته‌شده در setup |
-| `users/crud.spec.ts` | `هادیلو` | ساخت/ویرایش/حذف یوزر `E2E-<runId>` |
+| `users/list.spec.ts` | `هادیلو`, `0023548258` | search `E2E-<runId>` person; count before/after create |
+| `users/crud.spec.ts` | `هادیلو` | full lifecycle on `E2E-<runId>` user (create→edit→delete) |
+| `personnel/list.spec.ts` | `4411015056`, count `318` | `>0` + filter behavior on seeded data; select by value not index |
+| `organization/units.spec.ts` | `دانشگاه علوم پزشکی زنجان`, count `831` | search unit created in setup (`E2E-<runId>`) |
+| `hardware/list-filters.spec.ts` | count `449` | filter on hardware with unique serial created in setup |
+| `reports/map-no-boundary.spec.ts` | `290/241/49` | create unit without boundary → count increases by exactly 1 |
+| `dashboard/stats.spec.ts` | `/3\d\d\|8\d\d/` | presence of 7 labels + internal consistency (parts sum = total) |
+| `tickets/new.spec.ts` | `تست خودکار E2E` leftovers | subject `E2E-<runId>-<ts>` (fresh DB per run needs no delete) |
+| `auth/password-change.spec.ts` | mutates shared account | run ONLY on the dedicated `pwdNCode` user from run-state |
+| `rbac/roles.spec.ts` | 4 seeded accounts | keep seeded logins (fresh DB guarantees them) — assert menus/403s only |
+| `search/global.spec.ts` | `هادیلو` | search `E2E-<runId>` record |
 
-### Phase 3 — اثبات پایداری
+### Phase 3 — Stability proof
 
-1. `grep -rEn "toContainText\(['\"][0-9]{2,}" tests/e2e/` → صفر نتیجه
-2. `npx playwright test` → سبز
-3. تست ضربه: یک یوزر/پرسنل دستی اضافه و کم کن، دوباره اجرا → همچنان سبز
-4. `git status` → هیچ فایل حاوی کر دن شل واقعی ترک نشده
+1. `grep -rEn "toContainText\((['\"])[0-9]{2,}" tests/e2e/` → 0
+2. `grep -rn "هادیلو\|4411015056\|دانشگاه علوم پزشکی زنجان\|12345678" tests/e2e/` → 0
+3. Full suite green twice in a row (second run proves `fresh` self-heals).
+4. ضربه: add/remove a manual user+person in dev DB → E2E still green (proves dev-independence).
+5. `git status --short` → no file with real credentials tracked (`.env.e2e` ignored, `.run-state.json` ignored).
 
-## 6. STOP Conditions
-
-- فایلی از `tests/e2e/` توسط PR دیگری تغییر کرده → drift check اجرا کن
-- `E2eFixturesCommand` کرش کند → لیست خطا را چاپ کن، متوقف شو
-- teardown رکوردها را پاک نکند → فوراً متوقف شو (دیتای آلوده)
-
-## 7. Test Plan
+## 5. Test plan
 
 ```bash
-# Phase 1 verification
-php artisan e2e:fixtures test-run-001 up
-php artisan e2e:fixtures test-run-001 down
+# Phase 0–1
+php artisan migrate:fresh --seed --env=e2e --force
+php artisan serve --env=e2e --port=8001 &
+BASE_URL=http://localhost:8001 npx playwright test tests/e2e/auth/login.spec.ts
 
-# Phase 2 verification
-npx playwright test tests/e2e/users/list.spec.ts
-npx playwright test tests/e2e/personnel/list.spec.ts
-npx playwright test tests/e2e/organization/units.spec.ts
+# Phase 2 (per file, then full)
+BASE_URL=http://localhost:8001 npx playwright test tests/e2e/users/list.spec.ts
+BASE_URL=http://localhost:8001 npx playwright test
 
-# Full suite
-npx playwright test
-
-# No hardcoded counts
-grep -rEn "toContainText\(['\"][0-9]{2,}" tests/e2e/ | wc -l  # expect 0
+# Phase 3
+grep -rEn "toContainText\((['\"])[0-9]{2,}" tests/e2e/ | wc -l   # expect 0
 ```
 
-## 8. Done Criteria
+## 6. Done criteria
 
-- [ ] `E2eFixturesCommand` works with `up` and `down`
-- [ ] `globalSetup` / `globalTeardown` wired in `playwright.config.ts`
-- [ ] Zero hardcoded absolute counts in `tests/e2e/`
-- [ ] All E2E tests pass with `npx playwright test`
-- [ ] Teardown cleans all E2E-created records
+- [ ] `h_dashboard_e2e` + `.env.e2e` + `:8001` wired; dev DB never touched by E2E
+- [ ] `globalSetup` fresh-seeds every run; `globalTeardown` removes run-state
+- [ ] Zero hardcoded absolute counts / real-record searches / hardcoded passwords in `tests/e2e/`
+- [ ] Full suite green on two consecutive runs
+- [ ] `password-change.spec.ts` touches only the dedicated per-run user
+- [ ] No credentials tracked (`git status` clean of `.env.e2e`, `.run-state.json`)
 
-## 9. Risk Mitigation
+## 7. STOP conditions
 
-- **دیتابیس جدا vs مشترک**: ساده‌ترین حالت همین DB فعلی + پیشوند یکتا و teardown.
-- **پارالل**: چون `fullyParallel` است، یوزرها باید per-run باشند نه per-test.
-- **حجم کار**: ~۳۲ فایل، ولی تغییرات مکانیکی و تکراری‌اند.
+- `migrate:fresh --seed --env=e2e` fails (e.g. a seeder assumes dev-only data) → print the error, stop, do not hack seeders without review
+- Any file under `tests/e2e/` changed by another PR → re-run drift check, reconcile before continuing
+- Fresh seed takes >10 min or bcrypt cost blocks CI → stop, propose `--seeder=E2eSeeder` (minimal subset) instead of full seed
+- Parallel workers collide on the same `E2E-<runId>` record → stop, scope creation per-worker (not per-run)
 
-## 10. Already Done (in PR #625)
+## 8. Maintenance notes
 
-- `tests/e2e/shared/fixtures.ts`: fallback هاردکد `12345678` حذف شد
-- `tests/e2e/users/crud.spec.ts`: `fill('12345678')` → `TEST_USER.password`
-- `.env.test.example` (بدون مقدار واقعی) اضافه شد
+- Seeders intentionally keep password `12345678` — Pest, dev, and E2E all rely on it. Rotating it is a separate ops decision, not part of this plan.
+- `.env.e2e` is gitignored; CI must generate it from secrets (same pattern as `test.yml`'s `cp .env.example .env.testing` + `sed`).
+- The `!.mimocode/plans/.env.testing` negation in `.gitignore` is unrelated — leave it.
+- Future specs: create with `E2E-` prefix, assert relatively, never assert seeded names/codes/counts.
+- Old draft sections ("Already Done", absolute counts `317/318/831/449`, branch `celin`) were stale at review time and were dropped in this rewrite — do not reintroduce them.
