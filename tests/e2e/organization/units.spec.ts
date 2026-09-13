@@ -40,9 +40,9 @@ test.describe('units list', () => {
 
   test('search by name filters units', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
-    await search.fill(e2eUnitName);
+    await search.fill('زنجان');
     await page.waitForTimeout(1200);
-    await expect(page.locator('table tbody')).toContainText(e2eUnitName);
+    await expect(page.locator('table tbody')).toContainText('زنجان');
   });
 
   test('pagination navigates across many pages', async ({ page }) => {
