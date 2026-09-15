@@ -253,6 +253,18 @@ When code fails or tests break, follow this order:
 4. **Tinker** — `php artisan tinker --execute '...'` for quick DB checks
 5. **Pest** — `composer test` to verify nothing regressed
 
+--- 
+
+## Agent skills
+
+### Issue tracker
+
+Specs and issues live as local markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agents/domain.md`.
+
 ---
 
 ## Gotchas Quick Reference
