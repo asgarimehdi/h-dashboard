@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
+    },
+    "laravel-boost": {
+      "type": "stdio",
+      "command": "php",
+      "args": [
+        "artisan",
+        "boost:mcp"
+      ]
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github",
+        "--env",
+        "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN}",
+        "--connect-timeout",
+        "60"
+      ]
+    }
+  }
+}
