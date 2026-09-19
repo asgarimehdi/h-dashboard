@@ -15,4 +15,3 @@ parameters:
         - storage
         - bootstrap/cache
         - tests
-        - resources/views/livewire/glowingcard.blade.php

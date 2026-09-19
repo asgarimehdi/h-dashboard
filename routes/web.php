@@ -46,13 +46,7 @@ Route::middleware('auth')->group(function () {
     Route::livewire('/select-context', 'select-context');
 
     Route::middleware('unit_context')->group(function () {
-        // Route::get('/', function () {
-        //     return view('welcome');
-        // });
-        // Route::get('/dashboard', function () {
-        //     return view('dashboard');
-        // });
-        Route::livewire('/', 'index'); // صفحه انتخاب نقش
+        Route::redirect('/', '/dashboard');
         Route::livewire('/dashboard', 'dashboard');
 
         Route::middleware('role_or_permission:manage_users')->group(function () {
