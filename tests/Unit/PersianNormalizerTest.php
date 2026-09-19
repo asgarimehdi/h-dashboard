@@ -32,3 +32,31 @@ test('normalizeForSearch trims and collapses whitespace', function () {
     $expected = 'سلام دنیا ی';
     expect(NormalizerHelper::normalizeForSearch($input))->toBe($expected);
 });
+
+test('escapeLikeWildcards escapes percent signs', function () {
+    expect(NormalizerHelper::escapeLikeWildcards('hello%world'))->toBe('hello\\%world');
+});
+
+test('escapeLikeWildcards escapes underscores', function () {
+    expect(NormalizerHelper::escapeLikeWildcards('hello_world'))->toBe('hello\\_world');
+});
+
+test('escapeLikeWildcards escapes both wildcards in mixed text', function () {
+    expect(NormalizerHelper::escapeLikeWildcards('%test_case%'))->toBe('\\%test\\_case\\%');
+});
+
+test('escapeLikeWildcards returns text unchanged when no wildcards present', function () {
+    expect(NormalizerHelper::escapeLikeWildcards('سلام دنیا'))->toBe('سلام دنیا');
+});
+
+test('normalizeForQuery combines normalize and escape for Persian text with wildcards', function () {
+    $input = "  ي ك %تست  \u{200C} ";
+    $expected = "ی ک \\%تست";
+    expect(NormalizerHelper::normalizeForQuery($input))->toBe($expected);
+});
+
+test('normalizeForQuery escapes wildcards and converts Persian digits', function () {
+    $input = '۱۲۳_%test%';
+    $expected = '123\\_\\%test\\%';
+    expect(NormalizerHelper::normalizeForQuery($input))->toBe($expected);
+});
