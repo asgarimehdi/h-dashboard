@@ -229,7 +229,7 @@ return new class extends Component
             ->withAggregate('unit', 'name');
 
         if (! empty($this->search)) {
-            // normalizeForSearch also converts Persian/Arabic digits to Latin.
+            // normalizeForQuery normalizes Persian/Arabic chars + escapes LIKE wildcards.
             $search = PersianNormalizer::normalizeForQuery($this->search);
 
             // Each whitespace-separated term must match (AND); within a term,
