@@ -51,7 +51,7 @@ test('escapeLikeWildcards returns text unchanged when no wildcards present', fun
 
 test('normalizeForQuery combines normalize and escape for Persian text with wildcards', function () {
     $input = "  ي ك %تست  \u{200C} ";
-    $expected = "ی ک \\%تست";
+    $expected = 'ی ک \\%تست';
     expect(NormalizerHelper::normalizeForQuery($input))->toBe($expected);
 });
 
