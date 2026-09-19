@@ -111,7 +111,7 @@ class Hardware extends Model
             return;
         }
 
-        $s = self::normalizeForSearch($term);
+        $s = self::normalizeForQuery($term);
 
         $query->where(function ($q) use ($s) {
             $q->where('hardwares.pc_name', 'LIKE', "%{$s}%")
@@ -219,7 +219,7 @@ class Hardware extends Model
             return;
         }
 
-        $normalized = self::normalizeForSearch($term);
+        $normalized = self::normalizeForQuery($term);
 
         $query->where(function ($q) use ($normalized) {
             $q->where('persons.f_name', 'LIKE', "%{$normalized}%")
