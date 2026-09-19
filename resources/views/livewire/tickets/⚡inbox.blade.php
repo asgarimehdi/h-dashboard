@@ -480,28 +480,30 @@ new class extends Component
 
     public function rejectTicket($ticketId): void
     {
-        try {
-            $ticket = Ticket::where('unit_id', auth()->user()->person?->u_id)->findOrFail($ticketId);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
 
-            \DB::transaction(function () use ($ticket) {
-                $ticket->update([
-                    'status' => 'rejected',
-                    'current_assignee_id' => auth()->id(),
-                ]);
+        if (! $ticket) {
+            $this->dispatch('swal', ['title' => 'تیکت یافت نشد.', 'icon' => 'error']);
 
-                $ticket->activities()->create([
-                    'user_id' => auth()->id(),
-                    'action' => 'rejected',
-                    'description' => 'تیکت توسط واحد ' . (auth()->user()->person?->unit?->name ?? 'بدون واحد') . ' رد شد.',
-                ]);
-            });
-
-            $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
-            $this->closeDetail();
-        } catch (\Exception $e) {
-            $this->dispatch('swal', ['title' => 'خطایی رخ داد', 'icon' => 'error']);
-            $this->closeDetail();
+            return;
         }
+
+        \DB::transaction(function () use ($ticket) {
+            $ticket->update([
+                'status' => 'rejected',
+                'current_assignee_id' => auth()->id(),
+            ]);
+
+            $ticket->activities()->create([
+                'user_id' => auth()->id(),
+                'action' => 'rejected',
+                'description' => 'تیکت توسط واحد '.(auth()->user()->person?->unit?->name ?? 'بدون واحد').' رد شد.',
+            ]);
+        });
+
+        $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
+        $this->closeDetail();
     }
 
     public function openCompletionModal($id): void
