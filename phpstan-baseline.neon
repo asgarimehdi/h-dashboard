@@ -2904,7 +2904,6 @@ parameters:
 			count: 1
 			path: app/Models/User.php
 
-
 		-
 			message: '#^Property App\\Models\\User\:\:\$guard_name has no type specified\.$#'
 			identifier: missingType.property
@@ -3524,54 +3523,6 @@ parameters:
 			path: resources/views/livewire/auth/login.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:login\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:create\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/auth/register\.blade\.php\:9\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/auth/register\.blade\.php\:9\:\:register\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/auth/register\.blade\.php\:9\:\:\$layout has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -4092,24 +4043,6 @@ parameters:
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/index\.blade\.php\:5\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/index\.blade\.php\:5\:\:\$roleOptions has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/index\.blade\.php\:5\:\:\$selectedRole has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/index.blade.php
 
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/network\-traffic\-chart\.blade\.php\:5\:\:mount\(\) has parameter \$inItemId with no type specified\.$#'
@@ -6658,7 +6591,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 44
+			count: 43
 			path: routes/web.php
 
 		-
