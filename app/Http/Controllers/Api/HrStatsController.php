@@ -152,7 +152,7 @@ class HrStatsController extends Controller
 
         $p = 'persons.';
         if ($request->filled('search')) {
-            $s = self::normalizeForSearch($request->search);
+            $s = self::normalizeForQuery($request->search);
             $query->where(function ($q) use ($s, $p) {
                 $q->where($p.'n_code', 'LIKE', "%{$s}%")
                     ->orWhere($p.'f_name', 'LIKE', "%{$s}%")

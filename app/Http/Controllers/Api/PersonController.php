@@ -20,7 +20,7 @@ class PersonController extends Controller
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
 
         if ($request->filled('search')) {
-            $s = self::normalizeForSearch($request->search);
+            $s = self::normalizeForQuery($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('n_code', 'LIKE', "%{$s}%")
                     ->orWhere('f_name', 'LIKE', "%{$s}%")

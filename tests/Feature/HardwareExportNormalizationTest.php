@@ -155,7 +155,6 @@ class HardwareExportNormalizationTest extends TestCase
 
         expect($src)->toContain('use App\Traits\PersianNormalizer;');
         expect($src)->toContain('use PersianNormalizer;');
-        expect(substr_count($src, 'normalizeForSearch'))->toBeGreaterThanOrEqual(9);
-        expect($src)->toContain("str_replace(['%', '_']");
+        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(9);
     }
 }

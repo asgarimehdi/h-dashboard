@@ -166,7 +166,7 @@ return new class extends Component
 
     public function updatedPersonSearch(): void
     {
-        $normalized = self::normalizeForSearch($this->personSearch);
+        $normalized = self::normalizeForQuery($this->personSearch);
         if (strlen($normalized) < 2) {
             $this->personResults = [];
 
@@ -505,7 +505,7 @@ return new class extends Component
 
         // General search
         if (! empty($this->search)) {
-            $s = self::normalizeForSearch($this->search);
+            $s = self::normalizeForQuery($this->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                     ->orWhere('n_code', 'LIKE', "%{$s}%")
@@ -553,7 +553,7 @@ return new class extends Component
 
         // Related filters (AND logic)
         if ($this->filterPerson) {
-            $normalized = self::normalizeForSearch($this->filterPerson);
+            $normalized = self::normalizeForQuery($this->filterPerson);
             $query->whereHas('person', function ($q) use ($normalized) {
                 $q->where('f_name', 'LIKE', "%{$normalized}%")
                     ->orWhere('l_name', 'LIKE', "%{$normalized}%")
@@ -562,13 +562,13 @@ return new class extends Component
             });
         }
         if ($this->filterUnit) {
-            $normalized = self::normalizeForSearch($this->filterUnit);
+            $normalized = self::normalizeForQuery($this->filterUnit);
             $query->whereHas('person.unit', function ($q) use ($normalized) {
                 $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
         if ($this->filterSemat) {
-            $normalized = self::normalizeForSearch($this->filterSemat);
+            $normalized = self::normalizeForQuery($this->filterSemat);
             $query->whereHas('person.semat', function ($q) use ($normalized) {
                 $q->where('name', 'LIKE', "%{$normalized}%");
             });

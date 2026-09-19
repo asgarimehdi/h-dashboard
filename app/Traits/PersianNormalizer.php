@@ -45,4 +45,22 @@ trait PersianNormalizer
 
         return $text;
     }
+
+    /**
+     * Escape LIKE wildcards (% and _) for safe use in LIKE queries.
+     * Call this ONLY in query builders, NOT in data normalization.
+     */
+    public static function escapeLikeWildcards(string $text): string
+    {
+        return str_replace(['%', '_'], ['\\%', '\\_'], $text);
+    }
+
+    /**
+     * Normalize text AND escape LIKE wildcards — use in search query builders.
+     * Combines normalizeForSearch() + escapeLikeWildcards().
+     */
+    public static function normalizeForQuery(string $text): string
+    {
+        return self::escapeLikeWildcards(self::normalizeForSearch($text));
+    }
 }

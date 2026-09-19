@@ -2904,11 +2904,6 @@ parameters:
 			count: 1
 			path: app/Models/User.php
 
-		-
-			message: '#^Property App\\Models\\User\:\:\$dates has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: app/Models/User.php
 
 		-
 			message: '#^Property App\\Models\\User\:\:\$guard_name has no type specified\.$#'
