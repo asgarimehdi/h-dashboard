@@ -26,6 +26,12 @@ class Ticket extends Model
         'completed_at',
     ];
 
+    protected $casts = [
+        'deadline' => 'datetime',
+        'accepted_at' => 'datetime',
+        'completed_at' => 'datetime',
+    ];
+
     public function canBeCompleted()
     {
         return $this->status === 'accepted';

@@ -230,7 +230,7 @@ return new class extends Component
 
         if (! empty($this->search)) {
             // normalizeForSearch also converts Persian/Arabic digits to Latin.
-            $search = PersianNormalizer::normalizeForSearch($this->search);
+            $search = PersianNormalizer::normalizeForQuery($this->search);
 
             // Each whitespace-separated term must match (AND); within a term,
             // any of n_code / "first last" / "last first" / unit name counts,

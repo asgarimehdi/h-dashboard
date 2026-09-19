@@ -27,7 +27,15 @@ class User extends Authenticatable
         'settings',
     ];
 
-    protected $dates = ['deleted_at']; // برای مدیریت تاریخ حذف
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'settings' => 'array',
+            'deleted_at' => 'datetime',
+        ];
+    }
 
     /**
      * دریافت اطلاعات Person مرتبط با این User.
@@ -97,13 +105,4 @@ class User extends Authenticatable
 
     protected $hidden = ['password',
         'settings', 'remember_token'];
-
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'settings' => 'array',
-        ];
-    }
 }

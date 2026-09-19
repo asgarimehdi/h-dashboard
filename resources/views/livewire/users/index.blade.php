@@ -228,7 +228,7 @@ return new class extends Component
                 // Persian-normalize the raw input (ي/ك variants, ZWNJ,
                 // Persian digits) so «محمدی» typed with Arabic Yeh still
                 // matches the stored name (#494 follow-up).
-                $search = \App\Traits\PersianNormalizer::normalizeForSearch($this->search);
+                $search = \App\Traits\PersianNormalizer::normalizeForQuery($this->search);
 
                 $q->whereHas('person', function ($query) use ($search) {
                     $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
@@ -262,7 +262,7 @@ return new class extends Component
             return [];
         }
 
-        $search = \App\Traits\PersianNormalizer::normalizeForSearch($this->person_search);
+        $search = \App\Traits\PersianNormalizer::normalizeForQuery($this->person_search);
 
         return Person::query()
             ->where(function ($query) use ($search) {
