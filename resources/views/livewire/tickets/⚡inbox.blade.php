@@ -86,7 +86,7 @@ new class extends Component
     {
         $user = auth()->user();
 
-        $query = Ticket::with(['user:id,n_code', 'unit:id,name']);
+        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name']);
 
         if ($this->viewMode === 'received') {
             $query->accessible();
