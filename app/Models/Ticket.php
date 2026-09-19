@@ -26,6 +26,7 @@ class Ticket extends Model
         'completed_at',
     ];
 
+    /** @var array<string, string> */
     protected $casts = [
         'deadline' => 'datetime',
         'accepted_at' => 'datetime',
