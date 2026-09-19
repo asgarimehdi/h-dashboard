@@ -5650,7 +5650,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
-			count: 5
+			count: 4
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
@@ -5668,13 +5668,13 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 10
+			count: 11
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
