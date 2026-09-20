@@ -33,14 +33,16 @@ test.describe('organization units', () => {
   test('search filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
     // Use keyboard typing to trigger Livewire's wire:model.live.debounce properly
+    // Search for "بیمارستان" — NOT "وزارت" since the admin's own unit (1) is وزارت بهداشت
+    // and the component excludes userUnitId from results
     await search.click();
-    await search.pressSequentially('وزارت', { delay: 50 });
+    await search.pressSequentially('بیمارستان', { delay: 30 });
     // Wait for Livewire round-trip to complete and table to update
     await page.waitForFunction(
       () => !document.querySelector('.wire-loading'),
       { timeout: 10000 },
     );
     await page.waitForTimeout(500);
-    await expect(page.locator('table tbody tr').first()).toContainText('وزارت');
+    await expect(page.locator('table tbody tr').first()).toContainText('بیمارستان');
   });
 });
