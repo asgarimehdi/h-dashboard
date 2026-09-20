@@ -73,6 +73,7 @@ class Notification extends Model
 
     public static function markAllAsRead(): void
     {
+        /** @var User|null $user */
         $user = Auth::user();
         if ($user) {
             static::where('user_id', $user->id)->where('is_read', false)->update([

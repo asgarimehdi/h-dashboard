@@ -1105,18 +1105,6 @@ parameters:
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Support\\HigherOrderCollectionProxy\<string, Illuminate\\Database\\Eloquent\\Model, Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\>\:\:\$user\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2185,24 +2173,6 @@ parameters:
 			path: app/Models/MaintenanceSchedule.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Notification\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Notification.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Models/Notification.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Notification\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Models/Notification.php
-
-		-
 			message: '#^Method App\\Models\\Notification\:\:user\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2450,12 +2420,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/TicketComment.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Models/TicketComment.php
@@ -2857,12 +2821,6 @@ parameters:
 			path: app/Models/UnitTypeRelationship.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$person\.$#'
 			identifier: property.notFound
 			count: 1
@@ -3151,12 +3109,6 @@ parameters:
 			path: database/factories/PersonFactory.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/factories/UserFactory.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -3179,12 +3131,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: database/migrations/2025_03_20_000009_create_boundaries_table.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/seeders/ActivityLogSeeder.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:create\(\)\.$#'
@@ -3361,12 +3307,6 @@ parameters:
 			path: database/seeders/TicketSeeder.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 11
-			path: database/seeders/TicketSeeder.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\TaskActivity\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 5
@@ -3407,12 +3347,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: database/seeders/TicketSeeder.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/seeders/TodoSeeder.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$person\.$#'
@@ -4933,12 +4867,6 @@ parameters:
 			path: resources/views/livewire/notifications/bell.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Notification\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 4
-			path: resources/views/livewire/notifications/bell.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/notifications/bell\.blade\.php\:7\:\:markAsRead\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
@@ -6430,18 +6358,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\User\>\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\User\>\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 2
 			path: resources/views/livewire/users/index.blade.php
 
 		-
