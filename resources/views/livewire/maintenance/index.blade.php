@@ -171,7 +171,7 @@ return new class extends Component
         ];
     }
 
-    private function calculateNextDue(): \Carbon\Carbon
+    private function calculateNextDue(): \Carbon\CarbonInterface
     {
         return match ($this->frequency) {
             'daily' => now()->addDays($this->recurrenceInterval),
