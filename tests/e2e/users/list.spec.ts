@@ -44,10 +44,10 @@ test.describe('users list', () => {
 
   test('search by n_code filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
-    // 4411015056 is the seeded admin n_code
-    await search.fill('4411015056');
+    // 4400176134 is a seeded non-admin user (excluded from self-filter since we search OTHER users)
+    await search.fill('4400176134');
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('table tbody')).toContainText('4411015056');
+    await expect(page.locator('table tbody')).toContainText('4400176134');
   });
 
   test('status filter switches active/inactive', async ({ page }) => {

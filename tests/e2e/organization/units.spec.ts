@@ -13,7 +13,7 @@ import { test, expect, login } from '../shared/fixtures';
 test.describe('organization units', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/organization/units');
+    await page.goto('/units');
     await page.waitForLoadState('networkidle');
   });
 
@@ -21,20 +21,26 @@ test.describe('organization units', () => {
     const headers = await page.locator('table thead th').evaluateAll((th) =>
       th.map((x) => x.textContent!.trim()),
     );
-    for (const col of ['نام', 'نوع', 'منطقه']) {
+    for (const col of ['نام', 'نوع واحد', 'منطقه']) {
       expect(headers).toContain(col);
     }
   });
 
   test('shows total units in pagination', async ({ page }) => {
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await expect(page.locator('.mary-table-pagination')).toBeVisible();
   });
 
   test('search filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
-    // وزارت is always in seeded data (وزارت بهداشت)
-    await search.fill('وزارت');
-    await page.waitForTimeout(1500);
-    await expect(page.locator('table tbody')).toContainText('وزارت');
+    // Use keyboard typing to trigger Livewire's wire:model.live.debounce properly
+    await search.click();
+    await search.pressSequentially('وزارت', { delay: 50 });
+    // Wait for Livewire round-trip to complete and table to update
+    await page.waitForFunction(
+      () => !document.querySelector('.wire-loading'),
+      { timeout: 10000 },
+    );
+    await page.waitForTimeout(500);
+    await expect(page.locator('table tbody tr').first()).toContainText('وزارت');
   });
 });

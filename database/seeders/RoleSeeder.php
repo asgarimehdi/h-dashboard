@@ -56,10 +56,11 @@ class RoleSeeder extends Seeder
         ]);
 
         // Assign roles to demo users
-        $superadmins = User::whereIn('id', [1, 2, 3])->get();
-
-        foreach ($superadmins as $user) {
-            $user->assignRole('admin');
-        }
+        // ID 1 (4411015056) = admin, ID 2 (4400176134) = unit_manager,
+        // ID 3 (4400176143) = expert, ID 4 (1000000001) = user
+        User::whereIn('id', [1])->each(fn ($u) => $u->assignRole('admin'));
+        User::whereIn('id', [2])->each(fn ($u) => $u->assignRole('unit_manager'));
+        User::whereIn('id', [3])->each(fn ($u) => $u->assignRole('expert'));
+        User::whereIn('id', [4])->each(fn ($u) => $u->assignRole('user'));
     }
 }

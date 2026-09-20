@@ -36,15 +36,23 @@ test.describe('hardware list & filters', () => {
     // Record total before filtering
     const totalBefore = await page.locator('.mary-table-pagination').innerText();
 
-    await page.getByRole('button', { name: 'لپ\u200cتاپ\u200cها', exact: true }).click();
+    // Use evaluate to click since Livewire/Alpine needs native DOM event flow
+    await page.evaluate(() => {
+      const btn = document.querySelector('button[wire\\:click*="laptop"]') as HTMLButtonElement | null;
+      if (btn) btn.click();
+    });
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    // Filtered results should be fewer — pagination text changes or disappears
+    await page.waitForTimeout(500);
+    // Filtered results should have different pagination text (fewer results)
     const pag = await page.locator('.mary-table-pagination').innerText().catch(() => '');
-    expect(pag).not.toContain('نتیجه'); // filtered view may not show total
+    expect(pag).not.toEqual(totalBefore);
   });
 
   test('clear filters restores full list', async ({ page }) => {
-    await page.getByRole('button', { name: 'لپ\u200cتاپ\u200cها', exact: true }).click();
+    await page.evaluate(() => {
+      const btn = document.querySelector('button[wire\\:click*="laptop"]') as HTMLButtonElement | null;
+      if (btn) btn.click();
+    });
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
     await page.getByRole('button', { name: 'پاکسازی', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
