@@ -31,14 +31,14 @@ test.describe('personnel list', () => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
     await search.fill('عسگری');
     await page.waitForTimeout(1500);
-    await expect(page.locator('table tbody')).toContainText('عسگری');
+    await expect(page.locator('main table tbody')).toContainText('عسگری');
   });
 
   test('search by n_code filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
     await search.fill('4411015056');
     await page.waitForTimeout(1500);
-    await expect(page.locator('table tbody')).toContainText('4411015056');
+    await expect(page.locator('main table tbody')).toContainText('4411015056');
   });
 
   test('filters panel opens', async ({ page }) => {

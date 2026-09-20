@@ -9,7 +9,7 @@ test.describe('Authentication — login', () => {
     await expect(page).toHaveTitle(/h-dashboard/);
     await expect(page.locator('#n_code')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ورود به سیستم' })).toBeVisible();
   });
 
   test('login with valid credentials redirects to dashboard', async ({ page }) => {

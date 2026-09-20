@@ -51,13 +51,13 @@ test.describe('hardware bulk actions', () => {
     await expect(markBtn).toBeEnabled();
     await markBtn.click();
     await expect(page.locator('.toast').first()).toContainText('علامت‌گذاری', { timeout: 10000 });
-    await expect(page.locator('table tbody')).toContainText('علامت');
+    await expect(page.locator('main table tbody')).toContainText('علامت');
 
     // Revert in the same test (shared seeded data must not stay mutated).
     const unmarkBtn = page.getByRole('button', { name: 'برداشتن', exact: true });
     await expect(unmarkBtn).toBeEnabled();
     await unmarkBtn.click();
     await expect(page.locator('.toast').first()).toContainText('علامت‌گذاری', { timeout: 10000 });
-    await expect(page.locator('table tbody')).not.toContainText('علامت');
+    await expect(page.locator('main table tbody')).not.toContainText('علامت');
   });
 });

@@ -109,7 +109,7 @@ test.describe('users CRUD (inline modal)', () => {
     await page.waitForTimeout(1200);
 
     // Still in the active list.
-    await expect(page.locator('table tbody')).toContainText(
+    await expect(page.locator('main table tbody')).toContainText(
       firstCode.split('\n').find((l) => /\d{10}/.test(l))!.trim(),
     );
   });
@@ -126,13 +126,13 @@ test.describe('users CRUD (inline modal)', () => {
     await page.locator('button[wire\\:click^="delete("]').first().click();
     // Wait for Livewire to process the deletion
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('table tbody')).not.toContainText(nCode);
+    await expect(page.locator('main table tbody')).not.toContainText(nCode);
 
     // Switch to the inactive filter — the user must be there now.
     await page.locator('select.select-bordered').selectOption('inactive');
     // Wait for Livewire filter to complete
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('table tbody')).toContainText(nCode);
+    await expect(page.locator('main table tbody')).toContainText(nCode);
 
     // Restore → back to active (reverts the mutation in the same test).
     await page.locator('button[wire\\:click^="restore("]').first().click();
@@ -142,6 +142,6 @@ test.describe('users CRUD (inline modal)', () => {
     await page.locator('select.select-bordered').selectOption('active');
     // Wait for Livewire filter to complete
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('table tbody')).toContainText(nCode);
+    await expect(page.locator('main table tbody')).toContainText(nCode);
   });
 });
