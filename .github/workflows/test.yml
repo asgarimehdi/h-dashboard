@@ -226,6 +226,125 @@ jobs:
         # and reports the mutation score without blocking PRs.
         run: ./vendor/bin/pest --mutate --parallel --covered-only
 
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: example_6162e0f827d119b0
+          POSTGRES_DB: h_dashboard
+          POSTGRES_USER: h_dashboard
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Configure .env for E2E
+        run: |
+          cp .env.e2e .env
+          # Override DB credentials to match CI service containers
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=h_dashboard/' .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=example_6162e0f827d119b0/' .env
+          sed -i 's/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+
+      - name: Clear caches
+        run: |
+          php artisan config:clear
+          php artisan route:clear
+
+      - name: Run migrations and seed
+        run: php artisan migrate:fresh --seed --force
+
+      - name: Create password-mutation user
+        run: |
+          RUN_ID=$(date +%s%N | cut -b1-13)
+          PWD_NCODE="9${RUN_ID: -9}"
+          UNIT_NAME="E2E-${RUN_ID}"
+          export TEST_PASSWORD=12345678
+          php tests/e2e/create-pwd-user.php "$PWD_NCODE" "$TEST_PASSWORD" "$UNIT_NAME"
+          echo "{\"runId\":\"$RUN_ID\",\"pwdNCode\":\"$PWD_NCODE\"}" > tests/e2e/.run-state.json
+
+      - name: Start PHP server
+        run: php artisan serve --port=8001 &
+        env:
+          APP_ENV: local
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 20); do
+            if curl -s -o /dev/null http://localhost:8001/login 2>/dev/null; then
+              echo "Server ready"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: BASE_URL=http://localhost:8001 npx playwright test --config=playwright.config.ts
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   phpstan:
     name: PHPStan Static Analysis
     runs-on: ubuntu-latest
