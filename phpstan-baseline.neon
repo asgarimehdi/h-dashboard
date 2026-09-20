@@ -4531,6 +4531,54 @@ parameters:
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$title\.$#'
+			identifier: property.notFound
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\MaintenanceSchedule\:\:create\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\MaintenanceSchedule\:\:findOrFail\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 2
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\Unit\:\:orderBy\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:schedules\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			identifier: missingType.generics
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$children_count\.$#'
 			identifier: property.notFound
 			count: 1
@@ -6591,7 +6639,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 43
+			count: 44
 			path: routes/web.php
 
 		-

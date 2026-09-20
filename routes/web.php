@@ -12,6 +12,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
     Route::get('/hardware/export', [HardwareExportController::class, 'export'])->name('hardware.export');
+    Route::livewire('/maintenance', 'maintenance.index')->name('maintenance.index');
 });
 
 // Volt::route('/login', 'auth.login')->name('login');
