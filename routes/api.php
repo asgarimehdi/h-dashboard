@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\HardwareController;
 use App\Http\Controllers\Api\HrAnalyticsController;
 use App\Http\Controllers\Api\HrStatsController;
 use App\Http\Controllers\Api\MultiLatestValueController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrgChartController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\ReportController;
@@ -169,6 +170,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/analytics/vacancy-trend', [HrAnalyticsController::class, 'vacancyTrend']);
         Route::get('/analytics/staffing-ratio', [HrAnalyticsController::class, 'staffingRatio']);
     });
+
+    // Notification API routes — for Flutter mobile app
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
 
     // GIS / Map API routes — view gated (Issue #396)
     Route::prefix('gis')->middleware('role_or_permission:map')->group(function () {
