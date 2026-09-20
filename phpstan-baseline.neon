@@ -1921,6 +1921,30 @@ parameters:
 			path: app/Imports/PersonImport.php
 
 		-
+			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:whereIn\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 2
+			path: app/Jobs/ArchiveActivityLogsJob.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: app/Jobs/ArchiveActivityLogsJob.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\Notification\:\:whereIn\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: app/Jobs/CleanNotificationsJob.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: app/Jobs/CleanNotificationsJob.php
+
+		-
 			message: '#^Method App\\Models\\ActivityLog\:\:subject\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\MorphTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -5979,13 +6003,13 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Notification\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
@@ -5997,11 +6021,11 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 4
+			count: 2
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tools/tools\.blade\.php\:10\:\:\$stats type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tools/tools\.blade\.php\:12\:\:\$stats type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tools/tools.blade.php
