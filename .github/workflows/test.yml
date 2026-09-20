@@ -332,7 +332,7 @@ jobs:
             echo "DEBUGBAR_ENABLED=false"
             echo "TEST_N_CODE=4411015056"
             echo "TEST_PASSWORD=12345678"
-            echo "TEST_USER_NAME=E2E Admin"
+            echo "TEST_USER_NAME=\"E2E Admin\""
             echo "TEST_UNIT_MANAGER_N_CODE=4400176134"
             echo "TEST_EXPERT_N_CODE=4400176143"
             echo "TEST_REGULAR_USER_N_CODE=1000000001"
