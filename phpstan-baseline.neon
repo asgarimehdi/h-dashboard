@@ -4555,12 +4555,6 @@ parameters:
 			path: resources/views/livewire/maintenance/index.blade.php
 
 		-
-			message: '#^Match expression does not handle remaining value\: string$#'
-			identifier: match.unhandled
-			count: 1
-			path: resources/views/livewire/maintenance/index.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1

@@ -23,6 +23,8 @@ return new class extends Component
     public bool $showForm = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    private const SORTABLE_COLUMNS = ['id', 'title', 'frequency', 'next_due_at'];
+
     public function cancelEdit(): void
     {
         $this->resetValidation();
@@ -40,6 +42,8 @@ return new class extends Component
 
     public function delete(MaintenanceSchedule $schedule): void
     {
+        $this->authorize('manage_hardware');
+
         try {
             $schedule->delete();
             $this->warning("«{$schedule->title}» حذف شد", 'با موفقیت', position: 'toast-bottom');
@@ -50,6 +54,8 @@ return new class extends Component
 
     public function createSchedule(): void
     {
+        $this->authorize('manage_hardware');
+
         $this->validate([
             'title' => 'required|string|max:255',
             'frequency' => 'required|in:daily,weekly,monthly',
@@ -57,11 +63,7 @@ return new class extends Component
             'unitId' => 'nullable|exists:units,id',
         ]);
 
-        $nextDue = match ($this->frequency) {
-            'daily' => now()->addDays($this->recurrenceInterval),
-            'weekly' => now()->addWeeks($this->recurrenceInterval),
-            'monthly' => now()->addMonths($this->recurrenceInterval),
-        };
+        $nextDue = $this->calculateNextDue();
 
         MaintenanceSchedule::create([
             'title' => $this->title,
@@ -77,6 +79,8 @@ return new class extends Component
 
     public function editSchedule(int $id): void
     {
+        $this->authorize('manage_hardware');
+
         $this->resetValidation();
         $schedule = MaintenanceSchedule::findOrFail($id);
         $this->editingId = $id;
@@ -89,6 +93,8 @@ return new class extends Component
 
     public function updateSchedule(): void
     {
+        $this->authorize('manage_hardware');
+
         $this->validate([
             'title' => 'required|string|max:255',
             'frequency' => 'required|in:daily,weekly,monthly',
@@ -98,11 +104,13 @@ return new class extends Component
 
         try {
             $schedule = MaintenanceSchedule::findOrFail($this->editingId);
+
             $schedule->update([
                 'title' => $this->title,
                 'frequency' => $this->frequency,
                 'recurrence_interval' => $this->recurrenceInterval,
                 'unit_id' => $this->unitId,
+                'next_due_at' => $this->calculateNextDue(),
             ]);
 
             $this->success("«{$this->title}» بروزرسانی شد", 'با موفقیت', position: 'toast-bottom');
@@ -134,7 +142,7 @@ return new class extends Component
             ['key' => 'title', 'label' => 'عنوان', 'class' => 'flex-1'],
             ['key' => 'frequency', 'label' => 'دوره'],
             ['key' => 'next_due_at', 'label' => 'سررسید بعدی'],
-            ['key' => 'is_overdue', 'label' => 'وضعیت'],
+            ['key' => 'is_overdue', 'label' => 'وضعیت', 'sortable' => false],
         ];
     }
 
@@ -146,7 +154,10 @@ return new class extends Component
             $query->where('title', 'LIKE', '%' . $this->search . '%');
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
 
         return $query->paginate($this->perPage);
     }
@@ -158,6 +169,16 @@ return new class extends Component
             'headers' => $this->headers(),
             'units' => Unit::orderBy('name')->pluck('name', 'id'),
         ];
+    }
+
+    private function calculateNextDue(): \Carbon\Carbon
+    {
+        return match ($this->frequency) {
+            'daily' => now()->addDays($this->recurrenceInterval),
+            'weekly' => now()->addWeeks($this->recurrenceInterval),
+            'monthly' => now()->addMonths($this->recurrenceInterval),
+            default => now()->addMonth(),
+        };
     }
 }; ?>
 
