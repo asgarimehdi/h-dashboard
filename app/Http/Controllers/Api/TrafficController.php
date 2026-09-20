@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\ZabbixService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class TrafficController extends Controller
 {
@@ -36,7 +37,8 @@ class TrafficController extends Controller
 
             return response()->json($data);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Zabbix Traffic API error', ['exception' => $e]);
+            Log::error('Zabbix Traffic API error', ['exception' => $e]);
+
             return response()->json(['error' => 'Service temporarily unavailable'], 503);
         }
     }
