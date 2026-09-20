@@ -21,18 +21,23 @@ class TrafficController extends Controller
         $inItemId = $validated['in_item_id'];
         $duration = $validated['duration'] ?? 3600;
 
-        // Cache key now includes both IDs
-        $data = Cache::remember(
-            "traffic_{$outItemId}_{$inItemId}_{$duration}",
-            30,
-            function () use ($zabbix, $outItemId, $inItemId, $duration) {
-                return [
-                    'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
-                    'in' => $zabbix->getInterfaceTraffic($inItemId, $duration),
-                ];
-            }
-        );
+        try {
+            // Cache key now includes both IDs
+            $data = Cache::remember(
+                "traffic_{$outItemId}_{$inItemId}_{$duration}",
+                30,
+                function () use ($zabbix, $outItemId, $inItemId, $duration) {
+                    return [
+                        'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
+                        'in' => $zabbix->getInterfaceTraffic($inItemId, $duration),
+                    ];
+                }
+            );
 
-        return response()->json($data);
+            return response()->json($data);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Zabbix Traffic API error', ['exception' => $e]);
+            return response()->json(['error' => 'Service temporarily unavailable'], 503);
+        }
     }
 }
