@@ -291,30 +291,55 @@ jobs:
 
       - name: Configure .env for E2E
         run: |
-          # Use .env.e2e if available, otherwise build from .env.example
-          if [ -f .env.e2e ]; then
-            cp .env.e2e .env
-          else
-            cp .env.example .env
-            php artisan key:generate --force
-          fi
-          # Override DB/Redis credentials to match CI service containers
-          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
-          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
-          sed -i 's/^DB_PORT=.*/DB_PORT=5432/' .env
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard/' .env
-          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=h_dashboard/' .env
-          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=example_6162e0f827d119b0/' .env
-          sed -i 's/^REDIS_HOST=.*/REDIS_HOST=127.0.0.1/' .env
-          sed -i 's/^REDIS_PORT=.*/REDIS_PORT=6379/' .env
-          sed -i 's/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
-          sed -i 's/^CACHE_DRIVER=.*/CACHE_DRIVER=redis/' .env
-          sed -i 's/^SESSION_DRIVER=.*/SESSION_DRIVER=redis/' .env
-          grep -q '^DEBUGBAR_ENABLED=' .env || echo 'DEBUGBAR_ENABLED=false' >> .env
-          grep -q '^APP_URL=' .env || echo 'APP_URL=http://127.0.0.1:8001' >> .env
-          sed -i 's|^APP_URL=.*|APP_URL=http://127.0.0.1:8001|' .env
-          grep -q '^TEST_N_CODE=' .env || echo 'TEST_N_CODE=4411015056' >> .env
-          grep -q '^TEST_PASSWORD=' .env || echo 'TEST_PASSWORD=12345678' >> .env
+          # Build .env.e2e for Playwright (dotenv reads this file directly)
+          {
+            echo "APP_NAME=h-dashboard"
+            echo "APP_ENV=local"
+            echo "APP_DEBUG=true"
+            echo "APP_URL=http://127.0.0.1:8001"
+            echo "APP_LOCALE=fa"
+            echo "APP_FALLBACK_LOCALE=en"
+            echo "APP_FAKER_LOCALE=en_US"
+            echo "APP_MAINTENANCE_DRIVER=file"
+            echo "PHP_CLI_SERVER_WORKERS=4"
+            echo "BCRYPT_ROUNDS=12"
+            echo "LOG_CHANNEL=stack"
+            echo "LOG_STACK=single"
+            echo "LOG_DEPRECATIONS_CHANNEL=null"
+            echo "LOG_LEVEL=debug"
+            echo "DB_CONNECTION=pgsql"
+            echo "DB_HOST=127.0.0.1"
+            echo "DB_PORT=5432"
+            echo "DB_DATABASE=h_dashboard"
+            echo "DB_USERNAME=h_dashboard"
+            echo "DB_PASSWORD=example_6162e0f827d119b0"
+            echo "APP_TIMEZONE=Asia/Tehran"
+            echo "SESSION_LIFETIME=120"
+            echo "SESSION_ENCRYPT=false"
+            echo "SESSION_SECURE_COOKIE=false"
+            echo "SESSION_PATH=/"
+            echo "SESSION_DOMAIN=null"
+            echo "BROADCAST_CONNECTION=log"
+            echo "FILESYSTEM_DISK=local"
+            echo "CACHE_DRIVER=redis"
+            echo "SESSION_DRIVER=redis"
+            echo "QUEUE_CONNECTION=redis"
+            echo "REDIS_HOST=127.0.0.1"
+            echo "REDIS_PORT=6379"
+            echo "REDIS_PASSWORD="
+            echo "ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php"
+            echo "ZABBIX_TOKEN="
+            echo "DEBUGBAR_ENABLED=false"
+            echo "TEST_N_CODE=4411015056"
+            echo "TEST_PASSWORD=12345678"
+            echo "TEST_USER_NAME=E2E Admin"
+            echo "TEST_UNIT_MANAGER_N_CODE=4400176134"
+            echo "TEST_EXPERT_N_CODE=4400176143"
+            echo "TEST_REGULAR_USER_N_CODE=1000000001"
+          } > .env.e2e
+          # Also use it as .env for PHP artisan commands
+          cp .env.e2e .env
+          php artisan key:generate --force
 
       - name: Clear caches
         run: |
