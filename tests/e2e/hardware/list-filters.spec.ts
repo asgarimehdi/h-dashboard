@@ -29,26 +29,31 @@ test.describe('hardware list & filters', () => {
 
   test('shows total devices in pagination', async ({ page }) => {
     // Seeded data has hardware — pagination shows total count
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
   });
 
   test('laptop quick filter narrows results', async ({ page }) => {
     // Record total before filtering
     const totalBefore = await page.locator('.mary-table-pagination').innerText();
 
-    await page.getByRole('button', { name: 'لپ\u200cتاپ\u200cها', exact: true }).click();
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    // Filtered results should be fewer — pagination text changes or disappears
-    const pag = await page.locator('.mary-table-pagination').innerText().catch(() => '');
-    expect(pag).not.toContain('نتیجه'); // filtered view may not show total
+    // Use CSS selector targeting the Livewire wire:click directly
+    await page.locator('button[wire\\:click*="laptop"]').click();
+    // Wait for Livewire network request to complete
+    await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    // Filtered results should have fewer records
+    const totalAfter = await page.locator('.mary-table-pagination').innerText().catch(() => '');
+    expect(totalAfter).not.toBe(totalBefore);
   });
 
   test('clear filters restores full list', async ({ page }) => {
-    await page.getByRole('button', { name: 'لپ\u200cتاپ\u200cها', exact: true }).click();
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await page.getByRole('button', { name: 'پاکسازی', exact: true }).click();
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await page.locator('button[wire\\:click*="laptop"]').click();
+    await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    await page.locator('button[wire\\:click*="clearFilters"]').click();
+    await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
   });
 
   test('advanced filter panel opens with نوع دستگاه field', async ({ page }) => {

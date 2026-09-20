@@ -13,7 +13,7 @@ import { test, expect, login } from '../shared/fixtures';
 test.describe('organization units', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/organization/units');
+    await page.goto('/units');
     await page.waitForLoadState('networkidle');
   });
 
@@ -21,20 +21,20 @@ test.describe('organization units', () => {
     const headers = await page.locator('table thead th').evaluateAll((th) =>
       th.map((x) => x.textContent!.trim()),
     );
-    for (const col of ['نام', 'نوع', 'منطقه']) {
+    for (const col of ['نام', 'نوع واحد', 'منطقه']) {
       expect(headers).toContain(col);
     }
   });
 
   test('shows total units in pagination', async ({ page }) => {
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
   });
 
   test('search filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
-    // وزارت is always in seeded data (وزارت بهداشت)
-    await search.fill('وزارت');
+    // زنجان is always in seeded unit names
+    await search.fill('زنجان');
     await page.waitForTimeout(1500);
-    await expect(page.locator('table tbody')).toContainText('وزارت');
+    await expect(page.locator('table tbody')).toContainText('زنجان');
   });
 });
