@@ -291,11 +291,30 @@ jobs:
 
       - name: Configure .env for E2E
         run: |
-          cp .env.e2e .env
-          # Override DB credentials to match CI service containers
+          # Use .env.e2e if available, otherwise build from .env.example
+          if [ -f .env.e2e ]; then
+            cp .env.e2e .env
+          else
+            cp .env.example .env
+            php artisan key:generate --force
+          fi
+          # Override DB/Redis credentials to match CI service containers
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
+          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+          sed -i 's/^DB_PORT=.*/DB_PORT=5432/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard/' .env
           sed -i 's/^DB_USERNAME=.*/DB_USERNAME=h_dashboard/' .env
           sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=example_6162e0f827d119b0/' .env
+          sed -i 's/^REDIS_HOST=.*/REDIS_HOST=127.0.0.1/' .env
+          sed -i 's/^REDIS_PORT=.*/REDIS_PORT=6379/' .env
           sed -i 's/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+          sed -i 's/^CACHE_DRIVER=.*/CACHE_DRIVER=redis/' .env
+          sed -i 's/^SESSION_DRIVER=.*/SESSION_DRIVER=redis/' .env
+          grep -q '^DEBUGBAR_ENABLED=' .env || echo 'DEBUGBAR_ENABLED=false' >> .env
+          grep -q '^APP_URL=' .env || echo 'APP_URL=http://127.0.0.1:8001' >> .env
+          sed -i 's|^APP_URL=.*|APP_URL=http://127.0.0.1:8001|' .env
+          grep -q '^TEST_N_CODE=' .env || echo 'TEST_N_CODE=4411015056' >> .env
+          grep -q '^TEST_PASSWORD=' .env || echo 'TEST_PASSWORD=12345678' >> .env
 
       - name: Clear caches
         run: |
