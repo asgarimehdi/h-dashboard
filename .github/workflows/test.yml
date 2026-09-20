@@ -339,7 +339,10 @@ jobs:
           } > .env.e2e
           # Also use it as .env for PHP artisan commands
           cp .env.e2e .env
+          # Generate APP_KEY (key:generate needs it in .env)
           php artisan key:generate --force
+          # Write the generated key back to .env.e2e for Playwright
+          grep '^APP_KEY=' .env >> .env.e2e || true
 
       - name: Clear caches
         run: |
