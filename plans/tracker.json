@@ -57,7 +57,9 @@
       "category": "performance",
       "effort": "M",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/005-synchronous-notification-sends-in-comment-controller.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/662"
     },
     {
       "num": 6,
