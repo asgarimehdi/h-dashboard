@@ -1,5 +1,5 @@
 {
-  "last_created": 3,
+  "last_created": 4,
   "findings": [
     {
       "num": 1,
@@ -45,7 +45,9 @@
       "category": "performance",
       "effort": "M",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/004-unbounded-recursive-eager-loading.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/661"
     },
     {
       "num": 5,
