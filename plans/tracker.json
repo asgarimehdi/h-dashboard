@@ -105,7 +105,9 @@
       "category": "test",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/009-security-headers-middleware-no-tests.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/666"
     },
     {
       "num": 10,
