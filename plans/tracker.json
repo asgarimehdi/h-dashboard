@@ -69,7 +69,9 @@
       "category": "performance",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/006-missing-chunked-reading-in-audits-export.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/663"
     },
     {
       "num": 7,
