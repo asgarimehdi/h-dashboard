@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
-> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal.
+> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
 
 ## Project Overview
 
@@ -8,7 +8,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x on PHP ^8.3
+- **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
@@ -152,18 +152,19 @@ Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleU
 
 ## Scheduler & Console Commands
 
-| Command | Schedule | Purpose |
-|---|---|---|
-| `cache:prune-stale` | hourly | Resets cache version counters |
-| `todos:generate-recurring` | daily 02:00 | Creates recurring todo instances |
-| `maintenance:generate-due` | daily 03:00 | Generates due maintenance tickets |
-| `data:archive` | weekly (Mon 04:00) | Moves old `activity_logs` → `activity_log_archives` |
-| `reports:generate-daily` | daily 06:00 | Builds `daily_reports` rows per accessible unit |
-| `zabbix:sync` | every 5 min | Pulls Zabbix traffic/latest values |
+Six commands are scheduled in `app/Console/Kernel.php`. All take `--dry-run`:
 
-All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`.
+| Command | Schedule |
+|---|---|
+| `cache:prune-stale` | hourly |
+| `todos:generate-recurring` | daily 02:00 |
+| `maintenance:generate-due` | daily 03:00 |
+| `data:archive` | weekly (Mon 04:00) |
+| `reports:generate-daily` | daily 06:00 |
+| `zabbix:sync` | every 5 min |
 
-> **Do not add `->timeout(N)` to zabbix:sync schedule** — method doesn't exist, throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
+> Full command details, parameters, and gotchas: `references/api-endpoints.md` (Scheduler & Console Commands).
+> **Do not add `->timeout(N)` to zabbix:sync schedule** — throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
 
 ---
 
@@ -174,6 +175,8 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 **Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`.
 
 `PruneStaleCache` resets all of them.
+
+> Performance patterns, caching strategies, and optimization details: `references/api-endpoints.md` (Performance section).
 
 ---
 
@@ -187,12 +190,20 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
-- **Test Review Rule:** Every code change MUST include test review. Before finalizing any change: (1) check if existing tests cover the changed code, (2) add/update tests if the change introduces new behavior, fixes a bug, or alters an existing contract. No code change ships without corresponding test coverage verification.
+- **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
 - **Factories:** Only `UserFactory` exists; other models have seeders. When seeding rows with **explicit IDs** in tests, resync Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
+
+### Composer Scripts
+```bash
+composer test      # config:clear + route:clear + XDEBUG_MODE=off php artisan test
+composer dev       # concurrently: php artisan serve + queue:listen + npm run dev
+composer pint      # Pint --dirty --format agent (auto-staged PHP)
+composer phpstan   # phpstan analyse --no-progress
+```
 
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
@@ -203,8 +214,20 @@ php scripts/boost_tool.php <tool> '<json-args>'
 # e.g. php scripts/boost_tool.php application-info '{}'
 # php scripts/boost_tool.php db-schema '{}'
 # php scripts/boost_tool.php query '{"sql": "SELECT ..."}'
-# php scripts/boost_tool.php docs '{"query": "..."}'
 ```
+
+### MCP Tools
+
+Four MCP servers are configured in `~/.hermes/config.yaml`:
+
+| Server | Tools | Purpose |
+|---|---|---|
+| **codegraph** | `codegraph_explore` | Code intelligence — symbol resolution, call paths, blast-radius analysis |
+| **context7** | `query_docs`, `list_prompts`, `list_resources`, `read_resource`, `get_prompt` | Up-to-date framework documentation |
+| **laravel_boost** | `application_info`, `last_error`, `search_docs`, `database_query`, `database_schema`, `get_absolute_url`, `browser_logs` | Laravel-specific tools (DB, docs, logs) |
+| **github** | `create_issue`, `list_pull_requests`, `create_pull_request`, `search_code`, + 22 more | GitHub operations (repos, PRs, issues) |
+
+Use `tool_search` to discover available tools, `tool_describe` to load schemas, `tool_call` to invoke. Always use CodeGraph before grep/glob for code understanding tasks.
 
 ---
 
@@ -317,9 +340,13 @@ codegraph status .
 
 `.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`:
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
+- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking)
 - **Tests & Coverage (blocking)** — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov
 - **Mutation Testing (non-blocking)** — `--covered-only`, treat failures as informational
+- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
+
+> Full CI workflow details: `references/api-endpoints.md` (CI/CD section).
 
 ---
 

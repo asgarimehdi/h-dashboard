@@ -48,7 +48,6 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user
 | DELETE | `/api/hardware/{id}` | Delete |
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
-| GET | `/api/hardware/{hardware}/history` | **Backward-compat alias** for `/audits` (paginated change history, action filter, org scope) |
 | GET | `/api/hardware/{hardware}/audits` | Paginated audit trail — filters: `field`, `user_id`, `date_from`, `date_to`, `action`, `source`, `per_page` (max 50) |
 | GET | `/api/hardware/{hardware}/audits/export` | Export audit trail as Excel/CSV (compliance report, Jalali dates) |
 | GET | `/api/hardware/{hardware}/audits/{audit}` | Single audit record with full field diff + Persian labels |
@@ -440,11 +439,13 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner): pulls `/home/boxd/h-dashboard`, clears views/config/routes cache, runs `php artisan optimize`, reloads apache2.
+`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with two jobs:
-- **Tests & Coverage (blocking)** — PHP **8.5** (matches composer.lock; Symfony 8.1 requires ≥8.4), service containers `postgis/postgis:16-3.4` (:5432) + passwordless `redis`, builds frontend assets (`npm ci && npm run build`), rewrites `.env.testing` to match the containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`** — Laravel 13 ignores legacy `CACHE_DRIVER`; a shared redis store cross-pollutes spatie's permission cache across parallel workers), `key:generate --env=testing`, `migrate --env=testing`, then clears config/routes/views (guard against the stale-`routes-v7.php` Livewire-hash trap above), then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov.
-- **Mutation Testing (non-blocking, `continue-on-error: true`)** — all test files have `@covers` declarations (added 2026-08-31) so mutations are scoped to tested code via `--covered-only`. Previously ran `--everything --covered-only` which was too slow (30 min timeout). The mutation job may still fail due to lookup-table id collisions — treat failures as informational until the job passes consistently.
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
+- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)
+- **Tests & Coverage (blocking, timeout 10 min)** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov
+- **Mutation Testing (non-blocking, `continue-on-error: true`)** — `--covered-only`, treat failures as informational
+- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
 
 ### Storage Permissions (gotcha)
 
@@ -458,16 +459,3 @@ php artisan view:clear
 ```
 
 ---
-
-## Performance (recent fixes pattern)
-
-- Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
-- Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush)
-- Eager-load relationships (`with('person.unit')`) in list queries
-- Limit API pagination to max 100 per page
-- Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
-- Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
-- Apply `PersianNormalizer` on all text search inputs
-- pg_trgm GIN indexes back leading-wildcard `LIKE` search on `persons` (fullname forms), `hardwares` (pc_name/comments/type/ip_valid/ip_local/mac), and `units.name`
-- HR analytics endpoints aggregate in a single pgsql pass and cache the result; `headcountTrend`/`staffingRatio` use a SQLite fallback for tests. `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
-- **Monitoring note (no code change needed):** `TicketComments::loadTicket()` eager-loads only two levels (`comments.user.person` + `children.user.person`); with max comment depth = 3 this is sufficient and not an N+1. Revisit only if depth grows or tickets accumulate very large comment trees
