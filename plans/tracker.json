@@ -81,7 +81,9 @@
       "category": "correctness",
       "effort": "S",
       "impact": "medium",
-      "done": false
+      "done": true,
+      "plan_file": "plans/007-missing-user-id-in-todo-api-store.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/664"
     },
     {
       "num": 8,
