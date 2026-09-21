@@ -1,5 +1,5 @@
 {
-  "last_created": 4,
+  "last_created": 8,
   "findings": [
     {
       "num": 1,
@@ -93,7 +93,9 @@
       "category": "bug",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/008-sqlite-strftime-in-pgsql-fallback.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/665"
     },
     {
       "num": 9,
