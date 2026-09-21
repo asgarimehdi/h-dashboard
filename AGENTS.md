@@ -80,6 +80,22 @@ Uses **Spatie Permission** package:
 
 > **Do not add `X-XSS-Protection`** — replaced by CSP. The old header is removed.
 
+### CORS Hardening
+
+`config/cors.php` changes:
+- `allowed_origins_patterns` now **empty array in production** (was always localhost/127.0.0.1)
+- `max_age` increased from 0 to 86400 (reduces preflight requests)
+
+---
+
+## Dead Routes & Components Removed (Phase 4)
+
+These components and routes were removed — do not recreate:
+- `/` — changed from Livewire `index` component to `Route::redirect('/', '/dashboard')`
+- `auth.register` — registration form removed (unused)
+- `glowingcard` — demo component removed (unused)
+- Tests for these: `AuthRegisterLivewireTest`, `GlowingCardLivewireTest`, `IndexRedirectLivewireTest` — all deleted
+
 ---
 
 ## Settings Features
@@ -115,6 +131,8 @@ REST API endpoints for the Flutter mobile app (`/api/notifications/*`):
 | `/api/notifications/read-all` | POST | Mark all notifications as read |
 
 Controller: `App\Http\Controllers\Api\NotificationController`. Requires Sanctum auth.
+
+> **Sanctum token expiration** reduced from 7 days (10080 min) to 24 hours (1440 min). Configurable via `SANCTUM_TOKEN_EXPIRATION` env var.
 
 ---
 
