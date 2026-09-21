@@ -34,7 +34,7 @@ class HardwareExportController extends Controller
         // Apply filters from query parameters
         // Order: normalize → escape LIKE wildcards for all text inputs
         if ($request->filled('search')) {
-            $s = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->search));
+            $s = self::normalizeForQuery($request->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                     ->orWhere('n_code', 'LIKE', "%{$s}%")
@@ -53,37 +53,37 @@ class HardwareExportController extends Controller
         if ($request->filled('type')) {
             $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
             $type = $typeAliases[$request->type] ?? $request->type;
-            $type = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($type));
+            $type = self::normalizeForQuery($type);
             $query->where('type', 'LIKE', "%{$type}%");
         }
         if ($request->filled('os')) {
-            $os = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->os));
+            $os = self::normalizeForQuery($request->os);
             $query->where('os', 'LIKE', "%{$os}%");
         }
         if ($request->filled('cpu')) {
-            $cpu = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->cpu));
+            $cpu = self::normalizeForQuery($request->cpu);
             $query->where('cpu', 'LIKE', "%{$cpu}%");
         }
         if ($request->filled('ram')) {
-            $ram = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->ram));
+            $ram = self::normalizeForQuery($request->ram);
             $query->where('ram', 'LIKE', "%{$ram}%");
         }
         if ($request->filled('hdd')) {
-            $hdd = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->hdd));
+            $hdd = self::normalizeForQuery($request->hdd);
             $query->where('hdd', 'LIKE', "%{$hdd}%");
         }
         if ($request->filled('shutdown')) {
             $query->where('shutdown', $request->shutdown === '1');
         }
         if ($request->filled('net_type')) {
-            $netType = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->net_type));
+            $netType = self::normalizeForQuery($request->net_type);
             $query->where('net_type', 'LIKE', "%{$netType}%");
         }
         if ($request->filled('mark')) {
             $query->where('mark', $request->mark === '1');
         }
         if ($request->filled('person')) {
-            $normalized = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->person));
+            $normalized = self::normalizeForQuery($request->person);
             $query->whereHas('person', function ($q) use ($normalized) {
                 $q->where('f_name', 'LIKE', "%{$normalized}%")
                     ->orWhere('l_name', 'LIKE', "%{$normalized}%")
@@ -92,13 +92,13 @@ class HardwareExportController extends Controller
             });
         }
         if ($request->filled('unit')) {
-            $normalized = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->unit));
+            $normalized = self::normalizeForQuery($request->unit);
             $query->whereHas('person.unit', function ($q) use ($normalized) {
                 $q->where('name', 'LIKE', "%{$normalized}%");
             });
         }
         if ($request->filled('semat')) {
-            $normalized = str_replace(['%', '_'], ['\\%', '\\_'], self::normalizeForSearch($request->semat));
+            $normalized = self::normalizeForQuery($request->semat);
             $query->whereHas('person.semat', function ($q) use ($normalized) {
                 $q->where('name', 'LIKE', "%{$normalized}%");
             });

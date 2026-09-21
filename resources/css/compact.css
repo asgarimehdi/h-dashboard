@@ -1,0 +1,41 @@
+/* Compact Mode - tighter spacing, smaller fonts, denser layouts */
+.compact-mode {
+    font-size: 0.875rem;
+}
+
+.compact-mode .card {
+    padding: 0.75rem;
+}
+
+.compact-mode .table td,
+.compact-mode .table th {
+    padding: 0.375rem 0.5rem;
+}
+
+.compact-mode .stat {
+    padding: 0.5rem;
+}
+
+.compact-mode .badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+}
+
+.compact-mode .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.compact-mode .input,
+.compact-mode .select {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.compact-mode .space-y-4 > * + * {
+    margin-top: 0.5rem;
+}
+
+.compact-mode .space-y-2 > * + * {
+    margin-top: 0.25rem;
+}

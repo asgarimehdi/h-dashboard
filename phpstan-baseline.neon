@@ -1105,19 +1105,7 @@ parameters:
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Support\\HigherOrderCollectionProxy<.*>::\$user\.$#'
+			message: '#^Access to an undefined property Illuminate\\Support\\HigherOrderCollectionProxy\<string, Illuminate\\Database\\Eloquent\\Model, Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\>\:\:\$user\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/TicketCommentController.php
@@ -1933,6 +1921,30 @@ parameters:
 			path: app/Imports/PersonImport.php
 
 		-
+			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:whereIn\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 2
+			path: app/Jobs/ArchiveActivityLogsJob.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: app/Jobs/ArchiveActivityLogsJob.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\Notification\:\:whereIn\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: app/Jobs/CleanNotificationsJob.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: app/Jobs/CleanNotificationsJob.php
+
+		-
 			message: '#^Method App\\Models\\ActivityLog\:\:subject\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\MorphTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2185,24 +2197,6 @@ parameters:
 			path: app/Models/MaintenanceSchedule.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Notification\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Notification.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Models/Notification.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Notification\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Models/Notification.php
-
-		-
 			message: '#^Method App\\Models\\Notification\:\:user\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2450,12 +2444,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/TicketComment.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Models/TicketComment.php
@@ -2857,12 +2845,6 @@ parameters:
 			path: app/Models/UnitTypeRelationship.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$person\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2901,12 +2883,6 @@ parameters:
 		-
 			message: '#^Method App\\Models\\User\:\:units\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany does not specify its types\: TRelatedModel, TDeclaringModel, TPivotModel, TAccessor \(2\-4 required\)$#'
 			identifier: missingType.generics
-			count: 1
-			path: app/Models/User.php
-
-		-
-			message: '#^Property App\\Models\\User\:\:\$dates has no type specified\.$#'
-			identifier: missingType.property
 			count: 1
 			path: app/Models/User.php
 
@@ -3157,12 +3133,6 @@ parameters:
 			path: database/factories/PersonFactory.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/factories/UserFactory.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -3185,12 +3155,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: database/migrations/2025_03_20_000009_create_boundaries_table.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/seeders/ActivityLogSeeder.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:create\(\)\.$#'
@@ -3367,12 +3331,6 @@ parameters:
 			path: database/seeders/TicketSeeder.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 11
-			path: database/seeders/TicketSeeder.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\TaskActivity\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 5
@@ -3413,12 +3371,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: database/seeders/TicketSeeder.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/seeders/TodoSeeder.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$person\.$#'
@@ -3529,52 +3481,10 @@ parameters:
 			path: resources/views/livewire/auth/login.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:login\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:create\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/auth/register\.blade\.php\:9\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/auth/register\.blade\.php\:9\:\:register\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/auth/register\.blade\.php\:9\:\:\$layout has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/auth/register.blade.php
+			path: resources/views/livewire/dashboard.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:whereIn\(\)\.$#'
@@ -4093,24 +4003,6 @@ parameters:
 			path: resources/views/livewire/hr/org-chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/index\.blade\.php\:5\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/index\.blade\.php\:5\:\:\$roleOptions has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/index\.blade\.php\:5\:\:\$selectedRole has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/index.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/network\-traffic\-chart\.blade\.php\:5\:\:mount\(\) has parameter \$inItemId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
@@ -4597,6 +4489,54 @@ parameters:
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$title\.$#'
+			identifier: property.notFound
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\MaintenanceSchedule\:\:create\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\MaintenanceSchedule\:\:findOrFail\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 2
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Call to an undefined static method App\\Models\\Unit\:\:orderBy\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:schedules\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			identifier: missingType.generics
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:10\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/maintenance/index.blade.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$children_count\.$#'
 			identifier: property.notFound
 			count: 1
@@ -4897,12 +4837,6 @@ parameters:
 			path: resources/views/livewire/maps/unit.blade.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\*NEVER\*,\*NEVER\*\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/unit\.blade\.php\:10\:\:\$centerTypes has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
@@ -4945,27 +4879,9 @@ parameters:
 			path: resources/views/livewire/maps/unit.blade.php
 
 		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\*NEVER\*,\*NEVER\*\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
-			message: '#^Unable to resolve the template type TMergeValue in call to method Illuminate\\Support\\Collection\<\*NEVER\*,\*NEVER\*\>\:\:merge\(\)$#'
-			identifier: argument.templateType
-			count: 2
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
 			count: 5
-			path: resources/views/livewire/notifications/bell.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Notification\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 4
 			path: resources/views/livewire/notifications/bell.blade.php
 
 		-
@@ -5667,7 +5583,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
-			count: 5
+			count: 4
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
@@ -5685,13 +5601,13 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 10
+			count: 11
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
@@ -6087,13 +6003,13 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Notification\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
@@ -6105,11 +6021,11 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 4
+			count: 2
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tools/tools\.blade\.php\:10\:\:\$stats type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tools/tools\.blade\.php\:12\:\:\$stats type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tools/tools.blade.php
@@ -6457,39 +6373,9 @@ parameters:
 			path: resources/views/livewire/units/map.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$f_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$l_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 2
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\User\>\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\User\>\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 2
 			path: resources/views/livewire/users/index.blade.php
 
 		-
@@ -6547,12 +6433,6 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:getFilteredPersonsProperty\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -6579,12 +6459,6 @@ parameters:
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Person\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
@@ -6685,12 +6559,6 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Person\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\User\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -6711,7 +6579,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 46
+			count: 44
 			path: routes/web.php
 
 		-

@@ -86,7 +86,7 @@ new class extends Component
     {
         $user = auth()->user();
 
-        $query = Ticket::with(['user:id,n_code', 'unit:id,name']);
+        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name']);
 
         if ($this->viewMode === 'received') {
             $query->accessible();
@@ -480,28 +480,30 @@ new class extends Component
 
     public function rejectTicket($ticketId): void
     {
-        try {
-            $ticket = Ticket::where('unit_id', auth()->user()->person?->u_id)->findOrFail($ticketId);
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
 
-            \DB::transaction(function () use ($ticket) {
-                $ticket->update([
-                    'status' => 'rejected',
-                    'current_assignee_id' => auth()->id(),
-                ]);
+        if (! $ticket) {
+            $this->dispatch('swal', ['title' => 'تیکت یافت نشد.', 'icon' => 'error']);
 
-                $ticket->activities()->create([
-                    'user_id' => auth()->id(),
-                    'action' => 'rejected',
-                    'description' => 'تیکت توسط واحد ' . (auth()->user()->person?->unit?->name ?? 'بدون واحد') . ' رد شد.',
-                ]);
-            });
-
-            $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
-            $this->closeDetail();
-        } catch (\Exception $e) {
-            $this->dispatch('swal', ['title' => 'خطایی رخ داد', 'icon' => 'error']);
-            $this->closeDetail();
+            return;
         }
+
+        \DB::transaction(function () use ($ticket) {
+            $ticket->update([
+                'status' => 'rejected',
+                'current_assignee_id' => auth()->id(),
+            ]);
+
+            $ticket->activities()->create([
+                'user_id' => auth()->id(),
+                'action' => 'rejected',
+                'description' => 'تیکت توسط واحد '.(auth()->user()->person?->unit?->name ?? 'بدون واحد').' رد شد.',
+            ]);
+        });
+
+        $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
+        $this->closeDetail();
     }
 
     public function openCompletionModal($id): void
@@ -855,7 +857,7 @@ new class extends Component
                 @if(!empty($units))
                 <div class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl max-h-40 overflow-y-auto">
                     @foreach($units as $u)
-                    <button type="button" wire:click="selectTargetUnit({{ $u['id'] }}, '{{ $u['name'] }}')"
+                    <button type="button" wire:click="selectTargetUnit({{ $u['id'] }}, @js($u['name']))"
                         class="w-full text-right px-4 py-2 hover:bg-primary hover:text-white text-sm transition-colors border-b last:border-0">
                         {{ $u['name'] }}
                     </button>

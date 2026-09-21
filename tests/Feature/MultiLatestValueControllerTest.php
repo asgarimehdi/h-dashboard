@@ -64,8 +64,7 @@ class MultiLatestValueControllerTest extends TestCase
         $response = $this->authUser()
             ->getJson('/api/zabbix/multi-latest?item_ids[]=item1');
 
-        $response->assertStatus(500)
-            ->assertJsonStructure(['error', 'message'])
-            ->assertJsonPath('error', 'Zabbix connection failed');
+        $response->assertStatus(503)
+            ->assertJsonPath('error', 'Service temporarily unavailable');
     }
 }

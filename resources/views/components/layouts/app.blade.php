@@ -37,9 +37,12 @@
         font-family: 'Vazirmatn', sans-serif !important;
     }
 </style>
+@php
+    $compactMode = auth()->user()->settings['compact_mode'] ?? false;
+@endphp
 </head>
 
-<body class="min-h-screen font-sans antialiased stitch-bg">
+<body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
     <!-- Stitch-style animated background JavaScript -->
     <script>
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
@@ -131,7 +134,6 @@
             <x-app-brand />
         </x-slot:brand>
         <x-slot:actions>
-            <livewire:notifications.bell />
             <a href="/search" wire:navigate class="btn btn-ghost btn-sm">
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">جستجو</span>
@@ -153,7 +155,6 @@
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="text-sm">جستجو</span>
             </a>
-            <livewire:notifications.bell />
         </div>
 
         {{-- SIDEBAR --}}
@@ -261,6 +262,7 @@
                     </a>
                     @can('manage_hardware')
                     <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
+                    <x-menu-item title="زمانبندی تعمیرات" icon="o-wrench-screwdriver" link="/maintenance" wire:navigate />
                     @endcan
                     <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
                 </x-menu-sub>
@@ -314,9 +316,14 @@
     <x-toast />
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
+    // Register service worker for browser notifications
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
     document.addEventListener('livewire:init', () => {
        Livewire.on('swal', (event) => {
-           const data = event[0]; // در لاووایر ۳ داده‌ها در اولین ایندکس آرایه هستند
+           const data = event[0];
            Swal.fire({
                title: data.title,
                icon: data.icon,
@@ -325,6 +332,13 @@
                toast: true,
                position: 'top-end'
            });
+       });
+
+       // Browser notification listener
+       Livewire.on('browser-notification', (data) => {
+           if ('Notification' in window && Notification.permission === 'granted') {
+               new Notification(data[0].title, { body: data[0].body });
+           }
        });
     });
 </script>

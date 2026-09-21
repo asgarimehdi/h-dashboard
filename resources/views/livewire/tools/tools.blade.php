@@ -3,12 +3,15 @@
 use App\Models\{Ticket, ActivityLog, Notification};
 use App\Models\User;
 use App\Services\AccessService;
+use App\Jobs\ArchiveActivityLogsJob;
+use App\Jobs\CleanNotificationsJob;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Support\Facades\Cache;
 
 return new class extends Component {
     use Toast;
+    use \Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
     public array $stats = [];
     public int $archiveDays = 30;
@@ -18,6 +21,7 @@ return new class extends Component {
 
     public function mount(): void
     {
+        $this->authorize('manage_users');
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
         $cacheKey = 'tools:stats:' . md5(implode(',', $accessibleIds) . ':' . implode(',', $userIds));
@@ -60,10 +64,8 @@ return new class extends Component {
         $this->validate([
             'activityDays' => 'required|integer|min:30|max:365',
         ]);
-        $count = ActivityLog::whereIn('user_id', User::whereHas('person', fn($q) => $q->whereIn('u_id', app(AccessService::class)->accessibleUnitIds()))->pluck('id'))
-            ->where('created_at', '<', now()->subDays($this->activityDays))
-            ->delete();
-        $this->success("{$count} لاگ قدیمی پاک شد.");
+        ArchiveActivityLogsJob::dispatch($this->activityDays);
+        $this->success('پاک‌سازی لاگ‌ها در صف اجرا شد.');
         $this->invalidateStatsCache();
         $this->mount();
     }
@@ -73,10 +75,8 @@ return new class extends Component {
         $this->validate([
             'notificationDays' => 'required|integer|min:1|max:90',
         ]);
-        $count = Notification::whereIn('user_id', User::whereHas('person', fn($q) => $q->whereIn('u_id', app(AccessService::class)->accessibleUnitIds()))->pluck('id'))
-            ->where('created_at', '<', now()->subDays($this->notificationDays))
-            ->delete();
-        $this->success("{$count} اعلان قدیمی پاک شد.");
+        CleanNotificationsJob::dispatch($this->notificationDays);
+        $this->success('پاک‌سازی اعلان‌ها در صف اجرا شد.');
         $this->invalidateStatsCache();
         $this->mount();
     }

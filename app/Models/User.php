@@ -12,6 +12,11 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
+/**
+ * @property int $id
+ * @property string $n_code
+ * @property string $password
+ */
 class User extends Authenticatable
 {
     use HasApiTokens,HasFactory, Notifiable,SoftDeletes;
@@ -27,7 +32,15 @@ class User extends Authenticatable
         'settings',
     ];
 
-    protected $dates = ['deleted_at']; // برای مدیریت تاریخ حذف
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'settings' => 'array',
+            'deleted_at' => 'datetime',
+        ];
+    }
 
     /**
      * دریافت اطلاعات Person مرتبط با این User.
@@ -97,13 +110,4 @@ class User extends Authenticatable
 
     protected $hidden = ['password',
         'settings', 'remember_token'];
-
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'settings' => 'array',
-        ];
-    }
 }

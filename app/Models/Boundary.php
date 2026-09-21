@@ -9,7 +9,7 @@ class Boundary extends Model
 {
     protected $table = 'boundaries';
 
-    protected $guarded = [];
+    protected $fillable = ['boundary'];
 
     protected $casts = [
         'multipolygon' => 'multipolygon',

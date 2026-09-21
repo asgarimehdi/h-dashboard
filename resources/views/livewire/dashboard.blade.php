@@ -31,9 +31,13 @@ return new class extends Component {
     public float $avgResolutionDays = 0;
 
     public bool $showHelpModal = false;
+    public int $refreshInterval = 0;
 
     public function mount(): void
     {
+        $settings = auth()->user()->settings ?? [];
+        $this->refreshInterval = $settings['dashboard_refresh'] ?? 0;
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $scopeKey = md5(implode(',', $accessibleIds));
         $v = Cache::get('dashboard_version', 0);
@@ -222,7 +226,7 @@ return new class extends Component {
         });
     }
 }; ?>
-<div>
+<div x-data="{ interval: {{ $refreshInterval * 1000 }} }" x-init="if(interval > 0) { setInterval(() => { $wire.mount() }, interval) }">
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
         <x-slot:actions>
             <x-help:button section="dashboard" wireModel="showHelpModal" />

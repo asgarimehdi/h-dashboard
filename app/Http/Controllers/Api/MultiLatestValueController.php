@@ -7,6 +7,7 @@ use App\Services\ZabbixService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class MultiLatestValueController extends Controller
@@ -30,10 +31,9 @@ class MultiLatestValueController extends Controller
 
             return response()->json($values);
         } catch (Throwable $e) {
-            return response()->json([
-                'error' => 'Zabbix connection failed',
-                'message' => $e->getMessage(),
-            ], 500);
+            Log::error('Zabbix API error', ['exception' => $e]);
+
+            return response()->json(['error' => 'Service temporarily unavailable'], 503);
         }
     }
 }

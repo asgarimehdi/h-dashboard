@@ -2,10 +2,30 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
+/**
+ * @property string $id
+ * @property int $user_id
+ * @property string $type
+ * @property string $title
+ * @property string $body
+ * @property string|null $icon
+ * @property string|null $color
+ * @property string|null $url
+ * @property array<string, mixed>|null $data
+ * @property bool $is_read
+ * @property Carbon|null $read_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ *
+ * @method static Builder<static> where(string $column, mixed $value)
+ */
 class Notification extends Model
 {
     public $incrementing = false;
@@ -53,9 +73,13 @@ class Notification extends Model
 
     public static function markAllAsRead(): void
     {
-        static::where('user_id', auth()->id())->where('is_read', false)->update([
-            'is_read' => true,
-            'read_at' => now(),
-        ]);
+        /** @var User|null $user */
+        $user = Auth::user();
+        if ($user) {
+            static::where('user_id', $user->id)->where('is_read', false)->update([
+                'is_read' => true,
+                'read_at' => now(),
+            ]);
+        }
     }
 }
