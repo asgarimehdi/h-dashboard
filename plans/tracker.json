@@ -141,7 +141,9 @@
       "category": "test",
       "effort": "S",
       "impact": "medium",
-      "done": false
+      "done": true,
+      "plan_file": "plans/012-wrong-covers-annotations-in-tests.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/669"
     },
     {
       "num": 13,
