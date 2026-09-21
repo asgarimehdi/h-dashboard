@@ -24,7 +24,7 @@ test.describe('personnel list', () => {
   });
 
   test('shows total records in pagination', async ({ page }) => {
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
   });
 
   test('search by name filters the list', async ({ page }) => {
@@ -48,7 +48,7 @@ test.describe('personnel list', () => {
   });
 
   test('filter by semat narrows results', async ({ page }) => {
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
     await page.locator(FILTER_BTN).click();
     await page.waitForTimeout(800);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
@@ -76,7 +76,7 @@ test.describe('personnel list', () => {
 
     await page.locator('button:has-text("پاک کردن فیلترها")').first().click();
     await page.waitForTimeout(1500);
-    await expect(page.locator('.mary-table-pagination')).toContainText('نتیجه');
+    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
     expect(await page.locator('table tbody tr').count()).toBe(20);
   });
 });

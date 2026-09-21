@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 # 1. Swap .env
 cp .env .env.dev.bak 2>/dev/null || true
 cp .env.e2e .env
+set -a; source .env.e2e; set +a
 echo "[e2e] .env swapped to e2e config"
 
 # 2. Clear caches
