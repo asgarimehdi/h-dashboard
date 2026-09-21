@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
-> **Doc review (2026-09-11):** Updated after 27+ commits since 2026-09-02. Added E2E testing, settings features, security, performance, and refactoring sections.
+> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal.
 
 ## Project Overview
 
@@ -69,6 +69,33 @@ Uses **Spatie Permission** package:
 
 **Unit Context Middleware:** `ValidateUnitContext` ensures `session('current_unit_id')` is set before entering unit-scoped sections.
 
+### Security Headers
+
+`SecurityHeaders` middleware sets on every response:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Content-Security-Policy-Report-Only` — CSP in report-only mode (validate 1-2 weeks before enforcing)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS)
+
+> **Do not add `X-XSS-Protection`** — replaced by CSP. The old header is removed.
+
+### CORS Hardening
+
+`config/cors.php` changes:
+- `allowed_origins_patterns` now **empty array in production** (was always localhost/127.0.0.1)
+- `max_age` increased from 0 to 86400 (reduces preflight requests)
+
+---
+
+## Dead Routes & Components Removed (Phase 4)
+
+These components and routes were removed — do not recreate:
+- `/` — changed from Livewire `index` component to `Route::redirect('/', '/dashboard')`
+- `auth.register` — registration form removed (unused)
+- `glowingcard` — demo component removed (unused)
+- Tests for these: `AuthRegisterLivewireTest`, `GlowingCardLivewireTest`, `IndexRedirectLivewireTest` — all deleted
+
 ---
 
 ## Settings Features
@@ -78,6 +105,48 @@ Settings page (`/settings`) includes 4 user-configurable features:
 - **Browser notifications** — push notification toggle
 - **Auto-refresh** — dashboard auto-refresh interval (configurable via `dashboard_refresh` setting)
 - **Compact mode** — denser UI layout toggle
+
+---
+
+## Maintenance Schedule
+
+`/maintenance` route — Livewire component `maintenance.index` for CRUD on `MaintenanceSchedule` records.
+
+- Frequencies: `daily`, `weekly`, `monthly` with configurable interval
+- `calculateNextDue()` uses `CarbonInterface` return type
+- `maintenance:generate-due` command creates tickets from overdue schedules
+- Authorization: `manage_hardware` permission required
+
+---
+
+## Notification API (Flutter)
+
+REST API endpoints for the Flutter mobile app (`/api/notifications/*`):
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/notifications` | GET | Paginated notification list (20/page) |
+| `/api/notifications/unread-count` | GET | Count of unread notifications |
+| `/api/notifications/{id}/read` | POST | Mark single notification as read |
+| `/api/notifications/read-all` | POST | Mark all notifications as read |
+
+Controller: `App\Http\Controllers\Api\NotificationController`. Requires Sanctum auth.
+
+> **Sanctum token expiration** reduced from 7 days (10080 min) to 24 hours (1440 min). Configurable via `SANCTUM_TOKEN_EXPIRATION` env var.
+
+---
+
+## Queued Jobs
+
+Heavy operations are dispatched as queued jobs (plan 012). All implement `ShouldQueue` with retry/logging:
+
+| Job | Timeout | Tries | Purpose |
+|---|---|---|---|
+| `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
+| `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
+| `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command |
+
+Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All have `failed()` methods with `Log::error()`.
 
 ---
 
@@ -143,7 +212,16 @@ php scripts/boost_tool.php <tool> '<json-args>'
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-11:** **`composer test`** is the one-command way (**928+ passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**928+ passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+
+### Key test files
+| File | Tests | Purpose |
+|---|---|---|
+| `tests/Feature/Jobs/JobsTest.php` | 14+ | Tests queued jobs (archive, clean, generate) |
+| `tests/Feature/MaintenanceLivewireTest.php` | 14+ | Maintenance schedule CRUD |
+| `tests/Feature/NotificationApiTest.php` | 14+ | Notification API endpoints |
+| `tests/Feature/TodoLivewireTest.php` | 17 | Todo Livewire component |
+| `tests/Unit/PersianNormalizerTest.php` | 6+ | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 
 ### Prerequisites
 ```bash
@@ -186,7 +264,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**147 tests** across **32 spec files** in `tests/e2e/`. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+**142 tests** across **32 spec files** in `tests/e2e/`. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
 
 ### Setup
 ```bash
@@ -195,13 +273,14 @@ npx playwright install chromium  # one-time browser install
 ```
 
 ### Credentials
-Test credentials live in `.env.test` (gitignored). Read by `playwright.config.ts` via `dotenv`. Fallback defaults in `tests/e2e/shared/fixtures.ts`.
+Test credentials live in `.env.e2e` (gitignored). Read by `playwright.config.ts` via `dotenv`. Fallback defaults in `tests/e2e/shared/fixtures.ts`.
 
 ### Run
 ```bash
 npx playwright test                    # all tests
 npx playwright test tests/e2e/auth     # single suite
 npx playwright test --reporter=list    # list reporter
+bash scripts/e2e-test.sh               # full lifecycle: DB swap → migrate → seed → serve → test → cleanup
 ```
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
@@ -288,13 +367,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Person search | 500ms debounce applied — do not remove, causes Livewire update floods |
 | Toast auto-dismiss | Default 5s timeout; `timeout: 0` means never dismiss |
 | Search | Multi-word queries split and matched independently via `scopeFilterSearch` |
-
-## Agent skills
-
-### Issue tracker
-
-Specs and issues live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Single-context layout (`CONTEXT.md` + `docs/adr/` at repo root). See `docs/agents/domain.md`.
+| `normalizeForQuery` | Use `PersianNormalizer::normalizeForQuery()` for ALL user-supplied LIKE queries — combines Persian normalization + wildcard escaping. Do NOT inline `str_replace(['%', '_'], ...)` |
+| `PersianNormalizer` trait | Located at `app/Traits/PersianNormalizer.php`. Methods: `normalizeForSearch()` (Arabic→Persian + Unicode), `escapeLikeWildcards()`, `normalizeForQuery()` (normalize + escape combined) |
+| `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` catch `Throwable` and return 503, never 500 — do not remove try/catch |
+| Root `/` route | `Route::redirect('/', '/dashboard')` — NOT a Livewire component. The old `index` Livewire component is removed |
