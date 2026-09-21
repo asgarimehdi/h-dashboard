@@ -117,7 +117,9 @@
       "category": "test",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/010-hardware-updated-event-and-listener-untested.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/667"
     },
     {
       "num": 11,
