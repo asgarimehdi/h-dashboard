@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
-> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal.
+> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
 
 ## Project Overview
 
@@ -13,26 +13,12 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
-- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
+- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 22, npm 10)
 - **E2E Testing:** Playwright (Chromium, `tests/e2e/`, `npx playwright test`)
 - **Code Quality:** PHPStan level 6 with baseline, Laravel Pint (enforced in CI + pre-commit hook)
 
-> **Detailed data model, relationships, FK behavior:** see `references/data-model.md`
+> **Detailed data model, relationships, FK behavior, vocabulary:** see `references/data-model.md`
 > **API endpoints, UI features, scheduler, deployment, performance:** see `references/api-endpoints.md`
-
----
-
-## Area & Vocabulary
-
-- **Person** — HR record in the directory, linked to a `User` one-to-one via `n_code`.
-- **User** — authenticated account; Spatie roles/permissions; linked to Person via `n_code`.
-- **Unit** — organizational unit (hospital, health center, county); tree via `parent_id`.
-- **UnitType** — classification of a Unit; allowed parent types via `unit_type_relationships`.
-- **Region** — hierarchical geographic division (province or county).
-- **Boundary** — GIS polygon (MULTIPOLYGON, SRID 4326) representing a geographic area.
-- **Location Log** — GPS point recorded by the mobile app (`location_logs`).
-
-**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
 
 ---
 
@@ -42,7 +28,7 @@ Uses **Spatie Permission** package:
 
 - `HasOrganizationalScope` trait on models for automatic unit-based filtering
 - Users see only their own unit's data (plus sub-units via recursive CTE)
-- Permission `manage_hardware` required for hardware CRUD
+- Permission `manage_hardware` required for hardware CRUD and maintenance schedule CRUD
 - Roles: admin, operator, viewer
 
 **AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated.
@@ -85,16 +71,6 @@ Uses **Spatie Permission** package:
 `config/cors.php` changes:
 - `allowed_origins_patterns` now **empty array in production** (was always localhost/127.0.0.1)
 - `max_age` increased from 0 to 86400 (reduces preflight requests)
-
----
-
-## Dead Routes & Components Removed (Phase 4)
-
-These components and routes were removed — do not recreate:
-- `/` — changed from Livewire `index` component to `Route::redirect('/', '/dashboard')`
-- `auth.register` — registration form removed (unused)
-- `glowingcard` — demo component removed (unused)
-- Tests for these: `AuthRegisterLivewireTest`, `GlowingCardLivewireTest`, `IndexRedirectLivewireTest` — all deleted
 
 ---
 
@@ -152,6 +128,8 @@ Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleU
 
 ## Scheduler & Console Commands
 
+> Full details: `references/api-endpoints.md` (Scheduler section)
+
 | Command | Schedule | Purpose |
 |---|---|---|
 | `cache:prune-stale` | hourly | Resets cache version counters |
@@ -175,6 +153,8 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 
 `PruneStaleCache` resets all of them.
 
+> Performance patterns, caching strategies, and optimization details: `references/api-endpoints.md` (Performance section).
+
 ---
 
 ## Development Guidelines
@@ -194,6 +174,14 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
 
+### Composer Scripts
+```bash
+composer test      # config:clear + route:clear + XDEBUG_MODE=off php artisan test
+composer dev       # concurrently: php artisan serve + queue:listen + npm run dev
+composer pint      # Pint --dirty --format agent (auto-staged PHP)
+composer phpstan   # phpstan analyse --no-progress
+```
+
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
 
@@ -206,13 +194,28 @@ php scripts/boost_tool.php <tool> '<json-args>'
 # php scripts/boost_tool.php docs '{"query": "..."}'
 ```
 
+### MCP Tools
+
+Four MCP servers are configured in `~/.hermes/config.yaml`:
+
+| Server | Tools | Purpose |
+|---|---|---|
+| **codegraph** | `codegraph_explore` | Code intelligence — symbol resolution, call paths, blast-radius analysis |
+| **context7** | `query_docs`, `list_prompts`, `list_resources`, `read_resource`, `get_prompt` | Up-to-date framework documentation |
+| **laravel_boost** | `application_info`, `last_error`, `search_docs`, `database_query`, `database_schema`, `get_absolute_url`, `browser_logs` | Laravel-specific tools (DB, docs, logs) |
+| **github** | `create_issue`, `list_pull_requests`, `create_pull_request`, `search_code`, + 22 more | GitHub operations (repos, PRs, issues) |
+
+Use `tool_search` to discover available tools, `tool_describe` to load schemas, `tool_call` to invoke. Always use CodeGraph before grep/glob for code understanding tasks.
+
 ---
 
 ## Running Tests (Pest)
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**928+ passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**1352 passed, 2 risky** parallel; ~2.5 min). It bakes in the environment gotchas below.
+
+> **⚠️ Parallel flakiness:** Some tests may fail with `QueryException` or `PermissionDoesNotExist` in parallel mode due to spatie permission cache shared across workers. Run individual files if parallel fails.
 
 ### Key test files
 | File | Tests | Purpose |
@@ -317,9 +320,13 @@ codegraph status .
 
 `.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`:
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
+- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking)
 - **Tests & Coverage (blocking)** — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov
 - **Mutation Testing (non-blocking)** — `--covered-only`, treat failures as informational
+- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
+
+> Full CI workflow details: `references/api-endpoints.md` (CI/CD section).
 
 ---
 
@@ -362,7 +369,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Hardware auth | Must be 302 → /login for guests; do NOT "fix" back to 200 |
 | Postgres sequence | After seeding with explicit IDs in tests, `SELECT setval(...)` to avoid dup keys |
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
-| Dead routes removed | `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — views never existed or were deleted |
+| Dead routes/components removed | `/`, `auth.register`, `glowingcard`, `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — do not recreate |
 | Todo calendar | Must use `@script` block (not inline JS) for wire:navigate compatibility |
 | Person search | 500ms debounce applied — do not remove, causes Livewire update floods |
 | Toast auto-dismiss | Default 5s timeout; `timeout: 0` means never dismiss |
