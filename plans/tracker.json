@@ -129,7 +129,9 @@
       "category": "test",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/011-api-resource-transformers-untested.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/668"
     },
     {
       "num": 12,
