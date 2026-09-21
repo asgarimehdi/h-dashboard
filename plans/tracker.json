@@ -1,5 +1,5 @@
 {
-  "last_created": 0,
+  "last_created": 3,
   "findings": [
     {
       "num": 1,
@@ -33,7 +33,9 @@
       "category": "performance",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/003-unbounded-item-ids-in-multi-latest-value.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/660"
     },
     {
       "num": 4,
