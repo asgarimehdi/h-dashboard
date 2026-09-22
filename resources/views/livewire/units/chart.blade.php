@@ -55,10 +55,12 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $this->rootUnits = Unit::whereNull('parent_id')
+        $rootIds = Unit::whereNull('parent_id')
             ->whereIn('id', $accessibleIds)
-            ->with(['childrenRecursive', 'unitType'])
-            ->get();
+            ->pluck('id')
+            ->all();
+
+        $this->rootUnits = Unit::buildTree($rootIds, $accessibleIds);
     }
 
     public function updatedSearch(): void

@@ -1,7 +1,7 @@
 @props(['unit', 'level' => 0, 'isLast' => false])
 
 @php
-    $hasChildren = $unit->childrenRecursive->count() > 0;
+    $hasChildren = $unit->childrenRecursive && $unit->childrenRecursive->count() > 0;
     $isExpanded = in_array((string)$unit->id, $this->expanded);
     $isMatch = !empty($this->search) && mb_strpos($unit->name, $this->search) !== false;
 @endphp

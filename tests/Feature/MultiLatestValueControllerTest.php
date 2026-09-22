@@ -53,6 +53,42 @@ class MultiLatestValueControllerTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_rejects_item_ids_exceeding_max_limit(): void
+    {
+        $itemIds = array_map(fn ($i) => "item{$i}", range(1, 101));
+
+        $response = $this->authUser()
+            ->getJson('/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]));
+
+        $response->assertStatus(422);
+    }
+
+    public function test_rejects_item_id_exceeding_max_length(): void
+    {
+        $longId = str_repeat('a', 65);
+
+        $response = $this->authUser()
+            ->getJson("/api/zabbix/multi-latest?item_ids[]={$longId}");
+
+        $response->assertStatus(422);
+    }
+
+    public function test_accepts_exactly_100_item_ids(): void
+    {
+        $this->mock(ZabbixService::class, function ($mock) {
+            $mock->shouldReceive('getLatestValues')
+                ->once()
+                ->andReturn([]);
+        });
+
+        $itemIds = array_map(fn ($i) => "item{$i}", range(1, 100));
+
+        $response = $this->authUser()
+            ->getJson('/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]));
+
+        $response->assertStatus(200);
+    }
+
     public function test_returns_500_when_zabbix_fails(): void
     {
         $this->mock(ZabbixService::class, function ($mock) {
