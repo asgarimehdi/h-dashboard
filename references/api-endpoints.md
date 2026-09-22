@@ -439,11 +439,13 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner): pulls `/home/boxd/h-dashboard`, clears views/config/routes cache, runs `php artisan optimize`, reloads apache2.
+`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with two jobs:
-- **Tests & Coverage (blocking)** — PHP **8.5** (matches composer.lock; Symfony 8.1 requires ≥8.4), service containers `postgis/postgis:16-3.4` (:5432) + passwordless `redis`, builds frontend assets (`npm ci && npm run build`), rewrites `.env.testing` to match the containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`** — Laravel 13 ignores legacy `CACHE_DRIVER`; a shared redis store cross-pollutes spatie's permission cache across parallel workers), `key:generate --env=testing`, `migrate --env=testing`, then clears config/routes/views (guard against the stale-`routes-v7.php` Livewire-hash trap above), then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov.
-- **Mutation Testing (non-blocking, `continue-on-error: true`)** — all test files have `@covers` declarations (added 2026-08-31) so mutations are scoped to tested code via `--covered-only`. Previously ran `--everything --covered-only` which was too slow (30 min timeout). The mutation job may still fail due to lookup-table id collisions — treat failures as informational until the job passes consistently.
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
+- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)
+- **Tests & Coverage (blocking, timeout 10 min)** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov
+- **Mutation Testing (non-blocking, `continue-on-error: true`)** — `--covered-only`, treat failures as informational
+- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
 
 ### Storage Permissions (gotcha)
 
@@ -456,3 +458,4 @@ chown -R boxd:www-data storage/framework && chmod -R 775 storage/framework
 php artisan view:clear
 ```
 
+---

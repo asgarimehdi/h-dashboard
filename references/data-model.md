@@ -104,20 +104,6 @@ User ↔ Unit (user_units pivot)
 - **`user_units` pivot** — many-to-many user↔unit assignments (a user can belong to multiple units). Unique on `(user_id, unit_id)`. Seeded from `Person.u_id` via `UserUnitSeeder`.
 - **Migration/style note:** FKs are explicitly named (e.g. `tickets_user_fk`, `ta_ticket_fk`). Migration count is **58** (as of 2026-09-21). New migrations follow `YYYY_MM_DD_######_description.php`; both a sequential counter (`000001`) and a time-suffixed form (`002725`) appear in the tree. Avoid the classic `YYYY_MM_DD_HHMMSS` Laravel default and pass `--no-interaction`.
 
-## Area & Vocabulary
-
-Definitions shared across codebase, docs, and team communication:
-
-- **Person** — HR record in the directory, linked to a `User` one-to-one via `n_code`.
-- **User** — authenticated account; Spatie roles/permissions; linked to Person via `n_code`.
-- **Unit** — organizational unit (hospital, health center, county); tree via `parent_id`.
-- **UnitType** — classification of a Unit; allowed parent types via `unit_type_relationships`.
-- **Region** — hierarchical geographic division (province or county).
-- **Boundary** — GIS polygon (MULTIPOLYGON, SRID 4326) representing a geographic area.
-- **Location Log** — GPS point recorded by the mobile app (`location_logs`).
-
-**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
-
 ### FK Delete Behavior Summary
 
 | FK | onDelete |

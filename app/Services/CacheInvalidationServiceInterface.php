@@ -25,4 +25,23 @@ interface CacheInvalidationServiceInterface
      * @param  array<string, mixed>  $extra  Extra parameters hashed into the cache key.
      */
     public function remember(string $namespace, string $scopeHash, \Closure $callback, int $ttlMinutes = 60, array $extra = []): mixed;
+
+    /**
+     * Flush all pending namespace increments collected during a batch.
+     *
+     * @return int Number of distinct namespaces that were incremented.
+     */
+    public function flushPending(): int;
+
+    /**
+     * Execute a callback inside a batch scope. All increment() calls inside
+     * the callback are collected and flushed once at the end, deduplicating
+     * repeated increments for the same namespace.
+     *
+     * @template T
+     *
+     * @param  \Closure(): T  $callback
+     * @return T
+     */
+    public function batch(\Closure $callback): mixed;
 }
