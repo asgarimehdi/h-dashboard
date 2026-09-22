@@ -165,7 +165,9 @@
       "category": "tech-debt",
       "effort": "M",
       "impact": "medium",
-      "done": false
+      "done": true,
+      "plan_file": "plans/014-missing-property-annotations-on-models.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/671"
     },
     {
       "num": 15,
