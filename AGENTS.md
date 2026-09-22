@@ -1,6 +1,6 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
-> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
+> **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal.
 
 ## Project Overview
 
@@ -74,6 +74,8 @@ Uses **Spatie Permission** package:
 
 ---
 
+---
+
 ## Settings Features
 
 Settings page (`/settings`) includes 4 user-configurable features:
@@ -141,8 +143,6 @@ Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleU
 
 All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`.
 
-> **Do not add `->timeout(N)` to zabbix:sync schedule** — method doesn't exist, throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
-
 ---
 
 ## Cache Version Namespaces
@@ -152,8 +152,6 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 **Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`.
 
 `PruneStaleCache` resets all of them.
-
-> Performance patterns, caching strategies, and optimization details: `references/api-endpoints.md` (Performance section).
 
 ---
 
@@ -174,14 +172,6 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
 
-### Composer Scripts
-```bash
-composer test      # config:clear + route:clear + XDEBUG_MODE=off php artisan test
-composer dev       # concurrently: php artisan serve + queue:listen + npm run dev
-composer pint      # Pint --dirty --format agent (auto-staged PHP)
-composer phpstan   # phpstan analyse --no-progress
-```
-
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
 
@@ -194,28 +184,15 @@ php scripts/boost_tool.php <tool> '<json-args>'
 # php scripts/boost_tool.php docs '{"query": "..."}'
 ```
 
-### MCP Tools
-
-Four MCP servers are configured in `~/.hermes/config.yaml`:
-
-| Server | Tools | Purpose |
-|---|---|---|
-| **codegraph** | `codegraph_explore` | Code intelligence — symbol resolution, call paths, blast-radius analysis |
-| **context7** | `query_docs`, `list_prompts`, `list_resources`, `read_resource`, `get_prompt` | Up-to-date framework documentation |
-| **laravel_boost** | `application_info`, `last_error`, `search_docs`, `database_query`, `database_schema`, `get_absolute_url`, `browser_logs` | Laravel-specific tools (DB, docs, logs) |
-| **github** | `create_issue`, `list_pull_requests`, `create_pull_request`, `search_code`, + 22 more | GitHub operations (repos, PRs, issues) |
-
-Use `tool_search` to discover available tools, `tool_describe` to load schemas, `tool_call` to invoke. Always use CodeGraph before grep/glob for code understanding tasks.
-
 ---
 
 ## Running Tests (Pest)
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**1352 passed, 2 risky** parallel; ~2.5 min). It bakes in the environment gotchas below.
+> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**1353 passed, 28 failed** serial; parallel has ~151 flaky isolation failures). It bakes in the environment gotchas below.
 
-> **⚠️ Parallel flakiness:** Some tests may fail with `QueryException` or `PermissionDoesNotExist` in parallel mode due to spatie permission cache shared across workers. Run individual files if parallel fails.
+> **⚠️ Parallel flakiness:** ~151 tests fail in parallel mode (`QueryException`, `PermissionDoesNotExist`) but pass in serial. Root cause: spatie permission cache shared across workers + DB contention. Use `--no-parallel` or run individual files.
 
 ### Key test files
 | File | Tests | Purpose |
@@ -320,13 +297,9 @@ codegraph status .
 
 `.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
-- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking)
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`:
 - **Tests & Coverage (blocking)** — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov
 - **Mutation Testing (non-blocking)** — `--covered-only`, treat failures as informational
-- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
-
-> Full CI workflow details: `references/api-endpoints.md` (CI/CD section).
 
 ---
 
