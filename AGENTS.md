@@ -8,17 +8,31 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x on PHP ^8.3
+- **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
-- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 22, npm 10)
+- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 - **E2E Testing:** Playwright (Chromium, `tests/e2e/`, `npx playwright test`)
 - **Code Quality:** PHPStan level 6 with baseline, Laravel Pint (enforced in CI + pre-commit hook)
 
-> **Detailed data model, relationships, FK behavior, vocabulary:** see `references/data-model.md`
+> **Detailed data model, relationships, FK behavior:** see `references/data-model.md`
 > **API endpoints, UI features, scheduler, deployment, performance:** see `references/api-endpoints.md`
+
+---
+
+## Area & Vocabulary
+
+- **Person** — HR record in the directory, linked to a `User` one-to-one via `n_code`.
+- **User** — authenticated account; Spatie roles/permissions; linked to Person via `n_code`.
+- **Unit** — organizational unit (hospital, health center, county); tree via `parent_id`.
+- **UnitType** — classification of a Unit; allowed parent types via `unit_type_relationships`.
+- **Region** — hierarchical geographic division (province or county).
+- **Boundary** — GIS polygon (MULTIPOLYGON, SRID 4326) representing a geographic area.
+- **Location Log** — GPS point recorded by the mobile app (`location_logs`).
+
+**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
 
 ---
 
@@ -28,7 +42,7 @@ Uses **Spatie Permission** package:
 
 - `HasOrganizationalScope` trait on models for automatic unit-based filtering
 - Users see only their own unit's data (plus sub-units via recursive CTE)
-- Permission `manage_hardware` required for hardware CRUD and maintenance schedule CRUD
+- Permission `manage_hardware` required for hardware CRUD
 - Roles: admin, operator, viewer
 
 **AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated.
@@ -71,6 +85,16 @@ Uses **Spatie Permission** package:
 `config/cors.php` changes:
 - `allowed_origins_patterns` now **empty array in production** (was always localhost/127.0.0.1)
 - `max_age` increased from 0 to 86400 (reduces preflight requests)
+
+---
+
+## Dead Routes & Components Removed (Phase 4)
+
+These components and routes were removed — do not recreate:
+- `/` — changed from Livewire `index` component to `Route::redirect('/', '/dashboard')`
+- `auth.register` — registration form removed (unused)
+- `glowingcard` — demo component removed (unused)
+- Tests for these: `AuthRegisterLivewireTest`, `GlowingCardLivewireTest`, `IndexRedirectLivewireTest` — all deleted
 
 ---
 
@@ -128,20 +152,19 @@ Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleU
 
 ## Scheduler & Console Commands
 
-> Full details: `references/api-endpoints.md` (Scheduler section)
+Six commands are scheduled in `app/Console/Kernel.php`. All take `--dry-run`:
 
-| Command | Schedule | Purpose |
-|---|---|---|
-| `cache:prune-stale` | hourly | Resets cache version counters |
-| `todos:generate-recurring` | daily 02:00 | Creates recurring todo instances |
-| `maintenance:generate-due` | daily 03:00 | Generates due maintenance tickets |
-| `data:archive` | weekly (Mon 04:00) | Moves old `activity_logs` → `activity_log_archives` |
-| `reports:generate-daily` | daily 06:00 | Builds `daily_reports` rows per accessible unit |
-| `zabbix:sync` | every 5 min | Pulls Zabbix traffic/latest values |
+| Command | Schedule |
+|---|---|
+| `cache:prune-stale` | hourly |
+| `todos:generate-recurring` | daily 02:00 |
+| `maintenance:generate-due` | daily 03:00 |
+| `data:archive` | weekly (Mon 04:00) |
+| `reports:generate-daily` | daily 06:00 |
+| `zabbix:sync` | every 5 min |
 
-All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`.
-
-> **Do not add `->timeout(N)` to zabbix:sync schedule** — method doesn't exist, throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
+> Full command details, parameters, and gotchas: `references/api-endpoints.md` (Scheduler & Console Commands).
+> **Do not add `->timeout(N)` to zabbix:sync schedule** — throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
 
 ---
 
@@ -167,7 +190,7 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
-- **Test Review Rule:** Every code change MUST include test review. Before finalizing any change: (1) check if existing tests cover the changed code, (2) add/update tests if the change introduces new behavior, fixes a bug, or alters an existing contract. No code change ships without corresponding test coverage verification.
+- **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
 - **Factories:** Only `UserFactory` exists; other models have seeders. When seeding rows with **explicit IDs** in tests, resync Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
@@ -191,7 +214,6 @@ php scripts/boost_tool.php <tool> '<json-args>'
 # e.g. php scripts/boost_tool.php application-info '{}'
 # php scripts/boost_tool.php db-schema '{}'
 # php scripts/boost_tool.php query '{"sql": "SELECT ..."}'
-# php scripts/boost_tool.php docs '{"query": "..."}'
 ```
 
 ### MCP Tools
@@ -213,9 +235,7 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**1352 passed, 2 risky** parallel; ~2.5 min). It bakes in the environment gotchas below.
-
-> **⚠️ Parallel flakiness:** Some tests may fail with `QueryException` or `PermissionDoesNotExist` in parallel mode due to spatie permission cache shared across workers. Run individual files if parallel fails.
+> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**928+ passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
 
 ### Key test files
 | File | Tests | Purpose |
@@ -369,7 +389,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Hardware auth | Must be 302 → /login for guests; do NOT "fix" back to 200 |
 | Postgres sequence | After seeding with explicit IDs in tests, `SELECT setval(...)` to avoid dup keys |
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
-| Dead routes/components removed | `/`, `auth.register`, `glowingcard`, `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — do not recreate |
+| Dead routes removed | `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — views never existed or were deleted |
 | Todo calendar | Must use `@script` block (not inline JS) for wire:navigate compatibility |
 | Person search | 500ms debounce applied — do not remove, causes Livewire update floods |
 | Toast auto-dismiss | Default 5s timeout; `timeout: 0` means never dismiss |

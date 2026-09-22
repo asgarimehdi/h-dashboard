@@ -41,15 +41,27 @@ class Person extends Model
 
         // Invalidate cached HR stats whenever a person is created/updated/deleted (#341).
         // Dashboard, map and GIS caches also depend on person data, so bump those
-        // version namespaces too.
-        foreach (['saved', 'deleted'] as $event) {
-            static::$event(function () {
-                $cache = app(CacheInvalidationServiceInterface::class);
-                foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
-                    $cache->increment($namespace);
-                }
-            });
-        }
+        // version namespaces too. Maps/GIS only change when u_id changes.
+        static::saved(function (self $model) {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('hr_stats');
+            $cache->increment('dashboard');
+
+            $uIdChanged = in_array('u_id', array_keys($model->getChanges()))
+                || $model->wasRecentlyCreated;
+
+            if ($uIdChanged) {
+                $cache->increment('maps');
+                $cache->increment('gis');
+            }
+        });
+
+        static::deleted(function () {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
+                $cache->increment($namespace);
+            }
+        });
     }
 
     /**
