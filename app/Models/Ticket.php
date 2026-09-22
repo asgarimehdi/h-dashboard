@@ -3,10 +3,37 @@
 namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $ticket_code
+ * @property int $user_id
+ * @property int $unit_id
+ * @property string $subject
+ * @property string $content
+ * @property string $priority
+ * @property string $status
+ * @property int|null $current_assignee_id
+ * @property Carbon|null $deadline
+ * @property Carbon|null $accepted_at
+ * @property Carbon|null $completed_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read string $status_name
+ * @property-read array $waiting_duration
+ * @property-read Unit $unit
+ * @property-read User $user
+ * @property-read User|null $assignee
+ * @property-read Todo|null $task
+ * @property-read Collection $attachments
+ * @property-read Collection $activities
+ * @property-read Collection $comments
+ */
 class Ticket extends Model
 {
     use HasOrganizationalScope;
