@@ -1345,62 +1345,62 @@ parameters:
 			path: app/Http/Requests/UnitScopedRequest.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$created_at\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$created_at\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$end_at\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$end_at\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$id\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$is_completed\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$is_completed\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$start_at\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$start_at\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$title\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$title\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$unit\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$unit\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$unit_id\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$unit_id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$updated_at\.$#'
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$updated_at\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
 		-
-			message: '#^Method App\\Http\\Resources\\TodoResource\:\:toArray\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
+			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$user_id\.$#'
+			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/TodoResource.php
 
@@ -5881,61 +5881,61 @@ parameters:
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:closeModal\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:closeModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:convertToMiladi\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:convertToMiladi\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:convertToMiladi\(\) has parameter \$jalaliDate with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:convertToMiladi\(\) has parameter \$jalaliDate with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:editEvent\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:editEvent\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:getEvents\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:getEvents\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openCreateModal\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openCreateModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openCreateModal\(\) has parameter \$end with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openCreateModal\(\) has parameter \$end with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openCreateModal\(\) has parameter \$start with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openCreateModal\(\) has parameter \$start with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openModal\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
@@ -5947,37 +5947,37 @@ parameters:
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$end_at has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$end_at has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$end_date_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$end_date_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$end_time_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$end_time_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$start_at has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$start_at has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$start_date_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$start_date_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$start_time_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$start_time_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php

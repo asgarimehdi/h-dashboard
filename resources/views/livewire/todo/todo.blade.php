@@ -5,6 +5,7 @@ use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Morilog\Jalali\Jalalian;
 
@@ -225,7 +226,7 @@ return new class extends Component {
                 'end_at' => $endMildadi,
                 'is_completed' => $this->is_completed,
                 'unit_id' => $this->unit_id,
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),
             ]
         );
 
