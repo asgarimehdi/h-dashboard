@@ -30,31 +30,32 @@ class HrStatsController extends Controller
             now()->addMinutes(5),
             function () use ($accessibleIds) {
                 if (DB::getDriverName() === 'pgsql') {
-                    $idList = implode(',', array_map('intval', $accessibleIds));
+                    $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
 
                     $row = DB::selectOne(
                         "SELECT
-                            (SELECT count(*) FROM persons WHERE u_id IN ({$idList})) AS total,
+                            (SELECT count(*) FROM persons WHERE u_id = ANY(?)) AS total,
                             (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.u_id::text), x.c), '{}')
                                FROM (SELECT p.u_id, u.name, count(*) AS c
                                      FROM persons p LEFT JOIN units u ON p.u_id = u.id
-                                     WHERE p.u_id IN ({$idList}) GROUP BY p.u_id, u.name) x) AS by_unit,
+                                     WHERE p.u_id = ANY(?) GROUP BY p.u_id, u.name) x) AS by_unit,
                             (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.s_id::text), x.c), '{}')
                                FROM (SELECT p.s_id, s.name, count(*) AS c
                                      FROM persons p LEFT JOIN semats s ON p.s_id = s.id
-                                     WHERE p.s_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.s_id, s.name) x) AS by_semat,
+                                     WHERE p.s_id IS NOT NULL AND p.u_id = ANY(?) GROUP BY p.s_id, s.name) x) AS by_semat,
                             (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.t_id::text), x.c), '{}')
                                FROM (SELECT p.t_id, t.name, count(*) AS c
                                      FROM persons p LEFT JOIN tahsils t ON p.t_id = t.id
-                                     WHERE p.t_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.t_id, t.name) x) AS by_tahsil,
+                                     WHERE p.t_id IS NOT NULL AND p.u_id = ANY(?) GROUP BY p.t_id, t.name) x) AS by_tahsil,
                             (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.e_id::text), x.c), '{}')
                                FROM (SELECT p.e_id, e.name, count(*) AS c
                                      FROM persons p LEFT JOIN estekhdams e ON p.e_id = e.id
-                                     WHERE p.e_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.e_id, e.name) x) AS by_estekhdam,
+                                     WHERE p.e_id IS NOT NULL AND p.u_id = ANY(?) GROUP BY p.e_id, e.name) x) AS by_estekhdam,
                             (SELECT coalesce(jsonb_object_agg(coalesce(x.name, x.r_id::text), x.c), '{}')
                                FROM (SELECT p.r_id, r.name, count(*) AS c
                                      FROM persons p LEFT JOIN radifs r ON p.r_id = r.id
-                                     WHERE p.r_id IS NOT NULL AND p.u_id IN ({$idList}) GROUP BY p.r_id, r.name) x) AS by_radif"
+                                     WHERE p.r_id IS NOT NULL AND p.u_id = ANY(?) GROUP BY p.r_id, r.name) x) AS by_radif",
+                        [$idArray, $idArray, $idArray, $idArray, $idArray, $idArray]
                     );
 
                     return [
