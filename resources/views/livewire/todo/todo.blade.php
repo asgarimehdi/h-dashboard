@@ -225,6 +225,7 @@ return new class extends Component {
                 'end_at' => $endMildadi,
                 'is_completed' => $this->is_completed,
                 'unit_id' => $this->unit_id,
+                'user_id' => auth()->id(),
             ]
         );
 

@@ -117,7 +117,7 @@ test('can create a todo', function () {
         ->call('save')
         ->assertHasNoErrors();
 
-    $this->assertDatabaseHas('todos', ['title' => 'وظیفه تستی']);
+    $this->assertDatabaseHas('todos', ['title' => 'وظیفه تستی', 'user_id' => $this->user->id]);
 });
 
 test('create todo requires title', function () {
