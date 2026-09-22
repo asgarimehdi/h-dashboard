@@ -4,15 +4,22 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
+use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
 
 class TicketController extends Controller
 {
-    public function index(UnitScopedRequest $request): JsonResponse
+    public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
+        $request->validate([
+            'status' => 'sometimes|in:created,forwarded,accepted,completed,rejected',
+            'priority' => 'sometimes|in:low,normal,urgent',
+        ]);
+
         $user = $request->user();
 
         $query = Ticket::whereIn('unit_id', $request->accessibleIds())
@@ -32,15 +39,7 @@ class TicketController extends Controller
 
         $tickets = $query->latest()->paginate(20);
 
-        return response()->json([
-            'data' => $tickets->items(),
-            'meta' => [
-                'current_page' => $tickets->currentPage(),
-                'last_page' => $tickets->lastPage(),
-                'per_page' => $tickets->perPage(),
-                'total' => $tickets->total(),
-            ],
-        ]);
+        return TicketResource::collection($tickets);
     }
 
     public function show(UnitScopedRequest $request, Ticket $ticket): JsonResponse
@@ -51,13 +50,13 @@ class TicketController extends Controller
         }
 
         return response()->json([
-            'data' => $ticket->load([
+            'data' => new TicketResource($ticket->load([
                 'unit:id,name',
                 'user:id,n_code',
                 'assignee:id,n_code',
                 'activities' => fn ($q) => $q->latest()->with('user:id,n_code'),
                 'attachments',
-            ]),
+            ])),
         ]);
     }
 
@@ -85,7 +84,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $ticket,
+            'data' => new TicketResource($ticket->load(['unit:id,name'])),
         ], 201);
     }
 
@@ -107,7 +106,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $ticket->fresh(),
+            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name'])),
         ]);
     }
 
@@ -151,7 +150,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $ticket->fresh(),
+            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 
@@ -174,7 +173,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $ticket->fresh(),
+            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 
@@ -201,7 +200,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $ticket->fresh(),
+            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 }

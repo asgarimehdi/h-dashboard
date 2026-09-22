@@ -1069,18 +1069,6 @@ parameters:
 			path: app/Http/Controllers/Api/ReportController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 3
@@ -1186,24 +1174,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$current_assignee_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 6
 			path: app/Http/Controllers/Api/TicketController.php
 
 		-
@@ -1343,6 +1313,18 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Http/Requests/UnitScopedRequest.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/TicketResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/TicketResource.php
 
 		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$created_at\.$#'
@@ -2341,20 +2323,14 @@ parameters:
 			path: app/Models/TaskActivity.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$created_at\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: app/Models/Ticket.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/Ticket.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
-			identifier: method.notFound
+			message: '#^Class App\\Models\\Ticket has PHPDoc tag @property\-read for property \$waiting_duration with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
 			count: 1
 			path: app/Models/Ticket.php
 
@@ -2432,6 +2408,24 @@ parameters:
 
 		-
 			message: '#^Method App\\Models\\Ticket\:\:user\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Ticket.php
+
+		-
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\Ticket\:\:\$activities contains generic class Illuminate\\Database\\Eloquent\\Collection but does not specify its types\: TKey, TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Ticket.php
+
+		-
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\Ticket\:\:\$attachments contains generic class Illuminate\\Database\\Eloquent\\Collection but does not specify its types\: TKey, TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Ticket.php
+
+		-
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\Ticket\:\:\$comments contains generic class Illuminate\\Database\\Eloquent\\Collection but does not specify its types\: TKey, TModel$#'
 			identifier: missingType.generics
 			count: 1
 			path: app/Models/Ticket.php
@@ -3311,12 +3305,6 @@ parameters:
 			identifier: staticMethod.notFound
 			count: 1
 			path: database/seeders/TahsilSeeder.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 5
-			path: database/seeders/TicketSeeder.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\TaskActivity\:\:create\(\)\.$#'
@@ -5425,12 +5413,6 @@ parameters:
 			path: resources/views/livewire/settings/index.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: resources/views/livewire/tickets/ticket-comments.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
 			count: 5
@@ -5549,12 +5531,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/tickets/⚡create.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
 			message: '#^Anonymous function has an unused use \$count\.$#'
@@ -5753,12 +5729,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Ticket\>\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\Ticket\>\:\:accessible\(\)\.$#'

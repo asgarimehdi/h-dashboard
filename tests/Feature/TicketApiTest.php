@@ -327,4 +327,68 @@ class TicketApiTest extends TestCase
         $response->assertStatus(200)
             ->assertJson(['data' => ['status' => 'forwarded', 'current_assignee_id' => $user2->id]]);
     }
+
+    /**
+     * Issue #679: invalid status query parameter must return 422.
+     */
+    public function test_index_rejects_invalid_status_filter(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/tickets?status=nonexistent');
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
+
+    /**
+     * Issue #679: invalid priority query parameter must return 422.
+     */
+    public function test_index_rejects_invalid_priority_filter(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/tickets?priority=critical');
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('priority');
+    }
+
+    /**
+     * Issue #679: valid status values must be accepted.
+     */
+    public function test_index_accepts_valid_status_values(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        Ticket::create(['ticket_code' => 'T-VAL', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'V', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
+
+        foreach (['created', 'forwarded', 'accepted', 'completed', 'rejected'] as $status) {
+            $response = $this->actingAs($user, 'sanctum')->getJson("/api/tickets?status={$status}");
+            $response->assertStatus(200);
+        }
+    }
+
+    /**
+     * Issue #677: TicketResource must expose only safe fields — no internal DB columns leak.
+     */
+    public function test_ticket_resource_exposes_expected_fields(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $ticket = Ticket::create(['ticket_code' => 'T-RES', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Resource Test', 'content' => 'Body', 'priority' => 'urgent', 'status' => 'created']);
+
+        $response = $this->actingAs($user, 'sanctum')->getJson("/api/tickets/{$ticket->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'id', 'ticket_code', 'subject', 'content', 'priority', 'status', 'status_name',
+                    'user_id', 'unit_id', 'current_assignee_id', 'deadline', 'accepted_at', 'completed_at',
+                    'created_at', 'updated_at', 'unit', 'user',
+                ],
+            ]);
+
+        // Must NOT expose internal Eloquent artifacts
+        $data = $response->json('data');
+        $this->assertArrayNotHasKey('deleted_at', $data);
+    }
 }
