@@ -527,25 +527,31 @@ return new class extends Component
             // Map common aliases to actual database values
             $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
             $type = $typeAliases[$type] ?? $type;
+            $type = self::normalizeForQuery($type);
             $query->where('type', 'LIKE', "%{$type}%");
         }
         if ($this->filterOs) {
-            $query->where('os', 'LIKE', "%{$this->filterOs}%");
+            $os = self::normalizeForQuery($this->filterOs);
+            $query->where('os', 'LIKE', "%{$os}%");
         }
         if ($this->filterCpu) {
-            $query->where('cpu', 'LIKE', "%{$this->filterCpu}%");
+            $cpu = self::normalizeForQuery($this->filterCpu);
+            $query->where('cpu', 'LIKE', "%{$cpu}%");
         }
         if ($this->filterRam) {
-            $query->where('ram', 'LIKE', "%{$this->filterRam}%");
+            $ram = self::normalizeForQuery($this->filterRam);
+            $query->where('ram', 'LIKE', "%{$ram}%");
         }
         if ($this->filterHdd) {
-            $query->where('hdd', 'LIKE', "%{$this->filterHdd}%");
+            $hdd = self::normalizeForQuery($this->filterHdd);
+            $query->where('hdd', 'LIKE', "%{$hdd}%");
         }
         if ($this->filterShutdown !== null && $this->filterShutdown !== '') {
             $query->where('shutdown', $this->filterShutdown === '1');
         }
         if ($this->filterNetType) {
-            $query->where('net_type', 'LIKE', "%{$this->filterNetType}%");
+            $netType = self::normalizeForQuery($this->filterNetType);
+            $query->where('net_type', 'LIKE', "%{$netType}%");
         }
         if ($this->filterMark !== null && $this->filterMark !== '') {
             $query->where('mark', $this->filterMark === '1');

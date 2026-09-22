@@ -8,11 +8,14 @@ use App\Models\Hardware;
 use App\Models\Ticket;
 use App\Models\Unit;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
 class GisController extends Controller
 {
+    use PersianNormalizer;
+
     public function __construct(
         protected CacheInvalidationServiceInterface $cache
     ) {}
@@ -188,7 +191,8 @@ class GisController extends Controller
             $this->applyBboxAliased($query, $request);
 
             if ($request->filled('type')) {
-                $query->where('hardwares.type', 'LIKE', "%{$request->type}%");
+                $type = self::normalizeForQuery($request->type);
+                $query->where('hardwares.type', 'LIKE', "%{$type}%");
             }
             if ($request->filled('shutdown')) {
                 $query->where('hardwares.shutdown', $request->boolean('shutdown'));
