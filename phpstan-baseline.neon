@@ -2461,18 +2461,6 @@ parameters:
 			path: app/Models/TicketComment.php
 
 		-
-			message: '#^Method App\\Models\\TicketComment\:\:descendants\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Models/TicketComment.php
-
-		-
-			message: '#^Method App\\Models\\TicketComment\:\:descendants\(\) should return Illuminate\\Database\\Eloquent\\Relations\\HasMany but returns Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Models/TicketComment.php
-
-		-
 			message: '#^Method App\\Models\\TicketComment\:\:parent\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2629,8 +2617,20 @@ parameters:
 			path: app/Models/Todo.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Unit.php
+
+		-
 			message: '#^Class App\\Models\\Unit uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
 			identifier: missingType.generics
+			count: 1
+			path: app/Models/Unit.php
+
+		-
+			message: '#^Illuminate\\Support\\Collection\<\*NEVER\*, \*NEVER\*\> does not accept static\(App\\Models\\Unit\)\|stdClass\.$#'
+			identifier: offsetAssign.valueType
 			count: 1
 			path: app/Models/Unit.php
 
@@ -2667,18 +2667,6 @@ parameters:
 		-
 			message: '#^Method App\\Models\\Unit\:\:children\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
-			count: 1
-			path: app/Models/Unit.php
-
-		-
-			message: '#^Method App\\Models\\Unit\:\:childrenRecursive\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Models/Unit.php
-
-		-
-			message: '#^Method App\\Models\\Unit\:\:childrenRecursive\(\) should return Illuminate\\Database\\Eloquent\\Relations\\HasMany but returns Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
 			count: 1
 			path: app/Models/Unit.php
 
@@ -6034,12 +6022,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$assignedUsers\.$#'
 			identifier: property.notFound
 			count: 1
-			path: resources/views/livewire/units/chart.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$childrenRecursive\.$#'
-			identifier: property.notFound
-			count: 2
 			path: resources/views/livewire/units/chart.blade.php
 
 		-

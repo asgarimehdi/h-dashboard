@@ -33,6 +33,15 @@ return new class extends Component
     }
 
     /**
+     * Livewire restores Eloquent models by key only, so the in-memory
+     * childrenRecursive tree from buildTree() does not survive toggle().
+     */
+    public function hydrate(): void
+    {
+        $this->loadData();
+    }
+
+    /**
      * Expand root units and their children up to maxLevel.
      */
     /** @param  Collection<int, Unit>  $nodes  @return  list<string> */
@@ -55,10 +64,12 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $this->rootUnits = Unit::whereNull('parent_id')
+        $rootIds = Unit::whereNull('parent_id')
             ->whereIn('id', $accessibleIds)
-            ->with(['childrenRecursive', 'unitType'])
-            ->get();
+            ->pluck('id')
+            ->all();
+
+        $this->rootUnits = Unit::buildTree($rootIds, $accessibleIds);
     }
 
     public function updatedSearch(): void
