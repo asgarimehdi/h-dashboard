@@ -15,8 +15,8 @@ class MultiLatestValueController extends Controller
     public function index(Request $request, ZabbixService $zabbix): JsonResponse
     {
         $request->validate([
-            'item_ids' => 'required|array',
-            'item_ids.*' => 'required|string',
+            'item_ids' => 'required|array|max:100',
+            'item_ids.*' => 'required|string|max:64',
         ]);
 
         $itemIds = $request->item_ids;

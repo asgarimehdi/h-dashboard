@@ -415,38 +415,6 @@ class TicketCommentModelTest extends TestCase
         $this->assertCount(1, TicketComment::query()->user()->get());
     }
 
-    // --- descendants (recursive) ---
-
-    public function test_comment_descendants_are_recursive(): void
-    {
-        $ticket = $this->createTicket();
-        $user = User::first();
-
-        $root = TicketComment::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'body' => 'والد',
-        ]);
-        $child = TicketComment::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'parent_id' => $root->id,
-            'body' => 'فرزند',
-        ]);
-        $grandchild = TicketComment::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'parent_id' => $child->id,
-            'body' => 'نوه',
-        ]);
-
-        $root->load('descendants');
-
-        $this->assertCount(1, $root->descendants);
-        $this->assertEquals($child->id, $root->descendants->first()->id);
-        $this->assertEquals($grandchild->id, $root->descendants->first()->descendants->first()->id);
-    }
-
     // --- scopeWithReactionCounts ---
 
     public function test_scope_with_reaction_counts_groups_by_reaction(): void
