@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Unit;
+use App\Models\UnitType;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -229,17 +230,64 @@ class UnitModelTest extends TestCase
         $this->assertEquals(51.5, $unit->lng);
     }
 
-    // --- childrenRecursive ---
+    // --- buildTree ---
 
-    public function test_children_recursive_eager_loads_hierarchy(): void
+    public function test_build_tree_returns_nested_hierarchy(): void
     {
         $parent = Unit::create(['name' => 'والد']);
         $child = Unit::create(['name' => 'فرزند', 'parent_id' => $parent->id]);
         $grandchild = Unit::create(['name' => 'نوه', 'parent_id' => $child->id]);
 
-        $loaded = Unit::with('childrenRecursive')->find($parent->id);
+        $roots = Unit::buildTree([$parent->id]);
 
-        $this->assertCount(1, $loaded->childrenRecursive);
-        $this->assertCount(1, $loaded->childrenRecursive->first()->childrenRecursive);
+        $this->assertCount(1, $roots);
+        $this->assertEquals($parent->id, $roots->first()->id);
+        $this->assertCount(1, $roots->first()->childrenRecursive);
+        $this->assertEquals($child->id, $roots->first()->childrenRecursive->first()->id);
+        $this->assertCount(1, $roots->first()->childrenRecursive->first()->childrenRecursive);
+        $this->assertEquals($grandchild->id, $roots->first()->childrenRecursive->first()->childrenRecursive->first()->id);
+    }
+
+    public function test_build_tree_respects_accessible_ids_scope(): void
+    {
+        $parent1 = Unit::create(['name' => 'والد ۱']);
+        $child1 = Unit::create(['name' => 'فرزند ۱', 'parent_id' => $parent1->id]);
+        $parent2 = Unit::create(['name' => 'والد ۲']);
+        $child2 = Unit::create(['name' => 'فرزند ۲', 'parent_id' => $parent2->id]);
+
+        // Only parent2's subtree is accessible
+        $roots = Unit::buildTree([$parent1->id, $parent2->id], [$parent2->id, $child2->id]);
+
+        $this->assertCount(1, $roots);
+        $this->assertEquals($parent2->id, $roots->first()->id);
+        $this->assertCount(1, $roots->first()->childrenRecursive);
+    }
+
+    public function test_build_tree_with_empty_root_ids_returns_empty(): void
+    {
+        $roots = Unit::buildTree([]);
+        $this->assertCount(0, $roots);
+    }
+
+    public function test_build_tree_leaf_nodes_have_empty_children_recursive(): void
+    {
+        $parent = Unit::create(['name' => 'والد']);
+        $child = Unit::create(['name' => 'فرزند', 'parent_id' => $parent->id]);
+
+        $roots = Unit::buildTree([$parent->id]);
+
+        $this->assertCount(1, $roots->first()->childrenRecursive);
+        $this->assertCount(0, $roots->first()->childrenRecursive->first()->childrenRecursive);
+    }
+
+    public function test_build_tree_preserves_unit_type(): void
+    {
+        $unitType = UnitType::create(['name' => 'نوع تست']);
+        $parent = Unit::create(['name' => 'والد', 'unit_type_id' => $unitType->id]);
+
+        $roots = Unit::buildTree([$parent->id]);
+
+        $this->assertNotNull($roots->first()->unitType);
+        $this->assertEquals($unitType->id, $roots->first()->unitType->id);
     }
 }

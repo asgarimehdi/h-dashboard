@@ -58,14 +58,6 @@ class TicketComment extends Model
     }
 
     /**
-     * Get all descendants (recursive).
-     */
-    public function descendants(): HasMany
-    {
-        return $this->children()->with('descendants');
-    }
-
-    /**
      * Get reactions on this comment.
      */
     public function reactions(): HasMany
