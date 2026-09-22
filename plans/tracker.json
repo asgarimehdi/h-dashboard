@@ -201,7 +201,9 @@
       "category": "performance",
       "effort": "S",
       "impact": "medium",
-      "done": false
+      "done": true,
+      "plan_file": "plans/017-cache-invalidation-bypass-in-report-controller.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/674"
     },
     {
       "num": 18,
@@ -211,7 +213,9 @@
       "category": "performance",
       "effort": "S",
       "impact": "medium",
-      "done": false
+      "done": true,
+      "plan_file": "plans/018-synczabbix-runs-synchronously-in-scheduler.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/675"
     }
   ]
 }
