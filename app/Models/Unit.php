@@ -12,6 +12,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @property Collection<int, static> $childrenRecursive
+ */
 class Unit extends Model
 {
     use HasFactory;
@@ -76,10 +79,74 @@ class Unit extends Model
         return $this->belongsTo(Boundary::class, 'boundary_id');
     }
 
-    // برای بارگذاری تمام سطوح زیرمجموعه به صورت خودکار
-    public function childrenRecursive(): HasMany
+    /**
+     * Build full tree structure from a flat collection using a single CTE query.
+     * Replaces the N+1 recursive eager loading pattern (childrenRecursive).
+     *
+     * @param  array<int>  $rootIds
+     * @param  array<int>|null  $accessibleIds  If null, no scope filter applied
+     * @return Collection<int, static>
+     */
+    public static function buildTree(array $rootIds, ?array $accessibleIds = null): Collection
     {
-        return $this->children()->with('childrenRecursive');
+        if (empty($rootIds)) {
+            return collect();
+        }
+
+        // Single CTE: fetch all descendants of root units (inclusive)
+        $allIds = self::descendantIds($rootIds)->all();
+
+        if (! empty($accessibleIds)) {
+            $allIds = array_values(array_intersect($allIds, $accessibleIds));
+        }
+
+        if (empty($allIds)) {
+            return collect();
+        }
+
+        // Single query: load all relevant units with their types
+        $models = self::query()
+            ->with('unitType')
+            ->whereIn('units.id', $allIds)
+            ->get();
+
+        /** @var array<int, static> $allUnits */
+        $allUnits = [];
+        /** @var array<int, list<static>> $childrenMap */
+        $childrenMap = [];
+        foreach ($models as $unit) {
+            $allUnits[$unit->id] = $unit;
+        }
+
+        // Build adjacency list
+        foreach ($allUnits as $unit) {
+            $parentId = $unit->parent_id;
+            if ($parentId !== null && isset($allUnits[$parentId])) {
+                $childrenMap[$parentId][] = $unit;
+            }
+        }
+
+        // Recursive closure to attach children
+        $attachChildren = function (Unit $unit) use (&$attachChildren, $childrenMap): void {
+            $unit->childrenRecursive = collect($childrenMap[$unit->id] ?? []);
+            foreach ($unit->childrenRecursive as $child) {
+                $attachChildren($child);
+            }
+        };
+
+        // Build root collection
+        $roots = collect();
+        foreach ($rootIds as $rootId) {
+            if (isset($allUnits[$rootId])) {
+                $roots[] = $allUnits[$rootId];
+            }
+        }
+
+        foreach ($roots as $root) {
+            $attachChildren($root);
+        }
+
+        return $roots;
     }
 
     public function assignedUsers(): BelongsToMany
