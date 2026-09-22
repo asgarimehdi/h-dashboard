@@ -73,9 +73,11 @@ class AppServiceProvider extends ServiceProvider
         // Invalidate report caches on Todo/Ticket changes (Issue #320)
         $invalidate = function (array $namespaces) {
             $cache = app(CacheInvalidationServiceInterface::class);
-            foreach ($namespaces as $ns) {
-                $cache->increment($ns);
-            }
+            $cache->batch(function () use ($namespaces, $cache) {
+                foreach ($namespaces as $ns) {
+                    $cache->increment($ns);
+                }
+            });
         };
 
         $todoNamespaces = ['report_todos', 'dashboard'];
