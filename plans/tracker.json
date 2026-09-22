@@ -1,5 +1,5 @@
 {
-  "last_created": 8,
+  "last_created": 15,
   "findings": [
     {
       "num": 1,
@@ -177,7 +177,9 @@
       "category": "dx",
       "effort": "S",
       "impact": "high",
-      "done": false
+      "done": true,
+      "plan_file": "plans/015-deploy-ci-skips-quality-gates.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/672"
     },
     {
       "num": 16,
