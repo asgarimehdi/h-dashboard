@@ -5,6 +5,7 @@ use App\Services\AccessService;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Morilog\Jalali\Jalalian;
 
@@ -217,7 +218,7 @@ return new class extends Component {
             $endMildadi = $this->convertToMiladi($endDateTime);
         }
 
-        Todo::updateOrCreate(
+        $todo = Todo::updateOrCreate(
             ['id' => $this->editingId],
             [
                 'title' => $this->title,
@@ -227,6 +228,10 @@ return new class extends Component {
                 'unit_id' => $this->unit_id,
             ]
         );
+
+        if (! $this->editingId) {
+            $todo->update(['user_id' => Auth::id()]);
+        }
 
         $this->success('با موفقیت ذخیره شد');
         $this->modal = false;

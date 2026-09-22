@@ -86,6 +86,23 @@ class TodoApiTest extends TestCase
         $this->assertDatabaseHas('todos', [
             'title' => 'تست تسک جدید',
             'unit_id' => $unit->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function test_created_todo_belongs_to_authenticated_user(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+
+        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+            'title' => 'Ownership Test',
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('todos', [
+            'title' => 'Ownership Test',
+            'user_id' => $user->id,
         ]);
     }
 
