@@ -33,16 +33,16 @@ class HrAnalyticsController extends Controller
                 $since = now()->subMonths($months)->startOfMonth();
 
                 if (DB::getDriverName() === 'pgsql') {
-                    $idList = implode(',', array_map('intval', $accessibleIds));
+                    $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
                     $results = DB::select(
                         "SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
                                 COUNT(*) AS count
                          FROM persons
-                         WHERE u_id IN ({$idList})
+                         WHERE u_id = ANY(?)
                            AND created_at >= ?
                          GROUP BY date_trunc('month', created_at)
                          ORDER BY date_trunc('month', created_at) ASC",
-                        [$since]
+                        [$idArray, $since]
                     );
 
                     return collect($results)->map(fn ($row) => [
@@ -81,14 +81,14 @@ class HrAnalyticsController extends Controller
             now()->addMinutes(5),
             function () use ($accessibleIds, $months) {
                 if (DB::getDriverName() === 'pgsql') {
-                    $idList = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
+                    $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
                     $results = DB::select(
                         "WITH accessible_units AS (
                             SELECT id FROM units WHERE id = ANY(?)
                         ),
                         month_series AS (
                             SELECT generate_series(
-                                date_trunc('month', CURRENT_DATE) - interval '{$months} months',
+                                date_trunc('month', CURRENT_DATE) - make_interval(months => ?),
                                 date_trunc('month', CURRENT_DATE),
                                 '1 month'::interval
                             ) AS month_start
@@ -110,7 +110,7 @@ class HrAnalyticsController extends Controller
                         LEFT JOIN personnel_counts pc ON pc.month_start = ms.month_start AND pc.u_id = au.id
                         GROUP BY ms.month_start
                         ORDER BY ms.month_start DESC",
-                        [$idList]
+                        [$idArray, (string) $months]
                     );
 
                     return collect($results)->map(fn ($row) => [
@@ -160,7 +160,7 @@ class HrAnalyticsController extends Controller
             $this->hrAnalyticsCacheKey('staffing_ratio', $accessibleIds),
             now()->addMinutes(5),
             function () use ($accessibleIds) {
-                $idList = implode(',', array_map('intval', $accessibleIds));
+                $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
 
                 if (DB::getDriverName() === 'pgsql') {
                     $rows = DB::select(
@@ -168,14 +168,15 @@ class HrAnalyticsController extends Controller
                          FROM persons p
                          JOIN units u ON p.u_id = u.id
                          LEFT JOIN unit_types ut ON u.unit_type_id = ut.id
-                         WHERE p.u_id IN ({$idList})
+                         WHERE p.u_id = ANY(?)
                          GROUP BY ut.name
                          UNION ALL
                          SELECT 'semat' AS kind, COALESCE(s.name, 'نامشخص') AS label, COUNT(*) AS total
                          FROM persons p
                          JOIN semats s ON p.s_id = s.id
-                         WHERE p.u_id IN ({$idList}) AND p.s_id IS NOT NULL
-                         GROUP BY s.name"
+                         WHERE p.u_id = ANY(?) AND p.s_id IS NOT NULL
+                         GROUP BY s.name",
+                        [$idArray, $idArray]
                     );
 
                     $byUnitType = [];
