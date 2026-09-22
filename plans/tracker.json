@@ -189,7 +189,9 @@
       "category": "performance",
       "effort": "M",
       "impact": "medium",
-      "done": false
+      "done": true,
+      "plan_file": "plans/016-cache-invalidation-storm-on-hardware-person-write.md",
+      "issue_url": "https://github.com/asgarimehdi/h-dashboard/issues/673"
     },
     {
       "num": 17,
