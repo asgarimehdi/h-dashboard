@@ -176,6 +176,27 @@ test('edit saves changes', function () {
     $this->assertDatabaseHas('todos', ['id' => $todo->id, 'title' => 'عنوان جدید']);
 });
 
+test('editing a todo preserves the original owner', function () {
+    $owner = User::factory()->create(['n_code' => '0987654321']);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'عنوان قبل',
+        'user_id' => $owner->id,
+    ]);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->set('title', 'عنوان جدید')
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('todos', ['id' => $todo->id, 'user_id' => $owner->id]);
+});
+
 // ==================== Delete Todo ====================
 
 test('can delete a todo', function () {

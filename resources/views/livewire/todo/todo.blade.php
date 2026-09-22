@@ -218,7 +218,7 @@ return new class extends Component {
             $endMildadi = $this->convertToMiladi($endDateTime);
         }
 
-        Todo::updateOrCreate(
+        $todo = Todo::updateOrCreate(
             ['id' => $this->editingId],
             [
                 'title' => $this->title,
@@ -226,9 +226,12 @@ return new class extends Component {
                 'end_at' => $endMildadi,
                 'is_completed' => $this->is_completed,
                 'unit_id' => $this->unit_id,
-                'user_id' => Auth::id(),
             ]
         );
+
+        if (! $this->editingId) {
+            $todo->update(['user_id' => Auth::id()]);
+        }
 
         $this->success('با موفقیت ذخیره شد');
         $this->modal = false;
