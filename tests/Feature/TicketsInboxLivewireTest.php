@@ -162,7 +162,8 @@ class TicketsInboxLivewireTest extends TestCase
         ]);
 
         // Another user creating a ticket in the same unit
-        [$user2] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $result = $this->createUserWithUnit(['view_assigned_tickets']);
+        $user = $result['user'];
         $otherTicket = $this->createTicket([
             'unit' => $unit,
             'user' => $user2,

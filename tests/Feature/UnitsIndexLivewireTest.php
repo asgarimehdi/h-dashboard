@@ -162,7 +162,9 @@ class UnitsIndexLivewireTest extends TestCase
     public function test_create_unit(): void
     {
         // Parent = type 2 (university). Allowed child = type 3 (deputy).
-        [$user, $parent] = $this->createUserWithUnit(['organization']);
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $parent = $result['unit'];
         $parent->update(['unit_type_id' => 2]);
         $this->actingAs($user);
 
@@ -180,7 +182,9 @@ class UnitsIndexLivewireTest extends TestCase
     public function test_edit_unit(): void
     {
         // Parent = type 2 (university). Child = type 3 (deputy).
-        [$user, $parent] = $this->createUserWithUnit(['organization']);
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $parent = $result['unit'];
         $parent->update(['unit_type_id' => 2]);
         $this->actingAs($user);
 
@@ -259,7 +263,9 @@ class UnitsIndexLivewireTest extends TestCase
     public function test_level_logic(): void
     {
         // Province-level: unit has region with type=province
-        [$user1, $provUnit] = $this->createUserWithUnit(['organization']);
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $provUnit = $result['unit'];
         $provUnit->update(['unit_type_id' => 2, 'region_id' => 1]);
         $this->actingAs($user1);
 
@@ -268,7 +274,9 @@ class UnitsIndexLivewireTest extends TestCase
             ->assertSet('userRegionId', 1);
 
         // County-level: unit has region with type=county
-        [$user2, $countyUnit] = $this->createUserWithUnit(['organization']);
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $countyUnit = $result['unit'];
         $countyUnit->update(['unit_type_id' => 3, 'region_id' => 2]);
         $this->actingAs($user2);
 

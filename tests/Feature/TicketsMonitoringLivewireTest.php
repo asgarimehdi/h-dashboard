@@ -254,8 +254,11 @@ class TicketsMonitoringLivewireTest extends TestCase
     public function test_show_ticket_scope(): void
     {
         // Two users in different units, both with view_all_tickets
-        [$userA, $unitA] = $this->createUserWithUnit(['view_all_tickets']);
-        [$userB] = $this->createUserWithUnit(['view_all_tickets']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unitA = $result['unit'];
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
 
         // Ticket in unit A
         $ticket = $this->makeTicket($unitA, [

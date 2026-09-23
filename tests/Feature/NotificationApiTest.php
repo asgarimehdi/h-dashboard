@@ -98,7 +98,8 @@ class NotificationApiTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit();
 
         // Create another user
-        [$otherUser] = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit();
+        $user = $result['user'];
 
         $notification = Notification::create([
             'user_id' => $otherUser->id,
