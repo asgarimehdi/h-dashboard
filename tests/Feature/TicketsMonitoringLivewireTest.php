@@ -8,6 +8,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -42,10 +43,10 @@ class TicketsMonitoringLivewireTest extends TestCase
                 'n_code' => $ownerNCode,
                 'f_name' => 'مالک',
                 'l_name' => 'تیکت',
-                't_id' => 1,
-                'e_id' => 1,
-                's_id' => 1,
-                'r_id' => 1,
+                't_id' => DB::table('tahsils')->first()->id,
+                'e_id' => DB::table('estekhdams')->first()->id,
+                's_id' => DB::table('semats')->first()->id,
+                'r_id' => DB::table('radifs')->first()->id,
                 'u_id' => $unit->id,
             ]);
             $owner = User::create(['n_code' => $ownerNCode, 'password' => Hash::make('password')]);
