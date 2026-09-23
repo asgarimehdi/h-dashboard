@@ -12,12 +12,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareController::class);
 
 class HardwareApiTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $tId;
@@ -28,31 +30,17 @@ class HardwareApiTest extends TestCase
 
     protected $rId;
 
-    protected $unit;
-
     protected function setUp(): void
     {
         parent::setUp();
         Session::flush();
-    }
-
-    protected function createUserWithUnit(): array
-    {
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-        $this->unit = Unit::create(['name' => 'Test Unit']);
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId, 'u_id' => $this->unit->id]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $this->unit->id);
         $this->seed(PermissionSeeder::class);
-        $user->givePermissionTo('manage_hardware');
+        $this->seedLookupTables();
 
-        return ['user' => $user, 'unit' => $this->unit];
+        $this->tId = DB::table('tahsils')->first()->id;
+        $this->eId = DB::table('estekhdams')->first()->id;
+        $this->sId = DB::table('semats')->first()->id;
+        $this->rId = DB::table('radifs')->first()->id;
     }
 
     /**
@@ -75,7 +63,7 @@ class HardwareApiTest extends TestCase
 
     public function test_authenticated_user_can_list_hardware(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
         Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001', 'type' => 'desktop']);
 
@@ -87,7 +75,7 @@ class HardwareApiTest extends TestCase
 
     public function test_user_can_create_hardware(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
@@ -103,7 +91,7 @@ class HardwareApiTest extends TestCase
 
     public function test_user_can_update_hardware_with_partial_fields(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'Original PC', 'cpu' => 'Intel i3', 'ram' => '8GB']);
 
@@ -118,7 +106,7 @@ class HardwareApiTest extends TestCase
 
     public function test_user_can_update_hardware_n_code(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001']);
 
@@ -130,7 +118,7 @@ class HardwareApiTest extends TestCase
             'e_id' => $this->eId,
             's_id' => $this->sId,
             'r_id' => $this->rId,
-            'u_id' => $this->unit->id,
+            'u_id' => $unit->id,
         ]);
 
         $response = $this->actingAs($user, 'sanctum')->putJson("/api/hardware/{$hardware->id}", [
@@ -147,7 +135,7 @@ class HardwareApiTest extends TestCase
 
     public function test_user_can_show_hardware(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001']);
 
@@ -159,7 +147,7 @@ class HardwareApiTest extends TestCase
 
     public function test_user_can_delete_hardware(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001']);
 
@@ -171,7 +159,7 @@ class HardwareApiTest extends TestCase
 
     public function test_create_hardware_requires_n_code_and_pc_name(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
             'type' => 'laptop',
@@ -183,7 +171,7 @@ class HardwareApiTest extends TestCase
 
     public function test_create_hardware_rejects_invalid_n_code(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
             'n_code' => '9999999999',
@@ -196,7 +184,7 @@ class HardwareApiTest extends TestCase
 
     public function test_stats_endpoint_returns_aggregated_data(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
         $person2 = Person::create([
             'n_code' => '2222222222',
@@ -229,7 +217,7 @@ class HardwareApiTest extends TestCase
     public function test_stats_endpoint_respects_organizational_scope(): void
     {
         // User A in Unit A
-        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit();
+        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit(['manage_hardware']);
         $personA = Person::first();
         $personA2 = Person::create([
             'n_code' => '3333333333',
@@ -301,7 +289,7 @@ class HardwareApiTest extends TestCase
      */
     public function test_stats_cache_is_invalidated_on_write(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
 
         // Initial state: 1 device

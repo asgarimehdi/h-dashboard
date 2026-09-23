@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Http\Controllers\Api\HardwareController;
 use App\Models\Estekhdam;
 use App\Models\Person;
 use App\Models\Radif;
@@ -24,7 +23,7 @@ use Tests\TestCase;
  * (session regenerate + redirect + activity log), invalid credentials,
  * validation errors, and the rate-limit lockout branch.
  */
-covers(HardwareController::class);
+covers(User::class);
 
 class LoginLivewireTest extends TestCase
 {

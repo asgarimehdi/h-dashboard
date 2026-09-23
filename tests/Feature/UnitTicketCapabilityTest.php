@@ -4,35 +4,32 @@ use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
-use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->seed(PermissionSeeder::class);
+    $this->seedLookupTables();
+});
+
 function makeTicketManager(): User
 {
     $unit = Unit::create(['name' => 'Ticket Manager Unit', 'can_receive_tickets' => false]);
 
     $nCode = (string) fake()->unique()->numerify('##########');
-    // Create required related tables
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Ticket', 'l_name' => 'Manager',
-        't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id,
+        't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
     ]);
 
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-    Permission::firstOrCreate(['name' => 'manage_unit_tickets']);
     $user->givePermissionTo('manage_unit_tickets');
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $unit->id);
@@ -45,14 +42,9 @@ function makeUnauthorizedUser(): User
     $unit = Unit::create(['name' => 'Unauthorized Unit']);
 
     $nCode = (string) fake()->unique()->numerify('##########');
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Unauth', 'l_name' => 'User',
-        't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id,
+        't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
     ]);
 
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);

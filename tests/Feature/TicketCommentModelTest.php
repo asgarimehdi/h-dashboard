@@ -13,47 +13,31 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(TicketComment::class);
 
 class TicketCommentModelTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     protected function createTicket(): Ticket
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
 
         return Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $user->id,
-            'unit_id' => Unit::first()->id,
+            'unit_id' => $unit->id,
             'subject' => 'تیکت تست',
             'content' => 'متن تست',
             'priority' => 'normal',
@@ -257,7 +241,7 @@ class TicketCommentModelTest extends TestCase
         $unit = Unit::first();
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'کاربر دوم', 'l_name' => 'تست',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id, 'u_id' => $unit->id,
         ]);
         $otherUser = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
 
@@ -308,7 +292,6 @@ class TicketCommentModelTest extends TestCase
     {
         $ticket = $this->createTicket();
         $user = User::first();
-
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $user->assignRole('admin');
 
@@ -316,7 +299,7 @@ class TicketCommentModelTest extends TestCase
         $unit = Unit::first();
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'نویسنده', 'l_name' => 'دیگری',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id, 'u_id' => $unit->id,
         ]);
         $author = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
 
@@ -338,7 +321,7 @@ class TicketCommentModelTest extends TestCase
         $unit = Unit::first();
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'نویسنده', 'l_name' => 'دیگری',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id, 'u_id' => $unit->id,
         ]);
         $author = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
 
@@ -432,7 +415,7 @@ class TicketCommentModelTest extends TestCase
         $unit = Unit::first();
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'واکنش‌دهنده', 'l_name' => 'دوم',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id, 'u_id' => $unit->id,
         ]);
         $otherUser = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
 

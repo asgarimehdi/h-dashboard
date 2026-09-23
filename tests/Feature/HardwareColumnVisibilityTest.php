@@ -5,28 +5,27 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Hardware::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
+
+beforeEach(function () {
+    $this->seedLookupTables();
+});
 
 function makeColVisUser(): array
 {
     $unit = Unit::create(['name' => 'Col Unit']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
     $nCode = (string) fake()->unique()->numerify('##########');
-    Person::create(['n_code' => $nCode, 'f_name' => 'C', 'l_name' => 'V', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
-    $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+    Person::factory()->create(['n_code' => $nCode, 'u_id' => $unit->id]);
+    $user = User::factory()->create(['n_code' => $nCode]);
     Permission::firstOrCreate(['name' => 'manage_hardware']);
     $user->givePermissionTo('manage_hardware');
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -77,13 +76,13 @@ it('all column toggles remove their column from the table header', function () {
 
     // Uncheck each column -> its th disappears from thead, others remain
     foreach (['type' => 'نوع', 'os' => 'OS', 'cpu' => 'CPU', 'ram' => 'RAM', 'hdd' => 'HDD', 'ip_local' => 'IP', 'status' => 'وضعیت'] as $key => $label) {
-        $component->set("visibleCols.$key", false);
+        $component->set("visibleCols.{$key}", false);
 
         $thead = theadOf($component->html());
         expect($thead)->not->toContain($label);
 
         // Toggling back restores it
-        $component->set("visibleCols.$key", true);
+        $component->set("visibleCols.{$key}", true);
         expect(theadOf($component->html()))->toContain($label);
     }
 });

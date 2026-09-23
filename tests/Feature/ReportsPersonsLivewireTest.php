@@ -9,50 +9,21 @@ use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class ReportsPersonsLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences so later auto-incremented inserts don't collide
-        DB::select("SELECT setval('tahsils_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM tahsils), 1), 1))");
-        DB::select("SELECT setval('estekhdams_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM estekhdams), 1), 1))");
-        DB::select("SELECT setval('semats_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM semats), 1), 1))");
-        DB::select("SELECT setval('radifs_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM radifs), 1), 1))");
-        DB::select("SELECT setval('units_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM units), 1), 1))");
-        DB::select("SELECT setval('persons_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM persons), 1), 1))");
-    }
-
-    protected function createUserWithUnit(string $permission = ''): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        if ($permission) {
-            $user->givePermissionTo($permission);
-        }
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     protected function actingWithUnit(User $user): void
@@ -99,7 +70,7 @@ class ReportsPersonsLivewireTest extends TestCase
 
     public function test_renders_stats(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
         $this->actingWithUnit($user);
 
         Livewire::test('reports.persons')
@@ -112,9 +83,8 @@ class ReportsPersonsLivewireTest extends TestCase
 
     public function test_counts_match(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
         $this->actingWithUnit($user);
-        $unit = $user->units()->first();
 
         // Seed 2 more persons into this unit (setUp already created 1 via createUserWithUnit)
         $this->createPersonInUnit($unit, 'علی', 'اول');

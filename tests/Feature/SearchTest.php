@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
@@ -11,8 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
-
-covers(Hardware::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

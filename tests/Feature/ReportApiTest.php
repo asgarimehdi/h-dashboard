@@ -3,44 +3,25 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\ReportController;
-use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(ReportController::class);
 
 class ReportApiTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         Session::flush();
-    }
-
-    protected function createUserWithUnit(): array
-    {
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-        $unit = Unit::create(['name' => 'Test Unit']);
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $unit->id);
-
-        return ['user' => $user, 'unit' => $unit];
     }
 
     public function test_unauthenticated_user_cannot_access_reports(): void

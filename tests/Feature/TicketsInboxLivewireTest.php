@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Attachment;
-use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
@@ -11,46 +10,34 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class TicketsInboxLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
     }
 
-    protected function createUserWithUnit(?string $permission = 'view_assigned_tickets'): array
+    /**
+     * Create a destination unit capable of receiving tickets.
+     */
+    protected function createTargetUnit(string $name = 'واحد مقصد'): Unit
     {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $target = Unit::create(['name' => 'واحد مقصد', 'can_receive_tickets' => true]);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        return Unit::create([
+            'name' => $name,
+            'is_active' => true,
+            'can_receive_tickets' => true,
         ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        if ($permission) {
-            $user->givePermissionTo($permission);
-        }
-
-        return ['user' => $user, 'unit' => $unit, 'target' => $target];
     }
 
     protected function createTicket(array $overrides = []): Ticket
@@ -80,16 +67,16 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $ctx = $this->createUserWithUnit(null);
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
 
         $this->get('/tickets/inbox')->assertStatus(403);
     }
 
     public function test_authorized_loads_200(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.inbox')
             ->assertStatus(200)
@@ -102,8 +89,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_view_modes(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         // Empty state when no tickets
         Livewire::test('tickets.inbox')
@@ -136,13 +123,15 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_received_scope_filters_by_accessible_units(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        $result = $this->createUserWithUnit(['view_assigned_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
         // Accessible ticket in user's unit
         $inScope = $this->createTicket([
-            'unit' => $ctx['unit'],
-            'user' => $ctx['user'],
+            'unit' => $unit,
+            'user' => $user,
             'subject' => 'تیکت در دسترس',
         ]);
 
@@ -150,7 +139,7 @@ class TicketsInboxLivewireTest extends TestCase
         $otherUnit = Unit::create(['name' => 'واحد دیگر']);
         $otherTicket = $this->createTicket([
             'unit' => $otherUnit,
-            'user' => $ctx['user'],
+            'user' => $user,
             'subject' => 'تیکت خارج از دسترس',
         ]);
 
@@ -161,20 +150,22 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_sent_scope_shows_user_own_tickets(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        $result = $this->createUserWithUnit(['view_assigned_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
         $ownTicket = $this->createTicket([
-            'unit' => $ctx['unit'],
-            'user' => $ctx['user'],
+            'unit' => $unit,
+            'user' => $user,
             'subject' => 'تیکت خودم',
         ]);
 
         // Another user creating a ticket in the same unit
-        $ctx2 = $this->createUserWithUnit();
+        [$user2] = $this->createUserWithUnit(['view_assigned_tickets']);
         $otherTicket = $this->createTicket([
-            'unit' => $ctx['unit'],
-            'user' => $ctx2['user'],
+            'unit' => $unit,
+            'user' => $user2,
             'subject' => 'تیکت دیگران',
         ]);
 
@@ -190,8 +181,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_status_filters(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $created = $this->createTicket(['subject' => 'تیکت ایجاد شده', 'status' => 'created']);
         $accepted = $this->createTicket(['subject' => 'تیکت پذیرفته', 'status' => 'accepted']);
@@ -230,8 +221,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_search(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $this->createTicket(['subject' => 'مشکل شبکه', 'content' => 'توضیح شبکه']);
         $this->createTicket(['subject' => 'مشکل چاپگر', 'content' => 'پرینتر خراب']);
@@ -254,8 +245,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_jalali_dates(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         // created_at in past
         $old = $this->createTicket(['subject' => 'تیکت قدیمی تست داتا']);
@@ -280,8 +271,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_update_filter_resets_state(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.inbox')
             ->set('statusFilter', 'completed')
@@ -303,8 +294,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_show_ticket_scope(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['subject' => 'تیکت من']);
 
@@ -320,8 +311,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_show_ticket_out_of_scope_404(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $otherUnit = Unit::create(['name' => 'واحد دیگر']);
         $other = $this->createTicket(['unit' => $otherUnit, 'subject' => 'خارج از دسترس']);
@@ -337,8 +328,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_accept_ticket(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
 
@@ -348,7 +339,7 @@ class TicketsInboxLivewireTest extends TestCase
 
         $ticket->refresh();
         $this->assertSame('accepted', $ticket->status);
-        $this->assertSame($ctx['user']->id, $ticket->current_assignee_id);
+        $this->assertSame($user->id, $ticket->current_assignee_id);
         $this->assertNotNull($ticket->accepted_at);
         $this->assertDatabaseHas('task_activities', [
             'ticket_id' => $ticket->id,
@@ -358,8 +349,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_accept_ticket_already_accepted_warning(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);
 
@@ -375,8 +366,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_accept_ticket_out_of_scope_404(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $otherUnit = Unit::create(['name' => 'واحد دیگر']);
         $other = $this->createTicket(['unit' => $otherUnit, 'status' => 'created']);
@@ -392,8 +383,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_reject_ticket(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
 
@@ -415,8 +406,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_forward_validates_target_unit_id(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
 
@@ -428,22 +419,23 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_forward_updates_unit_and_creates_activity(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
+        $target = $this->createTargetUnit();
         $ticket = $this->createTicket(['status' => 'created']);
 
         Livewire::test('tickets.inbox')
             ->call('showTicket', $ticket->id)
-            ->set('targetUnitId', $ctx['target']->id)
-            ->set('targetUnitName', $ctx['target']->name)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
             ->set('forwardNote', 'لطفا بررسی شود')
             ->call('forward')
             ->assertDispatched('swal');
 
         $ticket->refresh();
         $this->assertSame('forwarded', $ticket->status);
-        $this->assertSame($ctx['target']->id, $ticket->unit_id);
+        $this->assertSame($target->id, $ticket->unit_id);
         $this->assertNull($ticket->current_assignee_id);
         $this->assertDatabaseHas('task_activities', [
             'ticket_id' => $ticket->id,
@@ -457,8 +449,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_bulk_actions(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $t1 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت یک']);
         $t2 = $this->createTicket(['status' => 'forwarded', 'subject' => 'تیکت دو']);
@@ -529,11 +521,10 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_execute_bulk_action_only_completed_warning(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $t = $this->createTicket(['status' => 'completed']);
-
         Livewire::test('tickets.inbox')
             ->set('selectedTickets', [$t->id])
             ->set('bulkAction', 'complete')
@@ -552,8 +543,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_completes_ticket(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);
 
@@ -575,8 +566,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_validates_completion_note(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);
 
@@ -592,22 +583,23 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_forward_with_target_unit(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
+        $target = $this->createTargetUnit();
         $ticket = $this->createTicket(['status' => 'accepted']);
 
         Livewire::test('tickets.inbox')
             ->call('openCompletionModal', $ticket->id)
-            ->set('targetUnitId', $ctx['target']->id)
-            ->set('targetUnitName', $ctx['target']->name)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
             ->set('completionNote', 'ارسال به مقصد')
             ->call('submitAction')
             ->assertDispatched('swal');
 
         $ticket->refresh();
         $this->assertSame('forwarded', $ticket->status);
-        $this->assertSame($ctx['target']->id, $ticket->unit_id);
+        $this->assertSame($target->id, $ticket->unit_id);
         $this->assertNull($ticket->current_assignee_id);
         $this->assertDatabaseHas('task_activities', [
             'ticket_id' => $ticket->id,
@@ -617,8 +609,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_rejects_non_accepted_without_target(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
 
@@ -634,8 +626,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_completes_todo_when_all_tickets_done(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $todo = Todo::create([
             'title' => 'وظیفه تست',
@@ -661,8 +653,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_invalid_jalali_date_filter_handled(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $this->createTicket(['subject' => 'تیکت معمولی']);
 
@@ -679,8 +671,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_execute_bulk_action_unknown_action(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $t = $this->createTicket(['status' => 'created']);
 
@@ -702,8 +694,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_forward_without_target_unit_id_validation_error(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
 
@@ -720,8 +712,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_updated_search_resets_state(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $this->createTicket(['subject' => 'تیکت الف']);
         $this->createTicket(['subject' => 'تیکت ب']);
@@ -734,8 +726,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_updated_status_filter_resets_page(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $this->createTicket(['status' => 'completed', 'subject' => 'تکمیل شده']);
         $this->createTicket(['status' => 'created', 'subject' => 'ایجاد شده']);
@@ -748,8 +740,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_updated_view_mode_resets_state(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $this->createTicket(['status' => 'created', 'subject' => 'معمولی']);
 
@@ -760,8 +752,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_updated_unit_search_loads_units(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.inbox')
             ->set('unitSearch', 'مقصد')
@@ -770,8 +762,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_updated_date_filters_resets_state(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $this->createTicket(['subject' => 'تیکت تاریخ']);
 
@@ -783,8 +775,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_set_tab_resets_page(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.inbox')
             ->call('setTab', 'completed')
@@ -793,20 +785,22 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_select_target_unit(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
 
         Livewire::test('tickets.inbox')
-            ->call('selectTargetUnit', $ctx['target']->id, $ctx['target']->name)
-            ->assertSet('targetUnitId', $ctx['target']->id)
-            ->assertSet('targetUnitName', $ctx['target']->name)
+            ->call('selectTargetUnit', $target->id, $target->name)
+            ->assertSet('targetUnitId', $target->id)
+            ->assertSet('targetUnitName', $target->name)
             ->assertSet('unitSearch', '');
     }
 
     public function test_close_all_modals(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.inbox')
             ->set('isCompletionModalOpen', true)
@@ -820,8 +814,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_open_comments_for_dispatches(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $t = $this->createTicket();
 
@@ -838,8 +832,8 @@ class TicketsInboxLivewireTest extends TestCase
     {
         Storage::fake('public');
 
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);
 
@@ -859,8 +853,8 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_remove_file(): void
     {
-        $ctx = $this->createUserWithUnit();
-        $this->actingAs($ctx['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
 
         $file1 = UploadedFile::fake()->create('a.pdf', 50);
         $file2 = UploadedFile::fake()->create('b.pdf', 50);

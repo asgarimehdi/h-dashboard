@@ -3,53 +3,32 @@
 namespace Tests\Feature;
 
 use App\Models\Hardware;
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Testing\File;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class HardwareImportLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo('manage_hardware');
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     // ==================== Smoke tests ====================
 
     public function test_renders(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
         Livewire::test('hardware.import-hardware.import-hardware')
@@ -64,7 +43,7 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         DB::table('model_has_permissions')
             ->where('permission_id', DB::table('permissions')->where('name', 'manage_hardware')->value('id'))
             ->where('model_id', $user->id)
@@ -78,7 +57,7 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_preview_requires_file(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
         Livewire::test('hardware.import-hardware.import-hardware')
@@ -88,7 +67,7 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_preview_max_size(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
         // Create a real small file but report oversized via sizeToReport
@@ -109,7 +88,7 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_preview_mime(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
         // .txt file → MIME text/plain (not in xlsx,xls,csv)
@@ -125,10 +104,10 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_compare_key_repreview(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
-        $nCode = Person::where('f_name', 'تست')->first()->n_code;
+        $nCode = $user->n_code;
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "{$nCode}\tPC-NEW\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t11:22:33:44:55:66\n";
         $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
@@ -149,7 +128,7 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_confirm_empty_error(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
         Livewire::test('hardware.import-hardware.import-hardware')
@@ -160,10 +139,10 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_cancel_resets(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
-        $nCode = Person::where('f_name', 'تست')->first()->n_code;
+        $nCode = $user->n_code;
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "{$nCode}\tPC-NEW\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t11:22:33:44:55:66\n";
         $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
@@ -184,10 +163,10 @@ class HardwareImportLivewireTest extends TestCase
 
     public function test_row_override_skip(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
-        $nCode = Person::where('f_name', 'تست')->first()->n_code;
+        $nCode = $user->n_code;
 
         // Create an existing hardware record to match against (will be 'update')
         Hardware::create([
