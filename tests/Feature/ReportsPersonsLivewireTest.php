@@ -86,13 +86,13 @@ class ReportsPersonsLivewireTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
         $this->actingWithUnit($user);
 
-        // Seed 2 more persons into this unit (setUp already created 1 via createUserWithUnit)
+        // Seed 2 more persons into this unit (createUserWithUnit already created 1)
         $this->createPersonInUnit($unit, 'علی', 'اول');
         $this->createPersonInUnit($unit, 'رضا', 'دوم');
 
-        // Total: setUp person + ali + reza = 3
+        // Total: createUserWithUnit person + ali + reza = 3
         Livewire::test('reports.persons')
-            ->assertSee('تست')     // setUp person's f_name
+            ->assertSee($user->person->f_name) // createUserWithUnit person's actual (factory) name
             ->assertSee('علی')    // ali
             ->assertSee('رضا')    // reza
             ->assertSeeHtml('3');  // total count displayed in stat card

@@ -46,6 +46,13 @@ class UnitsIndexLivewireTest extends TestCase
         $this->resetSequence('unit_types', 'id');
         $this->resetSequence('regions', 'id');
         $this->resetSequence('unit_type_relationships', 'id');
+
+        // The component treats unit id 1 as the ministry HQ (userUnitLevel =
+        // 'ministry'). Postgres sequences are non-transactional, so whether a
+        // test's first unit lands on id=1 depends on random test order.
+        // Pin the sequence so created units start at id 2 and level logic
+        // falls through to the region-based province/county branches.
+        DB::statement("SELECT setval('units_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM units), 1), 1))");
     }
 
     protected function resetSequence(string $table, string $column): void
@@ -162,7 +169,7 @@ class UnitsIndexLivewireTest extends TestCase
     public function test_create_unit(): void
     {
         // Parent = type 2 (university). Allowed child = type 3 (deputy).
-        [$user, $parent] = $this->createUserWithUnit(['organization']);
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
         $parent->update(['unit_type_id' => 2]);
         $this->actingAs($user);
 
@@ -180,7 +187,7 @@ class UnitsIndexLivewireTest extends TestCase
     public function test_edit_unit(): void
     {
         // Parent = type 2 (university). Child = type 3 (deputy).
-        [$user, $parent] = $this->createUserWithUnit(['organization']);
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
         $parent->update(['unit_type_id' => 2]);
         $this->actingAs($user);
 
@@ -259,7 +266,7 @@ class UnitsIndexLivewireTest extends TestCase
     public function test_level_logic(): void
     {
         // Province-level: unit has region with type=province
-        [$user1, $provUnit] = $this->createUserWithUnit(['organization']);
+        ['user' => $user1, 'unit' => $provUnit] = $this->createUserWithUnit(['organization']);
         $provUnit->update(['unit_type_id' => 2, 'region_id' => 1]);
         $this->actingAs($user1);
 
@@ -268,7 +275,7 @@ class UnitsIndexLivewireTest extends TestCase
             ->assertSet('userRegionId', 1);
 
         // County-level: unit has region with type=county
-        [$user2, $countyUnit] = $this->createUserWithUnit(['organization']);
+        ['user' => $user2, 'unit' => $countyUnit] = $this->createUserWithUnit(['organization']);
         $countyUnit->update(['unit_type_id' => 3, 'region_id' => 2]);
         $this->actingAs($user2);
 
