@@ -131,4 +131,35 @@ class ApiLoginTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+    public function test_token_has_expected_abilities(): void
+    {
+        $user = $this->createUserWithUnit();
+
+        $response = $this->postJson('/api/login', [
+            'n_code' => $user->n_code,
+            'password' => 'password',
+        ]);
+
+        $response->assertOk();
+
+        $token = $user->tokens()->latest()->first();
+
+        $this->assertNotNull($token);
+
+        $expectedAbilities = [
+            'units:read',
+            'hardware:read', 'hardware:write',
+            'tickets:read', 'tickets:write',
+            'persons:read', 'persons:write',
+            'todos:read', 'todos:write',
+            'hr:read',
+            'notifications:read',
+            'gis:read',
+            'reports:read',
+            'traffic:read',
+        ];
+
+        $this->assertEquals($expectedAbilities, $token->abilities);
+    }
 }
