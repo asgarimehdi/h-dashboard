@@ -130,4 +130,28 @@ class ChangePasswordTest extends TestCase
             ->call('changePassword')
             ->assertHasErrors(['currentPassword', 'newPassword', 'newPasswordConfirmation']);
     }
+
+    public function test_change_password_revokes_all_tokens(): void
+    {
+        $user = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        // Create a token for the user
+        $token = $user->createToken('test-token');
+        $tokenId = $token->accessToken->id;
+
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'id' => $tokenId,
+        ]);
+
+        Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword');
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'id' => $tokenId,
+        ]);
+    }
 }
