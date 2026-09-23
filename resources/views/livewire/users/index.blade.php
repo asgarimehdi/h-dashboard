@@ -156,6 +156,7 @@ return new class extends Component
             $user->roles()->sync($this->role_ids ?? []);
             $user->syncPermissions($this->user_permissions ?? []);
             $user->units()->sync($this->unit_ids ?? []);
+            app(AccessService::class)->clearCache($user);
 
             $this->resetForm();
             $this->success('کاربر با موفقیت ایجاد شد.');

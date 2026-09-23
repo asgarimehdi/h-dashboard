@@ -13,59 +13,21 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
 class TicketsMonitoringLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync Postgres sequences after explicit-ID inserts.
-        DB::statement("SELECT setval('tahsils_id_seq', COALESCE((SELECT MAX(id) FROM tahsils), 1))");
-        DB::statement("SELECT setval('estekhdams_id_seq', COALESCE((SELECT MAX(id) FROM estekhdams), 1))");
-        DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
-        DB::statement("SELECT setval('radifs_id_seq', COALESCE((SELECT MAX(id) FROM radifs), 1))");
-    }
-
-    /**
-     * Create a user with a unit and a given permission.
-     * Optionally sets the session's current_unit_id (required for AccessService
-     * when we want the test user to see the unit's tickets via accessible()).
-     */
-    protected function createUserWithUnit(string $permission = 'view_all_tickets', bool $setSession = true): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode,
-            'f_name' => 'تست',
-            'l_name' => 'کاربر',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
-            'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        if ($setSession) {
-            Session::put('current_unit_id', $unit->id);
-        }
-
-        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+        $this->seedLookupTables();
     }
 
     /**
@@ -81,10 +43,10 @@ class TicketsMonitoringLivewireTest extends TestCase
                 'n_code' => $ownerNCode,
                 'f_name' => 'مالک',
                 'l_name' => 'تیکت',
-                't_id' => 1,
-                'e_id' => 1,
-                's_id' => 1,
-                'r_id' => 1,
+                't_id' => DB::table('tahsils')->first()->id,
+                'e_id' => DB::table('estekhdams')->first()->id,
+                's_id' => DB::table('semats')->first()->id,
+                'r_id' => DB::table('radifs')->first()->id,
                 'u_id' => $unit->id,
             ]);
             $owner = User::create(['n_code' => $ownerNCode, 'password' => Hash::make('password')]);
@@ -112,8 +74,8 @@ class TicketsMonitoringLivewireTest extends TestCase
     public function test_unauthorized_403(): void
     {
         // Use a real permission that exists in PermissionSeeder but is NOT 'view_all_tickets'.
-        $data = $this->createUserWithUnit(permission: 'view_hr_dashboard');
-        $this->actingAs($data['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
 
         $this->get('/monitoring')
             ->assertStatus(403);
@@ -121,8 +83,8 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_authorized_user_renders_page(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.monitoring')
             ->assertStatus(200)
@@ -131,8 +93,8 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_empty_state_when_no_tickets(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        ['user' => $user] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
 
         Livewire::test('tickets.monitoring')
             ->assertStatus(200)
@@ -144,13 +106,15 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_status_filters(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت ساخته شده', 'status' => 'created', 'ticket_code' => 'TKT-1001']);
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت ارجاع شده', 'status' => 'forwarded', 'ticket_code' => 'TKT-1002']);
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت پذیرفته شده', 'status' => 'accepted', 'ticket_code' => 'TKT-1003']);
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت تکمیل شده', 'status' => 'completed', 'ticket_code' => 'TKT-1004']);
+        $this->makeTicket($unit, ['subject' => 'تیکت ساخته شده', 'status' => 'created', 'ticket_code' => 'TKT-1001']);
+        $this->makeTicket($unit, ['subject' => 'تیکت ارجاع شده', 'status' => 'forwarded', 'ticket_code' => 'TKT-1002']);
+        $this->makeTicket($unit, ['subject' => 'تیکت پذیرفته شده', 'status' => 'accepted', 'ticket_code' => 'TKT-1003']);
+        $this->makeTicket($unit, ['subject' => 'تیکت تکمیل شده', 'status' => 'completed', 'ticket_code' => 'TKT-1004']);
 
         // 'all' should show all 4 ticket codes (rendered with # prefix)
         Livewire::test('tickets.monitoring')
@@ -188,12 +152,14 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_search(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
-        $this->makeTicket($data['unit'], ['subject' => 'مشکل پرینتر', 'ticket_code' => 'TKT-2001']);
-        $this->makeTicket($data['unit'], ['subject' => 'مشکل شبکه', 'ticket_code' => 'TKT-2002']);
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت متفرقه', 'ticket_code' => 'TKT-9999']);
+        $this->makeTicket($unit, ['subject' => 'مشکل پرینتر', 'ticket_code' => 'TKT-2001']);
+        $this->makeTicket($unit, ['subject' => 'مشکل شبکه', 'ticket_code' => 'TKT-2002']);
+        $this->makeTicket($unit, ['subject' => 'تیکت متفرقه', 'ticket_code' => 'TKT-9999']);
 
         // Search by subject
         Livewire::test('tickets.monitoring')
@@ -214,18 +180,20 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_jalali_dates(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
         // Old ticket: 30 days ago
-        $old = $this->makeTicket($data['unit'], [
+        $old = $this->makeTicket($unit, [
             'subject' => 'تیکت قدیمی',
             'ticket_code' => 'TKT-OLD1',
         ]);
         $old->forceFill(['created_at' => now()->subDays(30), 'updated_at' => now()->subDays(30)])->save();
 
         // Recent ticket: today
-        $new = $this->makeTicket($data['unit'], [
+        $new = $this->makeTicket($unit, [
             'subject' => 'تیکت جدید',
             'ticket_code' => 'TKT-NEW1',
         ]);
@@ -246,8 +214,10 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_unit_filter(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
         // Recipient unit that can receive tickets
         $recipient = Unit::create([
@@ -284,18 +254,18 @@ class TicketsMonitoringLivewireTest extends TestCase
     public function test_show_ticket_scope(): void
     {
         // Two users in different units, both with view_all_tickets
-        $dataA = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $dataB = $this->createUserWithUnit(permission: 'view_all_tickets');
+        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit(['view_all_tickets']);
+        ['user' => $userB] = $this->createUserWithUnit(['view_all_tickets']);
 
         // Ticket in unit A
-        $ticket = $this->makeTicket($dataA['unit'], [
+        $ticket = $this->makeTicket($unitA, [
             'subject' => 'تیکت در واحد A',
             'ticket_code' => 'TKT-AA01',
         ]);
 
         // User A (in scope) can open the modal
-        $this->actingAs($dataA['user']);
-        Session::put('current_unit_id', $dataA['unit']->id);
+        $this->actingAs($userA);
+        Session::put('current_unit_id', $unitA->id);
         Livewire::test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
@@ -304,7 +274,7 @@ class TicketsMonitoringLivewireTest extends TestCase
 
         // User B (out of scope) — the component calls $this->error() which is not defined
         // (missing Mary Toast trait). We verify the modal stays closed regardless.
-        $this->actingAs($dataB['user']);
+        $this->actingAs($userB);
         try {
             Livewire::test('tickets.monitoring')
                 ->call('showTicket', $ticket->id);
@@ -322,10 +292,12 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_close_detail(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
-        $ticket = $this->makeTicket($data['unit'], [
+        $ticket = $this->makeTicket($unit, [
             'subject' => 'تیکت قابل بستن',
             'ticket_code' => 'TKT-CL01',
         ]);
@@ -343,11 +315,13 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_pagination_reset(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت الف', 'ticket_code' => 'TKT-PA01']);
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت ب', 'ticket_code' => 'TKT-PA02']);
+        $this->makeTicket($unit, ['subject' => 'تیکت الف', 'ticket_code' => 'TKT-PA01']);
+        $this->makeTicket($unit, ['subject' => 'تیکت ب', 'ticket_code' => 'TKT-PA02']);
 
         $component = Livewire::test('tickets.monitoring')
             ->call('gotoPage', 2)
@@ -361,10 +335,12 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_invalid_jalali_string_does_not_crash(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
-        $this->makeTicket($data['unit'], ['subject' => 'تیکت سالم', 'ticket_code' => 'TKT-VL01']);
+        $this->makeTicket($unit, ['subject' => 'تیکت سالم', 'ticket_code' => 'TKT-VL01']);
 
         // The component passes dateFrom to Jalalian::fromFormat; invalid input throws
         // an exception in the underlying library. We document expected behavior: the
@@ -381,8 +357,10 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_selected_unit_deleted_falls_back_to_null(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
         $recipient = Unit::create([
             'name' => 'واحد حذف شونده',
@@ -410,13 +388,15 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     public function test_tickets_ordered_latest_first(): void
     {
-        $data = $this->createUserWithUnit(permission: 'view_all_tickets');
-        $this->actingAs($data['user']);
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
 
-        $old = $this->makeTicket($data['unit'], ['subject' => 'قدیمی', 'ticket_code' => 'TKT-OR01']);
+        $old = $this->makeTicket($unit, ['subject' => 'قدیمی', 'ticket_code' => 'TKT-OR01']);
         $old->forceFill(['created_at' => now()->subDays(10), 'updated_at' => now()->subDays(10)])->save();
 
-        $new = $this->makeTicket($data['unit'], ['subject' => 'جدید', 'ticket_code' => 'TKT-OR02']);
+        $new = $this->makeTicket($unit, ['subject' => 'جدید', 'ticket_code' => 'TKT-OR02']);
         $new->forceFill(['created_at' => now(), 'updated_at' => now()])->save();
 
         $component = Livewire::test('tickets.monitoring');

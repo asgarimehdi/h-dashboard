@@ -10,15 +10,16 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Hardware::class);
 
 class HardwareIndexLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,36 +27,7 @@ class HardwareIndexLivewireTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences after explicit inserts
-        DB::statement("SELECT setval('tahsils_id_seq', COALESCE((SELECT MAX(id) FROM tahsils), 1))");
-        DB::statement("SELECT setval('estekhdams_id_seq', COALESCE((SELECT MAX(id) FROM estekhdams), 1))");
-        DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
-        DB::statement("SELECT setval('radifs_id_seq', COALESCE((SELECT MAX(id) FROM radifs), 1))");
-    }
-
-    protected function createUserWithUnit(string $permission = 'manage_hardware'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        DB::table('user_units')->where('user_id', $user->id)->update([
-            'role' => 'staff',
-            'is_primary' => true,
-        ]);
-
-        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+        $this->seedLookupTables();
     }
 
     protected function createHardwareForUser(User $user, Unit $unit, array $overrides = []): Hardware
@@ -82,14 +54,14 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_unauthorized_user_gets_403(): void
     {
-        $data = $this->createUserWithUnit('manage_users'); // different permission
+        $data = $this->createUserWithUnit(['manage_users']); // different permission
         $this->actingAs($data['user']);
         $this->get('/hardware')->assertStatus(403);
     }
 
     public function test_authorized_user_renders(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -99,7 +71,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_renders_with_pagination_defaults(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -113,7 +85,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_search_filters_by_name(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -132,7 +104,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_search_with_persian_normalizer(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -150,7 +122,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_toggle_filter_sets_and_clears(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -167,7 +139,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_type_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -186,7 +158,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_os_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -205,7 +177,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_cpu_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -224,7 +196,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_ram_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -243,7 +215,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_hdd_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -262,7 +234,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_shutdown_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -281,7 +253,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_net_type_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -300,7 +272,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_mark_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -319,7 +291,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_person_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -327,7 +299,11 @@ class HardwareIndexLivewireTest extends TestCase
         $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'علی', 'l_name' => 'رضایی',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $data['unit']->id,
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $data['unit']->id,
         ]);
 
         // Hardware belonging to the main user (person = تست کاربر)
@@ -350,7 +326,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_filter_unit_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -358,7 +334,11 @@ class HardwareIndexLivewireTest extends TestCase
         $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'دوم', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $data['unit']->id,
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $data['unit']->id,
         ]);
 
         $this->createHardwareForUser($data['user'], $data['unit'], [
@@ -366,13 +346,13 @@ class HardwareIndexLivewireTest extends TestCase
         ]);
 
         Livewire::test('hardware.index')
-            ->set('filterUnit', 'واحد تست')
+            ->set('filterUnit', $data['unit']->name)
             ->assertSee('UnitPC');
     }
 
     public function test_filter_semat_applies(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -380,14 +360,15 @@ class HardwareIndexLivewireTest extends TestCase
             'pc_name' => 'SematPC',
         ]);
 
+        $sematName = DB::table('semats')->first()->name;
         Livewire::test('hardware.index')
-            ->set('filterSemat', 'Test')
+            ->set('filterSemat', $sematName)
             ->assertSee('SematPC');
     }
 
     public function test_clear_filters_resets_all(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -411,7 +392,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_has_active_filters_true_when_set(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -422,7 +403,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_has_active_filters_false_when_empty(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -435,7 +416,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_column_visibility_defaults(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -454,7 +435,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_toggle_col_panel(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -470,21 +451,21 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_person_search_scoped(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
         // Person in scope
-        $person = Person::where('n_code', $data['n_code'])->first();
+        $person = Person::where('n_code', $data['user']->n_code)->first();
 
         Livewire::test('hardware.index')
-            ->set('personSearch', 'تست')
-            ->assertSet('personResults.0.n_code', $data['n_code']);
+            ->set('personSearch', mb_substr($person->f_name, 0, 3))
+            ->assertSet('personResults.0.n_code', $data['user']->n_code);
     }
 
     public function test_person_search_short_term_clears(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -496,19 +477,20 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_updated_n_code_valid(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
+        $person = Person::where('n_code', $data['user']->n_code)->first();
         Livewire::test('hardware.index')
-            ->set('n_code', $data['n_code'])
+            ->set('n_code', $data['user']->n_code)
             ->assertSet('n_code_status', 'valid')
-            ->assertSet('n_code_name', 'تست کاربر');
+            ->assertSet('n_code_name', $person->f_name.' '.$person->l_name);
     }
 
     public function test_updated_n_code_invalid(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -519,7 +501,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_updated_n_code_short_resets(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -534,7 +516,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_start_create_opens_form(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -546,13 +528,13 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_create_hardware_scoped(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
         Livewire::test('hardware.index')
             ->call('startCreate')
-            ->set('n_code', $data['n_code'])
+            ->set('n_code', $data['user']->n_code)
             ->set('pc_name', 'New-PC-Test')
             ->call('createHardware')
             ->assertHasNoErrors()
@@ -563,7 +545,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_create_hardware_requires_n_code_and_pc_name(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -575,7 +557,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_create_hardware_out_of_scope_rejected(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -584,7 +566,11 @@ class HardwareIndexLivewireTest extends TestCase
         $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'دیگر', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $otherUnit->id,
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $otherUnit->id,
         ]);
 
         Livewire::test('hardware.index')
@@ -600,7 +586,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_edit_hardware_populates_form(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -619,7 +605,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_update_hardware_scoped(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -639,7 +625,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_delete_soft_deletes(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -657,7 +643,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_bulk_mark_empty_shows_error(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -669,7 +655,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_bulk_mark_updates_selected(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -686,7 +672,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_bulk_delete_scoped(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -703,7 +689,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_bulk_delete_empty_does_nothing(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -715,7 +701,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_clear_selection(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -729,7 +715,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_export_dispatches(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -742,7 +728,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_load_history_paginated(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -767,7 +753,7 @@ class HardwareIndexLivewireTest extends TestCase
 
     public function test_history_page_navigation(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 

@@ -5,17 +5,16 @@ namespace Tests\Feature;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class HardwareTableLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -23,31 +22,7 @@ class HardwareTableLivewireTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences after inserting with explicit IDs
-        DB::select("SELECT setval('tahsils_id_seq', (SELECT COALESCE(MAX(id),0) FROM tahsils))");
-        DB::select("SELECT setval('estekhdams_id_seq', (SELECT COALESCE(MAX(id),0) FROM estekhdams))");
-        DB::select("SELECT setval('semats_id_seq', (SELECT COALESCE(MAX(id),0) FROM semats))");
-        DB::select("SELECT setval('radifs_id_seq', (SELECT COALESCE(MAX(id),0) FROM radifs))");
-    }
-
-    protected function createUserWithUnit(string $perm = 'manage_hardware'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $user->givePermissionTo($perm);
-
-        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+        $this->seedLookupTables();
     }
 
     protected function createHardware(array $overrides = [], ?int $personUnitId = null): Hardware
@@ -60,8 +35,11 @@ class HardwareTableLivewireTest extends TestCase
             $nCode = (string) fake()->unique()->numerify('##########');
             Person::create([
                 'n_code' => $nCode, 'f_name' => 'سخت', 'l_name' => 'افزار',
-                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1,
-                'u_id' => $unitId ?? 1,
+                't_id' => DB::table('tahsils')->first()->id,
+                'e_id' => DB::table('estekhdams')->first()->id,
+                's_id' => DB::table('semats')->first()->id,
+                'r_id' => DB::table('radifs')->first()->id,
+                'u_id' => $unitId ?? DB::table('units')->first()->id,
             ]);
 
             return Hardware::create(array_merge([
@@ -100,7 +78,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_returns_403_without_permission(): void
     {
-        $data = $this->createUserWithUnit('manage_users');
+        $data = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($data['user']);
 
         $this->get('/hardware')->assertStatus(403);
@@ -108,7 +86,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_page_loads_for_authorized_user(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         Livewire::test('hardware.index')
@@ -119,7 +97,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_renders_both_layouts(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware([], $data['unit']->id);
@@ -133,7 +111,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_status_badge_mark(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['mark' => true, 'shutdown' => false], $data['unit']->id);
@@ -144,7 +122,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_status_badge_off(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['mark' => false, 'shutdown' => true], $data['unit']->id);
@@ -155,7 +133,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_status_badge_active(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['mark' => false, 'shutdown' => false], $data['unit']->id);
@@ -168,7 +146,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_marked_highlight_applied(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['mark' => true, 'shutdown' => false], $data['unit']->id);
@@ -181,7 +159,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_bulk_checkbox_toggles_selection(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware([], $data['unit']->id);
@@ -196,7 +174,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_perpage_values(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         Livewire::test('hardware.index')
@@ -213,7 +191,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_sort_headers_reorder(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         Livewire::test('hardware.index')
@@ -228,7 +206,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_edit_opens_modal(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['pc_name' => 'EditTestPC'], $data['unit']->id);
@@ -244,7 +222,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_load_history(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['pc_name' => 'HistoryTestPC'], $data['unit']->id);
@@ -265,7 +243,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_delete_soft_deletes(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware(['pc_name' => 'DeleteTestPC'], $data['unit']->id);
@@ -281,7 +259,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_empty_hardwares_renders(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         Livewire::test('hardware.index')
@@ -293,7 +271,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_mark_overrides_off_status(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         // mark=true, shutdown=true — mark takes priority in status logic
@@ -309,7 +287,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_default_status_is_active(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         // mark=false, shutdown=false — status = 'on' → 'فعال'
@@ -323,7 +301,7 @@ class HardwareTableLivewireTest extends TestCase
 
     public function test_selection_survives_perpage_change(): void
     {
-        $data = $this->createUserWithUnit('manage_hardware');
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         $hw = $this->createHardware([], $data['unit']->id);

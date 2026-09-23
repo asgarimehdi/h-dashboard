@@ -42,7 +42,20 @@ Route::post('/login', function (Request $request) {
         return response()->json(['message' => 'Credentials not match'], 401);
     }
 
-    $token = $user->createToken('flutter-app')->plainTextToken;
+    $abilities = [
+        'units:read',
+        'hardware:read', 'hardware:write',
+        'tickets:read', 'tickets:write',
+        'persons:read', 'persons:write',
+        'todos:read', 'todos:write',
+        'hr:read',
+        'notifications:read',
+        'gis:read',
+        'reports:read',
+        'traffic:read',
+    ];
+
+    $token = $user->createToken('flutter-app', $abilities)->plainTextToken;
 
     return response()->json(['token' => $token]);
 })->middleware('throttle:5,1');

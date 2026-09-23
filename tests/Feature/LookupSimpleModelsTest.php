@@ -11,9 +11,10 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Tests\TestCase;
 
-covers(Person::class);
+#[CoversNothing]
 
 class LookupSimpleModelsTest extends TestCase
 {

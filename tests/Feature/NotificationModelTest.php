@@ -9,46 +9,29 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Notification::class);
 
 class NotificationModelTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     // --- UUID auto-generation ---
 
     public function test_notification_gets_uuid_on_create(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $notification = Notification::create([
             'user_id' => $user->id,
@@ -63,7 +46,6 @@ class NotificationModelTest extends TestCase
     public function test_notification_is_not_auto_incrementing(): void
     {
         $notification = new Notification;
-
         $this->assertFalse($notification->getIncrementing());
         $this->assertEquals('string', $notification->getKeyType());
     }
@@ -72,7 +54,7 @@ class NotificationModelTest extends TestCase
 
     public function test_notification_belongs_to_user(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $notification = Notification::create([
             'user_id' => $user->id,
@@ -88,7 +70,8 @@ class NotificationModelTest extends TestCase
 
     public function test_mark_as_read_sets_is_read_and_read_at(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
+
         $notification = Notification::create([
             'user_id' => $user->id,
             'type' => 'test',
@@ -107,7 +90,7 @@ class NotificationModelTest extends TestCase
 
     public function test_mark_all_as_read_marks_all_unread_for_current_user(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         // Create 3 unread notifications
@@ -124,7 +107,7 @@ class NotificationModelTest extends TestCase
 
     public function test_mark_all_as_read_does_not_affect_other_users(): void
     {
-        $user1 = $this->createUserWithUnit();
+        ['user' => $user1] = $this->createUserWithUnit();
         $this->actingAs($user1);
 
         $nCode2 = (string) fake()->unique()->numerify('##########');
@@ -148,7 +131,7 @@ class NotificationModelTest extends TestCase
 
     public function test_mark_all_as_read_does_not_mark_already_read(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         Notification::create(['user_id' => $user->id, 'type' => 'test', 'title' => 'خوانده شده', 'is_read' => true]);
@@ -163,7 +146,7 @@ class NotificationModelTest extends TestCase
 
     public function test_notification_fillable_attributes(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $notification = Notification::create([
             'user_id' => $user->id,
@@ -189,7 +172,7 @@ class NotificationModelTest extends TestCase
 
     public function test_notification_data_is_cast_to_array(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $notification = Notification::create([
             'user_id' => $user->id,
@@ -204,7 +187,7 @@ class NotificationModelTest extends TestCase
 
     public function test_notification_is_read_is_cast_to_boolean(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $notification = Notification::create([
             'user_id' => $user->id,
@@ -219,7 +202,7 @@ class NotificationModelTest extends TestCase
 
     public function test_notification_read_at_is_cast_to_datetime(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $notification = Notification::create([
             'user_id' => $user->id,
