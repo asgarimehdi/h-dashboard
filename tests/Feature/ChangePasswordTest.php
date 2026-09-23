@@ -113,7 +113,7 @@ class ChangePasswordTest extends TestCase
 
     public function test_change_password_revokes_all_tokens(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         // Create a token for the user
