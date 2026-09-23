@@ -3,15 +3,12 @@
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
-use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\TestCase;
-
-covers(ZabbixService::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

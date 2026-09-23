@@ -2,45 +2,24 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class UnitsMapLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(string $permission = 'organization'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return ['user' => $user, 'unit' => $unit];
+        $this->seedLookupTables();
     }
 
     protected function makePolygonGeoJson(float $lng = 48.0, float $lat = 36.0): string
@@ -101,7 +80,7 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit('manage_users');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($user);
 
         $this->get("/units/{$unit->id}/map")->assertStatus(403);
@@ -111,9 +90,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_renders(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->assertStatus(200)
@@ -125,9 +103,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_mount_unknown(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => 99999])
             ->assertSet('hasBoundary', false)
@@ -138,9 +115,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_save_polygon_creates(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->call('saveBoundary', $this->makePolygonGeoJson())
@@ -156,9 +132,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_save_second_updates(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->call('saveBoundary', $this->makePolygonGeoJson())
@@ -180,9 +155,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_invalid_geometry_rejected(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         $pointGeoJson = json_encode([
             'type' => 'Feature',
@@ -202,9 +176,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_linestring_rejected(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         $lineGeoJson = json_encode([
             'type' => 'Feature',
@@ -224,9 +197,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_malformed_json_rejected(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->call('saveBoundary', 'not json at all')
@@ -239,9 +211,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_delete_clears(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->call('saveBoundary', $this->makePolygonGeoJson())
@@ -261,9 +232,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_delete_noop_when_none(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->call('deleteBoundary')
@@ -277,9 +247,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_multipolygon_accepted(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.map', ['id' => $unit->id])
             ->call('saveBoundary', $this->makeMultiPolygonGeoJson())
@@ -295,9 +264,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_empty_geojson_triggers_delete_path(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Save a boundary first
         Livewire::test('units.map', ['id' => $unit->id])
@@ -320,9 +288,8 @@ class UnitsMapLivewireTest extends TestCase
 
     public function test_existing_boundary_renders_geojson(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Save a boundary first
         Livewire::test('units.map', ['id' => $unit->id])
