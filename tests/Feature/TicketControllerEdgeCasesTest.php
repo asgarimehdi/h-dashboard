@@ -3,56 +3,26 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\TicketController;
-use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
-use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(TicketController::class);
 
 class TicketControllerEdgeCasesTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Session::flush();
-    }
-
-    protected function createUserWithUnit(): array
-    {
-        app()[PermissionRegistrar::class]->forgetCachedPermissions();
-        foreach (['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'] as $p) {
-            Permission::firstOrCreate(['name' => $p]);
-        }
-        $adminRole = Role::firstOrCreate(['name' => 'admin']);
-        $adminRole->syncPermissions(Permission::all());
-
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-        $unit = Unit::create(['name' => 'Test Unit']);
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->assignRole('admin');
-        $user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
-        app()[PermissionRegistrar::class]->forgetCachedPermissions();
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $unit->id);
-
-        return ['user' => User::find($user->id), 'unit' => $unit];
+        $this->seed(PermissionSeeder::class);
+        $this->seedLookupTables();
     }
 
     public function actingAs($user, $driver = null)
@@ -64,7 +34,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_create_requires_valid_fields(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/tickets', []);
 
@@ -73,7 +43,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_create_rejects_unit_outside_scope(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $otherUnit = Unit::create(['name' => 'Other Unit']);
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/tickets', [
@@ -89,7 +59,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_update_rejects_unit_outside_scope(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-201', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'S', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
         $otherUnit = Unit::create(['name' => 'Other Unit']);
 
@@ -109,7 +79,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_delete_rejects_unit_outside_scope(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $otherUnit = Unit::create(['name' => 'Other Unit']);
         $ticket = Ticket::create(['ticket_code' => 'T-203', 'user_id' => $user->id, 'unit_id' => $otherUnit->id, 'subject' => 'Hidden', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
 
@@ -121,7 +91,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_index_filters_by_status_and_priority(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         Ticket::create(['ticket_code' => 'T-204', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'A', 'content' => 'C', 'priority' => 'urgent', 'status' => 'created']);
         Ticket::create(['ticket_code' => 'T-205', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'B', 'content' => 'C', 'priority' => 'low', 'status' => 'completed']);
 
@@ -140,7 +110,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_index_assigned_to_me_filter(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-206', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Mine', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
         $ticket->update(['current_assignee_id' => $user->id]);
 
@@ -153,7 +123,7 @@ class TicketControllerEdgeCasesTest extends TestCase
 
     public function test_update_with_partial_fields(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-207', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'S', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
 
         $response = $this->actingAs($user, 'sanctum')->putJson("/api/tickets/{$ticket->id}", [

@@ -9,16 +9,16 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAudit::class);
 
 class HardwareAuditModalLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,42 +26,7 @@ class HardwareAuditModalLivewireTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences after explicit inserts
-        DB::statement("SELECT setval('tahsils_id_seq', COALESCE((SELECT MAX(id) FROM tahsils), 1))");
-        DB::statement("SELECT setval('estekhdams_id_seq', COALESCE((SELECT MAX(id) FROM estekhdams), 1))");
-        DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
-        DB::statement("SELECT setval('radifs_id_seq', COALESCE((SELECT MAX(id) FROM radifs), 1))");
-    }
-
-    /**
-     * Create a user with the given permission, linked to a unit.
-     * Returns ['user' => User, 'unit' => Unit, 'n_code' => string].
-     */
-    protected function createUserWithUnit(string $permission = 'manage_hardware'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode,
-            'f_name' => 'تست',
-            'l_name' => 'کاربر',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
-            'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $unit->id);
-
-        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+        $this->seedLookupTables();
     }
 
     /**
@@ -94,7 +59,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_returns_403_without_permission(): void
     {
-        $data = $this->createUserWithUnit('view_all_tickets');
+        $data = $this->createUserWithUnit(['view_all_tickets']);
         $this->actingAs($data['user']);
 
         $this->get('/hardware')->assertStatus(403);
@@ -102,7 +67,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_page_loads_for_authorized_user(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         Livewire::test('hardware.index')
@@ -114,7 +79,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_load_history_opens_modal(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -138,7 +103,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_empty_history_message(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
 
         // Create hardware with a unique n_code that has no pre-existing audits
@@ -157,7 +122,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_filter_history_all_actions(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -211,7 +176,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_filter_history_active_button_class(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -232,7 +197,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_pagination_controls(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -263,7 +228,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_pagination_first_page_prev_disabled(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -288,7 +253,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_pagination_last_page_next_disabled(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -315,7 +280,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_rollback_button_visibility(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -332,7 +297,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_rollback_restores_field(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -366,7 +331,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_load_history_resets_page_to_1(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -393,7 +358,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_filter_history_resets_page_to_1(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -422,7 +387,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_no_matching_action_shows_empty(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -438,7 +403,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_pagination_hidden_when_total_lte_per_page(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -455,7 +420,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_rollback_invalid_audit_id_no_crash(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 
@@ -471,7 +436,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_rollback_mismatched_hardware_id_no_crash(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw1 = $this->createHardware($data['user']);
         $hw2 = $this->createHardware($data['user']);
@@ -496,8 +461,8 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_wrong_unit_sees_empty_history(): void
     {
-        $data1 = $this->createUserWithUnit();
-        $data2 = $this->createUserWithUnit();
+        $data1 = $this->createUserWithUnit(['manage_hardware']);
+        $data2 = $this->createUserWithUnit(['manage_hardware']);
 
         // Reset session to user1's unit (createUserWithUnit overwrites it)
         Session::put('current_unit_id', $data1['unit']->id);
@@ -505,7 +470,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
         // Create hardware in unit 2's scope
         $hw = Hardware::create([
-            'n_code' => $data2['n_code'],
+            'n_code' => $data2['user']->n_code,
             'pc_name' => 'PC-Other',
             'type' => 'PC',
             'cpu' => 'Intel i3',
@@ -522,7 +487,7 @@ class HardwareAuditModalLivewireTest extends TestCase
 
     public function test_jalali_date_renders_per_entry(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         $hw = $this->createHardware($data['user']);
 

@@ -8,23 +8,26 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareController::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
+
+beforeEach(function () {
+    $this->seedLookupTables();
+});
 
 /**
  * Helper: simulate restoreAuditValue (mirrors Livewire component method).
  */
 function simulateRestoreAuditValue(string $displayValue, string $field): mixed
 {
-    if ($displayValue === '—') {
+    if ($displayValue === '\u2014') {
         return null;
     }
     if ($displayValue === 'بله') {
@@ -43,13 +46,9 @@ function simulateRestoreAuditValue(string $displayValue, string $field): mixed
 function makeRestoreTestUser(): array
 {
     $unit = Unit::create(['name' => 'Restore Test']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
     $nCode = (string) fake()->unique()->numerify('##########');
-    Person::create(['n_code' => $nCode, 'f_name' => 'R', 'l_name' => 'S', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
-    $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+    Person::factory()->create(['n_code' => $nCode, 'u_id' => $unit->id]);
+    $user = User::factory()->create(['n_code' => $nCode]);
     Permission::firstOrCreate(['name' => 'manage_hardware']);
     $user->givePermissionTo('manage_hardware');
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
@@ -112,7 +111,7 @@ it('deleted hardware can be restored from audit trail (unit logic)', function ()
     // Log rollback audit
     app(HardwareAuditObserver::class)->recordRollbackAudit(
         $restored,
-        array_map(fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'], $audit->changes),
+        array_map(fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '\u2014'], $audit->changes),
         $user->id
     );
 
@@ -156,7 +155,7 @@ it('restore preserves original hardware id', function () {
     }
     $restoreData['n_code'] = $nCode;
 
-    // Create without explicit ID — let PostgreSQL sequence assign it
+    // Create without explicit ID \u2014 let PostgreSQL sequence assign it
     $restored = Hardware::create($restoreData);
 
     expect($restored->id)->not->toBeNull();

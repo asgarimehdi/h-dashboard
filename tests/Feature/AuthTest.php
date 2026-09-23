@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\Api\HardwareController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -13,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-covers(HardwareController::class);
+covers(User::class);
 
 uses(TestCase::class, RefreshDatabase::class);
 

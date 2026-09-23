@@ -8,16 +8,16 @@ use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Unit::class, Person::class);
 
 class HrOrgNodeLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,27 +26,7 @@ class HrOrgNodeLivewireTest extends TestCase
         Session::flush();
 
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(string $perm = 'view_hr_dashboard'): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($perm);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $unit->id);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     // ==================== Page load / auth ====================
@@ -58,7 +38,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_org_chart_returns_403_without_permission(): void
     {
-        $user = $this->createUserWithUnit('manage_users'); // wrong permission
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']); // wrong permission
         $this->actingAs($user);
 
         $this->get('/hr/org-chart')->assertStatus(403);
@@ -66,7 +46,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_org_chart_renders_for_authorized_user(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         Livewire::test('hr.org-chart')
@@ -78,7 +58,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_renders_root(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $component = Livewire::test('hr.org-chart')
@@ -93,7 +73,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_root_shows_name_unit_type_person_count_badge_and_leaf_dot(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $component = Livewire::test('hr.org-chart')
@@ -115,7 +95,7 @@ class HrOrgNodeLivewireTest extends TestCase
     public function test_toggle_expands_and_lazy_loads_children(): void
     {
         // Create a tree: root -> child
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $rootUnit = Unit::whereNull('parent_id')->first();
@@ -139,7 +119,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_select_loads_detail(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $rootUnit = Unit::whereNull('parent_id')->first();
@@ -156,7 +136,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_expand_collapse_all_updates_tree(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $component = Livewire::test('hr.org-chart')
@@ -177,7 +157,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_empty_badge_on_zero_persons(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         // Create an empty unit
@@ -193,7 +173,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_search_highlights_match_and_expands_ancestors(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $rootUnit = Unit::whereNull('parent_id')->first();
@@ -215,7 +195,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_unauthorized_select_unit_ignored_with_error_toast(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         // Create another unit that user doesn't have access to
@@ -232,7 +212,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_inaccessible_child_hidden_from_tree(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         $rootUnit = Unit::whereNull('parent_id')->first();
@@ -252,7 +232,7 @@ class HrOrgNodeLivewireTest extends TestCase
 
     public function test_no_n_plus_one_on_person_counts_and_lazy_children(): void
     {
-        $user = $this->createUserWithUnit('view_hr_dashboard');
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
         // Create a deeper tree with multiple units

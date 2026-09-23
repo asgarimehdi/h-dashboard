@@ -2,23 +2,21 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\UnitTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Unit::class);
 
 class MapsPointLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,33 +24,9 @@ class MapsPointLivewireTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
         $this->seed(UnitTypeSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences for tables with explicit IDs
-        DB::statement("SELECT setval('tahsils_id_seq', (SELECT COALESCE(MAX(id), 1) FROM tahsils))");
-        DB::statement("SELECT setval('estekhdams_id_seq', (SELECT COALESCE(MAX(id), 1) FROM estekhdams))");
-        DB::statement("SELECT setval('semats_id_seq', (SELECT COALESCE(MAX(id), 1) FROM semats))");
-        DB::statement("SELECT setval('radifs_id_seq', (SELECT COALESCE(MAX(id), 1) FROM radifs))");
+        $this->seedLookupTables();
 
         Cache::flush();
-    }
-
-    protected function createUserWithUnit(): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return ['user' => $user, 'unit' => $unit];
     }
 
     // ==================== Page load / auth ====================
@@ -72,8 +46,7 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_renders(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
 
@@ -86,8 +59,7 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_add_point(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
 
@@ -104,8 +76,7 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_edit_point(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
 
@@ -132,8 +103,7 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_delete_point(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
 
@@ -158,10 +128,13 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_invalid_coords(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
+
+        // Remove coordinates to simulate a unit without location data
+        $unit->update(['lat' => null, 'lng' => null]);
+        Cache::flush();
 
         // Unit without coordinates should not appear in location
         $component = Livewire::test('maps/point');
@@ -171,8 +144,7 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_duplicate_points_handled(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
 
@@ -198,8 +170,7 @@ class MapsPointLivewireTest extends TestCase
 
     public function test_missing_unit_rejected(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('map');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         Session::put('current_unit_id', $unit->id);
 

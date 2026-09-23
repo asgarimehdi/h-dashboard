@@ -2,44 +2,22 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class MapsRoute2LivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(string $permission = 'map'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $user->givePermissionTo($permission);
-
-        return ['user' => $user, 'unit' => $unit];
+        $this->seedLookupTables();
     }
 
     // ==================== Guest / Auth gates ====================
@@ -51,14 +29,14 @@ class MapsRoute2LivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        ['user' => $user] = $this->createUserWithUnit('manage_users');
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($user);
         $this->get('/maps/route2')->assertStatus(403);
     }
 
     public function test_renders(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         session()->put('current_unit_id', $unit->id);
 
@@ -71,7 +49,7 @@ class MapsRoute2LivewireTest extends TestCase
 
     public function test_create_route(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         session()->put('current_unit_id', $unit->id);
 
@@ -84,7 +62,7 @@ class MapsRoute2LivewireTest extends TestCase
 
     public function test_edit_route(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         session()->put('current_unit_id', $unit->id);
 
@@ -98,7 +76,7 @@ class MapsRoute2LivewireTest extends TestCase
 
     public function test_delete_route(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         session()->put('current_unit_id', $unit->id);
 
@@ -115,7 +93,7 @@ class MapsRoute2LivewireTest extends TestCase
 
     public function test_swap_points(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
         session()->put('current_unit_id', $unit->id);
 

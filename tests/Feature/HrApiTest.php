@@ -10,15 +10,16 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(OrgChartController::class, HrStatsController::class, HrAnalyticsController::class);
 
 class HrApiTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -29,26 +30,22 @@ class HrApiTest extends TestCase
     {
         parent::setUp();
         Session::flush();
-
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'کارشناسی']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'رسمی']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'کارشناس']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'رتبه ۱']);
+        $this->seed(PermissionSeeder::class);
+        $this->seedLookupTables();
 
         $this->unit = Unit::create(['name' => 'مرکز بهداشت']);
         $childUnit = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $this->unit->id]);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی',
-            't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
-            'u_id' => $this->unit->id, 'status' => 'active',
+        Person::factory()->create([
+            'n_code' => $nCode,
+            'u_id' => $this->unit->id,
+            'status' => 'active',
         ]);
 
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
-        $this->seed(PermissionSeeder::class);
         $this->user->givePermissionTo('view_hr_dashboard');
     }
 
@@ -117,14 +114,7 @@ class HrApiTest extends TestCase
     {
         $this->actingAs($this->user, 'sanctum');
         $otherUnit = Unit::create(['name' => 'Out of scope']);
-        $other = Person::create([
-            'n_code' => (string) fake()->unique()->numerify('##########'),
-            'f_name' => 'X', 'l_name' => 'Y', 'u_id' => $otherUnit->id,
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R']),
-        ]);
+        $other = Person::factory()->create(['u_id' => $otherUnit->id]);
 
         $response = $this->getJson("/api/hr/personnel/{$other->n_code}");
         $response->assertStatus(403);

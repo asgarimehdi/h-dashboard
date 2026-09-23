@@ -3,50 +3,29 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
-use App\Models\Person;
 use App\Models\Todo;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(ActivityLog::class);
 
 class ActivityLogModelTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     public function test_activity_log_belongs_to_user(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLog::create([
@@ -61,7 +40,7 @@ class ActivityLogModelTest extends TestCase
 
     public function test_activity_log_subject_morph_to(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create();
@@ -81,7 +60,7 @@ class ActivityLogModelTest extends TestCase
 
     public function test_activity_log_old_values_cast_to_array(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLog::create([
@@ -99,7 +78,7 @@ class ActivityLogModelTest extends TestCase
 
     public function test_activity_log_new_values_cast_to_array(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLog::create([
@@ -115,7 +94,7 @@ class ActivityLogModelTest extends TestCase
 
     public function test_activity_log_null_values_are_null(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLog::create([
@@ -132,7 +111,7 @@ class ActivityLogModelTest extends TestCase
 
     public function test_activity_log_fillable(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLog::create([

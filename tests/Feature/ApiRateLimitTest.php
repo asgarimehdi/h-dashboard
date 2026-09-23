@@ -2,57 +2,25 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\Api\HardwareController;
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-covers(HardwareController::class);
+#[CoversNothing]
 
 class ApiRateLimitTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-    }
-
-    protected function createUserWithUnit(): array
-    {
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
-        $unit = Unit::create(['name' => 'Test Unit']);
-
-        $person = Person::create([
-            'n_code' => '1234567890',
-            'f_name' => 'Test',
-            'l_name' => 'User',
-            'u_id' => $unit->id,
-            's_id' => $sId,
-            't_id' => $tId,
-            'e_id' => $eId,
-            'r_id' => $rId,
-        ]);
-
-        $user = User::create([
-            'n_code' => '1234567890',
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => Hash::make('password'),
-        ]);
-
-        return ['user' => $user, 'person' => $person, 'unit' => $unit];
+        $this->seedLookupTables();
     }
 
     public function test_authenticated_api_route_has_throttle_middleware(): void
@@ -98,10 +66,10 @@ class ApiRateLimitTest extends TestCase
 
     public function test_login_accepts_valid_credentials(): void
     {
-        $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $response = $this->postJson('/api/login', [
-            'n_code' => '1234567890',
+            'n_code' => $user->n_code,
             'password' => 'password',
         ]);
 

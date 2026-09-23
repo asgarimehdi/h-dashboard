@@ -2,57 +2,25 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
 use App\Models\Region;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class MapsUnitLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences after explicit-ID inserts
-        DB::select("SELECT setval('tahsils_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM tahsils), 1))");
-        DB::select("SELECT setval('estekhdams_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM estekhdams), 1))");
-        DB::select("SELECT setval('semats_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM semats), 1))");
-        DB::select("SELECT setval('radifs_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM radifs), 1))");
-    }
-
-    protected function createUserWithUnit(string $perm = 'map'): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode,
-            'f_name' => 'تست',
-            'l_name' => 'کاربر',
-            't_id' => 1,
-            'e_id' => 1,
-            's_id' => 1,
-            'r_id' => 1,
-            'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($perm);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     protected function seedRegionAndTypes(): Region
@@ -89,7 +57,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $user = $this->createUserWithUnit('manage_users');
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($user);
 
         $this->get('/maps/unit')->assertStatus(403);
@@ -97,7 +65,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_renders(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('maps/unit')
@@ -109,7 +77,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_unit_boundary(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         $region = $this->seedRegionAndTypes();
@@ -128,7 +96,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_scope_filtering(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         $region = $this->seedRegionAndTypes();
@@ -154,7 +122,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_search_filter(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('maps/unit')
@@ -164,7 +132,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_region_filter_dispatches_events(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         $region = $this->seedRegionAndTypes();
@@ -179,7 +147,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_empty_state_without_units(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         $region = Region::create(['name' => 'شهرستان خالی', 'type' => 'county']);
@@ -197,7 +165,7 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_show_help_modal(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('maps/unit')

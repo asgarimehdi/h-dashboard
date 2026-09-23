@@ -14,9 +14,10 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Tests\TestCase;
 
-covers(Ticket::class);
+#[CoversNothing]
 
 class OtherModelsTest extends TestCase
 {
