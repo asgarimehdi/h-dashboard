@@ -38,6 +38,19 @@ class GisApiTest extends TestCase
         ]);
     }
 
+    /**
+     * UnitFactory assigns random lat/lng that may fall outside the test bbox
+     * (48-49E, 36-37N), hiding units/hardware/tickets from GIS responses.
+     * Pin the user's unit inside the bbox after creation.
+     */
+    private function createBBoxUser(): array
+    {
+        $result = $this->createUserWithUnit(['map']);
+        $result['unit']->update(['lat' => 36.669343, 'lng' => 48.47163]);
+
+        return $result;
+    }
+
     /** @test */
     public function test_unauthenticated_user_cannot_access_gis_apis(): void
     {
@@ -51,7 +64,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_units_returns_geojson_feature_collection(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $this->createChildUnit($unit, 'Child Unit', 36.7, 48.5);
 
         $response = $this->actingAs($user, 'sanctum')
@@ -71,7 +84,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_units_filters_by_bbox(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $unit->update(['lat' => 36.669343, 'lng' => 48.47163]);
         $this->createChildUnit($unit, 'Child In BBox', 36.67, 48.48);
         $this->createChildUnit($unit, 'Child Out BBox', 38.0, 50.0); // clearly outside
@@ -90,7 +103,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_hardware_returns_geojson_feature_collection(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $person = Person::where('u_id', $unit->id)->first();
 
         Hardware::create([
@@ -118,7 +131,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_hardware_filters_by_type(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $person = Person::where('u_id', $unit->id)->first();
 
         Hardware::create([
@@ -142,7 +155,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_tickets_returns_geojson_feature_collection(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
 
         Ticket::create([
             'ticket_code' => 'TKT-001',
@@ -171,7 +184,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_tickets_filters_by_priority_and_status(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
 
         Ticket::create([
             'ticket_code' => 'TKT-001',
@@ -218,7 +231,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_stats_returns_counts(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $this->createChildUnit($unit, 'Child Unit', 36.67, 48.48);
         $person = Person::where('u_id', $unit->id)->first();
 
@@ -261,7 +274,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_clusters_returns_clustered_data(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $this->createChildUnit($unit, 'Cluster Unit 1', 36.669, 48.471);
         $this->createChildUnit($unit, 'Cluster Unit 2', 36.670, 48.472);
         $this->createChildUnit($unit, 'Cluster Unit 3', 37.0, 49.0); // far away
@@ -284,7 +297,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_apis_respect_accessible_units(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $unit->update(['name' => 'Unit A', 'lat' => 36.669, 'lng' => 48.471]);
         $this->createChildUnit($unit, 'Unit A Child', 36.67, 48.48);
 

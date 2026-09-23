@@ -34,13 +34,13 @@ class UnitsChartLivewireTest extends TestCase
 
     public function test_renders_tree(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
 
         Livewire::test('units.chart')
             ->assertStatus(200)
             ->assertSee('ساختار درختی واحدها')
-            ->assertSee('واحد تست');
+            ->assertSee($unit->name);
     }
 
     public function test_returns_403_without_permission(): void
@@ -68,7 +68,7 @@ class UnitsChartLivewireTest extends TestCase
 
         $rootUnits = $component->get('rootUnits');
         $this->assertCount(1, $rootUnits);
-        $this->assertEquals('واحد تست', $rootUnits[0]->name);
+        $this->assertEquals($unit->name, $rootUnits[0]->name);
     }
 
     public function test_toggle(): void

@@ -19,22 +19,32 @@ use Illuminate\Support\Str;
 trait InteractsWithTestSetup
 {
     /**
-     * Seed all four lookup tables using factories and resync Postgres sequences.
-     * Call this in setUp() instead of raw DB::table()->insert() + setval().
+     * Seed all four lookup tables with a deterministic row at id=1 and resync
+     * Postgres sequences. Call this in setUp() instead of raw DB::table()->insert() + setval().
+     *
+     * Tests hardcode lookup FKs as 1 (t_id/e_id/s_id/r_id => 1). Postgres
+     * sequences are NOT transactional: RefreshDatabase rolls back each test's
+     * rows but the sequence keeps advancing, so an auto-incremented factory row
+     * gets id=2,3,… on later tests and the hardcoded FKs break. Forcing id=1
+     * restores the contract on every test.
      */
     protected function seedLookupTables(): void
     {
-        // Use factories — they create realistic data and auto-handle sequences
-        TahsilFactory::new()->count(1)->create();
-        EstekhdamFactory::new()->count(1)->create();
-        SematFactory::new()->count(1)->create();
-        RadifFactory::new()->count(1)->create();
+        $lookups = [
+            'tahsils' => TahsilFactory::class,
+            'estekhdams' => EstekhdamFactory::class,
+            'semats' => SematFactory::class,
+            'radifs' => RadifFactory::class,
+        ];
 
-        // Resync sequences to avoid duplicate-key collisions
-        $this->resyncSequence('tahsils');
-        $this->resyncSequence('estekhdams');
-        $this->resyncSequence('semats');
-        $this->resyncSequence('radifs');
+        foreach ($lookups as $table => $factory) {
+            if (! DB::table($table)->where('id', 1)->exists()) {
+                $factory::new()->create(['id' => 1]);
+            }
+
+            // Resync sequence so later insertGetId() calls skip id=1.
+            $this->resyncSequence($table);
+        }
     }
 
     /**
