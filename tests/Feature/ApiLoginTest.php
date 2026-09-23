@@ -111,7 +111,7 @@ class ApiLoginTest extends TestCase
 
     public function test_token_has_expected_abilities(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
 
         $response = $this->postJson('/api/login', [
             'n_code' => $user->n_code,
