@@ -6,12 +6,15 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
+uses(InteractsWithTestSetup::class);
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
@@ -26,7 +29,7 @@ function makeTicketManager(): User
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Ticket', 'l_name' => 'Manager',
-        't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id, 'u_id' => $unit->id,
     ]);
 
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
@@ -44,7 +47,7 @@ function makeUnauthorizedUser(): User
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Unauth', 'l_name' => 'User',
-        't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id, 'u_id' => $unit->id,
     ]);
 
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);

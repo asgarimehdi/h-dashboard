@@ -14,6 +14,7 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -243,7 +244,7 @@ class TicketsCreateLivewireTest extends TestCase
         $recipientN = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $recipientN, 'f_name' => 'گیرنده', 'l_name' => 'تست',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1,
+            't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $target->id,
         ]);
         $recipient = User::create(['n_code' => $recipientN, 'password' => Hash::make('password')]);
