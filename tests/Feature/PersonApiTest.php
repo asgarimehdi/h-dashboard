@@ -8,6 +8,7 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -15,6 +16,7 @@ covers(PersonController::class);
 
 class PersonApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
@@ -35,8 +37,9 @@ class PersonApiTest extends TestCase
     public function test_authenticated_user_can_list_persons(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/persons');
+        $response = $this->apiGet('/api/persons', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data', 'meta']);
@@ -46,8 +49,9 @@ class PersonApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/persons/{$person->n_code}");
+        $response = $this->apiGet("/api/persons/{$person->n_code}", $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['n_code' => $person->n_code]]);
@@ -57,8 +61,9 @@ class PersonApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $existingPerson = Person::first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/persons', [
+        $response = $this->apiPost('/api/persons', [
             'n_code' => '1111111111',
             'f_name' => 'John',
             'l_name' => 'Doe',
@@ -67,7 +72,7 @@ class PersonApiTest extends TestCase
             's_id' => $existingPerson->s_id,
             'r_id' => $existingPerson->r_id,
             'u_id' => $unit->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
@@ -78,10 +83,11 @@ class PersonApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/persons/{$person->n_code}", [
+        $response = $this->apiPut("/api/persons/{$person->n_code}", [
             'f_name' => 'Updated',
-        ]);
+        ], $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['f_name' => 'Updated']]);
@@ -103,7 +109,8 @@ class PersonApiTest extends TestCase
             'r_id' => $existingPerson->r_id,
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/persons/{$person->n_code}");
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+        $response = $this->apiDelete("/api/persons/{$person->n_code}", $token);
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('persons', ['n_code' => $person->n_code]);
@@ -112,8 +119,9 @@ class PersonApiTest extends TestCase
     public function test_create_person_requires_required_fields(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/persons', []);
+        $response = $this->apiPost('/api/persons', [], $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id']);
@@ -127,12 +135,13 @@ class PersonApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
 
         // u_id=999999 doesn't exist in units table → should be 422 (validation)
         // Before the fix, this could return 403 (scope check ran first, leaking info)
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/persons/{$person->n_code}", [
+        $response = $this->apiPut("/api/persons/{$person->n_code}", [
             'u_id' => 999999,
-        ]);
+        ], $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['u_id']);
@@ -146,13 +155,14 @@ class PersonApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
 
         // Create a unit that EXISTS but is NOT in the user's accessible scope
         $otherUnit = Unit::create(['name' => 'Inaccessible Unit']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/persons/{$person->n_code}", [
+        $response = $this->apiPut("/api/persons/{$person->n_code}", [
             'u_id' => $otherUnit->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(403)
             ->assertJson(['message' => 'Unit not accessible.']);

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
 /**
@@ -27,6 +28,7 @@ covers(TicketComment::class);
 
 class TicketCommentTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use RefreshDatabase;
 
     protected $unit;
@@ -70,8 +72,7 @@ class TicketCommentTest extends TestCase
 
         $this->ticket = Ticket::create([
             'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
-            'subject' => 'Test Subject',
-            'content' => 'Desc',
+            'subject' => 'Test Subject', 'content' => 'Desc',
             'unit_id' => $this->unit->id,
             'user_id' => $this->user->id,
         ]);
@@ -79,10 +80,10 @@ class TicketCommentTest extends TestCase
 
     public function test_can_create_comment(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'اولین کامنت',
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.body', 'اولین کامنت');
@@ -96,13 +97,13 @@ class TicketCommentTest extends TestCase
 
     public function test_can_reply_to_comment(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $parent = $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'پدر'])->json('data');
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $parent = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'پدر'], $token)->json('data');
 
-        $response = $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $response = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'پاسخ',
             'parent_id' => $parent['id'],
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.parent_id', $parent['id']);
@@ -110,31 +111,31 @@ class TicketCommentTest extends TestCase
 
     public function test_can_list_comments(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'یک']);
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'دو']);
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'یک'], $token);
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'دو'], $token);
 
-        $response = $this->getJson("/api/tickets/{$this->ticket->id}/comments");
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments", $token);
         $response->assertStatus(200)
             ->assertJsonCount(2, 'data');
     }
 
     public function test_author_can_update_within_15min(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $comment = $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'قبل'])->json('data');
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $comment = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'قبل'], $token)->json('data');
 
-        $response = $this->putJson("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}", [
+        $response = $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}", [
             'body' => 'بعد',
-        ]);
+        ], $token);
         $response->assertStatus(200)
             ->assertJsonPath('data.body', 'بعد');
     }
 
     public function test_other_user_cannot_update(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $comment = $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'قبل'])->json('data');
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $comment = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'قبل'], $token)->json('data');
 
         // Another user in same unit (needs a person row - FK constraint)
         $nCode2 = (string) fake()->unique()->numerify('##########');
@@ -147,23 +148,26 @@ class TicketCommentTest extends TestCase
             'u_id' => $this->unit->id,
         ]);
         $other = User::create(['n_code' => $nCode2, 'password' => Hash::make('x')]);
+        $other->assignRole('admin');
+        $other->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $other->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
-        $this->actingAs($other, 'sanctum');
-        $response = $this->putJson("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}", [
+        $otherToken = $this->createApiToken($other, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}", [
             'body' => 'دزدی',
-        ]);
+        ], $otherToken);
         $response->assertStatus(403);
     }
 
     public function test_can_add_and_remove_reaction(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $comment = $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'ریاکشن'])->json('data');
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $comment = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'ریاکشن'], $token)->json('data');
 
-        $response = $this->postJson("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}/react", [
+        $response = $this->apiPost("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}/react", [
             'reaction' => '+1',
-        ]);
+        ], $token);
         $response->assertStatus(200);
         $this->assertDatabaseHas('ticket_comment_reactions', [
             'comment_id' => $comment['id'],
@@ -171,7 +175,12 @@ class TicketCommentTest extends TestCase
             'reaction' => '+1',
         ]);
 
-        $this->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}/react", [
+        $this->forgetGuards();
+        $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}/react", [
             'reaction' => '+1',
         ])->assertStatus(200);
         $this->assertDatabaseMissing('ticket_comment_reactions', [
@@ -182,10 +191,10 @@ class TicketCommentTest extends TestCase
 
     public function test_can_soft_delete_comment(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $comment = $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'حذف'])->json('data');
+        $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
+        $comment = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'حذف'], $token)->json('data');
 
-        $this->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}")
+        $this->apiDelete("/api/tickets/{$this->ticket->id}/comments/{$comment['id']}", $token)
             ->assertStatus(200);
 
         $this->assertSoftDeleted('ticket_comments', ['id' => $comment['id']]);

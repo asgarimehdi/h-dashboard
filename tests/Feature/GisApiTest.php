@@ -10,6 +10,7 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -17,6 +18,7 @@ covers(GisController::class);
 
 class GisApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
@@ -67,8 +69,8 @@ class GisApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
         $this->createChildUnit($unit, 'Child Unit', 36.7, 48.5);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/units?bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/units?bbox=48,36,49,37', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -89,8 +91,8 @@ class GisApiTest extends TestCase
         $this->createChildUnit($unit, 'Child In BBox', 36.67, 48.48);
         $this->createChildUnit($unit, 'Child Out BBox', 38.0, 50.0); // clearly outside
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/units?bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/units?bbox=48,36,49,37', $token);
 
         // Parent unit + Child In BBox = 2; Child Out BBox filtered out
         $features = $response->json('features');
@@ -114,8 +116,8 @@ class GisApiTest extends TestCase
             'ram' => '8GB',
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/hardware?bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/hardware?bbox=48,36,49,37', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -145,8 +147,8 @@ class GisApiTest extends TestCase
             'type' => 'desktop',
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/hardware?bbox=48,36,49,37&type=laptop');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/hardware?bbox=48,36,49,37&type=laptop', $token);
 
         $this->assertCount(1, $response->json('features'));
         $this->assertEquals('laptop', $response->json('features.0.properties.type'));
@@ -156,7 +158,6 @@ class GisApiTest extends TestCase
     public function test_gis_tickets_returns_geojson_feature_collection(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
-
         Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $user->id,
@@ -167,8 +168,8 @@ class GisApiTest extends TestCase
             'status' => 'created',
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/tickets?bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/tickets?bbox=48,36,49,37', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -214,15 +215,14 @@ class GisApiTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/tickets?bbox=48,36,49,37&priority=urgent');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/tickets?bbox=48,36,49,37&priority=urgent', $token);
 
         $this->assertCount(1, $response->json('features'));
         $this->assertEquals('urgent', $response->json('features.0.properties.priority'));
 
         // Test status filter
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/tickets?bbox=48,36,49,37&status=completed');
+        $response = $this->apiGet('/api/gis/tickets?bbox=48,36,49,37&status=completed', $token);
 
         $this->assertCount(1, $response->json('features'));
         $this->assertEquals('completed', $response->json('features.0.properties.status'));
@@ -240,7 +240,6 @@ class GisApiTest extends TestCase
             'pc_name' => 'PC-001',
             'type' => 'laptop',
         ]);
-
         Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $user->id,
@@ -260,8 +259,8 @@ class GisApiTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/stats?bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/stats?bbox=48,36,49,37', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['units', 'hardware', 'open_tickets']);
@@ -279,8 +278,8 @@ class GisApiTest extends TestCase
         $this->createChildUnit($unit, 'Cluster Unit 2', 36.670, 48.472);
         $this->createChildUnit($unit, 'Cluster Unit 3', 37.0, 49.0); // far away
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/clusters?zoom=10&bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/clusters?zoom=10&bbox=48,36,49,37', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -310,8 +309,8 @@ class GisApiTest extends TestCase
             'type' => 'laptop',
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->getJson('/api/gis/units?bbox=48,36,49,37');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/units?bbox=48,36,49,37', $token);
 
         // Should only see Unit A and its child, not Unit B
         $features = $response->json('features');

@@ -4,12 +4,42 @@ namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * @property int $id
+ * @property string $n_code
+ * @property string $pc_name
+ * @property string $type
+ * @property string $os
+ * @property string $ip_valid
+ * @property string $ip_local
+ * @property string $mac
+ * @property string $net_type
+ * @property string $switch
+ * @property string $port
+ * @property bool $shutdown
+ * @property string $vlan
+ * @property string $motherboard
+ * @property string $cpu
+ * @property string $ram
+ * @property string $hdd
+ * @property string $comments
+ * @property bool $mark
+ * @property Carbon|null $clean_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Person|null $person
+ * @property-read Collection<int, HardwareAudit> $audits
+ *
+ * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
+ */
 class Hardware extends Model
 {
     use HasFactory;
