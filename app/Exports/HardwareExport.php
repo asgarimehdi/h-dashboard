@@ -64,25 +64,6 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
         return $this->query->get();
     }
 
-    /**
-     * Chunked export for large datasets — processes records in batches of $chunkSize
-     * to avoid loading the entire result set into memory at once.
-     */
-    public function chunkCollection(): Collection
-    {
-        $chunk = $this->query
-            ->where('id', '>', $this->lastId)
-            ->orderBy('id')
-            ->take($this->chunkSize)
-            ->get();
-
-        if ($chunk->isNotEmpty()) {
-            $this->lastId = $chunk->last()->id;
-        }
-
-        return $chunk;
-    }
-
     public function chunkSize(): int
     {
         return $this->chunkSize;

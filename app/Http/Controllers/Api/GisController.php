@@ -417,12 +417,4 @@ class GisController extends Controller
             'features' => $features,
         ]);
     }
-
-    /**
-     * Invalidate GIS cache by bumping the version counter via the unified service.
-     */
-    public static function invalidateCache(): void
-    {
-        app(CacheInvalidationServiceInterface::class)->increment('gis');
-    }
 }

@@ -139,12 +139,6 @@ parameters:
 			path: app/Exports/HardwareExport.php
 
 		-
-			message: '#^Method App\\Exports\\HardwareExport\:\:chunkCollection\(\) return type with generic class Illuminate\\Support\\Collection does not specify its types\: TKey, TValue$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Exports/HardwareExport.php
-
-		-
 			message: '#^Method App\\Exports\\HardwareExport\:\:collection\(\) return type with generic class Illuminate\\Support\\Collection does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
@@ -1359,12 +1353,6 @@ parameters:
 		-
 			message: '#^Class App\\Models\\DailyReport has PHPDoc tag @property for property \$payload with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: app/Models/DailyReport.php
-
-		-
-			message: '#^Method App\\Models\\DailyReport\:\:generatedBy\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
 			count: 1
 			path: app/Models/DailyReport.php
 
@@ -4193,66 +4181,6 @@ parameters:
 			identifier: variable.undefined
 			count: 3
 			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
-			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:\$reportData\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Todo\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:getUnitsProperty\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Parameter \#1 \$carbon of static method Morilog\\Jalali\\Jalalian\:\:fromCarbon\(\) expects Carbon\\Carbon, Carbon\\CarbonInterface given\.$#'
-			identifier: argument.type
-			count: 2
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 4
-			path: resources/views/livewire/reports/index.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
