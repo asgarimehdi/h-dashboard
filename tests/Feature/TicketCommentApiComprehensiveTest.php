@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
 /**
@@ -28,6 +29,7 @@ covers(TicketCommentController::class);
 
 class TicketCommentApiComprehensiveTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use RefreshDatabase;
 
     protected $unit;
@@ -39,6 +41,8 @@ class TicketCommentApiComprehensiveTest extends TestCase
     protected $otherUnit;
 
     protected $otherUser;
+
+    protected $authToken;
 
     protected function setUp(): void
     {
@@ -91,13 +95,13 @@ class TicketCommentApiComprehensiveTest extends TestCase
 
     protected function authAsUserA(): void
     {
-        $this->actingAs($this->user, 'sanctum');
+        $this->authToken = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
         Session::put('current_unit_id', $this->unit->id);
     }
 
     protected function authAsUserB(): void
     {
-        $this->actingAs($this->otherUser, 'sanctum');
+        $this->authToken = $this->createApiToken($this->otherUser, ['tickets:read', 'tickets:write']);
         Session::put('current_unit_id', $this->otherUnit->id);
     }
 
@@ -120,7 +124,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->makeComment(['body' => 'ریشه ۲']);
         $this->makeComment(['body' => 'پاسخ', 'parent_id' => $root->id]);
 
-        $response = $this->getJson("/api/tickets/{$this->ticket->id}/comments");
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments", $this->authToken);
         $response->assertStatus(200);
         $this->assertEquals(2, $response->json('meta.total')); // only roots
     }
@@ -131,7 +135,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $root = $this->makeComment(['body' => 'ریشه']);
         $this->makeComment(['body' => 'پاسخ', 'parent_id' => $root->id]);
 
-        $response = $this->getJson("/api/tickets/{$this->ticket->id}/comments?threaded=true");
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments?threaded=true", $this->authToken);
         $response->assertStatus(200);
         $data = $response->json('data');
         $this->assertCount(1, $data);
@@ -141,7 +145,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     public function test_index_out_of_scope_403(): void
     {
         $this->authAsUserB();
-        $this->getJson("/api/tickets/{$this->ticket->id}/comments")
+        $this->apiGet("/api/tickets/{$this->ticket->id}/comments", $this->authToken)
             ->assertStatus(403);
     }
 
@@ -150,7 +154,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     public function test_store_requires_body(): void
     {
         $this->authAsUserA();
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", [])
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [], $this->authToken)
             ->assertStatus(422);
     }
 
@@ -164,10 +168,10 @@ class TicketCommentApiComprehensiveTest extends TestCase
         ]);
         $foreignComment = $this->makeComment(['ticket_id' => $otherTicket->id]);
 
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'پاسخ به غریبه',
             'parent_id' => $foreignComment->id,
-        ])->assertStatus(422);
+        ], $this->authToken)->assertStatus(422);
     }
 
     public function test_store_enforces_max_thread_depth_3(): void
@@ -179,24 +183,24 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $c4 = $this->makeComment(['body' => 'سطح ۴', 'parent_id' => $c3->id]);
 
         // Depth of c4 = 3 parents (c3→c2→c1); replying to c4 must fail
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'سطح ۵ ممنوع',
             'parent_id' => $c4->id,
-        ])->assertStatus(422);
+        ], $this->authToken)->assertStatus(422);
 
         // Replying to c3 (depth 2) is still allowed
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'سطح ۴ مجاز',
             'parent_id' => $c3->id,
-        ])->assertStatus(201);
+        ], $this->authToken)->assertStatus(201);
     }
 
     public function test_store_processes_markdown(): void
     {
         $this->authAsUserA();
-        $response = $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $response = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => '**bold** و `code` و [لینک](https://example.com)',
-        ]);
+        ], $this->authToken);
         $response->assertStatus(201);
         $html = $response->json('data.body_html');
         $this->assertStringContainsString('<strong>bold</strong>', $html);
@@ -207,7 +211,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     public function test_store_out_of_scope_403(): void
     {
         $this->authAsUserB();
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", ['body' => 'x'])
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", ['body' => 'x'], $this->authToken)
             ->assertStatus(403);
     }
 
@@ -217,7 +221,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     {
         $this->authAsUserA();
         $comment = $this->makeComment();
-        $this->getJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}")
+        $this->apiGet("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", $this->authToken)
             ->assertStatus(200)
             ->assertJsonPath('data.id', $comment->id);
     }
@@ -232,7 +236,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         ]);
         $foreign = $this->makeComment(['ticket_id' => $otherTicket->id]);
 
-        $this->getJson("/api/tickets/{$this->ticket->id}/comments/{$foreign->id}")
+        $this->apiGet("/api/tickets/{$this->ticket->id}/comments/{$foreign->id}", $this->authToken)
             ->assertStatus(403);
     }
 
@@ -247,9 +251,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'created_at' => now()->subMinutes(16),
         ]);
 
-        $this->putJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
+        $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
             'body' => 'ویرایش دیرهنگام',
-        ])->assertStatus(403);
+        ], $this->authToken)->assertStatus(403);
     }
 
     public function test_update_by_other_user_403(): void
@@ -258,9 +262,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $comment = $this->makeComment();
 
         $this->authAsUserB();
-        $this->putJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
+        $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
             'body' => 'دزدی',
-        ])->assertStatus(403);
+        ], $this->authToken)->assertStatus(403);
     }
 
     public function test_update_by_author_within_15min_ok(): void
@@ -268,9 +272,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->authAsUserA();
         $comment = $this->makeComment();
 
-        $this->putJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
+        $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
             'body' => 'ویرایش درست',
-        ])->assertStatus(200)
+        ], $this->authToken)->assertStatus(200)
             ->assertJsonPath('data.body', 'ویرایش درست');
     }
 
@@ -286,7 +290,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->user->assignRole('admin');
         $comment = $this->makeComment();
 
-        $this->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}")
+        $this->apiDelete("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", $this->authToken)
             ->assertStatus(200);
 
         $this->assertSoftDeleted('ticket_comments', ['id' => $comment->id]);
@@ -298,7 +302,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $comment = $this->makeComment();
 
         $this->authAsUserB();
-        $this->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}")
+        $this->apiDelete("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", $this->authToken)
             ->assertStatus(403);
     }
 
@@ -309,9 +313,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->authAsUserA();
         $comment = $this->makeComment();
 
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'])
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'], $this->authToken)
             ->assertStatus(200);
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'])
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'], $this->authToken)
             ->assertStatus(200);
 
         $this->assertEquals(1, TicketCommentReaction::where('comment_id', $comment->id)->count());
@@ -322,7 +326,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->authAsUserA();
         $comment = $this->makeComment();
 
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => '🤔'])
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => '🤔'], $this->authToken)
             ->assertStatus(422);
     }
 
@@ -336,7 +340,12 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'reaction' => 'rocket',
         ]);
 
-        $this->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'rocket'])
+        $this->forgetGuards();
+        $this->withHeaders([
+            'Authorization' => 'Bearer '.$this->authToken,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])->deleteJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'rocket'])
             ->assertStatus(200);
 
         $this->assertEquals(0, TicketCommentReaction::where('comment_id', $comment->id)->count());
@@ -350,7 +359,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         TicketCommentReaction::create(['comment_id' => $comment->id, 'user_id' => $this->otherUser->id, 'reaction' => '+1']);
         TicketCommentReaction::create(['comment_id' => $comment->id, 'user_id' => $this->user->id, 'reaction' => 'eyes']);
 
-        $response = $this->getJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/reactions");
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/reactions", $this->authToken);
         $response->assertStatus(200);
         $data = $response->json('data');
         $this->assertEquals(2, $data['+1']['count']);
@@ -364,7 +373,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $comment = $this->makeComment();
 
         $this->authAsUserB();
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'])
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'], $this->authToken)
             ->assertStatus(403);
     }
 
@@ -391,12 +400,13 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $userC->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $userC->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $this->actingAs($userC, 'sanctum');
 
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $tokenC = $this->createApiToken($userC, ['tickets:read', 'tickets:write']);
+
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'پاسخ به علی',
             'parent_id' => $parent->id,
-        ])->assertStatus(201);
+        ], $tokenC)->assertStatus(201);
 
         $this->assertDatabaseHas('notifications', [
             'user_id' => $this->user->id,
@@ -408,9 +418,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->authAsUserA();
 
         // Mention user B by n_code
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments", [
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'سلام @'.$this->otherUser->n_code.' لطفا ببین',
-        ])->assertStatus(201);
+        ], $this->authToken)->assertStatus(201);
 
         $this->assertDatabaseHas('notifications', [
             'user_id' => $this->otherUser->id,
@@ -437,9 +447,10 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $userC->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
         $userC->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $this->actingAs($userC, 'sanctum');
 
-        $this->postJson("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'])
+        $tokenC = $this->createApiToken($userC, ['tickets:read', 'tickets:write']);
+
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react", ['reaction' => 'heart'], $tokenC)
             ->assertStatus(200);
 
         $this->assertDatabaseHas('notifications', [

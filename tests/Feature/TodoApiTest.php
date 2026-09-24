@@ -7,6 +7,7 @@ use App\Models\Todo;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -14,6 +15,7 @@ covers(TodoController::class);
 
 class TodoApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
@@ -36,8 +38,9 @@ class TodoApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
 
         Todo::factory()->count(3)->create(['unit_id' => $unit->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/todos');
+        $response = $this->apiGet('/api/todos', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -50,13 +53,14 @@ class TodoApiTest extends TestCase
     public function test_user_can_create_todo_in_accessible_unit(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+        $response = $this->apiPost('/api/todos', [
             'title' => 'تست تسک جدید',
             'start_at' => '2026-07-15 10:00:00',
             'end_at' => '2026-07-20 10:00:00',
             'unit_id' => $unit->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
@@ -71,11 +75,12 @@ class TodoApiTest extends TestCase
     public function test_created_todo_belongs_to_authenticated_user(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+        $response = $this->apiPost('/api/todos', [
             'title' => 'Ownership Test',
             'start_at' => '2026-07-15 10:00:00',
-        ]);
+        ], $token);
 
         $response->assertStatus(201);
         $this->assertDatabaseHas('todos', [
@@ -88,12 +93,13 @@ class TodoApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $accessibleUnit] = $this->createUserWithUnit(['calendar']);
         $inaccessibleUnit = Unit::factory()->create(['name' => 'Inaccessible Unit']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+        $response = $this->apiPost('/api/todos', [
             'title' => 'Unauthorized Todo',
             'start_at' => '2026-07-15 10:00:00',
             'unit_id' => $inaccessibleUnit->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(403)
             ->assertJson(['message' => 'Unauthorized to create todo in this unit.']);
@@ -107,11 +113,12 @@ class TodoApiTest extends TestCase
             'unit_id' => $unit->id,
             'title' => 'Old Title',
         ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/todos/{$todo->id}", [
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
             'title' => 'Updated Title',
             'start_at' => '2026-07-16 10:00:00',
-        ]);
+        ], $token);
 
         $response->assertStatus(200)
             ->assertJson([
@@ -132,8 +139,9 @@ class TodoApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
 
         $todo = Todo::factory()->create(['unit_id' => $unit->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/todos/{$todo->id}");
+        $response = $this->apiDelete("/api/todos/{$todo->id}", $token);
 
         $response->assertStatus(200)
             ->assertJson(['success' => true]);
@@ -149,10 +157,10 @@ class TodoApiTest extends TestCase
             'unit_id' => $unit->id,
             'is_completed' => false,
         ]);
-
         $this->assertFalse($todo->is_completed);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/todos/{$todo->id}/toggle-complete");
+        $response = $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token);
 
         $response->assertStatus(200)
             ->assertJson([
@@ -177,8 +185,9 @@ class TodoApiTest extends TestCase
             'unit_id' => $unit->id,
             'start_at' => '2026-07-20 10:00:00',
         ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/todos?date=2026-07-15');
+        $response = $this->apiGet('/api/todos?date=2026-07-15', $token);
 
         $response->assertStatus(200);
         $this->assertCount(1, $response->json('data'));
@@ -190,8 +199,9 @@ class TodoApiTest extends TestCase
 
         Todo::factory()->create(['unit_id' => $unit->id, 'is_completed' => true]);
         Todo::factory()->create(['unit_id' => $unit->id, 'is_completed' => false]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/todos?is_completed=true');
+        $response = $this->apiGet('/api/todos?is_completed=true', $token);
 
         $response->assertStatus(200);
         $this->assertCount(1, $response->json('data'));
@@ -202,8 +212,9 @@ class TodoApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
 
         $todo = Todo::factory()->create(['unit_id' => $unit->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/todos/{$todo->id}");
+        $response = $this->apiGet("/api/todos/{$todo->id}", $token);
 
         $response->assertStatus(200)
             ->assertJson([
@@ -220,8 +231,9 @@ class TodoApiTest extends TestCase
         $inaccessibleUnit = Unit::factory()->create(['name' => 'Inaccessible Unit']);
 
         $todo = Todo::factory()->create(['unit_id' => $inaccessibleUnit->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/todos/{$todo->id}");
+        $response = $this->apiGet("/api/todos/{$todo->id}", $token);
 
         $response->assertStatus(403);
     }
@@ -232,10 +244,11 @@ class TodoApiTest extends TestCase
         $inaccessibleUnit = Unit::factory()->create(['name' => 'Inaccessible Unit']);
 
         $todo = Todo::factory()->create(['unit_id' => $inaccessibleUnit->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/todos/{$todo->id}", [
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
             'title' => 'Hacked Title',
-        ]);
+        ], $token);
 
         $response->assertStatus(403);
     }
@@ -246,8 +259,9 @@ class TodoApiTest extends TestCase
         $inaccessibleUnit = Unit::factory()->create(['name' => 'Inaccessible Unit']);
 
         $todo = Todo::factory()->create(['unit_id' => $inaccessibleUnit->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/todos/{$todo->id}");
+        $response = $this->apiDelete("/api/todos/{$todo->id}", $token);
 
         $response->assertStatus(403);
     }
@@ -261,8 +275,9 @@ class TodoApiTest extends TestCase
             'unit_id' => $inaccessibleUnit->id,
             'is_completed' => false,
         ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/todos/{$todo->id}/toggle-complete");
+        $response = $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token);
 
         $response->assertStatus(403);
     }
@@ -272,9 +287,10 @@ class TodoApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
 
         $todo = Todo::factory()->create(['unit_id' => null]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
         // Null-unit todos are outside any user's org scope — must be denied (issue #249)
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/todos/{$todo->id}");
+        $response = $this->apiGet("/api/todos/{$todo->id}", $token);
 
         $response->assertStatus(403);
     }
@@ -282,12 +298,12 @@ class TodoApiTest extends TestCase
     public function test_user_cannot_update_todo_with_null_unit(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['calendar']);
-
         $todo = Todo::factory()->create(['unit_id' => null]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/todos/{$todo->id}", [
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
             'title' => 'Hacked Title',
-        ]);
+        ], $token);
 
         $response->assertStatus(403);
     }
@@ -295,10 +311,10 @@ class TodoApiTest extends TestCase
     public function test_user_cannot_delete_todo_with_null_unit(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['calendar']);
-
         $todo = Todo::factory()->create(['unit_id' => null]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/todos/{$todo->id}");
+        $response = $this->apiDelete("/api/todos/{$todo->id}", $token);
 
         $response->assertStatus(403);
     }
@@ -306,10 +322,10 @@ class TodoApiTest extends TestCase
     public function test_user_cannot_toggle_todo_with_null_unit(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['calendar']);
-
         $todo = Todo::factory()->create(['unit_id' => null, 'is_completed' => false]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/todos/{$todo->id}/toggle-complete");
+        $response = $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token);
 
         $response->assertStatus(403);
     }
@@ -322,11 +338,12 @@ class TodoApiTest extends TestCase
         // fallback path still works. The null-bypass is covered by the show/update/
         // delete/toggle null-unit tests above (all expect 403).
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+        $response = $this->apiPost('/api/todos', [
             'title' => 'Fallback Todo',
             'start_at' => '2026-07-15 10:00:00',
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.unit_id', $unit->id);
@@ -335,11 +352,12 @@ class TodoApiTest extends TestCase
     public function test_user_can_create_todo_without_unit_id_using_person_unit(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/todos', [
+        $response = $this->apiPost('/api/todos', [
             'title' => 'Person Unit Todo',
             'start_at' => '2026-07-15 10:00:00',
-        ]);
+        ], $token);
 
         $response->assertStatus(201);
         // Should have used the person's unit automatically
@@ -349,9 +367,10 @@ class TodoApiTest extends TestCase
     public function test_delete_non_existent_todo_returns_404(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
 
         // Try to delete a non-existent todo (ID 99999)
-        $response = $this->actingAs($user, 'sanctum')->deleteJson('/api/todos/99999');
+        $response = $this->apiDelete('/api/todos/99999', $token);
 
         $response->assertStatus(404);
     }

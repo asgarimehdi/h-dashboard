@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -19,6 +20,7 @@ covers(HardwareController::class);
 
 class HardwareApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
@@ -67,7 +69,8 @@ class HardwareApiTest extends TestCase
         $person = Person::first();
         Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001', 'type' => 'desktop']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/hardware');
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet('/api/hardware', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data', 'meta']);
@@ -78,11 +81,12 @@ class HardwareApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost('/api/hardware', [
             'n_code' => $person->n_code,
             'pc_name' => 'New PC',
             'type' => 'laptop',
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
@@ -95,10 +99,11 @@ class HardwareApiTest extends TestCase
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'Original PC', 'cpu' => 'Intel i3', 'ram' => '8GB']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/hardware/{$hardware->id}", [
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPut("/api/hardware/{$hardware->id}", [
             'cpu' => 'Intel i7',
             'ram' => '16GB',
-        ]);
+        ], $token);
 
         $response->assertStatus(200);
         $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'cpu' => 'Intel i7', 'ram' => '16GB', 'pc_name' => 'Original PC']);
@@ -121,13 +126,14 @@ class HardwareApiTest extends TestCase
             'u_id' => $unit->id,
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/hardware/{$hardware->id}", [
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPut("/api/hardware/{$hardware->id}", [
             'n_code' => $person2->n_code,
-        ]);
+        ], $token);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/hardware/{$hardware->id}", [
+        $response = $this->apiPut("/api/hardware/{$hardware->id}", [
             'n_code' => $person2->n_code,
-        ]);
+        ], $token);
 
         $response->assertStatus(200);
         $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'n_code' => $person2->n_code]);
@@ -139,7 +145,8 @@ class HardwareApiTest extends TestCase
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/hardware/{$hardware->id}");
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$hardware->id}", $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['pc_name' => 'PC-001']]);
@@ -151,7 +158,8 @@ class HardwareApiTest extends TestCase
         $person = Person::first();
         $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-001']);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/hardware/{$hardware->id}");
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiDelete("/api/hardware/{$hardware->id}", $token);
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('hardwares', ['id' => $hardware->id]);
@@ -161,9 +169,10 @@ class HardwareApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost('/api/hardware', [
             'type' => 'laptop',
-        ]);
+        ], $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['n_code', 'pc_name']);
@@ -173,10 +182,11 @@ class HardwareApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost('/api/hardware', [
             'n_code' => '9999999999',
             'pc_name' => 'PC-002',
-        ]);
+        ], $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['n_code']);
@@ -201,7 +211,8 @@ class HardwareApiTest extends TestCase
         Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-002', 'type' => 'laptop', 'shutdown' => true]);
         Hardware::create(['n_code' => $person2->n_code, 'pc_name' => 'PC-003', 'type' => 'desktop', 'shutdown' => false]);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats');
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet('/api/hardware/stats', $token);
 
         $response->assertStatus(200)
             ->assertJson([
@@ -258,7 +269,8 @@ class HardwareApiTest extends TestCase
 
         // User A should only see their unit's hardware (2 items) - set session to Unit A
         Session::put('current_unit_id', $unitA->id);
-        $responseA = $this->actingAs($userA, 'sanctum')->getJson('/api/hardware/stats');
+        $tokenA = $this->createApiToken($userA, ['hardware:read']);
+        $responseA = $this->apiGet('/api/hardware/stats', $tokenA);
         $responseA->assertStatus(200)
             ->assertJson([
                 'success' => true,
@@ -271,7 +283,8 @@ class HardwareApiTest extends TestCase
 
         // User B should only see their unit's hardware (1 item) - set session to Unit B
         Session::put('current_unit_id', $unitB->id);
-        $responseB = $this->actingAs($userB, 'sanctum')->getJson('/api/hardware/stats');
+        $tokenB = $this->createApiToken($userB, ['hardware:read']);
+        $responseB = $this->apiGet('/api/hardware/stats', $tokenB);
         $responseB->assertStatus(200)
             ->assertJson([
                 'success' => true,
@@ -292,29 +305,33 @@ class HardwareApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $person = Person::first();
 
+        // Use a single token with both abilities to avoid Sanctum caching
+        // issues when switching between tokens for the same user.
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+
         // Initial state: 1 device
         Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-CACHE-1', 'type' => 'desktop', 'shutdown' => false]);
-        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+        $this->apiGet('/api/hardware/stats', $token)
             ->assertJsonPath('data.total', 1);
 
         // Create a new device → cache must be invalidated
-        $this->actingAs($user, 'sanctum')->postJson('/api/hardware', [
+        $this->apiPost('/api/hardware', [
             'n_code' => $person->n_code,
             'pc_name' => 'PC-CACHE-2',
             'type' => 'laptop',
             'shutdown' => true,
-        ])->assertStatus(201);
+        ], $token)->assertStatus(201);
 
-        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+        $this->apiGet('/api/hardware/stats', $token)
             ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.shutdown', 1);
 
         // Delete one → cache invalidated again
         $target = Hardware::where('pc_name', 'PC-CACHE-1')->first();
-        $this->actingAs($user, 'sanctum')->deleteJson("/api/hardware/{$target->id}")
+        $this->apiDelete("/api/hardware/{$target->id}", $token)
             ->assertStatus(200);
 
-        $this->actingAs($user, 'sanctum')->getJson('/api/hardware/stats')
+        $this->apiGet('/api/hardware/stats', $token)
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.shutdown', 1);
     }

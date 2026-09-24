@@ -11,12 +11,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Mockery;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
 covers(MultiLatestValueController::class);
 
 class MultiLatestValueApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -41,7 +43,8 @@ class MultiLatestValueApiTest extends TestCase
     public function test_multi_latest_requires_item_ids(): void
     {
         $user = $this->createUser();
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $response = $this->apiGet('/api/zabbix/multi-latest', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['item_ids']);
@@ -50,7 +53,8 @@ class MultiLatestValueApiTest extends TestCase
     public function test_multi_latest_requires_item_ids_to_be_array(): void
     {
         $user = $this->createUser();
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest?item_ids=notanarray');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $response = $this->apiGet('/api/zabbix/multi-latest?item_ids=notanarray', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['item_ids']);
@@ -67,7 +71,8 @@ class MultiLatestValueApiTest extends TestCase
         ]);
         $this->app->instance(ZabbixService::class, $mock);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest?item_ids[]=100&item_ids[]=200');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $response = $this->apiGet('/api/zabbix/multi-latest?item_ids[]=100&item_ids[]=200', $token);
 
         $response->assertStatus(200)
             ->assertJson(['100' => 1.5, '200' => 2.3]);
@@ -81,7 +86,8 @@ class MultiLatestValueApiTest extends TestCase
         $mock->shouldReceive('getLatestValues')->once()->with(['999'])->andReturn(['999' => null]);
         $this->app->instance(ZabbixService::class, $mock);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/multi-latest?item_ids[]=999');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $response = $this->apiGet('/api/zabbix/multi-latest?item_ids[]=999', $token);
 
         $response->assertStatus(200)
             ->assertJson(['999' => null]);
