@@ -11,6 +11,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -18,6 +19,7 @@ covers(TicketController::class);
 
 class TicketApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
@@ -51,16 +53,6 @@ class TicketApiTest extends TestCase
         return $user;
     }
 
-    /**
-     * Override actingAs to ensure Spatie permissions are properly resolved.
-     */
-    public function actingAs($user, $driver = null)
-    {
-        app()[PermissionRegistrar::class]->forgetCachedPermissions();
-
-        return parent::actingAs($user, $driver);
-    }
-
     public function test_unauthenticated_user_cannot_access_tickets(): void
     {
         $response = $this->getJson('/api/tickets');
@@ -72,7 +64,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         Ticket::create(['ticket_code' => 'T-001', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Test', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/tickets');
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet('/api/tickets', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data', 'meta']);
@@ -83,7 +76,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-002', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Show Me', 'content' => 'Body', 'priority' => 'urgent', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/tickets/{$ticket->id}");
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['subject' => 'Show Me']]);
@@ -93,12 +87,13 @@ class TicketApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/tickets', [
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
             'subject' => 'New Ticket',
             'content' => 'Description',
             'priority' => 'normal',
             'unit_id' => $unit->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
@@ -110,12 +105,13 @@ class TicketApiTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/tickets', [
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
             'subject' => 'Urgent Priority',
             'content' => 'Description',
             'priority' => 'urgent',
             'unit_id' => $unit->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
@@ -128,9 +124,10 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-003', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Old', 'content' => 'Body', 'priority' => 'low', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->putJson("/api/tickets/{$ticket->id}", [
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
             'subject' => 'Updated',
-        ]);
+        ], $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['subject' => 'Updated']]);
@@ -141,7 +138,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-004', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Delete Me', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/tickets/{$ticket->id}");
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('tickets', ['id' => $ticket->id]);
@@ -152,9 +150,10 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-005', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Assign', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/assign", [
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
             'assignee_id' => $user->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['status' => 'forwarded', 'current_assignee_id' => $user->id]]);
@@ -165,7 +164,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-006', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Accept', 'content' => 'Body', 'priority' => 'normal', 'status' => 'forwarded', 'current_assignee_id' => $user->id]);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/accept");
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['status' => 'accepted']]);
@@ -174,13 +174,13 @@ class TicketApiTest extends TestCase
     public function test_non_assignee_cannot_accept_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
-
         $user2 = $this->createSecondUserInUnit($unit);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         $ticket = Ticket::create(['ticket_code' => 'T-0529', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Not Yours', 'content' => 'Body', 'priority' => 'normal', 'status' => 'forwarded', 'current_assignee_id' => $user->id]);
 
-        $response = $this->actingAs($user2, 'sanctum')->postJson("/api/tickets/{$ticket->id}/accept");
+        $token2 = $this->createApiToken($user2, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token2);
 
         $response->assertStatus(403)
             ->assertJson(['message' => 'Only the assigned user can accept this ticket.']);
@@ -193,7 +193,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-007', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Complete', 'content' => 'Body', 'priority' => 'normal', 'status' => 'accepted', 'current_assignee_id' => $user->id]);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/complete");
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['status' => 'completed']]);
@@ -203,13 +204,13 @@ class TicketApiTest extends TestCase
     public function test_non_assignee_cannot_complete_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
-
         $user2 = $this->createSecondUserInUnit($unit);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         $ticket = Ticket::create(['ticket_code' => 'T-0530', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Not Yours', 'content' => 'Body', 'priority' => 'normal', 'status' => 'accepted', 'current_assignee_id' => $user->id]);
 
-        $response = $this->actingAs($user2, 'sanctum')->postJson("/api/tickets/{$ticket->id}/complete");
+        $token2 = $this->createApiToken($user2, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token2);
 
         $response->assertStatus(403)
             ->assertJson(['message' => 'Only the assigned user can complete this ticket.']);
@@ -222,7 +223,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-008', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Not Ready', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created', 'current_assignee_id' => $user->id]);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/complete");
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token);
 
         $response->assertStatus(422);
     }
@@ -233,7 +235,8 @@ class TicketApiTest extends TestCase
         $otherUnit = Unit::create(['name' => 'Other']);
         $ticket = Ticket::create(['ticket_code' => 'T-009', 'user_id' => $user->id, 'unit_id' => $otherUnit->id, 'subject' => 'Hidden', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/tickets/{$ticket->id}");
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
 
         $response->assertStatus(403);
     }
@@ -245,9 +248,10 @@ class TicketApiTest extends TestCase
 
         ['user' => $otherUser] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/assign", [
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
             'assignee_id' => $otherUser->id,
-        ]);
+        ], $token);
 
         // The other user is in a different unit — rejected with 403
         $response->assertStatus(403);
@@ -262,9 +266,10 @@ class TicketApiTest extends TestCase
 
         $user2 = $this->createSecondUserInUnit($unit);
 
-        $response = $this->actingAs($user, 'sanctum')->postJson("/api/tickets/{$ticket->id}/assign", [
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
             'assignee_id' => $user2->id,
-        ]);
+        ], $token);
 
         $response->assertStatus(200)
             ->assertJson(['data' => ['status' => 'forwarded', 'current_assignee_id' => $user2->id]]);
@@ -274,7 +279,8 @@ class TicketApiTest extends TestCase
     {
         ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/tickets?status=nonexistent');
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet('/api/tickets?status=nonexistent', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors('status');
@@ -284,7 +290,8 @@ class TicketApiTest extends TestCase
     {
         ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/tickets?priority=critical');
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet('/api/tickets?priority=critical', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors('priority');
@@ -295,8 +302,9 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         Ticket::create(['ticket_code' => 'T-VAL', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'V', 'content' => 'C', 'priority' => 'normal', 'status' => 'created']);
 
+        $token = $this->createApiToken($user, ['tickets:read']);
         foreach (['created', 'forwarded', 'accepted', 'completed', 'rejected'] as $status) {
-            $response = $this->actingAs($user, 'sanctum')->getJson("/api/tickets?status={$status}");
+            $response = $this->apiGet("/api/tickets?status={$status}", $token);
             $response->assertStatus(200);
         }
     }
@@ -306,7 +314,8 @@ class TicketApiTest extends TestCase
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $ticket = Ticket::create(['ticket_code' => 'T-RES', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Resource Test', 'content' => 'Body', 'priority' => 'urgent', 'status' => 'created']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson("/api/tickets/{$ticket->id}");
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([

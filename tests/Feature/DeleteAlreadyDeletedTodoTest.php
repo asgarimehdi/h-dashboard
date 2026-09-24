@@ -7,6 +7,7 @@ use App\Models\Todo;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -14,6 +15,7 @@ covers(TodoController::class);
 
 class DeleteAlreadyDeletedTodoTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
@@ -32,8 +34,10 @@ class DeleteAlreadyDeletedTodoTest extends TestCase
         $todo = Todo::factory()->create(['unit_id' => $unit->id]);
         $todoId = $todo->id;
 
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
         // First delete - should succeed
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/todos/{$todoId}");
+        $response = $this->apiDelete("/api/todos/{$todoId}", $token);
         $response->assertStatus(200)
             ->assertJson(['success' => true]);
 
@@ -41,7 +45,7 @@ class DeleteAlreadyDeletedTodoTest extends TestCase
         $this->assertDatabaseMissing('todos', ['id' => $todoId]);
 
         // Second delete - should return 404, not 500
-        $response = $this->actingAs($user, 'sanctum')->deleteJson("/api/todos/{$todoId}");
+        $response = $this->apiDelete("/api/todos/{$todoId}", $token);
         $response->assertStatus(404);
     }
 }

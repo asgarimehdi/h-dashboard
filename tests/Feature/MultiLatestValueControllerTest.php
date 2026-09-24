@@ -7,19 +7,21 @@ use App\Models\User;
 use App\Services\ZabbixService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
 covers(MultiLatestValueController::class);
 
 class MultiLatestValueControllerTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use RefreshDatabase;
 
-    private function authUser()
+    private function authUser(): string
     {
         $user = User::factory()->create(['password' => Hash::make('password')]);
 
-        return $this->actingAs($user, 'sanctum');
+        return $this->createApiToken($user, ['traffic:read']);
     }
 
     public function test_returns_latest_values_for_given_item_ids(): void
@@ -30,8 +32,10 @@ class MultiLatestValueControllerTest extends TestCase
                 ->andReturn(['item1' => 12.5, 'item2' => 8.0]);
         });
 
-        $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?item_ids[]=item1&item_ids[]=item2');
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=item1&item_ids[]=item2',
+            $this->authUser()
+        );
 
         $response->assertStatus(200)
             ->assertJson(['item1' => 12.5, 'item2' => 8.0]);
@@ -39,7 +43,7 @@ class MultiLatestValueControllerTest extends TestCase
 
     public function test_validates_item_ids_is_required_array(): void
     {
-        $response = $this->authUser()->getJson('/api/zabbix/multi-latest');
+        $response = $this->apiGet('/api/zabbix/multi-latest', $this->authUser());
 
         $response->assertStatus(422);
     }
@@ -47,8 +51,10 @@ class MultiLatestValueControllerTest extends TestCase
     public function test_validates_item_ids_entries_are_strings(): void
     {
         // Passing a non-array value for item_ids should fail the 'array' rule.
-        $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?item_ids=not-an-array');
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids=not-an-array',
+            $this->authUser()
+        );
 
         $response->assertStatus(422);
     }
@@ -57,8 +63,10 @@ class MultiLatestValueControllerTest extends TestCase
     {
         $itemIds = array_map(fn ($i) => "item{$i}", range(1, 101));
 
-        $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]));
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]),
+            $this->authUser()
+        );
 
         $response->assertStatus(422);
     }
@@ -67,8 +75,10 @@ class MultiLatestValueControllerTest extends TestCase
     {
         $longId = str_repeat('a', 65);
 
-        $response = $this->authUser()
-            ->getJson("/api/zabbix/multi-latest?item_ids[]={$longId}");
+        $response = $this->apiGet(
+            "/api/zabbix/multi-latest?item_ids[]={$longId}",
+            $this->authUser()
+        );
 
         $response->assertStatus(422);
     }
@@ -83,8 +93,10 @@ class MultiLatestValueControllerTest extends TestCase
 
         $itemIds = array_map(fn ($i) => "item{$i}", range(1, 100));
 
-        $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]));
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]),
+            $this->authUser()
+        );
 
         $response->assertStatus(200);
     }
@@ -97,8 +109,10 @@ class MultiLatestValueControllerTest extends TestCase
                 ->andThrow(new \Exception('Zabbix connection failed'));
         });
 
-        $response = $this->authUser()
-            ->getJson('/api/zabbix/multi-latest?item_ids[]=item1');
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=item1',
+            $this->authUser()
+        );
 
         $response->assertStatus(503)
             ->assertJsonPath('error', 'Service temporarily unavailable');
