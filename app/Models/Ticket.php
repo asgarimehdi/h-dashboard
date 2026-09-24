@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $priority
  * @property string $status
  * @property int|null $current_assignee_id
+ * @property int $task_id
  * @property Carbon|null $deadline
  * @property Carbon|null $accepted_at
  * @property Carbon|null $completed_at

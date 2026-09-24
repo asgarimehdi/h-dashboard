@@ -3,17 +3,51 @@
 namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * @property int $id
+ * @property int|null $region_id
+ * @property int|null $parent_id
+ * @property string $name
+ * @property int|null $unit_type_id
+ * @property float|null $lat
+ * @property float|null $lng
+ * @property string|null $description
+ * @property int|null $boundary_id
+ * @property bool $is_active
+ * @property bool $can_receive_tickets
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property mixed $geom
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, static> $children
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Person> $person
+ * @property-read UnitType|null $unitType
+ * @property-read Region|null $region
+ * @property-read static|null $parent
+ * @property-read Boundary|null $boundary
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Ticket> $tickets
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Todo> $todos
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, User> $assignedUsers
  * @property Collection<int, static> $childrenRecursive
+ *
+ * @method static Builder<static> where(string $column, mixed $value)
+ * @method static Builder<static> withinBounds(float $minLat, float $maxLat, float $minLng, float $maxLng)
+ * @method static Builder<static> nearby(float $lat, float $lng, float $radiusKm = 10)
+ * @method static Builder<static> containingPoint(float $lat, float $lng)
+ * @method static Builder<static> intersectsBoundary(string $wktPolygon)
+ * @method static Builder<static> subtree(int $unitId)
+ * @method static Builder<static> withPersonnelCount()
+ * @method static Builder<static> withinDistance(float $lat, float $lng, float $radiusMeters)
  */
 class Unit extends Model
 {
