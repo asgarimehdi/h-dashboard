@@ -16,7 +16,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Unit|null $unit
- * @property-read User|null $generatedBy
  *
  * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
  */
@@ -38,10 +37,5 @@ class DailyReport extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
-    }
-
-    public function generatedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'generated_by');
     }
 }
