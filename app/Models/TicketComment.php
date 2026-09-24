@@ -2,11 +2,33 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * @property int $id
+ * @property int $ticket_id
+ * @property int $user_id
+ * @property int|null $parent_id
+ * @property string $body
+ * @property string $body_html
+ * @property bool $is_system
+ * @property string $system_event
+ * @property Carbon|null $deleted_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Ticket $ticket
+ * @property-read User $user
+ * @property-read TicketComment|null $parent
+ * @property-read Collection<int, TicketComment> $children
+ * @property-read Collection<int, TicketCommentReaction> $reactions
+ *
+ * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
+ */
 class TicketComment extends Model
 {
     use SoftDeletes;
