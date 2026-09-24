@@ -79,11 +79,8 @@ class User extends Authenticatable
 
                 // اول از session بخوان
                 if (($cached = session($sessionKey)) !== null) {
-                    //                    \Log::info("[SESSION] Hit for user {$this->id}");
                     return $cached;
                 }
-
-                //                \Log::info("[DB] Loading person for user {$this->id}");
 
                 // دیتابیس — فقط اولین بار بعد از لاگین
                 $person = $this->relationLoaded('person')

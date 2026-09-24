@@ -54,20 +54,4 @@ class LastUserActivity
             now()->addMinutes(self::ONLINE_DURATION)
         );
     }
-
-    /**
-     * Check if a user is currently online
-     */
-    public static function isOnline(int $userId): bool
-    {
-        return Cache::has(self::CACHE_KEY_PREFIX.$userId);
-    }
-
-    /**
-     * Get the user's last activity timestamp
-     */
-    public static function getLastActivity(int $userId): ?string
-    {
-        return Cache::get(self::CACHE_KEY_PREFIX.$userId);
-    }
 }
