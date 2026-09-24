@@ -2,6 +2,7 @@
 
 namespace App\Console;
 
+use App\Jobs\SyncZabbixJob;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -27,11 +28,10 @@ class Kernel extends ConsoleKernel
         // Report generation — daily at 06:00 Tehran time
         $schedule->command('reports:generate-daily')->dailyAt('06:00');
 
-        // Zabbix sync — every 5 minutes (no overlap, background)
-        $schedule->command('zabbix:sync')
+        // Zabbix sync — every 5 minutes (dispatched as queued job)
+        $schedule->job(new SyncZabbixJob)
             ->everyFiveMinutes()
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
     }
 
     /**

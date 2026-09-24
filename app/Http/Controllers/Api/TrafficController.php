@@ -23,17 +23,18 @@ class TrafficController extends Controller
         $duration = $validated['duration'] ?? 3600;
 
         try {
-            // Cache key now includes both IDs
-            $data = Cache::remember(
-                "traffic_{$outItemId}_{$inItemId}_{$duration}",
-                30,
-                function () use ($zabbix, $outItemId, $inItemId, $duration) {
-                    return [
-                        'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
-                        'in' => $zabbix->getInterfaceTraffic($inItemId, $duration),
-                    ];
-                }
-            );
+            $cached = Cache::get('zabbix_traffic_data');
+
+            if ($cached !== null) {
+                return response()->json(['data' => $cached]);
+            }
+
+            $data = [
+                'out' => $zabbix->getInterfaceTraffic($outItemId, $duration),
+                'in' => $zabbix->getInterfaceTraffic($inItemId, $duration),
+            ];
+
+            Cache::put("traffic_{$outItemId}_{$inItemId}_{$duration}", $data, 30);
 
             return response()->json($data);
         } catch (\Throwable $e) {
