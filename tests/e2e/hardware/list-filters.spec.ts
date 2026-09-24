@@ -29,7 +29,7 @@ test.describe('hardware list & filters', () => {
 
   test('shows total devices in pagination', async ({ page }) => {
     // Seeded data has hardware — pagination shows total count
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
   });
 
   test('laptop quick filter narrows results', async ({ page }) => {
@@ -53,7 +53,7 @@ test.describe('hardware list & filters', () => {
     await page.locator('button[wire\\:click*="clearFilters"]').click();
     await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(500);
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
   });
 
   test('advanced filter panel opens with نوع دستگاه field', async ({ page }) => {

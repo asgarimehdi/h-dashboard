@@ -31,7 +31,7 @@ test.describe('users list', () => {
     const rows = await page.locator('table tbody tr').count();
     expect(rows).toBeGreaterThan(0);
     // Seeded data has users — pagination shows total count
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
   });
 
   test('search by name filters the list', async ({ page }) => {
@@ -68,14 +68,14 @@ test.describe('users list', () => {
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
     await expect(page.locator('table').first()).toBeVisible();
     // After changing page size, pagination text should change
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
   });
 
   test('pagination navigates to the next page', async ({ page }) => {
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing 1 to');
-    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش 1 تا');
+    await page.getByRole('button', { name: 'بعدی' }).click();
     await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing 21 to');
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش 21 تا');
   });
 
   test('expand row reveals permissions', async ({ page }) => {
