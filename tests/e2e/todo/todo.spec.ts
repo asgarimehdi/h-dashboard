@@ -38,12 +38,20 @@ test.describe('todo calendar', () => {
     // Fill title
     await page.locator('input[wire\\:model="title"]').fill('تست E2E تسک');
 
-    // Fill start date
+    // Fill start date — input is readonly (Jalali date picker), so set value via JS
+    // and trigger Livewire's wire:model.live binding
     const startDateInput = page.locator('input[data-jdp]').first();
-    await startDateInput.click();
-    await page.waitForTimeout(300);
-    // Type a date in Jalali format
-    await startDateInput.fill('1405/07/01');
+    await startDateInput.evaluate((el) => {
+      const input = el as HTMLInputElement;
+      // Set the native value
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      )!.set!;
+      nativeInputValueSetter.call(input, '1405/07/01');
+      // Dispatch events that wire:model.live / Alpine.js listens to
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await page.waitForTimeout(300);
 
     // Fill start time
