@@ -201,6 +201,18 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - **Map container:** shared `maps.map` component renders `#map` with `h-[80lvh]`; pages must NOT wrap it in a Bootstrap `container` class (restricts width) — use `relative` so overlays position correctly; `invalidateSize()` runs after init + on resize so Leaflet never locks a half-width
 - **Gotchas:** county map query joins `boundaries` — always qualify `regions.id` (ambiguous column error on pgsql otherwise)
 
+### Zabbix Device Management (`/it/zabbix-devices`) — issue #698
+
+- **Why:** `/it/networks` (25 traffic charts) and `/it/wireless` (14 gauges) baked Zabbix item IDs into the Blade components — retargeting a device after a Zabbix re-discovery meant a code change + deploy.
+- **Table `zabbix_devices`:** `type` (`network` | `wireless`), `out_item_id` / `in_item_id` (network pair), `signal_item_id` / `frequency_item_id` / `response_item_id` (wireless trio), `initial_duration` (default 3600), `min` / `max` (gauge range, wireless defaults -85 / -45), `sort_order`, `is_active`.
+- **Model `App\Models\ZabbixDevice`:** scopes `active()`, `ordered()`, `ofType()`; `itemIds()` returns every non-empty item ID; `saved` / `deleted` bump the `zabbix_devices` version counter.
+- **Seed:** `database/seeders/ZabbixDeviceSeeder` copies the 39 formerly hardcoded rows verbatim (25 network + 14 wireless) and runs from `DatabaseSeeder`; re-running it is idempotent.
+- **Display pages** read `ZabbixDevice::query()->active()->ofType(...)->ordered()` through `CacheInvalidationService::remember('zabbix_devices', …, 5 min)` and map to the exact array shape the child components already take — `it.network-traffic-chart` and `it.multi-gauge` are untouched. When the table is empty they render «دستگاهی برای نمایش ثبت نشده است.»
+- **Permissions:** viewing stays behind `map`; managing requires the new `manage_zabbix` permission (created in `PermissionSeeder`, granted to `admin` by `RoleSeeder`). Guest → 302 `/login`, authenticated without the permission → 403.
+- **«تست اتصال»** per row calls `ZabbixService::getLatestValues($device->itemIds())`; missing item IDs and any `Throwable` become an inline red badge (`connectionResults`) — never a 500, same rule as `TrafficController`.
+- **Cache namespace:** `zabbix_devices`, registered in `PruneStaleCache::NAMESPACES`.
+- **Tests:** `tests/Feature/ZabbixDeviceTest.php` (22) and e2e `tests/e2e/it/monitoring.spec.ts` (7).
+
 ### Other Pages
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring

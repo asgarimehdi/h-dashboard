@@ -46,6 +46,7 @@ class DatabaseSeeder extends Seeder
             PersonUserSeeder::class,
             CenterBoundarySeeder::class,
             HealthHouseBoundarySeeder::class,
+            ZabbixDeviceSeeder::class,
         ]);
 
         // Reset PostgreSQL sequences after seeding to prevent unique constraint errors

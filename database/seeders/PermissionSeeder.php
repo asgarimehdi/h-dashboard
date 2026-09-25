@@ -33,6 +33,8 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage_roles', 'label' => 'مدیریت نقش‌ها و دسترسی‌ها']);
         // شناسنامه سخت افزار
         Permission::firstOrCreate(['name' => 'manage_hardware', 'label' => 'شناسنامه سخت افزار']);
+        // مدیریت دستگاه‌های مانیتورینگ زبیکس (Issue #698)
+        Permission::firstOrCreate(['name' => 'manage_zabbix', 'label' => 'مدیریت دستگاه‌های زبیکس']);
         // داشبورد منابع انسانی (Issue #223)
         Permission::firstOrCreate(['name' => 'view_hr_dashboard', 'label' => 'مشاهده داشبورد منابع انسانی']);
         Permission::firstOrCreate(['name' => 'manage_personnel', 'label' => 'مدیریت پرسنل']);
