@@ -15,7 +15,9 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 | `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
 | `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
 | `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per accessible unit |
-| `zabbix:sync` | every 5 min | `SyncZabbix` | Pulls Zabbix traffic/latest values |
+| `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
+
+> `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
 
 **Implemented-command details (was placeholder before 2026-08-29):**
 
@@ -26,7 +28,7 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 
 > All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
 
-`zabbix:sync` uses `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler. **Do not add `->timeout(N)` to the schedule** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
+The old `zabbix:sync` schedule entry used `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler; today the equivalent protection is dispatching `SyncZabbixJob` (queued) instead of running the command inline. **Do not add `->timeout(N)` to any schedule entry** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
 
 Other commands: `NormalizePersianText` (one-off Persian normalization), plus the standard `migrate`, `db:seed`, `queue:listen` (see `composer.json` `dev` script).
 
@@ -34,7 +36,9 @@ Other commands: `NormalizePersianText` (one-off Persian normalization), plus the
 
 ## API Reference
 
-All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
+All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
+
+**Abilities:** read groups use `ability:*` (Sanctum: ANY of the listed abilities), write groups use `abilities:*` (ALL) — `units:read|write`, `traffic:read`, `hardware:read|write`, `tickets:read|write`, `reports:read`, `persons:read|write`, `todos:read|todos:write`, `hr:read`, `notifications:read`, `gis:read`. Several write groups *also* require a Spatie `role_or_permission` (`organization`, `manage_hardware`, `manage_personnel`, `calendar`, `view_hr_dashboard`, `map`) — both must pass. The full per-route table lives in **AGENTS.md → "API Token Abilities"**; tokens are scoped and revoked on password change (#678), and API tests mint real Bearer tokens (`tests/Feature/ApiAbilityTest.php`).
 
 ### Hardware CRUD (`/api/hardware`)
 
@@ -342,7 +346,7 @@ php artisan db:seed --force
 
 Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** named `h_dashboard_test` (DB name is hard-coded; `DB_USERNAME`/`DB_PASSWORD` are NOT set in phpunit.xml, so they fall back to `.env` and the local run uses the `h_dashboard` role). The suite is **hermetic** — no Redis dependency (see step 3). Getting the environment right is the most common failure mode — follow these steps exactly.
 
-> **✅ Working as of 2026-09-02:** **`composer test`** is the one-command way to run the full suite (**928 passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
+> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way to run the full suite (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
 
 #### 1. Prerequisites (services must be up)
 ```bash
@@ -396,7 +400,7 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 - **Why `XDEBUG_MODE=off`:** Xdebug loads in `develop` mode; when Laravel's date validation (`after_or_equal:start_at` etc.) throws its *expected* parse exception, Xdebug tries to attach a `$xdebug_message` dynamic property to `DateMalformedStringException`, PHP 8.3 turns that into an `Error`, and it escapes Laravel's `catch (Exception)` → HTTP 500. Symptom: `Failed to parse time string (start_at) … timezone could not be found in the database` plus `Cannot create dynamic property DateMalformedStringException::$xdebug_message`. Not a code bug — env only.
 - **No pcov needed for normal runs** — `phpunit.xml` deliberately has **no `<coverage>` block** (see failure table below). Request coverage explicitly when you want it: `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` (what CI runs, with pcov installed).
 - **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
-- Expected: **928 passed** (0 skipped).
+- Expected: **1461 passed, 2 risky** (0 skipped) — `risky` = tests with no assertions (non-blocking).
 
 #### Common failure → cause
 
@@ -410,6 +414,17 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 | postgres/secret/h_dashboard_test auth fail | test DB/role missing | Step 2 |
 | bare `vendor/bin/pest` → usage text | no path argument | pass `tests/` |
 | Parallel run: ~35 flaky failures (`PermissionDoesNotExist`, FK violations on `model_has_permissions`) | spatie permission cache shared across workers — only relevant if `CACHE_STORE=array` got dropped from phpunit.xml again | Keep `<env name="CACHE_STORE" value="array" force="true"/>` in phpunit.xml |
+
+### E2E Testing (Playwright)
+
+**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Full setup, credentials, and failure table: **AGENTS.md → "E2E Testing (Playwright)"**. Essentials:
+
+- Always run through the lifecycle script: `bash scripts/e2e-test.sh [optional spec paths]` — swaps `.env` ← `.env.e2e`, `config:clear` + `route:clear`, `migrate:fresh --seed` on `h_dashboard_e2e`, creates the password-mutation user, serves on `:8001`, runs Playwright, restores `.env`.
+- **`.env.e2e` is gitignored — create it locally from `.env.e2e.example` and fill `APP_KEY`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_PASSWORD`.** It **must** carry `APP_LOCALE=fa`: the example file omits it, `config/app.php` falls back to `en`, and **11 Persian-text specs fail** (`Showing 1 to 20 of 318 results`, English validation messages instead of `نمایش…` / `باید مطابقت داشته باشند`).
+- `h_dashboard_e2e` is created once from `TEMPLATE=template_postgis` and **wiped every run** — never point it at `h_dashboard` or `h_dashboard_test`.
+- Required vars (no fallbacks — `tests/e2e/shared/fixtures.ts` throws): `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
+- On a failing run the script's `set -e` skips restore: `cp .env.dev.bak .env`, delete the backup, and kill only the `:8001` server (`pgrep -f 'artisan serve --port=800[1]'`).
+- One-time per machine: `npx playwright install chromium`.
 
 ### Code Intelligence (CodeGraph)
 
