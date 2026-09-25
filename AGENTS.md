@@ -1,6 +1,8 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
 > **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
+>
+> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts: `composer test` = 1461 passed, Playwright = 152 passed.
 
 ## Project Overview
 
@@ -63,6 +65,30 @@ Uses **Spatie Permission** package:
 - Livewire components expect session-based auth. **API tokens are NOT accepted** for Livewire pages.
 - Login form at `/login`. API login: `POST /api/login` with `n_code` + `password` (throttled 5/min).
 
+### API Token Abilities (issue #690)
+
+Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise).
+
+Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:a,b` = ALL of them** (`CheckForAnyAbility` vs `CheckAbilities`).
+
+| Route group | Read (GET) | Write (POST/PUT/DELETE) |
+|---|---|---|
+| `/api/units` | `ability:units:read` | `abilities:units:write` + `role_or_permission:organization` |
+| `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` | — |
+| `/api/hardware/*` | `ability:hardware:read` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
+| `/api/tickets*` (+ comments) | `ability:tickets:read` | `abilities:tickets:write` |
+| `/api/reports/*` | `ability:reports:read` | — |
+| `/api/persons/*` | `ability:persons:read` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
+| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) | same middleware + `role_or_permission:calendar` |
+| `/api/hr/*` | `ability:hr:read` | `role_or_permission:view_hr_dashboard` |
+| `/api/notifications*` | `ability:notifications:read` | — |
+| `/api/gis*` | `ability:gis:read` | `role_or_permission:map` |
+
+- Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
+- Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
+- Tokens are **scoped and revoked on password change** (#678). API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
+
+
 **Safe Role/Permission Middleware:** `SafeRoleOrPermission` is registered but **intentionally NOT used on hardware routes**. Hardware routes require full auth via `auth` + `role_or_permission:manage_hardware`.
 
 > **Gotcha:** `test_hardware_page_loads_without_auth` asserts **302 → /login** for guests — a security decision. Do NOT "fix" it back to 200 — that reopens the data leak.
@@ -95,6 +121,11 @@ These components and routes were removed — do not recreate:
 - `auth.register` — registration form removed (unused)
 - `glowingcard` — demo component removed (unused)
 - Tests for these: `AuthRegisterLivewireTest`, `GlowingCardLivewireTest`, `IndexRedirectLivewireTest` — all deleted
+
+**Removed as dead code (issue #685, 2026-09-24) — do not recreate:**
+- PHP: `TicketAlreadyAcceptedException`, `GisController::invalidateCache()`, `LastUserActivity::isOnline()/getLastActivity()`, `DailyReport::generatedBy()`, `HardwareExport::chunkCollection()`
+- Blade views: `welcome.blade.php`, `tools/index.blade.php`, `livewire/reports/index.blade.php`, `components/stitch-parrot.blade.php`
+- Test: `ReportsIndexLivewireTest.php` (covered a component that no longer exists)
 
 ---
 
@@ -145,26 +176,29 @@ Heavy operations are dispatched as queued jobs (plan 012). All implement `Should
 | `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
 | `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command |
+| `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL) |
 
-Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All have `failed()` methods with `Log::error()`.
+The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope — it skips itself (warning log) when `services.zabbix.out_item_id` / `in_item_id` are not configured.
 
 ---
 
 ## Scheduler & Console Commands
 
-Six commands are scheduled in `app/Console/Kernel.php`. All take `--dry-run`:
+Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The commands all take `--dry-run`:
 
-| Command | Schedule |
+| Scheduled item | Schedule |
 |---|---|
 | `cache:prune-stale` | hourly |
 | `todos:generate-recurring` | daily 02:00 |
 | `maintenance:generate-due` | daily 03:00 |
 | `data:archive` | weekly (Mon 04:00) |
 | `reports:generate-daily` | daily 06:00 |
-| `zabbix:sync` | every 5 min |
+| `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | every 5 min, `->withoutOverlapping()` |
+
+`zabbix:sync` (plan 018) is **no longer scheduled** — the schedule dispatches `SyncZabbixJob` instead, so a slow Zabbix API can never block the scheduler. Run `php artisan zabbix:sync` manually when you need the command.
 
 > Full command details, parameters, and gotchas: `references/api-endpoints.md` (Scheduler & Console Commands).
-> **Do not add `->timeout(N)` to zabbix:sync schedule** — throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
+> **Do not add `->timeout(N)` to a schedule entry** — throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
 
 ---
 
@@ -191,7 +225,9 @@ Six commands are scheduled in `app/Console/Kernel.php`. All take `--dry-run`:
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Factories:** Only `UserFactory` exists; other models have seeders. When seeding rows with **explicit IDs** in tests, resync Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
+- **Shared test trait:** new Feature tests `use InteractsWithTestSetup;` (`tests/Support/Concerns/InteractsWithTestSetup.php`, 71 files already do) — provides `seedLookupTables()`, `resyncSequence()`, `createUserWithUnit($permissions, $role)`, `createHardware()`, `assertCacheInvalidated()`, `assertQueryCount()`, `assertNoNPlusOne()`. Do not re-implement user/unit/lookup seeding by hand; see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` (`PermissionSeeder` + `seedLookupTables()`).
+- **Models:** all 24 Eloquent models carry `@property` PHPDoc annotations (#671). When you add an attribute/cast, update the annotation too — PHPStan level 6 + baseline depends on them.
+- **Factories:** 14 factories exist (`UserFactory`, `UnitFactory`, `PersonFactory`, `HardwareFactory`, `TicketFactory`, `TodoFactory`, `SematFactory`, `TahsilFactory`, `EstekhdamFactory`, `RadifFactory`, `UnitTypeFactory`, `NotificationFactory`, `AttachmentFactory`, `TaskActivityFactory`). When seeding rows with **explicit IDs** in tests, resync the Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys — or call `$this->seedLookupTables()` / `$this->resyncSequence($table)` from the shared trait.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
@@ -235,7 +271,9 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**928+ passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+>
+> `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
 ### Key test files
 | File | Tests | Purpose |
@@ -287,24 +325,61 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**142 tests** across **32 spec files** in `tests/e2e/`. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
 
-### Setup
+### Setup (one-time, per machine)
 ```bash
-npm install                   # includes @playwright/test + dotenv
-npx playwright install chromium  # one-time browser install
+npm install                     # includes @playwright/test + dotenv
+npx playwright install chromium # one-time browser install (Chromium + headless shell)
 ```
 
+### `.env.e2e` — gitignored, must be created locally
+
+It is in `.gitignore`, so it never ships with the repo. Create it once per machine:
+
+```bash
+cp .env.e2e.example .env.e2e
+# copy from .env: APP_KEY, DB_USERNAME, DB_PASSWORD, REDIS_PASSWORD
+# then create the isolated database (NEVER point e2e at `h_dashboard` — it is wiped every run):
+psql -h 127.0.0.1 -U h_dashboard -d postgres \
+  -c "CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+```
+
+> **⚠️ `APP_LOCALE=fa` is MANDATORY in `.env.e2e`.**
+> `.env.e2e.example` does **not** include `APP_LOCALE`, and `config/app.php` defaults to `en`. Without it the app renders English pagination (`Showing 1 to 20 of 318 results`, `Next »`) and English validation messages instead of the Persian strings every spec asserts → **11 tests fail** across `auth/password-change`, `hardware/list-filters`, `organization/units`, `personnel/list`, `users/list`.
+> Required lines:
+> ```
+> APP_LOCALE=fa
+> APP_FALLBACK_LOCALE=en
+> APP_FAKER_LOCALE=en_US
+> ```
+> Playwright's `locale: 'fa-IR'` is browser-level only (affects `Intl`, not Laravel translations) — it does **not** replace this.
+
 ### Credentials
-Test credentials live in `.env.e2e` (gitignored). Read by `playwright.config.ts` via `dotenv`. Fallback defaults in `tests/e2e/shared/fixtures.ts`.
+Test credentials live in `.env.e2e` (gitignored), read by `playwright.config.ts` via `dotenv` and sourced by the shell script for the app itself. **No fallbacks** — `tests/e2e/shared/fixtures.ts` throws if any is missing: `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
 
 ### Run
 ```bash
-npx playwright test                    # all tests
-npx playwright test tests/e2e/auth     # single suite
-npx playwright test --reporter=list    # list reporter
-bash scripts/e2e-test.sh               # full lifecycle: DB swap → migrate → seed → serve → test → cleanup
+bash scripts/e2e-test.sh               # RECOMMENDED: swap .env → config/route:clear → migrate:fresh --seed → pwd user → serve :8001 → test → restore
+bash scripts/e2e-test.sh tests/e2e/auth    # single suite (fast loop)
+npx playwright test --reporter=list    # only if .env is already swapped and the server is already running
 ```
+
+> **Cleanup trap:** `scripts/e2e-test.sh` uses `set -e` **without** a `trap`, so a failing Playwright run exits before restore — `.env` stays swapped and the `:8001` server keeps running. Always run afterwards:
+> ```bash
+> [ -f .env.dev.bak ] && cp .env.dev.bak .env && rm -f .env.dev.bak
+> pgrep -f 'artisan serve --port=800[1]' | xargs -r kill
+> ```
+> (never `pkill -f 'artisan serve'` — it kills the shared dev server too)
+
+### Common failure → cause
+| Symptom | Cause | Fix |
+|---|---|---|
+| 11 tests fail on `نمایش…` / `باید مطابقت داشته باشند` — DOM shows `Showing…` / English validation text | `.env.e2e` has no `APP_LOCALE=fa` (example file lacks it) | add the three `APP_*LOCALE*` lines above |
+| `fixtures.ts` throws `<VAR> env var is required` or `.run-state.json not found` | `.env.e2e` missing / bare `npx playwright test` without global setup | create `.env.e2e`; run through `scripts/e2e-test.sh` |
+| `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE … TEMPLATE=template_postgis` |
+| `Executable doesn't exist … chromium` | browser not installed | `npx playwright install chromium` |
+| `.env` still the e2e one after a failed run | script aborted before restore | restore from `.env.dev.bak` manually (see cleanup above) |
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
 - `login(page, nCode?, password?)` — fills login form, waits for redirect
@@ -398,3 +473,11 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `PersianNormalizer` trait | Located at `app/Traits/PersianNormalizer.php`. Methods: `normalizeForSearch()` (Arabic→Persian + Unicode), `escapeLikeWildcards()`, `normalizeForQuery()` (normalize + escape combined) |
 | `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` catch `Throwable` and return 503, never 500 — do not remove try/catch |
 | Root `/` route | `Route::redirect('/', '/dashboard')` — NOT a Livewire component. The old `index` Livewire component is removed |
+| E2E locale | `.env.e2e` **must** set `APP_LOCALE=fa` — `.env.e2e.example` omits it, the app falls back to `en`, and 11 Persian-text specs fail (`Showing…`, English validation messages) |
+| E2E env lifecycle | `scripts/e2e-test.sh` swaps `.env` and, on a failing run, `set -e` skips restore — restore `.env.dev.bak` and kill the `:8001` server yourself |
+| `.env.e2e` / `h_dashboard_e2e` | Both gitignored/local-only; the e2e DB is `migrate:fresh --seed`ed every run — never point it at `h_dashboard` or `h_dashboard_test` |
+| API token abilities | `/api/*` needs `auth:sanctum` **and** a token ability; `ability:a,b` = ANY of them, `abilities:a,b` = ALL. Tests mint real tokens (`ApiAbilityTest`) |
+| Shared test trait | New Feature tests use `InteractsWithTestSetup` (`tests/Support/Concerns`) — `createUserWithUnit()`, `seedLookupTables()`, `resyncSequence()`, `assertNoNPlusOne()` |
+| `zabbix:sync` scheduling | Schedule dispatches `SyncZabbixJob` (queued) every 5 min; the `zabbix:sync` command itself is manual-only |
+| `@property` on models | All 24 Eloquent models carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
+| Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists |
