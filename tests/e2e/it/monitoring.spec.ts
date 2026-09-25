@@ -83,6 +83,17 @@ test.describe('Zabbix device management', () => {
 });
 
 test.describe('Zabbix device management — RBAC', () => {
+  test('the sidebar link is visible for an admin and hidden for a plain user', async ({ page }) => {
+    await login(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    const hrefs = await page.locator('.drawer-side a[href]').evaluateAll((as) =>
+      as.map((a) => a.getAttribute('href') || ''),
+    );
+    expect(hrefs).toContain('/it/zabbix-devices');
+  });
+
   test('a user without manage_zabbix cannot open the management page', async ({ page }) => {
     await login(page, ROLE_ACCOUNTS.user, TEST_USER.password);
 
