@@ -4,6 +4,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
+use Database\Seeders\ZabbixDeviceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
@@ -14,6 +15,7 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
+    $this->seed(ZabbixDeviceSeeder::class);
 
     DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
     DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
@@ -61,7 +63,7 @@ test('networks component mounts successfully', function () {
         ->assertOk();
 });
 
-test('networks component has hardcoded network items', function () {
+test('networks component lists devices seeded from the database', function () {
     $component = Livewire::actingAs($this->user)
         ->test('it.networks')
         ->assertOk();
@@ -107,7 +109,7 @@ test('wireless component mounts successfully', function () {
         ->assertOk();
 });
 
-test('wireless component has hardcoded signal items', function () {
+test('wireless component lists devices seeded from the database', function () {
     Livewire::actingAs($this->user)
         ->test('it.wireless')
         ->assertSet('signalItems', function ($items) {

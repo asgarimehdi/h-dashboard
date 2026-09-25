@@ -93,6 +93,12 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/map', 'map.map-dashboard')->name('map');
         });
 
+        // مدیریت دستگاه‌های مانیتورینگ زبیکس (Issue #698) — مشاهده صفحات
+        // شبکه/بی‌سیم همچنان پشت `map` است؛ مدیریت فقط برای دارندگان manage_zabbix.
+        Route::middleware('role_or_permission:manage_zabbix')->group(function () {
+            Route::livewire('/it/zabbix-devices', 'it/zabbix-devices')->name('it.zabbix-devices');
+        });
+
         Route::middleware('role_or_permission:calendar')->group(function () {
             Route::livewire('/todo', 'todo.todo');
         });

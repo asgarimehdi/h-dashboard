@@ -28,7 +28,7 @@ const EXPECTED_SECTIONS: Record<string, string[]> = {
 
 // hrefs that must (or must not) appear in a role's sidebar.
 const EVERYONE_ITEMS = ['/profile', '/settings', '/users/changepassword', '/search'];
-const ADMIN_ONLY_ITEMS = ['/users', '/roles', '/permissions', '/hardware', '/tools'];
+const ADMIN_ONLY_ITEMS = ['/users', '/roles', '/permissions', '/hardware', '/tools', '/it/zabbix-devices'];
 
 async function loginAs(page, nCode: string) {
   await page.goto('/login');

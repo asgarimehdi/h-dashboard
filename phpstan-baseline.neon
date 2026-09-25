@@ -2191,6 +2191,12 @@ parameters:
 			path: app/Models/User.php
 
 		-
+			message: '#^Class App\\Models\\ZabbixDevice uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/ZabbixDevice.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Contracts\\Auth\\Authenticatable\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2493,7 +2499,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Spatie\\Permission\\Models\\Permission\:\:firstOrCreate\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 17
+			count: 18
 			path: database/seeders/PermissionSeeder.php
 
 		-
@@ -3217,28 +3223,22 @@ parameters:
 			path: resources/views/livewire/it/network-traffic-chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/networks\.blade\.php\:5\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:active\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: resources/views/livewire/it/networks.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/it/networks\.blade\.php\:5\:\:\$networkItems type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/it/networks.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/wireless\.blade\.php\:5\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:active\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: resources/views/livewire/it/wireless.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/it/wireless\.blade\.php\:5\:\:\$signalItems type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:ordered\(\)\.$#'
+			identifier: method.notFound
 			count: 1
-			path: resources/views/livewire/it/wireless.blade.php
+			path: resources/views/livewire/it/zabbix-devices.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Estekhdam\:\:create\(\)\.$#'
@@ -5457,7 +5457,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 44
+			count: 45
 			path: routes/web.php
 
 		-
