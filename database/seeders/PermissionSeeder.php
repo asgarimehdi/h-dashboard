@@ -43,11 +43,19 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'test-permission', 'label' => 'تست مجوز']);
         // The admin ROLE — tests (TicketApiTest, TicketCommentPolicyTest, ...)
         // each had to firstOrCreate it; centralizing here keeps that convention
-        // in one place. Permissions are synced by RoleSeeder.
-        Role::firstOrCreate(
+        // in one place. RoleSeeder re-syncs every permission onto this role;
+        // here we only grant what a *newly added* permission needs so that
+        // `db:seed --class=PermissionSeeder` alone still leaves admins with
+        // full access (issue #698: manage_zabbix).
+        $adminRole = Role::firstOrCreate(
             ['name' => 'admin', 'guard_name' => 'web'],
             ['label' => 'مدیر سیستم']
         );
+
+        // givePermissionTo (not syncPermissions) — sync would REPLACE every
+        // permission the role already has, silently stripping admins of
+        // access to the other sections.
+        $adminRole->givePermissionTo('manage_zabbix');
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 

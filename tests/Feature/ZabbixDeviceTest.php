@@ -81,6 +81,16 @@ test('admin role receives the manage_zabbix permission', function () {
         ->toBeTrue();
 });
 
+test('seeding permissions alone hands manage_zabbix to the admin role', function () {
+    // Running only the permission seeder (no RoleSeeder) must still grant the
+    // new permission, otherwise a standalone `db:seed --class=PermissionSeeder`
+    // leaves admins without access to /it/zabbix-devices.
+    $this->seed(PermissionSeeder::class);
+
+    expect(Role::findByName('admin', 'web')->hasPermissionTo('manage_zabbix', 'web'))
+        ->toBeTrue();
+});
+
 // ── CRUD ─────────────────────────────────────────────────────────────────
 
 test('authorized user can create a network device', function () {
