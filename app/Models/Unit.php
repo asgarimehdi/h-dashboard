@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\DB;
  * @property float|null $lng
  * @property string|null $description
  * @property int|null $boundary_id
+ * @property int|null $personnel_count
  * @property bool $is_active
  * @property bool $can_receive_tickets
  * @property Carbon|null $created_at

@@ -17,6 +17,16 @@ use Tests\TestCase;
 
 covers(OrgChartController::class, HrStatsController::class, HrAnalyticsController::class);
 
+/**
+ * HR Livewire tests.
+ *
+ * Issue #704: `hr.org-chart` is now a thin composition over the generic
+ * `unit.tree` component. Tree mechanics (expanded/lazyChildren/toggle/
+ * expandAll/collapseAll/search) belong to `unit.tree` and are tested
+ * there — see HrOrgChartCoverageTest and UnitTreeLivewireTest.
+ * This file covers the HR page's own responsibility: rendering the
+ * composed tree with the personnel badge, and the personnel detail panel.
+ */
 class HrLivewireTest extends TestCase
 {
     use RefreshDatabase;
@@ -61,81 +71,6 @@ class HrLivewireTest extends TestCase
             ->assertOk()
             ->assertSee('چارت سازمانی')
             ->assertSee('مرکز بهداشت');
-    }
-
-    public function test_org_chart_toggle_collapses(): void
-    {
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk();
-
-        $expandedBefore = $component->get('expanded');
-        $this->assertNotEmpty($expandedBefore);
-
-        // Collapse the root unit
-        $rootId = $this->unit->id;
-        $component->call('toggle', (string) $rootId);
-        $expandedAfter = $component->get('expanded');
-        $this->assertNotContains((string) $rootId, $expandedAfter);
-    }
-
-    public function test_org_chart_collapse_all(): void
-    {
-        Livewire::test('hr.org-chart')
-            ->assertOk()
-            ->call('collapseAll')
-            ->assertSet('expanded', []);
-    }
-
-    public function test_org_chart_expand_all(): void
-    {
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk()
-            ->call('collapseAll')
-            ->call('expandAll');
-
-        $this->assertNotEmpty($component->get('expanded'));
-    }
-
-    /** @test */
-    public function test_org_chart_default_expand_only_first_three_levels(): void
-    {
-        // Create a deeper tree: unit -> child -> grandchild -> great-grandchild
-        $child = Unit::create(['name' => 'شبکه بهداشت', 'parent_id' => $this->unit->id]);
-        $grandchild = Unit::create(['name' => 'مرکز بهداشت روستایی', 'parent_id' => $child->id]);
-
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk();
-
-        $expanded = $component->get('expanded');
-
-        // Root unit (level 1) should be expanded
-        $this->assertContains((string) $this->unit->id, $expanded);
-        // Child (level 2) should be expanded
-        $this->assertContains((string) $child->id, $expanded);
-        // Grandchild (level 3) should be expanded
-        $this->assertContains((string) $grandchild->id, $expanded);
-    }
-
-    /** @test */
-    public function test_org_chart_collapses_beyond_level_3(): void
-    {
-        // Create a deep tree: unit -> child (l2) -> grandchild (l3) -> great-grandchild (l4)
-        $child = Unit::create(['name' => 'شبکه', 'parent_id' => $this->unit->id]);
-        $grandchild = Unit::create(['name' => 'مرکز', 'parent_id' => $child->id]);
-        $greatGrandchild = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $grandchild->id]);
-
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk();
-
-        $expanded = $component->get('expanded');
-
-        // Level 1, 2 and 3 should be expanded
-        $this->assertContains((string) $this->unit->id, $expanded);
-        $this->assertContains((string) $child->id, $expanded);
-        $this->assertContains((string) $grandchild->id, $expanded);
-
-        // Level 4 should NOT be expanded (collapsed by default)
-        $this->assertNotContains((string) $greatGrandchild->id, $expanded);
     }
 
     /** @test */
@@ -184,31 +119,25 @@ class HrLivewireTest extends TestCase
     }
 
     /** @test */
-    public function test_org_chart_shows_personnel_count_on_tree(): void
+    public function test_org_chart_shows_personnel_count_via_the_badge_plug_in(): void
     {
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk();
-
-        $personCounts = $component->get('personCounts');
-        $this->assertNotEmpty($personCounts);
-
-        // The unit should have 1 personnel
-        $this->assertEquals(1, $personCounts[$this->unit->id] ?? 0);
+        // The HR page renders the generic tree with badge-view=hr.personnel-badge.
+        // This unit has exactly one person, so the count badge reads "1 نفر".
+        Livewire::test('hr.org-chart')
+            ->assertOk()
+            ->assertSee('1 نفر');
     }
 
     /** @test */
     public function test_org_chart_vacancy_badge_on_empty_units(): void
     {
-        // Create a unit with no personnel
         $emptyUnit = Unit::create(['name' => 'واحد خالی', 'parent_id' => $this->unit->id]);
 
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk();
+        $component = Livewire::test('hr.org-chart')->assertOk();
 
-        $expanded = $component->get('expanded');
-        $this->assertContains((string) $emptyUnit->id, $expanded);
+        // The «خالی» badge is the plug-in's job for a zero-count unit.
+        $component->assertSee('خالی');
 
-        $personCounts = $component->get('personCounts');
-        $this->assertEquals(0, $personCounts[$emptyUnit->id] ?? 0);
+        $this->assertSame(0, (int) Person::where('u_id', $emptyUnit->id)->count());
     }
 }

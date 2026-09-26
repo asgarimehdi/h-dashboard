@@ -6,14 +6,23 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Services\UnitTreeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
 /**
  * Org-chart tree endpoints — extracted from HrController.
+ *
+ * Scope-rooted tree queries are shared with the Livewire `unit.tree`
+ * component via UnitTreeService (#704). The JSON contract below is
+ * unchanged — the Flutter app depends on it.
  */
 class OrgChartController extends Controller
 {
+    public function __construct(
+        private readonly UnitTreeService $unitTree,
+    ) {}
+
     /**
      * GET /api/hr/org-chart — full org tree with personnel counts per unit.
      */
@@ -25,9 +34,8 @@ class OrgChartController extends Controller
             $this->hrStatsCacheKey($accessibleIds, 'orgchart'),
             now()->addMinutes(10),
             function () use ($accessibleIds) {
-                $units = Unit::whereIn('id', $accessibleIds)
-                    ->withCount(['person as personnel_count'])
-                    ->get();
+                // Same scoped query the Livewire tree uses (issue #704).
+                $units = $this->unitTree->allScoped($accessibleIds);
 
                 // Build nested tree from flat list (parent_id references)
                 $byId = $units->keyBy('id');
