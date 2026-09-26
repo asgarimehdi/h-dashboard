@@ -35,7 +35,6 @@ coverage/
 *.lock
 package-lock.json
 /.claude
-/.hermes.md
 
 # E2E test credentials
 .env.test
