@@ -266,6 +266,8 @@ return new class extends Component
     /**
      * شناسه‌های آیتم دستگاه را در زبیکس بررسی می‌کند.
      *
+     * ابتدا اتصال واقعی به Zabbix API را تست می‌کند (apiinfo.version)
+     * سپس بررسی می‌کند آیتم‌های دستگاه مقدار دارند یا خیر.
      * هیچ‌وقت exception پرتاب نمی‌کند: خطای زبیکس هم مثل TrafficController
      * به پیام قابل نمایش تبدیل می‌شود تا صفحه 500 نشود.
      */
@@ -274,10 +276,27 @@ return new class extends Component
         $this->authorize('manage_zabbix');
 
         $device = ZabbixDevice::query()->findOrFail($id);
+
+        try {
+            // مرحله ۱: تست اتصال واقعی به Zabbix API
+            $connectionInfo = app(ZabbixService::class)->testApiConnection();
+        } catch (\Throwable $e) {
+            $this->connectionResults[$id] = [
+                'ok' => false,
+                'message' => 'خطا در اتصال به Zabbix: '.$e->getMessage(),
+            ];
+
+            return;
+        }
+
+        // مرحله ۲: بررسی آیتم‌های دستگاه
         $itemIds = $device->itemIds();
 
         if ($itemIds === []) {
-            $this->connectionResults[$id] = ['ok' => false, 'message' => 'شناسه آیتمی ثبت نشده است.'];
+            $this->connectionResults[$id] = [
+                'ok' => true,
+                'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].') — شناسه آیتمی ثبت نشده است.',
+            ];
 
             return;
         }
@@ -295,15 +314,21 @@ return new class extends Component
             if ($missing !== []) {
                 $this->connectionResults[$id] = [
                     'ok' => false,
-                    'message' => 'آیتم یافت نشد: '.implode('، ', $missing),
+                    'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].') اما آیتم یافت نشد: '.implode('، ', $missing),
                 ];
 
                 return;
             }
 
-            $this->connectionResults[$id] = ['ok' => true, 'message' => 'اتصال برقرار است'];
+            $this->connectionResults[$id] = [
+                'ok' => true,
+                'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].')',
+            ];
         } catch (\Throwable $e) {
-            $this->connectionResults[$id] = ['ok' => false, 'message' => 'خطا در اتصال: '.$e->getMessage()];
+            $this->connectionResults[$id] = [
+                'ok' => false,
+                'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].') اما خطا در دریافت مقادیر: '.$e->getMessage(),
+            ];
         }
     }
 

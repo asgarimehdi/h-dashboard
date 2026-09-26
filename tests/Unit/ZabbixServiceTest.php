@@ -109,4 +109,50 @@ class ZabbixServiceTest extends TestCase
 
         $service->getItemIdByKey('test.key');
     }
+
+    public function test_test_api_connection_returns_version()
+    {
+        Http::fake([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
+                'jsonrpc' => '2.0',
+                'result' => '6.0.0',
+                'id' => 1,
+            ], 200),
+        ]);
+
+        $service = new ZabbixService;
+        $result = $service->testApiConnection();
+
+        $this->assertEquals(['version' => '6.0.0'], $result);
+    }
+
+    public function test_test_api_connection_throws_on_http_error()
+    {
+        Http::fake([
+            'http://zabbix.local/api_json_rpc.php' => Http::response('', 500),
+        ]);
+
+        $service = new ZabbixService;
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Zabbix API HTTP error');
+
+        $service->testApiConnection();
+    }
+
+    public function test_test_api_connection_throws_on_invalid_response()
+    {
+        Http::fake([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
+                'jsonrpc' => '2.0',
+                'result' => ['unexpected' => 'format'],
+                'id' => 1,
+            ], 200),
+        ]);
+
+        $service = new ZabbixService;
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('unexpected version response');
+
+        $service->testApiConnection();
+    }
 }

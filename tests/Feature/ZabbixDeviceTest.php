@@ -304,14 +304,12 @@ test('device list is cached and refreshed after a write', function () {
 
 test('connection test succeeds when zabbix returns values for every item', function () {
     Http::fake([
-        '*' => Http::response([
-            'jsonrpc' => '2.0',
-            'id' => 1,
-            'result' => [
+        '*' => Http::sequence()
+            ->push(['jsonrpc' => '2.0', 'id' => 1, 'result' => '6.0.0'], 200)
+            ->push(['jsonrpc' => '2.0', 'id' => 1, 'result' => [
                 ['itemid' => '12345', 'lastvalue' => '1.5'],
                 ['itemid' => '54321', 'lastvalue' => '2.5'],
-            ],
-        ], 200),
+            ]], 200),
     ]);
 
     ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
@@ -329,18 +327,17 @@ test('connection test succeeds when zabbix returns values for every item', funct
 
     $result = $component->get('connectionResults')[$device->id] ?? null;
     expect($result)->not->toBeNull()
-        ->and($result['ok'])->toBeTrue();
+        ->and($result['ok'])->toBeTrue()
+        ->and($result['message'])->toContain('Zabbix 6.0.0');
 });
 
 test('connection test reports missing items instead of failing', function () {
     Http::fake([
-        '*' => Http::response([
-            'jsonrpc' => '2.0',
-            'id' => 1,
-            'result' => [
+        '*' => Http::sequence()
+            ->push(['jsonrpc' => '2.0', 'id' => 1, 'result' => '6.0.0'], 200)
+            ->push(['jsonrpc' => '2.0', 'id' => 1, 'result' => [
                 ['itemid' => '12345', 'lastvalue' => '1.5'],
-            ],
-        ], 200),
+            ]], 200),
     ]);
 
     ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
@@ -357,7 +354,8 @@ test('connection test reports missing items instead of failing', function () {
 
     $result = $component->get('connectionResults')[$device->id] ?? null;
     expect($result)->not->toBeNull()
-        ->and($result['ok'])->toBeFalse();
+        ->and($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('آیتم یافت نشد');
 });
 
 test('connection test never throws when zabbix is unreachable', function () {
@@ -378,7 +376,31 @@ test('connection test never throws when zabbix is unreachable', function () {
     $result = $component->get('connectionResults')[$device->id] ?? null;
     expect($result)->not->toBeNull()
         ->and($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('خطا در اتصال')
         ->and($result['message'])->not->toBe('');
+});
+
+test('connection test reports success even without item IDs when api is reachable', function () {
+    Http::fake([
+        '*' => Http::response(['jsonrpc' => '2.0', 'id' => 1, 'result' => '6.0.0'], 200),
+    ]);
+
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create([
+        'type' => 'network',
+        'out_item_id' => null,
+        'in_item_id' => null,
+    ]);
+
+    $component = Livewire::test('it.zabbix-devices')->call('testConnection', $device->id);
+    $component->assertStatus(200);
+
+    $result = $component->get('connectionResults')[$device->id] ?? null;
+    expect($result)->not->toBeNull()
+        ->and($result['ok'])->toBeTrue()
+        ->and($result['message'])->toContain('شناسه آیتمی ثبت نشده است');
 });
 
 test('connection test is denied without manage_zabbix', function () {
