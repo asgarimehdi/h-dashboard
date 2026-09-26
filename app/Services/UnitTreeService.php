@@ -95,6 +95,44 @@ class UnitTreeService
     }
 
     /**
+     * Children of SEVERAL parents in ONE query — the batch counterpart of
+     * `childrenOf()`, so a tree level paints with a single round trip
+     * instead of one query per node (issue #722: a 1→6→36 tree cost ~44
+     * queries on initial paint when each node asked for its own children).
+     *
+     * Scope contract mirrors `childrenOf()`: the requested parents are
+     * intersected with the scope FIRST, so an out-of-scope parent yields no
+     * children — exactly as if `childrenOf()` had been called for it (a child
+     * can never be in scope while its parent is not, but the method must stay
+     * safe on its own). Empty inputs return an empty collection without
+     * touching the database.
+     *
+     * Parents with no (in-scope) children get NO key in the result — callers
+     * read with `->get($parentId, collect())`.
+     *
+     * @param  array<int>  $unitIds
+     * @param  array<int>  $accessibleIds
+     * @return Collection<int, Collection<int, Unit>> parent id => its children
+     */
+    public function childrenOfMany(array $unitIds, array $accessibleIds): Collection
+    {
+        $parentIds = array_values(array_intersect($unitIds, $accessibleIds));
+
+        if ($parentIds === []) {
+            return collect();
+        }
+
+        return Unit::query()
+            ->with(['unitType'])
+            ->where(function ($query) use ($parentIds, $accessibleIds) {
+                $query->whereIn('parent_id', $parentIds)
+                    ->whereIn('id', $accessibleIds);
+            })
+            ->get()
+            ->groupBy('parent_id');
+    }
+
+    /**
      * Whether a unit has at least one child the caller may see.
      *
      * Used by the tree's node template to decide whether to draw a toggle for

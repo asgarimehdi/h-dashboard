@@ -134,48 +134,83 @@ return new class extends Component
     }
 
     /**
-     * Expand up to maxLevel, loading children from the DB as needed.
+     * Expand up to maxLevel, loading children one LEVEL at a time.
+     *
+     * Each iteration collects the current level's ids and fetches their
+     * children with a SINGLE `childrenOfMany()` call (issue #722) — the
+     * recursion this replaced issued one `childrenOf()` per node, so a
+     * 1→6→36 tree spent ~44 queries just to paint. Units with no children
+     * get an EMPTY collection cached too, so the view renders them as leaves
+     * without re-asking `hasChildren()` on every repaint.
+     *
+     * Deliberate behavior note: `$expanded` comes back in LEVEL order here,
+     * not the old depth-first order. Every consumer is membership-only
+     * (`in_array` in tree-node.blade.php, `in_array`/`array_diff` in
+     * `toggle()`), so the order is unobservable.
      *
      * @param  iterable<mixed, \App\Models\Unit>  $nodes
      * @return array<int, string>
      */
-    protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
+    protected function expandFirstNLevels($nodes, int $maxLevel): array
     {
         $ids = [];
         $accessibleIds = $this->accessibleIds();
+        $service = app(UnitTreeService::class);
+        $level = collect($nodes);
 
-        foreach ($nodes as $node) {
-            if ($level <= $maxLevel) {
+        for ($depth = 1; $level->isNotEmpty() && $depth <= $maxLevel; $depth++) {
+            $levelIds = [];
+
+            foreach ($level as $node) {
                 $ids[] = (string) $node->id;
+                $levelIds[] = (int) $node->id;
             }
 
-            if ($level < $maxLevel) {
-                $children = app(UnitTreeService::class)->childrenOf((int) $node->id, $accessibleIds);
-
-                $this->lazyChildren[(int) $node->id] = $children;
-
-                if ($children->isNotEmpty()) {
-                    $ids = array_merge($ids, $this->expandFirstNLevels($children, $maxLevel, $level + 1));
-                }
+            // The deepest level that is OPENED is not descended into: its own
+            // children stay lazy until the user toggles it (loadExpandedChildren
+            // backfills them for the initial paint).
+            if ($depth === $maxLevel) {
+                break;
             }
+
+            $grouped = $service->childrenOfMany($levelIds, $accessibleIds);
+
+            foreach ($levelIds as $id) {
+                $this->lazyChildren[$id] = $grouped->get($id, collect());
+            }
+
+            $level = $grouped->flatten();
         }
 
         return $ids;
     }
 
     /**
-     * Load children for every expanded unit not yet in the lazy cache.
+     * Load children for every expanded unit not yet in the lazy cache — ONE
+     * batched query for all of them instead of one per node (issue #722).
      */
     public function loadExpandedChildren(): void
     {
-        $accessibleIds = $this->accessibleIds();
+        $missing = [];
 
         foreach ($this->expanded as $unitId) {
             $id = (int) $unitId;
 
             if (! isset($this->lazyChildren[$id])) {
-                $this->lazyChildren[$id] = app(UnitTreeService::class)->childrenOf($id, $accessibleIds);
+                $missing[] = $id;
             }
+        }
+
+        if ($missing === []) {
+            return;
+        }
+
+        $grouped = app(UnitTreeService::class)->childrenOfMany($missing, $this->accessibleIds());
+
+        // Childless units are cached as EMPTY collections, so a repaint never
+        // repeats the query for them.
+        foreach ($missing as $id) {
+            $this->lazyChildren[$id] = $grouped->get($id, collect());
         }
     }
 

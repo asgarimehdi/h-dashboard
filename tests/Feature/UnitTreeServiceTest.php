@@ -72,6 +72,50 @@ test('childrenOf excludes children outside the scope', function () {
     expect(app(UnitTreeService::class)->childrenOf($this->root->id, $ids))->toBeEmpty();
 });
 
+test('childrenOfMany groups children under their parent id', function () {
+    $ids = Unit::descendantIds($this->root->id)->toArray();
+
+    $grouped = app(UnitTreeService::class)->childrenOfMany([$this->root->id, $this->mid->id], $ids);
+
+    expect($grouped->get($this->root->id)->pluck('id')->all())
+        ->toContain($this->mid->id)
+        ->toContain($this->professional->id)
+        ->and($grouped->get($this->mid->id)->pluck('id')->all())
+        ->toBe([$this->leaf->id]);
+});
+
+test('childrenOfMany filters children to the scope', function () {
+    // Scope = the two top nodes only; leaf and professional are excluded.
+    $grouped = app(UnitTreeService::class)->childrenOfMany(
+        [$this->root->id, $this->mid->id],
+        [$this->root->id, $this->mid->id],
+    );
+
+    // root keeps only its in-scope child, and mid — whose only child is out
+    // of scope — gets no key at all (callers read with ->get(id, collect())).
+    expect($grouped->get($this->root->id)->pluck('id')->all())->toBe([$this->mid->id])
+        ->and($grouped->has($this->mid->id))->toBeFalse()
+        ->and($grouped->flatten()->pluck('id')->all())
+        ->not->toContain($this->leaf->id)
+        ->not->toContain($this->professional->id);
+});
+
+test('childrenOfMany returns an empty collection for empty inputs without querying', function () {
+    $this->assertQueryCount(0, function (): void {
+        expect(app(UnitTreeService::class)->childrenOfMany([], [$this->root->id]))->toBeEmpty()
+            ->and(app(UnitTreeService::class)->childrenOfMany([$this->root->id], []))->toBeEmpty();
+    });
+});
+
+test('childrenOfMany yields nothing for an out-of-scope parent', function () {
+    // Scope starts at mid, so root is invisible to this caller. Asking for
+    // root's children must answer exactly like childrenOf(root, scope) does.
+    $ids = Unit::descendantIds($this->mid->id)->toArray();
+
+    expect(app(UnitTreeService::class)->childrenOfMany([$this->root->id], $ids))->toBeEmpty()
+        ->and(app(UnitTreeService::class)->childrenOf($this->root->id, $ids))->toBeEmpty();
+});
+
 test('search matches a name inside the scope', function () {
     $ids = Unit::descendantIds($this->root->id)->toArray();
 

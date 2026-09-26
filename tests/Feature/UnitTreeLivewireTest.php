@@ -95,6 +95,28 @@ class UnitTreeLivewireTest extends TestCase
         }, 12);
     }
 
+    public function test_initial_paint_batches_one_query_per_level(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // The exact N+1 shape from issue #722: 1 → 6 → 36. The old preload
+        // issued one childrenOf() per node while expanding PLUS one query per
+        // expanded level-3 node in loadExpandedChildren (~44 queries here);
+        // the batched paint costs one query per level and stays flat.
+        for ($i = 0; $i < 6; $i++) {
+            $mid = Unit::create(['name' => "سطح دوم {$i}", 'parent_id' => $unit->id]);
+
+            for ($j = 0; $j < 6; $j++) {
+                Unit::create(['name' => "سطح سوم {$i}-{$j}", 'parent_id' => $mid->id]);
+            }
+        }
+
+        $this->assertNoNPlusOne(function (): void {
+            Livewire::test('unit.tree')->assertStatus(200);
+        }, 12);
+    }
+
     // ==================== Selection event ====================
 
     public function test_select_node_dispatches_unit_selected(): void
