@@ -161,6 +161,15 @@ return new class extends Component {
                     const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
 
                     if (!response.ok) {
+                        // #703: a 503 from our API means Zabbix itself is
+                        // unreachable. That is NOT an internal error — it is a
+                        // server we cannot talk to, so show the requested
+                        // friendly message instead of "خطای HTTP 503".
+                        if (response.status === 503) {
+                            this.error = 'دسترسی به سرور مقدور نمی باشد';
+                            return;
+                        }
+
                         let errorMsg = `خطای HTTP ${response.status}`;
                         try {
                             const text = await response.text();
@@ -185,6 +194,15 @@ return new class extends Component {
                     }
                 } catch (e) {
                     console.error('Error fetching values:', e);
+
+                    // #703: a TypeError from fetch() means the request never
+                    // reached the server (network down / server offline), which
+                    // is the same "cannot reach the server" condition as a 503.
+                    if (e instanceof TypeError) {
+                        this.error = 'دسترسی به سرور مقدور نمی باشد';
+                        return;
+                    }
+
                     this.error = e.message || 'خطا در دریافت';
                 } finally {
                     this.loading = false;
