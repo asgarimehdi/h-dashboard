@@ -132,3 +132,16 @@ test('validation fails for invalid frequency', function () {
         ->call('createSchedule')
         ->assertHasErrors(['frequency']);
 });
+
+test('frequency select renders non-empty option labels (issue #706)', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('maintenance.index')->call('startCreate');
+
+    // Same #706 root cause as the zabbix type select: 'value'/'label' keys
+    // need option-value/option-label, else the options render empty.
+    expect($component->html())
+        ->toContain('روزانه')
+        ->toContain('هفتگی')
+        ->toContain('ماهانه');
+});

@@ -389,3 +389,30 @@ test('connection test is denied without manage_zabbix', function () {
 
     Livewire::test('it.zabbix-devices')->call('testConnection', $device->id)->assertForbidden();
 });
+
+test('type select renders non-empty option labels (issue #706)', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $component = Livewire::test('it.zabbix-devices')->call('startCreate');
+
+    // MaryUI defaults to optionValue='id'/optionLabel='name'. Without explicit
+    // option-value/option-label, 'value'/'label' keys render EMPTY options —
+    // the select shows a blank, unreadable control. (#706)
+    $html = $component->html();
+
+    expect($html)
+        ->toContain('شبکه')
+        ->toContain('بی‌سیم');
+});
+
+test('type select options carry the model value (issue #706)', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $component = Livewire::test('it.zabbix-devices')->call('startCreate');
+
+    expect($component->html())
+        ->toContain('value="network"')
+        ->toContain('value="wireless"');
+});
