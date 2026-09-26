@@ -144,6 +144,44 @@ These components and routes were removed — do not recreate:
 
 ---
 
+## Reusable Unit Tree (issue #704)
+
+The org chart's **tree mechanics** are extracted so a second feature (e.g. covered population per unit) reuses them with zero tree code.
+
+| Layer | File | Owns |
+|---|---|---|
+| Backend | `app/Services/UnitTreeService.php` | `roots()` (scope-rooted), `childrenOf()` (scope-guarded), `allScoped()` (flat, for the API), `search()` (+ ancestor chain, cycle-guarded) |
+| Generic UI | `resources/views/livewire/unit/tree.blade.php` | lazy roots/children, `expanded` state, search, toggle / expand-all / collapse-all |
+| Generic node | `resources/views/livewire/unit/tree-node.blade.php` | guide lines, toggle icon, name, unit type, **badge slot** |
+| HR plug-in | `resources/views/livewire/hr/personnel-badge.blade.php` | count badge + «خالی» |
+| HR page | `resources/views/livewire/hr/org-chart.blade.php` | `#[On('unit-selected')]` listener + personnel detail panel only |
+
+**Plug-in contract:**
+
+| Direction | Name | Meaning |
+|---|---|---|
+| in | `badgeView` | Blade view rendered per node, receives `$unit` (with `personnel_count` preloaded by the service) |
+| in | `title`, `searchPlaceholder` | page chrome strings |
+| out | `unit-selected` (int id) | dispatched on node click; the parent fills its own detail panel |
+
+Reusing it is one line:
+
+```blade
+<livewire:unit.tree badge-view="livewire.population.coverage-badge" title="جمعیت تحت پوشش" />
+```
+
+> ⚠️ **`$badgeView` must NOT be a `@props()` name in `unit/tree-node.blade.php`.** `@props()` unsets the name from the view scope, which silently breaks the recursive `@include` that passes it down — nodes render with no badge and no error. It is a public property on the `unit.tree` class instead.
+>
+> ⚠️ **Never add a `render()` method to a single-file Livewire component.** The view is the same file; `render()` re-enters it and throws `RootTagMissingFromViewException`. Let Livewire infer it.
+>
+> ⚠️ **`UnitTreeService::search()` gates on `mb_strlen`, not `strlen`.** A Persian term is multi-byte, so `strlen('بر')` is 4 and a one-character search would slip past the 2-character minimum.
+>
+> `OrgChartController::orgChart` uses `allScoped()` (every accessible unit), **not** `roots()` — it nests the flat list itself. `roots()` is only the tree entry point for a scope-rooted lazy tree.
+
+> **Tests:** tree mechanics live in `HrOrgChartCoverageTest` (against `unit.tree`) + `HrOrgNodeLivewireTest`; the service is covered there too. The HR page's own panel tests are in `HrLivewireTest`. E2E: `tests/e2e/hr/org-chart.spec.ts`. `hr/org-node.blade.php` was **deleted** — do not recreate.
+
+---
+
 ## Settings Features
 
 Settings page (`/settings`) includes 4 user-configurable features:

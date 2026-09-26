@@ -231,7 +231,11 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 ### Other Pages
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
-- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Components under `app/Livewire/Hr/`, views under `resources/views/livewire/hr/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
+- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
+- **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, search, personnel counts, empty-unit badges, and a personnel detail panel.
+  - Since #704 the page is a **thin composition over the generic `unit.tree` component**. Tree mechanics (scope-rooted lazy loading, `expanded` state, ancestor-expanding search, toggle/expand-all/collapse-all) live in `resources/views/livewire/unit/tree.blade.php` + `unit/tree-node.blade.php`, and the shared queries in `App\Services\UnitTreeService` (`roots`/`childrenOf`/`allScoped`/`search`).
+  - Reuse contract: pass `badge-view` (a Blade view receiving `$unit`), and listen for the `unit-selected` event to fill your own panel. See the **Reusable Unit Tree** section in `AGENTS.md`.
+  - `OrgChartController::orgChart` shares `UnitTreeService::allScoped()` with the UI; the API JSON contract is unchanged (Flutter depends on it).
 
 ### Help System (راهنما)
 
