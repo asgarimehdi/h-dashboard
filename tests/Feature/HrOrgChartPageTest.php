@@ -21,7 +21,7 @@ use Tests\TestCase;
  * the tree, that the personnel badge is wired through, and that the
  * detail panel still fills on selection.
  */
-class HrOrgNodeLivewireTest extends TestCase
+class HrOrgChartPageTest extends TestCase
 {
     use InteractsWithTestSetup;
     use RefreshDatabase;
@@ -82,7 +82,7 @@ class HrOrgNodeLivewireTest extends TestCase
         // the tree renders "N نفر" per node.
         Livewire::test('hr.org-chart')
             ->assertStatus(200)
-            ->assertSee('نفر');
+            ->assertSee('1 نفر');
     }
 
     public function test_person_counts_are_passed_to_the_tree(): void

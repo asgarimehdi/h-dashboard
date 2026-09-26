@@ -231,7 +231,7 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 ### Other Pages
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
-- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Since #704 the tree itself is the reusable `unit.tree` component (views under `resources/views/livewire/unit/`, queries in `App\Services\UnitTreeService`); the HR page contributes only the badge view (`resources/views/livewire/hr/personnel-badge.blade.php`) and the `unit-selected` detail panel. Views under `resources/views/livewire/hr/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
+- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Since #704 the tree itself is the reusable `unit.tree` component (views under `resources/views/livewire/unit/`, queries in `App\Services\UnitTreeService`); the HR page contributes only the badge view (`resources/views/livewire/hr/personnel-badge.blade.php`) and the `unit-selected` detail panel. Page and badge views live under `resources/views/livewire/hr/`, the shared tree under `resources/views/livewire/unit/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
 
 ### Help System (راهنما)
 

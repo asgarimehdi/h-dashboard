@@ -126,8 +126,7 @@ return new class extends Component
                  card. Selection arrives back as the `unit-selected` event. --}}
             <livewire:unit.tree
                 badge-view="livewire.hr.personnel-badge"
-                :person-counts="$personCounts"
-                title="چارت سازمانی"
+                :badge-data="$personCounts"
                 search-placeholder="جستجوی واحد..."
             />
         </div>

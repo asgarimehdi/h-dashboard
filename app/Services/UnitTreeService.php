@@ -7,13 +7,18 @@ use App\Traits\PersianNormalizer;
 use Illuminate\Support\Collection;
 
 /**
- * Tree queries for the unit hierarchy, shared by the Livewire `unit.tree`
- * component and the `/api/hr/org-chart*` endpoints.
+ * Tree queries for the unit hierarchy, consumed by the Livewire `unit.tree`
+ * component — its only real consumer today.
  *
  * Issue #704 (Plan 30). Every method takes the caller's accessible unit IDs as
- * an argument rather than resolving them from the session: the API controller
+ * an argument rather than resolving them from the session: a future API caller
  * gets its scope from `UnitScopedRequest`, not `auth()`, and passing them in
  * keeps the service testable without a session.
+ *
+ * The `/api/hr/org-chart*` endpoints deliberately stay inline (comment in
+ * OrgChartController): they interleave person counts and Flutter-specific
+ * shaping into the tree walk, and HrApiTest gates their payload byte-identical.
+ * Converging them onto this service is a separate, test-gated change.
  *
  * Extract the logic here rather than copy-pasting it — a second feature that
  * needs a unit tree (e.g. covered population per unit) plugs its own badge
@@ -31,10 +36,13 @@ class UnitTreeService
     use PersianNormalizer;
 
     /**
-     * Shortest term that triggers a search. Below this the result set is
+     * Shortest term (in CHARACTERS, not bytes) that triggers a search. The old
+     * page gate was `strlen() > 2` — a byte count, so two Persian characters
+     * (4 bytes) searched while one latin character did not. Two characters is
+     * the closest deliberate equivalent; below it the result set is
      * effectively the whole scope, so the tree just resets its expansion.
      */
-    private const MIN_SEARCH_LENGTH = 3;
+    private const MIN_SEARCH_LENGTH = 2;
 
     /**
      * The roots of an access-scoped tree: accessible units whose parent is
@@ -84,6 +92,30 @@ class UnitTreeService
                 $query->whereIn('id', $accessibleIds);
             })
             ->get();
+    }
+
+    /**
+     * Whether a unit has at least one child the caller may see.
+     *
+     * Used by the tree's node template to decide whether to draw a toggle for
+     * a unit whose children are not loaded yet. Existence only — the node
+     * never needs the rows themselves, and this must not degrade into a
+     * per-node full fetch on every render.
+     *
+     * @param  array<int>  $accessibleIds
+     */
+    public function hasChildren(int $unitId, array $accessibleIds): bool
+    {
+        if ($accessibleIds === [] || ! in_array($unitId, $accessibleIds, true)) {
+            return false;
+        }
+
+        return Unit::query()
+            ->where(function ($query) use ($unitId, $accessibleIds) {
+                $query->where('parent_id', $unitId)
+                    ->whereIn('id', $accessibleIds);
+            })
+            ->exists();
     }
 
     /**

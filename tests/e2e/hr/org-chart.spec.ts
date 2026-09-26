@@ -19,7 +19,9 @@ test.describe('hr org chart', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await page.goto('/hr/org-chart');
-    await page.waitForLoadState('networkidle');
+    // Readiness anchor instead of networkidle: it waits for what this page
+    // actually shows and fails fast, instead of stalling on stray requests.
+    await expect(page.locator('body')).toContainText('چارت سازمانی');
   });
 
   test('page and tree render', async ({ page }) => {
@@ -39,7 +41,9 @@ test.describe('hr org chart', () => {
 
   test('personnel badge renders on nodes', async ({ page }) => {
     // badgeView="livewire.hr.personnel-badge" — the plug-in contract (#704).
-    await expect(page.locator('body')).toContainText('نفر');
+    // \d+ نفر proves a COUNT reached the badge, not just that the word
+    // "نفر" appears somewhere.
+    await expect(page.locator('body')).toContainText(/\d+ نفر/);
   });
 
   test('empty selection placeholder, then selecting a node fills the detail panel', async ({ page }) => {
@@ -60,9 +64,8 @@ test.describe('hr org chart', () => {
     const search = page.locator('input[placeholder^="جستجوی واحد"]');
     await search.fill('طارم');
 
-    // Debounced (300ms) Livewire update: wait for the tree to settle.
-    await page.waitForTimeout(1500);
-
+    // expect() polls through the 300ms debounce + Livewire roundtrip — no
+    // fixed sleep to be too short on a slow CI runner.
     await expect(page.locator('.tree-container .border-primary').first()).toBeVisible();
     // The deep match renders, i.e. its ancestor chain was expanded too.
     await expect(page.locator('.tree-container')).toContainText('شبکه بهداشت و درمان طارم');
@@ -71,27 +74,25 @@ test.describe('hr org chart', () => {
   test('search with no match keeps the page usable', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجوی واحد"]');
     await search.fill('این‌نام‌واحدی_وجود_ندارد');
-    await page.waitForTimeout(1200);
 
     // Page still renders the tree card rather than erroring out.
     await expect(page.locator('.tree-container')).toBeVisible();
     await expect(page.locator('body')).toContainText('چارت سازمانی');
   });
 
-  test('collapse all empties the guide markers, expand all restores them', async ({ page }) => {
+  test('collapse all hides the nested nodes, expand all restores them', async ({ page }) => {
     const collapse = page.locator('button, [wire\\:click], a').filter({ hasText: 'جمع کردن' }).first();
     const expand = page.locator('button, [wire\\:click], a').filter({ hasText: 'باز کردن همه' }).first();
 
+    // "معاونت بهداشت" sits three levels deep in the seed data: collapse must
+    // hide it, expand must bring it back. expect() retries replace fixed
+    // sleeps, and the semantic assertion beats comparing dot counts.
+    await expect(page.locator('.tree-container')).toContainText('معاونت بهداشت');
+
     await collapse.click();
-    await page.waitForTimeout(1000);
-    const afterCollapse = await page.locator('.tree-node-dot').count();
+    await expect(page.locator('.tree-container')).not.toContainText('معاونت بهداشت');
 
     await expand.click();
-    await page.waitForTimeout(1000);
-    const afterExpand = await page.locator('.tree-node-dot').count();
-
-    // Collapsing drops the nested guide dots (root nodes stay visible);
-    // expanding brings the deeper levels back.
-    expect(afterExpand).toBeGreaterThan(afterCollapse);
+    await expect(page.locator('.tree-container')).toContainText('معاونت بهداشت');
   });
 });

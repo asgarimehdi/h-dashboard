@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -15,10 +14,11 @@ use Tests\TestCase;
 /**
  * Tree mechanics for the generic `unit.tree` component (issue #704).
  *
- * Renamed from HrOrgNodeLivewireTest: the tree UI moved out of hr/org-chart
- * into unit/tree, and hr/org-node.blade.php no longer exists. What this file
- * covers — roots, lazy children, search, expand/collapse — is now the generic
- * component's contract, independent of the HR page that consumes it.
+ * Split out of the original HrOrgNodeLivewireTest (now HrOrgChartPageTest):
+ * the tree UI moved out of hr/org-chart into unit/tree, and
+ * hr/org-node.blade.php no longer exists. What this file covers — roots, lazy
+ * children, search, expand/collapse — is the generic component's contract,
+ * independent of the HR page that consumes it.
  */
 class UnitTreeLivewireTest extends TestCase
 {
@@ -43,7 +43,7 @@ class UnitTreeLivewireTest extends TestCase
 
         Livewire::test('unit.tree', [
             'badgeView' => 'livewire.hr.personnel-badge',
-            'personCounts' => [],
+            'badgeData' => [],
         ])
             ->assertStatus(200);
     }
@@ -68,10 +68,31 @@ class UnitTreeLivewireTest extends TestCase
 
         Livewire::test('unit.tree', [
             'badgeView' => 'livewire.hr.personnel-badge',
-            'personCounts' => [$unit->id => 1],
+            'badgeData' => [$unit->id => 1],
         ])
             ->assertStatus(200)
-            ->assertSee('نفر');
+            ->assertSee('1 نفر');
+    }
+
+    public function test_rendering_stays_query_bounded(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // A four-level chain plus siblings: every relation the render touches
+        // must be eager/batched. If any of them degrades to a per-node query
+        // (the classic tree N+1 — e.g. unitType per node), the counter blows
+        // past the cap. Replaces the vacuous assertIsArray test that was
+        // dropped with hr/org-node.
+        $top = Unit::query()->firstOrFail();
+        Unit::create(['name' => 'شعبه الف', 'parent_id' => $top->id]);
+        $mid = Unit::create(['name' => 'سطح دوم', 'parent_id' => $top->id]);
+        $deep = Unit::create(['name' => 'سطح سوم', 'parent_id' => $mid->id]);
+        Unit::create(['name' => 'سطح چهارم', 'parent_id' => $deep->id]);
+
+        $this->assertNoNPlusOne(function (): void {
+            Livewire::test('unit.tree')->assertStatus(200);
+        }, 12);
     }
 
     // ==================== Selection event ====================

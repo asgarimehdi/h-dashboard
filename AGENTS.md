@@ -150,8 +150,8 @@ The tree UI is generic and shared: `resources/views/livewire/unit/tree.blade.php
 
 Reuse contract (documented at the top of `tree.blade.php`):
 
-- **IN** — `badge-view` (Blade view per node, receives `$unit` + `$personCounts`), `personCounts`, `title`, `search-placeholder`.
-- **OUT** — `unit-selected` event (int id) on node click; the embedding page listens via `#[On('unit-selected')]` and fills its own detail panel.
+- **IN** — `badge-view` (Blade view per node, receives `$unit` + `badge-data`), `badge-data` (opaque unit-id => payload map, forwarded verbatim — the tree never interprets it), `search-placeholder`.
+- **OUT** — `unit-selected` event (int id) on node click; the embedding page listens via `#[On('unit-selected')]` and fills its own detail panel. The listener **must re-check the id** against its own `accessibleUnitIds()` — `selectNode` is a public Livewire method that forwards any id.
 
 `hr/org-chart` is the reference consumer: it contributes only `livewire/hr/personnel-badge` (count + «خالی») and the personnel detail panel. `hr/org-node.blade.php` is **deleted** — do not recreate it; node markup lives in `unit/tree-node.blade.php`. The search box and expand/collapse buttons live INSIDE `unit.tree` because they drive the child's own state — a parent cannot call a child's methods without a ref. A second consumer (e.g. covered population per unit) needs zero tree code: a badge view + an event listener.
 
@@ -529,4 +529,4 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists |
 | Eloquent chains vs PHPStan (no larastan) | `Eloquent\Builder` has `@mixin Query\Builder`, so a top-level `whereIn()`/`limit()`/`take()` resolves to the query builder and types the rest of the chain `Collection<int, stdClass>`. Start chains `Model::query()->with([...])` (both declared on Eloquent), put IN-filters inside `where(Closure)`, cap rows with `get()->take(N)` not `->limit(N)->get()`. Do NOT add `@method static whereIn()` to a model to silence this — it re-types every `Model::whereIn()` chain repo-wide and unmasks errors in unrelated files |
 | phpstan-baseline is line-keyed | Its entries embed line numbers, so inserting even a comment into a baselined file "unmatches" its entries (`ignore.unmatched` errors). After editing baselined code, run `vendor/bin/phpstan analyse --generate-baseline`, then verify `git diff phpstan-baseline.neon` shows **0 additions** — an addition means a real new error got suppressed |
-| `hr/org-node.blade.php` removed | Replaced by `unit/tree-node.blade.php` (issue #704). Tests moved to `UnitTreeLivewireTest`; `HrOrgNodeLivewireTest` now covers only the HR page that embeds `unit.tree` |
+| `hr/org-node.blade.php` removed | Replaced by `unit/tree-node.blade.php` (issue #704). Tests split: `UnitTreeLivewireTest` (generic tree contract) + `HrOrgChartPageTest` (the HR page embedding it) |

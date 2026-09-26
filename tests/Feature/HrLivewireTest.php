@@ -200,16 +200,16 @@ class HrLivewireTest extends TestCase
     /** @test */
     public function test_org_chart_vacancy_badge_on_empty_units(): void
     {
-        // Create a unit with no personnel
-        $emptyUnit = Unit::create(['name' => 'واحد خالی', 'parent_id' => $this->unit->id]);
+        // Create a unit with no personnel under the page's root unit.
+        Unit::create(['name' => 'واحد خالی', 'parent_id' => $this->unit->id]);
 
-        $component = Livewire::test('unit.tree')
-            ->assertOk();
-
-        $expanded = $component->get('expanded');
-        $this->assertContains((string) $emptyUnit->id, $expanded);
-
-        $personCounts = $component->get('personCounts');
-        $this->assertEquals(0, $personCounts[$emptyUnit->id] ?? 0);
+        // Mount the PAGE, not the bare tree: hr.org-chart computes the counts,
+        // feeds them as badgeData, and the badge renders for a unit with no
+        // personnel — "0 نفر" plus the «خالی» error badge. Asserting the
+        // rendered output (not an empty map) is what makes this a real test.
+        Livewire::test('hr.org-chart')
+            ->assertOk()
+            ->assertSee('0 نفر')
+            ->assertSee('خالی');
     }
 }

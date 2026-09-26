@@ -1,40 +1,35 @@
 {{--
     One node of the shared `unit.tree` component. Recurses into itself for
-    children, so the tree markup lives in exactly one place.
-
-    Props:
-      unit        — the Unit model for this node
-      level       — depth, 0 for a root (drives the guide-line indent)
-      isLast      — last sibling (shortens the vertical guide line)
-      badgeView   — optional Blade view rendered per node, receives $unit
-      personCounts— unit-id => count map, forwarded to the badge view
-
-    All mechanics (expanded set, lazy children, search) live on the parent
-    `unit.tree` component — this template only renders.
+    children, so the tree markup lives in exactly one place. Props contract
+    documented in livewire/unit/tree.blade.php — this template only renders;
+    all mechanics (expanded set, lazy children, search, match highlight) live
+    on the parent `unit.tree` component.
 --}}
-{{-- Props documented in livewire/unit/tree.blade.php. --}}
-@props(['unit', 'level' => 0, 'isLast' => false, 'badgeView' => null, 'personCounts' => []])
+@props(['unit', 'level' => 0, 'isLast' => false, 'badgeView' => null, 'badgeData' => []])
 
 @php
-    use App\Services\AccessService;
     use App\Services\UnitTreeService;
 
     // Children come from the tree's lazy cache. When a node has never been
-    // loaded we still need to know whether to draw a toggle, so fall back to
-    // the service — scoped to what the current user may see, so a node never
-    // advertises children the user is not allowed to open.
+    // loaded we still need to know whether to draw a toggle, so ask the
+    // service for an existence check — scoped to what the current user may
+    // see (a node never advertises children the user cannot open) and cheap
+    // enough to run per unloaded node (no rows are fetched).
     $childUnits = $this->lazyChildren[$unit->id] ?? null;
 
     if ($childUnits !== null) {
         $hasChildren = $childUnits->isNotEmpty();
     } else {
         $hasChildren = app(UnitTreeService::class)
-            ->childrenOf($unit->id, app(AccessService::class)->accessibleUnitIds())
-            ->isNotEmpty();
+            ->hasChildren((int) $unit->id, $this->accessibleIds());
     }
 
-    $isExpanded = in_array((string) $unit->id, $this->expanded);
-    $isMatch = ! empty($this->search) && mb_strpos($unit->name, $this->search) !== false;
+    $isExpanded = in_array((string) $unit->id, $this->expanded, true);
+
+    // Highlight from the search result set, never by re-deriving the match
+    // against the raw term — folded matching and the length floor live in
+    // UnitTreeService, and a second implementation here would drift.
+    $isMatch = isset($this->matchIds[(int) $unit->id]);
 @endphp
 
 <div class="relative">
@@ -90,7 +85,7 @@
                 {{-- Badge slot: the one plug-in point. Omitted entirely when the
                      consuming page supplies no badgeView. --}}
                 @if ($badgeView)
-                    @include($badgeView, ['unit' => $unit, 'personCounts' => $personCounts])
+                    @include($badgeView, ['unit' => $unit, 'badgeData' => $badgeData])
                 @endif
             </div>
 
@@ -107,7 +102,7 @@
                     'level' => $level + 1,
                     'isLast' => $loop->last,
                     'badgeView' => $badgeView,
-                    'personCounts' => $personCounts,
+                    'badgeData' => $badgeData,
                 ])
             @endforeach
         </div>

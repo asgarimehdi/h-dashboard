@@ -6,11 +6,12 @@ use App\Models\Unit;
 use App\Services\UnitTreeService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(UnitTreeService::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, InteractsWithTestSetup::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
@@ -93,7 +94,7 @@ test('search folds ZWNJ so a half-spaced name is findable', function () {
 test('search folds Arabic alef variants', function () {
     // آموزش is stored with آ (U+0622) and must be findable when the user
     // types ا. The term is 5 characters so it clears the minimum.
-    $alefUnit = Unit::create(['name' => "آموزش", 'parent_id' => $this->root->id]);
+    $alefUnit = Unit::create(['name' => 'آموزش', 'parent_id' => $this->root->id]);
 
     $ids = Unit::descendantIds($this->root->id)->toArray();
 
@@ -110,10 +111,21 @@ test('search never returns units outside the scope', function () {
     expect($matches)->toBeEmpty();
 });
 
-test('search returns nothing for a term shorter than three characters', function () {
+test('search returns nothing for a one-character term', function () {
     $ids = Unit::descendantIds($this->root->id)->toArray();
 
-    expect(app(UnitTreeService::class)->search('بر', $ids))->toBeEmpty();
+    // Floor is two CHARACTERS: "برگ" is right there, one letter must not hit it.
+    expect(app(UnitTreeService::class)->search('ب', $ids))->toBeEmpty();
+});
+
+test('search matches a two-character term', function () {
+    $ids = Unit::descendantIds($this->root->id)->toArray();
+
+    // The old page gate was byte-based (strlen() > 2), which searched at two
+    // Persian characters (4 bytes). The mb floor of 2 keeps that behaviour.
+    $matches = app(UnitTreeService::class)->search('یا', $ids);
+
+    expect($matches->pluck('name')->all())->toContain('میانی');
 });
 
 test('ancestorChain returns the full root to unit chain', function () {

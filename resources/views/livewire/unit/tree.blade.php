@@ -14,21 +14,25 @@ use Livewire\Component;
  *
  * IN  (props):
  *   badgeView        string|null  Blade view rendered per node; receives
- *                               $unit and $personCounts. Omit for a bare tree.
- *   personCounts     array        unit-id => count, forwarded to badgeView.
- *   title            string       Page header text.
+ *                               $unit and $badgeData. Omit for a bare tree.
+ *   badgeData        array        Opaque per-unit payload (unit-id => data)
+ *                               forwarded verbatim to badgeView. The tree
+ *                               never interprets it.
  *   searchPlaceholder string      Search input placeholder.
  *
  * OUT (events):
  *   unit-selected    int          Fired on node click. The parent page listens
  *                               and fills its own detail panel — the tree
  *                               deliberately does not know what "selected"
- *                               means for the page embedding it.
+ *                               means for the page embedding it. The listener
+ *                               MUST re-check the id against its own
+ *                               accessibleUnitIds(): selectNode is a public
+ *                               Livewire method and forwards ANY id (pinned
+ *                               by UnitTreeLivewireTest).
  *
  * A new feature (e.g. covered population per unit) needs ZERO tree code:
  *
- *     <livewire:unit.tree badge-view="livewire.population.coverage-badge"
- *                         title="جمعیت تحت پوشش" />
+ *     <livewire:unit.tree badge-view="livewire.population.coverage-badge" />
  *
  * plus a badge view and a `#[On('unit-selected')]` listener. Resist adding
  * further knobs until a second real consumer needs one.
@@ -36,18 +40,20 @@ use Livewire\Component;
  */
 return new class extends Component
 {
-    /** Blade view rendered per node; receives $unit + $personCounts. */
+    /** Levels open on first paint; deeper levels lazy-load on expand. */
+    private const INITIAL_EXPAND_LEVELS = 3;
+
+    /** Blade view rendered per node; receives $unit + $badgeData. */
     public ?string $badgeView = null;
 
     /**
-     * unit-id => count, forwarded verbatim to the badge view.
+     * Opaque per-unit payload forwarded verbatim to the badge view — the tree
+     * does not know or care what it holds (counts, flags, anything keyed by
+     * unit id).
      *
-     * @var array<int, int>
+     * @var array<int, mixed>
      */
-    public array $personCounts = [];
-
-    /** Page header text. */
-    public string $title = 'درخت واحدها';
+    public array $badgeData = [];
 
     /** Search input placeholder. */
     public string $searchPlaceholder = 'جستجوی واحد...';
@@ -60,6 +66,22 @@ return new class extends Component
     public array $expanded = [];
 
     public string $search = '';
+
+    /**
+     * Units matched by the current search (id => true). Nodes highlight from
+     * THIS set instead of re-deriving a match against the raw term, so the
+     * highlight and the search can never disagree about what matched.
+     *
+     * @var array<int, bool>
+     */
+    public array $matchIds = [];
+
+    /**
+     * Scope ids for the current request — resolved once, then memoized.
+     *
+     * @var array<int>|null
+     */
+    protected ?array $accessibleIds = null;
 
     /**
      * Scope-rooted top of the tree.
@@ -75,12 +97,24 @@ return new class extends Component
      */
     public array $lazyChildren = [];
 
-    /** How many levels are open on first paint. */
-    public int $initialExpandLevels = 3;
-
     public function mount(): void
     {
         $this->loadData();
+    }
+
+    /**
+     * The caller's accessible unit ids, resolved once per request so node
+     * templates and recursive helpers never re-enter the container.
+     *
+     * @return array<int>
+     */
+    public function accessibleIds(): array
+    {
+        if ($this->accessibleIds === null) {
+            $this->accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        }
+
+        return $this->accessibleIds;
     }
 
     /**
@@ -88,12 +122,12 @@ return new class extends Component
      */
     public function loadData(): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = $this->accessibleIds();
 
         $this->rootUnits = app(UnitTreeService::class)->roots($accessibleIds);
 
         if ($this->expanded === []) {
-            $this->expanded = $this->expandFirstNLevels($this->rootUnits, $this->initialExpandLevels);
+            $this->expanded = $this->expandFirstNLevels($this->rootUnits, self::INITIAL_EXPAND_LEVELS);
         }
 
         $this->loadExpandedChildren();
@@ -108,7 +142,7 @@ return new class extends Component
     protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
     {
         $ids = [];
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = $this->accessibleIds();
 
         foreach ($nodes as $node) {
             if ($level <= $maxLevel) {
@@ -134,7 +168,7 @@ return new class extends Component
      */
     public function loadExpandedChildren(): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = $this->accessibleIds();
 
         foreach ($this->expanded as $unitId) {
             $id = (int) $unitId;
@@ -150,7 +184,7 @@ return new class extends Component
      */
     public function loadChildren(int $unitId): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = $this->accessibleIds();
 
         if (! in_array($unitId, $accessibleIds, true)) {
             return;
@@ -175,7 +209,9 @@ return new class extends Component
      */
     public function toggle($id): void
     {
-        if (in_array($id, $this->expanded)) {
+        $id = (string) $id;
+
+        if (in_array($id, $this->expanded, true)) {
             $this->expanded = array_values(array_diff($this->expanded, [$id]));
         } else {
             $this->expanded[] = $id;
@@ -203,12 +239,17 @@ return new class extends Component
     {
         $this->expanded = [];
         $this->lazyChildren = [];
+        $this->matchIds = [];
 
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = $this->accessibleIds();
         $matches = app(UnitTreeService::class)->search($this->search, $accessibleIds);
 
         if ($matches->isEmpty()) {
             return;
+        }
+
+        foreach ($matches as $matched) {
+            $this->matchIds[(int) $matched->id] = true;
         }
 
         $tree = app(UnitTreeService::class);
@@ -276,7 +317,7 @@ return new class extends Component
                     'level' => 0,
                     'isLast' => $loop->last,
                     'badgeView' => $badgeView,
-                    'personCounts' => $personCounts,
+                    'badgeData' => $badgeData,
                 ])
             @endforeach
 
