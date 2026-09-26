@@ -480,6 +480,10 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Hardware auth | Must be 302 → /login for guests; do NOT "fix" back to 200 |
 | Postgres sequence | After seeding with explicit IDs in tests, `SELECT setval(...)` to avoid dup keys |
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
+| Leaflet.Draw featureGroup | `L.Control.Draw({ edit: { featureGroup } })` only enables edit/remove when `featureGroup.getLayers().length > 0` — `_checkDisabled` in `public/js/leaflet/leaflet.draw.js` adds `.leaflet-disabled` otherwise. A layer added straight to the map is invisible to the toolbar: put it in the FeatureGroup with `eachLayer(l => drawnItems.addLayer(l))` (individual layers, never the `L.GeoJSON` group — `updateGeojson()` only serialises `L.Polygon`) |
+| `units.boundary_id` is ON DELETE CASCADE | Deleting the `boundaries` row cascades the **unit** away with it. Always `$unit->update(['boundary_id' => null])` FIRST, then delete the boundary row. Reversed order silently deletes the unit and its subtree (issue #702) |
+| Playwright on map pages | Never `await networkidle` — Leaflet keeps fetching tiles so it never goes idle and the wait times out. Wait for `#unitMap` + `.leaflet-draw-edit-edit` instead |
+| `scripts/e2e-test.sh` has no `trap` | A failing run exits before restore, leaving `.env` swapped to `h_dashboard_e2e`. Recover with `cp .env.dev.bak .env && rm -f .env.dev.bak`, then kill `:8001` (use `kill $(pgrep -f 'artisan serve')` — `pkill -f` kills the calling shell) |
 | Dead routes removed | `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — views never existed or were deleted |
 | Todo calendar | Must use `@script` block (not inline JS) for wire:navigate compatibility |
 | Person search | 500ms debounce applied — do not remove, causes Livewire update floods |

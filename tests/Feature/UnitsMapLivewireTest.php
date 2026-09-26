@@ -301,4 +301,73 @@ class UnitsMapLivewireTest extends TestCase
             ->assertSet('hasBoundary', true)
             ->assertSet('geojson', fn ($val) => $val !== null && str_contains($val, 'Polygon'));
     }
+
+    // ==================== #702: deleteBoundary must not orphan the row ====================
+
+    public function test_delete_boundary_removes_the_boundaries_row(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        Livewire::test('units.map', ['id' => $unit->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson())
+            ->assertSet('hasBoundary', true);
+
+        $unit->refresh();
+        $boundaryId = $unit->boundary_id;
+        $this->assertNotNull($boundaryId);
+        $this->assertDatabaseHas('boundaries', ['id' => $boundaryId]);
+
+        Livewire::test('units.map', ['id' => $unit->id])->call('deleteBoundary');
+
+        // #702: nulling boundary_id alone left the geometry row behind forever.
+        $this->assertDatabaseMissing('boundaries', ['id' => $boundaryId]);
+    }
+
+    public function test_delete_boundary_keeps_other_units_boundaries(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+
+        Livewire::test('units.map', ['id' => $unit->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson());
+
+        $otherBoundaryId = DB::table('boundaries')->insertGetId([
+            'boundary' => DB::raw("ST_GeomFromGeoJSON('".json_encode([
+                'type' => 'Polygon',
+                'coordinates' => [[[50.0, 37.0], [50.1, 37.0], [50.1, 37.1], [50.0, 37.1], [50.0, 37.0]]],
+            ])."' )"),
+        ]);
+        $otherUnit->update(['boundary_id' => $otherBoundaryId]);
+
+        $unit->refresh();
+        $mineId = $unit->boundary_id;
+
+        Livewire::test('units.map', ['id' => $unit->id])->call('deleteBoundary');
+
+        $this->assertDatabaseMissing('boundaries', ['id' => $mineId]);
+        $this->assertDatabaseHas('boundaries', ['id' => $otherBoundaryId]);
+    }
+
+    public function test_delete_boundary_does_not_cascade_delete_the_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        Livewire::test('units.map', ['id' => $unit->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson());
+
+        $unit->refresh();
+        $this->assertNotNull($unit->boundary_id);
+
+        Livewire::test('units.map', ['id' => $unit->id])->call('deleteBoundary');
+
+        // units.boundary_id is ON DELETE CASCADE — removing the `boundaries` row
+        // first would take the unit (and its whole subtree) with it. Clearing the
+        // boundary must never delete the unit it belonged to.
+        $this->assertDatabaseHas('units', ['id' => $unit->id]);
+        $this->assertNull($unit->fresh()->boundary_id);
+    }
 }
