@@ -567,7 +567,7 @@ return new class extends Component
                 $l = self::foldSeparatorsSql('l_name');
                 $q->whereRaw($f.' LIKE ?', ["%{$term}%"])
                     ->orWhereRaw($l.' LIKE ?', ["%{$term}%"])
-                    ->where('n_code', 'LIKE', "%{$term}%")
+                    ->orWhere('n_code', 'LIKE', "%{$term}%")
                     ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$term}%"]);
             });
         }

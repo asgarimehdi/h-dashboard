@@ -221,4 +221,43 @@ class HardwareUnitFilterTest extends TestCase
             ->set('filterUnit', $data['unit']->name)
             ->assertSee('PctPC');
     }
+
+    /**
+     * Regression guard for the filterPerson boolean logic: every branch must
+     * be an OR. An AND between l_name and n_code hides the row when filtering
+     * by national code alone (a name never matches a digit-only code, and a
+     * code never matches a name).
+     */
+    public function test_filter_person_matches_last_name_and_national_code(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode, 'f_name' => 'سارا', 'l_name' => 'رضایی',
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $data['unit']->id,
+        ]);
+        Hardware::create([
+            'n_code' => $nCode,
+            'pc_name' => 'PC-Sara',
+            'type' => 'PC', 'os' => 'Windows 10',
+            'cpu' => 'Intel i5', 'ram' => '8GB', 'hdd' => '256GB SSD',
+        ]);
+
+        // Last name alone must find the row.
+        Livewire::test('hardware.index')
+            ->set('filterPerson', 'رضایی')
+            ->assertSee('PC-Sara');
+
+        // National code alone must find the row.
+        Livewire::test('hardware.index')
+            ->set('filterPerson', $nCode)
+            ->assertSee('PC-Sara');
+    }
 }
