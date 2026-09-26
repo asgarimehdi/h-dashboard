@@ -174,6 +174,74 @@ class UnitModelTest extends TestCase
         $this->assertTrue($result->isEmpty());
     }
 
+    public function test_descendant_ids_terminates_on_a_parent_id_cycle(): void
+    {
+        // parent_id is not constrained by the database, so a cycle is possible
+        // via direct writes, seeders, or a bad type-relationship edit. The
+        // recursive CTE must dedupe (UNION, not UNION ALL) or it recurses
+        // forever and takes the connection with it.
+        $this->withStatementTimeout(3000, function () {
+            $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+            $b = Unit::create(['name' => 'ب', 'is_active' => true, 'parent_id' => $a->id]);
+            $a->update(['parent_id' => $b->id]);
+
+            $descendants = Unit::descendantIds($a->id);
+
+            // Terminated, and did not loop: each unit appears exactly once.
+            $this->assertCount(2, $descendants);
+            $this->assertEqualsCanonicalizing(
+                [$a->id, $b->id],
+                $descendants->unique()->values()->all()
+            );
+        });
+    }
+
+    public function test_descendant_ids_terminates_on_a_longer_cycle(): void
+    {
+        $this->withStatementTimeout(3000, function () {
+            $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+            $b = Unit::create(['name' => 'ب', 'is_active' => true, 'parent_id' => $a->id]);
+            $c = Unit::create(['name' => 'ج', 'is_active' => true, 'parent_id' => $b->id]);
+            $d = Unit::create(['name' => 'د', 'is_active' => true, 'parent_id' => $c->id]);
+            $a->update(['parent_id' => $d->id]);
+
+            $this->assertCount(4, Unit::descendantIds($a->id));
+        });
+    }
+
+    public function test_descendant_ids_still_terminates_on_an_inactive_node_in_a_cycle(): void
+    {
+        // The recursive step filters is_active = true, so an inactive unit is
+        // never traversed: a cycle through one already terminated even with
+        // UNION ALL. Pinned here so the UNION change cannot silently alter it —
+        // the inactive unit is EXCLUDED from the result, not included.
+        $this->withStatementTimeout(3000, function () {
+            $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+            $b = Unit::create(['name' => 'ب', 'is_active' => false, 'parent_id' => $a->id]);
+            $a->update(['parent_id' => $b->id]);
+
+            $descendants = Unit::descendantIds($a->id);
+
+            $this->assertCount(1, $descendants);
+            $this->assertSame($a->id, $descendants->first());
+        });
+    }
+
+    /**
+     * Run a callback under a Postgres statement_timeout, so a non-terminating
+     * recursive query fails fast instead of hanging the whole suite.
+     *
+     * The timeout is NOT reset afterwards: a timed-out statement aborts the
+     * test's transaction, so any reset would raise a second, misleading error.
+     * RefreshDatabase rolls the connection back between tests.
+     */
+    protected function withStatementTimeout(int $milliseconds, callable $callback): void
+    {
+        DB::statement("SET statement_timeout = {$milliseconds}");
+
+        $callback();
+    }
+
     public function test_descendant_ids_caches_results(): void
     {
         $parent = Unit::create(['name' => 'والد']);

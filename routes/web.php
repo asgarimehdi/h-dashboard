@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\HardwareExportController;
+use App\Http\Controllers\Api\UnitsExportController;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Route;
 
@@ -57,6 +58,7 @@ Route::middleware('auth')->group(function () {
 
         Route::middleware('role_or_permission:organization')->group(function () {
             Route::livewire('/units', 'units.index');
+            Route::get('/units/export', [UnitsExportController::class, 'export'])->name('units.export');
             Route::livewire('/units/chart', 'units.chart');
             Route::livewire('/units/{id}/map', 'units.map');
         });

@@ -104,6 +104,21 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 | PUT | `/api/units/{unit}` | Update |
 | DELETE | `/api/units/{unit}` | Delete (cascades if children exist) |
 
+### Units Export (`/units/export`, issue #701)
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/units/export` | xlsx download of the caller's accessible units |
+
+- **Access-scoped** like the rest of the app: rows come from `UnitScopedRequest::accessibleIds()` (own unit + descendants). An empty scope yields a header-only file, not an error.
+- **Format — one row per unit** (flat table, not one column per hierarchy level): `شناسه`, `نام واحد`, `نوع واحد`, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. The breadcrumb (`وزارت بهداشت > دانشگاه > … > واحد`) carries the hierarchy so the sheet stays sortable in Excel.
+- **Ordering:** depth-first, parents before children; siblings alphabetically. Ancestors above the caller's scope still name the path (names only — the tree page renders them anyway).
+- **Inactive units are included** with وضعیت = `غیرفعال` (visibility, not hidden filtering).
+- **RTL:** sheet direction set via `WithEvents` → `AfterSheet` → `setRightToLeft(true)`.
+- **Naming:** `units-Ymd-His.xlsx`. Button is a plain `<a href>` (Livewire cannot return file downloads) in the `/units` page header.
+- `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, gated by `role_or_permission:organization`.
+- ⚠️ `buildHierarchy()` guards against a `parent_id` cycle, but note `Unit::descendantIds()` (used for scoping) uses `WITH RECURSIVE ... UNION ALL` and will **not terminate** on an active-node cycle — a data problem, not a code one.
+
 ### Ticket CRUD (`/api/tickets`)
 
 | Method | URL | Description |
