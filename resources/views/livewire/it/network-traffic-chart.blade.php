@@ -38,6 +38,10 @@ return new class extends Component {
 
     <div x-ref="container" class="w-full h-[300px]"></div>
 
+    <!-- #703: when Zabbix is unreachable the chart was silently blank. Surface
+         the requested friendly message instead of an unexplained empty chart. -->
+    <div x-show="error" x-cloak class="text-sm text-error mt-2" x-text="error"></div>
+
     <div x-show="loading" x-cloak
          class="absolute inset-0 flex items-center justify-center bg-base-100/50 z-10 rounded-lg">
         <span class="loading loading-spinner loading-lg text-primary"></span>
@@ -66,6 +70,7 @@ return new class extends Component {
             outItemId, inItemId, chartTitle,
             duration: initialDuration,
             loading: false,
+            error: null,
             chart: null,
             timer: null,
 
@@ -114,10 +119,20 @@ return new class extends Component {
             async load(show = false) {
                 if (!this.chart) return;
                 if (show) this.loading = true;
+                this.error = null;
 
                 try {
                     const url = `/api/zabbix/traffic?out_item_id=${this.outItemId}&in_item_id=${this.inItemId}&duration=${this.duration}`;
                     const res = await fetch(url);
+
+                    // #703: 503 means Zabbix is unreachable — show the requested
+                    // friendly message, not a silent empty chart. Other statuses
+                    // keep their existing behaviour so real bugs stay visible.
+                    if (res.status === 503) {
+                        this.error = 'دسترسی به سرور مقدور نمی باشد';
+                        return;
+                    }
+
                     const data = await res.json();
 
                     if (this.chart && this.chart.series) {
@@ -127,6 +142,15 @@ return new class extends Component {
                     }
                 } catch(e) {
                     console.error(e);
+
+                    // #703: a TypeError means the request never reached the
+                    // server (offline / network down) — the same condition.
+                    if (e instanceof TypeError) {
+                        this.error = 'دسترسی به سرور مقدور نمی باشد';
+                        return;
+                    }
+
+                    this.error = 'خطا در دریافت داده‌های ترافیک';
                 } finally {
                     if (show) this.loading = false;
                 }
