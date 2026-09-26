@@ -260,6 +260,12 @@ class Unit extends Model
 
     /**
      * Run the recursive CTE query for descendant IDs.
+     *
+     * UNION (not UNION ALL) is load-bearing: the set operator dedupes, so a
+     * parent_id cycle terminates instead of recursing forever. UNION ALL on a
+     * cyclic parent_id hangs the connection — parent_id is user-editable and
+     * not constrained by the database, so the web form's type guard is not the
+     * only possible writer.
      */
     protected static function recursiveDescendantQuery(array $ids): Collection
     {
@@ -268,7 +274,7 @@ class Unit extends Model
         $results = DB::select("
             WITH RECURSIVE unit_tree AS (
                 SELECT id FROM units WHERE id IN ({$placeholders})
-                UNION ALL
+                UNION
                 SELECT u.id FROM units u
                 INNER JOIN unit_tree ut ON u.parent_id = ut.id
                 WHERE u.is_active = true

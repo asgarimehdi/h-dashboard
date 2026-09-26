@@ -11,11 +11,20 @@ class PruneStaleCache extends Command
 
     protected $description = 'Prune stale cache entries from expired versioned keys';
 
+    /**
+     * Versioned namespaces maintained by CacheInvalidationService.
+     * New namespaces (e.g. `zabbix_devices`, issue #698) must be listed here so
+     * `cache:prune-stale` — and its call-count test — stay in sync.
+     *
+     * @var array<int, string>
+     */
+    public const NAMESPACES = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_units', 'unit_hierarchy', 'calendar', 'zabbix_devices'];
+
     public function handle(CacheInvalidationServiceInterface $cache): int
     {
         $this->info('Pruning stale cache entries...');
 
-        $namespaces = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_units', 'unit_hierarchy', 'calendar'];
+        $namespaces = self::NAMESPACES;
         $pruned = 0;
 
         foreach ($namespaces as $namespace) {

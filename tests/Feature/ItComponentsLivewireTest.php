@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Database\Seeders\PermissionSeeder;
+use Database\Seeders\ZabbixDeviceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -20,6 +21,7 @@ class ItComponentsLivewireTest extends TestCase
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
+        $this->seed(ZabbixDeviceSeeder::class);
         $this->seedLookupTables();
     }
 
