@@ -59,6 +59,19 @@ return new class extends Component
 
     private const SORTABLE_COLUMNS = ['id', 'name', 'type', 'sort_order'];
 
+    /**
+     * گزینه‌های فیلد «نوع» — کلیدها با option-value/option-label هم‌خوان‌اند.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function typeOptions(): array
+    {
+        return [
+            ['value' => ZabbixDevice::TYPE_NETWORK, 'label' => 'شبکه'],
+            ['value' => ZabbixDevice::TYPE_WIRELESS, 'label' => 'بی‌سیم'],
+        ];
+    }
+
     // ── validation ────────────────────────────────────────────────────────
 
     /**
@@ -387,10 +400,17 @@ return new class extends Component
                         @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
                     </div>
                     <div class="w-full sm:w-40">
-                        <x-select wire:model="type" label="نوع" class="text-base-content" :options="[
-                            ['value' => 'network', 'label' => 'شبکه'],
-                            ['value' => 'wireless', 'label' => 'بی‌سیم'],
-                        ]" />
+                        {{-- option-value/option-label are required: MaryUI defaults to
+                             optionValue='id' / optionLabel='name', so 'value'/'label'
+                             keys render empty options (an unreadable blank select). --}}
+                        <x-select
+                            wire:model="type"
+                            label="نوع"
+                            class="text-base-content"
+                            :options="$this->typeOptions()"
+                            option-value="value"
+                            option-label="label"
+                        />
                     </div>
                     <div class="w-full sm:w-32">
                         <x-input wire:model="sortOrder" label="ترتیب" type="number" min="0" />
