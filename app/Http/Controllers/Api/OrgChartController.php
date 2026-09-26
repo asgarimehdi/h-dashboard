@@ -29,7 +29,14 @@ class OrgChartController extends Controller
                     ->withCount(['person as personnel_count'])
                     ->get();
 
-                // Build nested tree from flat list (parent_id references)
+                // Build nested tree from flat list (parent_id references).
+                // The else-branch below is the same predicate UnitTreeService::roots()
+                // applies (parent is null, or the parent is out of scope) — see
+                // issue #704. It stays inline here deliberately: the loop already
+                // holds every accessible unit in $byId, so calling roots() would
+                // re-query the same rows to learn something this loop can read off
+                // directly. The Livewire `unit.tree` component, which does NOT
+                // already have the flat list in hand, uses the service.
                 $byId = $units->keyBy('id');
                 $tree = [];
                 foreach ($units as $unit) {
