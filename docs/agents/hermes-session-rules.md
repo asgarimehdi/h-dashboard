@@ -74,5 +74,6 @@ grep/glob/read. The debugging order from `AGENTS.md` is: CodeGraph → Boost →
 - `storage/logs/laravel.log` may not exist on a fresh server, so
   `read_log_entries` reports "Log file not found". Check `storage/logs/` first.
 - CodeGraph writes `.codegraph/` locally; it is git-ignored via `.git/info/exclude`.
-- `.hermes.md` **is** tracked by `beta` — do not exclude it locally, and remove it
-  before a `git merge` so the tracked version can land.
+- `.hermes.md` is **no longer tracked** — the per-instance boot note was removed
+  from the repository, so no merge or exclude dance is needed for it. If a future
+  `beta` sync reintroduces the file, delete it again rather than restoring it.
