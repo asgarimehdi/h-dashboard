@@ -23,11 +23,17 @@ return new class extends Component
 {
     use Toast;
 
-    /** unit-id => direct personnel count, passed down to the badge view. */
+    /**
+     * unit-id => direct personnel count, passed down to the badge view.
+     *
+     * @var array<int, int>
+     */
     public array $personCounts = [];
 
+    /** @var \App\Models\Unit|null */
     public $selectedUnit;
 
+    /** @var \Illuminate\Support\Collection<int, \App\Models\Person>|null */
     public $selectedPersonnel;
 
     public int $selectedPersonnelTotal = 0;
@@ -77,10 +83,15 @@ return new class extends Component
         // Query 1: Unit with relations
         $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person'])->find($unitId);
 
-        // Query 2: Personnel + total count (clone query, no separate count query)
+        // Query 2: Personnel + total count (clone query, no separate count query).
+        // The 20-row cap is applied AFTER get(): a builder-level ->limit() hops to
+        // Query\Builder through @mixin (Eloquent\Builder declares no limit()),
+        // which types the result as Collection<int, stdClass> for PHPStan while
+        // runtime still yields Person models. get()->take(20) keeps the declared
+        // type honest — see AGENTS.md gotchas if this ever needs revisiting.
         $personQuery = Person::where('u_id', $unitId)->with(['semat', 'tahsil', 'estekhdam', 'radif', 'user']);
         $this->selectedPersonnelTotal = (clone $personQuery)->count();
-        $this->selectedPersonnel = $personQuery->limit(20)->get();
+        $this->selectedPersonnel = $personQuery->get()->take(20);
 
         // Query 3: Descendant personnel + user counts (descendantIds is cached)
         $descendantIds = Unit::descendantIds($unitId);

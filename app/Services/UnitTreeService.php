@@ -18,6 +18,13 @@ use Illuminate\Support\Collection;
  * Extract the logic here rather than copy-pasting it — a second feature that
  * needs a unit tree (e.g. covered population per unit) plugs its own badge
  * view into `unit.tree` and gets all of this for free.
+ *
+ * Query-shape note (PHPStan level 6, no larastan in this repo): every chain
+ * starts with `Unit::query()->with(...)`, where `query()` and `with()` are
+ * declared on `Eloquent\Builder`. An IN-filter goes inside a `where(Closure)`
+ * instead of a top-level `whereIn()`, because `whereIn` lives only on
+ * `Query\Builder` and resolves through `@mixin` — which types the rest of the
+ * chain as a query builder and makes `with()`/`get()` unreadable to PHPStan.
  */
 class UnitTreeService
 {
@@ -46,12 +53,15 @@ class UnitTreeService
             return collect();
         }
 
-        return Unit::whereIn('id', $accessibleIds)
+        return Unit::query()
+            ->with(['unitType'])
+            ->where(function ($query) use ($accessibleIds) {
+                $query->whereIn('id', $accessibleIds);
+            })
             ->where(function ($query) use ($accessibleIds) {
                 $query->whereNull('parent_id')
                     ->orWhereNotIn('parent_id', $accessibleIds);
             })
-            ->with(['unitType'])
             ->get();
     }
 
@@ -67,9 +77,12 @@ class UnitTreeService
             return collect();
         }
 
-        return Unit::where('parent_id', $unitId)
-            ->whereIn('id', $accessibleIds)
+        return Unit::query()
             ->with(['unitType'])
+            ->where('parent_id', $unitId)
+            ->where(function ($query) use ($accessibleIds) {
+                $query->whereIn('id', $accessibleIds);
+            })
             ->get();
     }
 
@@ -95,9 +108,12 @@ class UnitTreeService
 
         $folded = self::foldedTerm($term);
 
-        return Unit::whereIn('id', $accessibleIds)
-            ->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$folded}%"])
+        return Unit::query()
             ->with(['unitType', 'parent'])
+            ->where(function ($query) use ($accessibleIds, $folded) {
+                $query->whereIn('id', $accessibleIds);
+                $query->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$folded}%"]);
+            })
             ->get();
     }
 
@@ -108,7 +124,9 @@ class UnitTreeService
      *
      * The walk keeps its own visited set: a `parent_id` cycle would otherwise
      * loop forever, and this runs per search match. Same guard the units
-     * export's `buildHierarchy()` uses (issue #702).
+     * export's `buildHierarchy()` uses (issue #702). The chain is walked
+     * through the `parent` relation rather than a per-hop `Unit::find()`,
+     * matching how the original org chart walked it.
      *
      * @param  array<int>  $accessibleIds
      * @return Collection<int, Unit>
@@ -119,14 +137,14 @@ class UnitTreeService
         $visited = [(int) $unit->id => true];
         $current = $unit;
 
-        while ($current && $current->parent_id) {
+        while ($current->parent_id) {
             $parentId = (int) $current->parent_id;
 
             if (isset($visited[$parentId]) || ! in_array($parentId, $accessibleIds, true)) {
                 break;
             }
 
-            $parent = Unit::find($parentId);
+            $parent = $current->parent;
 
             if (! $parent) {
                 break;

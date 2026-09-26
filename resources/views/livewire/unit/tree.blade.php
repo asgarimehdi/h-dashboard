@@ -39,7 +39,11 @@ return new class extends Component
     /** Blade view rendered per node; receives $unit + $personCounts. */
     public ?string $badgeView = null;
 
-    /** unit-id => count, forwarded verbatim to the badge view. */
+    /**
+     * unit-id => count, forwarded verbatim to the badge view.
+     *
+     * @var array<int, int>
+     */
     public array $personCounts = [];
 
     /** Page header text. */
@@ -48,15 +52,27 @@ return new class extends Component
     /** Search input placeholder. */
     public string $searchPlaceholder = 'جستجوی واحد...';
 
-    /** Unit IDs expanded in the tree, as strings. */
+    /**
+     * Unit IDs expanded in the tree, as strings (wire:click payloads are strings).
+     *
+     * @var array<int, string>
+     */
     public array $expanded = [];
 
     public string $search = '';
 
-    /** Scope-rooted top of the tree. */
+    /**
+     * Scope-rooted top of the tree.
+     *
+     * @var \Illuminate\Support\Collection<int, \App\Models\Unit>
+     */
     public $rootUnits;
 
-    /** Lazily loaded children, keyed by parent unit ID. */
+    /**
+     * Lazily loaded children, keyed by parent unit ID.
+     *
+     * @var array<int, \Illuminate\Support\Collection<int, \App\Models\Unit>>
+     */
     public array $lazyChildren = [];
 
     /** How many levels are open on first paint. */
@@ -86,6 +102,7 @@ return new class extends Component
     /**
      * Expand up to maxLevel, loading children from the DB as needed.
      *
+     * @param  iterable<mixed, \App\Models\Unit>  $nodes
      * @return array<int, string>
      */
     protected function expandFirstNLevels($nodes, int $maxLevel, int $level = 1): array
@@ -153,6 +170,9 @@ return new class extends Component
         $this->dispatch('unit-selected', unitId: $id);
     }
 
+    /**
+     * @param  int|string  $id  Unit id; wire:click delivers it unquoted, so both shapes arrive.
+     */
     public function toggle($id): void
     {
         if (in_array($id, $this->expanded)) {
@@ -206,6 +226,7 @@ return new class extends Component
     }
 
     /**
+     * @param  iterable<mixed, \App\Models\Unit>  $nodes
      * @return array<int, string>
      */
     protected function collectAllIds($nodes): array
