@@ -21,6 +21,10 @@ class UnitsExportController extends Controller
 
         $units = Unit::query()
             ->with('unitType')
+            // The «شهرستان» column reads region.name per row, so the relation
+            // is eager-loaded here — otherwise the export issues one query per
+            // unit, exactly the N+1 the other columns already avoid.
+            ->with('region')
             ->when($accessibleIds === [], fn ($query) => $query->whereRaw('1 = 0'))
             ->when($accessibleIds !== [], fn ($query) => $query->whereIn('id', $accessibleIds))
             ->get();

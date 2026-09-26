@@ -142,7 +142,7 @@ class UnitsExportTest extends TestCase
     //  Slice 2 — headings + row shape
     // -----------------------------------------------------------
 
-    public function test_export_headings_are_the_seven_persian_labels(): void
+    public function test_export_headings_are_the_eight_persian_labels(): void
     {
         $export = new UnitsExport(collect(), []);
 
@@ -150,6 +150,7 @@ class UnitsExportTest extends TestCase
             'شناسه',
             'نام واحد',
             'نوع واحد',
+            'شهرستان',
             'والد مستقیم',
             'مسیر کامل',
             'سطح',
@@ -165,7 +166,7 @@ class UnitsExportTest extends TestCase
     public function test_export_map_returns_one_row_per_column(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
-        $unit->update(['unit_type_id' => 2, 'name' => 'دانشگاه تست', 'is_active' => true]);
+        $unit->update(['unit_type_id' => 2, 'name' => 'دانشگاه تست', 'region_id' => 1, 'is_active' => true]);
         $this->actingAs($user);
 
         $export = new UnitsExport(
@@ -175,14 +176,15 @@ class UnitsExportTest extends TestCase
 
         $row = $export->map($unit->fresh());
 
-        $this->assertCount(7, $row);
+        $this->assertCount(8, $row);
         $this->assertSame($unit->id, $row[0]);
         $this->assertSame('دانشگاه تست', $row[1]);
         $this->assertSame('دانشگاه علوم پزشکی', $row[2]);
-        $this->assertSame('-', $row[3], 'a root unit has no parent name');
-        $this->assertSame('دانشگاه تست', $row[4]);
-        $this->assertSame(0, $row[5]);
-        $this->assertSame('فعال', $row[6]);
+        $this->assertSame('-', $row[3], 'the unit is in a province, not a county');
+        $this->assertSame('-', $row[4], 'a root unit has no parent name');
+        $this->assertSame('دانشگاه تست', $row[5]);
+        $this->assertSame(0, $row[6]);
+        $this->assertSame('فعال', $row[7]);
     }
 
     public function test_export_marks_inactive_units(): void
@@ -196,7 +198,7 @@ class UnitsExportTest extends TestCase
             [$unit->id => ['path' => 'واحد غیرفعال', 'depth' => 0, 'parent_name' => '']]
         );
 
-        $this->assertSame('غیرفعال', $export->map($unit->fresh())[6]);
+        $this->assertSame('غیرفعال', $export->map($unit->fresh())[7]);
     }
 
     public function test_export_map_uses_unit_type_name(): void
@@ -380,7 +382,105 @@ class UnitsExportTest extends TestCase
     }
 
     // -----------------------------------------------------------
-    //  Slice 5 — cycle guard on user-editable parent_id
+    //  Slice 5 — county column
+    // -----------------------------------------------------------
+
+    public function test_export_headings_include_the_county_column(): void
+    {
+        $headings = (new UnitsExport(collect(), []))->headings();
+
+        $this->assertContains('شهرستان', $headings);
+    }
+
+    public function test_export_writes_the_county_name_for_a_unit_in_a_county(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 4, 'name' => 'شبکه بهداشت الف', 'region_id' => 2, 'is_active' => true]);
+        $this->actingAs($user);
+
+        $rows = $this->rowsFromRoute();
+
+        $this->assertSame(['شهرستان الف'], $this->column($rows, 'شهرستان'));
+    }
+
+    public function test_export_county_column_is_dash_for_a_unit_in_a_province(): void
+    {
+        // A unit attached to a PROVINCE has no county of its own — the county
+        // column must not silently inherit the province name.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 2, 'name' => 'دانشگاه تست', 'region_id' => 1, 'is_active' => true]);
+        $this->actingAs($user);
+
+        $rows = $this->rowsFromRoute();
+
+        $this->assertSame(['-'], $this->column($rows, 'شهرستان'));
+    }
+
+    public function test_export_county_column_is_dash_when_the_unit_has_no_region(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 2, 'name' => 'واحد بدون منطقه', 'region_id' => null, 'is_active' => true]);
+        $this->actingAs($user);
+
+        $rows = $this->rowsFromRoute();
+
+        $this->assertSame(['-'], $this->column($rows, 'شهرستان'));
+    }
+
+    public function test_export_county_column_groups_units_of_the_same_county_together(): void
+    {
+        // The point of the column: filtering in Excel by one county name must
+        // select every unit in that county.
+        $county = DB::table('regions')->insertGetId([
+            'name' => 'شهرستان مشترک',
+            'type' => 'county',
+            'parent_id' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->resyncSequence('regions');
+
+        $other = DB::table('regions')->insertGetId([
+            'name' => 'شهرستان دیگر',
+            'type' => 'county',
+            'parent_id' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->resyncSequence('regions');
+
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['organization']);
+        $root->update(['unit_type_id' => 1, 'name' => 'وزارت تست', 'region_id' => null, 'is_active' => true]);
+
+        Unit::factory()->create([
+            'name' => 'شبکه الف', 'unit_type_id' => 4, 'parent_id' => $root->id,
+            'region_id' => $county, 'is_active' => true,
+        ]);
+        Unit::factory()->create([
+            'name' => 'بیمارستان ب', 'unit_type_id' => 4, 'parent_id' => $root->id,
+            'region_id' => $county, 'is_active' => true,
+        ]);
+        Unit::factory()->create([
+            'name' => 'شبکه ج', 'unit_type_id' => 4, 'parent_id' => $root->id,
+            'region_id' => $other, 'is_active' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        $counties = $this->column($this->rowsFromRoute(), 'شهرستان');
+
+        $this->assertCount(4, $counties, 'the ministry plus its three children');
+        $this->assertSame(['-'], [$counties[0]], 'the ministry has no county');
+        $this->assertSame(
+            2,
+            count(array_filter($counties, fn ($c) => $c === 'شهرستان مشترک')),
+            'filtering the column by one county must select every unit in it'
+        );
+        $this->assertContains('شهرستان دیگر', $counties);
+    }
+
+    // -----------------------------------------------------------
+    //  Slice 6 — cycle guard on user-editable parent_id
     // -----------------------------------------------------------
 
     public function test_export_survives_a_cyclic_parent_chain(): void
