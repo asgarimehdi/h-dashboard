@@ -28,6 +28,7 @@ class HardwareIndexLivewireTest extends TestCase
         $this->seed(PermissionSeeder::class);
 
         $this->seedLookupTables();
+
     }
 
     protected function createHardwareForUser(User $user, Unit $unit, array $overrides = []): Hardware
@@ -304,6 +305,17 @@ class HardwareIndexLivewireTest extends TestCase
             's_id' => DB::table('semats')->first()->id,
             'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $data['unit']->id,
+        ]);
+
+        // #705: pin the main user's name. PersonFactory draws a random fa_IR
+        // first name, and "علی" itself plus names containing it ("ابوعلی") come
+        // up in ~0.4% of draws (13/3000 measured). On those runs the main user's
+        // own row also matches the "علی" filter and the assertDontSee below
+        // fails — the random-order flake. The test means "this other person
+        // matches, the user does not", so state both names explicitly.
+        Person::where('n_code', $data['user']->n_code)->update([
+            'f_name' => 'تست',
+            'l_name' => 'کاربر',
         ]);
 
         // Hardware belonging to the main user (person = تست کاربر)
