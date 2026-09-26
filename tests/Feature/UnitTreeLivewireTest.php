@@ -187,15 +187,26 @@ class UnitTreeLivewireTest extends TestCase
         $this->assertEmpty($component->get('lazyChildren'));
     }
 
-    public function test_expand_all_populates_expansion(): void
+    public function test_expand_all_opens_every_level_not_just_the_first(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
+
+        $child = Unit::create(['name' => 'سطح دوم', 'parent_id' => $unit->id]);
+        $grand = Unit::create(['name' => 'سطح سوم', 'parent_id' => $child->id]);
+        $deep = Unit::create(['name' => 'سطح چهارم', 'parent_id' => $grand->id]);
 
         $component = Livewire::test('unit.tree')
             ->call('expandAll');
 
-        $this->assertNotEmpty($component->get('expanded'));
+        // The pre-#704 collectAllIds() only ever collected the ROOT ids, so
+        // "باز کردن همه" restored a single level. Every depth must open.
+        $expanded = array_map('intval', $component->get('expanded'));
+
+        $this->assertContains($unit->id, $expanded);
+        $this->assertContains($child->id, $expanded);
+        $this->assertContains($grand->id, $expanded);
+        $this->assertContains($deep->id, $expanded);
     }
 
     public function test_search_expands_the_ancestor_chain_of_a_deep_match(): void

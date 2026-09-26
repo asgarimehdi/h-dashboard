@@ -219,9 +219,18 @@ return new class extends Component
         }
     }
 
+    /**
+     * Open every unit in scope: walk the hierarchy from the roots, loading
+     * children as we go so the very next paint is already complete. (The old
+     * org chart collected only the root ids here — "باز کردن همه" restored a
+     * single level, which is not what the label promises.)
+     */
     public function expandAll(): void
     {
-        $this->expanded = $this->collectAllIds($this->rootUnits);
+        $accessibleIds = $this->accessibleIds();
+        $this->expanded = array_values(array_unique(
+            $this->collectAllIds($this->rootUnits, $accessibleIds, [])
+        ));
         $this->loadExpandedChildren();
     }
 
@@ -267,15 +276,34 @@ return new class extends Component
     }
 
     /**
+     * Depth-first id walk that caches every children query it makes. The
+     * visited set is carried down the path, so a parent_id cycle stops at
+     * its own repeat instead of walking forever (same guard as
+     * UnitTreeService::ancestorChain).
+     *
      * @param  iterable<mixed, \App\Models\Unit>  $nodes
+     * @param  array<int>  $accessibleIds
+     * @param  array<int, bool>  $visited
      * @return array<int, string>
      */
-    protected function collectAllIds($nodes): array
+    protected function collectAllIds($nodes, array $accessibleIds, array $visited): array
     {
         $ids = [];
 
         foreach ($nodes as $node) {
+            if (isset($visited[(int) $node->id])) {
+                continue;
+            }
+
+            $visited[(int) $node->id] = true;
             $ids[] = (string) $node->id;
+
+            $children = app(UnitTreeService::class)->childrenOf((int) $node->id, $accessibleIds);
+            $this->lazyChildren[(int) $node->id] = $children;
+
+            if ($children->isNotEmpty()) {
+                $ids = array_merge($ids, $this->collectAllIds($children, $accessibleIds, $visited));
+            }
         }
 
         return $ids;
