@@ -52,21 +52,20 @@ test.describe('hr org chart', () => {
     await expect(page.locator('body')).toContainText(/پرسنل مستقیم|کاربران مستقیم/);
   });
 
-  test('search reveals a deep match with its ancestors expanded', async ({ page }) => {
-    const dotsBefore = await page.locator('.tree-node-dot').count();
-
+  test('search highlights the match and keeps its ancestor chain expanded', async ({ page }) => {
+    // Seed-real term: the tree contains "شبکه بهداشت و درمان طارم". The first
+    // assertion is the discriminator — .border-primary on a node only appears
+    // when updatedSearch() ran and marked the match ($isMatch), so a search
+    // that never fires (dead wire:model, wrong component) fails here.
     const search = page.locator('input[placeholder^="جستجوی واحد"]');
-    await search.fill('خانه');
+    await search.fill('طارم');
 
     // Debounced (300ms) Livewire update: wait for the tree to settle.
-    await page.waitForTimeout(1200);
-    await expect(page.locator('.tree-container')).toBeVisible();
+    await page.waitForTimeout(1500);
 
-    // Expansion either opened more nodes or kept the tree intact — the point
-    // is that the tree did not break or go empty on a real query.
-    expect(await page.locator('.tree-node-dot').count()).toBeGreaterThan(0);
-    expect(await page.locator('.tree-container').innerText()).toContain('خانه');
-    expect(dotsBefore).toBeGreaterThan(0);
+    await expect(page.locator('.tree-container .border-primary').first()).toBeVisible();
+    // The deep match renders, i.e. its ancestor chain was expanded too.
+    await expect(page.locator('.tree-container')).toContainText('شبکه بهداشت و درمان طارم');
   });
 
   test('search with no match keeps the page usable', async ({ page }) => {
