@@ -223,6 +223,30 @@ return new class extends Component
 ?>
 
 <div>
+    {{-- Search and expand/collapse drive the TREE's state, so they live inside
+         the tree component rather than on the embedding page — a parent cannot
+         call into a child's state without a ref. --}}
+    <div class="mb-4 flex items-center gap-2">
+        <x-input
+            wire:model.live.debounce.300ms="search"
+            :placeholder="$searchPlaceholder"
+            icon="o-magnifying-glass"
+            clearable
+        />
+        <x-button
+            wire:click="collapseAll"
+            icon="o-arrows-pointing-in"
+            label="جمع کردن"
+            class="btn-ghost btn-sm"
+        />
+        <x-button
+            wire:click="expandAll"
+            icon="o-arrows-pointing-out"
+            label="باز کردن همه"
+            class="btn-ghost btn-sm"
+        />
+    </div>
+
     <x-card shadow>
         <div class="tree-container text-right" dir="rtl">
             @foreach ($rootUnits as $unit)

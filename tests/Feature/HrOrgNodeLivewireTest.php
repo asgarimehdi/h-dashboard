@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,8 +12,15 @@ use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-covers(Unit::class, Person::class);
-
+/**
+ * HR org-chart PAGE (issue #704).
+ *
+ * The tree mechanics these tests used to cover now live in
+ * UnitTreeLivewireTest against the reusable `unit.tree` component. What
+ * remains here is what is specific to the HR page: that the page composes
+ * the tree, that the personnel badge is wired through, and that the
+ * detail panel still fills on selection.
+ */
 class HrOrgNodeLivewireTest extends TestCase
 {
     use InteractsWithTestSetup;
@@ -54,143 +60,82 @@ class HrOrgNodeLivewireTest extends TestCase
             ->assertSee('چارت سازمانی');
     }
 
-    // ==================== Smoke / Render tests ====================
+    // ==================== Composition: the page embeds the shared tree ====================
 
-    public function test_renders_root(): void
+    public function test_page_renders_the_shared_tree_with_unit_names(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        $rootUnits = $component->get('rootUnits');
-        $this->assertNotEmpty($rootUnits);
-
-        // Root unit name should be visible
-        $component->assertSee($rootUnits->first()->name);
+        // Unit names reach the DOM through the nested <livewire:unit.tree>.
+        Livewire::test('hr.org-chart')
+            ->assertStatus(200)
+            ->assertSee($unit->name);
     }
 
-    public function test_root_shows_name_unit_type_person_count_badge_and_leaf_dot(): void
+    public function test_page_renders_the_personnel_badge_for_each_node(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        $rootUnits = $component->get('rootUnits');
-        $rootUnit = $rootUnits->first();
-
-        $component->assertSee($rootUnit->name);
-        if ($rootUnit->unitType) {
-            $component->assertSee($rootUnit->unitType->name);
-        }
-        $personCounts = $component->get('personCounts');
-        $this->assertArrayHasKey($rootUnit->id, $personCounts);
+        // The badge view is the plug-in contract: the page passes it down and
+        // the tree renders "N نفر" per node.
+        Livewire::test('hr.org-chart')
+            ->assertStatus(200)
+            ->assertSee('نفر');
     }
 
-    // ==================== Interaction tests ====================
-
-    public function test_toggle_expands_and_lazy_loads_children(): void
+    public function test_person_counts_are_passed_to_the_tree(): void
     {
-        // Create a tree: root -> child
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
-        $rootUnit = Unit::whereNull('parent_id')->first();
-        $child = Unit::create(['name' => 'فرزند', 'parent_id' => $rootUnit->id]);
+        // createUserWithUnit() already seeds one Person in this unit, so the
+        // count is 1 without adding anything. A second person is added to
+        // prove the map is a live count and not a presence flag.
+        Person::factory()->create(['u_id' => $unit->id]);
 
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
+        $counts = Livewire::test('hr.org-chart')->get('personCounts');
 
-        // Initially child might not be in lazyChildren (if not pre-loaded)
-        $expanded = $component->get('expanded');
-        $this->assertContains((string) $rootUnit->id, $expanded);
-
-        // Toggle root (collapse then expand to trigger lazy load)
-        $component->call('toggle', (string) $rootUnit->id);
-        $component->call('toggle', (string) $rootUnit->id);
-
-        $lazyChildren = $component->get('lazyChildren');
-        $this->assertArrayHasKey($rootUnit->id, $lazyChildren);
-        $this->assertNotEmpty($lazyChildren[$rootUnit->id]);
+        $this->assertArrayHasKey($unit->id, $counts);
+        $this->assertEquals(2, $counts[$unit->id]);
     }
+
+    public function test_tree_defaults_to_first_three_levels_expanded(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // Root -> child -> grandchild -> great-grandchild.
+        $child = Unit::create(['name' => 'شبکه بهداشت', 'parent_id' => $unit->id]);
+        $grandchild = Unit::create(['name' => 'مرکز بهداشت روستایی', 'parent_id' => $child->id]);
+        $great = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $grandchild->id]);
+
+        // Assert against the tree component the page embeds.
+        $tree = Livewire::test('unit.tree');
+        $expanded = array_map('intval', $tree->get('expanded'));
+
+        $this->assertContains($unit->id, $expanded);
+        $this->assertContains($child->id, $expanded);
+        $this->assertContains($grandchild->id, $expanded);
+        $this->assertNotContains($great->id, $expanded, 'level 4 must stay collapsed by default');
+    }
+
+    // ==================== Detail panel (HR-specific) ====================
 
     public function test_select_loads_detail(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
-
-        $rootUnit = Unit::whereNull('parent_id')->first();
 
         $component = Livewire::test('hr.org-chart')
             ->assertStatus(200)
-            ->call('selectUnit', $rootUnit->id);
+            ->call('selectUnit', $unit->id);
 
         $selectedUnit = $component->get('selectedUnit');
         $this->assertNotNull($selectedUnit);
-        $this->assertEquals($rootUnit->id, $selectedUnit->id);
+        $this->assertEquals($unit->id, $selectedUnit->id);
         $this->assertNotNull($component->get('selectedPersonnel'));
-    }
-
-    public function test_expand_collapse_all_updates_tree(): void
-    {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
-        $this->actingAs($user);
-
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        // Expand all
-        $component->call('expandAll');
-        $expanded = $component->get('expanded');
-        $this->assertNotEmpty($expanded);
-
-        // Collapse all
-        $component->call('collapseAll');
-        $expandedAfter = $component->get('expanded');
-        $this->assertEmpty($expandedAfter);
-    }
-
-    // ==================== Edge-case tests ====================
-
-    public function test_empty_badge_on_zero_persons(): void
-    {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
-        $this->actingAs($user);
-
-        // Create an empty unit
-        $rootUnit = Unit::whereNull('parent_id')->first();
-        $emptyUnit = Unit::create(['name' => 'واحد خالی', 'parent_id' => $rootUnit->id]);
-
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        $personCounts = $component->get('personCounts');
-        $this->assertEquals(0, $personCounts[$emptyUnit->id] ?? 0);
-    }
-
-    public function test_search_highlights_match_and_expands_ancestors(): void
-    {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
-        $this->actingAs($user);
-
-        $rootUnit = Unit::whereNull('parent_id')->first();
-        $child = Unit::create(['name' => 'مرکز بهداشت', 'parent_id' => $rootUnit->id]);
-        $grandchild = Unit::create(['name' => 'واحد جستجو', 'parent_id' => $child->id]);
-
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        // Search with >2 chars
-        $component->set('search', 'جستجو');
-
-        $expanded = $component->get('expanded');
-        // Matching unit and its ancestors should be expanded
-        $this->assertContains((string) $grandchild->id, $expanded);
-        $this->assertContains((string) $child->id, $expanded);
-        $this->assertContains((string) $rootUnit->id, $expanded);
     }
 
     public function test_unauthorized_select_unit_ignored_with_error_toast(): void
@@ -198,16 +143,35 @@ class HrOrgNodeLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
-        // Create another unit that user doesn't have access to
         $otherUnit = Unit::create(['name' => 'واحد دیگر']);
 
         $component = Livewire::test('hr.org-chart')
             ->assertStatus(200)
             ->call('selectUnit', $otherUnit->id);
 
-        // Should show error toast (via Mary Toast trait)
-        $selectedUnit = $component->get('selectedUnit');
-        $this->assertNull($selectedUnit);
+        $this->assertNull($component->get('selectedUnit'));
+    }
+
+    public function test_detail_panel_shows_placeholder_before_any_selection(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        Livewire::test('hr.org-chart')
+            ->assertStatus(200)
+            ->assertSee('یک واحد را انتخاب کنید');
+    }
+
+    public function test_empty_badge_on_zero_persons(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        $emptyUnit = Unit::create(['name' => 'واحد خالی', 'parent_id' => $unit->id]);
+
+        $counts = Livewire::test('hr.org-chart')->get('personCounts');
+
+        $this->assertEquals(0, $counts[$emptyUnit->id] ?? 0);
     }
 
     public function test_inaccessible_child_hidden_from_tree(): void
@@ -215,41 +179,12 @@ class HrOrgNodeLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->actingAs($user);
 
-        $rootUnit = Unit::whereNull('parent_id')->first();
+        // Verify the roots the tree is given are all inside the caller's scope.
+        $roots = Livewire::test('unit.tree')->get('rootUnits');
 
-        // Create a child unit that is NOT in accessibleIds
-        // We can't easily create inaccessible unit without complex setup,
-        // so we verify accessible units ARE shown
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        $rootUnits = $component->get('rootUnits');
-        foreach ($rootUnits as $unit) {
+        foreach ($roots as $unit) {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             $this->assertContains($unit->id, $accessibleIds);
         }
-    }
-
-    public function test_no_n_plus_one_on_person_counts_and_lazy_children(): void
-    {
-        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
-        $this->actingAs($user);
-
-        // Create a deeper tree with multiple units
-        $rootUnit = Unit::whereNull('parent_id')->first();
-        $child1 = Unit::create(['name' => 'فرزند ۱', 'parent_id' => $rootUnit->id]);
-        $child2 = Unit::create(['name' => 'فرزند ۲', 'parent_id' => $rootUnit->id]);
-        $grandchild1 = Unit::create(['name' => 'نوه ۱', 'parent_id' => $child1->id]);
-
-        // This test verifies the component loads without N+1
-        // by checking that personCounts and lazyChildren are populated efficiently
-        $component = Livewire::test('hr.org-chart')
-            ->assertStatus(200);
-
-        $personCounts = $component->get('personCounts');
-        $this->assertIsArray($personCounts);
-
-        $expanded = $component->get('expanded');
-        $this->assertIsArray($expanded);
     }
 }
