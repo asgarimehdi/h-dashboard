@@ -36,6 +36,10 @@ coverage/
 package-lock.json
 /.claude
 
+# Per-instance Hermes boot note. Local to each server: it only tells an agent
+# which repo it is in, which is exactly what AGENTS.md already covers.
+/.hermes.md
+
 # E2E test credentials
 .env.test
 .env.e2e
