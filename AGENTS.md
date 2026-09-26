@@ -144,6 +144,22 @@ These components and routes were removed — do not recreate:
 
 ---
 
+## Reusable unit tree (issue #704)
+
+`<livewire:unit.tree>` is the **single** implementation of the unit tree. Pages compose it instead of rebuilding tree logic.
+
+- **Files:** `resources/views/livewire/unit/tree.blade.php` (state + controls) → `resources/views/livewire/unit/tree-node.blade.php` (recursive node) → `app/Services/UnitTreeService.php` (access-scoped queries). `resources/views/livewire/hr/org-node.blade.php` was **deleted** — do not recreate it.
+- **Props:** `badge-view` (view rendered inside every node, e.g. `livewire.hr.personnel-badge`), `badge-data` (array keyed by unit id), `search-placeholder`.
+- **Event:** the tree dispatches `unit-selected` (`id`); the page fills its own panel via `#[On('unit-selected')]`. `selectUnit()` lives in the **tree**, never in the page.
+- **Default view:** first three levels, loaded **one query per level** — never one query per node (N+1 guard). `loadExpandedChildren()` batch-loads every expanded unit missing its children in a single `whereIn('parent_id', …)`.
+- **Reuse rule:** a page supplies `badge-view` + `badge-data` for its per-node data; the tree never queries the page's own data (`personCounts` for HR).
+- **PHPStan query shape:** every `UnitTreeService` chain ends on an **Eloquent-defined** call (`where()` / `whereKey()`). PHPStan resolves `whereIn()` through `Query\Builder`'s mixin, so any Eloquent-only call asked afterwards (`with`, `withCount`, model-returning `get()`) reports as undefined. Keep the trailing-call ordering — it produces identical SQL.
+- **Tests:** `tests/Feature/UnitTreeServiceTest.php` (15), `tests/Feature/UnitTreeLivewireTest.php` (16), `tests/e2e/hr/org-chart.spec.ts` (4).
+
+> ⚠️ **Known limitation kept for parity:** `expandAll()` only opens the roots' children — `collectAllIds()` is non-recursive, so only the root ids reach `expanded`. This is pre-existing behavior (the original `hr.org-chart` did the same) while the button label promises more. Issue #704 is a refactor with **no user-facing change**, so it was left untouched — candidate for a follow-up issue.
+
+---
+
 ## Settings Features
 
 Settings page (`/settings`) includes 4 user-configurable features:
