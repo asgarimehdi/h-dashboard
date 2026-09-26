@@ -236,6 +236,7 @@ Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The 
 - **CSS:** Tailwind utility classes over custom CSS
 - **Pagination:** `LengthAwarePaginator` with `WithPagination` trait
 - **Forms:** MaryUI `x-input`, `x-select`, `x-button` components
+- **x-select key mapping:** MaryUI defaults to `optionValue='id'` / `optionLabel='name'`. If your options use `value`/`label` keys you **must** pass `option-value="value" option-label="label"`, otherwise every `<option>` renders **empty** (`<option value=""></option>`) and the control looks blank/unreadable. This was issue #706 — reported as a "background and text are the same color" bug, but it was a key-mapping bug, not a color bug. Build option lists in a component method (`typeOptions()`) and pass `:options="$this->typeOptions()"` — a bare `$typeOptions` is undefined in the Blade view.
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
@@ -496,4 +497,6 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `zabbix:sync` scheduling | Schedule dispatches `SyncZabbixJob` (queued) every 5 min; the `zabbix:sync` command itself is manual-only |
 | `descendantIds` CTE | Uses `UNION`, **not** `UNION ALL` — deliberate. `UNION ALL` does not dedupe, so a `parent_id` cycle recurses forever and hangs the connection (this query scopes every authenticated page via `AccessService`). Tested in `UnitModelTest` under a `statement_timeout` |
 | `@property` on models | All 24 Eloquent models carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
+| x-select option keys | MaryUI defaults to `optionValue='id'`/`optionLabel='name'`. Options keyed `value`/`label` need explicit `option-value="value" option-label="label"` or every `<option>` renders empty and the field looks blank (#706). Pass `:options="$this->someOptions()"` — a bare `$someOptions` is undefined in the view |
+| Shared test DB under `--parallel` | All Pest workers share ONE `h_dashboard_test` database; `TEST_TOKEN` is not consumed anywhere in the app. `HardwareIndexLivewireTest` `test_filter_person_applies` / `test_filter_unit_applies` fail intermittently in parallel runs and pass in isolation — treat a single-file rerun as inconclusive, check the shared-DB hypothesis before "fixing" the test |
 | Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists |
