@@ -387,7 +387,7 @@ return new class extends Component
                         @error('name') <span class="text-error text-xs">{{ $message }}</span> @enderror
                     </div>
                     <div class="w-full sm:w-40">
-                        <x-select wire:model="type" label="نوع" :options="[
+                        <x-select wire:model="type" label="نوع" class="text-base-content" :options="[
                             ['value' => 'network', 'label' => 'شبکه'],
                             ['value' => 'wireless', 'label' => 'بی‌سیم'],
                         ]" />
@@ -480,7 +480,7 @@ return new class extends Component
             @endscope
 
             @scope('actions', $device)
-                <div class="flex gap-1 items-center flex-wrap">
+                <div class="flex gap-1 items-center">
                     @php $result = $connectionResults[$device->id] ?? null; @endphp
                     @if($result !== null)
                         <span class="{{ $result['ok'] ? 'badge badge-success' : 'badge badge-error' }} badge-sm whitespace-nowrap"
@@ -491,7 +491,7 @@ return new class extends Component
                     <x-button
                         icon="o-signal"
                         wire:click="testConnection({{ $device->id }})"
-                        class="btn-ghost btn-sm"
+                        class="btn-ghost btn-circle btn-sm"
                         title="تست اتصال"
                         spinner
                     />
@@ -499,13 +499,13 @@ return new class extends Component
                         <x-button
                             icon="o-pencil"
                             wire:click="editDevice({{ $device->id }})"
-                            class="btn-ghost btn-sm text-primary"
+                            class="btn-ghost btn-circle btn-sm text-primary"
                             title="ویرایش"
                         />
                         <x-button
                             icon="{{ $device->is_active ? 'o-eye-slash' : 'o-eye' }}"
                             wire:click="toggle({{ $device->id }})"
-                            class="btn-ghost btn-sm"
+                            class="btn-ghost btn-circle btn-sm"
                             title="{{ $device->is_active ? 'غیرفعال کردن' : 'فعال کردن' }}"
                         />
                         <x-button
@@ -513,7 +513,7 @@ return new class extends Component
                             wire:click="delete({{ $device->id }})"
                             wire:confirm="آیا مطمئن هستید؟"
                             spinner
-                            class="btn-ghost btn-sm text-error"
+                            class="btn-ghost btn-circle btn-sm text-error"
                             title="حذف"
                         />
                     @endif
