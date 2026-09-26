@@ -47,17 +47,31 @@ trait PersianNormalizer
         // Convert Persian (۰-۹) and Arabic-Indic (٠-٩) digits to Latin so a
         // national code typed on a Persian keyboard matches the Latin digits
         // stored in the database.
-        $text = strtr($text, [
-            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
-            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
-            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
-            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
-        ]);
+        $text = strtr($text, self::digitMap());
 
         // Remove extra spaces
         $text = preg_replace('/\s+/', ' ', trim($text));
 
         return $text;
+    }
+
+    /**
+     * Persian (۰-۹) and Arabic-Indic (٠-٩) digits mapped to Latin.
+     *
+     * Second half of the single source of truth: `normalizeForSearch()` applies
+     * it in PHP, `foldSeparatorsSql()` emits the matching `translate()` call, so
+     * the term side and the column side fold digits identically.
+     *
+     * @return array<string, string>
+     */
+    public static function digitMap(): array
+    {
+        return [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ];
     }
 
     /**
@@ -84,7 +98,17 @@ trait PersianNormalizer
      *     so "آموزش" is stored with آ and searched with ا.
      *
      * The same map `normalize()` uses is applied to the column, then the
-     * separator runs are collapsed, so both sides land on one spelling.
+     * separator runs are collapsed, so both sides land on one spelling. Digits
+     * are folded too: `normalizeForSearch()` turns Persian (۰-۹) and
+     * Arabic-Indic (٠-٩) digits into Latin ones, so the column gets the same
+     * `digitMap()` treatment via `translate()` — otherwise a stored "۴۵" could
+     * never match the "45" the term side produces. The two sides therefore fold
+     * exactly the same sets of characters: `charMap()` plus `digitMap()`, one
+     * shared source each.
+     *
+     * The only difference left is whitespace: PHP collapses any `\s+` run and
+     * trims, SQL collapses runs of spaces. Stored person/unit names carry
+     * neither tabs nor newlines, so the two agree where it matters.
      *
      * Why fold the column and not the pattern: PostgreSQL `LIKE` supports only
      * `%` and `_` as wildcards and has NO character-class syntax, so `[ ... ]`
@@ -113,6 +137,11 @@ trait PersianNormalizer
             }
             $expr = "regexp_replace({$expr}, '{$from}', '{$to}', 'g')";
         }
+
+        // Same digit map normalizeForSearch() applies to the term, in a single
+        // translate() pass (1:1 character mapping, which is all a digit fold is).
+        $digits = self::digitMap();
+        $expr = "translate({$expr}, '".implode('', array_keys($digits))."', '".implode('', array_values($digits))."')";
 
         // Collapse the run a folded separator may have left, like PHP does.
         return "regexp_replace({$expr}, ' +', ' ', 'g')";

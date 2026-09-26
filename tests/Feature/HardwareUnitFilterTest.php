@@ -143,6 +143,18 @@ class HardwareUnitFilterTest extends TestCase
             ->assertSee('TypedAlefPC');
     }
 
+    public function test_filter_unit_matches_persian_digits_stored_in_the_name(): void
+    {
+        // normalizeForSearch() turns ۴۵ into 45 on the term side, so the column
+        // must be folded the same way or a name stored with Persian digits is
+        // invisible to its own filter (review note on #711).
+        $data = $this->seedUnitWithHardware('واحد بهداشت ۴۵', 'PersianDigitPC');
+
+        Livewire::test('hardware.index')
+            ->set('filterUnit', '۴۵')
+            ->assertSee('PersianDigitPC');
+    }
+
     public function test_filter_unit_does_not_leak_other_units(): void
     {
         $data = $this->seedUnitWithHardware('واحد بهداشت حرفه‌ای 42', 'MinePC');
