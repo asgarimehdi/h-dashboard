@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Models\Region;
 use App\Models\Unit;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -28,6 +29,7 @@ class UnitsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHea
         'id' => ['label' => 'شناسه'],
         'name' => ['label' => 'نام واحد'],
         'unit_type' => ['label' => 'نوع واحد'],
+        'county' => ['label' => 'شهرستان'],
         'parent_name' => ['label' => 'والد مستقیم'],
         'full_path' => ['label' => 'مسیر کامل'],
         'depth' => ['label' => 'سطح'],
@@ -35,7 +37,7 @@ class UnitsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHea
     ];
 
     /** @var array<int, string> */
-    protected array $columns = ['id', 'name', 'unit_type', 'parent_name', 'full_path', 'depth', 'status'];
+    protected array $columns = ['id', 'name', 'unit_type', 'county', 'parent_name', 'full_path', 'depth', 'status'];
 
     /** @var Collection<int, Unit> */
     protected Collection $units;
@@ -88,12 +90,36 @@ class UnitsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHea
     }
 
     /**
+     * The county a unit sits in, for filtering the sheet by county name.
+     *
+     * `Unit::region_id` points at a `regions` row whose `type` is either
+     * `province` or `county`. Only a county row is reported here — a unit
+     * attached directly to a province has no county of its own, and showing
+     * the province name in a column labelled «شهرستان» would be a lie that
+     * also defeats filtering (one province name would swallow every unit
+     * below it).
+     */
+    protected function resolveCounty(Unit $unit): string
+    {
+        $region = $unit->relationLoaded('region')
+            ? $unit->region
+            : Region::query()->find($unit->region_id);
+
+        if (! $region instanceof Region || $region->type !== 'county' || (string) $region->name === '') {
+            return '-';
+        }
+
+        return (string) $region->name;
+    }
+
+    /**
      * @param  array{path: string, depth: int, parent_name: string}  $meta
      */
     protected function resolveValue(Unit $unit, string $key, array $meta): mixed
     {
         return match ($key) {
             'unit_type' => $unit->unitType->name ?? '-',
+            'county' => $this->resolveCounty($unit),
             'parent_name' => $meta['parent_name'] !== '' ? $meta['parent_name'] : '-',
             'full_path' => $meta['path'],
             'depth' => $meta['depth'],
