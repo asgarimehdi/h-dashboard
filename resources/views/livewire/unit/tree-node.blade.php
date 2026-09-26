@@ -14,7 +14,7 @@
 
 <div class="relative">
     <div class="flex items-center group">
-        
+
         {{-- خطوط راهنما --}}
         @if($level > 0)
             <div class="relative" style="width: {{ $level * 28 }}px;">
@@ -35,7 +35,7 @@
             "border-primary bg-primary/10 scale-[1.02]" => $isMatch,
             "border-base-300 bg-base-100 hover:border-gray-400" => !$isMatch
         ]) wire:click="selectUnit({{ $unit->id }})">
-            
+
             {{-- آیکون وضعیت --}}
             <div wire:click.stop="toggle({{ $unit->id }})" class="cursor-pointer">
                 @if($hasChildren)
@@ -61,9 +61,9 @@
                 @if($unit->unitType)
                     <span class="text-[11px] opacity-70 font-medium italic">{{ $unit->unitType->name }}</span>
                 @endif
-                <span class="badge badge-sm badge-ghost">{{ $personCounts[$unit->id] ?? 0 }} نفر</span>
-                @if(($personCounts[$unit->id] ?? 0) === 0)
-                    <span class="badge badge-sm badge-error">خالی</span>
+                {{-- Badge slot: every page brings its own per-node data (#704) --}}
+                @if($badgeView)
+                    @include($badgeView, ['unit' => $unit, 'badgeData' => $badgeData])
                 @endif
             </div>
 
@@ -75,9 +75,9 @@
         {{-- ایجاد فاصله و خط عمودی ممتد برای زیرمجموعه‌ها --}}
         <div class="mr-9">
             @foreach($childUnits as $child)
-                @include('livewire.hr.org-node', [
-                    'unit' => $child, 
-                    'level' => $level + 1, 
+                @include('livewire.unit.tree-node', [
+                    'unit' => $child,
+                    'level' => $level + 1,
                     'isLast' => $loop->last
                 ])
             @endforeach

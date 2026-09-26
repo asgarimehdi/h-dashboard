@@ -6,14 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Services\UnitTreeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
 /**
  * Org-chart tree endpoints — extracted from HrController.
+ *
+ * Every tree query is delegated to UnitTreeService (#704). The JSON produced
+ * here is consumed by the Flutter app, so the shape must stay byte-identical
+ * — HrApiTest pins it and must pass unmodified.
  */
 class OrgChartController extends Controller
 {
+    public function __construct(private readonly UnitTreeService $treeService) {}
+
     /**
      * GET /api/hr/org-chart — full org tree with personnel counts per unit.
      */
@@ -25,30 +32,31 @@ class OrgChartController extends Controller
             $this->hrStatsCacheKey($accessibleIds, 'orgchart'),
             now()->addMinutes(10),
             function () use ($accessibleIds) {
-                $units = Unit::whereIn('id', $accessibleIds)
-                    ->withCount(['person as personnel_count'])
-                    ->get();
+                $units = $this->treeService->unitsInScope($accessibleIds)->get();
 
-                // Build nested tree from flat list (parent_id references)
+                // Build nested tree from flat list (parent_id references).
+                // Children are kept in a local map instead of being written
+                // onto the models — `$children` is a read-only relation and
+                // mutating it is both wrong and PHPStan-hostile.
                 $byId = $units->keyBy('id');
                 $tree = [];
+                $childrenOf = [];
                 foreach ($units as $unit) {
                     if ($unit->parent_id && $byId->has($unit->parent_id)) {
-                        $byId[$unit->parent_id]->children ??= [];
-                        $byId[$unit->parent_id]->children[] = $unit;
+                        $childrenOf[$unit->parent_id][] = $unit;
                     } else {
                         $tree[] = $unit;
                     }
                 }
 
-                $format = function ($unit) use (&$format) {
+                $format = function ($unit) use (&$format, $childrenOf) {
                     return [
                         'id' => $unit->id,
                         'name' => $unit->name,
                         'parent_id' => $unit->parent_id,
                         'personnel_count' => $unit->personnel_count,
-                        'children' => isset($unit->children)
-                            ? collect($unit->children)->map($format)->values()
+                        'children' => isset($childrenOf[$unit->id])
+                            ? collect($childrenOf[$unit->id])->map($format)->values()
                             : [],
                     ];
                 };
@@ -74,8 +82,8 @@ class OrgChartController extends Controller
         $cacheKey = "hr:expandable:v{$version}:{$scopeHash}:{$initialLimit}";
 
         $units = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds, $initialLimit) {
-            return Unit::whereIn('id', $accessibleIds)
-                ->withCount(['person as personnel_count', 'children as has_children'])
+            return $this->treeService->unitsInScope($accessibleIds)
+                ->withCount(['children as has_children'])
                 ->with('unitType:id,name')
                 ->orderBy('name')
                 ->limit($initialLimit)
@@ -111,8 +119,7 @@ class OrgChartController extends Controller
         $scopeHash = md5(implode(',', $accessibleIds));
         $result = app(CacheInvalidationServiceInterface::class)
             ->remember('unit_hierarchy', $scopeHash, function () use ($accessibleIds, $unitId) {
-                $units = Unit::whereIn('id', $accessibleIds)
-                    ->subtree($unitId)
+                $units = $this->treeService->subtree($unitId, $accessibleIds)
                     ->withCount('person as personnel_count')
                     ->with('unitType:id,name')
                     ->get();
@@ -146,6 +153,9 @@ class OrgChartController extends Controller
         return response()->json(['data' => $result]);
     }
 
+    /**
+     * @param  array<int>  $accessibleIds
+     */
     private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
     {
         $version = Cache::get('hr_stats_version', 0);

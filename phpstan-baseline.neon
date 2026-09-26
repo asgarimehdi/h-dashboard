@@ -577,20 +577,32 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 3
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Method App\\Http\\Controllers\\Api\\OrgChartController\:\:hrStatsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\),App\\Models\\Unit\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
 			count: 1
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,App\\Models\\Unit\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/OrgChartController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Api/OrgChartController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: array\{id\: int, name\: string, parent_id\: int\|null, unit_type\: string\|null, personnel_count\: mixed, has_children\: bool, level\: 1\}, Closure\(App\\Models\\Unit\)\: array\{id\: int, name\: string, parent_id\: int\|null, unit_type\: string\|null, personnel_count\: mixed, has_children\: bool, level\: 1\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/OrgChartController.php
+
+		-
+			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\),App\\Models\\Unit\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: method.unresolvableReturnType
 			count: 1
 			path: app/Http/Controllers/Api/OrgChartController.php
 
@@ -601,21 +613,21 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
+			message: '#^Return type of call to method Illuminate\\Support\\Collection\<int,App\\Models\\Unit\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: method.unresolvableReturnType
 			count: 1
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Unable to resolve the template type TKey in call to function collect$#'
-			identifier: argument.templateType
-			count: 2
+			message: '#^Return type of call to method Illuminate\\Support\\Collection\<int,array\<string, mixed\>\>\:\:values\(\) contains unresolvable type\.$#'
+			identifier: method.unresolvableReturnType
+			count: 1
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Unable to resolve the template type TValue in call to function collect$#'
-			identifier: argument.templateType
-			count: 2
+			message: '#^Return type of call to method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: method.unresolvableReturnType
+			count: 1
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
@@ -3085,117 +3097,9 @@ parameters:
 			path: resources/views/livewire/hr/dashboard.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 2
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectAllIds\(\) has parameter \$nodes with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectAllIds\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectFirstNLevels\(\) has parameter \$nodes with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:expandFirstNLevels\(\) has parameter \$nodes with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:expandFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:toggle\(\) has parameter \$id with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$expanded type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$lazyChildren type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$loadingUnits type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$personCounts type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$rootUnits has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$selectedPersonnel has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$selectedUnit has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Static method App\\Models\\Unit\:\:where\(\) invoked with 3 parameters, 2 required\.$#'
-			identifier: arguments.count
-			count: 1
 			path: resources/views/livewire/hr/org-chart.blade.php
 
 		-

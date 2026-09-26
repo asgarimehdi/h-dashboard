@@ -2,7 +2,7 @@
 
 > **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
 >
-> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts: `composer test` = 1461 passed, Playwright = 152 passed.
+> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts (2026-09-26): `composer test` = 1551 passed, Playwright = 173 passed.
 
 ## Project Overview
 
@@ -287,7 +287,7 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Verified 2026-09-26:** **`composer test`** is the one-command way (**1551 passed, 2 risky, 3884 assertions**, ~5.6 min serial, ~50s parallel). It bakes in the three environment gotchas.
 >
 > `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
@@ -298,6 +298,8 @@ Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test databas
 | `tests/Feature/MaintenanceLivewireTest.php` | 14+ | Maintenance schedule CRUD |
 | `tests/Feature/NotificationApiTest.php` | 14+ | Notification API endpoints |
 | `tests/Feature/TodoLivewireTest.php` | 17 | Todo Livewire component |
+| `tests/Feature/UnitTreeServiceTest.php` | 15 | `UnitTreeService` — roots, scope, children, search, subtree |
+| `tests/Feature/UnitTreeLivewireTest.php` | 16 | Reusable `unit.tree` — expand/collapse, search, badges, `unit-selected` |
 | `tests/Unit/PersianNormalizerTest.php` | 6+ | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 
 ### Prerequisites
@@ -341,7 +343,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+**173 tests** across **38 spec files** in `tests/e2e/` (verified 2026-09-26). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, and the HR org chart (`tests/e2e/hr/org-chart.spec.ts`).
 
 ### Setup (one-time, per machine)
 ```bash
