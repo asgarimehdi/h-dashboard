@@ -18,9 +18,9 @@ covers(OrgChartController::class, HrStatsController::class, HrAnalyticsControlle
 
 uses(TestCase::class, RefreshDatabase::class);
 
-// Coverage gap (#494): HrLivewireTest covers mount/render/expand/collapse and
-// selectUnit happy-path, but not the lazy-loading guard rails, the search
-// reset path, the ancestor-chain expansion, or the out-of-scope select error.
+// Coverage: the hr.org-chart page's selection guard rails. The lazy-loading,
+// search-reset and ancestor-expansion tests that used to live here moved to
+// UnitTreeLivewireTest when the tree became the reusable `unit.tree` (#704).
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
@@ -45,49 +45,6 @@ beforeEach(function () {
     ]);
 });
 
-test('loadChildren lazy-loads children for an expanded unit', function () {
-    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
-
-    $component->call('loadChildren', $this->mid->id);
-
-    expect($component->instance()->lazyChildren)->toHaveKey($this->mid->id)
-        ->and($component->instance()->lazyChildren[$this->mid->id]->pluck('id'))
-        ->toContain($this->leaf->id);
-});
-
-test('loadChildren ignores units outside organizational scope', function () {
-    $outsider = Unit::create(['name' => 'واحد بیرونی']);
-
-    $component = Livewire::actingAs($this->user)->test('hr.org-chart')
-        ->call('loadChildren', $outsider->id);
-
-    expect($component->instance()->lazyChildren)->not->toHaveKey($outsider->id);
-});
-
-test('updatedSearch expands full ancestor chain of deep matches', function () {
-    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
-
-    $component->set('search', 'برگ');
-
-    $expanded = array_map('intval', $component->instance()->expanded);
-
-    expect($expanded)->toContain($this->leaf->id)
-        ->and($expanded)->toContain($this->mid->id)
-        ->and($expanded)->toContain($this->root->id);
-});
-
-test('updatedSearch clears previous expansion state first', function () {
-    $component = Livewire::actingAs($this->user)->test('hr.org-chart');
-
-    expect($component->instance()->lazyChildren)->not->toBeEmpty();
-
-    // Short queries (<3 chars) skip matching but must still reset state.
-    $component->set('search', 'ب');
-
-    expect($component->instance()->lazyChildren)->toBeEmpty()
-        ->and($component->instance()->expanded)->toBeEmpty();
-});
-
 test('selectUnit does not select units outside organizational scope', function () {
     $outsider = Unit::create(['name' => 'واحد ممنوع']);
 
@@ -100,22 +57,37 @@ test('selectUnit does not select units outside organizational scope', function (
     $component = Livewire::actingAs($otherUser)->test('hr.org-chart')
         ->call('selectUnit', $outsider->id);
 
-    expect($component->instance()->selectedUnit)->toBeNull()
-        ->and($component->instance()->selectedPersonnelTotal)->toBe(0);
+    expect($component->get('selectedUnit'))->toBeNull()
+        ->and($component->get('selectedPersonnelTotal'))->toBe(0);
 });
 
-test('toggle collapses an open unit and expands a closed one', function () {
+test('a unit-selected event from outside the scope is ignored', function () {
+    $outsider = Unit::create(['name' => 'واحد ممنوع']);
+
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart')
+        ->dispatch('unit-selected', id: $outsider->id);
+
+    expect($component->get('selectedUnit'))->toBeNull();
+});
+
+test('a unit-selected event from the tree fills the detail panel', function () {
+    $component = Livewire::actingAs($this->user)->test('hr.org-chart')
+        ->dispatch('unit-selected', id: $this->root->id);
+
+    // The factory user's backing Person lands on the first unit (root), so
+    // the panel must show exactly that unit's personnel.
+    expect($component->get('selectedUnit')->id)->toBe((int) $this->root->id)
+        ->and($component->get('selectedPersonnel'))->toHaveCount(1)
+        ->and($component->get('selectedPersonnelTotal'))->toBe(1);
+});
+
+test('the page hands its personnel counts to the tree as badge data', function () {
     $component = Livewire::actingAs($this->user)->test('hr.org-chart');
 
-    // Root and mid are expanded by default (first 3 levels).
-    expect($component->instance()->expanded)->toContain((string) $this->mid->id);
-
-    // Toggling the already-open mid collapses it.
-    $component->call('toggle', (string) $this->mid->id);
-    expect($component->instance()->expanded)->not->toContain((string) $this->mid->id);
-
-    // Toggling again re-expands it.
-    $component->call('toggle', (string) $this->mid->id);
-    expect($component->instance()->expanded)->toContain((string) $this->mid->id)
-        ->and($component->instance()->lazyChildren)->toHaveKey($this->mid->id);
+    // Units with personnel carry their count; personnel-less units are absent
+    // and the badge falls back to 0 → «خالی».
+    expect($component->get('personCounts'))
+        ->toHaveKey($this->root->id, 1)
+        ->toHaveKey($this->leaf->id, 1)
+        ->not->toHaveKey($this->mid->id);
 });

@@ -2,7 +2,7 @@
 
 > **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
 >
-> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts: `composer test` = 1461 passed, Playwright = 152 passed.
+> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts (2026-09-26): `composer test` = 1551 passed, Playwright = 173 passed.
 
 ## Project Overview
 
@@ -141,6 +141,22 @@ These components and routes were removed — do not recreate:
 - Files: `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, tests in `tests/Feature/UnitsExportTest.php`.
 
 > ✅ **`descendantIds` uses `UNION`, not `UNION ALL`** — deliberate. The set operator dedupes, so a `parent_id` cycle terminates (2ms) instead of hanging the connection (proven: `UNION ALL` on a cycle runs until `statement_timeout`). Do not "optimize" it back to `UNION ALL`. The export's own `buildHierarchy()` guards its upward walk separately.
+
+---
+
+## Reusable unit tree (issue #704)
+
+`<livewire:unit.tree>` is the **single** implementation of the unit tree. Pages compose it instead of rebuilding tree logic.
+
+- **Files:** `resources/views/livewire/unit/tree.blade.php` (state + controls) → `resources/views/livewire/unit/tree-node.blade.php` (recursive node) → `app/Services/UnitTreeService.php` (access-scoped queries). `resources/views/livewire/hr/org-node.blade.php` was **deleted** — do not recreate it.
+- **Props:** `badge-view` (view rendered inside every node, e.g. `livewire.hr.personnel-badge`), `badge-data` (array keyed by unit id), `search-placeholder`.
+- **Event:** the tree dispatches `unit-selected` (`id`); the page fills its own panel via `#[On('unit-selected')]`. `selectUnit()` lives in the **tree**, never in the page.
+- **Default view:** first three levels, loaded **one query per level** — never one query per node (N+1 guard). `loadExpandedChildren()` batch-loads every expanded unit missing its children in a single `whereIn('parent_id', …)`.
+- **Reuse rule:** a page supplies `badge-view` + `badge-data` for its per-node data; the tree never queries the page's own data (`personCounts` for HR).
+- **PHPStan query shape:** every `UnitTreeService` chain ends on an **Eloquent-defined** call (`where()` / `whereKey()`). PHPStan resolves `whereIn()` through `Query\Builder`'s mixin, so any Eloquent-only call asked afterwards (`with`, `withCount`, model-returning `get()`) reports as undefined. Keep the trailing-call ordering — it produces identical SQL.
+- **Tests:** `tests/Feature/UnitTreeServiceTest.php` (15), `tests/Feature/UnitTreeLivewireTest.php` (16), `tests/e2e/hr/org-chart.spec.ts` (4).
+
+> ⚠️ **Known limitation kept for parity:** `expandAll()` only opens the roots' children — `collectAllIds()` is non-recursive, so only the root ids reach `expanded`. This is pre-existing behavior (the original `hr.org-chart` did the same) while the button label promises more. Issue #704 is a refactor with **no user-facing change**, so it was left untouched — candidate for a follow-up issue.
 
 ---
 
@@ -287,7 +303,7 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Verified 2026-09-26:** **`composer test`** is the one-command way (**1551 passed, 2 risky, 3884 assertions**, ~5.6 min serial, ~50s parallel). It bakes in the three environment gotchas.
 >
 > `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
@@ -298,6 +314,8 @@ Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test databas
 | `tests/Feature/MaintenanceLivewireTest.php` | 14+ | Maintenance schedule CRUD |
 | `tests/Feature/NotificationApiTest.php` | 14+ | Notification API endpoints |
 | `tests/Feature/TodoLivewireTest.php` | 17 | Todo Livewire component |
+| `tests/Feature/UnitTreeServiceTest.php` | 15 | `UnitTreeService` — roots, scope, children, search, subtree |
+| `tests/Feature/UnitTreeLivewireTest.php` | 16 | Reusable `unit.tree` — expand/collapse, search, badges, `unit-selected` |
 | `tests/Unit/PersianNormalizerTest.php` | 6+ | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 
 ### Prerequisites
@@ -341,7 +359,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+**173 tests** across **38 spec files** in `tests/e2e/` (verified 2026-09-26). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, and the HR org chart (`tests/e2e/hr/org-chart.spec.ts`).
 
 ### Setup (one-time, per machine)
 ```bash
