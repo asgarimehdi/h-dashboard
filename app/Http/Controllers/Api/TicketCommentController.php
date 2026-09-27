@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
+use App\Jobs\SendNotificationJob;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketCommentReaction;
 use App\Models\User;
-use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -356,7 +356,7 @@ class TicketCommentController extends Controller
                 continue;
             }
 
-            NotificationService::send(
+            SendNotificationJob::dispatch(
                 $userId,
                 'mention',
                 "شما در یک نظر به تیکت {$comment->ticket->ticket_code} منشن شدید",
@@ -373,7 +373,7 @@ class TicketCommentController extends Controller
      */
     private function notifyReply(TicketComment $parentComment, TicketComment $reply, User $author): void
     {
-        NotificationService::send(
+        SendNotificationJob::dispatch(
             $parentComment->user_id,
             'reply',
             "{$author->n_code} به نظر شما در تیکت {$reply->ticket->ticket_code} پاسخ داد",
@@ -404,7 +404,7 @@ class TicketCommentController extends Controller
 
         $emoji = $emojiMap[$reaction] ?? $reaction;
 
-        NotificationService::send(
+        SendNotificationJob::dispatch(
             $comment->user_id,
             'reaction',
             "{$reactor->n_code} واکنش {$emoji} را به نظر شما در تیکت {$comment->ticket->ticket_code} اضافه کرد",

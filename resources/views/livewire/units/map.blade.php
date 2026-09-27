@@ -68,9 +68,32 @@ return new class extends Component {
     public function deleteBoundary(): void
     {
         $unit = Unit::find($this->unitId);
-        if (! $unit || ! $unit->boundary_id) return;
 
-        $unit->update(['boundary_id' => null]);
+        if (! $unit || ! $unit->boundary_id) {
+            return;
+        }
+
+        $boundaryId = $unit->boundary_id;
+
+        // #702: nulling boundary_id alone left the geometry row orphaned in
+        // `boundaries` forever.
+        //
+        // ORDER MATTERS: units.boundary_id is ON DELETE CASCADE, so deleting the
+        // `boundaries` row first would cascade-delete THIS unit (and any child
+        // units). Null the FK first so the boundary row is unreferenced, then
+        // remove it.
+        try {
+            DB::transaction(function () use ($unit, $boundaryId): void {
+                $unit->update(['boundary_id' => null]);
+                DB::table('boundaries')->where('id', $boundaryId)->delete();
+            });
+        } catch (\Throwable $e) {
+            report($e);
+            $this->error('حذف مرز ناموفق بود.');
+
+            return;
+        }
+
         $this->success('مرز حذف شد.');
         $this->loadUnit();
         $this->dispatch('boundaryUpdated');
@@ -148,10 +171,53 @@ return new class extends Component {
         if (initialGeojson) {
             try {
                 var data = typeof initialGeojson === 'string' ? JSON.parse(initialGeojson) : initialGeojson;
-                existingLayer = L.geoJSON(data, {
+
+                // #702: boundaries are stored as MultiPolygon (PostGIS) and
+                // Boundary::getGeojsonAttribute() returns ST_AsGeoJSON's BARE
+                // geometry ({type, coordinates}) — not a GeoJSON Feature. Two bugs
+                // followed from that:
+                //   1. L.geoJSON() was handed a geometry with no `geometry` key, so
+                //      the layer was empty and fitBounds threw "Bounds are not valid",
+                //      leaving the draw toolbar permanently disabled.
+                //   2. Even when a layer did load, MultiPolygon gave it THREE levels
+                //      of nesting ([[ring]] -> [1] => [1] => [19] => LatLng).
+                //      L.Edit.Poly only understands two ([ring]), so it enabled
+                //      without error but rendered zero vertex handles and the
+                //      boundary was not editable.
+                // Normalise both: accept a bare geometry or a Feature, and unwrap
+                // the single MultiPolygon to a plain Polygon so L.Edit.Poly works.
+                var geometry = (data && data.geometry) ? data.geometry : data;
+                if (geometry && geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
+                    geometry = {
+                        type: 'Polygon',
+                        coordinates: geometry.coordinates[0] || [],
+                    };
+                }
+
+                existingLayer = L.geoJSON({ type: 'Feature', properties: {}, geometry: geometry }, {
                     style: { color: '#f59e0b', weight: 3, opacity: 0.8, fillOpacity: 0.15 }
                 }).addTo(unitMap);
-                unitMap.fitBounds(existingLayer.getBounds());
+
+                // #702: the draw toolbar's edit/remove tools only operate on layers
+                // inside `drawnItems`. The saved boundary was added straight to the
+                // map, so it got no edit handles and the toolbar could not delete it —
+                // only the bottom "حذف مرز" button worked.
+                //
+                // Add the INDIVIDUAL polygon layers (eachLayer), never the L.GeoJSON
+                // group itself: updateGeojson() iterates getLayers() and only handles
+                // L.Polygon instances.
+                existingLayer.eachLayer(function (layer) {
+                    drawnItems.addLayer(layer);
+                });
+
+                unitMap.fitBounds(drawnItems.getBounds());
+
+                // #702: seed _mapGeojson from the loaded boundary. Without this,
+                // _mapGeojson stayed undefined until the user drew something, and
+                // saveMapBoundary() reads that as "nothing to save" and routed to
+                // deleteBoundary() — so simply opening a unit with a boundary and
+                // pressing ذخیره deleted it.
+                updateGeojson();
             } catch (e) {
                 console.error('Error loading existing boundary:', e);
             }
@@ -171,11 +237,18 @@ return new class extends Component {
         unitMap.addControl(drawControl);
 
         unitMap.on('draw:created', function(event) {
-            if (existingLayer) {
-                unitMap.removeLayer(existingLayer);
-                existingLayer = null;
+            // #702: a unit has exactly one boundary, so a newly drawn polygon
+            // replaces the previous one. The old layer now lives inside
+            // `drawnItems`, so clearing the group replaces the previous
+            // "remove existingLayer from map" logic.
+            drawnItems.clearLayers();
+
+            var layer = event.layer;
+            if (layer instanceof L.Rectangle) {
+                layer = L.polygon(layer.getLatLngs()[0], layer.options);
             }
-            drawnItems.addLayer(event.layer);
+
+            drawnItems.addLayer(layer);
             updateGeojson();
         });
 
@@ -198,13 +271,23 @@ return new class extends Component {
         var coords = [];
         layers.forEach(function(layer) {
             if (layer instanceof L.Polygon && !(layer instanceof L.Rectangle)) {
-                var latlngs = layer.getLatLngs()[0];
-                var ring = latlngs.map(function(ll) { return [ll.lng, ll.lat]; });
-                if (ring.length > 0) {
-                    var first = ring[0], last = ring[ring.length - 1];
-                    if (first[0] !== last[0] || first[1] !== last[1]) ring.push(first);
+                // #702: getLatLngs() is [ring] for a plain polygon but [[ring]] for
+                // one built from a MultiPolygon geometry. Normalise to the real
+                // ring before mapping coords, otherwise ring.map() walks arrays
+                // instead of LatLngs and yields [undefined, undefined, ...].
+                var latlngs = layer.getLatLngs();
+                var ring = latlngs;
+                while (Array.isArray(ring) && Array.isArray(ring[0])) {
+                    ring = ring[0];
                 }
-                coords.push([ring]);
+                if (!Array.isArray(ring) || ring.length === 0) return;
+
+                var pts = ring.map(function(ll) { return [ll.lng, ll.lat]; });
+                if (pts.length > 0) {
+                    var first = pts[0], last = pts[pts.length - 1];
+                    if (first[0] !== last[0] || first[1] !== last[1]) pts.push(first);
+                }
+                if (pts.length > 0) coords.push([pts]);
             }
         });
         if (coords.length === 0) {

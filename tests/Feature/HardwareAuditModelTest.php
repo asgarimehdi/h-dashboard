@@ -10,12 +10,14 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAudit::class);
 
 class HardwareAuditModelTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -23,10 +25,7 @@ class HardwareAuditModelTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
     }
 
     protected function createHardware(): Hardware
@@ -35,7 +34,11 @@ class HardwareAuditModelTest extends TestCase
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $unit->id,
         ]);
 
         return Hardware::create([

@@ -125,6 +125,20 @@ return new class extends Component
         return $this->getErrorBag()->first('title');
     }
 
+    /**
+     * گزینه‌های فیلد «دوره» — کلیدها با option-value/option-label هم‌خوان‌اند.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function frequencyOptions(): array
+    {
+        return [
+            ['value' => 'daily', 'label' => 'روزانه'],
+            ['value' => 'weekly', 'label' => 'هفتگی'],
+            ['value' => 'monthly', 'label' => 'ماهانه'],
+        ];
+    }
+
     public function frequencyLabel(string $freq): string
     {
         return match ($freq) {
@@ -211,11 +225,16 @@ return new class extends Component
                         @error('title') <span class="text-error text-xs">{{ $message }}</span> @enderror
                     </div>
                     <div class="w-full sm:w-40">
-                        <x-select wire:model="frequency" label="دوره" :options="[
-                            ['value' => 'daily', 'label' => 'روزانه'],
-                            ['value' => 'weekly', 'label' => 'هفتگی'],
-                            ['value' => 'monthly', 'label' => 'ماهانه'],
-                        ]" />
+                        {{-- option-value/option-label required: MaryUI defaults to
+                             optionValue='id' / optionLabel='name', so 'value'/'label'
+                             keys would render empty options. --}}
+                        <x-select
+                            wire:model="frequency"
+                            label="دوره"
+                            :options="$this->frequencyOptions()"
+                            option-value="value"
+                            option-label="label"
+                        />
                     </div>
                     <div class="w-full sm:w-32">
                         <x-input wire:model="recurrenceInterval" label="هر" type="number" min="1" />

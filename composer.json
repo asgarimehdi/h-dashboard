@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "laravel/boost": "^2.10",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
@@ -24,7 +25,6 @@
         "fakerphp/faker": "^1.23",
         "fruitcake/laravel-debugbar": "^4.0",
         "infection/infection": "^0.35.3",
-        "laravel/boost": "^2.9",
         "laravel/pail": "^1.2.5",
         "laravel/pint": "^1.27",
         "mockery/mockery": "^1.6",

@@ -1,48 +1,22 @@
 <?php
 
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class MapsRouteLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        DB::statement("SELECT setval('tahsils_id_seq', GREATEST((SELECT MAX(id) FROM tahsils), 1))");
-        DB::statement("SELECT setval('estekhdams_id_seq', GREATEST((SELECT MAX(id) FROM estekhdams), 1))");
-        DB::statement("SELECT setval('semats_id_seq', GREATEST((SELECT MAX(id) FROM semats), 1))");
-        DB::statement("SELECT setval('radifs_id_seq', GREATEST((SELECT MAX(id) FROM radifs), 1))");
-    }
-
-    protected function createUserWithUnit(string $permission = 'map'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return ['user' => $user, 'unit' => $unit];
+        $this->seedLookupTables();
     }
 
     // ==================== Auth & permissions ====================
@@ -54,7 +28,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $result = $this->createUserWithUnit('manage_users');
+        $result = $this->createUserWithUnit(['manage_users']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         DB::table('user_units')->where('user_id', $result['user']->id)->update(['is_primary' => true]);
         session()->put('current_unit_id', $result['unit']->id);
@@ -64,7 +40,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_renders(): void
     {
-        $result = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit(['map']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         session()->put('current_unit_id', $result['unit']->id);
 
@@ -77,7 +55,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_mount_sets_default_waypoints(): void
     {
-        $result = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit(['map']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         session()->put('current_unit_id', $result['unit']->id);
 
@@ -88,7 +68,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_mount_sets_routing_url(): void
     {
-        $result = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit(['map']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         session()->put('current_unit_id', $result['unit']->id);
 
@@ -100,7 +82,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_mount_sets_tile_template(): void
     {
-        $result = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit(['map']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         session()->put('current_unit_id', $result['unit']->id);
 
@@ -114,7 +98,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_renders_distance_elements(): void
     {
-        $result = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit(['map']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         session()->put('current_unit_id', $result['unit']->id);
 
@@ -125,7 +111,9 @@ class MapsRouteLivewireTest extends TestCase
 
     public function test_renders_toggle_label(): void
     {
-        $result = $this->createUserWithUnit();
+        $result = $this->createUserWithUnit(['map']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($result['user']);
         session()->put('current_unit_id', $result['unit']->id);
 

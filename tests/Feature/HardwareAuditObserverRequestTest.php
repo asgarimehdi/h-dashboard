@@ -13,12 +13,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
 covers(HardwareAuditObserver::class);
 
 class HardwareAuditObserverRequestTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use RefreshDatabase;
 
     protected $tId;
@@ -34,6 +36,8 @@ class HardwareAuditObserverRequestTest extends TestCase
     protected $user;
 
     protected $nCode;
+
+    protected $token;
 
     protected function setUp(): void
     {
@@ -64,18 +68,17 @@ class HardwareAuditObserverRequestTest extends TestCase
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Permission::firstOrCreate(['name' => 'manage_hardware']);
         $this->user->givePermissionTo('manage_hardware');
+        $this->token = $this->createApiToken($this->user, ['hardware:read', 'hardware:write']);
         Session::put('current_unit_id', $this->unit->id);
     }
 
     public function test_audit_captures_ip_from_test_request(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-
-        $response = $this->postJson('/api/hardware', [
+        $response = $this->apiPost('/api/hardware', [
             'n_code' => $this->nCode,
             'pc_name' => 'REQ-PC-001',
             'type' => 'pc',
-        ]);
+        ], $this->token);
 
         $response->assertCreated();
 
@@ -92,14 +95,15 @@ class HardwareAuditObserverRequestTest extends TestCase
 
     public function test_audit_captures_user_agent_from_request(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-
-        $response = $this->postJson('/api/hardware', [
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'FlutterTest/1.0',
+        ])->postJson('/api/hardware', [
             'n_code' => $this->nCode,
             'pc_name' => 'REQ-PC-002',
             'type' => 'pc',
-        ], [
-            'User-Agent' => 'FlutterTest/1.0',
         ]);
 
         $response->assertCreated();
@@ -115,23 +119,21 @@ class HardwareAuditObserverRequestTest extends TestCase
 
     public function test_rollback_audit_captures_ip_from_request(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-
         // Create hardware first
-        $createResponse = $this->postJson('/api/hardware', [
+        $createResponse = $this->apiPost('/api/hardware', [
             'n_code' => $this->nCode,
             'pc_name' => 'REQ-PC-ROLLBACK',
             'type' => 'pc',
             'cpu' => 'Intel i5',
-        ]);
+        ], $this->token);
         $createResponse->assertCreated();
 
         $hardware = Hardware::where('pc_name', 'REQ-PC-ROLLBACK')->first();
 
         // Update it to create an audit trail
-        $updateResponse = $this->patchJson("/api/hardware/{$hardware->id}", [
+        $updateResponse = $this->apiPatch("/api/hardware/{$hardware->id}", [
             'cpu' => 'Intel i7',
-        ]);
+        ], $this->token);
         $updateResponse->assertOk();
 
         $updateAudit = HardwareAudit::where('hardware_id', $hardware->id)
@@ -140,10 +142,14 @@ class HardwareAuditObserverRequestTest extends TestCase
         $this->assertNotNull($updateAudit);
 
         // Rollback via API
-        $rollbackResponse = $this->postJson(
+        $rollbackResponse = $this->withHeaders([
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'RollbackTest/2.0',
+        ])->postJson(
             "/api/hardware/{$hardware->id}/audits/{$updateAudit->id}/rollback",
-            ['field' => 'cpu'],
-            ['User-Agent' => 'RollbackTest/2.0']
+            ['field' => 'cpu']
         );
         $rollbackResponse->assertOk();
 

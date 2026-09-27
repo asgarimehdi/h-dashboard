@@ -18,12 +18,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
 class TicketsCreateLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -31,40 +33,7 @@ class TicketsCreateLivewireTest extends TestCase
         parent::setUp();
 
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync Postgres sequences for tables seeded with explicit id=1
-        // so later inserts do not collide with the explicit primary key.
-        foreach (['tahsils', 'estekhdams', 'semats', 'radifs'] as $table) {
-            DB::statement("SELECT setval(pg_get_serial_sequence('{$table}', 'id'), GREATEST((SELECT MAX(id) FROM {$table}), 1))");
-        }
-    }
-
-    /**
-     * Create a user that belongs to a unit, optionally with a permission.
-     */
-    protected function createUserWithUnit(string $permission = 'create_ticket'): array
-    {
-        $unit = Unit::create(['name' => 'واحد مبدا', 'is_active' => true]);
-        $nCode = (string) fake()->unique()->numerify('##########');
-
-        Person::create([
-            'n_code' => $nCode,
-            'f_name' => 'تست',
-            'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1,
-            'u_id' => $unit->id,
-        ]);
-
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $user->givePermissionTo($permission);
-
-        return ['user' => $user, 'unit' => $unit];
+        $this->seedLookupTables();
     }
 
     /**
@@ -88,21 +57,23 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket']);
         // Strip the permission back off so the route is denied.
-        $data['user']->revokePermissionTo('create_ticket');
+        $user->revokePermissionTo('create_ticket');
 
-        $this->actingAs($data['user'])
+        $this->actingAs($user)
             ->get('/tickets/new')
             ->assertStatus(403);
     }
 
     public function test_renders(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
-        Livewire::actingAs($data['user'])
+        Livewire::actingAs($user)
             ->test('tickets.create')
             ->assertOk()
             ->assertSee('ایجاد تیکت جدید')
@@ -115,9 +86,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_loads_todos(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $unit = $data['unit'];
-        $user = $data['user'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         // Open todo for current unit — should be loaded.
@@ -159,9 +130,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_search_units(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        $unit = $data['unit'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         $targetA = $this->createTargetUnit('بیمارستان هدف الف');
@@ -199,9 +170,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_select_unit(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit('واحد انتخابی');
 
@@ -217,9 +189,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_reset_form_clears_fields(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit();
 
@@ -241,9 +214,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_remove_file_clears_index(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         $file1 = UploadedFile::fake()->create('doc1.pdf', 10);
         $file2 = UploadedFile::fake()->create('doc2.pdf', 10);
@@ -259,9 +233,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_save_creates_ticket(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        $unit = $data['unit'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit('واحد مقصد اصلی');
@@ -270,7 +244,7 @@ class TicketsCreateLivewireTest extends TestCase
         $recipientN = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $recipientN, 'f_name' => 'گیرنده', 'l_name' => 'تست',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1,
+            't_id' => DB::table('tahsils')->first()->id, 'e_id' => DB::table('estekhdams')->first()->id, 's_id' => DB::table('semats')->first()->id, 'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $target->id,
         ]);
         $recipient = User::create(['n_code' => $recipientN, 'password' => Hash::make('password')]);
@@ -332,9 +306,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_auto_creates_todo(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        $unit = $data['unit'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit('واحد تودو');
@@ -364,9 +338,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_links_existing_todo_when_task_id_provided(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        $unit = $data['unit'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit('واحد با تسک موجود');
@@ -400,9 +374,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_attachments_are_persisted(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        $unit = $data['unit'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit('واحد پیوست');
@@ -433,9 +407,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_validation_errors(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         // Empty payload → 3 required errors.
         Livewire::actingAs($user)
@@ -446,9 +421,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_validation_min_max_lengths(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         $target = $this->createTargetUnit();
 
@@ -464,9 +440,9 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_own_unit_rejected(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        $unit = $data['unit'];
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         Session::put('current_unit_id', $unit->id);
 
         // The user's own unit — must be rejected by the custom rule.
@@ -484,9 +460,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_unit_id_required_and_exists(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         // Pick a non-existent unit id.
         Livewire::actingAs($user)
@@ -500,9 +477,10 @@ class TicketsCreateLivewireTest extends TestCase
 
     public function test_file_validation_rejects_too_many_files(): void
     {
-        $data = $this->createUserWithUnit('create_ticket');
-        $user = $data['user'];
-        Session::put('current_unit_id', $data['unit']->id);
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
 
         $files = [
             UploadedFile::fake()->create('a.pdf', 10),

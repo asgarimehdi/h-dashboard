@@ -2,49 +2,25 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Unit::class);
 
 class MapDashboardLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(string $permission = 'map'): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست', 'lat' => 36.6693, 'lng' => 48.4716]);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        Session::put('current_unit_id', $unit->id);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     // ==================== Auth / permission ====================
@@ -56,7 +32,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $user = $this->createUserWithUnit('manage_users'); // wrong permission
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($user);
 
         $this->get('/map')->assertStatus(403);
@@ -66,7 +42,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_renders_map(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('map.map-dashboard')
@@ -79,7 +55,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_markers_scoped(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         // Create an accessible unit (child of user's unit)
         $accessible = Unit::create(['name' => 'واحد قابل دسترس', 'lat' => 36.70, 'lng' => 48.50, 'parent_id' => $user->units()->first()->id]);
@@ -100,7 +76,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_marker_detail(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         $unit = Unit::create(['name' => 'unit-detail-test', 'lat' => 36.67, 'lng' => 48.47]);
@@ -117,7 +93,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_layer_toggled(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('map.map-dashboard')
@@ -132,7 +108,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_filter_changed(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('map.map-dashboard')
@@ -145,7 +121,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_unit_selected_dispatches_event(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('map.map-dashboard')
@@ -158,7 +134,7 @@ class MapDashboardLivewireTest extends TestCase
 
     public function test_load_unit_details_inaccessible_unit(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         // Create a unit that is NOT in the user's accessible tree

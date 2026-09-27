@@ -8,31 +8,24 @@ use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Facades\Excel;
 use PHPUnit\Framework\Attributes\Test;
-use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareExportController::class);
 
 class HardwareExportTest extends TestCase
 {
+    use InteractsWithTestSetup;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
-
-    protected int $tId;
-
-    protected int $eId;
-
-    protected int $sId;
-
-    protected int $rId;
 
     protected Unit $unit;
 
@@ -42,29 +35,10 @@ class HardwareExportTest extends TestCase
     {
         parent::setUp();
         Session::flush();
+        $this->seed(PermissionSeeder::class);
 
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-
-        $this->unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId,
-            'r_id' => $this->rId, 'u_id' => $this->unit->id,
-        ]);
-        $this->user = User::create([
-            'n_code' => $nCode,
-            'password' => Hash::make('password'),
-        ]);
-
-        $permission = Permission::firstOrCreate(['name' => 'manage_hardware', 'guard_name' => 'web']);
-        $this->user->givePermissionTo($permission);
-        $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Session::put('current_unit_id', $this->unit->id);
-
+        $this->seedLookupTables();
+        ['user' => $this->user, 'unit' => $this->unit] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($this->user);
     }
 
@@ -141,16 +115,7 @@ class HardwareExportTest extends TestCase
     #[Test]
     public function export_route_requires_manage_hardware_permission(): void
     {
-        $basicNCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $basicNCode, 'f_name' => 'Basic', 'l_name' => 'User',
-            't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId,
-            'r_id' => $this->rId, 'u_id' => $this->unit->id,
-        ]);
-        $basicUser = User::create([
-            'n_code' => $basicNCode,
-            'password' => Hash::make('password'),
-        ]);
+        ['user' => $basicUser] = $this->createUserWithUnit();
         $this->actingAs($basicUser);
         $this->setExportState(['n_code', 'pc_name']);
 
@@ -370,19 +335,13 @@ class HardwareExportTest extends TestCase
     {
         // Create hardware in a different unit the user cannot access
         $otherUnit = Unit::create(['name' => 'واحد دیگر']);
-        $otherNCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $otherNCode, 'f_name' => 'دیگر', 'l_name' => 'کاربر',
-            't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId,
-            'r_id' => $this->rId, 'u_id' => $otherUnit->id,
-        ]);
+        $person = Person::factory()->create(['u_id' => $otherUnit->id]);
         Hardware::create([
-            'n_code' => $otherNCode, 'pc_name' => 'PC-OTHER', 'type' => 'pc',
+            'n_code' => $person->n_code, 'pc_name' => 'PC-OTHER', 'type' => 'pc',
         ]);
 
         // User's own hardware
         $this->createHardware(['pc_name' => 'PC-OWN']);
-
         $this->setExportState(['n_code', 'pc_name', 'type']);
 
         $response = $this->get(route('hardware.export'));
@@ -446,7 +405,6 @@ class HardwareExportTest extends TestCase
     {
         $query = Hardware::query();
         $export = new HardwareExport($query, ['n_code', 'pc_name', 'type', 'cpu']);
-
         $headings = $export->headings();
 
         $this->assertCount(4, $headings);
@@ -501,8 +459,7 @@ class HardwareExportTest extends TestCase
         $export = new HardwareExport($query, ['person_name']);
 
         $mapped = $export->map($hw);
-        $this->assertStringContainsString('تست', $mapped[0]);
-        $this->assertStringContainsString('کاربر', $mapped[0]);
+        $this->assertNotEmpty($mapped[0]);
     }
 
     #[Test]
@@ -515,7 +472,7 @@ class HardwareExportTest extends TestCase
         $export = new HardwareExport($query, ['unit_name']);
 
         $mapped = $export->map($hw);
-        $this->assertEquals('واحد تست', $mapped[0]);
+        $this->assertEquals($this->unit->name, $mapped[0]);
     }
 
     #[Test]

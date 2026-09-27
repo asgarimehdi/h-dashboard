@@ -9,7 +9,10 @@ class SyncZabbix extends Command
 {
     protected $signature = 'zabbix:sync';
 
-    protected $description = 'Sync metrics from Zabbix monitoring system';
+    /**
+     * @deprecated Use \App\Jobs\SyncZabbixJob dispatched via the scheduler instead.
+     */
+    protected $description = 'Sync metrics from Zabbix monitoring system (deprecated — use SyncZabbixJob)';
 
     public function handle(ZabbixService $zabbix): int
     {

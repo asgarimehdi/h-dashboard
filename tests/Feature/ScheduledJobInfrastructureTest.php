@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Console\Commands\PruneStaleCache;
 use App\Console\Kernel;
+use App\Jobs\SyncZabbixJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
@@ -36,7 +37,10 @@ class ScheduledJobInfrastructureTest extends TestCase
         $this->assertContains('maintenance:generate-due', $commands);
         $this->assertContains('data:archive', $commands);
         $this->assertContains('reports:generate-daily', $commands);
-        $this->assertContains('zabbix:sync', $commands);
+
+        // zabbix:sync is now dispatched as SyncZabbixJob, not an artisan command
+        $descriptions = array_map(fn ($event) => $event->description ?? '', $events);
+        $this->assertContains(SyncZabbixJob::class, $descriptions);
     }
 
     public function test_prune_stale_cache_command_runs(): void

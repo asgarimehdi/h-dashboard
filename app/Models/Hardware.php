@@ -4,12 +4,42 @@ namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * @property int $id
+ * @property string $n_code
+ * @property string $pc_name
+ * @property string $type
+ * @property string $os
+ * @property string $ip_valid
+ * @property string $ip_local
+ * @property string $mac
+ * @property string $net_type
+ * @property string $switch
+ * @property string $port
+ * @property bool $shutdown
+ * @property string $vlan
+ * @property string $motherboard
+ * @property string $cpu
+ * @property string $ram
+ * @property string $hdd
+ * @property string $comments
+ * @property bool $mark
+ * @property Carbon|null $clean_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Person|null $person
+ * @property-read Collection<int, HardwareAudit> $audits
+ *
+ * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
+ */
 class Hardware extends Model
 {
     use HasFactory;
@@ -136,6 +166,7 @@ class Hardware extends Model
 
         $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
         $type = $typeAliases[$type] ?? $type;
+        $type = self::normalizeForQuery($type);
 
         $query->where('hardwares.type', 'LIKE', "%{$type}%");
     }
@@ -146,6 +177,7 @@ class Hardware extends Model
     public function scopeFilterOs($query, ?string $os): void
     {
         if ($os) {
+            $os = self::normalizeForQuery($os);
             $query->where('hardwares.os', 'LIKE', "%{$os}%");
         }
     }
@@ -156,6 +188,7 @@ class Hardware extends Model
     public function scopeFilterCpu($query, ?string $cpu): void
     {
         if ($cpu) {
+            $cpu = self::normalizeForQuery($cpu);
             $query->where('hardwares.cpu', 'LIKE', "%{$cpu}%");
         }
     }
@@ -166,6 +199,7 @@ class Hardware extends Model
     public function scopeFilterRam($query, ?string $ram): void
     {
         if ($ram) {
+            $ram = self::normalizeForQuery($ram);
             $query->where('hardwares.ram', 'LIKE', "%{$ram}%");
         }
     }
@@ -176,6 +210,7 @@ class Hardware extends Model
     public function scopeFilterHdd($query, ?string $hdd): void
     {
         if ($hdd) {
+            $hdd = self::normalizeForQuery($hdd);
             $query->where('hardwares.hdd', 'LIKE', "%{$hdd}%");
         }
     }
@@ -196,6 +231,7 @@ class Hardware extends Model
     public function scopeFilterNetType($query, ?string $netType): void
     {
         if ($netType) {
+            $netType = self::normalizeForQuery($netType);
             $query->where('hardwares.net_type', 'LIKE', "%{$netType}%");
         }
     }
@@ -238,7 +274,7 @@ class Hardware extends Model
             return;
         }
 
-        $normalized = self::normalizeForSearch($term);
+        $normalized = self::normalizeForQuery($term);
 
         $query->whereExists(function ($q) use ($normalized) {
             $q->selectRaw('1')
@@ -257,7 +293,7 @@ class Hardware extends Model
             return;
         }
 
-        $normalized = self::normalizeForSearch($term);
+        $normalized = self::normalizeForQuery($term);
 
         $query->whereExists(function ($q) use ($normalized) {
             $q->selectRaw('1')

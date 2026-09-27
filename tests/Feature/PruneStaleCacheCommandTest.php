@@ -29,8 +29,9 @@ class PruneStaleCacheCommandTest extends TestCase
     public function test_cache_prune_stale_queries_version_for_each_namespace(): void
     {
         $cache = $this->mock(CacheInvalidationServiceInterface::class);
+        // one version lookup per registered namespace
         $cache->shouldReceive('getVersion')
-            ->times(10)
+            ->times(count(PruneStaleCache::NAMESPACES))
             ->andReturn(42);
 
         $this->artisan('cache:prune-stale')

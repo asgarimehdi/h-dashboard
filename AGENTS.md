@@ -1,6 +1,8 @@
 # Health Dashboard (داشبورد سلامت) — Agent Rules
 
 > **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
+>
+> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts: `composer test` = 1461 passed, Playwright = 152 passed.
 
 ## Project Overview
 
@@ -8,17 +10,31 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 ### Tech Stack
 
-- **Framework:** Laravel 13.x on PHP ^8.3
+- **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
-- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 22, npm 10)
+- **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 - **E2E Testing:** Playwright (Chromium, `tests/e2e/`, `npx playwright test`)
 - **Code Quality:** PHPStan level 6 with baseline, Laravel Pint (enforced in CI + pre-commit hook)
 
-> **Detailed data model, relationships, FK behavior, vocabulary:** see `references/data-model.md`
+> **Detailed data model, relationships, FK behavior:** see `references/data-model.md`
 > **API endpoints, UI features, scheduler, deployment, performance:** see `references/api-endpoints.md`
+
+---
+
+## Area & Vocabulary
+
+- **Person** — HR record in the directory, linked to a `User` one-to-one via `n_code`.
+- **User** — authenticated account; Spatie roles/permissions; linked to Person via `n_code`.
+- **Unit** — organizational unit (hospital, health center, county); tree via `parent_id`.
+- **UnitType** — classification of a Unit; allowed parent types via `unit_type_relationships`.
+- **Region** — hierarchical geographic division (province or county).
+- **Boundary** — GIS polygon (MULTIPOLYGON, SRID 4326) representing a geographic area.
+- **Location Log** — GPS point recorded by the mobile app (`location_logs`).
+
+**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
 
 ---
 
@@ -28,12 +44,12 @@ Uses **Spatie Permission** package:
 
 - `HasOrganizationalScope` trait on models for automatic unit-based filtering
 - Users see only their own unit's data (plus sub-units via recursive CTE)
-- Permission `manage_hardware` required for hardware CRUD and maintenance schedule CRUD
+- Permission `manage_hardware` required for hardware CRUD
 - Roles: admin, operator, viewer
 
 **AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated.
 
-**Key permissions:** `manage_users`, `organization`, `kargozini`, `map`, `calendar`, `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache`, `manage_hardware`, `bw`, `view_hr_dashboard`, `manage_personnel`, `manage_unit_tickets`, `manage_org_chart`.
+**Key permissions:** `manage_users`, `organization`, `kargozini`, `map`, `manage_zabbix`, `calendar`, `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache`, `manage_hardware`, `bw`, `view_hr_dashboard`, `manage_personnel`, `manage_unit_tickets`, `manage_org_chart`.
 
 ---
 
@@ -48,6 +64,30 @@ Uses **Spatie Permission** package:
 
 - Livewire components expect session-based auth. **API tokens are NOT accepted** for Livewire pages.
 - Login form at `/login`. API login: `POST /api/login` with `n_code` + `password` (throttled 5/min).
+
+### API Token Abilities (issue #690)
+
+Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise).
+
+Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:a,b` = ALL of them** (`CheckForAnyAbility` vs `CheckAbilities`).
+
+| Route group | Read (GET) | Write (POST/PUT/DELETE) |
+|---|---|---|
+| `/api/units` | `ability:units:read` | `abilities:units:write` + `role_or_permission:organization` |
+| `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` | — |
+| `/api/hardware/*` | `ability:hardware:read` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
+| `/api/tickets*` (+ comments) | `ability:tickets:read` | `abilities:tickets:write` |
+| `/api/reports/*` | `ability:reports:read` | — |
+| `/api/persons/*` | `ability:persons:read` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
+| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) | same middleware + `role_or_permission:calendar` |
+| `/api/hr/*` | `ability:hr:read` | `role_or_permission:view_hr_dashboard` |
+| `/api/notifications*` | `ability:notifications:read` | — |
+| `/api/gis*` | `ability:gis:read` | `role_or_permission:map` |
+
+- Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
+- Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
+- Tokens are **scoped and revoked on password change** (#678). API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
+
 
 **Safe Role/Permission Middleware:** `SafeRoleOrPermission` is registered but **intentionally NOT used on hardware routes**. Hardware routes require full auth via `auth` + `role_or_permission:manage_hardware`.
 
@@ -71,6 +111,49 @@ Uses **Spatie Permission** package:
 `config/cors.php` changes:
 - `allowed_origins_patterns` now **empty array in production** (was always localhost/127.0.0.1)
 - `max_age` increased from 0 to 86400 (reduces preflight requests)
+
+---
+
+## Dead Routes & Components Removed (Phase 4)
+
+These components and routes were removed — do not recreate:
+- `/` — changed from Livewire `index` component to `Route::redirect('/', '/dashboard')`
+- `auth.register` — registration form removed (unused)
+- `glowingcard` — demo component removed (unused)
+- Tests for these: `AuthRegisterLivewireTest`, `GlowingCardLivewireTest`, `IndexRedirectLivewireTest` — all deleted
+
+**Removed as dead code (issue #685, 2026-09-24) — do not recreate:**
+- PHP: `TicketAlreadyAcceptedException`, `GisController::invalidateCache()`, `LastUserActivity::isOnline()/getLastActivity()`, `DailyReport::generatedBy()`, `HardwareExport::chunkCollection()`
+- Blade views: `welcome.blade.php`, `tools/index.blade.php`, `livewire/reports/index.blade.php`, `components/stitch-parrot.blade.php`
+- Test: `ReportsIndexLivewireTest.php` (covered a component that no longer exists)
+
+---
+
+## Units Export (issue #701)
+
+`GET /units/export` → `units-Ymd-His.xlsx`, gated by `role_or_permission:organization` (same group as `/units`).
+
+- **Access-scoped** — rows = `UnitScopedRequest::accessibleIds()`; empty scope → header-only file.
+- **One row per unit** (flat, sortable): `شناسه`, `نام واحد`, `نوع واحد`, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. Breadcrumb carries hierarchy instead of one column per level.
+- Depth-first order (parents first, siblings alphabetical). Ancestors above the caller's scope still name the path. Inactive units included as `غیرفعال`.
+- RTL via `WithEvents` → `AfterSheet` → `setRightToLeft(true)`.
+- Button is a plain `<a href="{{ route('units.export') }}">` in `resources/views/livewire/units/index.blade.php` — **Livewire cannot return file downloads**, so never `wire:click` it.
+- Files: `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, tests in `tests/Feature/UnitsExportTest.php`.
+
+> ✅ **`descendantIds` uses `UNION`, not `UNION ALL`** — deliberate. The set operator dedupes, so a `parent_id` cycle terminates (2ms) instead of hanging the connection (proven: `UNION ALL` on a cycle runs until `statement_timeout`). Do not "optimize" it back to `UNION ALL`. The export's own `buildHierarchy()` guards its upward walk separately.
+
+---
+
+## Reusable unit tree (issue #704)
+
+The tree UI is generic and shared: `resources/views/livewire/unit/tree.blade.php` + `tree-node.blade.php` (single-file Livewire component `unit.tree`), backed by `app/Services/UnitTreeService.php` (scope-rooted `roots()`, `childrenOf()`, `search()`, `ancestorChain()` — all take `$accessibleIds` as an argument, never read `auth()`).
+
+Reuse contract (documented at the top of `tree.blade.php`):
+
+- **IN** — `badge-view` (Blade view per node, receives `$unit` + `badge-data`), `badge-data` (opaque unit-id => payload map, forwarded verbatim — the tree never interprets it), `search-placeholder`.
+- **OUT** — `unit-selected` event (int id) on node click; the embedding page listens via `#[On('unit-selected')]` and fills its own detail panel. The listener **must re-check the id** against its own `accessibleUnitIds()` — `selectNode` is a public Livewire method that forwards any id.
+
+`hr/org-chart` is the reference consumer: it contributes only `livewire/hr/personnel-badge` (count + «خالی») and the personnel detail panel. `hr/org-node.blade.php` is **deleted** — do not recreate it; node markup lives in `unit/tree-node.blade.php`. The search box and expand/collapse buttons live INSIDE `unit.tree` because they drive the child's own state — a parent cannot call a child's methods without a ref. A second consumer (e.g. covered population per unit) needs zero tree code: a badge view + an event listener.
 
 ---
 
@@ -121,27 +204,29 @@ Heavy operations are dispatched as queued jobs (plan 012). All implement `Should
 | `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
 | `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command |
+| `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL) |
 
-Each job accepts `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All have `failed()` methods with `Log::error()`.
+The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope — it skips itself (warning log) when `services.zabbix.out_item_id` / `in_item_id` are not configured.
 
 ---
 
 ## Scheduler & Console Commands
 
-> Full details: `references/api-endpoints.md` (Scheduler section)
+Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The commands all take `--dry-run`:
 
-| Command | Schedule | Purpose |
-|---|---|---|
-| `cache:prune-stale` | hourly | Resets cache version counters |
-| `todos:generate-recurring` | daily 02:00 | Creates recurring todo instances |
-| `maintenance:generate-due` | daily 03:00 | Generates due maintenance tickets |
-| `data:archive` | weekly (Mon 04:00) | Moves old `activity_logs` → `activity_log_archives` |
-| `reports:generate-daily` | daily 06:00 | Builds `daily_reports` rows per accessible unit |
-| `zabbix:sync` | every 5 min | Pulls Zabbix traffic/latest values |
+| Scheduled item | Schedule |
+|---|---|
+| `cache:prune-stale` | hourly |
+| `todos:generate-recurring` | daily 02:00 |
+| `maintenance:generate-due` | daily 03:00 |
+| `data:archive` | weekly (Mon 04:00) |
+| `reports:generate-daily` | daily 06:00 |
+| `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | every 5 min, `->withoutOverlapping()` |
 
-All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`.
+`zabbix:sync` (plan 018) is **no longer scheduled** — the schedule dispatches `SyncZabbixJob` instead, so a slow Zabbix API can never block the scheduler. Run `php artisan zabbix:sync` manually when you need the command.
 
-> **Do not add `->timeout(N)` to zabbix:sync schedule** — method doesn't exist, throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
+> Full command details, parameters, and gotchas: `references/api-endpoints.md` (Scheduler & Console Commands).
+> **Do not add `->timeout(N)` to a schedule entry** — throws `BadMethodCallException`. HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)`.
 
 ---
 
@@ -164,11 +249,14 @@ All commands take `--dry-run`. `reports:generate-daily` also supports `--unit=N`
 - **CSS:** Tailwind utility classes over custom CSS
 - **Pagination:** `LengthAwarePaginator` with `WithPagination` trait
 - **Forms:** MaryUI `x-input`, `x-select`, `x-button` components
+- **x-select key mapping:** MaryUI defaults to `optionValue='id'` / `optionLabel='name'`. If your options use `value`/`label` keys you **must** pass `option-value="value" option-label="label"`, otherwise every `<option>` renders **empty** (`<option value=""></option>`) and the control looks blank/unreadable. This was issue #706 — reported as a "background and text are the same color" bug, but it was a key-mapping bug, not a color bug. Build option lists in a component method (`typeOptions()`) and pass `:options="$this->typeOptions()"` — a bare `$typeOptions` is undefined in the Blade view.
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
-- **Test Review Rule:** Every code change MUST include test review. Before finalizing any change: (1) check if existing tests cover the changed code, (2) add/update tests if the change introduces new behavior, fixes a bug, or alters an existing contract. No code change ships without corresponding test coverage verification.
-- **Factories:** Only `UserFactory` exists; other models have seeders. When seeding rows with **explicit IDs** in tests, resync Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys.
+- **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
+- **Shared test trait:** new Feature tests `use InteractsWithTestSetup;` (`tests/Support/Concerns/InteractsWithTestSetup.php`, 71 files already do) — provides `seedLookupTables()`, `resyncSequence()`, `createUserWithUnit($permissions, $role)`, `createHardware()`, `assertCacheInvalidated()`, `assertQueryCount()`, `assertNoNPlusOne()`. Do not re-implement user/unit/lookup seeding by hand; see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` (`PermissionSeeder` + `seedLookupTables()`).
+- **Models:** all 24 Eloquent models carry `@property` PHPDoc annotations (#671). When you add an attribute/cast, update the annotation too — PHPStan level 6 + baseline depends on them.
+- **Factories:** 14 factories exist (`UserFactory`, `UnitFactory`, `PersonFactory`, `HardwareFactory`, `TicketFactory`, `TodoFactory`, `SematFactory`, `TahsilFactory`, `EstekhdamFactory`, `RadifFactory`, `UnitTypeFactory`, `NotificationFactory`, `AttachmentFactory`, `TaskActivityFactory`). When seeding rows with **explicit IDs** in tests, resync the Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys — or call `$this->seedLookupTables()` / `$this->resyncSequence($table)` from the shared trait.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
@@ -191,7 +279,6 @@ php scripts/boost_tool.php <tool> '<json-args>'
 # e.g. php scripts/boost_tool.php application-info '{}'
 # php scripts/boost_tool.php db-schema '{}'
 # php scripts/boost_tool.php query '{"sql": "SELECT ..."}'
-# php scripts/boost_tool.php docs '{"query": "..."}'
 ```
 
 ### MCP Tools
@@ -213,9 +300,9 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Working as of 2026-09-21:** **`composer test`** is the one-command way (**1352 passed, 2 risky** parallel; ~2.5 min). It bakes in the environment gotchas below.
-
-> **⚠️ Parallel flakiness:** Some tests may fail with `QueryException` or `PermissionDoesNotExist` in parallel mode due to spatie permission cache shared across workers. Run individual files if parallel fails.
+> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+>
+> `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
 ### Key test files
 | File | Tests | Purpose |
@@ -267,24 +354,61 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**142 tests** across **32 spec files** in `tests/e2e/`. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
 
-### Setup
+### Setup (one-time, per machine)
 ```bash
-npm install                   # includes @playwright/test + dotenv
-npx playwright install chromium  # one-time browser install
+npm install                     # includes @playwright/test + dotenv
+npx playwright install chromium # one-time browser install (Chromium + headless shell)
 ```
 
+### `.env.e2e` — gitignored, must be created locally
+
+It is in `.gitignore`, so it never ships with the repo. Create it once per machine:
+
+```bash
+cp .env.e2e.example .env.e2e
+# copy from .env: APP_KEY, DB_USERNAME, DB_PASSWORD, REDIS_PASSWORD
+# then create the isolated database (NEVER point e2e at `h_dashboard` — it is wiped every run):
+psql -h 127.0.0.1 -U h_dashboard -d postgres \
+  -c "CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+```
+
+> **⚠️ `APP_LOCALE=fa` is MANDATORY in `.env.e2e`.**
+> `.env.e2e.example` does **not** include `APP_LOCALE`, and `config/app.php` defaults to `en`. Without it the app renders English pagination (`Showing 1 to 20 of 318 results`, `Next »`) and English validation messages instead of the Persian strings every spec asserts → **11 tests fail** across `auth/password-change`, `hardware/list-filters`, `organization/units`, `personnel/list`, `users/list`.
+> Required lines:
+> ```
+> APP_LOCALE=fa
+> APP_FALLBACK_LOCALE=en
+> APP_FAKER_LOCALE=en_US
+> ```
+> Playwright's `locale: 'fa-IR'` is browser-level only (affects `Intl`, not Laravel translations) — it does **not** replace this.
+
 ### Credentials
-Test credentials live in `.env.e2e` (gitignored). Read by `playwright.config.ts` via `dotenv`. Fallback defaults in `tests/e2e/shared/fixtures.ts`.
+Test credentials live in `.env.e2e` (gitignored), read by `playwright.config.ts` via `dotenv` and sourced by the shell script for the app itself. **No fallbacks** — `tests/e2e/shared/fixtures.ts` throws if any is missing: `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
 
 ### Run
 ```bash
-npx playwright test                    # all tests
-npx playwright test tests/e2e/auth     # single suite
-npx playwright test --reporter=list    # list reporter
-bash scripts/e2e-test.sh               # full lifecycle: DB swap → migrate → seed → serve → test → cleanup
+bash scripts/e2e-test.sh               # RECOMMENDED: swap .env → config/route:clear → migrate:fresh --seed → pwd user → serve :8001 → test → restore
+bash scripts/e2e-test.sh tests/e2e/auth    # single suite (fast loop)
+npx playwright test --reporter=list    # only if .env is already swapped and the server is already running
 ```
+
+> **Cleanup trap:** `scripts/e2e-test.sh` uses `set -e` **without** a `trap`, so a failing Playwright run exits before restore — `.env` stays swapped and the `:8001` server keeps running. Always run afterwards:
+> ```bash
+> [ -f .env.dev.bak ] && cp .env.dev.bak .env && rm -f .env.dev.bak
+> pgrep -f 'artisan serve --port=800[1]' | xargs -r kill
+> ```
+> (never `pkill -f 'artisan serve'` — it kills the shared dev server too)
+
+### Common failure → cause
+| Symptom | Cause | Fix |
+|---|---|---|
+| 11 tests fail on `نمایش…` / `باید مطابقت داشته باشند` — DOM shows `Showing…` / English validation text | `.env.e2e` has no `APP_LOCALE=fa` (example file lacks it) | add the three `APP_*LOCALE*` lines above |
+| `fixtures.ts` throws `<VAR> env var is required` or `.run-state.json not found` | `.env.e2e` missing / bare `npx playwright test` without global setup | create `.env.e2e`; run through `scripts/e2e-test.sh` |
+| `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE … TEMPLATE=template_postgis` |
+| `Executable doesn't exist … chromium` | browser not installed | `npx playwright install chromium` |
+| `.env` still the e2e one after a failed run | script aborted before restore | restore from `.env.dev.bak` manually (see cleanup above) |
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
 - `login(page, nCode?, password?)` — fills login form, waits for redirect
@@ -369,7 +493,16 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Hardware auth | Must be 302 → /login for guests; do NOT "fix" back to 200 |
 | Postgres sequence | After seeding with explicit IDs in tests, `SELECT setval(...)` to avoid dup keys |
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
-| Dead routes/components removed | `/`, `auth.register`, `glowingcard`, `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — do not recreate |
+| Leaflet.Draw featureGroup | `L.Control.Draw({ edit: { featureGroup } })` only enables edit/remove when `featureGroup.getLayers().length > 0` — `_checkDisabled` in `public/js/leaflet/leaflet.draw.js` adds `.leaflet-disabled` otherwise. A layer added straight to the map is invisible to the toolbar: put it in the FeatureGroup with `eachLayer(l => drawnItems.addLayer(l))` (individual layers, never the `L.GeoJSON` group — `updateGeojson()` only serialises `L.Polygon`) |
+| `units.boundary_id` is ON DELETE CASCADE | Deleting the `boundaries` row cascades the **unit** away with it. Always `$unit->update(['boundary_id' => null])` FIRST, then delete the boundary row. Reversed order silently deletes the unit and its subtree (issue #702) |
+| `Boundary::geojson` is a BARE geometry | `getGeojsonAttribute()` returns `ST_AsGeoJSON(...)` = `{"type":"MultiPolygon","coordinates":[…]}` — there is NO `geometry` key, so it is not a GeoJSON Feature. Hand `L.geoJSON` a Feature you build yourself and unwrap `MultiPolygon` → `Polygon` first, or `fitBounds` throws `Bounds are not valid` inside the `try`/`catch`, the layer never loads, and the draw toolbar stays disabled (issue #702) |
+| `getLatLngs()` nesting depth | A plain `L.Polygon` is `[ring]`; one built from a `MultiPolygon` is `[[ring]]` — three levels. `L.Edit.Poly` only reads two, so `editing.enabled()` returns `true` with **no error** while `.leaflet-editing-icon` count is `0` and the ring serialises as `[undefined, undefined, …]`. Normalise with `while (Array.isArray(ring[0])) ring = ring[0]` before mapping coords |
+| Leaflet is minified in E2E | `layer.constructor.name` is `"e"`, never `"Polygon"`. In Playwright assert `layer instanceof window.L.Polygon` — never match a constructor-name string. Keep the real names in the returned payload so a failure prints what it got |
+| `_mapGeojson` must be seeded on load | `saveMapBoundary()` calls `deleteBoundary()` whenever `_mapGeojson` is falsy, so a boundary that is never re-serialised on page load is destroyed by a plain "ذخیره" click. Call `updateGeojson()` right after loading the saved layer (issue #702) |
+| Playwright on map pages | Never `await networkidle` — Leaflet keeps fetching tiles so it never goes idle and the wait times out. Wait for `#unitMap` + `.leaflet-draw-edit-edit` instead |
+| `scripts/e2e-test.sh` has no `trap` | A failing run exits before restore, leaving `.env` swapped to `h_dashboard_e2e`. Recover with `cp .env.dev.bak .env && rm -f .env.dev.bak`, then kill `:8001` (use `kill $(pgrep -f 'artisan serve')` — `pkill -f` kills the calling shell) |
+| Rebuilding a lost `.env` | `.env` is gitignored. Rebuild from `.env-example-github` (the committed dev template) plus the secrets already resolved in `.env.e2e`, override `APP_URL=http://127.0.0.1:8000` and `DB_DATABASE=h_dashboard`, then drop any line whose value still contains `secrets.` (CI placeholders) or artisan dies with "environment file is invalid". Confirm with `php artisan about --only=environment` (expect `local`, locale `fa`). `parse_ini_file('.env')` fails here — unquoted parens — so scan lines with a regex instead |
+| Dead routes removed | `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — views never existed or were deleted |
 | Todo calendar | Must use `@script` block (not inline JS) for wire:navigate compatibility |
 | Person search | 500ms debounce applied — do not remove, causes Livewire update floods |
 | Toast auto-dismiss | Default 5s timeout; `timeout: 0` means never dismiss |
@@ -378,3 +511,22 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `PersianNormalizer` trait | Located at `app/Traits/PersianNormalizer.php`. Methods: `normalizeForSearch()` (Arabic→Persian + Unicode), `escapeLikeWildcards()`, `normalizeForQuery()` (normalize + escape combined) |
 | `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` catch `Throwable` and return 503, never 500 — do not remove try/catch |
 | Root `/` route | `Route::redirect('/', '/dashboard')` — NOT a Livewire component. The old `index` Livewire component is removed |
+| E2E locale | `.env.e2e` **must** set `APP_LOCALE=fa` — `.env.e2e.example` omits it, the app falls back to `en`, and 11 Persian-text specs fail (`Showing…`, English validation messages) |
+| E2E env lifecycle | `scripts/e2e-test.sh` swaps `.env` and, on a failing run, `set -e` skips restore — restore `.env.dev.bak` and kill the `:8001` server yourself |
+| `.env.e2e` / `h_dashboard_e2e` | Both gitignored/local-only; the e2e DB is `migrate:fresh --seed`ed every run — never point it at `h_dashboard` or `h_dashboard_test` |
+| API token abilities | `/api/*` needs `auth:sanctum` **and** a token ability; `ability:a,b` = ANY of them, `abilities:a,b` = ALL. Tests mint real tokens (`ApiAbilityTest`) |
+| Shared test trait | New Feature tests use `InteractsWithTestSetup` (`tests/Support/Concerns`) — `createUserWithUnit()`, `seedLookupTables()`, `resyncSequence()`, `assertNoNPlusOne()` |
+| `zabbix:sync` scheduling | Schedule dispatches `SyncZabbixJob` (queued) every 5 min; the `zabbix:sync` command itself is manual-only |
+| `descendantIds` CTE | Uses `UNION`, **not** `UNION ALL` — deliberate. `UNION ALL` does not dedupe, so a `parent_id` cycle recurses forever and hangs the connection (this query scopes every authenticated page via `AccessService`). Tested in `UnitModelTest` under a `statement_timeout` |
+| `@property` on models | All 24 Eloquent models carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
+| x-select option keys | MaryUI defaults to `optionValue='id'`/`optionLabel='name'`. Options keyed `value`/`label` need explicit `option-value="value" option-label="label"` or every `<option>` renders empty and the field looks blank (#706). Pass `:options="$this->someOptions()"` — a bare `$someOptions` is undefined in the view |
+| Persian search must fold the COLUMN, not the pattern | `normalizeForQuery()` rewrites the search term (ZWNJ U+200C → space; آ/أ/إ U+0622/0623/0625 → ا) but the stored text keeps the original code points, so `LIKE` stops matching — a unit named "حرفه" + ZWNJ + "ای" or "آموزش" becomes invisible to its own filter. Postgres `LIKE` has only `%`/`_` and **no character-class syntax**, so `[ … ]` is literal and "either spelling" is unexpressible. Use `PersianNormalizer::foldSeparatorsSql($column)` (nested `regexp_replace` applying the same `charMap()` as `normalize()`, plus one `translate()` applying `digitMap()` so Persian/Arabic-Indic digits fold to Latin exactly as `normalizeForSearch()` does) compared against `foldedTerm($input)`. Replace ZWNJ with a SPACE, never `''` — deleting it makes the regex eat the next letter ("حرفه" + ZWNJ + "ای" → "حرفهای") |
+| `LIKE '%term%'` is never index-seekable | Folding the column in `foldSeparatorsSql()` is not index-friendly, but `LIKE '%term%'` already forced a full scan, so this is not a regression to worry about |
+| Faker names can collide with a `LIKE` filter | `PersonFactory` draws `fa_IR` `firstNameMale()`. "علی" itself (3/3000) and names containing it like "ابوعلی" (13/3000) come up in ~0.4% of draws, so a test filtering "علی" with `assertDontSee` on its own row flakes under `executionOrder="random"`. Pin both names explicitly in the test — do NOT fix it in `PersonFactory`, other tests assert on the raw faker value |
+| Cache keys collide across tests | Postgres sequences are non-transactional, so `RefreshDatabase` restarts ids at 1 every test. `AccessService` keys on `accessible_units:v{version}:{user_id}:{session_unit_id}:{md5(baseIds)}` — byte-identical across tests, so a stale answer leaks from one test into the next. Put the flush in the base `TestCase::setUp()`, not in a test class — the seeder bump happens in the child's `setUp()`, which runs after `parent::setUp()`, so one flush there covers every class and needs no ordering rule. Never flush inside a test method |
+| Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
+| Testing a cache fix | Assert through the component or the service, never by poisoning a key and expecting it to be ignored — that tests your own poison, not the flush. A test that only passes in isolation is asserting `setUp`, not the fix; assert the behaviour a user sees |
+| Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists |
+| Eloquent chains vs PHPStan (no larastan) | `Eloquent\Builder` has `@mixin Query\Builder`, so a top-level `whereIn()`/`limit()`/`take()` resolves to the query builder and types the rest of the chain `Collection<int, stdClass>`. Start chains `Model::query()->with([...])` (both declared on Eloquent), put IN-filters inside `where(Closure)`, cap rows with `get()->take(N)` not `->limit(N)->get()`. Do NOT add `@method static whereIn()` to a model to silence this — it re-types every `Model::whereIn()` chain repo-wide and unmasks errors in unrelated files |
+| phpstan-baseline is line-keyed | Its entries embed line numbers, so inserting even a comment into a baselined file "unmatches" its entries (`ignore.unmatched` errors). After editing baselined code, run `vendor/bin/phpstan analyse --generate-baseline`, then verify `git diff phpstan-baseline.neon` shows **0 additions** — an addition means a real new error got suppressed |
+| `hr/org-node.blade.php` removed | Replaced by `unit/tree-node.blade.php` (issue #704). Tests split: `UnitTreeLivewireTest` (generic tree contract) + `HrOrgChartPageTest` (the HR page embedding it) |

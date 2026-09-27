@@ -15,7 +15,9 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 | `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
 | `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
 | `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per accessible unit |
-| `zabbix:sync` | every 5 min | `SyncZabbix` | Pulls Zabbix traffic/latest values |
+| `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
+
+> `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
 
 **Implemented-command details (was placeholder before 2026-08-29):**
 
@@ -26,7 +28,7 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 
 > All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
 
-`zabbix:sync` uses `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler. **Do not add `->timeout(N)` to the schedule** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
+The old `zabbix:sync` schedule entry used `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler; today the equivalent protection is dispatching `SyncZabbixJob` (queued) instead of running the command inline. **Do not add `->timeout(N)` to any schedule entry** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
 
 Other commands: `NormalizePersianText` (one-off Persian normalization), plus the standard `migrate`, `db:seed`, `queue:listen` (see `composer.json` `dev` script).
 
@@ -34,7 +36,9 @@ Other commands: `NormalizePersianText` (one-off Persian normalization), plus the
 
 ## API Reference
 
-All `/api/*` routes require `auth:sanctum` (Bearer token) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
+All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
+
+**Abilities:** read groups use `ability:*` (Sanctum: ANY of the listed abilities), write groups use `abilities:*` (ALL) — `units:read|write`, `traffic:read`, `hardware:read|write`, `tickets:read|write`, `reports:read`, `persons:read|write`, `todos:read|todos:write`, `hr:read`, `notifications:read`, `gis:read`. Several write groups *also* require a Spatie `role_or_permission` (`organization`, `manage_hardware`, `manage_personnel`, `calendar`, `view_hr_dashboard`, `map`) — both must pass. The full per-route table lives in **AGENTS.md → "API Token Abilities"**; tokens are scoped and revoked on password change (#678), and API tests mint real Bearer tokens (`tests/Feature/ApiAbilityTest.php`).
 
 ### Hardware CRUD (`/api/hardware`)
 
@@ -99,6 +103,21 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 | GET | `/api/units/{unit}` | Show unit with children |
 | PUT | `/api/units/{unit}` | Update |
 | DELETE | `/api/units/{unit}` | Delete (cascades if children exist) |
+
+### Units Export (`/units/export`, issue #701)
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/units/export` | xlsx download of the caller's accessible units |
+
+- **Access-scoped** like the rest of the app: rows come from `UnitScopedRequest::accessibleIds()` (own unit + descendants). An empty scope yields a header-only file, not an error.
+- **Format — one row per unit** (flat table, not one column per hierarchy level): `شناسه`, `نام واحد`, `نوع واحد`, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. The breadcrumb (`وزارت بهداشت > دانشگاه > … > واحد`) carries the hierarchy so the sheet stays sortable in Excel.
+- **Ordering:** depth-first, parents before children; siblings alphabetically. Ancestors above the caller's scope still name the path (names only — the tree page renders them anyway).
+- **Inactive units are included** with وضعیت = `غیرفعال` (visibility, not hidden filtering).
+- **RTL:** sheet direction set via `WithEvents` → `AfterSheet` → `setRightToLeft(true)`.
+- **Naming:** `units-Ymd-His.xlsx`. Button is a plain `<a href>` (Livewire cannot return file downloads) in the `/units` page header.
+- `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, gated by `role_or_permission:organization`.
+- ⚠️ `buildHierarchy()` guards against a `parent_id` cycle, but note `Unit::descendantIds()` (used for scoping) uses `WITH RECURSIVE ... UNION ALL` and will **not terminate** on an active-node cycle — a data problem, not a code one.
 
 ### Ticket CRUD (`/api/tickets`)
 
@@ -197,10 +216,22 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - **Map container:** shared `maps.map` component renders `#map` with `h-[80lvh]`; pages must NOT wrap it in a Bootstrap `container` class (restricts width) — use `relative` so overlays position correctly; `invalidateSize()` runs after init + on resize so Leaflet never locks a half-width
 - **Gotchas:** county map query joins `boundaries` — always qualify `regions.id` (ambiguous column error on pgsql otherwise)
 
+### Zabbix Device Management (`/it/zabbix-devices`) — issue #698
+
+- **Why:** `/it/networks` (25 traffic charts) and `/it/wireless` (14 gauges) baked Zabbix item IDs into the Blade components — retargeting a device after a Zabbix re-discovery meant a code change + deploy.
+- **Table `zabbix_devices`:** `type` (`network` | `wireless`), `out_item_id` / `in_item_id` (network pair), `signal_item_id` / `frequency_item_id` / `response_item_id` (wireless trio), `initial_duration` (default 3600), `min` / `max` (gauge range, wireless defaults -85 / -45), `sort_order`, `is_active`.
+- **Model `App\Models\ZabbixDevice`:** scopes `active()`, `ordered()`, `ofType()`; `itemIds()` returns every non-empty item ID; `saved` / `deleted` bump the `zabbix_devices` version counter.
+- **Seed:** `database/seeders/ZabbixDeviceSeeder` copies the 39 formerly hardcoded rows verbatim (25 network + 14 wireless) and runs from `DatabaseSeeder`; re-running it is idempotent.
+- **Display pages** read `ZabbixDevice::query()->active()->ofType(...)->ordered()` through `CacheInvalidationService::remember('zabbix_devices', …, 5 min)` and map to the exact array shape the child components already take — `it.network-traffic-chart` and `it.multi-gauge` are untouched. When the table is empty they render «دستگاهی برای نمایش ثبت نشده است.»
+- **Permissions:** viewing stays behind `map`; managing requires the new `manage_zabbix` permission (created in `PermissionSeeder`, granted to `admin` by `RoleSeeder`). Guest → 302 `/login`, authenticated without the permission → 403.
+- **«تست اتصال»** per row calls `ZabbixService::getLatestValues($device->itemIds())`; missing item IDs and any `Throwable` become an inline red badge (`connectionResults`) — never a 500, same rule as `TrafficController`.
+- **Cache namespace:** `zabbix_devices`, registered in `PruneStaleCache::NAMESPACES`.
+- **Tests:** `tests/Feature/ZabbixDeviceTest.php` (22) and e2e `tests/e2e/it/monitoring.spec.ts` (7).
+
 ### Other Pages
 
 - Dashboard, users management, units (chart/map), roles/permissions, settings, profile, notifications, todos, tickets, tools (Zabbix), reports, activity log, kargozini (HR), IT monitoring
-- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Components under `app/Livewire/Hr/`, views under `resources/views/livewire/hr/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
+- **HR Dashboard** (`/hr-dashboard`, permission `view_hr_dashboard`): personnel stats (by unit/semat/tahsil/estekhdam/radif) + vacancies; **Org Chart** (`/hr/org-chart`): recursive unit tree with expand/collapse, personnel counts, empty-unit badges. Since #704 the tree itself is the reusable `unit.tree` component (views under `resources/views/livewire/unit/`, queries in `App\Services\UnitTreeService`); the HR page contributes only the badge view (`resources/views/livewire/hr/personnel-badge.blade.php`) and the `unit-selected` detail panel. Page and badge views live under `resources/views/livewire/hr/`, the shared tree under `resources/views/livewire/unit/`. Aggregations cached 5 min per org scope (`hr:dashboard:*`, `hr:orgchart:*`).
 
 ### Help System (راهنما)
 
@@ -342,7 +373,7 @@ php artisan db:seed --force
 
 Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** named `h_dashboard_test` (DB name is hard-coded; `DB_USERNAME`/`DB_PASSWORD` are NOT set in phpunit.xml, so they fall back to `.env` and the local run uses the `h_dashboard` role). The suite is **hermetic** — no Redis dependency (see step 3). Getting the environment right is the most common failure mode — follow these steps exactly.
 
-> **✅ Working as of 2026-09-02:** **`composer test`** is the one-command way to run the full suite (**928 passed**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
+> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way to run the full suite (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
 
 #### 1. Prerequisites (services must be up)
 ```bash
@@ -396,7 +427,7 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 - **Why `XDEBUG_MODE=off`:** Xdebug loads in `develop` mode; when Laravel's date validation (`after_or_equal:start_at` etc.) throws its *expected* parse exception, Xdebug tries to attach a `$xdebug_message` dynamic property to `DateMalformedStringException`, PHP 8.3 turns that into an `Error`, and it escapes Laravel's `catch (Exception)` → HTTP 500. Symptom: `Failed to parse time string (start_at) … timezone could not be found in the database` plus `Cannot create dynamic property DateMalformedStringException::$xdebug_message`. Not a code bug — env only.
 - **No pcov needed for normal runs** — `phpunit.xml` deliberately has **no `<coverage>` block** (see failure table below). Request coverage explicitly when you want it: `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` (what CI runs, with pcov installed).
 - **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
-- Expected: **928 passed** (0 skipped).
+- Expected: **1461 passed, 2 risky** (0 skipped) — `risky` = tests with no assertions (non-blocking).
 
 #### Common failure → cause
 
@@ -410,6 +441,17 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 | postgres/secret/h_dashboard_test auth fail | test DB/role missing | Step 2 |
 | bare `vendor/bin/pest` → usage text | no path argument | pass `tests/` |
 | Parallel run: ~35 flaky failures (`PermissionDoesNotExist`, FK violations on `model_has_permissions`) | spatie permission cache shared across workers — only relevant if `CACHE_STORE=array` got dropped from phpunit.xml again | Keep `<env name="CACHE_STORE" value="array" force="true"/>` in phpunit.xml |
+
+### E2E Testing (Playwright)
+
+**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Full setup, credentials, and failure table: **AGENTS.md → "E2E Testing (Playwright)"**. Essentials:
+
+- Always run through the lifecycle script: `bash scripts/e2e-test.sh [optional spec paths]` — swaps `.env` ← `.env.e2e`, `config:clear` + `route:clear`, `migrate:fresh --seed` on `h_dashboard_e2e`, creates the password-mutation user, serves on `:8001`, runs Playwright, restores `.env`.
+- **`.env.e2e` is gitignored — create it locally from `.env.e2e.example` and fill `APP_KEY`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_PASSWORD`.** It **must** carry `APP_LOCALE=fa`: the example file omits it, `config/app.php` falls back to `en`, and **11 Persian-text specs fail** (`Showing 1 to 20 of 318 results`, English validation messages instead of `نمایش…` / `باید مطابقت داشته باشند`).
+- `h_dashboard_e2e` is created once from `TEMPLATE=template_postgis` and **wiped every run** — never point it at `h_dashboard` or `h_dashboard_test`.
+- Required vars (no fallbacks — `tests/e2e/shared/fixtures.ts` throws): `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
+- On a failing run the script's `set -e` skips restore: `cp .env.dev.bak .env`, delete the backup, and kill only the `:8001` server (`pgrep -f 'artisan serve --port=800[1]'`).
+- One-time per machine: `npx playwright install chromium`.
 
 ### Code Intelligence (CodeGraph)
 
@@ -439,11 +481,13 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner): pulls `/home/boxd/h-dashboard`, clears views/config/routes cache, runs `php artisan optimize`, reloads apache2.
+`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with two jobs:
-- **Tests & Coverage (blocking)** — PHP **8.5** (matches composer.lock; Symfony 8.1 requires ≥8.4), service containers `postgis/postgis:16-3.4` (:5432) + passwordless `redis`, builds frontend assets (`npm ci && npm run build`), rewrites `.env.testing` to match the containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`** — Laravel 13 ignores legacy `CACHE_DRIVER`; a shared redis store cross-pollutes spatie's permission cache across parallel workers), `key:generate --env=testing`, `migrate --env=testing`, then clears config/routes/views (guard against the stale-`routes-v7.php` Livewire-hash trap above), then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov.
-- **Mutation Testing (non-blocking, `continue-on-error: true`)** — all test files have `@covers` declarations (added 2026-08-31) so mutations are scoped to tested code via `--covered-only`. Previously ran `--everything --covered-only` which was too slow (30 min timeout). The mutation job may still fail due to lookup-table id collisions — treat failures as informational until the job passes consistently.
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
+- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)
+- **Tests & Coverage (blocking, timeout 10 min)** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov
+- **Mutation Testing (non-blocking, `continue-on-error: true`)** — `--covered-only`, treat failures as informational
+- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
 
 ### Storage Permissions (gotcha)
 
@@ -456,3 +500,4 @@ chown -R boxd:www-data storage/framework && chmod -R 775 storage/framework
 php artisan view:clear
 ```
 
+---

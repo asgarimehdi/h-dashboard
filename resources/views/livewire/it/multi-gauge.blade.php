@@ -37,6 +37,18 @@ return new class extends Component {
 };
 ?>
 
+{{--
+    نمایشی (Presentational) — این گیج دیگر خودش درخواست نمی‌فرستد.
+
+    قبلاً هر گیج یک `fetch()` مستقل به `/api/zabbix/multi-latest` می‌زد و هر ۳۰ ثانیه
+    تکرارش می‌کرد. با ۱۴ دستگاه بی‌سیم یعنی ۲۸ درخواست در دقیقه — و چون
+    `x-init="init()"` کنار init خودکار Alpine اجرا می‌شد، بار اول **دو برابر**
+    می‌شد؛ هر دو با هم از سقف `throttle:api-user` (۶۰ درخواست در دقیقه برای کل
+    کاربر) عبور می‌کردند و صفحه بعد از چند ثانیه «Too Many Attempts» می‌داد.
+
+    حالا صفحه `it/wireless` یک poller واحد دارد که همه آیتم‌ها را با **یک** درخواست
+    می‌گیرد و نتیجه را در `window.zabbixGauges` می‌گذارد؛ هر گیج فقط مشترک آن است.
+--}}
 <div x-data="window.signalGauge(
     '{{ $signalItemId }}',
     '{{ $frequencyItemId }}',
@@ -48,7 +60,6 @@ return new class extends Component {
     '{{ $responseTimeUnit }}',
     '{{ $title }}'
 )"
-     x-init="init(); interval = setInterval(() => fetchValues(), 30000)"
      class="flex flex-col items-center p-4 border rounded-lg shadow-sm bg-base-100 w-full">
 
     <!-- عنوان -->
@@ -61,7 +72,7 @@ return new class extends Component {
                     stroke-opacity="0.2" class="text-base-content/20"/>
             <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="8"
                     stroke-linecap="round" :stroke-dasharray="circumference"
-                    :stroke-dashoffset="dashOffset" 
+                    :stroke-dashoffset="dashOffset"
                     :class="responseTimeColorClass + ' transition-all duration-500'"/>
         </svg>
         <div class="absolute inset-0 flex flex-col items-center justify-center">
@@ -99,6 +110,12 @@ return new class extends Component {
 
 @script
 <script>
+    // وضعیت مشترک را هر کسی که زودتر اجرا شود می‌سازد؛ گیج‌ها ممکن است پیش از
+    // poller صفحه ساخته شوند، پس ساختن شیء باید در هر دو طرف idempotent باشد.
+    window.zabbixGauges = window.zabbixGauges || {
+        values: {}, error: null, loading: false, loaded: false, subscribers: [], timer: null,
+    };
+
     // تعریف تابع در window برای دسترسی سراسری
     window.signalGauge = function(signalItemId, frequencyItemId, responseTimeItemId, min, max, unit, frequencyUnit, responseTimeUnit, title) {
         return {
@@ -111,11 +128,34 @@ return new class extends Component {
             responseTime: null,
             loading: false,
             error: null,
-            interval: null,
             circumference: 2 * Math.PI * 45,
+            bound: null,
 
             init() {
-                this.fetchValues();
+                const state = window.zabbixGauges;
+                this.bound = this.apply.bind(this);
+                state.subscribers.push(this.bound);
+                this.apply();
+            },
+
+            /** مقادیر را از وضعیت مشترک می‌خواند؛ تنها جایی که به داده وصل می‌شود. */
+            apply() {
+                const state = window.zabbixGauges;
+                const values = state.values || {};
+
+                this.loading = state.loading;
+                this.signal = values[this.signalItemId] ?? null;
+                this.frequency = values[this.frequencyItemId] ?? null;
+                this.responseTime = values[this.responseTimeItemId] ?? null;
+
+                this.error = state.error;
+
+                // تا وقتی اولین fetch تمام نشده «داده‌ای یافت نشد» زودهنگام است؛
+                // قبلاً در این حالت فقط «—» نشان داده می‌شد.
+                if (!this.error && state.loaded &&
+                    this.signal === null && this.frequency === null && this.responseTime === null) {
+                    this.error = 'داده‌ای یافت نشد';
+                }
             },
 
             get displaySignal() {
@@ -146,53 +186,11 @@ return new class extends Component {
                 return this.circumference - (percent / 100) * this.circumference;
             },
 
-            async fetchValues() {
-                if (this.loading) return;
-                this.loading = true;
-                this.error = null;
-                try {
-                    const itemIds = [this.signalItemId, this.frequencyItemId, this.responseTimeItemId];
-                    const params = new URLSearchParams();
-                    itemIds.forEach((id, index) => params.append(`item_ids[${index}]`, id));
-
-                    const token = localStorage.getItem('token');
-                    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-                    const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
-
-                    if (!response.ok) {
-                        let errorMsg = `خطای HTTP ${response.status}`;
-                        try {
-                            const text = await response.text();
-                            try {
-                                const errorData = JSON.parse(text);
-                                if (errorData.message) errorMsg = errorData.message;
-                            } catch {
-                                errorMsg = text.substring(0, 100);
-                            }
-                        } catch (e) {}
-                        throw new Error(errorMsg);
-                    }
-
-                    const data = await response.json();
-
-                    this.signal = data[this.signalItemId] ?? null;
-                    this.frequency = data[this.frequencyItemId] ?? null;
-                    this.responseTime = data[this.responseTimeItemId] ?? null;
-
-                    if (this.signal === null && this.frequency === null && this.responseTime === null) {
-                        this.error = 'داده‌ای یافت نشد';
-                    }
-                } catch (e) {
-                    console.error('Error fetching values:', e);
-                    this.error = e.message || 'خطا در دریافت';
-                } finally {
-                    this.loading = false;
-                }
-            },
-
             destroy() {
-                if (this.interval) clearInterval(this.interval);
+                const state = window.zabbixGauges;
+                if (!state || !this.bound) return;
+                const at = state.subscribers.indexOf(this.bound);
+                if (at !== -1) state.subscribers.splice(at, 1);
             }
         };
     };

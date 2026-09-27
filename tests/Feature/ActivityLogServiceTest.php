@@ -3,54 +3,33 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
-use App\Models\Person;
 use App\Models\Todo;
-use App\Models\Unit;
-use App\Models\User;
 use App\Services\ActivityLogService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(ActivityLogService::class);
 
 class ActivityLogServiceTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-    }
-
-    protected function createUserWithUnit(): User
-    {
-        $this->unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $this->unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     // --- log ---
 
     public function test_log_creates_activity_log_entry(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLogService::log('test_action', description: 'تست لاگ');
@@ -65,7 +44,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_log_records_subject_when_provided(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create(['title' => 'وظیفه تست', 'unit_id' => $this->unit->id]);
@@ -78,7 +57,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_log_records_old_and_new_values(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLogService::log(
@@ -94,7 +73,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_log_records_ip_and_user_agent(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $request = Request::create('/test', 'GET', [], [], [], [
@@ -112,7 +91,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_created_logs_creation_action(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create(['title' => 'وظیفه جدید', 'unit_id' => $this->unit->id]);
@@ -125,7 +104,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_created_uses_custom_description(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create(['title' => 'وظیفه', 'unit_id' => $this->unit->id]);
@@ -139,7 +118,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_updated_logs_update_action_with_changes(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create(['title' => 'عنوان اصلی', 'unit_id' => $this->unit->id]);
@@ -155,7 +134,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_deleted_logs_deletion_action(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create(['title' => 'وظیفه حذف', 'unit_id' => $this->unit->id]);
@@ -168,7 +147,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_deleted_uses_custom_description(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $todo = Todo::factory()->create(['title' => 'وظیفه', 'unit_id' => $this->unit->id]);
@@ -182,7 +161,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_login_creates_login_log(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLogService::login();
@@ -194,7 +173,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_logout_creates_logout_log(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLogService::logout();
@@ -206,7 +185,7 @@ class ActivityLogServiceTest extends TestCase
 
     public function test_login_with_custom_description(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $this->unit] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $log = ActivityLogService::login('ورود از موبایل');

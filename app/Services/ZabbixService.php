@@ -99,6 +99,26 @@ class ZabbixService
         return $data;
     }
 
+    /**
+     * تست اتصال واقعی به Zabbix API — version info بازمی‌گردونه.
+     *
+     * @return array{version: string}
+     *
+     * @throws \Exception
+     */
+    public function testApiConnection(): array
+    {
+        $response = $this->request('apiinfo.version', []);
+
+        $version = $response['result'] ?? null;
+
+        if (! is_string($version)) {
+            throw new \Exception('Zabbix API returned unexpected version response');
+        }
+
+        return ['version' => $version];
+    }
+
     public function getLatestValues(array $itemIds): array
     {
         if (empty($itemIds)) {

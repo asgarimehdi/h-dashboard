@@ -3,15 +3,52 @@
 namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @property int $id
+ * @property int|null $region_id
+ * @property int|null $parent_id
+ * @property string $name
+ * @property int|null $unit_type_id
+ * @property float|null $lat
+ * @property float|null $lng
+ * @property string|null $description
+ * @property int|null $boundary_id
+ * @property bool $is_active
+ * @property bool $can_receive_tickets
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property mixed $geom
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, static> $children
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Person> $person
+ * @property-read UnitType|null $unitType
+ * @property-read Region|null $region
+ * @property-read static|null $parent
+ * @property-read Boundary|null $boundary
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Ticket> $tickets
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Todo> $todos
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, User> $assignedUsers
+ * @property Collection<int, static> $childrenRecursive
+ *
+ * @method static Builder<static> where(string $column, mixed $value)
+ * @method static Builder<static> withinBounds(float $minLat, float $maxLat, float $minLng, float $maxLng)
+ * @method static Builder<static> nearby(float $lat, float $lng, float $radiusKm = 10)
+ * @method static Builder<static> containingPoint(float $lat, float $lng)
+ * @method static Builder<static> intersectsBoundary(string $wktPolygon)
+ * @method static Builder<static> subtree(int $unitId)
+ * @method static Builder<static> withPersonnelCount()
+ * @method static Builder<static> withinDistance(float $lat, float $lng, float $radiusMeters)
+ */
 class Unit extends Model
 {
     use HasFactory;
@@ -76,10 +113,74 @@ class Unit extends Model
         return $this->belongsTo(Boundary::class, 'boundary_id');
     }
 
-    // برای بارگذاری تمام سطوح زیرمجموعه به صورت خودکار
-    public function childrenRecursive(): HasMany
+    /**
+     * Build full tree structure from a flat collection using a single CTE query.
+     * Replaces the N+1 recursive eager loading pattern (childrenRecursive).
+     *
+     * @param  array<int>  $rootIds
+     * @param  array<int>|null  $accessibleIds  If null, no scope filter applied
+     * @return Collection<int, static>
+     */
+    public static function buildTree(array $rootIds, ?array $accessibleIds = null): Collection
     {
-        return $this->children()->with('childrenRecursive');
+        if (empty($rootIds)) {
+            return collect();
+        }
+
+        // Single CTE: fetch all descendants of root units (inclusive)
+        $allIds = self::descendantIds($rootIds)->all();
+
+        if (! empty($accessibleIds)) {
+            $allIds = array_values(array_intersect($allIds, $accessibleIds));
+        }
+
+        if (empty($allIds)) {
+            return collect();
+        }
+
+        // Single query: load all relevant units with their types
+        $models = self::query()
+            ->with('unitType')
+            ->whereIn('units.id', $allIds)
+            ->get();
+
+        /** @var array<int, static> $allUnits */
+        $allUnits = [];
+        /** @var array<int, list<static>> $childrenMap */
+        $childrenMap = [];
+        foreach ($models as $unit) {
+            $allUnits[$unit->id] = $unit;
+        }
+
+        // Build adjacency list
+        foreach ($allUnits as $unit) {
+            $parentId = $unit->parent_id;
+            if ($parentId !== null && isset($allUnits[$parentId])) {
+                $childrenMap[$parentId][] = $unit;
+            }
+        }
+
+        // Recursive closure to attach children
+        $attachChildren = function (Unit $unit) use (&$attachChildren, $childrenMap): void {
+            $unit->childrenRecursive = collect($childrenMap[$unit->id] ?? []);
+            foreach ($unit->childrenRecursive as $child) {
+                $attachChildren($child);
+            }
+        };
+
+        // Build root collection
+        $roots = collect();
+        foreach ($rootIds as $rootId) {
+            if (isset($allUnits[$rootId])) {
+                $roots[] = $allUnits[$rootId];
+            }
+        }
+
+        foreach ($roots as $root) {
+            $attachChildren($root);
+        }
+
+        return $roots;
     }
 
     public function assignedUsers(): BelongsToMany
@@ -159,6 +260,12 @@ class Unit extends Model
 
     /**
      * Run the recursive CTE query for descendant IDs.
+     *
+     * UNION (not UNION ALL) is load-bearing: the set operator dedupes, so a
+     * parent_id cycle terminates instead of recursing forever. UNION ALL on a
+     * cyclic parent_id hangs the connection — parent_id is user-editable and
+     * not constrained by the database, so the web form's type guard is not the
+     * only possible writer.
      */
     protected static function recursiveDescendantQuery(array $ids): Collection
     {
@@ -167,7 +274,7 @@ class Unit extends Model
         $results = DB::select("
             WITH RECURSIVE unit_tree AS (
                 SELECT id FROM units WHERE id IN ({$placeholders})
-                UNION ALL
+                UNION
                 SELECT u.id FROM units u
                 INNER JOIN unit_tree ut ON u.parent_id = ut.id
                 WHERE u.is_active = true

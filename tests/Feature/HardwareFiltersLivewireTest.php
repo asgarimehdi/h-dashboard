@@ -12,12 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Hardware::class);
 
 class HardwareFiltersLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -25,31 +27,7 @@ class HardwareFiltersLivewireTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync sequences after explicit inserts
-        DB::statement("SELECT setval('tahsils_id_seq', COALESCE((SELECT MAX(id) FROM tahsils), 1))");
-        DB::statement("SELECT setval('estekhdams_id_seq', COALESCE((SELECT MAX(id) FROM estekhdams), 1))");
-        DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
-        DB::statement("SELECT setval('radifs_id_seq', COALESCE((SELECT MAX(id) FROM radifs), 1))");
-    }
-
-    protected function createUserWithUnit(string $permission = 'manage_hardware'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+        $this->seedLookupTables();
     }
 
     protected function createHardwareForUser(User $user, Unit $unit, array $overrides = []): Hardware
@@ -69,7 +47,7 @@ class HardwareFiltersLivewireTest extends TestCase
 
     protected function actingAsHardwareUser(): array
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -85,7 +63,7 @@ class HardwareFiltersLivewireTest extends TestCase
 
     public function test_unauthorized_user_gets_403(): void
     {
-        $data = $this->createUserWithUnit('manage_users');
+        $data = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($data['user']);
         $this->get('/hardware')->assertStatus(403);
     }
@@ -282,7 +260,11 @@ class HardwareFiltersLivewireTest extends TestCase
         $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'محمد', 'l_name' => 'احمدی',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit2->id,
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $unit2->id,
         ]);
         $user2 = User::create(['n_code' => $nCode2, 'password' => Hash::make('password')]);
         $user2->givePermissionTo('manage_hardware');
@@ -298,8 +280,11 @@ class HardwareFiltersLivewireTest extends TestCase
             'type' => 'PC',
         ]);
 
+        // Get the first user's person name for filtering
+        $person1 = Person::where('n_code', $data['user']->n_code)->first();
+
         Livewire::test('hardware.index')
-            ->set('filterPerson', 'تست')
+            ->set('filterPerson', mb_substr($person1->f_name, 0, 3))
             ->assertSee('PC-Ali')
             ->assertDontSee('PC-Mohammad');
     }
@@ -307,24 +292,26 @@ class HardwareFiltersLivewireTest extends TestCase
     public function test_filter_unit_normalizes_search(): void
     {
         $data = $this->actingAsHardwareUser();
+        // Use a known unit name for the filter
+        $data['unit']->update(['name' => 'واحد تست فیلتر']);
         $this->createHardwareForUser($data['user'], $data['unit'], [
             'pc_name' => 'PC-Main',
         ]);
 
         Livewire::test('hardware.index')
-            ->set('filterUnit', 'واحد تست')
+            ->set('filterUnit', 'واحد تست فیلتر')
             ->assertSee('PC-Main');
     }
 
     public function test_filter_semat_normalizes_search(): void
     {
         $data = $this->actingAsHardwareUser();
-        // Create semat row
-        DB::table('semats')->insert(['id' => 2, 'name' => 'پزشک']);
+        // Create an additional semat row for this test
+        $semat2 = DB::table('semats')->insertGetId(['name' => 'پزشک']);
         DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
 
-        $person = Person::where('n_code', $data['n_code'])->first();
-        $person->update(['s_id' => 2]);
+        $person = Person::where('n_code', $data['user']->n_code)->first();
+        $person->update(['s_id' => $semat2]);
 
         $this->createHardwareForUser($data['user'], $data['unit'], [
             'pc_name' => 'PC-Doc',

@@ -12,12 +12,14 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Mockery;
+use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
 covers(TrafficController::class);
 
 class TrafficApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -49,7 +51,8 @@ class TrafficApiTest extends TestCase
     public function test_traffic_requires_out_item_id(): void
     {
         $user = $this->createUser();
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?in_item_id=2');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $response = $this->apiGet('/api/zabbix/traffic?in_item_id=2', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['out_item_id']);
@@ -58,7 +61,8 @@ class TrafficApiTest extends TestCase
     public function test_traffic_requires_in_item_id(): void
     {
         $user = $this->createUser();
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=1');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=1', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['in_item_id']);
@@ -67,8 +71,9 @@ class TrafficApiTest extends TestCase
     public function test_traffic_returns_out_and_in_data(): void
     {
         $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200');
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['out', 'in']);
@@ -77,8 +82,9 @@ class TrafficApiTest extends TestCase
     public function test_traffic_respects_duration_parameter(): void
     {
         $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
 
-        $response = $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200&duration=7200');
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200&duration=7200', $token);
 
         $response->assertStatus(200);
     }
@@ -86,9 +92,9 @@ class TrafficApiTest extends TestCase
     public function test_traffic_caches_results(): void
     {
         $user = $this->createUser();
-
-        $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200');
-        $this->actingAs($user, 'sanctum')->getJson('/api/zabbix/traffic?out_item_id=100&in_item_id=200');
+        $token = $this->createApiToken($user, ['traffic:read']);
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
         $this->assertNotEmpty(Cache::get('traffic_100_200_3600'));
     }

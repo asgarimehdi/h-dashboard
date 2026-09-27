@@ -163,3 +163,104 @@ it('general search matches the full person name (f_name + l_name)', function () 
     // The combined name must surface the matching hardware row
     expect($component->html())->toContain('PC-MEHDI-01');
 });
+
+it('filterType escapes LIKE wildcards — percent does not match all', function () {
+    $unit = Unit::create(['name' => 'Unit A']);
+    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
+    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
+    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
+    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
+        't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
+        'u_id' => $unit->id,
+    ]);
+    Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-1', 'type' => 'laptop']);
+    Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-2', 'type' => 'desktop']);
+
+    $user = makeUserInUnit($unit);
+
+    // Searching for '%' should match only literal '%', not everything
+    $component = Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->set('filterType', '%');
+
+    // Neither laptop nor desktop should match a literal '%'
+    expect($component->html())->not->toContain('PC-1');
+    expect($component->html())->not->toContain('PC-2');
+});
+
+it('filterType escapes LIKE wildcards — underscore does not match single char', function () {
+    $unit = Unit::create(['name' => 'Unit A']);
+    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
+    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
+    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
+    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
+        't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
+        'u_id' => $unit->id,
+    ]);
+    Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-1', 'type' => 'laptop']);
+
+    $user = makeUserInUnit($unit);
+
+    // '_' as filter should not match 'laptop' (single-char wildcard)
+    $component = Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->set('filterType', '_');
+
+    expect($component->html())->not->toContain('PC-1');
+});
+
+it('filterOs escapes LIKE wildcards — percent does not match all', function () {
+    $unit = Unit::create(['name' => 'Unit A']);
+    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
+    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
+    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
+    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
+        't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
+        'u_id' => $unit->id,
+    ]);
+    Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-1', 'type' => 'pc', 'os' => 'Windows 11']);
+    Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-2', 'type' => 'pc', 'os' => 'Linux']);
+
+    $user = makeUserInUnit($unit);
+
+    $component = Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->set('filterOs', '%');
+
+    // Should not match all — literal % is escaped
+    expect($component->html())->not->toContain('PC-1');
+    expect($component->html())->not->toContain('PC-2');
+});
+
+it('filterUnit escapes LIKE wildcards — percent does not match all', function () {
+    $unit = Unit::create(['name' => 'Test Unit']);
+    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
+    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
+    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
+    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
+        't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
+        'u_id' => $unit->id,
+    ]);
+    Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-1', 'type' => 'pc']);
+
+    $user = makeUserInUnit($unit);
+
+    $component = Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->set('filterUnit', '%');
+
+    // '%' is escaped, so it won't match 'Test Unit'
+    expect($component->html())->not->toContain('PC-1');
+});

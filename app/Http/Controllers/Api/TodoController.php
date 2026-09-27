@@ -62,6 +62,7 @@ class TodoController extends Controller
             'end_at' => $validated['end_at'] ?? null,
             'is_completed' => $validated['is_completed'] ?? false,
             'unit_id' => $unitId,
+            'user_id' => $user->id,
         ]);
 
         return response()->json([

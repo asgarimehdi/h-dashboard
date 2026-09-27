@@ -27,7 +27,7 @@ test.describe('organization units', () => {
   });
 
   test('shows total units in pagination', async ({ page }) => {
-    await expect(page.locator('.mary-table-pagination')).toContainText('Showing');
+    await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
   });
 
   test('search filters the list', async ({ page }) => {

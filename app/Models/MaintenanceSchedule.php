@@ -2,9 +2,25 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $unit_id
+ * @property string $title
+ * @property string $frequency
+ * @property int $recurrence_interval
+ * @property Carbon|null $last_generated_at
+ * @property Carbon|null $next_due_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Unit|null $unit
+ *
+ * @method static Builder<static> where(string $column, mixed $value)
+ */
 class MaintenanceSchedule extends Model
 {
     protected $fillable = [

@@ -371,6 +371,12 @@ return new class extends Component {
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
             <x-button class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
+            <a href="{{ route('units.export') }}"
+               class="btn btn-outline btn-sm"
+               title="خروجی اکسل واحدهای در دسترس">
+                <x-icon name="o-arrow-down-tray" class="w-5 h-5"/>
+                <span class="hidden 2xl:inline">خروجی اکسل</span>
+            </a>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."

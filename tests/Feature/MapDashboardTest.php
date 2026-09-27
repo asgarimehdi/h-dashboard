@@ -2,74 +2,25 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Unit::class);
 
 class MapDashboardTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
-
-    protected $tId;
-
-    protected $eId;
-
-    protected $sId;
-
-    protected $rId;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Session::flush();
-
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-    }
-
-    private function createAuthenticatedUser(): User
-    {
-        $unit = Unit::create([
-            'name' => 'Test Unit',
-            'lat' => 36.669343,
-            'lng' => 48.47163,
-        ]);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-
-        $person = Person::create([
-            'n_code' => $nCode,
-            'f_name' => 'Test',
-            'l_name' => 'User',
-            't_id' => $this->tId,
-            'e_id' => $this->eId,
-            's_id' => $this->sId,
-            'r_id' => $this->rId,
-            'u_id' => $unit->id,
-        ]);
-
-        $user = User::create([
-            'n_code' => $nCode,
-            'password' => Hash::make('password'),
-        ]);
-
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        Permission::firstOrCreate(['name' => 'map', 'guard_name' => 'web']);
-        $user->givePermissionTo('map');
-        Session::put('current_unit_id', $unit->id);
-
-        return $user;
+        $this->seed(PermissionSeeder::class);
+        $this->seedLookupTables();
     }
 
     /** @test */
@@ -83,10 +34,9 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_authenticated_user_can_view_map_page(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $response = $this->actingAs($user)->get('/map');
-
         $response->assertStatus(200);
         $response->assertSee('map-container');
     }
@@ -94,7 +44,8 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_map_dashboard_mounts_with_token(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $unit->update(['lat' => 36.669343, 'lng' => 48.47163]);
 
         Livewire::actingAs($user)
             ->test('map.map-dashboard')
@@ -114,7 +65,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_on_map_moved_updates_coordinates(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
@@ -134,7 +85,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_on_layer_toggled_toggles_layer(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
@@ -158,7 +109,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_on_filter_changed_updates_filters(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
@@ -177,7 +128,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_on_filter_changed_only_updates_known_properties(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
@@ -196,22 +147,19 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_on_unit_selected_dispatches_event(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
 
         $component->dispatch('unitSelected', unitId: 42);
-
         $component->assertDispatched('showUnitDetails');
     }
 
     /** @test */
     public function test_load_unit_details_returns_unit_data(): void
     {
-        $user = $this->createAuthenticatedUser();
-
-        $unit = Unit::where('name', 'Test Unit')->first();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
 
         // Add a child unit
         Unit::create([
@@ -236,7 +184,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_load_unit_details_returns_error_for_invalid_id(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
@@ -251,7 +199,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_load_unit_details_blocks_units_outside_org_scope(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         // Unit NOT in the user's org scope (no relation to user's unit tree)
         $outsideUnit = Unit::create([
@@ -273,10 +221,9 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_map_page_renders_leaflet_assets(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $response = $this->actingAs($user)->get('/map');
-
         $response->assertStatus(200);
         $response->assertSee('leaflet');
         $response->assertSee('unpkg.com/leaflet');
@@ -287,7 +234,7 @@ class MapDashboardTest extends TestCase
     /** @test */
     public function test_map_dashboard_render_has_required_elements(): void
     {
-        $user = $this->createAuthenticatedUser();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');

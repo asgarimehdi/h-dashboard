@@ -8,6 +8,7 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -307,8 +308,10 @@ class HardwareController extends Controller
             ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
         ]);
 
-        event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
-        Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
+            event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
+            Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
+        });
 
         return response()->json(['success' => true, 'message' => "$count device(s) updated", 'count' => $count]);
     }
@@ -346,8 +349,10 @@ class HardwareController extends Controller
             request()->attributes->remove('suppress_audit');
         }
 
-        event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
-        Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
+            event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
+            Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
+        });
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
     }

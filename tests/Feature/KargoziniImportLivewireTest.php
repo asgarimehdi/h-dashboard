@@ -2,55 +2,24 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Testing\File;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class KargoziniImportLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Resync Postgres sequences after explicit ID inserts
-        DB::select("SELECT setval('tahsils_id_seq', (SELECT COALESCE(MAX(id),1) FROM tahsils))");
-        DB::select("SELECT setval('estekhdams_id_seq', (SELECT COALESCE(MAX(id),1) FROM estekhdams))");
-        DB::select("SELECT setval('semats_id_seq', (SELECT COALESCE(MAX(id),1) FROM semats))");
-        DB::select("SELECT setval('radifs_id_seq', (SELECT COALESCE(MAX(id),1) FROM radifs))");
-    }
-
-    protected function createUserWithUnit(string $permission): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $user->givePermissionTo($permission);
-
-        Session::put('current_unit_id', $unit->id);
-
-        return $user;
+        $this->seedLookupTables();
     }
 
     /**
@@ -95,7 +64,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_unauthorized_403(): void
     {
-        $user = $this->createUserWithUnit('manage_users');
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($user);
 
         $this->get('/kargozini/persons/import')->assertStatus(403);
@@ -103,7 +72,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_renders(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')
@@ -115,7 +84,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_mount_initializes_clean_state(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')
@@ -129,7 +98,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_file_validation_rejects_missing_file(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')
@@ -139,7 +108,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_file_validation_rejects_invalid_mime(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         $file = UploadedFile::fake()->createWithContent('test.txt', 'hello');
@@ -154,10 +123,12 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_valid_preview_populates_data(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        $result = $this->createUserWithUnit(['kargozini']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($user);
 
-        $unitId = $user->units()->first()->id;
+        $unitId = $unit->id;
 
         $tsv = $this->buildTsv([[
             'n_code' => '9000000001', 'f_name' => 'علی', 'l_name' => 'محمدی',
@@ -180,7 +151,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_confirm_without_preview_shows_error(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')
@@ -192,10 +163,12 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_cancel_clears_state(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        $result = $this->createUserWithUnit(['kargozini']);
+        $user = $result['user'];
+        $unit = $result['unit'];
         $this->actingAs($user);
 
-        $unitId = $user->units()->first()->id;
+        $unitId = $unit->id;
 
         $tsv = $this->buildTsv([[
             'n_code' => '9000000003', 'f_name' => 'رضا', 'l_name' => 'کریمی',
@@ -218,7 +191,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_zero_rows_shows_total_zero(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         // TSV with header only (no data rows)
@@ -235,7 +208,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_exception_during_preview_shows_error(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         // Upload a file that is not valid Excel/CSV to trigger an exception
@@ -252,7 +225,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_help_modal_toggles(): void
     {
-        $user = $this->createUserWithUnit('kargozini');
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')

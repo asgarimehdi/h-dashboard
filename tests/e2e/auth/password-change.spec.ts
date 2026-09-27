@@ -51,7 +51,7 @@ test.describe('Authentication — change password', () => {
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill('differentthing99x');
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
 
-    await expect(page.locator('text=must match').first()).toBeVisible();
+    await expect(page.locator('text=باید مطابقت داشته باشند').first()).toBeVisible();
   });
 
   test('weak new password shows validation error', async ({ page }) => {
@@ -62,6 +62,6 @@ test.describe('Authentication — change password', () => {
     await page.locator('input[wire\\:model="newPasswordConfirmation"]').fill('short');
     await page.getByRole('button', { name: 'تغییر رمز' }).click();
 
-    await expect(page.locator('text=at least 8 characters').first()).toBeVisible();
+    await expect(page.locator('text=باید حداقل 8 کاراکتر باشد').first()).toBeVisible();
   });
 });

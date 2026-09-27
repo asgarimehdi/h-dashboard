@@ -10,6 +10,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  lint:
+    name: Code Style (Pint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:latest
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
   test:
     name: Tests
     runs-on: ubuntu-latest
@@ -28,6 +56,16 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
 
     steps:
       - name: Checkout code
@@ -65,7 +103,11 @@ jobs:
       - name: Copy .env for testing
         run: |
           cp .env.example .env.testing
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/' .env.testing
+          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
+          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
+          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
+          # cache between parallel test processes and cross-pollutes their separate DBs.
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
           grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
 
       - name: Generate application key
@@ -79,12 +121,41 @@ jobs:
           php artisan config:clear --env=testing
           php artisan route:clear --env=testing
 
-      - name: Run tests
-        run: ./vendor/bin/pest --parallel
+      - name: Run tests with coverage
+        run: ./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml
+
+  phpstan:
+    name: PHPStan Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress
 
   deploy:
     name: Deploy Production
-    needs: [test]
+    needs: [lint, test, phpstan]
     runs-on: self-hosted
     timeout-minutes: 30
     environment:

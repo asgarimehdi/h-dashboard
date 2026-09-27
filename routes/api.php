@@ -42,7 +42,20 @@ Route::post('/login', function (Request $request) {
         return response()->json(['message' => 'Credentials not match'], 401);
     }
 
-    $token = $user->createToken('flutter-app')->plainTextToken;
+    $abilities = [
+        'units:read',
+        'hardware:read', 'hardware:write',
+        'tickets:read', 'tickets:write',
+        'persons:read', 'persons:write',
+        'todos:read', 'todos:write',
+        'hr:read',
+        'notifications:read',
+        'gis:read',
+        'reports:read',
+        'traffic:read',
+    ];
+
+    $token = $user->createToken('flutter-app', $abilities)->plainTextToken;
 
     return response()->json(['token' => $token]);
 })->middleware('throttle:5,1');
@@ -53,25 +66,30 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         return $request->user();
     });
 
-    // Unit API routes — write gated (Issue #396)
-    Route::get('/units', [UnitController::class, 'index']);
-    Route::get('/units/{unit}', [UnitController::class, 'show']);
-    Route::middleware('role_or_permission:organization')->group(function () {
-        Route::post('/units', [UnitController::class, 'store']);
-        Route::put('/units/{unit}', [UnitController::class, 'update']);
-        Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+    // Unit API routes — ability:units:read (Issue #690)
+    Route::middleware('ability:units:read')->group(function () {
+        Route::get('/units', [UnitController::class, 'index']);
+        Route::get('/units/{unit}', [UnitController::class, 'show']);
+        Route::middleware(['abilities:units:write', 'role_or_permission:organization'])->group(function () {
+            Route::post('/units', [UnitController::class, 'store']);
+            Route::put('/units/{unit}', [UnitController::class, 'update']);
+            Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+        });
     });
 
-    Route::get('/zabbix/traffic', [TrafficController::class, 'index']);
-    Route::get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
+    // Zabbix / Traffic API routes — ability:traffic:read (Issue #690)
+    Route::middleware('ability:traffic:read')->group(function () {
+        Route::get('/zabbix/traffic', [TrafficController::class, 'index']);
+        Route::get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
+    });
 
-    // Hardware API routes — write gated (Issue #396)
-    Route::prefix('hardware')->group(function () {
+    // Hardware API routes — ability:hardware:read (Issue #690)
+    Route::prefix('hardware')->middleware('ability:hardware:read')->group(function () {
         Route::get('/', [HardwareController::class, 'index']);
         Route::get('/stats', [HardwareController::class, 'stats']);
         Route::get('/{hardware}', [HardwareController::class, 'show']);
 
-        Route::middleware('role_or_permission:manage_hardware')->group(function () {
+        Route::middleware(['abilities:hardware:write', 'role_or_permission:manage_hardware'])->group(function () {
             Route::post('/', [HardwareController::class, 'store']);
             Route::match(['put', 'patch'], '/{hardware}', [HardwareController::class, 'update']);
             Route::delete('/{hardware}', [HardwareController::class, 'destroy']);
@@ -89,61 +107,73 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
             ->middleware('permission:manage_hardware');
     });
 
-    // Ticket API routes — permission-gated (Issue #323)
-    Route::get('/tickets', [TicketController::class, 'index'])
-        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
-    Route::post('/tickets', [TicketController::class, 'store'])
-        ->middleware('permission:create_ticket');
-    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
-        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
-    Route::put('/tickets/{ticket}', [TicketController::class, 'update'])
-        ->middleware('permission:manage_unit_tickets');
-    Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
-        ->middleware('permission:manage_unit_tickets');
-    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
-        ->middleware('permission:manage_unit_tickets');
-    Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept'])
-        ->middleware('permission:create_ticket');
-    Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete'])
-        ->middleware('permission:manage_unit_tickets');
+    // Ticket API routes — ability:tickets:read (Issue #690)
+    Route::middleware('ability:tickets:read')->group(function () {
+        Route::get('/tickets', [TicketController::class, 'index'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+        Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
 
-    // Ticket Comments — permission-gated (Issue #323)
-    Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index'])
-        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
-    Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store'])
-        ->middleware('permission:create_ticket');
-    Route::get('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'show'])
-        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
-    Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])
-        ->middleware('permission:manage_unit_tickets');
-    Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])
-        ->middleware('permission:manage_unit_tickets');
-    Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react'])
-        ->middleware('permission:create_ticket');
-    Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact'])
-        ->middleware('permission:create_ticket');
-    Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions'])
-        ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+        Route::middleware('abilities:tickets:write')->group(function () {
+            Route::post('/tickets', [TicketController::class, 'store'])
+                ->middleware('permission:create_ticket');
+            Route::put('/tickets/{ticket}', [TicketController::class, 'update'])
+                ->middleware('permission:manage_unit_tickets');
+            Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
+                ->middleware('permission:manage_unit_tickets');
+            Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
+                ->middleware('permission:manage_unit_tickets');
+            Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept'])
+                ->middleware('permission:create_ticket');
+            Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete'])
+                ->middleware('permission:manage_unit_tickets');
+        });
+    });
 
-    // Report API routes
-    Route::get('/reports/units', [ReportController::class, 'units']);
-    Route::get('/reports/todos', [ReportController::class, 'todos']);
-    Route::get('/reports/tickets', [ReportController::class, 'tickets']);
+    // Ticket Comments — ability:tickets:read (Issue #690)
+    Route::middleware('ability:tickets:read')->group(function () {
+        Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+        Route::get('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'show'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+        Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
 
-    // Person API routes — write gated (Issue #396)
-    Route::prefix('persons')->group(function () {
+        Route::middleware('abilities:tickets:write')->group(function () {
+            Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store'])
+                ->middleware('permission:create_ticket');
+            Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])
+                ->middleware('permission:manage_unit_tickets');
+            Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])
+                ->middleware('permission:manage_unit_tickets');
+            Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react'])
+                ->middleware('permission:create_ticket');
+            Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact'])
+                ->middleware('permission:create_ticket');
+        });
+    });
+
+    // Report API routes — ability:reports:read (Issue #690)
+    Route::middleware('ability:reports:read')->group(function () {
+        Route::get('/reports/units', [ReportController::class, 'units']);
+        Route::get('/reports/todos', [ReportController::class, 'todos']);
+        Route::get('/reports/tickets', [ReportController::class, 'tickets']);
+    });
+
+    // Person API routes — ability:persons:read (Issue #690)
+    Route::prefix('persons')->middleware('ability:persons:read')->group(function () {
         Route::get('/', [PersonController::class, 'index']);
         Route::get('/{person}', [PersonController::class, 'show']);
 
-        Route::middleware('role_or_permission:manage_personnel')->group(function () {
+        Route::middleware(['abilities:persons:write', 'role_or_permission:manage_personnel'])->group(function () {
             Route::post('/', [PersonController::class, 'store']);
             Route::put('/{person}', [PersonController::class, 'update']);
             Route::delete('/{person}', [PersonController::class, 'destroy']);
         });
     });
 
-    // Todo API routes — gated on calendar permission (Issue #396)
-    Route::middleware('role_or_permission:calendar')->group(function () {
+    // Todo API routes — ability:todos:read|todos:write (Issue #690)
+    Route::middleware(['ability:todos:read,todos:write', 'role_or_permission:calendar'])->group(function () {
         Route::get('/todos', [TodoController::class, 'index']);
         Route::get('/todos/{todo}', [TodoController::class, 'show']);
         Route::post('/todos', [TodoController::class, 'store']);
@@ -152,8 +182,8 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
     });
 
-    // HR API routes (Issue #223, #444) — view gated (Issue #396)
-    Route::prefix('hr')->middleware('role_or_permission:view_hr_dashboard')->group(function () {
+    // HR API routes (Issue #223, #444) — ability:hr:read (Issue #690)
+    Route::prefix('hr')->middleware(['ability:hr:read', 'role_or_permission:view_hr_dashboard'])->group(function () {
         // Org chart
         Route::get('/org-chart', [OrgChartController::class, 'orgChart']);
         Route::get('/org-chart/expandable', [OrgChartController::class, 'orgChartExpandable']);
@@ -171,14 +201,16 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/analytics/staffing-ratio', [HrAnalyticsController::class, 'staffingRatio']);
     });
 
-    // Notification API routes — for Flutter mobile app
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
-    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    // Notification API routes — ability:notifications:read (Issue #690)
+    Route::middleware('ability:notifications:read')->group(function () {
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    });
 
-    // GIS / Map API routes — view gated (Issue #396)
-    Route::prefix('gis')->middleware('role_or_permission:map')->group(function () {
+    // GIS / Map API routes — ability:gis:read (Issue #690)
+    Route::prefix('gis')->middleware(['ability:gis:read', 'role_or_permission:map'])->group(function () {
         Route::get('/units', [GisController::class, 'units'])->name('api.gis.units');
         Route::get('/hardware', [GisController::class, 'hardware'])->name('api.gis.hardware');
         Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');

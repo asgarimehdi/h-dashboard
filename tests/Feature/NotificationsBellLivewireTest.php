@@ -3,20 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\Notification;
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class NotificationsBellLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -24,34 +21,16 @@ class NotificationsBellLivewireTest extends TestCase
         parent::setUp();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
 
         Cache::flush();
-    }
-
-    protected function createUserWithUnit(): User
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        return $user;
     }
 
     // ==================== Rendering ====================
 
     public function test_bell_renders_for_authenticated_user(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         Livewire::test('notifications.bell')
@@ -62,7 +41,7 @@ class NotificationsBellLivewireTest extends TestCase
 
     public function test_bell_mounts_with_empty_notifications(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         Livewire::test('notifications.bell')
@@ -75,7 +54,7 @@ class NotificationsBellLivewireTest extends TestCase
 
     public function test_mark_as_read_updates_notification(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         $notif = Notification::create([
@@ -103,7 +82,7 @@ class NotificationsBellLivewireTest extends TestCase
 
     public function test_mark_all_as_read_updates_all_notifications(): void
     {
-        $user = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
         Notification::create([

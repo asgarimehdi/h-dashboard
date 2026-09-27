@@ -2,30 +2,24 @@
 
 namespace Tests\Feature;
 
-use App\Models\Person;
 use App\Models\Unit;
-use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 class UnitsTreeItemLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
-
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
 
         DB::table('unit_types')->insert([
             ['id' => 1, 'name' => 'وزارت بهداشت', 'created_at' => now(), 'updated_at' => now()],
@@ -65,35 +59,6 @@ class UnitsTreeItemLivewireTest extends TestCase
         }
     }
 
-    /**
-     * Create a user linked to a unit, with the given permission.
-     * Returns [user, unit].
-     */
-    protected function createUserWithUnit(array $overrides = []): array
-    {
-        $unitTypeId = $overrides['unit_type_id'] ?? 4;
-        $regionId = $overrides['region_id'] ?? null;
-
-        $unit = Unit::create([
-            'name' => $overrides['unit_name'] ?? 'واحد تست',
-            'unit_type_id' => $unitTypeId,
-            'region_id' => $regionId,
-            'parent_id' => $overrides['parent_id'] ?? null,
-        ]);
-
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        $user->givePermissionTo($overrides['permission'] ?? 'organization');
-
-        return [$user, $unit];
-    }
-
     // ==================== Smoke tests ====================
 
     public function test_guest_302(): void
@@ -103,9 +68,9 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_renders_tree(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 4]);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Create some child units
         $child1 = Unit::create(['name' => 'فرزند اول', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
@@ -123,7 +88,7 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_authenticated_without_permission_403(): void
     {
-        [$user] = $this->createUserWithUnit(['permission' => 'manage_users']);
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($user);
 
         $this->get('/units')->assertStatus(403);
@@ -131,9 +96,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_authenticated_with_permission_200(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Livewire::test('units.index')->assertStatus(200);
     }
@@ -142,9 +106,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_toggle_expand_collapse(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Create children
         $child1 = Unit::create(['name' => 'فرزند اول', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
@@ -174,9 +137,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_select_unit(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         $child = Unit::create(['name' => 'فرزند انتخاب شده', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
 
@@ -190,9 +152,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_search_highlight(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         Unit::create(['name' => 'بیمارستان امیرالمؤمنین', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
         Unit::create(['name' => 'خانه بهداشت ولیعصر', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
@@ -210,9 +171,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_nesting_indent(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Create 3-level nesting: root -> child -> grandchild
         $child = Unit::create(['name' => 'فرزند', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
@@ -234,9 +194,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_empty_children_no_toggle(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Create a leaf unit (no children)
         $leaf = Unit::create(['name' => 'برگ', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);
@@ -254,9 +213,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_unit_without_unit_type_no_type_span(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Create a unit without unit_type
         $noType = Unit::create(['name' => 'بدون نوع', 'unit_type_id' => null, 'parent_id' => $unit->id, 'region_id' => 2]);
@@ -277,9 +235,8 @@ class UnitsTreeItemLivewireTest extends TestCase
         // The setUp already does this, so if we get here without duplicate key errors,
         // the resync worked.
 
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         $component = Livewire::test('units.index')
             ->assertStatus(200);
@@ -292,9 +249,8 @@ class UnitsTreeItemLivewireTest extends TestCase
 
     public function test_is_last_shortens_branch_line(): void
     {
-        [$user, $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
         $this->actingAs($user);
-        Session::put('current_unit_id', $unit->id);
 
         // Create multiple children - last one should have shortened branch line
         $child1 = Unit::create(['name' => 'فرزند اول', 'unit_type_id' => 5, 'parent_id' => $unit->id, 'region_id' => 2]);

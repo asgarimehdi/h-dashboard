@@ -505,7 +505,7 @@ return new class extends Component
 
         // General search
         if (! empty($this->search)) {
-            $s = self::normalizeForQuery($this->search);
+            $s = self::foldedTerm($this->search);
             $query->where(function ($q) use ($s) {
                 $q->where('pc_name', 'LIKE', "%{$s}%")
                     ->orWhere('n_code', 'LIKE', "%{$s}%")
@@ -514,9 +514,9 @@ return new class extends Component
                     ->orWhere('mac', 'LIKE', "%{$s}%")
                     ->orWhere('comments', 'LIKE', "%{$s}%")
                     ->orWhereHas('person', function ($pq) use ($s) {
-                        $pq->where('f_name', 'LIKE', "%{$s}%")
-                            ->orWhere('l_name', 'LIKE', "%{$s}%")
-                            ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$s}%"]);
+                        $pq->whereRaw(self::foldSeparatorsSql('f_name').' LIKE ?', ["%{$s}%"])
+                            ->orWhereRaw(self::foldSeparatorsSql('l_name').' LIKE ?', ["%{$s}%"])
+                            ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$s}%"]);
                     });
             });
         }
@@ -527,25 +527,31 @@ return new class extends Component
             // Map common aliases to actual database values
             $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
             $type = $typeAliases[$type] ?? $type;
+            $type = self::normalizeForQuery($type);
             $query->where('type', 'LIKE', "%{$type}%");
         }
         if ($this->filterOs) {
-            $query->where('os', 'LIKE', "%{$this->filterOs}%");
+            $os = self::normalizeForQuery($this->filterOs);
+            $query->where('os', 'LIKE', "%{$os}%");
         }
         if ($this->filterCpu) {
-            $query->where('cpu', 'LIKE', "%{$this->filterCpu}%");
+            $cpu = self::normalizeForQuery($this->filterCpu);
+            $query->where('cpu', 'LIKE', "%{$cpu}%");
         }
         if ($this->filterRam) {
-            $query->where('ram', 'LIKE', "%{$this->filterRam}%");
+            $ram = self::normalizeForQuery($this->filterRam);
+            $query->where('ram', 'LIKE', "%{$ram}%");
         }
         if ($this->filterHdd) {
-            $query->where('hdd', 'LIKE', "%{$this->filterHdd}%");
+            $hdd = self::normalizeForQuery($this->filterHdd);
+            $query->where('hdd', 'LIKE', "%{$hdd}%");
         }
         if ($this->filterShutdown !== null && $this->filterShutdown !== '') {
             $query->where('shutdown', $this->filterShutdown === '1');
         }
         if ($this->filterNetType) {
-            $query->where('net_type', 'LIKE', "%{$this->filterNetType}%");
+            $netType = self::normalizeForQuery($this->filterNetType);
+            $query->where('net_type', 'LIKE', "%{$netType}%");
         }
         if ($this->filterMark !== null && $this->filterMark !== '') {
             $query->where('mark', $this->filterMark === '1');
@@ -553,24 +559,28 @@ return new class extends Component
 
         // Related filters (AND logic)
         if ($this->filterPerson) {
-            $normalized = self::normalizeForQuery($this->filterPerson);
-            $query->whereHas('person', function ($q) use ($normalized) {
-                $q->where('f_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhere('n_code', 'LIKE', "%{$normalized}%")
-                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$normalized}%"]);
+            // #705: fold the column so a ZWNJ in the term still matches a stored
+            // ZWNJ (or a plain space). normalizeForQuery alone cannot.
+            $term = self::foldedTerm($this->filterPerson);
+            $query->whereHas('person', function ($q) use ($term) {
+                $f = self::foldSeparatorsSql('f_name');
+                $l = self::foldSeparatorsSql('l_name');
+                $q->whereRaw($f.' LIKE ?', ["%{$term}%"])
+                    ->orWhereRaw($l.' LIKE ?', ["%{$term}%"])
+                    ->orWhere('n_code', 'LIKE', "%{$term}%")
+                    ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$term}%"]);
             });
         }
         if ($this->filterUnit) {
-            $normalized = self::normalizeForQuery($this->filterUnit);
-            $query->whereHas('person.unit', function ($q) use ($normalized) {
-                $q->where('name', 'LIKE', "%{$normalized}%");
+            $term = self::foldedTerm($this->filterUnit);
+            $query->whereHas('person.unit', function ($q) use ($term) {
+                $q->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
             });
         }
         if ($this->filterSemat) {
-            $normalized = self::normalizeForQuery($this->filterSemat);
-            $query->whereHas('person.semat', function ($q) use ($normalized) {
-                $q->where('name', 'LIKE', "%{$normalized}%");
+            $term = self::foldedTerm($this->filterSemat);
+            $query->whereHas('person.semat', function ($q) use ($term) {
+                $q->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
             });
         }
 

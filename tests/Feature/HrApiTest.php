@@ -10,15 +10,18 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithApiTokens;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(OrgChartController::class, HrStatsController::class, HrAnalyticsController::class);
 
 class HrApiTest extends TestCase
 {
+    use InteractsWithApiTokens;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -29,33 +32,29 @@ class HrApiTest extends TestCase
     {
         parent::setUp();
         Session::flush();
-
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'کارشناسی']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'رسمی']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'کارشناس']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'رتبه ۱']);
+        $this->seed(PermissionSeeder::class);
+        $this->seedLookupTables();
 
         $this->unit = Unit::create(['name' => 'مرکز بهداشت']);
         $childUnit = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $this->unit->id]);
 
         $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی',
-            't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId,
-            'u_id' => $this->unit->id, 'status' => 'active',
+        Person::factory()->create([
+            'n_code' => $nCode,
+            'u_id' => $this->unit->id,
+            'status' => 'active',
         ]);
 
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
-        $this->seed(PermissionSeeder::class);
         $this->user->givePermissionTo('view_hr_dashboard');
     }
 
     public function test_org_chart_returns_tree_with_counts(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/org-chart');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data' => [['id', 'name', 'personnel_count', 'children']]]);
@@ -64,8 +63,8 @@ class HrApiTest extends TestCase
 
     public function test_stats_returns_aggregations(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/stats');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/stats', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -83,8 +82,8 @@ class HrApiTest extends TestCase
 
     public function test_vacancies_lists_empty_units(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/vacancies');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/vacancies', $token);
 
         $response->assertStatus(200);
         // The child unit (خانه بهداشت) has no personnel
@@ -94,8 +93,8 @@ class HrApiTest extends TestCase
 
     public function test_personnel_list_with_filters(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/personnel?status=active');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/personnel?status=active', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data', 'meta' => ['total']]);
@@ -104,9 +103,9 @@ class HrApiTest extends TestCase
 
     public function test_personnel_detail_returns_profile(): void
     {
-        $this->actingAs($this->user, 'sanctum');
+        $token = $this->createApiToken($this->user, ['hr:read']);
         $person = Person::first();
-        $response = $this->getJson("/api/hr/personnel/{$person->n_code}");
+        $response = $this->apiGet("/api/hr/personnel/{$person->n_code}", $token);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.n_code', $person->n_code)
@@ -115,18 +114,11 @@ class HrApiTest extends TestCase
 
     public function test_personnel_detail_scoped_to_org(): void
     {
-        $this->actingAs($this->user, 'sanctum');
+        $token = $this->createApiToken($this->user, ['hr:read']);
         $otherUnit = Unit::create(['name' => 'Out of scope']);
-        $other = Person::create([
-            'n_code' => (string) fake()->unique()->numerify('##########'),
-            'f_name' => 'X', 'l_name' => 'Y', 'u_id' => $otherUnit->id,
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R']),
-        ]);
+        $other = Person::factory()->create(['u_id' => $otherUnit->id]);
 
-        $response = $this->getJson("/api/hr/personnel/{$other->n_code}");
+        $response = $this->apiGet("/api/hr/personnel/{$other->n_code}", $token);
         $response->assertStatus(403);
     }
 
@@ -140,8 +132,8 @@ class HrApiTest extends TestCase
 
     public function test_org_chart_expandable_returns_root_units(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/org-chart/expandable');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart/expandable', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -157,8 +149,8 @@ class HrApiTest extends TestCase
         Unit::create(['name' => 'واحد ۳']);
         Unit::create(['name' => 'واحد ۴']);
 
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/org-chart/expandable?initial_limit=2');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart/expandable?initial_limit=2', $token);
 
         $response->assertStatus(200);
         $this->assertCount(2, $response->json('data'));
@@ -167,8 +159,8 @@ class HrApiTest extends TestCase
 
     public function test_org_chart_expandable_returns_has_children_flag(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/org-chart/expandable');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart/expandable', $token);
 
         $response->assertStatus(200);
         // The parent unit should have has_children = true
@@ -178,8 +170,8 @@ class HrApiTest extends TestCase
 
     public function test_org_chart_subtree_returns_children(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson("/api/hr/org-chart/subtree/{$this->unit->id}");
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$this->unit->id}", $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data' => [['id', 'name', 'children']]]);
@@ -191,8 +183,8 @@ class HrApiTest extends TestCase
     {
         $otherUnit = Unit::create(['name' => 'Out of scope']);
 
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson("/api/hr/org-chart/subtree/{$otherUnit->id}");
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$otherUnit->id}", $token);
 
         $response->assertStatus(403);
     }
@@ -201,8 +193,8 @@ class HrApiTest extends TestCase
 
     public function test_headcount_trend_returns_monthly_data(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/analytics/headcount-trend');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data' => [['month', 'count']]]);
@@ -210,8 +202,8 @@ class HrApiTest extends TestCase
 
     public function test_vacancy_trend_returns_monthly_data(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/analytics/vacancy-trend');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/vacancy-trend', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure(['data' => [['month', 'count']]]);
@@ -219,8 +211,8 @@ class HrApiTest extends TestCase
 
     public function test_staffing_ratio_returns_aggregations(): void
     {
-        $this->actingAs($this->user, 'sanctum');
-        $response = $this->getJson('/api/hr/analytics/staffing-ratio');
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/staffing-ratio', $token);
 
         $response->assertStatus(200)
             ->assertJsonStructure([

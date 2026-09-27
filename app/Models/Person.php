@@ -5,12 +5,38 @@ namespace App\Models;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\HasOrganizationalScope;
 use App\Traits\PersianNormalizer;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * @property int $id
+ * @property string $n_code
+ * @property string $f_name
+ * @property string $l_name
+ * @property int $t_id
+ * @property int $e_id
+ * @property int $s_id
+ * @property int $r_id
+ * @property int $u_id
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $birth_date
+ * @property Carbon|null $hire_date
+ * @property string $status
+ * @property-read string $name
+ * @property-read User|null $user
+ * @property-read Estekhdam $estekhdam
+ * @property-read Radif $radif
+ * @property-read Semat $semat
+ * @property-read Tahsil $tahsil
+ * @property-read Unit $unit
+ *
+ * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
+ */
 class Person extends Model
 {
     use HasFactory;
@@ -41,15 +67,27 @@ class Person extends Model
 
         // Invalidate cached HR stats whenever a person is created/updated/deleted (#341).
         // Dashboard, map and GIS caches also depend on person data, so bump those
-        // version namespaces too.
-        foreach (['saved', 'deleted'] as $event) {
-            static::$event(function () {
-                $cache = app(CacheInvalidationServiceInterface::class);
-                foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
-                    $cache->increment($namespace);
-                }
-            });
-        }
+        // version namespaces too. Maps/GIS only change when u_id changes.
+        static::saved(function (self $model) {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('hr_stats');
+            $cache->increment('dashboard');
+
+            $uIdChanged = in_array('u_id', array_keys($model->getChanges()))
+                || $model->wasRecentlyCreated;
+
+            if ($uIdChanged) {
+                $cache->increment('maps');
+                $cache->increment('gis');
+            }
+        });
+
+        static::deleted(function () {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
+                $cache->increment($namespace);
+            }
+        });
     }
 
     /**

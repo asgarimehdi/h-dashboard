@@ -38,6 +38,9 @@ return new class extends Component {
         $user->password = Hash::make($this->newPassword);
         $user->save();
 
+        // باطل کردن تمام توکن‌ها پس از تغییر رمز
+        $user->tokens()->delete();
+
         // ریست کردن فرم
         $this->reset(['currentPassword', 'newPassword', 'newPasswordConfirmation']);
         $this->success("رمز با موفقیت تغییر یافت.", position: 'toast-bottom');

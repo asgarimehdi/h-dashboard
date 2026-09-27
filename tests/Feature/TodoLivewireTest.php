@@ -117,7 +117,7 @@ test('can create a todo', function () {
         ->call('save')
         ->assertHasNoErrors();
 
-    $this->assertDatabaseHas('todos', ['title' => 'وظیفه تستی']);
+    $this->assertDatabaseHas('todos', ['title' => 'وظیفه تستی', 'user_id' => $this->user->id]);
 });
 
 test('create todo requires title', function () {
@@ -174,6 +174,27 @@ test('edit saves changes', function () {
         ->call('save');
 
     $this->assertDatabaseHas('todos', ['id' => $todo->id, 'title' => 'عنوان جدید']);
+});
+
+test('editing a todo preserves the original owner', function () {
+    $owner = User::factory()->create(['n_code' => '0987654321']);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'عنوان قبل',
+        'user_id' => $owner->id,
+    ]);
+
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->set('title', 'عنوان جدید')
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('todos', ['id' => $todo->id, 'user_id' => $owner->id]);
 });
 
 // ==================== Delete Todo ====================

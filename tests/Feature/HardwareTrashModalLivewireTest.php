@@ -10,15 +10,16 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Hardware::class);
 
 class HardwareTrashModalLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,35 +27,7 @@ class HardwareTrashModalLivewireTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        DB::statement("SELECT setval('tahsils_id_seq', COALESCE((SELECT MAX(id) FROM tahsils), 1))");
-        DB::statement("SELECT setval('estekhdams_id_seq', COALESCE((SELECT MAX(id) FROM estekhdams), 1))");
-        DB::statement("SELECT setval('semats_id_seq', COALESCE((SELECT MAX(id) FROM semats), 1))");
-        DB::statement("SELECT setval('radifs_id_seq', COALESCE((SELECT MAX(id) FROM radifs), 1))");
-    }
-
-    protected function createUserWithUnit(string $permission = 'manage_hardware'): array
-    {
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create([
-            'n_code' => $nCode, 'f_name' => 'تست', 'l_name' => 'کاربر',
-            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
-        ]);
-        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
-        $user->givePermissionTo($permission);
-        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-
-        DB::table('user_units')->where('user_id', $user->id)->update([
-            'role' => 'staff',
-            'is_primary' => true,
-        ]);
-
-        return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode];
+        $this->seedLookupTables();
     }
 
     protected function createHardwareForUser(User $user, Unit $unit, array $overrides = []): Hardware
@@ -91,14 +64,14 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_unauthorized_user_gets_403(): void
     {
-        $data = $this->createUserWithUnit('manage_users');
+        $data = $this->createUserWithUnit(['manage_users']);
         $this->actingAs($data['user']);
         $this->get('/hardware')->assertStatus(403);
     }
 
     public function test_authorized_user_renders(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -110,7 +83,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_empty_state_when_no_deleted_hardware(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -125,7 +98,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_deleted_item_shows_in_trash(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -145,7 +118,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_idempotent_load_deleted_hardware(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -170,7 +143,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_jalali_timestamp_and_user_ncode_shown(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -185,12 +158,12 @@ class HardwareTrashModalLivewireTest extends TestCase
             // Jalali timestamp contains a forward slash date pattern like 1404/06/...
             ->assertSee('حذف شده در')
             // User n_code should appear as the deleter
-            ->assertSee($data['n_code']);
+            ->assertSee($data['user']->n_code);
     }
 
     public function test_fallback_when_no_user_on_audit(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -214,7 +187,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_change_badges_render_excluding_pc_name_and_ncode(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -241,7 +214,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_restore_button_shows_when_n_code_present_in_changes(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -264,7 +237,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_not_restorable_warning_when_no_ncode_in_changes(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -308,7 +281,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_restore_success_recreates_hardware(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -329,13 +302,13 @@ class HardwareTrashModalLivewireTest extends TestCase
         // Hardware should be recreated (with a new id since original was deleted)
         $this->assertDatabaseHas('hardwares', [
             'pc_name' => 'PC-RestoreMe',
-            'n_code' => $data['n_code'],
+            'n_code' => $data['user']->n_code,
         ]);
     }
 
     public function test_restore_denied_without_ncode_in_changes(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -364,7 +337,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_list_updates_after_restore(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -384,7 +357,7 @@ class HardwareTrashModalLivewireTest extends TestCase
         // The hardware should be back in the database with the same pc_name
         $this->assertDatabaseHas('hardwares', [
             'pc_name' => 'PC-UpdateList',
-            'n_code' => $data['n_code'],
+            'n_code' => $data['user']->n_code,
         ]);
 
         // loadDeletedHardware was called again by restoreRecord internally
@@ -394,7 +367,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_modal_stays_open_until_closed(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -416,7 +389,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_load_deleted_hardware_populates_data_correctly(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -446,7 +419,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_null_user_shows_system_label(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -457,7 +430,7 @@ class HardwareTrashModalLivewireTest extends TestCase
             'action' => 'created',
             'changes' => json_encode([
                 ['field' => 'pc_name', 'old' => null, 'new' => 'PC-SystemDel'],
-                ['field' => 'n_code', 'old' => null, 'new' => $data['n_code']],
+                ['field' => 'n_code', 'old' => null, 'new' => $data['user']->n_code],
             ]),
             'source' => 'web',
             'created_at' => now(),
@@ -483,7 +456,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_large_volume_deleted_hardware(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -506,7 +479,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
     public function test_concurrent_delete_between_load_and_restore(): void
     {
-        $data = $this->createUserWithUnit();
+        $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
@@ -525,7 +498,7 @@ class HardwareTrashModalLivewireTest extends TestCase
         // Hardware should be restored despite the concurrent scenario
         $this->assertDatabaseHas('hardwares', [
             'pc_name' => 'PC-Concurrent',
-            'n_code' => $data['n_code'],
+            'n_code' => $data['user']->n_code,
         ]);
     }
 }

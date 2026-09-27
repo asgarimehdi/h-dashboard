@@ -113,6 +113,34 @@ class AccessServiceTest extends TestCase
         $this->assertGreaterThan($unitBefore, $unitAfter);
     }
 
+    public function test_scope_reduction_takes_effect_immediately(): void
+    {
+        $parent = Unit::create(['name' => 'Parent']);
+        $child = Unit::create(['name' => 'Child', 'parent_id' => $parent->id]);
+        $user = $this->makeUserInUnit($parent);
+        $user->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
+        Session::put('current_unit_id', $parent->id);
+        $this->actingAs($user);
+
+        // Initially accessible to both parent and child
+        $ids = app(AccessService::class)->accessibleUnitIds($user);
+        $this->assertContains($child->id, $ids);
+
+        // Reduce scope: detach parent, attach only a new unit
+        $newUnit = Unit::create(['name' => 'New Unit']);
+        $user->units()->detach($parent->id);
+        $user->units()->attach($newUnit->id, ['role' => 'staff', 'is_primary' => true]);
+        Session::put('current_unit_id', $newUnit->id);
+
+        // Clear cache to simulate what should happen
+        app(AccessService::class)->clearCache($user);
+
+        // Should immediately reflect reduced scope
+        $newIds = app(AccessService::class)->accessibleUnitIds($user);
+        $this->assertNotContains($child->id, $newIds);
+        $this->assertContains($newUnit->id, $newIds);
+    }
+
     public function test_accessible_unit_ids_is_cached_per_user(): void
     {
         $unit = Unit::create(['name' => 'Cached Unit']);

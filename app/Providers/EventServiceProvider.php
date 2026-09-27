@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Events\HardwareUpdated;
-use App\Listeners\HardwareGisCacheListener;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
@@ -13,11 +11,7 @@ class EventServiceProvider extends ServiceProvider
      *
      * @var array<class-string, array<class-string>>
      */
-    protected $listen = [
-        HardwareUpdated::class => [
-            HardwareGisCacheListener::class,
-        ],
-    ];
+    protected $listen = [];
 
     /**
      * Register any other events for your application.

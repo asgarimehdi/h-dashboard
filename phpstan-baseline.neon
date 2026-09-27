@@ -1,72 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$user_agent\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$created_at\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$description\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$ip_address\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$new_values\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$old_values\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$subject_id\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$subject_type\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$type\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Access to protected property App\\Models\\ActivityLog\:\:\$updated_at\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -79,26 +13,8 @@ parameters:
 			path: app/Console/Commands/ArchiveOldRecords.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: array\{user_id\: mixed, type\: string, subject_type\: string\|null, subject_id\: int\|null, description\: string\|null, old_values\: array\|null, new_values\: array\|null, ip_address\: string\|null, user_agent\: mixed, original_created_at\: string, original_updated_at\: string, archived_at\: Carbon\\CarbonInterface\}, Closure\(App\\Models\\ActivityLog\)\: array\{user_id\: mixed, type\: string, subject_type\: string\|null, subject_id\: int\|null, description\: string\|null, old_values\: array\|null, new_values\: array\|null, ip_address\: string\|null, user_agent\: mixed, original_created_at\: string, original_updated_at\: string, archived_at\: Carbon\\CarbonInterface\} given\.$#'
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: array\{user_id\: int\|null, type\: string\|null, subject_type\: string\|null, subject_id\: int\|null, description\: string\|null, old_values\: array\|null, new_values\: array\|null, ip_address\: string\|null, user_agent\: string\|null, original_created_at\: Carbon\\Carbon\|null, original_updated_at\: Carbon\\Carbon\|null, archived_at\: Carbon\\CarbonInterface\}, Closure\(App\\Models\\ActivityLog\)\: array\{user_id\: int\|null, type\: string\|null, subject_type\: string\|null, subject_id\: int\|null, description\: string\|null, old_values\: array\|null, new_values\: array\|null, ip_address\: string\|null, user_agent\: string\|null, original_created_at\: Carbon\\Carbon\|null, original_updated_at\: Carbon\\Carbon\|null, archived_at\: Carbon\\CarbonInterface\} given\.$#'
 			identifier: argument.type
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<int,array\<string, mixed\>\>\:\:all\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
 			count: 1
 			path: app/Console/Commands/ArchiveOldRecords.php
 
@@ -109,46 +25,10 @@ parameters:
 			path: app/Console/Commands/GenerateDailyReports.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\DailyReport\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Console/Commands/GenerateDailyReports.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: app/Console/Commands/GenerateDailyReports.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$frequency\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/GenerateDueMaintenance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/GenerateDueMaintenance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$recurrence_interval\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/GenerateDueMaintenance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$title\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/GenerateDueMaintenance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/GenerateDueMaintenance.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:create\(\)\.$#'
@@ -205,6 +85,12 @@ parameters:
 			path: app/Exports/HardwareAuditsExport.php
 
 		-
+			message: '#^Method App\\Exports\\HardwareAuditsExport\:\:chunkCollection\(\) return type with generic class Illuminate\\Support\\Collection does not specify its types\: TKey, TValue$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Exports/HardwareAuditsExport.php
+
+		-
 			message: '#^Method App\\Exports\\HardwareAuditsExport\:\:collection\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -248,12 +134,6 @@ parameters:
 
 		-
 			message: '#^Method App\\Exports\\HardwareExport\:\:__construct\(\) has parameter \$query with generic class Illuminate\\Database\\Eloquent\\Builder but does not specify its types\: TModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Exports/HardwareExport.php
-
-		-
-			message: '#^Method App\\Exports\\HardwareExport\:\:chunkCollection\(\) return type with generic class Illuminate\\Support\\Collection does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: app/Exports/HardwareExport.php
@@ -415,91 +295,7 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$pc_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$person\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$action\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$hardware_id\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$ip_address\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$source\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$user\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$user_agent\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Access to protected property App\\Models\\HardwareAudit\:\:\$changes\.$#'
-			identifier: property.protected
-			count: 10
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:create\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HardwareAuditController.php
@@ -541,142 +337,10 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$clean_at\.$#'
-			identifier: property.notFound
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
 			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$comments\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$cpu\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$hdd\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$ip_local\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$ip_valid\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$mac\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$mark\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$motherboard\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$net_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$os\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$pc_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$person\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$port\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$ram\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$shutdown\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$switch\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$vlan\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
+			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:create\(\)\.$#'
@@ -700,12 +364,6 @@ parameters:
 			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:insert\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
-			path: app/Http/Controllers/Api/HardwareController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
 			path: app/Http/Controllers/Api/HardwareController.php
 
 		-
@@ -748,6 +406,12 @@ parameters:
 			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Http\\Request\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
+			path: app/Http/Controllers/Api/HardwareController.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type App\\Models\\Unit\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
 			path: app/Http/Controllers/Api/HardwareController.php
 
 		-
@@ -829,18 +493,6 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 3
-			path: app/Http/Controllers/Api/HrAnalyticsController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrAnalyticsController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\Api\\HrAnalyticsController\:\:hrAnalyticsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -889,19 +541,7 @@ parameters:
 			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:leftJoin\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: app/Http/Controllers/Api/HrStatsController.php
@@ -931,31 +571,7 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$parent_id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$personnel_count\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$unitType\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/OrgChartController.php
@@ -1021,18 +637,6 @@ parameters:
 			path: app/Http/Controllers/Api/PersonController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/PersonController.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -1069,42 +673,6 @@ parameters:
 			path: app/Http/Controllers/Api/ReportController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$ticket\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$ticket_id\.$#'
-			identifier: property.notFound
-			count: 9
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Support\\HigherOrderCollectionProxy\<string, Illuminate\\Database\\Eloquent\\Model, Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\>\:\:\$user\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1130,12 +698,6 @@ parameters:
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\TicketCommentReaction\:\:firstOrCreate\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\TicketCommentReaction\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: app/Http/Controllers/Api/TicketCommentController.php
@@ -1171,8 +733,20 @@ parameters:
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
 		-
+			message: '#^Parameter \#1 \$column of static method App\\Models\\TicketCommentReaction\:\:where\(\) expects string, array\<string, mixed\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/TicketCommentController.php
+
+		-
 			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: method.unresolvableReturnType
+			count: 1
+			path: app/Http/Controllers/Api/TicketCommentController.php
+
+		-
+			message: '#^Static method App\\Models\\TicketCommentReaction\:\:where\(\) invoked with 1 parameter, 2 required\.$#'
+			identifier: arguments.count
 			count: 1
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
@@ -1186,24 +760,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$current_assignee_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/TicketController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 6
 			path: app/Http/Controllers/Api/TicketController.php
 
 		-
@@ -1243,18 +799,6 @@ parameters:
 			path: app/Http/Controllers/Api/TodoController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$is_completed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/TodoController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Api/TodoController.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Todo\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -1277,18 +821,6 @@ parameters:
 			identifier: missingType.return
 			count: 1
 			path: app/Http/Controllers/Api/TrafficController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Http/Controllers/Api/UnitController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$parent_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/UnitController.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:create\(\)\.$#'
@@ -1343,186 +875,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Http/Requests/UnitScopedRequest.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$end_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$is_completed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$start_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$title\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$unit\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\TodoResource\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Method App\\Http\\Resources\\TodoResource\:\:toArray\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Resources/TodoResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$clean_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$comments\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$cpu\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$hdd\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$ip_local\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$ip_valid\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$mac\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$mark\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$motherboard\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$net_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$os\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$pc_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$port\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$ram\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$shutdown\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$switch\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$vlan\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/HardwareImport.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:create\(\)\.$#'
@@ -1679,60 +1031,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$e_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$f_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$l_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$n_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$r_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$s_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$t_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Imports/PersonImport.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Estekhdam\:\:get\(\)\.$#'
@@ -1945,6 +1243,18 @@ parameters:
 			path: app/Jobs/CleanNotificationsJob.php
 
 		-
+			message: '#^Class App\\Models\\ActivityLog has PHPDoc tag @property for property \$new_values with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: app/Models/ActivityLog.php
+
+		-
+			message: '#^Class App\\Models\\ActivityLog has PHPDoc tag @property for property \$old_values with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: app/Models/ActivityLog.php
+
+		-
 			message: '#^Method App\\Models\\ActivityLog\:\:subject\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\MorphTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -1957,22 +1267,28 @@ parameters:
 			path: app/Models/ActivityLog.php
 
 		-
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\ActivityLog\:\:\$subject contains unknown class App\\Models\\Model\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Models/ActivityLog.php
+
+		-
 			message: '#^Property App\\Models\\ActivityLog\:\:\$casts type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Models/ActivityLog.php
 
 		-
-			message: '#^Property App\\Models\\ActivityLog\:\:\$new_values type has no value type specified in iterable type array\.$#'
+			message: '#^Class App\\Models\\ActivityLogArchive has PHPDoc tag @property for property \$new_values with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
-			path: app/Models/ActivityLog.php
+			path: app/Models/ActivityLogArchive.php
 
 		-
-			message: '#^Property App\\Models\\ActivityLog\:\:\$old_values type has no value type specified in iterable type array\.$#'
+			message: '#^Class App\\Models\\ActivityLogArchive has PHPDoc tag @property for property \$old_values with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
-			path: app/Models/ActivityLog.php
+			path: app/Models/ActivityLogArchive.php
 
 		-
 			message: '#^Method App\\Models\\ActivityLogArchive\:\:user\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
@@ -1997,12 +1313,6 @@ parameters:
 			identifier: missingType.generics
 			count: 1
 			path: app/Models/Attachment.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Boundary\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Boundary.php
 
 		-
 			message: '#^Call to static method selectOne\(\) on an unknown class DB\.$#'
@@ -2041,8 +1351,8 @@ parameters:
 			path: app/Models/Boundary.php
 
 		-
-			message: '#^Method App\\Models\\DailyReport\:\:generatedBy\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
+			message: '#^Class App\\Models\\DailyReport has PHPDoc tag @property for property \$payload with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
 			count: 1
 			path: app/Models/DailyReport.php
 
@@ -2161,6 +1471,12 @@ parameters:
 			path: app/Models/Hardware.php
 
 		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 1
+			path: app/Models/Hardware.php
+
+		-
 			message: '#^Method App\\Models\\HardwareAudit\:\:hardware\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2177,12 +1493,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Models/HardwareAudit.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$next_due_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/MaintenanceSchedule.php
 
 		-
 			message: '#^Method App\\Models\\MaintenanceSchedule\:\:unit\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
@@ -2207,18 +1517,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Models/Notification.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$f_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Person.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$l_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Person.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
@@ -2287,6 +1585,12 @@ parameters:
 			path: app/Models/Person.php
 
 		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 1
+			path: app/Models/Person.php
+
+		-
 			message: '#^Method App\\Models\\Radif\:\:person\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
 			count: 1
@@ -2341,20 +1645,14 @@ parameters:
 			path: app/Models/TaskActivity.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$created_at\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: app/Models/Ticket.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/Ticket.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
-			identifier: method.notFound
+			message: '#^Class App\\Models\\Ticket has PHPDoc tag @property\-read for property \$waiting_duration with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
 			count: 1
 			path: app/Models/Ticket.php
 
@@ -2437,16 +1735,22 @@ parameters:
 			path: app/Models/Ticket.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$created_at\.$#'
-			identifier: property.notFound
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\Ticket\:\:\$activities contains generic class Illuminate\\Database\\Eloquent\\Collection but does not specify its types\: TKey, TModel$#'
+			identifier: missingType.generics
 			count: 1
-			path: app/Models/TicketComment.php
+			path: app/Models/Ticket.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/TicketComment.php
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\Ticket\:\:\$attachments contains generic class Illuminate\\Database\\Eloquent\\Collection but does not specify its types\: TKey, TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Ticket.php
+
+		-
+			message: '#^PHPDoc tag @property\-read for property App\\Models\\Ticket\:\:\$comments contains generic class Illuminate\\Database\\Eloquent\\Collection but does not specify its types\: TKey, TModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Ticket.php
 
 		-
 			message: '#^Method App\\Models\\TicketComment\:\:children\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
@@ -2456,18 +1760,6 @@ parameters:
 
 		-
 			message: '#^Method App\\Models\\TicketComment\:\:children\(\) should return Illuminate\\Database\\Eloquent\\Relations\\HasMany but returns Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\TicketComment\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Models/TicketComment.php
-
-		-
-			message: '#^Method App\\Models\\TicketComment\:\:descendants\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Models/TicketComment.php
-
-		-
-			message: '#^Method App\\Models\\TicketComment\:\:descendants\(\) should return Illuminate\\Database\\Eloquent\\Relations\\HasMany but returns Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
 			identifier: return.type
 			count: 1
 			path: app/Models/TicketComment.php
@@ -2563,18 +1855,6 @@ parameters:
 			path: app/Models/TicketCommentReaction.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$recurrence_interval\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Todo.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$recurrence_rule\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/Todo.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -2583,6 +1863,12 @@ parameters:
 		-
 			message: '#^Class App\\Models\\Todo uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
 			identifier: missingType.generics
+			count: 1
+			path: app/Models/Todo.php
+
+		-
+			message: '#^Method App\\Models\\Todo\:\:nextOccurrence\(\) should return Carbon\\Carbon\|null but returns Carbon\\CarbonInterface\.$#'
+			identifier: return.type
 			count: 1
 			path: app/Models/Todo.php
 
@@ -2629,8 +1915,20 @@ parameters:
 			path: app/Models/Todo.php
 
 		-
+			message: '#^Strict comparison using \!\=\= between string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Models/Todo.php
+
+		-
 			message: '#^Class App\\Models\\Unit uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
 			identifier: missingType.generics
+			count: 1
+			path: app/Models/Unit.php
+
+		-
+			message: '#^Illuminate\\Support\\Collection\<\*NEVER\*, \*NEVER\*\> does not accept static\(App\\Models\\Unit\)\|stdClass\.$#'
+			identifier: offsetAssign.valueType
 			count: 1
 			path: app/Models/Unit.php
 
@@ -2667,18 +1965,6 @@ parameters:
 		-
 			message: '#^Method App\\Models\\Unit\:\:children\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
 			identifier: missingType.generics
-			count: 1
-			path: app/Models/Unit.php
-
-		-
-			message: '#^Method App\\Models\\Unit\:\:childrenRecursive\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Models/Unit.php
-
-		-
-			message: '#^Method App\\Models\\Unit\:\:childrenRecursive\(\) should return Illuminate\\Database\\Eloquent\\Relations\\HasMany but returns Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
 			count: 1
 			path: app/Models/Unit.php
 
@@ -2845,7 +2131,13 @@ parameters:
 			path: app/Models/UnitTypeRelationship.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$person\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$f_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$l_name\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Models/User.php
@@ -2899,10 +2191,10 @@ parameters:
 			path: app/Models/User.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Observers/HardwareAuditObserver.php
+			message: '#^Class App\\Models\\ZabbixDevice uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/ZabbixDevice.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Contracts\\Auth\\Authenticatable\:\:\$id\.$#'
@@ -2951,12 +2243,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 4
 			path: app/Observers/HardwareAuditObserver.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\TicketComment\:\:\$ticket\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Policies/TicketCommentPolicy.php
 
 		-
 			message: '#^PHPDoc type array\<class\-string, array\<class\-string\>\> of property App\\Providers\\EventServiceProvider\:\:\$listen is not covariant with PHPDoc type array\<string, array\<int, string\>\> of overridden property Illuminate\\Foundation\\Support\\Providers\\EventServiceProvider\:\:\$listen\.$#'
@@ -3139,12 +2425,6 @@ parameters:
 			path: database/factories/UserFactory.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: database/factories/UserFactory.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -3167,12 +2447,6 @@ parameters:
 			identifier: staticMethod.notFound
 			count: 1
 			path: database/seeders/BoundarySeeder.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: database/seeders/CenterBoundarySeeder.php
 
 		-
 			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
@@ -3217,12 +2491,6 @@ parameters:
 			path: database/seeders/HardwareSeeder.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: database/seeders/HealthHouseBoundarySeeder.php
-
-		-
 			message: '#^Method Database\\Seeders\\HealthHouseBoundarySeeder\:\:getBoundaries\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -3231,7 +2499,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Spatie\\Permission\\Models\\Permission\:\:firstOrCreate\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 17
+			count: 18
 			path: database/seeders/PermissionSeeder.php
 
 		-
@@ -3325,12 +2593,6 @@ parameters:
 			path: database/seeders/TahsilSeeder.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 5
-			path: database/seeders/TicketSeeder.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\TaskActivity\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 5
@@ -3338,12 +2600,6 @@ parameters:
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:create\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: database/seeders/TicketSeeder.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: database/seeders/TicketSeeder.php
@@ -3371,12 +2627,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: database/seeders/TicketSeeder.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$person\.$#'
-			identifier: property.notFound
-			count: 1
-			path: database/seeders/TodoSeeder.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Todo\:\:create\(\)\.$#'
@@ -3613,39 +2863,9 @@ parameters:
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$pc_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\:\:\$person\.$#'
-			identifier: property.notFound
-			count: 2
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$deleted_at\.$#'
 			identifier: property.notFound
 			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$hardware_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Hardware\>\:\:\$clean_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Hardware\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Hardware\>\:\:\$person\.$#'
-			identifier: property.notFound
-			count: 2
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
@@ -3673,12 +2893,6 @@ parameters:
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 4
@@ -3691,21 +2905,9 @@ parameters:
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 2
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
@@ -3883,123 +3085,9 @@ parameters:
 			path: resources/views/livewire/hr/dashboard.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$assignedUsers\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 2
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 4
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectAllIds\(\) has parameter \$nodes with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectAllIds\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectFirstNLevels\(\) has parameter \$nodes with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:collectFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:expandFirstNLevels\(\) has parameter \$nodes with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:expandFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:toggle\(\) has parameter \$id with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$expanded type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$lazyChildren type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$loadingUnits type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$personCounts type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$rootUnits has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$selectedPersonnel has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hr/org\-chart\.blade\.php\:8\:\:\$selectedUnit has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
 			path: resources/views/livewire/hr/org-chart.blade.php
 
 		-
@@ -4027,34 +3115,22 @@ parameters:
 			path: resources/views/livewire/it/network-traffic-chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/networks\.blade\.php\:5\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:active\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: resources/views/livewire/it/networks.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/it/networks\.blade\.php\:5\:\:\$networkItems type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/it/networks.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/wireless\.blade\.php\:5\:\:mount\(\) has no return type specified\.$#'
-			identifier: missingType.return
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:active\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: resources/views/livewire/it/wireless.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/it/wireless\.blade\.php\:5\:\:\$signalItems type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:ordered\(\)\.$#'
+			identifier: method.notFound
 			count: 1
-			path: resources/views/livewire/it/wireless.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Estekhdam\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/estekhdam.blade.php
+			path: resources/views/livewire/it/zabbix-devices.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Estekhdam\:\:create\(\)\.$#'
@@ -4175,24 +3251,6 @@ parameters:
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$f_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/person.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$l_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/person.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Person\:\:\$u_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\Person\>\:\:accessible\(\)\.$#'
@@ -4327,12 +3385,6 @@ parameters:
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Radif\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/radif.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Radif\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -4379,12 +3431,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Semat\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Semat\:\:create\(\)\.$#'
@@ -4435,12 +3481,6 @@ parameters:
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Tahsil\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/kargozini/tahsil.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Tahsil\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -4489,12 +3529,6 @@ parameters:
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\MaintenanceSchedule\:\:\$title\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/maintenance/index.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\MaintenanceSchedule\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -4538,36 +3572,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$children_count\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$lat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$lng\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Unit\>\:\:\$unitType\.$#'
 			identifier: property.notFound
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
@@ -4807,12 +3811,6 @@ parameters:
 			path: resources/views/livewire/maps/point.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Region\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/maps/unit.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Region\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -4941,12 +3939,6 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/profile/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\ActivityLog\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
 			count: 1
 			path: resources/views/livewire/profile/index.blade.php
 
@@ -5081,66 +4073,6 @@ parameters:
 			identifier: variable.undefined
 			count: 3
 			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
-			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:\$reportData\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Todo\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:getUnitsProperty\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Parameter \#1 \$carbon of static method Morilog\\Jalali\\Jalalian\:\:fromCarbon\(\) expects Carbon\\Carbon, Carbon\\CarbonInterface given\.$#'
-			identifier: argument.type
-			count: 2
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/index\.blade\.php\:11\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/reports/index.blade.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 4
-			path: resources/views/livewire/reports/index.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:with\(\)\.$#'
@@ -5437,12 +4369,6 @@ parameters:
 			path: resources/views/livewire/settings/index.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: resources/views/livewire/tickets/ticket-comments.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
 			count: 5
@@ -5503,18 +4429,6 @@ parameters:
 			path: resources/views/livewire/tickets/⚡create.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Todo\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡create.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡create.blade.php
-
-		-
 			message: '#^Call to static method random\(\) on an unknown class Str\.$#'
 			identifier: class.notFound
 			count: 1
@@ -5563,12 +4477,6 @@ parameters:
 			path: resources/views/livewire/tickets/⚡create.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
 			message: '#^Anonymous function has an unused use \$count\.$#'
 			identifier: closure.unusedUse
 			count: 1
@@ -5608,18 +4516,6 @@ parameters:
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 11
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Todo\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
@@ -5761,16 +4657,16 @@ parameters:
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
+			message: '#^Static method App\\Models\\Unit\:\:where\(\) invoked with 3 parameters, 2 required\.$#'
+			identifier: arguments.count
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Ticket\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Ticket\>\:\:\$unit_id\.$#'
-			identifier: property.notFound
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 1
-			path: resources/views/livewire/tickets/⚡monitoring.blade.php
+			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\Ticket\>\:\:accessible\(\)\.$#'
@@ -5780,12 +4676,6 @@ parameters:
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡monitoring.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
@@ -5821,40 +4711,10 @@ parameters:
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$end_at\.$#'
-			identifier: property.notFound
+			message: '#^Static method App\\Models\\Unit\:\:where\(\) invoked with 3 parameters, 2 required\.$#'
+			identifier: arguments.count
 			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$is_completed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$start_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$title\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Todo\:\:\$unit_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
+			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
@@ -5893,110 +4753,104 @@ parameters:
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:closeModal\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:closeModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:convertToMiladi\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:convertToMiladi\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:convertToMiladi\(\) has parameter \$jalaliDate with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:convertToMiladi\(\) has parameter \$jalaliDate with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:editEvent\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:editEvent\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:getEvents\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:getEvents\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openCreateModal\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openCreateModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openCreateModal\(\) has parameter \$end with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openCreateModal\(\) has parameter \$end with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openCreateModal\(\) has parameter \$start with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openCreateModal\(\) has parameter \$start with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:openModal\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:openModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Todo\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$end_at has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$end_at has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$end_date_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$end_date_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$end_time_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$end_time_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$start_at has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$start_at has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$start_date_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$start_date_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:11\:\:\$start_time_picker has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:12\:\:\$start_time_picker has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Todo\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
+			message: '#^Strict comparison using \=\=\= between int and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
 			count: 1
 			path: resources/views/livewire/todo/todo.blade.php
 
@@ -6031,31 +4885,7 @@ parameters:
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$assignedUsers\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/units/chart.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$childrenRecursive\.$#'
-			identifier: property.notFound
-			count: 2
-			path: resources/views/livewire/units/chart.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/units/chart.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/units/chart.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
@@ -6109,21 +4939,15 @@ parameters:
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$name\.$#'
-			identifier: property.notFound
+			message: '#^Static method App\\Models\\Unit\:\:where\(\) invoked with 3 parameters, 2 required\.$#'
+			identifier: arguments.count
 			count: 1
-			path: resources/views/livewire/units/index.blade.php
+			path: resources/views/livewire/units/chart.blade.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
 			identifier: method.notFound
 			count: 3
-			path: resources/views/livewire/units/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Region\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 4
 			path: resources/views/livewire/units/index.blade.php
 
 		-
@@ -6145,19 +4969,7 @@ parameters:
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/units/index.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/units/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\UnitType\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
@@ -6166,12 +4978,6 @@ parameters:
 			message: '#^Call to an undefined static method App\\Models\\UnitType\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
-			path: resources/views/livewire/units/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\UnitTypeRelationship\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 3
 			path: resources/views/livewire/units/index.blade.php
 
 		-
@@ -6343,16 +5149,10 @@ parameters:
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$boundary\.$#'
-			identifier: property.notFound
+			message: '#^Static method App\\Models\\UnitType\:\:where\(\) invoked with 3 parameters, 2 required\.$#'
+			identifier: arguments.count
 			count: 1
-			path: resources/views/livewire/units/map.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$boundary_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/units/map.blade.php
+			path: resources/views/livewire/units/index.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
@@ -6371,18 +5171,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/map.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\User\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\User\>\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\User\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\User\>\:\:\$roles\.$#'
@@ -6409,19 +5197,7 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Person\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\User\:\:create\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:where\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
@@ -6559,12 +5335,6 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: routes/api.php
-
-		-
 			message: '#^Undefined variable\: \$this$#'
 			identifier: variable.undefined
 			count: 1
@@ -6579,7 +5349,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 44
+			count: 45
 			path: routes/web.php
 
 		-
