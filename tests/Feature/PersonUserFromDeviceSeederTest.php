@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Region;
 use App\Models\Unit;
-use App\Models\UnitType;
+use Database\Seeders\BoundarySeeder;
 use Database\Seeders\PersonUserFromDeviceSeeder;
+use Database\Seeders\RegionSeeder;
+use Database\Seeders\UnitSeeder;
+use Database\Seeders\UnitTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -21,67 +24,67 @@ class PersonUserFromDeviceSeederTest extends TestCase
     {
         parent::setUp();
         $this->seedLookupTables();
+
+        // BoundarySeeder با auto-increment و UnitSeeder/RegionSeeder با id صریح
+        // insert می‌کنند، پس sequence ها باید از ۱ شروع شوند — sequence ها
+        // غیر-تراکنشی‌اند و تست‌های قبلی جلو انداخته‌اند.
+        foreach (['boundaries', 'unit_types', 'regions'] as $table) {
+            DB::statement("SELECT setval('{$table}_id_seq', COALESCE((SELECT MAX(id) FROM {$table}), 1), false)");
+        }
+
+        // همان ترتیب DatabaseSeeder
+        $this->seed(BoundarySeeder::class);
+        $this->seed(UnitTypeSeeder::class);
+        $this->seed(RegionSeeder::class);
+        $this->seed(UnitSeeder::class);
     }
 
-    public function test_units_of_special_branches_get_their_unit_type(): void
+    public function test_device_units_are_declared_in_unit_seeder_with_type_and_county(): void
     {
-        $this->seed(PersonUserFromDeviceSeeder::class);
-
-        // نام واحد => نوع واحد مورد انتظار (خود واحد و زیرمجموعه‌هایش)
+        // نام واحد => نوع واحد مورد انتظار
         $expected = [
             'ستاد' => 'ستادی',
-            'دبیرخانه' => 'ستادی', // زیرمجموعه مستقیم ستاد
-            'بهورزی' => 'ستادی', // زیرمجموعه ستاد
+            'دبیرخانه' => 'ستادی',
+            'بهورزی' => 'ستادی',
+            'دفتر مدیریت' => 'ستادی', // در فایل دیتا بود ولی هرگز ساخته نشده بود
+            'آی تی' => 'ستادی',
             'فوریت' => 'فوریت',
-            'پایگاه فوریت چرگر' => 'فوریت', // زیرمجموعه فوریت
+            'پایگاه فوریت چرگر' => 'فوریت',
             'مرکز سراج' => 'مرکز روان',
             'پایگاه غیر ضمیمه صائین قلعه' => 'پایگاه سلامت غیر ضمیمه',
         ];
 
         foreach ($expected as $unitName => $typeName) {
             $unit = Unit::where('name', $unitName)->first();
-            $this->assertNotNull($unit, "واحد «{$unitName}» باید ساخته شده باشد");
-
-            $typeId = UnitType::where('name', $typeName)->value('id');
-            $this->assertNotNull($typeId, "نوع واحد «{$typeName}» باید ساخته شود");
-            $this->assertEquals($typeId, $unit->unit_type_id, "واحد «{$unitName}» باید نوع «{$typeName}» بگیرد");
+            $this->assertNotNull($unit, "واحد «{$unitName}» باید در UnitSeeder تعریف شده باشد");
+            $this->assertEquals($typeName, $unit->unitType->name ?? null, "واحد «{$unitName}» باید نوع «{$typeName}» داشته باشد");
         }
 
-        // واحدی خارج از این شاخه‌ها نباید نوع بگیرد
-        $outside = Unit::where('name', 'مرکز قروه')->first();
-        $this->assertNotNull($outside);
-        $this->assertNull($outside->unit_type_id, 'واحد خارج از این شاخه‌ها نباید تغییر کند');
+        $this->assertSame(0, Unit::whereNull('unit_type_id')->count(), 'هیچ واحدی نباید بدون نوع واحد بماند');
+
+        $this->assertEquals(
+            ['وزارت بهداشت'],
+            Unit::whereNull('region_id')->pluck('name')->all(),
+            'فقط ریشه (وزارت بهداشت) نباید شهرستان داشته باشد'
+        );
+
+        $setad = Unit::where('name', 'ستاد')->first();
+        $this->assertEquals('ابهر', $setad->region->name ?? null, 'شهرستان واحد ستاد باید ابهر باشد');
     }
 
-    public function test_units_without_region_inherit_the_parent_region(): void
+    public function test_person_seeder_resolves_every_device_path_without_creating_units(): void
     {
-        $county = Region::create(['name' => 'ابهر', 'type' => 'county']);
-        $network = Unit::create(['name' => 'شبکه تست', 'region_id' => $county->id]);
-        $child = Unit::create(['name' => 'واحد بدون شهرستان', 'parent_id' => $network->id]);
-        $grandChild = Unit::create(['name' => 'زیرمجموعه بدون شهرستان', 'parent_id' => $child->id]);
+        $unitsBefore = Unit::count();
 
         $this->seed(PersonUserFromDeviceSeeder::class);
+        $this->assertSame(
+            $unitsBefore,
+            Unit::count(),
+            'سیدر افراد نباید واحد جدیدی بسازد — همه مسیرهای فایل دیتا باید در UnitSeeder باشند'
+        );
 
-        $this->assertEquals($county->id, $child->fresh()->region_id, 'واحد باید شهرستان والدش را ارث ببرد');
-        $this->assertEquals($county->id, $grandChild->fresh()->region_id, 'ارث باید چندسطحی هم کار کند');
-
-        // ریشه بدون والد و بدون region نباید city پیدا کند
-        $root = Unit::where('name', 'وزارت بهداشت')->first();
-        $this->assertNotNull($root);
-        $this->assertNull($root->region_id, 'واحد ریشه نباید شهرستان پیدا کند');
-    }
-
-    public function test_seeding_is_idempotent_for_the_assigned_unit_types(): void
-    {
+        // اجرای دوم هم نباید چیزی بسازد
         $this->seed(PersonUserFromDeviceSeeder::class);
-        $this->seed(PersonUserFromDeviceSeeder::class);
-
-        foreach (['ستادی', 'فوریت', 'مرکز روان', 'پایگاه سلامت غیر ضمیمه'] as $typeName) {
-            $this->assertSame(
-                1,
-                UnitType::where('name', $typeName)->count(),
-                "اجرای چندباره نباید نوع «{$typeName}» را تکراری بسازد"
-            );
-        }
+        $this->assertSame($unitsBefore, Unit::count());
     }
 }

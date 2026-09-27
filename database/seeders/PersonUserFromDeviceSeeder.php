@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Person;
 use App\Models\Unit;
-use App\Models\UnitType;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -81,61 +80,6 @@ class PersonUserFromDeviceSeeder extends Seeder
             }
         });
 
-        $this->assignUnitTypes();
-        $this->inheritMissingRegions();
-    }
-
-    /**
-     * واحدِ بدون شهرستان را از نزدیک‌ترین والدِ دارای region ارث می‌دهد.
-     *
-     * `resolveUnitPath` only writes name/parent/is_active, so units created
-     * from the device paths have no `region_id` — the «شهرستان» export column
-     * and the county filter stay empty for them. Runs until no row changes
-     * (bounded by the tree depth). Idempotent, does not overwrite an existing
-     * region.
-     */
-    private function inheritMissingRegions(): void
-    {
-        do {
-            $updated = DB::update(
-                'UPDATE units child SET region_id = parent.region_id
-                 FROM units parent
-                 WHERE child.region_id IS NULL
-                   AND parent.id = child.parent_id
-                   AND parent.region_id IS NOT NULL'
-            );
-        } while ($updated > 0);
-    }
-
-    /**
-     * نوع واحد شاخه‌های خاص: خود واحد و همه زیرمجموعه‌هایش.
-     *
-     * Runs after the unit paths are resolved, so it also repairs databases
-     * seeded before these types existed. Idempotent.
-     */
-    private function assignUnitTypes(): void
-    {
-        $rules = [
-            'ستاد' => 'ستادی',
-            'فوریت' => 'فوریت',
-            'مرکز سراج' => 'مرکز روان',
-            'پایگاه غیر ضمیمه صائین قلعه' => 'پایگاه سلامت غیر ضمیمه',
-        ];
-
-        foreach ($rules as $unitName => $typeName) {
-            $rootIds = DB::table('units')->where('name', $unitName)->pluck('id')->all();
-
-            if ($rootIds === []) {
-                continue;
-            }
-
-            $typeId = UnitType::query()->firstOrCreate(['name' => $typeName])->id;
-
-            // descendantIds() شامل خود واحد هم می‌شود و با UNION می‌آید (cycle-safe).
-            DB::table('units')
-                ->whereIn('id', Unit::descendantIds($rootIds))
-                ->update(['unit_type_id' => $typeId]);
-        }
     }
 
     /**
