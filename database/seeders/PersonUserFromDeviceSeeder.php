@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Person;
 use App\Models\Unit;
+use App\Models\UnitType;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -79,6 +80,30 @@ class PersonUserFromDeviceSeeder extends Seeder
                 }
             }
         });
+
+        $this->assignSetadUnitType();
+    }
+
+    /**
+     * واحدهایی که داخل «ستاد» هستند باید نوع واحدشان «ستادی» باشد.
+     *
+     * Runs after the unit paths are resolved, so it also repairs databases
+     * that were seeded before this type existed. Idempotent.
+     */
+    private function assignSetadUnitType(): void
+    {
+        $setadIds = DB::table('units')->where('name', 'ستاد')->pluck('id')->all();
+
+        if ($setadIds === []) {
+            return;
+        }
+
+        $typeId = UnitType::query()->firstOrCreate(['name' => 'ستادی'])->id;
+
+        // descendantIds() شامل خود «ستاد» هم می‌شود و با UNION می‌آید (cycle-safe).
+        DB::table('units')
+            ->whereIn('id', Unit::descendantIds($setadIds))
+            ->update(['unit_type_id' => $typeId]);
     }
 
     /**

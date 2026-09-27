@@ -39,6 +39,7 @@ class UnitTypeSeeder extends Seeder
             'بیمارستان', // 19
             'خانه های کارگری', // 20
             'HSE', // 21
+            'ستادی', // 22 — واحدهای داخل «ستاد» (PersonUserFromDeviceSeeder)
         ];
 
         foreach ($unitTypes as $type) {
