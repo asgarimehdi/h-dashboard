@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Person;
 use App\Models\Unit;
-use App\Models\UnitType;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -81,38 +80,6 @@ class PersonUserFromDeviceSeeder extends Seeder
             }
         });
 
-        $this->assignUnitTypes();
-    }
-
-    /**
-     * نوع واحد شاخه‌های خاص: خود واحد و همه زیرمجموعه‌هایش.
-     *
-     * Runs after the unit paths are resolved, so it also repairs databases
-     * seeded before these types existed. Idempotent.
-     */
-    private function assignUnitTypes(): void
-    {
-        $rules = [
-            'ستاد' => 'ستادی',
-            'فوریت' => 'فوریت',
-            'مرکز سراج' => 'مرکز روان',
-            'پایگاه غیر ضمیمه صائین قلعه' => 'پایگاه سلامت غیر ضمیمه',
-        ];
-
-        foreach ($rules as $unitName => $typeName) {
-            $rootIds = DB::table('units')->where('name', $unitName)->pluck('id')->all();
-
-            if ($rootIds === []) {
-                continue;
-            }
-
-            $typeId = UnitType::query()->firstOrCreate(['name' => $typeName])->id;
-
-            // descendantIds() شامل خود واحد هم می‌شود و با UNION می‌آید (cycle-safe).
-            DB::table('units')
-                ->whereIn('id', Unit::descendantIds($rootIds))
-                ->update(['unit_type_id' => $typeId]);
-        }
     }
 
     /**
