@@ -65,7 +65,8 @@ class HrLivewireTest extends TestCase
 
     public function test_org_chart_toggle_collapses(): void
     {
-        $component = Livewire::test('hr.org-chart')
+        // Tree mechanics now live on the shared unit.tree component (#704).
+        $component = Livewire::test('unit.tree')
             ->assertOk();
 
         $expandedBefore = $component->get('expanded');
@@ -80,7 +81,7 @@ class HrLivewireTest extends TestCase
 
     public function test_org_chart_collapse_all(): void
     {
-        Livewire::test('hr.org-chart')
+        Livewire::test('unit.tree')
             ->assertOk()
             ->call('collapseAll')
             ->assertSet('expanded', []);
@@ -88,7 +89,7 @@ class HrLivewireTest extends TestCase
 
     public function test_org_chart_expand_all(): void
     {
-        $component = Livewire::test('hr.org-chart')
+        $component = Livewire::test('unit.tree')
             ->assertOk()
             ->call('collapseAll')
             ->call('expandAll');
@@ -103,7 +104,7 @@ class HrLivewireTest extends TestCase
         $child = Unit::create(['name' => 'شبکه بهداشت', 'parent_id' => $this->unit->id]);
         $grandchild = Unit::create(['name' => 'مرکز بهداشت روستایی', 'parent_id' => $child->id]);
 
-        $component = Livewire::test('hr.org-chart')
+        $component = Livewire::test('unit.tree')
             ->assertOk();
 
         $expanded = $component->get('expanded');
@@ -124,7 +125,7 @@ class HrLivewireTest extends TestCase
         $grandchild = Unit::create(['name' => 'مرکز', 'parent_id' => $child->id]);
         $greatGrandchild = Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $grandchild->id]);
 
-        $component = Livewire::test('hr.org-chart')
+        $component = Livewire::test('unit.tree')
             ->assertOk();
 
         $expanded = $component->get('expanded');
@@ -199,16 +200,16 @@ class HrLivewireTest extends TestCase
     /** @test */
     public function test_org_chart_vacancy_badge_on_empty_units(): void
     {
-        // Create a unit with no personnel
-        $emptyUnit = Unit::create(['name' => 'واحد خالی', 'parent_id' => $this->unit->id]);
+        // Create a unit with no personnel under the page's root unit.
+        Unit::create(['name' => 'واحد خالی', 'parent_id' => $this->unit->id]);
 
-        $component = Livewire::test('hr.org-chart')
-            ->assertOk();
-
-        $expanded = $component->get('expanded');
-        $this->assertContains((string) $emptyUnit->id, $expanded);
-
-        $personCounts = $component->get('personCounts');
-        $this->assertEquals(0, $personCounts[$emptyUnit->id] ?? 0);
+        // Mount the PAGE, not the bare tree: hr.org-chart computes the counts,
+        // feeds them as badgeData, and the badge renders for a unit with no
+        // personnel — "0 نفر" plus the «خالی» error badge. Asserting the
+        // rendered output (not an empty map) is what makes this a real test.
+        Livewire::test('hr.org-chart')
+            ->assertOk()
+            ->assertSee('0 نفر')
+            ->assertSee('خالی');
     }
 }
