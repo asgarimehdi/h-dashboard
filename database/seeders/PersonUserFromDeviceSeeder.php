@@ -82,6 +82,29 @@ class PersonUserFromDeviceSeeder extends Seeder
         });
 
         $this->assignUnitTypes();
+        $this->inheritMissingRegions();
+    }
+
+    /**
+     * واحدِ بدون شهرستان را از نزدیک‌ترین والدِ دارای region ارث می‌دهد.
+     *
+     * `resolveUnitPath` only writes name/parent/is_active, so units created
+     * from the device paths have no `region_id` — the «شهرستان» export column
+     * and the county filter stay empty for them. Runs until no row changes
+     * (bounded by the tree depth). Idempotent, does not overwrite an existing
+     * region.
+     */
+    private function inheritMissingRegions(): void
+    {
+        do {
+            $updated = DB::update(
+                'UPDATE units child SET region_id = parent.region_id
+                 FROM units parent
+                 WHERE child.region_id IS NULL
+                   AND parent.id = child.parent_id
+                   AND parent.region_id IS NOT NULL'
+            );
+        } while ($updated > 0);
     }
 
     /**

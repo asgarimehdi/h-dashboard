@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Region;
 use App\Models\Unit;
 use App\Models\UnitType;
 use Database\Seeders\PersonUserFromDeviceSeeder;
@@ -50,6 +51,24 @@ class PersonUserFromDeviceSeederTest extends TestCase
         $outside = Unit::where('name', 'مرکز قروه')->first();
         $this->assertNotNull($outside);
         $this->assertNull($outside->unit_type_id, 'واحد خارج از این شاخه‌ها نباید تغییر کند');
+    }
+
+    public function test_units_without_region_inherit_the_parent_region(): void
+    {
+        $county = Region::create(['name' => 'ابهر', 'type' => 'county']);
+        $network = Unit::create(['name' => 'شبکه تست', 'region_id' => $county->id]);
+        $child = Unit::create(['name' => 'واحد بدون شهرستان', 'parent_id' => $network->id]);
+        $grandChild = Unit::create(['name' => 'زیرمجموعه بدون شهرستان', 'parent_id' => $child->id]);
+
+        $this->seed(PersonUserFromDeviceSeeder::class);
+
+        $this->assertEquals($county->id, $child->fresh()->region_id, 'واحد باید شهرستان والدش را ارث ببرد');
+        $this->assertEquals($county->id, $grandChild->fresh()->region_id, 'ارث باید چندسطحی هم کار کند');
+
+        // ریشه بدون والد و بدون region نباید city پیدا کند
+        $root = Unit::where('name', 'وزارت بهداشت')->first();
+        $this->assertNotNull($root);
+        $this->assertNull($root->region_id, 'واحد ریشه نباید شهرستان پیدا کند');
     }
 
     public function test_seeding_is_idempotent_for_the_assigned_unit_types(): void
