@@ -21,6 +21,25 @@ return new class extends Component {
     }
 
     /**
+     * شناسهٔ همهٔ آیتم‌هایی که گیج‌ها لازم دارند، بدون تکرار.
+     *
+     * یک درخواست `/api/zabbix/multi-latest` تا ۱۰۰ آیتم می‌پذیرد، پس کل صفحه با
+     * یک بار فراخوانی همهٔ گیج‌ها را پر می‌کند — به‌جای یک درخواست به‌ازای هر گیج.
+     *
+     * @return array<int, string>
+     */
+    public function itemIds(): array
+    {
+        return array_values(array_unique(array_merge(
+            [],
+            ...array_map(
+                fn (array $item) => [$item['signalId'], $item['freqId'], $item['respId']],
+                $this->signalItems
+            )
+        )));
+    }
+
+    /**
      * @return array<int, array{signalId: string, freqId: string, respId: string, name: string, min: float, max: float}>
      */
     protected function loadSignalItems(): array
@@ -75,7 +94,7 @@ return new class extends Component {
         </div>
         
         <div class="p-6">
-            {{-- بخش گیج‌های سیگنال با Lazy Loading --}}
+            {{-- بخش گیج‌های سیگنال — یک poller مشترک برای همهٔ گیج‌ها --}}
             @if(count($this->signalItems) === 0)
                 <p class="text-sm opacity-70">دستگاهی برای نمایش ثبت نشده است.</p>
             @endif
@@ -85,9 +104,8 @@ return new class extends Component {
                         // ایجاد key یکتا برای هر کامپوننت
                         $key = 'gauge-' . $item['signalId'] . '-' . $item['freqId'] . '-' . $item['respId'];
                     @endphp
-                    
-                    {{-- استفاده از lazy با کلید یکتا --}}
-                    <livewire:it.multi-gauge 
+
+                    <livewire:it.multi-gauge
                         :signal-item-id="$item['signalId']"
                         :frequency-item-id="$item['freqId']"
                         :response-time-item-id="$item['respId']"
@@ -98,10 +116,111 @@ return new class extends Component {
                         frequency-unit="MHz"
                         response-time-unit="ms"
                         :key="$key"
-                        lazy
                     />
                 @endforeach
             </div>
         </div>
     </x-card>
 </div>
+
+@script
+<script>
+    // یک درخواست برای همهٔ گیج‌های صفحه، به‌جای یک درخواست به‌ازای هر گیج.
+    //
+    // چرا: مسیر `/api/zabbix/multi-latest` زیر `throttle:api-user` است
+    // (۶۰ درخواست در دقیقه برای کل کاربر، نه برای هر صفحه). با ۱۴ دستگاه،
+    // حلقهٔ ۳۰ ثانیه‌ایِ هر گیج ۲۸ درخواست در دقیقه می‌ساخت و صفحه بعد از چند
+    // ثانیه با ۴۲۹ «Too Many Attempts» می‌افتاد. اکنون هر چرخه = یک درخواست.
+    (() => {
+        const state = window.zabbixGauges || (window.zabbixGauges = {
+            values: {}, error: null, loading: false, loaded: false, subscribers: [], timer: null,
+        });
+
+        const itemIds = @js($this->itemIds());
+        const REFRESH_MS = 30000;
+        // سقف اعتبارسنجی endpoint = ۱۰۰ آیتم در هر درخواست.
+        const CHUNK = 90;
+
+        if (state.timer) {
+            clearInterval(state.timer);
+            state.timer = null;
+        }
+        state.values = {};
+        state.error = null;
+        state.loaded = false;
+
+        const publish = () => {
+            state.subscribers.slice().forEach((subscriber) => subscriber());
+        };
+
+        const load = async () => {
+            if (!itemIds.length || state.loading) return;
+
+            state.loading = true;
+            publish();
+
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+                const values = {};
+
+                for (let offset = 0; offset < itemIds.length; offset += CHUNK) {
+                    const params = new URLSearchParams();
+                    itemIds
+                        .slice(offset, offset + CHUNK)
+                        .forEach((id, index) => params.append(`item_ids[${index}]`, id));
+
+                    const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
+
+                    if (!response.ok) {
+                        // #703: a 503 from our API means Zabbix itself is
+                        // unreachable. That is NOT an internal error — it is a
+                        // server we cannot talk to, so show the requested
+                        // friendly message instead of "خطای HTTP 503".
+                        if (response.status === 503) {
+                            state.error = 'دسترسی به سرور مقدور نمی باشد';
+                            return;
+                        }
+
+                        let errorMsg = `خطای HTTP ${response.status}`;
+                        try {
+                            const text = await response.text();
+                            try {
+                                const errorData = JSON.parse(text);
+                                if (errorData.message) errorMsg = errorData.message;
+                            } catch {
+                                errorMsg = text.substring(0, 100);
+                            }
+                        } catch (e) {}
+                        state.error = errorMsg;
+                        return;
+                    }
+
+                    Object.assign(values, await response.json());
+                }
+
+                state.values = values;
+                state.error = null;
+            } catch (e) {
+                console.error('Error fetching values:', e);
+
+                // #703: a TypeError from fetch() means the request never
+                // reached the server (network down / server offline), which
+                // is the same "cannot reach the server" condition as a 503.
+                state.error = e instanceof TypeError
+                    ? 'دسترسی به سرور مقدور نمی باشد'
+                    : (e.message || 'خطا در دریافت');
+            } finally {
+                state.loading = false;
+                state.loaded = true;
+                publish();
+            }
+        };
+
+        load();
+        state.timer = setInterval(load, REFRESH_MS);
+    })();
+</script>
+@endscript
+
