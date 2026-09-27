@@ -42,6 +42,8 @@ class UnitTypeRelationshipSeeder extends Seeder
             [18, 21], // خانه بهداشت کارگری child of HSE
             [22, 4], // واحد ستادی child of شبکه بهداشت (ستاد زیرمجموعه شبکه است)
             [22, 22], // واحد ستادی child of واحد ستادی (زیرمجموعه‌های داخل ستاد)
+            [17, 17], // فوریت child of فوریت (پایگاه‌های فوریت زیر واحد فوریت)
+            [23, 4], // مرکز روان child of شبکه بهداشت (مرکز سراج زیر شبکه)
         ];
 
         foreach ($relationships as [$childId, $parentId]) {

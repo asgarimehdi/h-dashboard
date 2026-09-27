@@ -22,35 +22,47 @@ class PersonUserFromDeviceSeederTest extends TestCase
         $this->seedLookupTables();
     }
 
-    public function test_units_inside_setad_get_the_setad_unit_type(): void
+    public function test_units_of_special_branches_get_their_unit_type(): void
     {
         $this->seed(PersonUserFromDeviceSeeder::class);
 
-        $typeId = UnitType::where('name', 'ستادی')->value('id');
-        $this->assertNotNull($typeId, 'نوع واحد «ستادی» باید ساخته شود');
+        // نام واحد => نوع واحد مورد انتظار (خود واحد و زیرمجموعه‌هایش)
+        $expected = [
+            'ستاد' => 'ستادی',
+            'دبیرخانه' => 'ستادی', // زیرمجموعه مستقیم ستاد
+            'بهورزی' => 'ستادی', // زیرمجموعه ستاد
+            'فوریت' => 'فوریت',
+            'پایگاه فوریت چرگر' => 'فوریت', // زیرمجموعه فوریت
+            'مرکز سراج' => 'مرکز روان',
+            'پایگاه غیر ضمیمه صائین قلعه' => 'پایگاه سلامت غیر ضمیمه',
+        ];
 
-        // خود «ستاد»، یک زیرمجموعه مستقیم و یک واحد عمیق‌تر
-        foreach (['ستاد', 'دبیرخانه', 'بهورزی'] as $name) {
-            $unit = Unit::where('name', $name)->first();
-            $this->assertNotNull($unit, "واحد «{$name}» باید ساخته شده باشد");
-            $this->assertEquals($typeId, $unit->unit_type_id, "واحد «{$name}» باید نوع «ستادی» بگیرد");
+        foreach ($expected as $unitName => $typeName) {
+            $unit = Unit::where('name', $unitName)->first();
+            $this->assertNotNull($unit, "واحد «{$unitName}» باید ساخته شده باشد");
+
+            $typeId = UnitType::where('name', $typeName)->value('id');
+            $this->assertNotNull($typeId, "نوع واحد «{$typeName}» باید ساخته شود");
+            $this->assertEquals($typeId, $unit->unit_type_id, "واحد «{$unitName}» باید نوع «{$typeName}» بگیرد");
         }
 
-        // واحد خارج از ستاد نباید نوع بگیرد
-        $outside = Unit::where('name', 'فوریت')->first();
+        // واحدی خارج از این شاخه‌ها نباید نوع بگیرد
+        $outside = Unit::where('name', 'مرکز قروه')->first();
         $this->assertNotNull($outside);
-        $this->assertNull($outside->unit_type_id, 'واحد خارج از ستاد نباید تغییر کند');
+        $this->assertNull($outside->unit_type_id, 'واحد خارج از این شاخه‌ها نباید تغییر کند');
     }
 
-    public function test_seeding_is_idempotent_for_the_setad_type(): void
+    public function test_seeding_is_idempotent_for_the_assigned_unit_types(): void
     {
         $this->seed(PersonUserFromDeviceSeeder::class);
         $this->seed(PersonUserFromDeviceSeeder::class);
 
-        $this->assertSame(
-            1,
-            UnitType::where('name', 'ستادی')->count(),
-            'اجرای چندباره نباید نوع واحد تکراری بسازد'
-        );
+        foreach (['ستادی', 'فوریت', 'مرکز روان', 'پایگاه سلامت غیر ضمیمه'] as $typeName) {
+            $this->assertSame(
+                1,
+                UnitType::where('name', $typeName)->count(),
+                "اجرای چندباره نباید نوع «{$typeName}» را تکراری بسازد"
+            );
+        }
     }
 }

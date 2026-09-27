@@ -81,29 +81,38 @@ class PersonUserFromDeviceSeeder extends Seeder
             }
         });
 
-        $this->assignSetadUnitType();
+        $this->assignUnitTypes();
     }
 
     /**
-     * واحدهایی که داخل «ستاد» هستند باید نوع واحدشان «ستادی» باشد.
+     * نوع واحد شاخه‌های خاص: خود واحد و همه زیرمجموعه‌هایش.
      *
      * Runs after the unit paths are resolved, so it also repairs databases
-     * that were seeded before this type existed. Idempotent.
+     * seeded before these types existed. Idempotent.
      */
-    private function assignSetadUnitType(): void
+    private function assignUnitTypes(): void
     {
-        $setadIds = DB::table('units')->where('name', 'ستاد')->pluck('id')->all();
+        $rules = [
+            'ستاد' => 'ستادی',
+            'فوریت' => 'فوریت',
+            'مرکز سراج' => 'مرکز روان',
+            'پایگاه غیر ضمیمه صائین قلعه' => 'پایگاه سلامت غیر ضمیمه',
+        ];
 
-        if ($setadIds === []) {
-            return;
+        foreach ($rules as $unitName => $typeName) {
+            $rootIds = DB::table('units')->where('name', $unitName)->pluck('id')->all();
+
+            if ($rootIds === []) {
+                continue;
+            }
+
+            $typeId = UnitType::query()->firstOrCreate(['name' => $typeName])->id;
+
+            // descendantIds() شامل خود واحد هم می‌شود و با UNION می‌آید (cycle-safe).
+            DB::table('units')
+                ->whereIn('id', Unit::descendantIds($rootIds))
+                ->update(['unit_type_id' => $typeId]);
         }
-
-        $typeId = UnitType::query()->firstOrCreate(['name' => 'ستادی'])->id;
-
-        // descendantIds() شامل خود «ستاد» هم می‌شود و با UNION می‌آید (cycle-safe).
-        DB::table('units')
-            ->whereIn('id', Unit::descendantIds($setadIds))
-            ->update(['unit_type_id' => $typeId]);
     }
 
     /**
