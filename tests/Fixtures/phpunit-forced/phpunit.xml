@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Fixture for TestDatabaseResolverTest — NOT the project's phpunit.xml.
+
+    It exists to pin the "force" branch of PHPUnit's precedence rules: a forced
+    <env> entry replaces an already-exported shell variable, which is what
+    CACHE_STORE/SESSION_DRIVER/QUEUE_CONNECTION do in the real phpunit.xml.
+    The real file deliberately does NOT force the DB_* entries.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         bootstrap="vendor/autoload.php">
+    <php>
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_DATABASE" value="h_dashboard_forced" force="true"/>
+    </php>
+</phpunit>
