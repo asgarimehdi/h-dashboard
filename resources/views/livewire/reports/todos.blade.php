@@ -1,18 +1,24 @@
 <?php
 
-use Livewire\Component;
 use App\Models\Todo;
 use App\Services\AccessService;
+use App\Services\DailySeries;
 use Carbon\Carbon;
+use Livewire\Component;
 use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public ?int $selectedUnitId = null;
+
     public ?string $statusFilter = null; // completed, pending, overdue, null=all
+
     public $units = [];
+
     public bool $showHelpModal = false;
 
     public function mount(): void
@@ -24,13 +30,34 @@ return new class extends Component
 
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
     {
-        if (empty($date)) return null;
+        if (empty($date)) {
+            return null;
+        }
         try {
             $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
+
             return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * The chosen from..to range as Carbon bounds, or null when either end is
+     * missing/invalid — in which case the daily series has no window to fill.
+     *
+     * @return array{0: Carbon, 1: Carbon}|null
+     */
+    private function dateRange(): ?array
+    {
+        $from = $this->parseJalaliDate($this->dateFrom);
+        $to = $this->parseJalaliDate($this->dateTo, endOfDay: true);
+
+        if (! $from || ! $to || $from->gt($to)) {
+            return null;
+        }
+
+        return [$from, $to];
     }
 
     public function chartPayload(): array
@@ -38,8 +65,8 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $query = Todo::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('unit_id', $accessibleIds))
-            ->when($this->selectedUnitId, fn($q) => $q->where('unit_id', $this->selectedUnitId));
+            ->when($accessibleIds, fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->when($this->selectedUnitId, fn ($q) => $q->where('unit_id', $this->selectedUnitId));
 
         if ($from = $this->parseJalaliDate($this->dateFrom)) {
             $query->where('start_at', '>=', $from);
@@ -56,22 +83,25 @@ return new class extends Component
 
         $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
             ->whereIn('todos.unit_id', $accessibleIds)
-            ->when($this->selectedUnitId, fn($q) => $q->where('todos.unit_id', $this->selectedUnitId))
+            ->when($this->selectedUnitId, fn ($q) => $q->where('todos.unit_id', $this->selectedUnitId))
             ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
             ->groupBy('unit_name')
             ->pluck('count', 'unit_name')
             ->toArray();
 
-        $byDay = (clone $query)
-            ->selectRaw("date(start_at) as day, count(*) as count")
-            ->groupBy('day')
-            ->orderBy('day')
-            ->get()
-            ->map(fn($r) => [
-                'day' => Jalalian::fromCarbon(Carbon::parse($r->day))->format('Y/m/d'),
-                'count' => (int) $r->count,
-            ])
-            ->toArray();
+        // Issue #736: materialise every day in the chosen range, zeros included,
+        // so a day with no todos is a zero rather than a missing column. The
+        // filtered $query is reused, so unit/status/date filters still apply.
+        $range = $this->dateRange();
+        $byDay = $range
+            ? array_map(
+                fn (array $row) => [
+                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                    'count' => $row['count'],
+                ],
+                DailySeries::between($range[0], $range[1])->counts(clone $query, 'start_at')
+            )
+            : [];
 
         $byStatus = [
             'تکمیل شده' => $completed,
@@ -80,20 +110,20 @@ return new class extends Component
         ];
 
         $items = (clone $query)
-            ->when($this->statusFilter === 'completed', fn($q) => $q->where('is_completed', true))
-            ->when($this->statusFilter === 'pending', fn($q) => $q->where('is_completed', false)->where(fn($q) => $q->whereNull('end_at')->orWhere('end_at', '>=', $now)))
-            ->when($this->statusFilter === 'overdue', fn($q) => $q->where('is_completed', false)->whereNotNull('end_at')->where('end_at', '<', $now))
+            ->when($this->statusFilter === 'completed', fn ($q) => $q->where('is_completed', true))
+            ->when($this->statusFilter === 'pending', fn ($q) => $q->where('is_completed', false)->where(fn ($q) => $q->whereNull('end_at')->orWhere('end_at', '>=', $now)))
+            ->when($this->statusFilter === 'overdue', fn ($q) => $q->where('is_completed', false)->whereNotNull('end_at')->where('end_at', '<', $now))
             ->with('unit:id,name')
             ->orderBy('start_at', 'desc')
             ->get()
-            ->map(fn($t) => [
+            ->map(fn ($t) => [
                 'id' => $t->id,
                 'title' => $t->title,
                 'unit' => $t->unit?->name ?? '—',
                 'start' => $t->start_at ? Jalalian::fromCarbon(Carbon::parse($t->start_at))->format('Y/m/d') : '—',
                 'end' => $t->end_at ? Jalalian::fromCarbon(Carbon::parse($t->end_at))->format('Y/m/d') : '—',
                 'completed' => $t->is_completed,
-                'is_overdue' => !$t->is_completed && $t->end_at && $t->end_at < $now,
+                'is_overdue' => ! $t->is_completed && $t->end_at && $t->end_at < $now,
             ])
             ->toArray();
 
@@ -111,6 +141,7 @@ return new class extends Component
     public function getAccessibleUnitsProperty()
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         return \App\Models\Unit::whereIn('id', $accessibleIds)->get();
     }
 }; ?>

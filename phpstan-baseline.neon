@@ -663,7 +663,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Todo\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 1
 			path: app/Http/Controllers/Api/ReportController.php
 
 		-
@@ -2745,7 +2745,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
@@ -2773,19 +2773,19 @@ parameters:
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/dashboard\.blade\.php\:10\:\:getRecentActivitiesProperty\(\) return type with generic class Illuminate\\Database\\Eloquent\\Collection does not specify its types\: TKey, TModel$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/dashboard\.blade\.php\:11\:\:getRecentActivitiesProperty\(\) return type with generic class Illuminate\\Database\\Eloquent\\Collection does not specify its types\: TKey, TModel$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/dashboard\.blade\.php\:10\:\:getTicketChartDataProperty\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/dashboard\.blade\.php\:11\:\:getTicketChartDataProperty\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/dashboard\.blade\.php\:10\:\:getTicketStatusDataProperty\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/dashboard\.blade\.php\:11\:\:getTicketStatusDataProperty\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/dashboard.blade.php
@@ -3979,7 +3979,7 @@ parameters:
 			path: resources/views/livewire/profile/index.blade.php
 
 		-
-			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:12\:\:\$reportData\.$#'
+			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:13\:\:\$reportData\.$#'
 			identifier: property.notFound
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
@@ -4015,25 +4015,25 @@ parameters:
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:12\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:13\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 3
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:12\:\:childUnits\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:13\:\:childUnits\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:12\:\:grandChildUnits\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:13\:\:grandChildUnits\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:12\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:13\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
@@ -4045,7 +4045,7 @@ parameters:
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:12\:\:\$units has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:13\:\:\$units has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
@@ -4189,13 +4189,13 @@ parameters:
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:9\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:10\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:9\:\:getAccessibleUnitsProperty\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:10\:\:getAccessibleUnitsProperty\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
@@ -4207,7 +4207,7 @@ parameters:
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:9\:\:\$units has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:10\:\:\$units has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
