@@ -115,10 +115,37 @@ class GitHooksTest extends TestCase
 
     public function test_the_hooks_ignore_non_php_changes(): void
     {
-        // A markdown-only commit must not pay for a Pint run.
-        foreach (self::HOOKS as $hook) {
-            $this->assertStringContainsString('grep', $this->commands($hook));
-            $this->assertStringContainsString('.php', $this->commands($hook));
-        }
+        // A markdown-only commit must not pay for a Pint run, and a docs-only
+        // push must not pay for PHPStan. The pre-commit hook filters with grep
+        // (it builds an explicit file list); the pre-push hook lets git do it
+        // with a pathspec, which is the same guarantee without the extra step.
+        $this->assertStringContainsString('grep', $this->commands('pre-commit'));
+        $this->assertStringContainsString('.php', $this->commands('pre-commit'));
+
+        $this->assertStringContainsString("'*.php'", $this->commands('pre-push'));
+    }
+
+    public function test_the_pre_push_hook_asks_git_which_refs_are_being_pushed(): void
+    {
+        // The index is ALWAYS empty when a pre-push hook runs, so a gate built
+        // on `git diff --cached` reports nothing and silently never runs — the
+        // gate that looks installed and never fires. git passes the refs on
+        // stdin; the hook has to read them.
+        $commands = $this->commands('pre-push');
+
+        $this->assertStringNotContainsString('diff --cached', $commands);
+        $this->assertMatchesRegularExpression('/while read /', $commands);
+        $this->assertStringContainsString('pushed_php_files', $commands);
+    }
+
+    public function test_the_pre_push_hook_compares_against_the_remote_sha(): void
+    {
+        // The decision has to be made about the range actually being pushed, not
+        // about the working tree — otherwise a docs-only push still pays for
+        // PHPStan and a code push on an "empty" index skips it.
+        $commands = $this->commands('pre-push');
+
+        $this->assertStringContainsString('..HEAD', $commands);
+        $this->assertStringContainsString('0000000000000000000000000000000000000000', $commands);
     }
 }

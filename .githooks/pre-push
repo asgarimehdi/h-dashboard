@@ -1,21 +1,40 @@
 #!/usr/bin/env bash
-# Middle layer. PHPStan over the WHOLE project, not the staged subset:
-# a staged-only analysis is a second analysis route that CI never runs, so any
-# error that only surfaces through a dependency would never be seen locally.
+# Middle layer. PHPStan over the WHOLE project, not the pushed range only:
+# a range-only path would be an analysis route CI never exercises, so errors
+# that surface only through dependencies would never be seen locally.
 #
 # The full test suite is deliberately NOT run here — it takes minutes, and a
 # push gate that slow is a push people cancel. Tests are opt-in:
 #   VERIFY_TESTS="tests/Feature/TodoLivewireTest.php" git push
 set -euo pipefail
 
-STAGED_PHP_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.php$' || true)
+# git hands a pre-push hook "<local ref> <local sha> <remote ref> <remote sha>"
+# on stdin — one line per ref being pushed. The INDEX is always empty at this
+# point, so "git diff --cached" cannot answer "what is being pushed"; it only
+# ever reported nothing, and the gate silently never ran.
+pushed_php_files() {
+    local remote_sha=""
 
-if [ -z "$STAGED_PHP_FILES" ]; then
-    echo "No PHP changes staged — skipping PHPStan."
+    while read -r _local_ref _local_sha _remote_ref remote_sha_in; do
+        remote_sha=$remote_sha_in
+    done
+
+    # A new branch has no remote sha to compare against: everything is new.
+    if [ -z "$remote_sha" ] || [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        return 0
+    fi
+
+    git diff --name-only "${remote_sha}..HEAD" -- '*.php'
+}
+
+PHP_FILES=$(pushed_php_files | sort -u)
+
+if [ -z "$PHP_FILES" ]; then
+    echo "No PHP changes in the pushed range — skipping PHPStan."
     exit 0
 fi
 
-echo "PHPStan (full analysis)..."
+echo "PHPStan (full analysis) — $(printf '%s\n' "$PHP_FILES" | wc -l) PHP file(s) in the push..."
 
 # Xdebug in develop mode turns PHPStan's own diagnostics into fatals.
 export XDEBUG_MODE=off
