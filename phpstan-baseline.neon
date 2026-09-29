@@ -2745,7 +2745,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 3
+			count: 2
 			path: resources/views/livewire/dashboard.blade.php
 
 		-

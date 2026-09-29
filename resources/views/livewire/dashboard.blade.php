@@ -178,11 +178,23 @@ return new class extends Component {
 
         return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-            $tickets = Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw("date(created_at) as day, count(*) as count")
+
+            // #734: the 30 newest days WITH data, not the 30 oldest. Ordering
+            // and limiting in the same query returns the oldest 30 because
+            // ORDER BY runs before LIMIT, so the newest window has to be picked
+            // in a subquery; the outer query only re-orders it for display
+            // (oldest → newest). Do not flip the outer orderBy — that reverses
+            // the axis.
+            $daily = DB::table('tickets')
+                ->whereIn('unit_id', $accessibleIds)
+                ->selectRaw('date(created_at) as day, count(*) as count')
                 ->groupBy('day')
+                ->orderByDesc('day')
+                ->limit(30);
+
+            $tickets = DB::query()
+                ->fromSub($daily, 'daily')
                 ->orderBy('day')
-                ->limit(30)
                 ->get();
 
             return [
