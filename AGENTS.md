@@ -157,6 +157,33 @@ Reuse contract (documented at the top of `tree.blade.php`):
 
 ---
 
+## One Daily Window (issue #736)
+
+Every `by_day` aggregate — `/api/reports/{todos,tickets}`, the dashboard ticket trend, and both
+report pages — covers **one defined window** and returns **one entry per day in it, including days
+with no rows**. Before this, the same chart meant different things per surface (UI = 30 days, API =
+whole history) and a day without a ticket was a *missing column*, not a zero.
+
+| Surface | Window source | Default |
+|---|---|---|
+| `/api/reports/todos`, `/api/reports/tickets` | `?days=` query param | 30 (range 1–365) |
+| `/dashboard` ticket trend | `Dashboard::TICKET_CHART_DAYS` | 30 |
+| `/reports/todos`, `/reports/tickets` | the page's own date-from/date-to picker | 30 days back + 30 forward |
+
+- `App\Services\DailySeries` owns the shape. It materialises the window with `generate_series`
+  and **left-joins the caller's own aggregate query** — it fills gaps in an already-filtered query
+  instead of re-deriving its filters, so unit/status/date filters keep working untouched.
+- `?days=abc` falls back to 30 (a sloppy value still renders a chart); `?days=0`, `?days=-5` and
+  `?days=5000` return **422** (`App\Rules\ReportDays`).
+- Output days are Jalali `Y/m/d`, ascending, oldest first. The dashboard chart labels are `m/d`.
+- The window is part of the **cache key** (`remember(..., extra: ['days' => $days])`) — a chart
+  cached for 30 days must not be served to a client that asked for 7.
+- **Not** read from `daily_reports`: it is written by `reports:generate-daily` at 06:00, so it is
+  always a day behind, and a failed schedule becomes an invisible hole in the chart.
+- `tickets.completed_at` is indexed by `2026_09_29_000001_add_completed_at_index_to_tickets_table`.
+
+---
+
 ## Settings Features
 
 Settings page (`/settings`) includes 4 user-configurable features:
@@ -529,4 +556,9 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists |
 | Eloquent chains vs PHPStan (no larastan) | `Eloquent\Builder` has `@mixin Query\Builder`, so a top-level `whereIn()`/`limit()`/`take()` resolves to the query builder and types the rest of the chain `Collection<int, stdClass>`. Start chains `Model::query()->with([...])` (both declared on Eloquent), put IN-filters inside `where(Closure)`, cap rows with `get()->take(N)` not `->limit(N)->get()`. Do NOT add `@method static whereIn()` to a model to silence this — it re-types every `Model::whereIn()` chain repo-wide and unmasks errors in unrelated files |
 | phpstan-baseline is line-keyed | Its entries embed line numbers, so inserting even a comment into a baselined file "unmatches" its entries (`ignore.unmatched` errors). After editing baselined code, run `vendor/bin/phpstan analyse --generate-baseline`, then verify `git diff phpstan-baseline.neon` shows **0 additions** — an addition means a real new error got suppressed |
+| Daily charts must fill empty days | A `GROUP BY date(...)` aggregate only returns days that exist, so a day without a ticket became a **missing column**. Use `DailySeries` (`generate_series` + left-join) — never re-derive a filtered query just to count by day. `days=1` means today alone; the window is inclusive at both ends |
+| `?days=` belongs in the cache key | `CacheInvalidationServiceInterface::remember($ns, $scope, $cb, $ttl, $extra)` hashes `$extra` into the key. Omit `['days' => $days]` and a 30-day chart is served to a client that asked for 7 |
+| `Ticket::create(['created_at' => ...])` is silently ignored | `created_at` is **not fillable** on `Ticket` — the attribute is dropped without error, so every row lands on today and date-window tests pass for the wrong reason. Use `$ticket->forceFill(['created_at' => ...])->saveQuietly()` |
+| `Query\Builder::toBase()` does not exist | Only `Eloquent\Builder::toBase()` does. The `@mixin Query\Builder` on `Eloquent\Builder` is one-way, so PHPStan resolves `Ticket::query()` as `Query\Builder` — accept both and branch on `instanceof` rather than adding a `@method` (that re-types the chain repo-wide) |
+| `DailySeries` needs explicit generics | `Eloquent\Builder` in a signature without a `TModel` produces `missingType.generics` at level 6. Annotate `@param EloquentBuilder<covariant Model>|QueryBuilder` — otherwise the fix gets buried in `phpstan-baseline.neon` |
 | `hr/org-node.blade.php` removed | Replaced by `unit/tree-node.blade.php` (issue #704). Tests split: `UnitTreeLivewireTest` (generic tree contract) + `HrOrgChartPageTest` (the HR page embedding it) |

@@ -7,8 +7,12 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Rules\ReportDays;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Services\DailySeries;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Morilog\Jalali\Jalalian;
 
@@ -54,14 +58,16 @@ class ReportController extends Controller
 
     public function todos(UnitScopedRequest $request): JsonResponse
     {
+        $days = $this->days($request);
         $accessibleIds = $request->accessibleIds();
         $scopeHash = md5(json_encode($accessibleIds));
 
-        $data = $this->cache->remember('report_todos', $scopeHash, function () use ($accessibleIds) {
+        $data = $this->cache->remember('report_todos', $scopeHash, function () use ($accessibleIds, $days) {
             $now = now();
+            $query = Todo::whereIn('unit_id', $accessibleIds);
 
             // Single query: completed/pending/overdue via conditional aggregation (was 3 count queries)
-            $stats = Todo::whereIn('unit_id', $accessibleIds)
+            $stats = (clone $query)
                 ->selectRaw(
                     'SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) as completed, '
                     .'SUM(CASE WHEN NOT is_completed THEN 1 ELSE 0 END) as pending, '
@@ -70,16 +76,7 @@ class ReportController extends Controller
                 )
                 ->first();
 
-            $byDay = Todo::whereIn('unit_id', $accessibleIds)
-                ->selectRaw('date(start_at) as day, count(*) as count')
-                ->groupBy('day')
-                ->orderBy('day')
-                ->get()
-                ->map(fn ($r) => [
-                    'day' => Jalalian::fromCarbon(Carbon::parse($r->day))->format('Y/m/d'),
-                    'count' => (int) $r->count,
-                ])
-                ->toArray();
+            $byDay = $this->dailySeries($days, $query, 'start_at');
 
             $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
                 ->whereIn('todos.unit_id', $accessibleIds)
@@ -95,17 +92,18 @@ class ReportController extends Controller
                 'by_day' => $byDay,
                 'by_unit' => $byUnit,
             ];
-        }, 10);
+        }, 10, ['days' => $days]);
 
         return response()->json($data);
     }
 
     public function tickets(UnitScopedRequest $request): JsonResponse
     {
+        $days = $this->days($request);
         $accessibleIds = $request->accessibleIds();
         $scopeHash = md5(json_encode($accessibleIds));
 
-        $data = $this->cache->remember('report_tickets', $scopeHash, function () use ($accessibleIds) {
+        $data = $this->cache->remember('report_tickets', $scopeHash, function () use ($accessibleIds, $days) {
             $query = Ticket::whereIn('unit_id', $accessibleIds);
 
             $byStatus = (clone $query)
@@ -120,16 +118,7 @@ class ReportController extends Controller
                 ->pluck('count', 'priority')
                 ->toArray();
 
-            $byDay = (clone $query)
-                ->selectRaw('date(created_at) as day, count(*) as count')
-                ->groupBy('day')
-                ->orderBy('day')
-                ->get()
-                ->map(fn ($r) => [
-                    'day' => Jalalian::fromCarbon(Carbon::parse($r->day))->format('Y/m/d'),
-                    'count' => (int) $r->count,
-                ])
-                ->toArray();
+            $byDay = $this->dailySeries($days, $query, 'created_at');
 
             return [
                 'total' => array_sum($byStatus),
@@ -137,8 +126,39 @@ class ReportController extends Controller
                 'by_priority' => $byPriority,
                 'by_day' => $byDay,
             ];
-        }, 10);
+        }, 10, ['days' => $days]);
 
         return response()->json($data);
+    }
+
+    /**
+     * Resolve and validate the `?days=` window (default 30, cap 365).
+     *
+     * The UI and the API used to disagree about what a daily chart covered —
+     * the UI clipped to 30 while the API aggregated the whole history — so both
+     * now take the window from here.
+     */
+    private function days(UnitScopedRequest $request): int
+    {
+        $request->validate(['days' => ['sometimes', new ReportDays]]);
+
+        return DailySeries::resolveDays($request->query('days'));
+    }
+
+    /**
+     * Daily counts as Jalali labels, one entry per day in the window.
+     *
+     * @param  EloquentBuilder<covariant Model>  $query  Already scoped to the caller's units
+     * @return array<int, array{day: string, count: int}>
+     */
+    private function dailySeries(int $days, EloquentBuilder $query, string $dateColumn): array
+    {
+        return array_map(
+            fn (array $row) => [
+                'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                'count' => $row['count'],
+            ],
+            DailySeries::lastDays($days)->counts($query, $dateColumn)
+        );
     }
 }
