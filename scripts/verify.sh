@@ -26,6 +26,12 @@ readonly EXIT_PRECONDITION_FAILED=2
 # Xdebug in develop mode makes every date error a fatal; AGENTS.md records it.
 export XDEBUG_MODE=off
 
+# Capture the shell environment NOW, before the first php process boots Laravel
+# and putenv's every .env value into the process environment. Without this the
+# preflight cannot tell a developer's export from the app's own .env, and would
+# report "wrong database" on a machine that is configured perfectly.
+export VERIFY_SHELL_ENV="${VERIFY_SHELL_ENV:-$(env -0 | php -r 'echo json_encode(array_filter($_SERVER, "is_string", ARRAY_FILTER_USE_KEY));')}"
+
 step() {
     echo ""
     echo "── $1"

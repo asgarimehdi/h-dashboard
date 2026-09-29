@@ -25,13 +25,6 @@ use Throwable;
  */
 class TestDatabaseResolver
 {
-    /**
-     * Env keys that describe the connection, in the order they matter.
-     *
-     * @var array<int, string>
-     */
-    private const KEYS = ['DB_URL', 'DB_CONNECTION', 'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'];
-
     public function __construct(
         private readonly string $basePath,
         /** @var array<string, string> shell environment to resolve against */
@@ -44,22 +37,71 @@ class TestDatabaseResolver
     }
 
     /**
-     * The current process's environment, the way a shell would hand it to a
-     * child process: getenv(), falling back to $_SERVER and $_ENV.
+     * The environment this process was STARTED with — never one the running
+     * application has since putenv'd into it.
+     *
+     * This distinction is the whole reason the preflight can be trusted. By the
+     * time an artisan command runs, Laravel has already `putenv`'d every value
+     * from `.env`, so `getenv('DB_DATABASE')` returns the app's database whether
+     * or not the developer ever exported one. Reading that back would make the
+     * gate report "wrong database" on a machine that is configured perfectly.
+     *
+     * `/proc/self/environ` is the only source that separates the two: it is the
+     * environment as inherited at exec time, and `putenv()` never rewrites it.
+     * A wrapper that runs php as its first child passes the shell environment
+     * explicitly (VERIFY_SHELL_ENV), which is the portable form of the same
+     * answer and the preferred path.
      *
      * @return array<string, string>
      */
     public static function shellEnvironment(): array
     {
-        $env = [];
+        $snapshot = getenv('VERIFY_SHELL_ENV');
 
-        foreach (array_merge($_ENV, $_SERVER) as $key => $value) {
-            if (is_string($key) && is_scalar($value)) {
-                $env[$key] = (string) $value;
+        if (is_string($snapshot) && $snapshot !== '') {
+            $decoded = json_decode($snapshot, true);
+
+            if (is_array($decoded)) {
+                $variables = [];
+
+                // Scalars only: a real environment value is text, and
+                // json_decode turns a value like TERMINAL_DOCKER_EXTRA_ARGS=[]
+                // into an array. Casting that to a string raises "Array to
+                // string conversion" and takes the preflight down on a machine
+                // that is configured correctly.
+                foreach ($decoded as $name => $value) {
+                    if (is_string($name) && is_scalar($value)) {
+                        $variables[$name] = (string) $value;
+                    }
+                }
+
+                return $variables;
             }
         }
 
-        return $env + getenv();
+        return self::parseEnvironBlock((string) @file_get_contents('/proc/self/environ'));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function parseEnvironBlock(string $block): array
+    {
+        $variables = [];
+
+        foreach (explode("\0", $block) as $entry) {
+            if (! str_contains($entry, '=')) {
+                continue;
+            }
+
+            [$name, $value] = explode('=', $entry, 2);
+
+            if ($name !== '') {
+                $variables[$name] = $value;
+            }
+        }
+
+        return $variables;
     }
 
     public function resolve(): ResolvedTestDatabase

@@ -74,7 +74,11 @@
             "php artisan route:clear",
             "XDEBUG_MODE=off php artisan test"
         ],
-        "verify": "Composer\\Config::disableProcessTimeout && @php -r \"file_exists('.env') || exit(1);\" && bash scripts/verify.sh",
+        "verify": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -r \"file_exists('.env') || exit(1);\"",
+            "bash scripts/verify.sh"
+        ],
         "hooks:install": "bash scripts/install-hooks.sh",
         "phpstan": "phpstan analyse --no-progress",
         "phpstan-baseline": "phpstan analyse --generate-baseline",

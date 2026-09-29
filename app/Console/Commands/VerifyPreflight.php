@@ -112,9 +112,12 @@ class VerifyPreflight extends Command
         }
 
         $quoted = $pdo->quote($target->database);
+
+        // query() returns false on failure — never null — so the nullsafe
+        // operator would be dead code that hides a real error.
         $exists = (bool) $pdo
             ->query("SELECT 1 FROM pg_database WHERE datname = {$quoted}")
-            ?->fetchColumn();
+            ->fetchColumn();
 
         if (! $exists) {
             $create = 'psql -h '.escapeshellarg($target->host).' -U '.escapeshellarg($target->username)
@@ -128,7 +131,7 @@ class VerifyPreflight extends Command
             ];
         }
 
-        $postgis = $pdo->query("SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'")?->fetchColumn();
+        $postgis = $pdo->query("SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'")->fetchColumn();
 
         if (! $postgis) {
             return [
@@ -196,7 +199,9 @@ class VerifyPreflight extends Command
         }
 
         try {
-            return trim(Process::run('git', ['config', '--get', 'core.hooksPath'])->output());
+            // Process::run()'s second argument is a callback, not an argv array —
+            // the command goes in the first one.
+            return trim(Process::run(['git', 'config', '--get', 'core.hooksPath'])->output());
         } catch (Throwable) {
             return '';
         }
