@@ -264,11 +264,47 @@ Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The 
 
 ### Composer Scripts
 ```bash
-composer test      # config:clear + route:clear + XDEBUG_MODE=off php artisan test
-composer dev       # concurrently: php artisan serve + queue:listen + npm run dev
-composer pint      # Pint --dirty --format agent (auto-staged PHP)
-composer phpstan   # phpstan analyse --no-progress
+composer test         # config:clear + route:clear + XDEBUG_MODE=off php artisan test
+composer verify       # preflight + view:clear + pint --test + phpstan + the suite  ← run before push
+composer verify tests/Feature/TodoLivewireTest.php   # same gates, only the tests you name
+composer dev          # concurrently: php artisan serve + queue:listen + npm run dev
+composer pint         # Pint --dirty --format agent (auto-staged PHP)
+composer phpstan      # phpstan analyse --no-progress
+composer hooks:install  # git config core.hooksPath .githooks
 ```
+
+### Local Verification & Git Hooks (issue #739)
+
+Feedback comes in three layers. The hook layers stay **light on purpose**: a
+commit hook that costs a minute is a hook the team bypasses with `--no-verify`,
+which is worse than no hook. CI stays the only authority.
+
+| Layer | What runs | Why there |
+|---|---|---|
+| `pre-commit` | Pint on staged PHP files | Seconds; catches the most |
+| `pre-push` | **Full** PHPStan; tests only if `VERIFY_TESTS` names them | Deterministic with the baseline |
+| CI | Everything | The final authority |
+
+- Hooks are **versioned** in `.githooks/` and activated with `core.hooksPath`, not
+  symlinked by `composer install`. The old `post-install-cmd` symlink only appeared on
+  a *fresh* install, so on an already-provisioned machine the light layer was silently
+  absent. `composer hooks:install` fixes an existing clone; `php artisan verify:preflight`
+  **warns** when hooks are inactive.
+- `pre-push` runs PHPStan over the **whole project**, not the staged subset — a
+  staged-only path is an analysis route CI never exercises, so errors surfacing only
+  through dependencies would never be seen locally.
+- **Test selection is manual, never heuristic.** Livewire components are single-file
+  Blade views, so no `app/… → tests/…` mapping exists. A heuristic could report green
+  without ever running the failing test — an intermittently broken gate is worse than
+  no gate.
+- `composer verify` reproduces CI's **test job, not the coverage gate**: CI also runs
+  `--parallel --coverage --min=80`, which needs pcov. Coverage is CI-only. It runs the
+  suite **serially** like `composer test`.
+- The preflight **exits 2** (distinct from 1) so callers can tell "your machine is
+  wrong" from "your code is wrong". It resolves the effective test database from
+  PHPUnit's own precedence — an exported `DB_DATABASE` (or a `DB_URL`) beats
+  `phpunit.xml`, because those `<env>` entries carry no `force="true"`. Never run
+  `migrate:fresh` before it: a mis-resolved database destroys real data.
 
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
@@ -527,6 +563,9 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
 | Testing a cache fix | Assert through the component or the service, never by poisoning a key and expecting it to be ignored — that tests your own poison, not the flush. A test that only passes in isolation is asserting `setUp`, not the fix; assert the behaviour a user sees |
 | Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists |
+| An exported `DB_DATABASE` beats `phpunit.xml` | The `DB_*` `<env>` entries in `phpunit.xml` have no `force="true"`, so PHPUnit skips them when the variable already exists (`PhpHandler.php:140`). `DB_URL` is not in `phpunit.xml` at all and outranks everything. `php artisan verify:preflight` resolves the real value — read `.env` or `phpunit.xml` directly and you will check the wrong database |
+| `expectsOutputToContain` matches ONE line per expectation | `PendingCommand`'s buffered mock consumes a written line with the first substring that matches it, so two substrings on the same line can never both be asserted. Put each claim on its own output line |
+| `assertStringNotContainsString` returns void | Chaining `->and()` after it dies with "Call to a member function and() on null". Same for `assertMatchesRegularExpression` — use separate statements |
 | Eloquent chains vs PHPStan (no larastan) | `Eloquent\Builder` has `@mixin Query\Builder`, so a top-level `whereIn()`/`limit()`/`take()` resolves to the query builder and types the rest of the chain `Collection<int, stdClass>`. Start chains `Model::query()->with([...])` (both declared on Eloquent), put IN-filters inside `where(Closure)`, cap rows with `get()->take(N)` not `->limit(N)->get()`. Do NOT add `@method static whereIn()` to a model to silence this — it re-types every `Model::whereIn()` chain repo-wide and unmasks errors in unrelated files |
 | phpstan-baseline is line-keyed | Its entries embed line numbers, so inserting even a comment into a baselined file "unmatches" its entries (`ignore.unmatched` errors). After editing baselined code, run `vendor/bin/phpstan analyse --generate-baseline`, then verify `git diff phpstan-baseline.neon` shows **0 additions** — an addition means a real new error got suppressed |
 | `hr/org-node.blade.php` removed | Replaced by `unit/tree-node.blade.php` (issue #704). Tests split: `UnitTreeLivewireTest` (generic tree contract) + `HrOrgChartPageTest` (the HR page embedding it) |
