@@ -1,12 +1,16 @@
 <?php
 
-use Livewire\Component;
-use Livewire\Attributes\Layout;
-use Livewire\WithPagination;
-use App\Models\{Ticket, Todo, Unit, Person};
+use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\Todo;
+use App\Models\Unit;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\DailySeries;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Layout;
+use Livewire\Component;
+use Livewire\WithPagination;
 use Morilog\Jalali\Jalalian;
 
 return new class extends Component
@@ -14,12 +18,19 @@ return new class extends Component
     use WithPagination;
 
     public string $reportType = 'tickets';
+
     public ?string $dateFrom = null;
+
     public ?string $dateTo = null;
+
     public ?int $unitId = null;
+
     public ?int $parentUnitId = null;
+
     public ?int $rootUnitId = null;
+
     public string $statusFilter = 'all';
+
     public $units = [];
 
     public function mount(): void
@@ -31,7 +42,7 @@ return new class extends Component
         if (empty($accessibleIds)) {
             $this->units = [];
         } else {
-            $cacheKey = 'advanced_report:units:' . md5(implode(',', $accessibleIds));
+            $cacheKey = 'advanced_report:units:'.md5(implode(',', $accessibleIds));
             $this->units = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
                 return Unit::whereIn('id', $accessibleIds)
                     ->select('id', 'name', 'parent_id')
@@ -57,17 +68,42 @@ return new class extends Component
         }
     }
 
+    /**
+     * The chosen from..to range as Carbon bounds, or null when either end is
+     * missing/invalid or the range is inverted — in which case the daily series
+     * has no window to fill.
+     *
+     * @return array{0: Carbon, 1: Carbon}|null
+     */
+    private function dateRange(): ?array
+    {
+        $from = $this->parseJalaliDate($this->dateFrom);
+        $to = $this->parseJalaliDate($this->dateTo, endOfDay: true);
+
+        if (! $from || ! $to || $from->gt($to)) {
+            return null;
+        }
+
+        return [$from, $to];
+    }
+
     #[Livewire\Attributes\Computed]
     public function childUnits()
     {
-        if (!$this->rootUnitId || empty($this->units)) return collect();
+        if (! $this->rootUnitId || empty($this->units)) {
+            return collect();
+        }
+
         return collect($this->units)->where('parent_id', $this->rootUnitId)->values();
     }
 
     #[Livewire\Attributes\Computed]
     public function grandChildUnits()
     {
-        if (!$this->parentUnitId || empty($this->units)) return collect();
+        if (! $this->parentUnitId || empty($this->units)) {
+            return collect();
+        }
+
         return collect($this->units)->where('parent_id', $this->parentUnitId)->values();
     }
 
@@ -87,7 +123,7 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = match($this->reportType) {
+        $query = match ($this->reportType) {
             'tickets' => Ticket::whereIn('unit_id', $accessibleIds),
             'todos' => Todo::whereIn('unit_id', $accessibleIds),
             'persons' => Person::whereIn('u_id', $accessibleIds),
@@ -118,16 +154,19 @@ return new class extends Component
 
         $total = $query->count();
 
-        $byDay = $query->clone()
-            ->selectRaw("date(created_at) as day, count(*) as count")
-            ->groupBy('day')
-            ->orderBy('day')
-            ->get()
-            ->map(fn ($row) => [
-                'day' => Jalalian::fromCarbon(Carbon::parse($row->day))->format('Y/m/d'),
-                'count' => (int) $row->count,
-            ])
-            ->toArray();
+        // Issue #736: materialise every day in the chosen range, zeros included,
+        // so a day with no rows is a zero rather than a missing column. The
+        // filtered $query is reused, so unit/status/date filters still apply.
+        $range = $this->dateRange();
+        $byDay = $range
+            ? array_map(
+                fn (array $row) => [
+                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                    'count' => $row['count'],
+                ],
+                DailySeries::between($range[0], $range[1])->counts($query->clone(), 'created_at')
+            )
+            : [];
 
         $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
         $byUnit = $query->clone()
@@ -135,7 +174,7 @@ return new class extends Component
             ->groupBy($unitColumn)
             ->with('unit:id,name')
             ->get()
-            ->mapWithKeys(fn($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
+            ->mapWithKeys(fn ($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
             ->toArray();
 
         $details = [];
@@ -153,22 +192,22 @@ return new class extends Component
             $details = [
                 'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
                     ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-                    ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
-                    ->when($unitId, fn($q) => $q->whereIn('persons.u_id', $descendantIds))
+                    ->when($accessibleIds, fn ($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
                     ->groupBy('name')
                     ->pluck('count', 'name')
                     ->toArray(),
                 'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
                     ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-                    ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
-                    ->when($unitId, fn($q) => $q->whereIn('persons.u_id', $descendantIds))
+                    ->when($accessibleIds, fn ($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
                     ->groupBy('name')
                     ->pluck('count', 'name')
                     ->toArray(),
                 'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
                     ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-                    ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
-                    ->when($unitId, fn($q) => $q->whereIn('persons.u_id', $descendantIds))
+                    ->when($accessibleIds, fn ($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
                     ->groupBy('name')
                     ->pluck('count', 'name')
                     ->toArray(),

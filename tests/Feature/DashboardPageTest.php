@@ -47,6 +47,33 @@ test('authenticated user can load dashboard', function () {
     $this->get('/dashboard')->assertStatus(200);
 });
 
+test('user without accessible unit gets zero stats, not 500', function () {
+    $orphan = User::factory()->create([
+        'n_code' => '0000000000',
+        'password' => Hash::make('password'),
+    ]);
+    Person::where('n_code', '0000000000')->update(['u_id' => null]);
+
+    $this->actingAs($orphan);
+    $this->get('/dashboard')->assertStatus(200);
+});
+
+test('dashboard shows empty-scope message when no unit is accessible', function () {
+    $orphan = User::factory()->create([
+        'n_code' => '0000000000',
+        'password' => Hash::make('password'),
+    ]);
+    Person::where('n_code', '0000000000')->update(['u_id' => null]);
+
+    $this->actingAs($orphan);
+
+    Livewire::test('dashboard')
+        ->assertStatus(200)
+        ->assertSee('واحدی برای نمایش انتخاب نشده')
+        ->assertSet('totalPersons', 0)
+        ->assertSet('totalTickets', 0);
+});
+
 test('dashboard renders expected sections', function () {
     $this->actingAs($this->user);
 
