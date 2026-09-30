@@ -333,6 +333,8 @@ which is worse than no hook. CI stays the only authority.
   `phpunit.xml`, because those `<env>` entries carry no `force="true"`. Never run
   `migrate:fresh` before it: a mis-resolved database destroys real data.
 
+- Branch-sync helper (#744): `scripts/sync-beta.sh` reports `behind X, ahead Y` against the **explicit** `origin/beta` ref and fast-forwards only when safe — never auto-merges (exit 1 on divergence).
+
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
 
