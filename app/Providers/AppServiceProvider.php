@@ -9,6 +9,9 @@ use App\Models\Unit;
 use App\Observers\HardwareAuditObserver;
 use App\Services\CacheInvalidationService;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Services\Zabbix\ServiceZabbixClient;
+use App\Services\Zabbix\ZabbixClient;
+use App\Services\ZabbixService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -21,6 +24,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(
             CacheInvalidationServiceInterface::class,
             CacheInvalidationService::class
+        );
+
+        // Zabbix transport behind a typed interface (#741). Resolved per call
+        // so tests that bind a `ZabbixService` instance still get their mock
+        // wrapped — see ServiceZabbixClient's docblock.
+        $this->app->bind(
+            ZabbixClient::class,
+            fn ($app) => new ServiceZabbixClient($app->make(ZabbixService::class))
         );
     }
 
