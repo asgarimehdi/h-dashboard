@@ -75,6 +75,31 @@ return new class extends Component
         $this->reset(['filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
     }
 
+    /**
+     * The list filters carried into the Excel export as query params, so the
+     * download contains exactly the rows the table is showing.
+     *
+     * Livewire cannot return a file download, so the control is a plain
+     * `<a href>` — the parameters have to travel in the URL. The export
+     * re-applies them server-side and can only ever narrow the caller's
+     * accessible scope, never widen it.
+     *
+     * @return array<string, string|int>
+     */
+    public function exportQuery(): array
+    {
+        $params = array_filter([
+            'search' => trim($this->search),
+            'filter_u_id' => $this->filter_u_id,
+            'filter_s_id' => $this->filter_s_id,
+            'filter_t_id' => $this->filter_t_id,
+            'filter_e_id' => $this->filter_e_id,
+            'filter_r_id' => $this->filter_r_id,
+        ], fn ($value) => $value !== null && $value !== '' && $value !== false);
+
+        return $params;
+    }
+
     public function resetForm(): void
     {
         $this->resetValidation();
@@ -308,6 +333,7 @@ return new class extends Component
             'units' => $units,
             'selectedUnitName' => $selectedUnitName,
             'filterUnitName' => $filterUnitName,
+            'exportUrl' => route('kargozini.persons.export', $this->exportQuery()),
         ];
     }
 };
@@ -326,6 +352,12 @@ return new class extends Component
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
             <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+            <a href="{{ $exportUrl }}"
+               class="btn btn-outline btn-sm"
+               title="خروجی اکسل پرسنل در دسترس با فیلترهای فعال">
+                <x-icon name="o-arrow-down-tray" class="w-5 h-5"/>
+                <span class="hidden 2xl:inline">خروجی اکسل</span>
+            </a>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."

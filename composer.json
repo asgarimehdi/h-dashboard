@@ -57,7 +57,7 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
         ],
         "post-install-cmd": [
-            "@php -r \"file_exists('.git/hooks/pre-commit') || symlink('../../scripts/pre-commit', '.git/hooks/pre-commit');\""
+            "@composer hooks:install --quiet"
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi",
@@ -74,6 +74,12 @@
             "php artisan route:clear",
             "XDEBUG_MODE=off php artisan test"
         ],
+        "verify": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -r \"file_exists('.env') || exit(1);\"",
+            "bash scripts/verify.sh"
+        ],
+        "hooks:install": "bash scripts/install-hooks.sh",
         "phpstan": "phpstan analyse --no-progress",
         "phpstan-baseline": "phpstan analyse --generate-baseline",
         "pint": "pint --dirty --format agent",

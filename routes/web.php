@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\HardwareExportController;
+use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Route;
@@ -71,6 +72,7 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/semats', 'kargozini.semat');
             Route::livewire('/kargozini/radifs', 'kargozini.radif');
             Route::livewire('/kargozini/persons', 'kargozini.person');
+            Route::get('/kargozini/persons/export', [PersonsExportController::class, 'export'])->name('kargozini.persons.export');
             Route::livewire('/kargozini/persons/import', 'kargozini.import-persons.import-persons')->name('kargozini.persons.import');
         });
 
