@@ -167,6 +167,35 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | GET | `/api/reports/todos` | Todo statistics |
 | GET | `/api/reports/tickets` | Ticket statistics |
 
+#### The daily window (issue #736)
+
+`by_day` in both `/api/reports/todos` and `/api/reports/tickets` covers a **window**, not the whole
+history. One definition is shared by the API and every UI chart:
+
+| Param | Default | Range | Behaviour |
+|---|---|---|---|
+| `?days=` | `30` | 1–365 | Days back from today, inclusive of today (`days=1` is today alone) |
+| `?days=abc` | — | — | Falls back to 30 — a sloppy value still renders a chart |
+| `?days=0`, `?days=-5` | — | — | `422` — a zero/negative window is meaningless |
+| `?days=5000` | — | — | `422` — the cap keeps the query from growing with the table |
+
+`by_day` returns **one entry per day in the window, including days with no rows**, as
+`{"day": "YYYY/MM/DD" (Jalali), "count": 0}`. A missing day previously read as "no data" rather
+than "zero that day", so the line collapsed whenever the data was sparse.
+
+Implementation: `App\Services\DailySeries` materialises the window with `generate_series` and
+left-joins the caller's own aggregate, so it fills gaps in an existing (already filtered) query
+instead of re-deriving its filters. The API takes the window from `?days=`; the UI report pages
+pass their own date-from/date-to picker bounds, and the dashboard trend uses
+`Dashboard::TICKET_CHART_DAYS`.
+
+> Deliberately **not** read from `daily_reports`: that table is written by
+> `reports:generate-daily` at 06:00, so it is always a day behind, and a failed schedule
+> silently becomes a hole in the chart.
+
+`tickets.completed_at` is indexed (`2026_09_29_000001`) — every average-resolution-time aggregate
+filters on `completed_at IS NOT NULL`, and without it those queries full-scan.
+
 ### HR (`/api/hr`)
 
 | Method | URL | Description |
