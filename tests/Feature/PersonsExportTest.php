@@ -187,8 +187,9 @@ class PersonsExportTest extends TestCase
             'نوع استخدام',
             'ردیف سازمانی',
             'واحد سازمانی',
-            'تاریخ استخدام',
             'وضعیت',
+            'تاریخ تولد',
+            'تاریخ استخدام',
         ], (new PersonsExport(collect()))->headings());
     }
 
@@ -444,6 +445,39 @@ class PersonsExportTest extends TestCase
         $this->assertSame(['بیمارستان شهید فهمیده'], $this->forCode($rows, 'واحد سازمانی', '0012345678'));
     }
 
+    public function test_export_separates_same_named_units_in_different_branches(): void
+    {
+        // #756: a bare unit name cannot tell two «پایگاه»s apart, so the cell
+        // carries the full breadcrumb — the same contract as the units
+        // export's «مسیر کامل» column.
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['kargozini']);
+
+        $central = Unit::factory()->create(['name' => 'شبکه بهداشت مرکزی', 'parent_id' => $root->id]);
+        $south = Unit::factory()->create(['name' => 'شبکه بهداشت جنوب', 'parent_id' => $root->id]);
+        $clinicA = Unit::factory()->create(['name' => 'پایگاه', 'parent_id' => $central->id]);
+        $clinicB = Unit::factory()->create(['name' => 'پایگاه', 'parent_id' => $south->id]);
+
+        $this->createPerson([
+            'n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $clinicA->id,
+        ]);
+        $this->createPerson([
+            'n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $clinicB->id,
+        ]);
+
+        $this->actingAs($user);
+
+        $rows = $this->rowsFromRoute();
+
+        $this->assertSame(
+            ["{$root->name} > شبکه بهداشت مرکزی > پایگاه"],
+            $this->forCode($rows, 'واحد سازمانی', '0012345678')
+        );
+        $this->assertSame(
+            ["{$root->name} > شبکه بهداشت جنوب > پایگاه"],
+            $this->forCode($rows, 'واحد سازمانی', '0098765432')
+        );
+    }
+
     public function test_export_writes_a_dash_for_a_missing_lookup_or_unit(): void
     {
         // The FKs are `onDelete('restrict')`, so a real row cannot be orphaned
@@ -510,6 +544,38 @@ class PersonsExportTest extends TestCase
 
         // 2021-03-15 Gregorian is 25 Esfand 1399 (Nowruz 1400 = 2021-03-20).
         $this->assertSame(['1399/12/25'], $this->forCode($this->rowsFromRoute(), 'تاریخ استخدام', '0012345678'));
+    }
+
+    public function test_export_writes_the_birth_date_in_the_hire_date_format(): void
+    {
+        // #756: «تاریخ تولد» must use the same Jalali Y/m/d the rest of the
+        // sheet uses — two date formats in one file invite misreading.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson([
+            'n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری',
+            'u_id' => $unit->id, 'birth_date' => '1985-09-23',
+        ]);
+
+        $this->actingAs($user);
+
+        // 1985-09-23 Gregorian is 1 Mehr 1364.
+        $this->assertSame(['1364/07/01'], $this->forCode($this->rowsFromRoute(), 'تاریخ تولد', '0012345678'));
+    }
+
+    public function test_export_writes_a_dash_for_a_missing_birth_date(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson([
+            'n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $unit->id,
+        ]);
+
+        $this->actingAs($user);
+
+        // PersonFactory draws no birth_date, so the cell must fall back to
+        // the file's own '-' instead of an empty string.
+        $this->assertSame(['-'], $this->forCode($this->rowsFromRoute(), 'تاریخ تولد', '0012345678'));
     }
 
     public function test_export_uses_a_dash_for_an_empty_full_name(): void

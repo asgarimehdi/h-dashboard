@@ -3,6 +3,9 @@
 namespace App\Exports;
 
 use App\Models\Person;
+use App\Models\Unit;
+use App\Services\UnitTreeService;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -35,23 +38,39 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
         'estekhdam' => ['label' => 'نوع استخدام'],
         'radif' => ['label' => 'ردیف سازمانی'],
         'unit' => ['label' => 'واحد سازمانی'],
-        'hire_date' => ['label' => 'تاریخ استخدام'],
         'status' => ['label' => 'وضعیت'],
+        'birth_date' => ['label' => 'تاریخ تولد'],
+        'hire_date' => ['label' => 'تاریخ استخدام'],
     ];
 
     /** @var array<int, string> */
     protected array $columns = [
         'n_code', 'f_name', 'l_name', 'full_name', 'semat', 'tahsil',
-        'estekhdam', 'radif', 'unit', 'hire_date', 'status',
+        'estekhdam', 'radif', 'unit', 'status', 'birth_date', 'hire_date',
     ];
 
     /** @var Collection<int, Person> */
     protected Collection $persons;
 
+    /**
+     * Breadcrumb walker from the shared unit tree service (#756) — the same
+     * chain the tree UI and the units export resolve their hierarchy with.
+     */
+    protected UnitTreeService $unitTree;
+
+    /**
+     * Every unit keyed by id with `parent` linked in memory, built once on
+     * first row so mapping never walks back to the database.
+     *
+     * @var array<int, Unit>|null
+     */
+    protected ?array $unitsById = null;
+
     /** @param  Collection<int, Person>  $persons */
     public function __construct(Collection $persons)
     {
         $this->persons = $persons;
+        $this->unitTree = new UnitTreeService;
     }
 
     /**
@@ -89,9 +108,10 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
             'tahsil' => $person->tahsil->name ?? '-',
             'estekhdam' => $person->estekhdam->name ?? '-',
             'radif' => $person->radif->name ?? '-',
-            'unit' => $person->unit->name ?? '-',
-            'hire_date' => $this->resolveHireDate($person),
+            'unit' => $this->resolveUnitPath($person),
             'status' => $this->resolveStatus($person),
+            'birth_date' => $this->resolveJalaliDate($person->birth_date),
+            'hire_date' => $this->resolveJalaliDate($person->hire_date),
             default => (string) ($person->{$key} ?? '-'),
         };
     }
@@ -107,11 +127,66 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
         return $name !== '' ? $name : '-';
     }
 
-    protected function resolveHireDate(Person $person): string
+    protected function resolveJalaliDate(?Carbon $date): string
     {
-        $date = $person->hire_date;
-
         return $date !== null ? Jalalian::fromCarbon($date)->format('Y/m/d') : '-';
+    }
+
+    /**
+     * The person's unit as the full breadcrumb — the same contract as the
+     * units export's «مسیر کامل» column (#756): every ancestor names the
+     * path, joined with ' > ', and ancestors above the caller's scope still
+     * appear (the tree page renders those, so nothing new leaks). Walking
+     * `UnitTreeService::ancestorChain()` over the in-memory index keeps the
+     * guarantee the class docblock makes: mapping a row never queries.
+     * A person whose unit is missing or gone reports '-' like every other
+     * absent cell in this sheet.
+     */
+    protected function resolveUnitPath(Person $person): string
+    {
+        $units = $this->unitsById();
+        $unit = $units[(int) $person->u_id] ?? null;
+
+        if (! $unit instanceof Unit) {
+            return '-';
+        }
+
+        $chain = $this->unitTree->ancestorChain($unit, array_keys($units));
+
+        return $chain->pluck('name')->push($unit->name)->implode(' > ');
+    }
+
+    /**
+     * All units keyed by id, with each `parent` relation pre-linked in
+     * memory. One query per export, not one per row or per hop — the same
+     * shape UnitsExportController's `hierarchyMap()` gives the units
+     * breadcrumb. The index deliberately covers every unit, not just the
+     * caller's scope, so `ancestorChain()` walks to the real root.
+     *
+     * @return array<int, Unit>
+     */
+    protected function unitsById(): array
+    {
+        if ($this->unitsById !== null) {
+            return $this->unitsById;
+        }
+
+        /** @var array<int, Unit> $units */
+        $units = [];
+
+        foreach (Unit::query()->get(['id', 'name', 'parent_id']) as $unit) {
+            $units[(int) $unit->id] = $unit;
+        }
+
+        foreach ($units as $unit) {
+            if ($unit->parent_id !== null) {
+                // A parent_id pointing outside the index (impossible under
+                // the FK, guarded anyway) ends the chain instead of exploding.
+                $unit->setRelation('parent', $units[(int) $unit->parent_id] ?? null);
+            }
+        }
+
+        return $this->unitsById = $units;
     }
 
     /**
