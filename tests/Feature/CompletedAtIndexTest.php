@@ -49,7 +49,13 @@ class CompletedAtIndexTest extends TestCase
 
     public function test_migrating_back_removes_the_index(): void
     {
-        $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+        // Roll back THIS migration explicitly: `--step=1` targets whichever
+        // migration happens to be last, which shifts the moment any migration
+        // is appended (e.g. #738/#740) and would silently roll back the
+        // wrong one while still reporting success.
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_09_29_000001_add_completed_at_index_to_tickets_table.php',
+        ])->assertSuccessful();
 
         $this->assertNotContains('tickets_completed_at_index', $this->indexesOnTickets());
 

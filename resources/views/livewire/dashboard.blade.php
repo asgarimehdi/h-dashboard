@@ -292,6 +292,50 @@ return new class extends Component
                 ->latest()->take(10)->get();
         });
     }
+
+    /**
+     * Zabbix sync state for the status banner (#740).
+     *
+     * The traffic charts can only be showing fresh numbers when the LAST
+     * run succeeded inside the 5-minute cache TTL — this separates "sync
+     * سالم" from "reading stale cache" (and from a job that stopped running
+     * entirely), which the cache alone could never tell apart.
+     *
+     * Reads the row through the DB facade so the import block (and with it
+     * the anonymous class line the PHPStan baseline is keyed on) stays
+     * untouched.
+     *
+     * @return array{state: string, time: string, failures: int, cache: bool}
+     */
+    public function getZabbixSyncStatusProperty(): array
+    {
+        $latest = DB::table('zabbix_sync_logs')->orderByDesc('id')->first();
+
+        if ($latest === null) {
+            return ['state' => 'unknown', 'time' => '', 'failures' => 0, 'cache' => false];
+        }
+
+        $ranAt = strtotime((string) $latest->ran_at);
+        $time = $ranAt !== false ? date('H:i', $ranAt) : '';
+        $cache = Cache::has('zabbix_traffic_data');
+
+        if ($latest->success) {
+            return [
+                // Fresh = last success inside the 5-minute cache TTL.
+                'state' => ($ranAt !== false && $ranAt > time() - 300) ? 'ok' : 'stale',
+                'time' => $time,
+                'failures' => 0,
+                'cache' => $cache,
+            ];
+        }
+
+        return [
+            'state' => 'failing',
+            'time' => $time,
+            'failures' => (int) $latest->consecutive_failures,
+            'cache' => $cache,
+        ];
+    }
 }; ?>
 <div x-data="{ interval: {{ $refreshInterval * 1000 }} }" x-init="if(interval > 0) { setInterval(() => { $wire.mount() }, interval) }">
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
@@ -307,6 +351,23 @@ return new class extends Component
         <div class="alert alert-info mb-6" role="alert">
             <x-icon name="o-information-circle" class="w-5 h-5" />
             <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
+
+    {{-- وضعیت sync زیبکس — سالم / کش قدیمی / ناموفق (#740) --}}
+    @if(($zabbixSync = $this->zabbixSyncStatus)['state'] !== 'unknown')
+        <div class="mb-6 alert {{ ['ok' => 'alert-success', 'stale' => 'alert-warning', 'failing' => 'alert-error'][$zabbixSync['state']] }} shadow-sm" role="alert">
+            <x-icon name="o-server-stack" class="w-5 h-5" />
+            <span>
+                @if($zabbixSync['state'] === 'ok')
+                    sync زیبکس سالم — آخرین: {{ $zabbixSync['time'] }}
+                @elseif($zabbixSync['state'] === 'failing')
+                    sync زیبکس ناموفق ({{ $zabbixSync['failures'] }} بار متوالی)
+                    — {{ $zabbixSync['cache'] ? 'نمایش از کش قدیمی' : 'داده ترافیک در دسترس نیست' }}
+                @else
+                    آخرین sync زیبکس قدیمی است — {{ $zabbixSync['time'] }}
+                @endif
+            </span>
         </div>
     @endif
 
