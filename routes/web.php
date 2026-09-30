@@ -4,9 +4,26 @@ use App\Http\Controllers\Api\HardwareExportController;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
 use App\Services\ActivityLogService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/login', 'auth.login')->name('login');
+
+// CSP violation reports (#742) — public, unauthenticated, throttled: the
+// Reporting-Endpoints header (SecurityHeaders) points browsers here.
+// Same-app destination is a temporary decision (recorded on #742); the
+// final target is a separate-domain endpoint once that infra exists.
+Route::post('/csp-report', function (Request $request) {
+    // Browsers post `application/csp-report` (Chrome) or `application/json`;
+    // json() decodes whatever the body holds, [] for garbage.
+    Log::warning('csp-report', [
+        'content_type' => $request->header('Content-Type'),
+        'report' => $request->json()->all(),
+    ]);
+
+    return response()->noContent();
+})->middleware('throttle:60,1')->name('csp.report');
 
 // Hardware routes — require authentication and manage_hardware permission
 // (Issue #216: guests must NOT see sensitive hardware data)
