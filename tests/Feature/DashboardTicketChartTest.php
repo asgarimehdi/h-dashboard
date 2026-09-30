@@ -84,12 +84,20 @@ test('trend chart shows the 30 most recent days with data, oldest first', functi
     expect($data['series'])->toHaveCount(30);
 });
 
-test('trend chart keeps every category when fewer than 30 days have data', function () {
+/**
+ * Since #747 the window is materialised: 30 days ending today, empty days
+ * included as zeros. A short history therefore gets PADDED, not clipped.
+ */
+test('trend chart pads a history shorter than the window with zero days', function () {
     seedTicketPerDay($this->unit, $this->user, 5);
 
     $data = Livewire::test('dashboard')->instance()->ticketChartData;
 
-    expect($data['categories'])->toBe(expectedRecentDayLabels(5));
+    expect($data['categories'])->toBe(expectedRecentDayLabels());
+    expect($data['series'])->toHaveCount(30);
+    expect(array_sum($data['series']))->toBe(5);
+    expect(array_slice($data['series'], -5))->toBe([1, 1, 1, 1, 1]);
+    expect(array_sum(array_slice($data['series'], 0, 25)))->toBe(0);
 });
 
 test('trend chart counts several tickets on the same day as one bucket', function () {
@@ -99,5 +107,8 @@ test('trend chart counts several tickets on the same day as one bucket', functio
 
     $data = Livewire::test('dashboard')->instance()->ticketChartData;
 
-    expect($data['series'])->toBe([1, 2]);
+    expect($data['series'])->toHaveCount(30);
+    expect(array_sum($data['series']))->toBe(3);
+    expect($data['series'][29])->toBe(2); // today holds both tickets
+    expect($data['series'][28])->toBe(1); // yesterday is its own bucket
 });

@@ -12,8 +12,8 @@ import { test, expect, login } from '../shared/fixtures';
  *   them off the live Highcharts instance — the same array the chart plots —
  *   rather than guessing at SVG geometry after async init.
  *
- * The chart shows the most recent 30 days THAT HAVE DATA, so the axis is
- * sparse, not 30 consecutive days. The assertions therefore check the
+ * Since #747 the window is materialised day by day (30 days ending today,
+ * empty days as zeros), so the assertions check the
  * properties that define the fix:
  *   1. at most 30 buckets, and the series lines up with the categories;
  *   2. strictly ascending by real date (display order preserved);
