@@ -1,36 +1,65 @@
 <?php
 
-use App\Models\{User, Person, Unit, Ticket, Todo, ActivityLog};
+use App\Models\ActivityLog;
+use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\Todo;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\AccessService;
+use App\Services\DailySeries;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
-return new class extends Component {
+return new class extends Component
+{
+    /** Days covered by the ticket trend chart — one definition shared with /api/reports (#736). */
+    private const TICKET_CHART_DAYS = 30;
+
     public int $totalUsers = 0;
+
     public int $totalPersons = 0;
+
     public int $totalUnits = 0;
+
     public int $totalTickets = 0;
+
     public int $openTickets = 0;
+
     public int $completedTickets = 0;
+
     public int $totalTodos = 0;
+
     public int $pendingTodos = 0;
+
     public int $completedTodos = 0;
+
     public int $linkedTodos = 0;
+
     public int $totalRoles = 0;
+
     // آمار امروز
     public int $todayTickets = 0;
+
     public int $todayTodos = 0;
+
     public int $todayActivities = 0;
+
     // آمار تفصیلی تیکت‌ها
     public int $urgentTickets = 0;
+
     public int $normalTickets = 0;
+
     public int $lowTickets = 0;
+
     public int $overdueTickets = 0;
+
     public float $avgResolutionDays = 0;
 
     public bool $showHelpModal = false;
+
     public int $refreshInterval = 0;
     public bool $emptyScope = false;
 
@@ -106,15 +135,15 @@ return new class extends Component {
             ", $accessibleIds);
 
             return [
-                'totalPersons'     => (int) ($row->total_persons ?? 0),
-                'totalUnits'       => (int) ($row->total_units ?? 0),
-                'totalTickets'     => (int) ($ticketRow->total_tickets ?? 0),
-                'openTickets'      => (int) ($ticketRow->open_tickets ?? 0),
+                'totalPersons' => (int) ($row->total_persons ?? 0),
+                'totalUnits' => (int) ($row->total_units ?? 0),
+                'totalTickets' => (int) ($ticketRow->total_tickets ?? 0),
+                'openTickets' => (int) ($ticketRow->open_tickets ?? 0),
                 'completedTickets' => (int) ($ticketRow->completed_tickets ?? 0),
-                'totalTodos'       => (int) ($todoRow->total_todos ?? 0),
-                'pendingTodos'     => (int) ($todoRow->pending_todos ?? 0),
-                'completedTodos'   => (int) ($todoRow->completed_todos ?? 0),
-                'linkedTodos'      => (int) ($linkedTodos->cnt ?? 0),
+                'totalTodos' => (int) ($todoRow->total_todos ?? 0),
+                'pendingTodos' => (int) ($todoRow->pending_todos ?? 0),
+                'completedTodos' => (int) ($todoRow->completed_todos ?? 0),
+                'linkedTodos' => (int) ($linkedTodos->cnt ?? 0),
             ];
         });
 
@@ -174,10 +203,10 @@ return new class extends Component {
             ", $accessibleIds);
 
             return [
-                'urgentTickets'    => (int) ($row->urgent ?? 0),
-                'normalTickets'    => (int) ($row->normal ?? 0),
-                'lowTickets'       => (int) ($row->low ?? 0),
-                'overdueTickets'   => (int) ($row->overdue ?? 0),
+                'urgentTickets' => (int) ($row->urgent ?? 0),
+                'normalTickets' => (int) ($row->normal ?? 0),
+                'lowTickets' => (int) ($row->low ?? 0),
+                'overdueTickets' => (int) ($row->overdue ?? 0),
                 'avgResolutionDays' => (float) ($row->avg_days ?? 0),
             ];
         });
@@ -211,16 +240,20 @@ return new class extends Component {
 
         return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-            $tickets = Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw("date(created_at) as day, count(*) as count")
-                ->groupBy('day')
-                ->orderBy('day')
-                ->limit(30)
-                ->get();
+
+            // Issue #736: the window is 30 days ending today, with every day
+            // present (zeros included). The previous `ORDER BY day` +
+            // `LIMIT 30` returned the *oldest* 30 days, so recent days were
+            // missing from the chart entirely.
+            $days = DailySeries::lastDays(self::TICKET_CHART_DAYS)
+                ->counts(Ticket::query()->whereIn('unit_id', $accessibleIds), 'created_at');
 
             return [
-                'categories' => $tickets->pluck('day')->map(fn($d) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($d))->format('m/d'))->toArray(),
-                'series' => $tickets->pluck('count')->toArray(),
+                'categories' => array_map(
+                    fn (array $row) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($row['day']))->format('m/d'),
+                    $days
+                ),
+                'series' => array_column($days, 'count'),
             ];
         });
     }
@@ -233,8 +266,9 @@ return new class extends Component {
 
         return Cache::remember("dashboard:ticket_status:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
             return Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw("status, count(*) as count")
+                ->selectRaw('status, count(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status')
                 ->toArray();
@@ -246,13 +280,13 @@ return new class extends Component {
     {
         $v = Cache::get('dashboard_version', 0);
         $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
-        
+
         return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-            $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
-                ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))
+            $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+                ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
-            
+
             return ActivityLog::with('user')
                 ->whereIn('user_id', $userIds)
                 ->latest()->take(10)->get();
