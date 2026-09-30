@@ -6,6 +6,11 @@
 > 1. دامنه = **همه‌چیز**: تریاژ + گپ‌ها + شش ایشوی باز، فازبندی‌شده.
 > 2. #737/#739 = بستن با کامنت + ایشوی جدا برای هر گپ واقعی.
 > 3. خروجی = همین فایل در `plans/`، کامیت و پوش روی برنچ فعلی.
+> 4. **چهار تصمیم فاز ۳ حل‌شده** (۲۰۲۶-۰۹-۳۰):
+>    - **#743:** قالب PR را اجراکننده می‌سازد؛ مراحل دقیق اعمال branch protection در مرورگر در گزارش/کامنت final به کاربر داده می‌شود تا خودش اعمال کند (توکن `haileen5` فقط `pull` دارد).
+>    - **#740:** هشدار = **اعلام داخلی اپ برای نقش `admin`** از طریق `NotificationService::send()` موجود + ویجت داشبورد. بدون زیرساخت جدید (ایمیل/وب‌هوک).
+>    - **#742:** **endpoint موقت روی همین اپ** — `POST /csp-report` با ذخیرهٔ لاگی، هدر با `Reporting-Endpoints` (+ `report-to`) روی همان دامنه؛ جابجایی به دامنهٔ جدا در ایشوی بعدی ثبت شود.
+>    - **#738:** ستون `phone`، رشته‌ای، `nullable`، **بدون ولیدیشن سخت‌گیرانه**.
 >
 > Category: Process + Implementation | فازها: 0 تا 4
 
@@ -42,7 +47,7 @@
 - فایل `package-lock.json` محلی یک تغییر از پیش موجود دارد (۳ خط) — **در هیچ کامیتی staged نشود**.
 - فایل‌های خارج از scope هر ایشو را دست نزنید. بعد از هر تغییر PHP: `vendor/bin/pint --dirty --format agent` و `vendor/bin/phpstan analyse --no-progress` (مراقب `phpstan-baseline.neon` خطی — بعد از ویرایش فایل baselined: `--generate-baseline` و تأیید `git diff phpstan-baseline.neon` بدون addition).
 - تست: `composer test` (config:clear + route:clear + سریال). تست جدید Feature با `use InteractsWithTestSetup;`.
-- اگر اجرای هر مرحله به **تصمیم انسانی** برخورد (ادمین، کانال هشدار، مقصد گزارش CSP) → **STOP و گزارش**؛ نه حدس، نه پیاده‌سازی خودسرانه.
+- تصمیم‌های چهارگانهٔ فاز ۳ در همین پلن حل شده‌اند (سربرگ بالای فایل) — به بخش همان ایشو رجوع کنید، دوباره پرسیده نشود. برای هر **تصمیم جدیدِ خارج از این چهار مورد** → **STOP و گزارش**؛ نه حدس، نه پیاده‌سازی خودسرانه.
 
 ---
 
@@ -162,18 +167,23 @@ commit: `fix(export): persons export — full unit breadcrumb + birth date colum
 - Acceptance: `bash -n scripts/sync-beta.sh` (و `shellcheck` اگر هست)؛ روی برنچ واقعی عقب‌مانده عدد درست گزارش می‌شود؛ روی برنچ واگرا merge نمی‌کند.
 - **تست خودکار ندارد** — راستی‌آزمایی دستی با یک برنچ آزمایشی محلی (مثلاً `git branch test-behind origin/beta~3`) و گزارش خروجی در PR.
 
-### 3.2 #743 — گاردریل مرج (S + تصمیم ادمین)
+### 3.2 #743 — گاردریل مرج (S) — تصمیم: اجراکننده قالب می‌سازد، protection با کاربر
 
-- **Step 1 (تصمیم — ابتدا):** آیا branch protection با required checks روی `beta` قابل‌قبول است؟ جواب را از کاربر بگیر. اگر نه → فقط قالب را بساز و در PR/کامنت گزارش بده.
-- **Step 2:** `.github/PULL_REQUEST_TEMPLATE.md` جدید با چک‌لیست خود ایشو (sync با beta / تست محلی / commit+push / توضیح «چرا»).
-- **Step 3 (پس از تأیید):** فعال‌سازی protection از طریق GitHub MCP یا `gh api` — required checks = چک‌های CI (`test.yml`). توجه: در تریاژ قبلی `GET .../branches/beta/protection` روی کانونیکال **404** بود = احتمالاً دسترسی admin نداریم؛ اگر 403/404 دیدی → STOP و گزارش، ادمین خودش انجام می‌دهد.
-- Acceptance: قالب در PR جدید ظاهر می‌شود؛ protection (در صورت دسترسی) چک‌ها را اجباری می‌کند.
+- **Step 1:** `.github/PULL_REQUEST_TEMPLATE.md` جدید با چک‌لیست خود ایشو (sync با beta / تست محلی با `composer verify` / commit+push / توضیح «چرا» نه فقط «چه»).
+- **Step 2:** نوشتن **مراحل دقیق اعمال branch protection در مرورگر** و گذاشتن آن در کامنت #743 (یا گزارش final به کاربر). مراحل استاندارد:
+  1. در `asgarimehdi/h-dashboard` → تب **Settings → Branches → Add branch protection rule**.
+  2. Branch name pattern: `beta`.
+  3. فعال کردن **Require a pull request before merging** (حداقل ۱ approve اگر تیم >۱ نفر است، وگرنه ۰).
+  4. فعال کردن **Require status checks to pass before merging** و اضافه کردن چک‌های jobهای `.github/workflows/test.yml` (نام دقیق jobها را از همان فایل بخوان و عیناً بنویس).
+  5. Save.
+- **هرگز** سعی نکن از API با توکن فعلی اعمال شود — `haileen5` فقط `pull` دارد و پاسخ 404/403 می‌دهد.
+- Acceptance: قالب در PR جدید ظاهر می‌شود؛ مراحل protection نوشته و تحویل داده شده است. (اعمال واقعی protection = کارِ کاربر؛ در گزارش final یادآوری شود.)
 
-### 3.3 #738 — شماره تماس پرسنل (S-M + تصمیم نام ستون)
+### 3.3 #738 — شماره تماس پرسنل (S-M) — تصمیم: ستون `phone`
 
-- **تصمیم پیش‌فرض (اگر کاربر نگفت):** ستون `phone`، رشته‌ای، `nullable`. قبل از migration از کاربر تأیید بگیر اگر شک دارد.
-- Scope عیناً از ایشو: migration (+ rollback تمیز)، فیلد فرم در `resources/views/livewire/kargozini/person.blade.php` + ولیدیشن، ستون در `PersonImport`، نمایش در جزئیات رکورد.
-- `@property` روی مدل `Person` را به‌روز کن (PHPStan level 6).
+- **تصمیم قطعی:** ستون `phone`، رشته‌ای (`string`)، `nullable`، **بدون ولیدیشن سخت‌گیرانه** — در فرم یک `x-input` با ولیدیشن سادهٔ حداکثر طول (مثلاً `max:20`)، بدون اجباری بودن.
+- Scope عیناً از ایشو: migration (`YYYY_MM_DD_000001_add_phone_to_persons_table.php`، rollback تمیز)، فیلد فرم در `resources/views/livewire/kargozini/person.blade.php`، ستون در `PersonImport`، نمایش در جزئیات رکورد (نمایش در فهرست اختیاری، طبق ایشو).
+- `@property` روی مدل `Person` را به‌روز کن (`@property string|null $phone` — PHPStan level 6).
 - تست Feature برای هر سه مسیر (ذخیرهٔ فرم، ایمپورت، نمایش) با `InteractsWithTestSetup`.
 - Gates: pint / phpstan / `composer test`.
 - بعد از بسته شدن: «شماره تماس» را می‌توان به ستون‌های اکسل پرسنل اضافه کرد (یادداشت در کامنت).
@@ -185,20 +195,23 @@ commit: `fix(export): persons export — full unit breadcrumb + birth date colum
 - خارج از scope: `SyncZabbixJob` (#740 جدا است)، صفحهٔ مدیریت زیبکس #700.
 - Gates: تست‌های موجود کنترلرها **بدون تغییر** سبز + تست واحد جدید + pint/phpstan.
 
-### 3.5 #740 — observability برای `SyncZabbixJob` (S-M + تصمیم کانال هشدار)
+### 3.5 #740 — observability برای `SyncZabbixJob` (S-M) — تصمیم: اعلام داخلی ادمین
 
-- Steps 1-2 (بدون تصمیم): `report($e)` در `failed()` (`app/Jobs/SyncZabbixJob.php:42-44` علاوه بر `Log::error`) + رکورد دائمی هر اجرا (موفق/ناموفق/زمان — جدول وضعیت sync یا `notifications`؛ تصمیم با کدگذار: اگر جدول وضعیت جدید لازم بود، migration با شماره‌گذاری `YYYY_MM_DD_000001_...`) + ویجت «آخرین sync موفق» در داشبورد با تمایز «کش قدیمی» از «sync سالم».
-- **Step 3 (هشدار N fail متوالی): STOP — تصمیم انسانی.** به‌روزرسانی خود ایشو می‌گوید `app/Notifications/` وجود ندارد و تنها مسیر موجود `NotificationService::send()` است که اعلان اپ به کاربر است، نه هشدار عملیاتی. کانال هشدار (ایمیل ادمین؟ لاگ؟ وب‌هوک تیم؟) را از کاربر بپرس، بعد پیاده کن.
-- Acceptance: fail تکی در داشبورد دیده شود؛ سه fail متوالی → هشدار (پس از تصمیم)؛ تست + pint/phpstan سبز.
+- **Step 1:** `report($e)` در `failed()` (`app/Jobs/SyncZabbixJob.php:42-44`، علاوه بر `Log::error` فعلی) + ثبت رکورد هر اجرا (موفق/ناموفق/زمان) — تصمیم کدگذار: جدول وضعیت sync جدید (migration با شماره‌گذاری `YYYY_MM_DD_000001_...`) یا استفاده از `notifications`؛ هر کدام ساده‌تر بود.
+- **Step 2:** ویجت «آخرین sync موفق» در داشبورد + تمایز «کش قدیمی» از «sync سالم».
+- **Step 3 (هشدار N fail متوالی): N = ۳** (طبق Acceptance خود ایشو). کانال = **اعلام داخلی اپ برای نقش `admin`** از طریق `NotificationService::send()` موجود (`NotificationService::send()` استاتیک، نه `create()`؛ `app/Notifications/` وجود ندارد و ساخته نمی‌شود). پس از سومین fail متوالی، یک اعلان برای کاربران نقش admin؛ شمارش fail متوالی ریست پس از یک اجرا موفق.
+- Acceptance: fail تکی در داشبورد دیده شود؛ سه fail متوالی → اعلان داخلی admin؛ تست (fail متوالی → رکورد + اعلان) + pint/phpstan سبز.
 
-### 3.6 #742 — CSP reporting (S-M + تصمیم معماری)
+### 3.6 #742 — CSP reporting (S-M) — تصمیم: endpoint موقت روی همین اپ
 
-- **تصمیم اول (پیش از هر کد):** مقصد گزارش. به‌روزرسانی ایشو می‌گوید `report-uri` منسوخ است؛ راه درست `report-to` + هدر `Reporting-Endpoints` روی **endpoint دامنهٔ جدا** (گزارش‌های نقض داده دارند). گزینه‌ها را به کاربر ارائه بده:
-  1. endpoint گزارش روی همین اپ (`POST /csp-report`، حداقلی و موقت) — سریع ولی خلاف توصیهٔ ایشو.
-  2. endpoint روی سرویس/دامنهٔ جدا — نیازمند زیرساخت که ما نداریم.
-  3. حذف `report-uri` از هدر تا تصمیم مقصد — صادقانه‌تر از ادعای کذب.
-- بعد از تصمیم: پیاده‌سازی + تست (POST به مسیر در صورت پیاده‌سازی → 2xx) + pint/phpstan. `SecurityHeaders.php:20` نقطهٔ تغییر است.
-- خارج از scope: enforce کردن CSP (دورهٔ report-only ادامه دارد).
+- **تصمیم قطعی:**
+  1. مسیر `POST /csp-report` روی همین اپ ثبت شود (روت `web` یا `api` بسته به اینکه لاگین لازم نداشته باشد — CSP report باید **بدون auth** بتواند بیاید؛ throttle سبک `throttle:60,1` بگذار).
+  2. گزارش‌ها فقط **لاگ** شوند (`Log::warning('csp-report', ...)` با بدنهٔ نرمال‌شده؛ ذخیرهٔ دائمی/جدول لازم نیست — دادهٔ دورهٔ اعتبارسنجی است).
+  3. در `SecurityHeaders.php:20`: `report-uri` **حذف** (deprecated و در Chrome بی‌اثر) و جایگزینی با هدر `Reporting-Endpoints: csp-endpoint="/csp-report"` + `; report-to csp-endpoint` در CSP.
+  4. یک **یادداشت موقتی بودن** در کامنت #742 و داخل پلن: مقصد نهایی طبق خود ایشو باید endpoint دامنهٔ جدا باشد؛ جابجایی بعد از مشخص شدن زیرساخت، در ایشوی جدا ثبت شود (این تصمیم را در کامنت #742 هم بنویس).
+- **خارج از scope:** enforce کردن CSP (دورهٔ report-only ادامه دارد)، سرویس دامنهٔ جدا.
+- تست: POST خام نمونهٔ گزارش به `/csp-report` → 2xx؛ هدر پاسخِ یک صفحه حاوی `Reporting-Endpoints` (تست موجود SecurityHeaders را به‌روز کن اگر هدر را assert می‌کند).
+- Gates: pint / phpstan / `composer test`.
 
 ---
 
@@ -224,7 +237,7 @@ gh issue comment 755 --repo asgarimehdi/h-dashboard --body "<جمع‌بندی: 
         └─ فاز 4 (جمع‌بندی — فقط بعد از اتمام ۰ تا ۳)
 ```
 
-هر آیتمِ فاز ۳ مستقل است؛ اگر یکی به تصمیم انسانی گیر کرد (3.2 ادمین، 3.5 کانال هشدار، 3.6 مقصد CSP) آیتم بعدی را اجرا کن و آن را در گزارش final به‌عنوان blocking صریح ثبت کن.
+هر آیتمِ فاز ۳ مستقل است؛ چهار تصمیم قبلی حل شده و هیچ آیتمی دیگر مسدود نیست. تنها کارِ باقی‌ماندهٔ خارج از دسترسِ اجراکننده: **اعمال branch protection در مرورگر توسط کاربر** (۳.2) — آن را در گزارش final یادآوری کن.
 
 ## Test plan (جمعی)
 
@@ -236,9 +249,7 @@ gh issue comment 755 --repo asgarimehdi/h-dashboard --body "<جمع‌بندی: 
 ## Escape hatches (توقف و گزارش، نه بداهه‌کاری)
 
 - `composer verify` قرمز شد و به تغییرات مرتبط نیست → STOP.
-- دسترسی admin برای branch protection نیست → قالب را بساز، protection را گزارش بده، STOP.
-- کانال هشدار (#740) یا مقصد CSP (#742) تصمیم نگرفته → بقیهٔ Steps همان ایشو را هم رها کن، آیتم بعدی را اجرا کن.
-- نام/نوع ستون `phone` (#738) مورد اعتراض بود → STOP و بپرس.
+- به تصمیمی **خارج از چهار تصمیم حل‌شدهٔ سربرگ** برخوردی → STOP و گزارش.
 - اگر `gh` یا GitHub MCP روی ایشوها permission نداشت → کامنت/بستن را رها کن، گزارش بده.
 
 ## Maintenance note
