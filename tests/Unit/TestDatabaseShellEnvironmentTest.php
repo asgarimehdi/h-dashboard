@@ -21,15 +21,25 @@ uses(TestCase::class);
  */
 
 test('a value putenv by the running application is not treated as a shell export', function () {
-    // This is exactly what Laravel does with DB_DATABASE while booting.
-    putenv('DB_DATABASE=from_the_env_file');
+    // This is exactly what Laravel does with DB_DATABASE while booting — but
+    // DB_DATABASE itself cannot be the probe. Under `test --parallel` the
+    // workers are exec'd AFTER the parent has putenv'd phpunit.xml/.env, so a
+    // worker's exec-time /proc/self/environ legitimately contains it and the
+    // assertion would depend on how the suite was started (CI runs parallel;
+    // a local run may not). A key nothing else sets isolates the mechanism:
+    // putenv() never rewrites the exec-time block.
+    putenv('H_DASHBOARD_TEST_PROBE=from_the_env_file');
+
+    // The probe must be live in the process environment, otherwise the
+    // assertion below would pass without testing anything.
+    expect(getenv('H_DASHBOARD_TEST_PROBE'))->toBe('from_the_env_file');
 
     $environment = TestDatabaseResolver::shellEnvironment();
 
     // If putenv'd values leaked in, the preflight would resolve the .env
     // database and refuse to run a suite that is perfectly configured.
-    expect($environment)->not->toHaveKey('DB_DATABASE');
-})->after(fn () => putenv('DB_DATABASE'));
+    expect($environment)->not->toHaveKey('H_DASHBOARD_TEST_PROBE');
+})->after(fn () => putenv('H_DASHBOARD_TEST_PROBE'));
 
 test('an explicit environment snapshot wins over the live process environment', function () {
     // The wrapper captures the environment before Laravel boots and hands it
