@@ -390,4 +390,45 @@ class PersonLivewireTest extends TestCase
             $linkedUser->units()->where('units.id', $this->unit->id)->exists()
         );
     }
+
+    // -----------------------------------------------------------
+    //  شماره تماس (#738)
+    // -----------------------------------------------------------
+
+    public function test_save_person_stores_the_phone(): void
+    {
+        $data = $this->personData();
+
+        $component = Livewire::test('kargozini.person');
+        $this->fillForm($component, $data)->set('phone', '09123456789');
+        $component->call('savePerson');
+
+        $this->assertDatabaseHas('persons', [
+            'n_code' => $data['n_code'], 'phone' => '09123456789',
+        ]);
+    }
+
+    public function test_edit_form_fills_the_saved_phone(): void
+    {
+        // «نمایش» (#738): the edit form is where this page shows a record's
+        // saved details, so editPerson() must load the phone into the form.
+        $person = PersonModel::where('u_id', $this->unit->id)->firstOrFail();
+        $person->update(['phone' => '02188776655']);
+
+        Livewire::test('kargozini.person')
+            ->call('editPerson', $person->id)
+            ->assertSet('phone', '02188776655');
+    }
+
+    public function test_save_person_validates_the_phone_max_length(): void
+    {
+        // Free text, but the column and the decided rule both cap at 20 (#738).
+        $data = $this->personData();
+
+        $component = Livewire::test('kargozini.person');
+        $this->fillForm($component, $data)->set('phone', str_repeat('9', 21));
+        $component->call('savePerson')->assertHasErrors(['phone' => 'max']);
+
+        $this->assertDatabaseMissing('persons', ['n_code' => $data['n_code']]);
+    }
 }

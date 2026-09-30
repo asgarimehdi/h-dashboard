@@ -251,4 +251,55 @@ class PersonImportTest extends TestCase
 
         @unlink($file);
     }
+
+    // -----------------------------------------------------------
+    //  شماره تماس (#738)
+    // -----------------------------------------------------------
+
+    public function test_import_reads_the_phone_column_on_create(): void
+    {
+        $data = $this->createTestData();
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\tphone\n";
+        $csvContent .= "1112223344\tمریم\tاحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$data['unit']->id}\t09121234567\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setSelectedActions(['row_2' => 'create']);
+        Excel::import($import, $file);
+
+        $this->assertEquals(1, $import->getImportResults()['created']);
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '1112223344', 'phone' => '09121234567',
+        ]);
+
+        @unlink($file);
+    }
+
+    public function test_import_updates_an_existing_persons_phone(): void
+    {
+        $data = $this->createTestData();
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\tphone\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$data['unit']->id}\t02144556677\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        // Only the phone differs, so it must be the one detected change.
+        $changes = $import->getImportResults()['preview'][0]['changes'] ?? [];
+        $this->assertSame(['phone'], array_keys($changes));
+
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '1234567890', 'phone' => '02144556677',
+        ]);
+
+        @unlink($file);
+    }
 }

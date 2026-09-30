@@ -42,6 +42,8 @@ return new class extends Component
 
     public $u_id;
 
+    public ?string $phone = null;
+
     public ?int $editingId = null;
 
     public string $search = '';
@@ -103,7 +105,7 @@ return new class extends Component
     public function resetForm(): void
     {
         $this->resetValidation();
-        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId', 'formOpen', 'unitModal', 'showFilters', 'filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
+        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'phone', 'editingId', 'formOpen', 'unitModal', 'showFilters', 'filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
     }
 
     public function startCreate(): void
@@ -141,6 +143,9 @@ return new class extends Component
             's_id' => 'required|exists:semats,id',
             'r_id' => 'required|exists:radifs,id',
             'u_id' => 'required|exists:units,id',
+            // #738: free-text phone, optional, simple max length — no format
+            // constraint (see the migration's docblock).
+            'phone' => 'nullable|string|max:20',
         ]);
 
         if ($this->editingId) {
@@ -163,6 +168,7 @@ return new class extends Component
                 's_id' => $this->s_id,
                 'r_id' => $this->r_id,
                 'u_id' => $this->u_id,
+                'phone' => $this->phone,
             ]);
 
             if ($user = $person->user) {
@@ -189,6 +195,7 @@ return new class extends Component
                 's_id' => $this->s_id,
                 'r_id' => $this->r_id,
                 'u_id' => $this->u_id,
+                'phone' => $this->phone,
             ]);
 
             if ($user = $person->user) {
@@ -224,6 +231,7 @@ return new class extends Component
         $this->s_id = $person->s_id;
         $this->r_id = $person->r_id;
         $this->u_id = $person->u_id;
+        $this->phone = $person->phone;
         $this->formOpen = true;
         $this->unitModal = false;
     }
@@ -425,6 +433,7 @@ return new class extends Component
                     <x-select wire:model="e_id" label="استخدام" :options="$estekhdams" required placeholder="انتخاب نوع استخدام"/>
                     <x-select wire:model="s_id" label="سمت" :options="$semats" required placeholder="انتخاب سمت"/>
                     <x-select wire:model="r_id" label="ردیف سازمانی" :options="$radifs" required placeholder="انتخاب ردیف سازمانی"/>
+                    <x-input wire:model="phone" label="شماره تماس" placeholder="شماره تماس" maxlength="20"/>
 
                     <div class="sm:col-span-2">
                         <label class="text-sm font-medium block mb-1">واحد</label>

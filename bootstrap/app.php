@@ -26,6 +26,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+        // Browser-submitted CSP reports arrive without a CSRF token (#742).
+        $middleware->validateCsrfTokens(except: ['csp-report']);
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,

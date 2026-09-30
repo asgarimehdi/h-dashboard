@@ -103,7 +103,7 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         // NOTE: 'id' MUST be selected — records are later updated via these
         // models; without the PK, update() issues WHERE id IS NULL and
         // silently persists nothing while counters still report success.
-        $persons = $query->get(['id', 'n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id']);
+        $persons = $query->get(['id', 'n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'phone']);
 
         foreach ($persons as $person) {
             if ($person->n_code) {
@@ -295,7 +295,7 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
     private function mapRowToData(array $row): array
     {
-        // Expected CSV headers: n_code, f_name, l_name, t_id, e_id, r_id, s_id, u_id
+        // Expected CSV headers: n_code, f_name, l_name, t_id, e_id, r_id, s_id, u_id, phone
         return [
             'n_code' => $this->clean($row['n_code'] ?? null),
             'f_name' => $this->clean($row['f_name'] ?? null),
@@ -305,6 +305,7 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             'r_id' => $this->parseInt($row['r_id'] ?? null),
             's_id' => $this->parseInt($row['s_id'] ?? null),
             'u_id' => $this->parseInt($row['u_id'] ?? null),
+            'phone' => $this->clean($row['phone'] ?? null),
         ];
     }
 
@@ -415,7 +416,7 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     private function detectChanges(Person $existing, array $newData): array
     {
         $changes = [];
-        $compareFields = ['f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id'];
+        $compareFields = ['f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'phone'];
 
         foreach ($compareFields as $field) {
             $oldValue = $existing->$field;
