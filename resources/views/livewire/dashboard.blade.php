@@ -61,6 +61,7 @@ return new class extends Component
     public bool $showHelpModal = false;
 
     public int $refreshInterval = 0;
+    public bool $emptyScope = false;
 
     public function mount(): void
     {
@@ -68,6 +69,7 @@ return new class extends Component
         $this->refreshInterval = $settings['dashboard_refresh'] ?? 0;
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $this->emptyScope = $accessibleIds === [];
         $scopeKey = md5(implode(',', $accessibleIds));
         $v = Cache::get('dashboard_version', 0);
 
@@ -83,14 +85,28 @@ return new class extends Component
 
         // Scoped stats — consolidated with PostgreSQL FILTER
         $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
-            $ids = implode(',', $accessibleIds);
+            if ($accessibleIds === []) {
+                return [
+                    'totalPersons'     => 0,
+                    'totalUnits'       => 0,
+                    'totalTickets'     => 0,
+                    'openTickets'      => 0,
+                    'completedTickets' => 0,
+                    'totalTodos'       => 0,
+                    'pendingTodos'     => 0,
+                    'completedTodos'   => 0,
+                    'linkedTodos'      => 0,
+                ];
+            }
+
+            $idList = implode(',', array_fill(0, count($accessibleIds), '?'));
 
             // Persons + Units in one shot
             $row = DB::selectOne("
                 SELECT
-                    (SELECT COUNT(*) FROM persons WHERE u_id IN ({$ids})) AS total_persons,
-                    (SELECT COUNT(*) FROM units WHERE id IN ({$ids})) AS total_units
-            ");
+                    (SELECT COUNT(*) FROM persons WHERE u_id IN ({$idList})) AS total_persons,
+                    (SELECT COUNT(*) FROM units WHERE id IN ({$idList})) AS total_units
+            ", array_merge($accessibleIds, $accessibleIds));
 
             // Tickets: total, open, completed
             $ticketRow = DB::selectOne("
@@ -98,8 +114,8 @@ return new class extends Component
                     COUNT(*) AS total_tickets,
                     COUNT(*) FILTER (WHERE status IN ('created','forwarded')) AS open_tickets,
                     COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets
-                FROM tickets WHERE unit_id IN ({$ids})
-            ");
+                FROM tickets WHERE unit_id IN ({$idList})
+            ", $accessibleIds);
 
             // Todos: total, pending, completed
             $todoRow = DB::selectOne("
@@ -107,16 +123,16 @@ return new class extends Component
                     COUNT(*) AS total_todos,
                     COUNT(*) FILTER (WHERE is_completed = false) AS pending_todos,
                     COUNT(*) FILTER (WHERE is_completed = true) AS completed_todos
-                FROM todos WHERE unit_id IN ({$ids})
-            ");
+                FROM todos WHERE unit_id IN ({$idList})
+            ", $accessibleIds);
 
             // Linked todos (tickets.task_id -> todos.id)
             $linkedTodos = DB::selectOne("
                 SELECT COUNT(DISTINCT t.id) AS cnt
                 FROM todos t
-                WHERE t.unit_id IN ({$ids})
+                WHERE t.unit_id IN ({$idList})
                   AND EXISTS (SELECT 1 FROM tickets WHERE task_id = t.id)
-            ");
+            ", $accessibleIds);
 
             return [
                 'totalPersons' => (int) ($row->total_persons ?? 0),
@@ -133,8 +149,15 @@ return new class extends Component
 
         // Today stats — 1 consolidated query
         $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
+            if ($accessibleIds === []) {
+                return [
+                    'todayTickets'    => 0,
+                    'todayTodos'      => 0,
+                    'todayActivities' => 0,
+                ];
+            }
+
             $today = now()->startOfDay()->toDateTimeString();
-            $ids = implode(',', $accessibleIds);
             $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
                 ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
@@ -152,7 +175,17 @@ return new class extends Component
 
         // Ticket details — 1 consolidated query
         $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
-            $ids = implode(',', $accessibleIds);
+            if ($accessibleIds === []) {
+                return [
+                    'urgentTickets'     => 0,
+                    'normalTickets'     => 0,
+                    'lowTickets'        => 0,
+                    'overdueTickets'    => 0,
+                    'avgResolutionDays' => 0.0,
+                ];
+            }
+
+            $idList = implode(',', array_fill(0, count($accessibleIds), '?'));
             $diffExpr = match (DB::getDriverName()) {
                 'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
                 'sqlite' => 'julianday(completed_at) - julianday(created_at)',
@@ -166,8 +199,8 @@ return new class extends Component
                     COUNT(*) FILTER (WHERE priority = 'low' AND status IN ('created','forwarded')) AS low,
                     COUNT(*) FILTER (WHERE status IN ('created','forwarded') AND deadline < NOW()) AS overdue,
                     AVG(CASE WHEN status = 'completed' AND completed_at IS NOT NULL THEN {$diffExpr} END) AS avg_days
-                FROM tickets WHERE unit_id IN ({$ids})
-            ");
+                FROM tickets WHERE unit_id IN ({$idList})
+            ", $accessibleIds);
 
             return [
                 'urgentTickets' => (int) ($row->urgent ?? 0),
@@ -269,6 +302,13 @@ return new class extends Component
     </x-header>
 
     <x-help:modal wireModel="showHelpModal" />
+
+    @if($emptyScope)
+        <div class="alert alert-info mb-6" role="alert">
+            <x-icon name="o-information-circle" class="w-5 h-5" />
+            <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <x-stat
