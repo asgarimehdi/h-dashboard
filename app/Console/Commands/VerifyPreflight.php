@@ -122,7 +122,7 @@ class VerifyPreflight extends Command
         if (! $exists) {
             $create = 'psql -h '.escapeshellarg($target->host).' -U '.escapeshellarg($target->username)
                 .' -d '.self::MAINTENANCE_DATABASE.' -c '
-                .escapeshellarg("CREATE DATABASE {$target->database} WITH OWNER={$target->username} TEMPLATE=template_postgis;");
+                .escapeshellarg("CREATE DATABASE {$target->database} WITH OWNER={$target->username};");
 
             return [
                 "Database [{$target->database}] does not exist.",
