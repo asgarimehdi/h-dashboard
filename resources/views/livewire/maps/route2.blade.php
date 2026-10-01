@@ -102,6 +102,47 @@ return new class extends Component {
         return null;
     }
 
+    window.Alpine.store('map').onReady(function (map) {
+    function initRouting() {
+        if (typeof L.Routing === 'undefined' || typeof L.Routing.control !== 'function') {
+            console.error('L.Routing not available. Make sure leaflet-routing-machine.js is loaded.');
+            return;
+        }
+
+        routingControl = L.Routing.control({
+            waypoints: [],
+            router: L.Routing.osrmv1({
+                serviceUrl: '{{ $routing_url }}/route/v1'
+            }),
+            routeWhileDragging: true,
+            show: true
+        }).addTo(map);
+
+        routingControl.on('routesfound', function (e) {
+            var summary = e.routes[0].summary;
+            document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
+            document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
+        });
+
+        routingControl.on('routingerror', function (e) {
+            console.error('Routing error:', e.error);
+        });
+
+        setTimeout(() => {
+            if (routingControl._container) {
+                routingControl._container.style.display = 'none';
+            }
+        }, 200);
+
+        window.routingControl = routingControl;
+    }
+
+    initRouting();
+
+    // Issue #028 — these three are bound to `window` because the Blade
+    // x-on:click handlers call them as window.searchRoute() etc. They close over
+    // the live `map` handed to us by onReady(), so they can never act on a map
+    // from a previous page.
     window.searchRoute = async function() {
         if (!routingControl) {
             console.error('Routing control not initialized');
@@ -111,7 +152,7 @@ return new class extends Component {
         var endPoint = parseCoordinates(document.getElementById('end-input').value) || await geocode(document.getElementById('end-input').value);
         if (startPoint && endPoint) {
             routingControl.setWaypoints([startPoint, endPoint]);
-            window.map.fitBounds([startPoint, endPoint]);
+            map.fitBounds([startPoint, endPoint]);
         } else {
             alert('لطفاً مبدا و مقصد معتبر وارد کنید');
         }
@@ -133,65 +174,6 @@ return new class extends Component {
         var container = routingControl._container;
         container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
     };
-
-    function initRouting() {
-        if (typeof L.Routing === 'undefined' || typeof L.Routing.control !== 'function') {
-            console.error('L.Routing not available. Make sure leaflet-routing-machine.js is loaded.');
-            return;
-        }
-        console.log('initRouting: creating routing control...');
-
-        routingControl = L.Routing.control({
-            waypoints: [],
-            router: L.Routing.osrmv1({
-                serviceUrl: '{{ $routing_url }}/route/v1'
-            }),
-            routeWhileDragging: true,
-            show: true
-        }).addTo(window.map);
-
-        routingControl.on('routesfound', function (e) {
-            console.log('Route found:', e.routes[0].summary);
-            var summary = e.routes[0].summary;
-            document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
-            document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
-        });
-
-        routingControl.on('routingerror', function (e) {
-            console.error('Routing error:', e.error);
-        });
-
-        setTimeout(() => {
-            if (routingControl._container) {
-                routingControl._container.style.display = 'none';
-            }
-        }, 200);
-
-        window.routingControl = routingControl;
-        console.log('initRouting: routing control added to map');
-    }
-
-    // Destroy any existing routing control to avoid duplicates on re-navigation
-    if (window.routingControl) {
-        try { if (window.map) window.map.removeControl(window.routingControl); } catch(e) {}
-        window.routingControl = null;
-    }
-
-    // Init routing when map is ready
-    if (window.map && typeof window.map.getSize === 'function') {
-        initRouting();
-    } else {
-        var tries = 0;
-        var waitForMap = setInterval(() => {
-            tries++;
-            if (window.map && typeof window.map.getSize === 'function') {
-                clearInterval(waitForMap);
-                initRouting();
-            } else if (tries > 50) {
-                clearInterval(waitForMap);
-                console.error('Map did not initialize within 10s');
-            }
-        }, 200);
-    }
+});
 </script>
 @endscript

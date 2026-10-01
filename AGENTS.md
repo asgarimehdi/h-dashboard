@@ -210,6 +210,47 @@ Free-text, `string(20)`, **nullable**, migration `2026_09_30_000001_add_phone_to
 
 ---
 
+## Leaflet map lifecycle (issue #028)
+
+The Leaflet instance is owned by **`Alpine.store('map')`** (`resources/js/map-store.js`, registered
+in `resources/js/bootstrap.js`) — **not** on `window.map`.
+
+- **`resources/views/livewire/maps/map.blade.php` is the only place allowed to call `L.map()`.** Its
+  `x-data` calls `configure()` + `use()` in `init()` and `release()` in `destroy()`.
+- Host pages (`maps/point`, `maps/county`, `maps/unit`, `maps/route`, `maps/route2`,
+  `reports/map-no-boundary`) call `Alpine.store('map').onReady(cb)` and attach to **the instance the
+  callback receives**. They must never wait on "does a map exist" and must never create one.
+
+Why it changed: the instance used to live on `window.map`, which is never cleared, so SPA navigation
+left the **previous page's detached instance** in place. Host pages waited for `window.map` to exist
+— a condition a detached instance satisfies — bound their layers to it, and then `initMap()` built a
+fresh map and wiped the layers. Measured **0/6** marker renders on `/maps/point` when reached by
+clicking the sidebar, versus 783 on a direct load.
+
+`onReady()` exists because **script execution order between two Livewire components is not
+guaranteed** (`@script` runs once per component instance — `evaluateScripts` in `livewire.esm.js`).
+It queues the callback and flushes it when the map exists, so neither component has to know which
+runs first.
+
+Three rules, each of which cost real debugging time:
+
+| Rule | Why |
+|---|---|
+| The `x-data` element must **not** be the component root | Livewire puts `wire:id` on the **outermost** element of a component's markup. An `x-data` there is claimed by Livewire and its `init()` never runs, so the map silently never appears. `map.blade.php` wraps it in a plain `<div>` for this reason. |
+| The `import` of `map-store` in `bootstrap.js` must be **static** | A dynamic `import()` resolves in a microtask, i.e. **after** Livewire's `start()` already dispatched `alpine:init`. The store then registers too late, every `x-data` `init()` finds no store, and **all maps render blank with no console error**. |
+| Register on `alpine:init`, not at module evaluation | `window.Alpine` does not exist when the module runs, and the event always fires before the first `x-data`. |
+
+`$refs.map` resolves fine **across** the `wire:ignore` boundary, so the container keeps `id="map"`
+and `class="h-[80lvh] rounded"` — the E2E map specs assert on both plus `clientWidth > 400`, which is
+why `invalidateSize()` and the `resize` listener are preserved.
+
+> **Out of scope, deliberately untouched:** `map/map-dashboard.blade.php` (`/map`) and
+> `units/map.blade.php` (`/units/{id}/map`) each own a separate instance (`map-dashboard` via
+> `x-data`, `units/map` on `#unitMap`, whose E2E spec depends on `window._drawnItems`), and
+> `maps/interactive` owns `#unitsMap`. Do not migrate them without a separate decision.
+
+---
+
 ## Reusable unit tree (issue #704)
 
 The tree UI is generic and shared: `resources/views/livewire/unit/tree.blade.php` + `tree-node.blade.php` (single-file Livewire component `unit.tree`), backed by `app/Services/UnitTreeService.php` (scope-rooted `roots()`, `childrenOf()`, `search()`, `ancestorChain()` — all take `$accessibleIds` as an argument, never read `auth()`).
@@ -707,4 +748,9 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `Query\Builder::toBase()` does not exist | Only `Eloquent\Builder::toBase()` does. The `@mixin Query\Builder` on `Eloquent\Builder` is one-way, so PHPStan resolves `Ticket::query()` as `Query\Builder` — accept both and branch on `instanceof` rather than adding a `@method` (that re-types the chain repo-wide) |
 | `DailySeries` needs explicit generics | `Eloquent\Builder` in a signature without a `TModel` produces `missingType.generics` at level 6. Annotate `@param EloquentBuilder<covariant Model>|QueryBuilder` — otherwise the fix gets buried in `phpstan-baseline.neon` |
 | `hr/org-node.blade.php` removed | Replaced by `unit/tree-node.blade.php` (issue #704). Tests split: `UnitTreeLivewireTest` (generic tree contract) + `HrOrgChartPageTest` (the HR page embedding it) |
+| `waitForMap` is not a pattern — use `Alpine.store('map').onReady()` | `window.map` is never cleared, so a previous page's **detached** instance satisfied the old "map exists" check; host pages bound layers to a dying map and `initMap()` wiped them (0/6 marker renders via the sidebar). Issue #028 moved ownership into an Alpine store with an explicit `release()` on `destroy()`. Do not reintroduce a "wait until a map exists" loop |
+| Alpine `x-data` on a Livewire **component root** never runs `init()` | Livewire puts `wire:id` on the outermost element of the component's markup and claims that node, so an `x-data` there is never initialised by Alpine. Nest it inside a plain `<div>` — the map then renders blank with no console error |
+| A **dynamic** `import()` in `bootstrap.js` registers the store too late | It resolves in a microtask, after Livewire's `start()` already dispatched `alpine:init`. Every `x-data` `init()` then finds no store and all maps stay blank with no error. Import statically and register on the event |
+| `window.map` is **not** the Leaflet instance | With `id="map"` in the DOM the browser exposes the element itself as `window.map`, so it has no `getContainer`. Read the instance from `Alpine.store('map').get()`, and remember `#028` deliberately has no `window.map` |
+| MaryUI `<x-menu-sub>` collapses in E2E | It renders as a `<details>`, open only when a child is active. A collapsed `<details>` still gives children a non-empty box in Chromium, so `isVisible()` is not an "is it open" test — read `details.open`, click the `<summary>`, then `scrollIntoViewIfNeeded()` before clicking (see `tests/e2e/maps/spa-navigation.spec.ts`) |
 | `ORDER BY` + `LIMIT` = oldest N, not newest | `groupBy('day')->orderBy('day')->limit(30)` returns the **oldest** 30 days, because ORDER BY is applied before LIMIT (issue #734, dashboard ticket-trend chart). To show the most recent N buckets, take them in a subquery and re-sort for display: `DB::query()->fromSub($inner->orderByDesc('day')->limit(30), 'daily')->orderBy('day')->get()`. Flipping only the outer `orderBy` reverses the axis — do not "fix" it that way. The axis is deliberately **sparse** (30 most recent days *that have data*, not 30 consecutive days), so an E2E assertion of "30 consecutive days" fails against correct code |

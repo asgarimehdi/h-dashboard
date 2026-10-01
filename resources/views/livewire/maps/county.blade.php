@@ -87,44 +87,44 @@ $this->regions = Cache::remember('county:regions_with_boundaries:v' . Cache::get
     var geojsonLayers = {};
     var allregions = {{ Js::from($regions) }};
 
-    window.toggleGeoJson = function(regionId) {
-        if (!window.map) {
-            console.error('Map not initialized');
-            return;
-        }
-        
-        const region = allregions.find(r => r.id === regionId);
-        if (!region || !region.geojson) {
-            console.warn('No geojson found for region:', regionId);
-            return;
-        }
-
-        if (geojsonLayers[regionId]) {
-            window.map.removeLayer(geojsonLayers[regionId]);
-            delete geojsonLayers[regionId];
-        } else {
-            try {
-                let data = typeof region.geojson === 'string' 
-                    ? JSON.parse(region.geojson) 
-                    : region.geojson;
-                    
-                let newLayer = L.geoJSON(data, {
-                    style: {
-                        color: "orange",
-                        weight: 2,
-                        opacity: 0.8,
-                        fillOpacity: 0.1,
-                    }
-                }).addTo(window.map);
-                
-                geojsonLayers[regionId] = newLayer;
-                
-                // Zoom to layer bounds
-                window.map.fitBounds(newLayer.getBounds());
-            } catch (e) {
-                console.error('Error parsing GeoJSON:', e);
+    // Issue #028 — attach to the live map the store owns. Calling onReady()
+    // (instead of waiting for a `window.map` a previous page may still own)
+    // also removes any script-ordering race with maps.map.
+    window.Alpine.store('map').onReady(function (map) {
+        window.toggleGeoJson = function(regionId) {
+            const region = allregions.find(r => r.id === regionId);
+            if (!region || !region.geojson) {
+                console.warn('No geojson found for region:', regionId);
+                return;
             }
-        }
-    };
+
+            if (geojsonLayers[regionId]) {
+                map.removeLayer(geojsonLayers[regionId]);
+                delete geojsonLayers[regionId];
+            } else {
+                try {
+                    let data = typeof region.geojson === 'string'
+                        ? JSON.parse(region.geojson)
+                        : region.geojson;
+
+                    let newLayer = L.geoJSON(data, {
+                        style: {
+                            color: "orange",
+                            weight: 2,
+                            opacity: 0.8,
+                            fillOpacity: 0.1,
+                        }
+                    }).addTo(map);
+
+                    geojsonLayers[regionId] = newLayer;
+
+                    // Zoom to layer bounds
+                    map.fitBounds(newLayer.getBounds());
+                } catch (e) {
+                    console.error('Error parsing GeoJSON:', e);
+                }
+            }
+        };
+    });
 </script>
 @endscript

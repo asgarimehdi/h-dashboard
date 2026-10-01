@@ -161,20 +161,6 @@ return new class extends Component
 
 @script
 <script>
-    function waitForMap(callback) {
-        var tries = 0;
-        function check() {
-            if (window.map && typeof window.map.getSize === 'function') {
-                callback();
-            } else if (++tries > 50) {
-                console.error('Map not ready within 10s');
-            } else {
-                setTimeout(check, 200);
-            }
-        }
-        check();
-    }
-
     const typeIcons = {
         4: '/icons/network.svg',
         5: '/icons/urban-health.svg',
@@ -217,11 +203,9 @@ return new class extends Component
 
     const lineColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
 
-    function renderMarkers(locations) {
-        if (!window.markersLayer) return;
-
-        window.markersLayer.clearLayers();
-        window.linesLayer.clearLayers();
+    function renderMarkers(markersLayer, linesLayer, locations) {
+        markersLayer.clearLayers();
+        linesLayer.clearLayers();
 
         locations.forEach(loc => {
             if (loc.parent_id && loc.lat && loc.lng) {
@@ -232,7 +216,7 @@ return new class extends Component
                     L.polyline(
                         [[loc.lat, loc.lng], [parent.lat, parent.lng]],
                         { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
-                    ).addTo(window.linesLayer);
+                    ).addTo(linesLayer);
                 }
             }
         });
@@ -243,31 +227,23 @@ return new class extends Component
                 { icon: getIcon(loc.unit_type_id) }
             )
                 .bindPopup(loc.name)
-                .addTo(window.markersLayer);
+                .addTo(markersLayer);
         });
     }
 
-    waitForMap(function() {
-        // Always bind layers to the CURRENT map instance. Stale layers from a
-        // previous page (bound to an older Leaflet instance) are useless here.
-        if (window.markersLayer && window.map.hasLayer(window.markersLayer)) {
-            window.markersLayer.clearLayers();
-        } else {
-            window.markersLayer = L.layerGroup().addTo(window.map);
-        }
-        if (window.linesLayer && window.map.hasLayer(window.linesLayer)) {
-            window.linesLayer.clearLayers();
-        } else {
-            window.linesLayer = L.layerGroup().addTo(window.map);
-        }
+    // Issue #028 — take a LIVE map from the store instead of waiting for a
+    // `window.map` that a previous page may still own. onReady() removes the
+    // script-ordering race with maps.map entirely.
+    window.Alpine.store('map').onReady(function (map) {
+        const markersLayer = L.layerGroup().addTo(map);
+        const linesLayer = L.layerGroup().addTo(map);
 
         // Render initial locations
-        var initialLocations = {{ Js::from($location) }};
-        renderMarkers(initialLocations);
+        renderMarkers(markersLayer, linesLayer, {{ Js::from($location) }});
 
         // Listen for future updates from Livewire
         Livewire.on('locations-updated', ({ locations }) => {
-            renderMarkers(locations);
+            renderMarkers(markersLayer, linesLayer, locations);
         });
     });
 </script>
