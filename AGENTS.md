@@ -308,11 +308,11 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
 | `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command |
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
-| `SendNotificationJob` | 30s | 3 | Pushes one in-app notification per recipient; dispatched from `TicketCommentController` on comment create/update/delete and from `SyncZabbixJob`'s admin alert (#740) |
+| `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
-The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured. `SendNotificationJob` is **per-recipient, not unit-scoped**.
+The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
 
-> Gotcha: `SendNotificationJob::send()` is a **static convenience dispatcher** — read it before adding a second notification path; `NotificationService::send()` is the underlying primitive.
+> Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
 
 ---
 
@@ -452,21 +452,23 @@ Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test databas
 > `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
 ### Key test files
+Counts come from `php artisan test <file> --list-tests` — the authoritative per-file number. A plain `grep` for `test(`/`it(` **undercounts**, because PHPUnit-style classes declare tests as `public function test…` with neither wrapper.
+
 | File | Tests | Purpose |
 |---|---|---|
-| `tests/Feature/TodoLivewireTest.php` | 35 | Todo Livewire component |
-| `tests/Feature/UnitsExportTest.php` | 18 | Units Excel export (8 columns incl. «شهرستان») |
-| `tests/Feature/MaintenanceLivewireTest.php` | 16 | Maintenance schedule CRUD |
-| `tests/Feature/PersonsExportTest.php` | large | Personnel export (12 columns, filters, breadcrumb) |
+| `tests/Feature/ApiAbilityTest.php` | 33 | Real Bearer tokens per ability (#690) |
+| `tests/Feature/TodoLivewireTest.php` | 18 | Todo Livewire component |
+| `tests/Feature/PersonsExportTest.php` | 30 | Personnel export (12 columns, filters, breadcrumb) |
+| `tests/Feature/UnitsExportTest.php` | 22 | Units Excel export (8 columns incl. «شهرستان») |
+| `tests/Feature/SyncZabbixObservabilityTest.php` | 10 | `zabbix_sync_logs` rows, streak, admin alert (#740) |
 | `tests/Unit/PersianNormalizerTest.php` | 11 | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 | `tests/Feature/SecurityHeadersMiddlewareTest.php` | 10 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
-| `tests/Feature/SyncZabbixObservabilityTest.php` | — | `zabbix_sync_logs` rows, streak, admin alert (#740) |
+| `tests/Feature/Jobs/JobsTest.php` | 9 | Archive / clean / generate jobs |
+| `tests/Feature/MaintenanceLivewireTest.php` | 9 | Maintenance schedule CRUD |
 | `tests/Unit/ZabbixAdapterTest.php` | 7 | `ZabbixResult` failure classification with a stub client (#741) |
 | `tests/Feature/NotificationApiTest.php` | 6 | Notification API endpoints |
-| `tests/Feature/Jobs/JobsTest.php` | 4 | Archive / clean / generate jobs |
-| `tests/Feature/ApiAbilityTest.php` | 3 | Real Bearer tokens per ability (#690) |
 
-> Counts are `test(`/`it(` occurrences in the file, not the suite total — prefer `composer test` output for anything you assert in CI.
+> Per-file counts, not the suite total — use `composer test` output for anything you assert in CI.
 
 ### Prerequisites
 ```bash
