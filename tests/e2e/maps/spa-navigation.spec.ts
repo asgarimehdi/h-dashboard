@@ -30,10 +30,32 @@ async function waitForMap(page: import('@playwright/test').Page) {
   await page.waitForTimeout(1500);
 }
 
-/** Navigate via the sidebar so wire:navigate runs (not a full page load). */
+/**
+ * Navigate via the sidebar so wire:navigate runs (not a full page load).
+ *
+ * The maps links live inside a MaryUI <x-menu-sub>, which renders as a
+ * <details> collapsed unless a child is already active. A collapsed <details>
+ * still gives its children a non-empty box in Chromium, so isVisible() alone is
+ * not a reliable "is it open" test — and at Playwright's 1280x720 viewport the
+ * link can sit below the sidebar's scroll fold. So: open the submenu first when
+ * needed, then scroll it into view before clicking.
+ */
 async function navigateByMenu(page: import('@playwright/test').Page, href: string) {
   const link = page.locator(`a[href="${href}"]`).first();
-  await link.waitFor({ state: 'visible', timeout: 15000 });
+
+  // Open the submenu when it is collapsed. The toggle is the <summary> of the
+  // same <details> that contains the link.
+  const collapsed = await link.evaluate((el: Element) => {
+    const details = el.closest('details');
+    return !!details && !details.open;
+  });
+  if (collapsed) {
+    await link
+      .locator('xpath=ancestor::details/summary')
+      .click({ force: true });
+  }
+
+  await link.scrollIntoViewIfNeeded();
   await link.click();
   await page.waitForURL(`**${href}`, { timeout: 15000 });
   await waitForMap(page);
