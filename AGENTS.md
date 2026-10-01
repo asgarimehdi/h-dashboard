@@ -480,9 +480,11 @@ pg_isready -h 127.0.0.1 -p 5432                        # Verify PostGIS healthy
 
 ### Ensure test database exists
 ```bash
-psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
-  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+psql -h 127.0.0.1 -U h_dashboard -d postgres -c \
+  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard;"
 ```
+
+> **No `TEMPLATE=template_postgis`.** PostGIS is enabled by the migrations themselves — `2025_03_20_000009_create_boundaries_table.php` runs `CREATE EXTENSION IF NOT EXISTS postgis` before it creates any geometry column, and four later migrations do the same for `pg_trgm`/geometry. A plain database is enough, and this matches `verify:preflight`, which checks `pg_available_extensions` rather than the existence of a template. Requiring `TEMPLATE=template_postgis` fails outright on a server that has the extension available but not that template — which is exactly the plain `postgis/postgis` image the compose file uses.
 
 ### Clear cached config/routes BEFORE running (critical!)
 ```bash
@@ -533,7 +535,7 @@ cp .env.e2e.example .env.e2e
 # copy from .env: APP_KEY, DB_USERNAME, DB_PASSWORD, REDIS_PASSWORD
 # then create the isolated database (NEVER point e2e at `h_dashboard` — it is wiped every run):
 psql -h 127.0.0.1 -U h_dashboard -d postgres \
-  -c "CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+  -c "CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard;"
 ```
 
 > **⚠️ `APP_LOCALE=fa` is MANDATORY in `.env.e2e`.**
@@ -570,7 +572,7 @@ npx playwright test --reporter=list    # only if .env is already swapped and the
 | `fixtures.ts` throws `<VAR> env var is required` or `.run-state.json not found` | `.env.e2e` missing / bare `npx playwright test` without global setup | create `.env.e2e`; run through `scripts/e2e-test.sh` |
 | `No tests found` even from `npx playwright test --list` | fixtures read `.run-state.json`, which only `scripts/e2e-test.sh` writes | run through the script; a bare invocation cannot even enumerate |
 | `Executable doesn't exist … chromium` | browser not installed | `npx playwright install chromium` |
-| `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE … TEMPLATE=template_postgis` |
+| `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard` (plain — migrations enable PostGIS) |
 | `.env` still the e2e one after a failed run | script aborted before restore | restore from `.env.dev.bak` manually (see cleanup above) |
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
