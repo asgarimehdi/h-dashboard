@@ -42,10 +42,30 @@ function destroyInstance(instance) {
   }
 }
 
+/*
+ * Issue #769 — the Leaflet instance must NEVER pass through Alpine's
+ * reactivity. Alpine deep-wraps store properties in reactive proxies, so
+ * `store.instance` came back as a Proxy of the L.Map. Every addLayer /
+ * removeLayer / on / off then flowed through that proxy, and its set traps
+ * wrapped stored layers in nested proxies: map._layers[id] ended up holding
+ * a proxy of the marker while the zoomanim listener ctx was the raw marker
+ * (or vice versa — either direction breaks ===). Marker.onRemove's
+ * map.off('zoomanim', this._animateZoom, this) relies on strict identity in
+ * Leaflet's _listens(), so it silently matched nothing and every
+ * clearLayers() leaked ~N orphaned zoomanim listeners. On the next zoom the
+ * orphans fire with ctx._map === null, _animateZoom throws
+ * (reading '_latLngToNewLayerPoint' of null), and the exception aborts the
+ * whole zoom animation — every marker freezes in place.
+ *
+ * The instance therefore lives in module scope, outside the reactive store.
+ * The store keeps only plain data (config, pending callbacks) and the
+ * lifecycle API; get()/use()/onReady() hand out the raw instance.
+ */
+let instance = null;
+let containerEl = null;
+
 export function registerMapStore(Alpine) {
   Alpine.store(MAP_ID, {
-    instance: null,
-    container: null,
     config: {},
     pending: [],
 
@@ -54,10 +74,10 @@ export function registerMapStore(Alpine) {
       this.config = { ...this.config, ...config };
     },
 
-    /** The live instance, or null. Never returns a detached map. */
+    /** The live instance, or null. Never returns a detached map. Never a proxy. */
     get() {
-      if (!this.instance) return null;
-      return containerOf(this.instance) === this.container ? this.instance : null;
+      if (!instance) return null;
+      return containerOf(instance) === containerEl ? instance : null;
     },
 
     /**
@@ -71,18 +91,18 @@ export function registerMapStore(Alpine) {
         return null;
       }
 
-      if (this.instance && containerOf(this.instance) === el) {
-        return this.instance; // already ours — reuse
+      if (instance && containerOf(instance) === el) {
+        return instance; // already ours — reuse
       }
 
       // Either nothing yet, or a stale instance from a previous page.
-      if (this.instance) {
+      if (instance) {
         this.release(null, { force: true });
       }
 
       const view = this.config.view ?? [36.558188, 48.716125];
       const zoom = this.config.zoom ?? 8;
-      const instance = L.map(el).setView(view, zoom);
+      instance = L.map(el).setView(view, zoom);
 
       L.tileLayer(
         this.config.tileUrl ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -92,8 +112,7 @@ export function registerMapStore(Alpine) {
         },
       ).addTo(instance);
 
-      this.instance = instance;
-      this.container = el;
+      containerEl = el;
 
       this.flush();
       return instance;
@@ -118,7 +137,7 @@ export function registerMapStore(Alpine) {
       this.pending = [];
       queued.forEach((callback) => {
         try {
-          callback(this.instance);
+          callback(instance);
         } catch (e) {
           console.error('[map] an onReady consumer threw', e);
         }
@@ -131,12 +150,12 @@ export function registerMapStore(Alpine) {
      * { force: true } to destroy regardless.
      */
     release(el, { force = false } = {}) {
-      if (!this.instance) return;
-      if (!force && el && this.container !== el) return;
+      if (!instance) return;
+      if (!force && el && containerEl !== el) return;
 
-      destroyInstance(this.instance);
-      this.instance = null;
-      this.container = null;
+      destroyInstance(instance);
+      instance = null;
+      containerEl = null;
     },
   });
 }
