@@ -78,16 +78,23 @@ class MapsMapLivewireTest extends TestCase
         $component = Livewire::test('maps.map')
             ->assertStatus(200);
 
-        // The @script block (initMap, invalidateSize, resize listener,
-        // _leaflet_id guard) and @assets style block are compiled into the
-        // Blade view. Use the raw HTML to verify asset presence.
+        // The component owns the Leaflet lifecycle through Alpine (#028), so the
+        // @script block that used to hold initMap/waitForEl is gone. What the
+        // view must now carry is the x-data lifecycle plus the resize handling
+        // that keeps the map out of the half-width state (the E2E spec
+        // `map is not half-width` asserts clientWidth > 400).
         $html = $component->html();
 
-        $this->assertStringContainsString('initMap', $html, 'initMap script missing');
+        $this->assertStringContainsString('x-data', $html, 'x-data lifecycle missing');
+        $this->assertStringContainsString('$store.map', $html, 'map store wiring missing');
+        $this->assertStringContainsString('x-ref="map"', $html, 'map container ref missing');
         $this->assertStringContainsString('invalidateSize', $html, 'invalidateSize missing');
         $this->assertStringContainsString('resize', $html, 'resize listener missing');
-        $this->assertStringContainsString('_leaflet_id', $html, '_leaflet_id guard missing');
         $this->assertStringContainsString('styleModule', $html, 'style asset block missing');
+
+        // The instance must be owned by the store, never by a window global:
+        // a stale window.map survived SPA navigation and broke every host page.
+        $this->assertStringNotContainsString('window.map = map', $html, 'window.map assignment must be gone');
     }
 
     // ==================== SPA re-render safe ====================

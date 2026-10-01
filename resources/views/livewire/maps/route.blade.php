@@ -47,65 +47,50 @@ return new class extends Component {
 
 @script
 <script>
-    // Destroy any existing routing control to avoid duplicates on re-navigation
-    if (window.routingControl) {
-        try { if (window.map) window.map.removeControl(window.routingControl); } catch(e) {}
-        window.routingControl = null;
-    }
+    // Issue #028 — bind to the live map the store owns. onReady() replaces the old
+    // `if (window.map)` guard, which a previous page's DETACHED instance satisfied,
+    // and it also removes the script-ordering race with maps.map. The routing
+    // control is now created against that live map, so it can never end up attached
+    // to a map that is about to be destroyed.
+    window.Alpine.store('map').onReady(function (map) {
+        function initRouting() {
+            var routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng({{ $waypoint1 }}),
+                    L.latLng({{ $waypoint2 }})
+                ],
+                router: L.Routing.osrmv1({
+                    serviceUrl: '{{ $routing_url }}/route/v1'
+                }),
+                lineOptions: {
+                    styles: [{ color: 'blue', weight: 5 }]
+                },
+                routeWhileDragging: true,
+                show: true,
+            }).addTo(map);
 
-    // Guard: only init if map exists and has no stale container
-    if (!window.map || typeof window.map.getSize !== 'function') {
-        console.warn('Map not ready, retrying...');
-        var tries = 0;
-        var waitForMap = setInterval(() => {
-            tries++;
-            if (window.map && typeof window.map.getSize === 'function') {
-                clearInterval(waitForMap);
-                initRouting();
-            } else if (tries > 50) {
-                clearInterval(waitForMap);
-                console.error('Map did not initialize within 10s');
-            }
-        }, 200);
-    } else {
+            routingControl.on('routesfound', function (e) {
+                let route = e.routes[0];
+                document.getElementById('distance').textContent = (route.summary.totalDistance / 1000).toFixed(2);
+                document.getElementById('duration').textContent = Math.ceil(route.summary.totalTime / 60);
+            });
+
+            setTimeout(() => {
+                if (routingControl._container) {
+                    routingControl._container.style.display = 'none';
+                }
+            }, 200);
+
+            window.routingControl = routingControl;
+        }
+
         initRouting();
-    }
 
-    function initRouting() {
-        var routingControl = L.Routing.control({
-            waypoints: [
-                L.latLng({{ $waypoint1 }}),
-                L.latLng({{ $waypoint2 }})
-            ],
-            router: L.Routing.osrmv1({
-                serviceUrl: '{{ $routing_url }}/route/v1'
-            }),
-            lineOptions: {
-                styles: [{ color: 'blue', weight: 5 }]
-            },
-            routeWhileDragging: true,
-            show: true,
-        }).addTo(window.map);
-
-        routingControl.on('routesfound', function (e) {
-            let route = e.routes[0];
-            document.getElementById('distance').textContent = (route.summary.totalDistance / 1000).toFixed(2);
-            document.getElementById('duration').textContent = Math.ceil(route.summary.totalTime / 60);
-        });
-
-        setTimeout(() => {
-            if (routingControl._container) {
-                routingControl._container.style.display = 'none';
-            }
-        }, 200);
-
-        window.routingControl = routingControl;
-    }
-
-    window.toggleRoutingContainer = function() {
-        if (!window.routingControl || !window.routingControl._container) return;
-        let container = window.routingControl._container;
-        container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
-    };
-</script>
-@endscript
+        window.toggleRoutingContainer = function() {
+            if (!window.routingControl || !window.routingControl._container) return;
+            let container = window.routingControl._container;
+            container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
+        };
+    });
+    </script>
+    @endscript
