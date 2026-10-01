@@ -281,6 +281,26 @@ body {
     box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.28) !important;
 }
 
+/* Alert/toast text must stay readable on the glass background above.
+   That rule replaces the variant background (alert-warning etc.) with a
+   base-100 glass panel, but text color stays --color-*-content — which DaisyUI
+   designs FOR the bright variant background. Measured against base-100:
+   error-content 1.01:1, success-content 1.58:1, warning-content 1.71:1 in the
+   dark theme (unreadable); light themes read fine against white, which is why
+   the bug only shows in dark mode.
+   Fix: keep the semantic hue but anchor it to --color-base-content (which every
+   DaisyUI theme guarantees contrast against base-100). 30% variant color was
+   measured across all 7 enabled themes (light, dark, synthwave, coffee,
+   cupcake, fantasy, luxury) — worst case 6.90:1 (coffee/success), all pass
+   WCAG AA (≥4.5). Using the full variant color instead would fix dark themes
+   and break light ones (warning on white = 1.76:1).
+   Covers the toast body (title + description + icon all inherit currentColor)
+   and the dashboard banners. Falls back to base-content for a plain .alert. */
+.toast .alert,
+.alert {
+    color: color-mix(in oklab, var(--alert-color, var(--color-base-content)) 30%, var(--color-base-content)) !important;
+}
+
 /* Keep form controls readable: solid-ish glass, not fully transparent. */
 .input,
 .select,
