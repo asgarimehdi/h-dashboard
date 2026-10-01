@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Mockery;
+use RuntimeException;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
@@ -97,6 +98,77 @@ class TrafficApiTest extends TestCase
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
         $this->assertNotEmpty(Cache::get('traffic_100_200_3600'));
+    }
+
+    // -----------------------------------------------------------
+    //  مسیرهای خطا (#741)
+    // -----------------------------------------------------------
+
+    public function test_a_failure_on_the_out_side_answers_503_without_touching_the_in_side(): void
+    {
+        // The two sides are fetched in sequence, so a failing `out` must stop
+        // the request before the `in` call — a 503 with the same body either
+        // way, but only one Zabbix call was made.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andThrow(new RuntimeException('cURL error 28: Operation timed out'));
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('error', 'Service temporarily unavailable');
+    }
+
+    public function test_a_failure_on_the_in_side_answers_503(): void
+    {
+        // The out side already succeeded; the in side is the one that breaks.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andReturn([['x' => 1, 'y' => 1.5]]);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('200', 3600)
+            ->andThrow(new RuntimeException('Zabbix API HTTP error: 503'));
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(503)
+            ->assertJsonPath('error', 'Service temporarily unavailable');
+    }
+
+    public function test_a_failure_is_never_written_to_the_cache(): void
+    {
+        // #741: same rule as multi-latest — a broken Zabbix must not pin its
+        // own error for the TTL, so a later healthy request is served fresh.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andThrow(new RuntimeException('Zabbix API returned invalid JSON'));
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(503);
+
+        $this->assertNull(
+            Cache::get('traffic_100_200_3600'),
+            'A failed sync must not be cached.'
+        );
     }
 
     protected function createUser(): User
