@@ -11,19 +11,22 @@ import { test, expect, TEST_USER, ROLE_ACCOUNTS } from '../shared/fixtures';
  * Probed DOM facts (not guessed):
  * - Sidebar sections = `.drawer-side summary` (collapsible), menu items = `.drawer-side a[href]`
  * - Forbidden navigation returns HTTP 403 with body "403 ... access rights"
- * - admin sidebar has 8 sections; unit_manager 4; expert/user 3
+ * - admin sidebar has 10 sections (IT tools / admin tools / hardware were split
+ *   out of one group); unit_manager 4; expert/user 2
  */
 
-// Sidebar section titles each role should see (subset of the admin's 8).
+// Sidebar section titles each role should see (subset of the admin's 10).
+// NOTE: «گزارش‌ها» requires `manage_personnel` (routes/web.php) — expert/user
+// no longer see that section and would get 403 on /reports/*.
 const EXPECTED_SECTIONS: Record<string, string[]> = {
   admin: [
     'منابع انسانی', 'مدیریت تیکت‌ها', 'مدیریت سازمان', 'کار با نقشه',
-    'ابزارهای مدیریتی', 'گزارش‌ها', 'مدیریت', 'راهنما و پشتیبانی',
+    'ابزارهای مدیریتی', 'ابزار مدیریتی', 'سخت‌افزار', 'گزارش‌ها', 'مدیریت', 'راهنما و پشتیبانی',
   ],
-  // unit_manager: no HR, no maps, no tools, no management
+  // unit_manager: no HR, no maps, no IT tools, no management
   unit_manager: ['مدیریت تیکت‌ها', 'مدیریت سازمان', 'گزارش‌ها', 'راهنما و پشتیبانی'],
-  expert: ['مدیریت تیکت‌ها', 'گزارش‌ها', 'راهنما و پشتیبانی'],
-  user: ['مدیریت تیکت‌ها', 'گزارش‌ها', 'راهنما و پشتیبانی'],
+  expert: ['مدیریت تیکت‌ها', 'راهنما و پشتیبانی'],
+  user: ['مدیریت تیکت‌ها', 'راهنما و پشتیبانی'],
 };
 
 // hrefs that must (or must not) appear in a role's sidebar.

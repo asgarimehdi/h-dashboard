@@ -37,6 +37,9 @@ beforeEach(function () {
 
     $this->user = User::factory()->create(['n_code' => $this->person->n_code]);
     $this->user->givePermissionTo('manage_hardware');
+    // /reports/* is gated by `manage_personnel` (routes/web.php) — the HTTP
+    // assertion below needs that permission in addition to manage_hardware.
+    $this->user->givePermissionTo('manage_personnel');
 
     Session::put('current_unit_id', $this->unit->id);
 });
