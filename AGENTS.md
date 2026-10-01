@@ -53,6 +53,37 @@ Uses **Spatie Permission** package:
 
 **Key permissions:** `manage_users`, `organization`, `kargozini`, `map`, `manage_zabbix`, `calendar`, `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache`, `manage_hardware`, `bw`, `view_hr_dashboard`, `manage_personnel`, `manage_unit_tickets`, `manage_org_chart`.
 
+### Sidebar ↔ route permission contract
+
+Every session starts **in `h-dashboard`** (the Hermes `terminal.cwd` default) and uses **CodeGraph first** for any
+code question, plus the **superpowers** skills for process (`brainstorming`, `systematic-debugging`,
+`test-driven-development`, `verification-before-completion`).
+
+A sidebar item in `resources/views/components/layouts/app.blade.php` and the route it points at in
+`routes/web.php` **must carry the same permission(s)**. A link the user cannot open is a 403 they were
+invited to click; a hidden link for a permission the route accepts is a lost feature. Pinned by
+`tests/Feature/SidebarPermissionsTest.php`, which renders the sidebar per permission and asserts each
+link's visibility in both directions, plus a real `GET` per link.
+
+- Groups: **ابزارهای مدیریتی** (`map`|`bw` → `/it/networks` + `/it/wireless`; `manage_zabbix` →
+  `/it/zabbix-devices`; `op-cache` → `/op`, with `@production` so the link never renders where the route
+  does not exist), **ابزار مدیریتی** (`manage_users` → `/tools`), **سخت‌افزار** (`manage_hardware` →
+  `/hardware` + `/maintenance`), **گزارش‌ها** (`manage_personnel`, plus `manage_users` for `/activity-log`).
+- `/it/networks` and `/it/wireless` live in their **own** `role_or_permission:map|bw` group — **not**
+  nested inside the `map` group. Nesting re-adds `map` as an extra requirement and 403s a `bw`-only user
+  (there is a regression test for exactly this). Nested `middleware(['a', 'b'])` means **AND**, not OR.
+- `role_or_permission` syntax is `a|b` = ANY. It is **not** the `ability:a,b` / `abilities:a,b` comma form
+  from Sanctum, and it resolves through `canAny()`, so a permission name is never treated as a role.
+- `/reports/*` is gated by `manage_personnel`, deliberately **not** a new permission: a permission that
+  exists in the seeder but not on a deployment's DB 403s every non-admin, because Spatie's
+  `hasAnyPermission()` answers `false` for an unknown name instead of throwing. `RoleSeeder` grants
+  `manage_personnel` to `unit_manager` so that role keeps the report access it had before the gate existed,
+  and `PermissionSeeder` `givePermissionTo`s it for admin.
+- `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
+  existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
+  `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
+  `PermissionSeeder`.
+
 ---
 
 ## Authentication
@@ -755,3 +786,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `window.map` is **not** the Leaflet instance | With `id="map"` in the DOM the browser exposes the element itself as `window.map`, so it has no `getContainer`. Read the instance from `Alpine.store('map').get()`, and remember `#028` deliberately has no `window.map` |
 | MaryUI `<x-menu-sub>` collapses in E2E | It renders as a `<details>`, open only when a child is active. A collapsed `<details>` still gives children a non-empty box in Chromium, so `isVisible()` is not an "is it open" test — read `details.open`, click the `<summary>`, then `scrollIntoViewIfNeeded()` before clicking (see `tests/e2e/maps/spa-navigation.spec.ts`) |
 | `ORDER BY` + `LIMIT` = oldest N, not newest | `groupBy('day')->orderBy('day')->limit(30)` returns the **oldest** 30 days, because ORDER BY is applied before LIMIT (issue #734, dashboard ticket-trend chart). To show the most recent N buckets, take them in a subquery and re-sort for display: `DB::query()->fromSub($inner->orderByDesc('day')->limit(30), 'daily')->orderBy('day')->get()`. Flipping only the outer `orderBy` reverses the axis — do not "fix" it that way. The axis is deliberately **sparse** (30 most recent days *that have data*, not 30 consecutive days), so an E2E assertion of "30 consecutive days" fails against correct code |
+| Nested route middleware is **AND**, not OR | `Route::middleware(['a','b'])->group(...)` — and nesting a route inside another permission group — requires **both**. To accept either, use ONE `role_or_permission:a|b` in a group of its own. This bit `/it/networks` + `/it/wireless`: putting them inside the `role_or_permission:map` group re-added `map` and 403'd a `bw`-only user. `php artisan route:list --path=X -v` prints every resolved middleware — read it instead of guessing |
+| Sidebar link must match its route's gate | Every `x-menu-item` in `resources/views/components/layouts/app.blade.php` needs the same permission as the route it links to (`routes/web.php`). `SidebarPermissionsTest` pins it in both directions (link visible to every permission the route accepts, invisible otherwise — both a 403 invite and a hidden working page are bugs). `@production`-only routes (`/op`) need the same environment guard on the link |
+| Spatie `canAny` is FALSE for an unknown permission name | `hasAnyPermission(['nosuchperm'])` returns `false` — it does **not** throw `PermissionDoesNotExist`. So a route gated on a permission that is missing from a deployment's DB 403s **every non-admin** (only role bypasses), silently. Before adding a NEW permission to a gate, either seed it everywhere or reuse an existing one — and remember `PermissionSeeder` alone only re-grants the permissions it explicitly lists |
+| `@can`/`@canany` nesting prunes child items | A menu item can be hidden by an ancestor gate, not just its own: `/hr/org-chart` is gated `manage_org_chart|view_hr_dashboard` **and** sits inside the «مدیریت سازمان» group's `@canany`, and «تقویم» sits inside «مدیریت تیکتها». When you add an item or change a gate, add its permission to the parent `@canany` too or the item is unreachable |
