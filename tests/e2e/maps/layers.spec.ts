@@ -90,7 +90,6 @@ test.describe('maps — issue #769 marker zoom after filter toggle', () => {
 
     await login(page);
     await page.goto('/maps/point');
-    await page.waitForLoadState('networkidle');
     await page.waitForFunction(
       () => document.querySelectorAll('#map .leaflet-marker-icon').length > 100,
       { timeout: 30000 },
@@ -102,12 +101,15 @@ test.describe('maps — issue #769 marker zoom after filter toggle', () => {
     });
     expect(isRaw).toBe(true);
 
-    const markerCount = await page.locator('.leaflet-marker-icon').count();
+    const before = await page.evaluate(() => ({
+      markers: document.querySelectorAll('#map .leaflet-marker-icon').length,
+      zoomanim: ((window as any).Alpine.store('map').get()._events?.zoomanim || []).length,
+    }));
 
     await page.locator('.controls-panel input[type="checkbox"]').first().check();
     await page.waitForFunction(
       (n) => document.querySelectorAll('#map .leaflet-marker-icon').length !== n,
-      markerCount,
+      before.markers,
       { timeout: 30000 },
     );
     await page.waitForTimeout(1000);
@@ -128,29 +130,47 @@ test.describe('maps — issue #769 marker zoom after filter toggle', () => {
 
     // No orphaned listeners: the count must track the live markers, not grow.
     expect(after.zombies).toBe(0);
-    expect(after.zoomanim).toBeLessThanOrEqual(after.markers + 10);
+    expect(after.zoomanim - after.markers).toBeLessThanOrEqual(
+      before.zoomanim - before.markers,
+    );
 
-    // Zoom must move the markers instead of freezing them.
-    const moved = await page.evaluate(async () => {
+    // Animated zoom must move the markers instead of freezing them. Note:
+    // { animate: false } would take the _resetView path which never fires
+    // 'zoomanim', so it cannot exercise the orphaned-listener bug — click the
+    // real zoom control like a user would.
+    const beforeZoom = await page.evaluate(() => {
       const w = window as any;
       const map = w.Alpine.store('map').get();
       const xs = new Map<number, number>();
       map.eachLayer((l: any) => {
         if (l._latlng && l._icon) xs.set(w.L.stamp(l), l._icon.getBoundingClientRect().x);
       });
-      map.setZoom(map.getZoom() + 1, { animate: false });
-      await new Promise((r) => setTimeout(r, 800));
+      return { zoom: map.getZoom(), xs: [...xs.entries()] };
+    });
+
+    await page.locator('.leaflet-control-zoom-in').click();
+    await page.waitForFunction(
+      (z) => (window as any).Alpine.store('map').get().getZoom() !== z,
+      beforeZoom.zoom,
+      { timeout: 10000 },
+    );
+    await page.waitForTimeout(1000); // let the CSS zoom transition settle
+
+    const moved = await page.evaluate((entries: [number, number][]) => {
+      const w = window as any;
+      const map = w.Alpine.store('map').get();
+      const prev = new Map<number, number>(entries);
       let movedCount = 0;
       map.eachLayer((l: any) => {
         if (l._latlng && l._icon) {
-          const x0 = xs.get(w.L.stamp(l));
+          const x0 = prev.get(w.L.stamp(l));
           if (x0 !== undefined && Math.abs(x0 - l._icon.getBoundingClientRect().x) > 2) {
             movedCount++;
           }
         }
       });
-      return { total: xs.size, movedCount };
-    });
+      return { total: prev.size, movedCount };
+    }, beforeZoom.xs);
 
     expect(moved.total).toBeGreaterThan(50);
     expect(moved.movedCount).toBeGreaterThan(moved.total * 0.9);

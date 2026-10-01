@@ -46,14 +46,17 @@ return new class extends Component {
                     tileUrl: '{{ $map_tile_template }}',
                 });
 
-                this.map = $store.map.use(this.$refs.map);
+                // Keep the raw instance in a closure local — assigning it to
+                // this.map would put it back through Alpine's reactivity
+                // (see the note in map-store.js).
+                const map = $store.map.use(this.$refs.map);
 
-                if (this.map) {
+                if (map) {
                     // Issue (map width): Leaflet captures dimensions at
                     // construction, so a page/layout still settling (SPA
                     // navigation, fonts, hidden containers) can lock in a
                     // smaller width and render half-page.
-                    this._invalidate = () => this.map.invalidateSize();
+                    this._invalidate = () => map.invalidateSize();
                     setTimeout(this._invalidate, 100);
                     window.addEventListener('resize', this._invalidate);
                 }
