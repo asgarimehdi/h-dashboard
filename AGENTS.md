@@ -2,7 +2,9 @@
 
 > **Doc review (2026-09-21):** Updated after 27+ commits since 2026-09-15. Added maintenance schedule, notification API, queued jobs, CSP/HSTS headers, normalizeForQuery, dead code removal. Reorganized to keep this file lean — detailed API, deployment, and performance patterns live in `references/`.
 >
-> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup` (71 test files), `@property` PHPDoc on all 24 models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts: `composer test` = 1461 passed, Playwright = 152 passed.
+> **Doc review (2026-09-25):** 51 commits since 2026-09-21. Added: Sanctum **token abilities** on every `/api/*` route (#690), shared test trait `InteractsWithTestSetup`, `@property` PHPDoc on all models (#671), `SyncZabbixJob` dispatched every 5 min instead of the `zabbix:sync` schedule entry (plan 018), dead-code removal (#685), and the **E2E locale rule** (`APP_LOCALE=fa` in `.env.e2e`). Verified counts: `composer test` = 1461 passed, Playwright = 152 passed.
+>
+> **Doc review (2026-10-01):** 133 commits since 2026-09-24. Added: **Zabbix typed transport** — `ZabbixClient` interface + `ZabbixResult` value object (#741), **Zabbix sync observability** — `zabbix_sync_logs` + dashboard banner + admin alert (#740), **persons Excel export** (#729) with full breadcrumb + birth-date columns (#755), **`persons.phone`** column (#738), **8-column units export** with «شهرستان» (#722 follow-up), `POST /csp-report` + `Reporting-Endpoints` header (#742), real Zabbix `apiinfo.version` connection test (#713), batched unit-tree children (`childrenOfMany`, #722), versioned git hooks + `composer verify` preflight, `scripts/sync-beta.sh`, `scripts/build-env-e2e.sh`, PR template. Corrected stale counts and one **factual contradiction** with `references/api-endpoints.md` (the `descendantIds` CTE uses `UNION`, not `UNION ALL`). Verified counts: `composer test` = **1687 passed**, 2 risky, 4268 assertions (~289s serial).
 
 ## Project Overview
 
@@ -86,6 +88,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
+- **`/api/tickets*` and `/api/tickets/{ticket}/comments/*` also need `role_or_permission:view_assigned_tickets|view_all_tickets`** on top of the ability — they are in neither the "read" nor "write" column of that permission set, so the table above understates the gate.
 - Tokens are **scoped and revoked on password change** (#678). API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
 
 
@@ -102,9 +105,54 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Content-Security-Policy-Report-Only` — CSP in report-only mode (validate 1-2 weeks before enforcing)
+- `Reporting-Endpoints: csp-endpoint="/csp-report"` — the Reporting API destination
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS)
 
 > **Do not add `X-XSS-Protection`** — replaced by CSP. The old header is removed.
+
+### CSP violation reporting (issue #742)
+
+`POST /csp-report` (name `csp.report`) — **public, no auth**, `throttle:60,1`, named in `routes/web.php`.
+
+- The CSP header carries `report-to csp-endpoint` and the **deprecated `report-uri` directive is gone** — modern Chrome never acted on it, so it was a lie.
+- Route is **CSRF-exempt** via `$middleware->validateCsrfTokens(except: ['csp-report'])` in `bootstrap/app.php` — a browser report carries no token.
+- Body is read with `$request->json()->all()` (Chrome sends `application/csp-report`, others `application/json`); a garbage body decodes to `[]` instead of throwing. Logs `Log::warning('csp-report', …)` and returns **204**.
+- **The same-app destination is temporary.** The decision on #742: the final target must be a **separate-domain** endpoint once that infrastructure exists — follow-up issue material.
+
+> Gotcha: it logs at `warning` with a **user-controlled body**. A large/garbage body is rate-limited but not size-capped, so do not treat `zabbix_sync_logs`-style assumptions about log volume as safe here.
+
+### Zabbix transport is a typed value, not an exception (issue #741)
+
+`App\Services\Zabbix\ZabbixClient` (interface) + `ZabbixResult` (final value object) + `ServiceZabbixClient` (the only implementation, bound in `AppServiceProvider`).
+
+- `ZabbixResult::success($data)` / `::fail($failure, $message)`; read with `isOk()`, `failed()`, `data()`, `failure()`, `message()`.
+- Failure kinds: `timeout`, `connection`, `invalid_response`, `error`.
+- `TrafficController` and `MultiLatestValueController` now **branch on the result** and keep the **unchanged 503** contract. The `catch (\Throwable)` that used to wrap these calls is **no longer what guards them** — do not "restore" it, and do not remove the 503 mapping.
+- The point is testability: `tests/Unit/ZabbixAdapterTest.php` proves each classification (timeout, connection refused, HTTP error status, invalid JSON, unexpected) with a **stub client and no Zabbix server**.
+
+> **Do not call `ZabbixService` directly from a controller.** Depend on `ZabbixClient`; that is the boundary that keeps failures as values.
+
+### Zabbix sync observability (issue #740)
+
+`zabbix_sync_logs` — one row per `SyncZabbixJob` run (`2026_09_30_000002_create_zabbix_sync_logs_table.php`), model `App\Models\ZabbixSyncLog`.
+
+- Columns: `success`, `consecutive_failures`, `error`, `ran_at` (indexed). `consecutive_failures` is **precomputed including the current row** (0 on a success row), so the threshold check and the widget are single-row reads.
+- `failed()` runs **only after the queue gives up** (tries exhausted) → one failure row per job failure; retries do **not** inflate the streak. `failed()` also calls `report($exception)`, so a dead log channel still records it.
+- **The unconfigured-skip is now a recorded failure**, not a silent warning: missing `services.zabbix.out_item_id`/`in_item_id` writes a failure row (previously a misconfigured deployment stayed silently broken for weeks).
+- At streak **exactly** `ZabbixSyncLog::ALERT_THRESHOLD` (= 3) it alerts every admin **once** through `NotificationService::send()` — in-app only, no email/webhook. Any success resets the streak, so further failures never re-fire the alert.
+- Dashboard banner: `getZabbixSyncStatusProperty()` on `/dashboard` reads the **latest row only** and renders `ok` / `stale` (old) / `failing` (streak), showing «نمایش از کش قدیمی» when the traffic cache outlived the last good sync.
+
+> Gotcha: the streak is computed by reading the previous row (`orderByDesc('id')->first()`), so it is **serial by nature** — do not parallelise or reorder run recording.
+
+### Zabbix connection test is real (issue #713)
+
+`ZabbixService::testApiConnection()` calls `apiinfo.version` and throws unless the response carries a string `result`. `testConnection()` verifies API reachability **before** item checks and surfaces the reported Zabbix version. `tests/Unit/ZabbixServiceTest.php` + `tests/Feature/ZabbixDeviceTest.php` cover it.
+
+> The `/it` widgets' friendly «دسترسی به سرور مقدور نمی باشد» message (#703) is **client-side and only for a connection failure** — a 400 from bad item ids must keep surfacing as an error, or real bugs get hidden.
+
+### Batched Zabbix polling (issue #722 sibling, `f002cfc`)
+
+One **batched** poll per `/it/networks` and `/it/wireless` page, not one request per gauge.
 
 ### CORS Hardening
 
@@ -129,18 +177,36 @@ These components and routes were removed — do not recreate:
 
 ---
 
-## Units Export (issue #701)
+### Units Export (issue #701)
 
 `GET /units/export` → `units-Ymd-His.xlsx`, gated by `role_or_permission:organization` (same group as `/units`).
 
 - **Access-scoped** — rows = `UnitScopedRequest::accessibleIds()`; empty scope → header-only file.
-- **One row per unit** (flat, sortable): `شناسه`, `نام واحد`, `نوع واحد`, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. Breadcrumb carries hierarchy instead of one column per level.
+- **One row per unit** (flat, sortable), **8 columns**: `شناسه`, `نام واحد`, `نوع واحد`, **`شهرستان`**, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. The breadcrumb carries hierarchy instead of one column per level; **`شهرستان` was added later so the sheet filters by county as a plain Excel filter** instead of matching a path substring.
+- **`شهرستان` semantics (deliberate):** a county unit writes **its own county name**; a unit attached directly to a **province writes `-`**, and a region-less unit writes `-`. It is **not** the province name — repeating the province would make one filter value swallow every unit beneath it.
 - Depth-first order (parents first, siblings alphabetical). Ancestors above the caller's scope still name the path. Inactive units included as `غیرفعال`.
 - RTL via `WithEvents` → `AfterSheet` → `setRightToLeft(true)`.
 - Button is a plain `<a href="{{ route('units.export') }}">` in `resources/views/livewire/units/index.blade.php` — **Livewire cannot return file downloads**, so never `wire:click` it.
 - Files: `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, tests in `tests/Feature/UnitsExportTest.php`.
 
 > ✅ **`descendantIds` uses `UNION`, not `UNION ALL`** — deliberate. The set operator dedupes, so a `parent_id` cycle terminates (2ms) instead of hanging the connection (proven: `UNION ALL` on a cycle runs until `statement_timeout`). Do not "optimize" it back to `UNION ALL`. The export's own `buildHierarchy()` guards its upward walk separately.
+
+### Personnel Export (issue #729, columns #755)
+
+`GET /kargozini/persons/export` → `persons-Ymd-His.xlsx`, named `kargozini.persons.export`, in the **same permission group as the personnel list** (`role_or_permission:manage_personnel`), controller `App\Http\Controllers\Api\PersonsExportController`.
+
+- **Exports the filtered result**, not the whole table — search and every active filter are reapplied server-side, so what you download is what you were looking at.
+- **12 columns:** `کد ملی`, `نام`, `نام خانوادگی`, `نام کامل`, `سمت`, `تحصیلات`, `نوع استخدام`, `ردیف سازمانی`, `واحد سازمانی`, `وضعیت`, **`تاریخ تولد`**, `تاریخ استخدام`. «تاریخ تولد» was added in #755 — `birth_date`/`hire_date` had **no cast** and were returning raw strings, so the export would have printed unformatted values.
+- The unit column carries the **full breadcrumb** via `UnitTreeService::ancestorChain()` — the same contract as the units export's «مسیر کامل».
+- **Relations are eager-loaded in the controller** (`semat`, `tahsil`, `estekhdam`, `radif`, `unit`) so mapping a row never queries. An empty scope uses `whereRaw('1 = 0')`, not a raw empty `IN ()`.
+- Same plain-`<a>` rule: Livewire cannot return file downloads.
+- Files: `app/Exports/PersonsExport.php`, `app/Http/Controllers/Api/PersonsExportController.php`, `tests/Feature/PersonsExportTest.php`, e2e `tests/e2e/personnel/list.spec.ts`.
+
+### `persons.phone` (issue #738)
+
+Free-text, `string(20)`, **nullable**, migration `2026_09_30_000001_add_phone_to_persons_table.php`; fillable, form field, and an Excel **import** mapping column.
+
+> Deliberately **no format validation** — the form rule is `'phone' => 'nullable|string|max:20'`. Real Iranian numbers arrive as `0912…`, `+98…`, or `0912 345 6789`; a strict pattern would silently reject valid rows. Do not "tighten" it into a regex.
 
 ---
 
@@ -154,6 +220,16 @@ Reuse contract (documented at the top of `tree.blade.php`):
 - **OUT** — `unit-selected` event (int id) on node click; the embedding page listens via `#[On('unit-selected')]` and fills its own detail panel. The listener **must re-check the id** against its own `accessibleUnitIds()` — `selectNode` is a public Livewire method that forwards any id.
 
 `hr/org-chart` is the reference consumer: it contributes only `livewire/hr/personnel-badge` (count + «خالی») and the personnel detail panel. `hr/org-node.blade.php` is **deleted** — do not recreate it; node markup lives in `unit/tree-node.blade.php`. The search box and expand/collapse buttons live INSIDE `unit.tree` because they drive the child's own state — a parent cannot call a child's methods without a ref. A second consumer (e.g. covered population per unit) needs zero tree code: a badge view + an event listener.
+
+`UnitTreeService::ancestorChain()` is the **shared breadcrumb walker** — the units export's «مسیر کامل», the personnel export's unit path, and the tree UI all resolve hierarchy through it. Do not re-implement an upward walk.
+
+### Batched child loading (issue #722)
+
+`UnitTreeService::childrenOfMany(array $unitIds, array $accessibleIds)` loads the children of **N nodes in one query**; `childrenOf()` is the single-node case. `unit.tree` preloads through the batch method.
+
+- The old per-node implementation cost **~44 queries**; the batch form holds `assertNoNPlusOne(..., 12)` in `UnitTreeLivewireTest` — verified to **fail** against the per-node code and pass with the batch. Do not revert to a per-node loop.
+- `hasChildren()` answers the same question **without loading rows**; keep using it for expand/collapse affordances.
+- An **empty scope short-circuits** to no query at all.
 
 ---
 
@@ -186,17 +262,17 @@ whole history) and a day without a ticket was a *missing column*, not a zero.
 
 ## Settings Features
 
-Settings page (`/settings`) includes 4 user-configurable features:
-- **Email notifications** — toggle email alerts via `EmailNotificationService`
-- **Browser notifications** — push notification toggle
-- **Auto-refresh** — dashboard auto-refresh interval (configurable via `dashboard_refresh` setting)
-- **Compact mode** — denser UI layout toggle
+Settings page (`/settings`), component `settings.index` — **3 persisted, user-configurable features**, stored in `user.settings` as a JSON column:
 
----
+- **Browser notifications** — `browser_notifications` (bool) toggle
+- **Auto-refresh** — `dashboard_refresh` (int, `0` = off) dashboard auto-refresh interval
+- **Compact mode** — `compact_mode` (bool) denser UI layout toggle
+
+> **`EmailNotificationService` does not exist.** There is no email-notification setting and no such class — do not list one as a feature or wire a toggle to it. `showHelpModal` is a **transient component property** (help modal open/closed) and is deliberately **not** persisted by `save()`.
 
 ## Maintenance Schedule
 
-`/maintenance` route — Livewire component `maintenance.index` for CRUD on `MaintenanceSchedule` records.
+`/maintenance` route — Livewire component `maintenance.index` for CRUD on `MaintenanceSchedule` records. Sits in the **same `role_or_permission:manage_hardware` group as `/hardware`**, and each mutating method also calls `$this->authorize('manage_hardware')` itself.
 
 - Frequencies: `daily`, `weekly`, `monthly` with configurable interval
 - `calculateNextDue()` uses `CarbonInterface` return type
@@ -224,22 +300,25 @@ Controller: `App\Http\Controllers\Api\NotificationController`. Requires Sanctum 
 
 ## Queued Jobs
 
-Heavy operations are dispatched as queued jobs (plan 012). All implement `ShouldQueue` with retry/logging:
+Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with retry/logging:
 
 | Job | Timeout | Tries | Purpose |
 |---|---|---|---|
 | `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
 | `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command |
-| `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL) |
+| `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
+| `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
-The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope — it skips itself (warning log) when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+
+> Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
 
 ---
 
 ## Scheduler & Console Commands
 
-Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The commands all take `--dry-run`:
+**Five commands plus one queued job** are scheduled in `app/Console/Kernel.php` (`protected function schedule(Schedule $schedule)`, the Laravel 11+ skeleton style). The commands all take `--dry-run`:
 
 | Scheduled item | Schedule |
 |---|---|
@@ -248,7 +327,7 @@ Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The 
 | `maintenance:generate-due` | daily 03:00 |
 | `data:archive` | weekly (Mon 04:00) |
 | `reports:generate-daily` | daily 06:00 |
-| `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | every 5 min, `->withoutOverlapping()` |
+| `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | `everyFiveMinutes()`, `->withoutOverlapping()` |
 
 `zabbix:sync` (plan 018) is **no longer scheduled** — the schedule dispatches `SyncZabbixJob` instead, so a slow Zabbix API can never block the scheduler. Run `php artisan zabbix:sync` manually when you need the command.
 
@@ -261,9 +340,9 @@ Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The 
 
 `CacheInvalidationService` uses driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter. Hot paths use `Cache::remember(...)` with the versioned key.
 
-**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`.
+**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, **`zabbix_devices`** (added with issue #698).
 
-`PruneStaleCache` resets all of them.
+`PruneStaleCache::NAMESPACES` is the **single source of truth** — that exact `const` array lists every versioned namespace. A new namespace must be added there, or `cache:prune-stale` leaves it alive forever and stale versioned keys never get bumped.
 
 > Performance patterns, caching strategies, and optimization details: `references/api-endpoints.md` (Performance section).
 
@@ -281,9 +360,9 @@ Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The 
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Shared test trait:** new Feature tests `use InteractsWithTestSetup;` (`tests/Support/Concerns/InteractsWithTestSetup.php`, 71 files already do) — provides `seedLookupTables()`, `resyncSequence()`, `createUserWithUnit($permissions, $role)`, `createHardware()`, `assertCacheInvalidated()`, `assertQueryCount()`, `assertNoNPlusOne()`. Do not re-implement user/unit/lookup seeding by hand; see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` (`PermissionSeeder` + `seedLookupTables()`).
-- **Models:** all 24 Eloquent models carry `@property` PHPDoc annotations (#671). When you add an attribute/cast, update the annotation too — PHPStan level 6 + baseline depends on them.
-- **Factories:** 14 factories exist (`UserFactory`, `UnitFactory`, `PersonFactory`, `HardwareFactory`, `TicketFactory`, `TodoFactory`, `SematFactory`, `TahsilFactory`, `EstekhdamFactory`, `RadifFactory`, `UnitTypeFactory`, `NotificationFactory`, `AttachmentFactory`, `TaskActivityFactory`). When seeding rows with **explicit IDs** in tests, resync the Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys — or call `$this->seedLookupTables()` / `$this->resyncSequence($table)` from the shared trait.
+- **Shared test trait:** new Feature tests `use InteractsWithTestSetup;` (`tests/Support/Concerns/InteractsWithTestSetup.php`, **84 files** already do) — provides `seedLookupTables()`, `resyncSequence()`, `createUserWithUnit($permissions, $role)`, `createHardware()`, `assertCacheInvalidated()`, `assertQueryCount()`, `assertNoNPlusOne()`. Do not re-implement user/unit/lookup seeding by hand; see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` (`PermissionSeeder` + `seedLookupTables()`).
+- **Models:** all **26** Eloquent models under `app/Models/` carry `@property` PHPDoc annotations (#671). When you add an attribute/cast, update the annotation too — PHPStan level 6 + baseline depends on them.
+- **Factories:** **15 factories** exist (`UserFactory`, `UnitFactory`, `PersonFactory`, `HardwareFactory`, `TicketFactory`, `TodoFactory`, `SematFactory`, `TahsilFactory`, `EstekhdamFactory`, `RadifFactory`, `UnitTypeFactory`, `NotificationFactory`, `AttachmentFactory`, `TaskActivityFactory`, `ZabbixDeviceFactory`). When seeding rows with **explicit IDs** in tests, resync the Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys — or call `$this->seedLookupTables()` / `$this->resyncSequence($table)` from the shared trait.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
@@ -292,13 +371,16 @@ Six commands plus one queued job are scheduled in `app/Console/Kernel.php`. The 
 ### Composer Scripts
 ```bash
 composer test         # config:clear + route:clear + XDEBUG_MODE=off php artisan test
-composer verify       # preflight + view:clear + pint --test + phpstan + the suite  ← run before push
+composer verify       # .env existence check, then scripts/verify.sh (preflight + view:clear + pint --test + phpstan + the suite)  ← run before push
 composer verify tests/Feature/TodoLivewireTest.php   # same gates, only the tests you name
 composer dev          # concurrently: php artisan serve + queue:listen + npm run dev
 composer pint         # Pint --dirty --format agent (auto-staged PHP)
 composer phpstan      # phpstan analyse --no-progress
+composer phpstan-baseline  # phpstan analyse --generate-baseline
 composer hooks:install  # git config core.hooksPath .githooks
 ```
+
+> `composer verify` **fails fast if `.env` is missing** (`file_exists('.env') || exit(1)`) — that is deliberate, not a bug. Everything after that lives in `scripts/verify.sh`.
 
 ### Local Verification & Git Hooks (issue #739)
 
@@ -365,18 +447,28 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas.
+> **✅ Verified 2026-10-01:** **`composer test`** is the one-command way (**1687 passed, 2 risky, 4268 assertions**, ~289s serial). It bakes in the three environment gotchas.
 >
 > `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
 ### Key test files
+Counts come from `php artisan test <file> --list-tests` — the authoritative per-file number. A plain `grep` for `test(`/`it(` **undercounts**, because PHPUnit-style classes declare tests as `public function test…` with neither wrapper.
+
 | File | Tests | Purpose |
 |---|---|---|
-| `tests/Feature/Jobs/JobsTest.php` | 14+ | Tests queued jobs (archive, clean, generate) |
-| `tests/Feature/MaintenanceLivewireTest.php` | 14+ | Maintenance schedule CRUD |
-| `tests/Feature/NotificationApiTest.php` | 14+ | Notification API endpoints |
-| `tests/Feature/TodoLivewireTest.php` | 17 | Todo Livewire component |
-| `tests/Unit/PersianNormalizerTest.php` | 6+ | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
+| `tests/Feature/ApiAbilityTest.php` | 33 | Real Bearer tokens per ability (#690) |
+| `tests/Feature/TodoLivewireTest.php` | 18 | Todo Livewire component |
+| `tests/Feature/PersonsExportTest.php` | 30 | Personnel export (12 columns, filters, breadcrumb) |
+| `tests/Feature/UnitsExportTest.php` | 22 | Units Excel export (8 columns incl. «شهرستان») |
+| `tests/Feature/SyncZabbixObservabilityTest.php` | 10 | `zabbix_sync_logs` rows, streak, admin alert (#740) |
+| `tests/Unit/PersianNormalizerTest.php` | 11 | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
+| `tests/Feature/SecurityHeadersMiddlewareTest.php` | 10 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
+| `tests/Feature/Jobs/JobsTest.php` | 9 | Archive / clean / generate jobs |
+| `tests/Feature/MaintenanceLivewireTest.php` | 9 | Maintenance schedule CRUD |
+| `tests/Unit/ZabbixAdapterTest.php` | 7 | `ZabbixResult` failure classification with a stub client (#741) |
+| `tests/Feature/NotificationApiTest.php` | 6 | Notification API endpoints |
+
+> Per-file counts, not the suite total — use `composer test` output for anything you assert in CI.
 
 ### Prerequisites
 ```bash
@@ -419,17 +511,22 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, and tools.
+**~165 tests** across **40 spec files** in `tests/e2e/` (file count + `test(` count re-checked 2026-10-01). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
+
+> Not verified by an actual run on 2026-10-01 — no browser installed and no `.env.e2e` on that machine. The numbers are **static counts** from the spec files. Run `bash scripts/e2e-test.sh` to get a real total.
+
+Newest suites since the 2026-09-25 review: `reports/daily-window`, `dashboard/ticket-trend-window`, `it/zabbix-unavailable`, `it/monitoring`, `organization/units-tree`, `organization/unit-map-boundary`, `hr/org-chart`, `personnel/list`.
 
 ### Setup (one-time, per machine)
 ```bash
 npm install                     # includes @playwright/test + dotenv
 npx playwright install chromium # one-time browser install (Chromium + headless shell)
+bash scripts/build-env-e2e.sh   # builds .env.e2e from .env.e2e.example, copying secret VALUES without printing them
 ```
 
 ### `.env.e2e` — gitignored, must be created locally
 
-It is in `.gitignore`, so it never ships with the repo. Create it once per machine:
+It is in `.gitignore`, so it never ships with the repo. **`scripts/build-env-e2e.sh`** (issue #703) generates it from `.env.e2e.example` by copying `APP_KEY`, `DB_PASSWORD`, `REDIS_PASSWORD` out of `.env` — it edits the file **without printing the values**, because the terminal masks secrets in output and a read-and-rewrite would write a literal `***` into `.env.e2e`. Manual equivalent:
 
 ```bash
 cp .env.e2e.example .env.e2e
@@ -440,8 +537,8 @@ psql -h 127.0.0.1 -U h_dashboard -d postgres \
 ```
 
 > **⚠️ `APP_LOCALE=fa` is MANDATORY in `.env.e2e`.**
-> `.env.e2e.example` does **not** include `APP_LOCALE`, and `config/app.php` defaults to `en`. Without it the app renders English pagination (`Showing 1 to 20 of 318 results`, `Next »`) and English validation messages instead of the Persian strings every spec asserts → **11 tests fail** across `auth/password-change`, `hardware/list-filters`, `organization/units`, `personnel/list`, `users/list`.
-> Required lines:
+> **`.env.e2e.example` now DOES include it** (fixed in `7485043`) — the earlier failure mode was the example file omitting it while `config/app.php` defaults to `en`. Without it the app renders English pagination (`Showing 1 to 20 of 318 results`, `Next »`) and English validation messages instead of the Persian strings every spec asserts → **11 tests fail** across `auth/password-change`, `hardware/list-filters`, `organization/units`, `personnel/list`, `users/list`.
+> If you hand-write `.env.e2e` from an older copy of the example, re-add:
 > ```
 > APP_LOCALE=fa
 > APP_FALLBACK_LOCALE=en
@@ -469,10 +566,11 @@ npx playwright test --reporter=list    # only if .env is already swapped and the
 ### Common failure → cause
 | Symptom | Cause | Fix |
 |---|---|---|
-| 11 tests fail on `نمایش…` / `باید مطابقت داشته باشند` — DOM shows `Showing…` / English validation text | `.env.e2e` has no `APP_LOCALE=fa` (example file lacks it) | add the three `APP_*LOCALE*` lines above |
+| 11 tests fail on `نمایش…` / `باید مطابقت داشته باشند` — DOM shows `Showing…` / English validation text | `.env.e2e` has no `APP_LOCALE=fa` (a hand-written or stale example copy) | add the three `APP_*LOCALE*` lines above |
 | `fixtures.ts` throws `<VAR> env var is required` or `.run-state.json not found` | `.env.e2e` missing / bare `npx playwright test` without global setup | create `.env.e2e`; run through `scripts/e2e-test.sh` |
-| `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE … TEMPLATE=template_postgis` |
+| `No tests found` even from `npx playwright test --list` | fixtures read `.run-state.json`, which only `scripts/e2e-test.sh` writes | run through the script; a bare invocation cannot even enumerate |
 | `Executable doesn't exist … chromium` | browser not installed | `npx playwright install chromium` |
+| `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE … TEMPLATE=template_postgis` |
 | `.env` still the e2e one after a failed run | script aborted before restore | restore from `.env.dev.bak` manually (see cleanup above) |
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
@@ -574,16 +672,19 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Search | Multi-word queries split and matched independently via `scopeFilterSearch` |
 | `normalizeForQuery` | Use `PersianNormalizer::normalizeForQuery()` for ALL user-supplied LIKE queries — combines Persian normalization + wildcard escaping. Do NOT inline `str_replace(['%', '_'], ...)` |
 | `PersianNormalizer` trait | Located at `app/Traits/PersianNormalizer.php`. Methods: `normalizeForSearch()` (Arabic→Persian + Unicode), `escapeLikeWildcards()`, `normalizeForQuery()` (normalize + escape combined) |
-| `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` catch `Throwable` and return 503, never 500 — do not remove try/catch |
+| `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` map a **failed `ZabbixResult`** to 503, never 500. Since #741 they do **not** wrap the call in `catch (\Throwable)` — that try/catch is gone, and the 503 mapping is what guards them |
+| Controllers must depend on `ZabbixClient` | `App\Services\Zabbix\ZabbixClient` is the transport boundary (#741). Calling `ZabbixService` directly from a controller throws away the failure-as-value design and re-couples you to a live server |
+| `ZabbixSyncLog` streak is serial | The failure streak is computed by reading the previous row (`orderByDesc('id')->first()`), and `failed()` runs only after retries are exhausted — do not parallelise run recording or the streak inflates |
+| `/csp-report` is public and CSRF-exempt | That is deliberate (#742): browsers post reports with no token. It is throttled `60,1` but the body is **not size-capped**, and it logs a user-controlled payload at `warning` — never point a log-volume assumption at it |
 | Root `/` route | `Route::redirect('/', '/dashboard')` — NOT a Livewire component. The old `index` Livewire component is removed |
-| E2E locale | `.env.e2e` **must** set `APP_LOCALE=fa` — `.env.e2e.example` omits it, the app falls back to `en`, and 11 Persian-text specs fail (`Showing…`, English validation messages) |
+| E2E locale | `.env.e2e` **must** set `APP_LOCALE=fa`. `.env.e2e.example` **does** include it now (`7485043`); a hand-written `.env.e2e` from an older copy omits it, the app falls back to `en`, and 11 Persian-text specs fail (`Showing…`, English validation messages) |
 | E2E env lifecycle | `scripts/e2e-test.sh` swaps `.env` and, on a failing run, `set -e` skips restore — restore `.env.dev.bak` and kill the `:8001` server yourself |
 | `.env.e2e` / `h_dashboard_e2e` | Both gitignored/local-only; the e2e DB is `migrate:fresh --seed`ed every run — never point it at `h_dashboard` or `h_dashboard_test` |
 | API token abilities | `/api/*` needs `auth:sanctum` **and** a token ability; `ability:a,b` = ANY of them, `abilities:a,b` = ALL. Tests mint real tokens (`ApiAbilityTest`) |
 | Shared test trait | New Feature tests use `InteractsWithTestSetup` (`tests/Support/Concerns`) — `createUserWithUnit()`, `seedLookupTables()`, `resyncSequence()`, `assertNoNPlusOne()` |
 | `zabbix:sync` scheduling | Schedule dispatches `SyncZabbixJob` (queued) every 5 min; the `zabbix:sync` command itself is manual-only |
 | `descendantIds` CTE | Uses `UNION`, **not** `UNION ALL` — deliberate. `UNION ALL` does not dedupe, so a `parent_id` cycle recurses forever and hangs the connection (this query scopes every authenticated page via `AccessService`). Tested in `UnitModelTest` under a `statement_timeout` |
-| `@property` on models | All 24 Eloquent models carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
+| `@property` on models | All **26** Eloquent models under `app/Models/` carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
 | x-select option keys | MaryUI defaults to `optionValue='id'`/`optionLabel='name'`. Options keyed `value`/`label` need explicit `option-value="value" option-label="label"` or every `<option>` renders empty and the field looks blank (#706). Pass `:options="$this->someOptions()"` — a bare `$someOptions` is undefined in the view |
 | Persian search must fold the COLUMN, not the pattern | `normalizeForQuery()` rewrites the search term (ZWNJ U+200C → space; آ/أ/إ U+0622/0623/0625 → ا) but the stored text keeps the original code points, so `LIKE` stops matching — a unit named "حرفه" + ZWNJ + "ای" or "آموزش" becomes invisible to its own filter. Postgres `LIKE` has only `%`/`_` and **no character-class syntax**, so `[ … ]` is literal and "either spelling" is unexpressible. Use `PersianNormalizer::foldSeparatorsSql($column)` (nested `regexp_replace` applying the same `charMap()` as `normalize()`, plus one `translate()` applying `digitMap()` so Persian/Arabic-Indic digits fold to Latin exactly as `normalizeForSearch()` does) compared against `foldedTerm($input)`. Replace ZWNJ with a SPACE, never `''` — deleting it makes the regex eat the next letter ("حرفه" + ZWNJ + "ای" → "حرفهای") |
 | `LIKE '%term%'` is never index-seekable | Folding the column in `foldSeparatorsSql()` is not index-friendly, but `LIKE '%term%'` already forced a full scan, so this is not a regression to worry about |
@@ -591,7 +692,8 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Cache keys collide across tests | Postgres sequences are non-transactional, so `RefreshDatabase` restarts ids at 1 every test. `AccessService` keys on `accessible_units:v{version}:{user_id}:{session_unit_id}:{md5(baseIds)}` — byte-identical across tests, so a stale answer leaks from one test into the next. Put the flush in the base `TestCase::setUp()`, not in a test class — the seeder bump happens in the child's `setUp()`, which runs after `parent::setUp()`, so one flush there covers every class and needs no ordering rule. Never flush inside a test method |
 | Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
 | Testing a cache fix | Assert through the component or the service, never by poisoning a key and expecting it to be ignored — that tests your own poison, not the flush. A test that only passes in isolation is asserting `setUp`, not the fix; assert the behaviour a user sees |
-| Factories | 14 factories exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` has no `HasFactory` trait**, so `Ticket::factory()` throws `BadMethodCallException` and `TicketFactory` is dead code — build tickets with `Ticket::create([...])` like `TicketsInboxLivewireTest` does. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
+| Factories | **15 factories** exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` has no `HasFactory` trait**, so `Ticket::factory()` throws `BadMethodCallException` and `TicketFactory` is dead code — build tickets with `Ticket::create([...])` like `TicketsInboxLivewireTest` does. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
+| `persons.phone` has no format rule | Free text, `max:20`, **no regex** (#738) — `0912…`, `+98…`, `0912 345 6789` are all valid. A "stricter" validation silently rejects real rows |
 | An exported `DB_DATABASE` beats `phpunit.xml` | The `DB_*` `<env>` entries in `phpunit.xml` have no `force="true"`, so PHPUnit skips them when the variable already exists (`PhpHandler.php:140`). `DB_URL` is not in `phpunit.xml` at all and outranks everything. `php artisan verify:preflight` resolves the real value — read `.env` or `phpunit.xml` directly and you will check the wrong database |
 | `expectsOutputToContain` matches ONE line per expectation | `PendingCommand`'s buffered mock consumes a written line with the first substring that matches it, so two substrings on the same line can never both be asserted. Put each claim on its own output line |
 | `assertStringNotContainsString` returns void | Chaining `->and()` after it dies with "Call to a member function and() on null". Same for `assertMatchesRegularExpression` — use separate statements |
