@@ -300,6 +300,42 @@ test('device list is cached and refreshed after a write', function () {
     expect(count(Livewire::test('it.networks')->get('networkItems')))->toBe(24);
 });
 
+// ── Table sorting ────────────────────────────────────────────────────────
+
+test('table honors the selected sort column instead of the default display order', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    // sort_order deliberately contradicts the id order the header asks for,
+    // so a query that puts `ordered()` first can never satisfy the click.
+    $older = ZabbixDevice::factory()->create(['sort_order' => 1]);
+    $newer = ZabbixDevice::factory()->create(['sort_order' => 2]);
+
+    $ids = Livewire::test('it.zabbix-devices')
+        ->set('sortBy', ['column' => 'id', 'direction' => 'desc'])
+        ->viewData('devices')
+        ->pluck('id')
+        ->all();
+
+    expect($ids)->toBe([$newer->id, $older->id]);
+});
+
+test('default table order stays sort_order then id', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $second = ZabbixDevice::factory()->create(['sort_order' => 2]);
+    $first = ZabbixDevice::factory()->create(['sort_order' => 1]);
+    $third = ZabbixDevice::factory()->create(['sort_order' => 2]);
+
+    $ids = Livewire::test('it.zabbix-devices')
+        ->viewData('devices')
+        ->pluck('id')
+        ->all();
+
+    expect($ids)->toBe([$first->id, $second->id, $third->id]);
+});
+
 // ── Connection test ──────────────────────────────────────────────────────
 
 test('connection test succeeds when zabbix returns values for every item', function () {

@@ -3127,12 +3127,6 @@ parameters:
 			path: resources/views/livewire/it/wireless.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ZabbixDevice\>\:\:ordered\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/it/zabbix-devices.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Estekhdam\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
