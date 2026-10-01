@@ -461,12 +461,14 @@ The committed `phpunit.xml` expects:
 <env name="SESSION_DRIVER" value="array" force="true"/>
 <env name="QUEUE_CONNECTION" value="sync" force="true"/>
 ```
-Create them once (the `postgis` extension must be enabled — build from the `template_postgis` template):
+Create them once (the `postgis` extension must be **available** on the server — the migrations enable it inside the database themselves, so a plain `CREATE DATABASE` is enough):
 ```bash
 # Local run: phpunit.xml does NOT set DB_USERNAME/PASSWORD, so they come from .env
-# (the `h_dashboard` role). Only the empty test DB (from template_postgis) is needed:
+# (the `h_dashboard` role). Only the empty test DB is needed — plain, because the
+# migrations run CREATE EXTENSION IF NOT EXISTS postgis themselves (see the boundaries
+# migration); do NOT pass TEMPLATE=template_postgis, which fails on a plain postgis image:
 psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
-  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard;"
 # CI only: the runner rewrites .env.testing to postgres/secret, so it ALSO creates that role:
 # psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
 #   "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='postgres') \
@@ -516,7 +518,7 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 
 - Always run through the lifecycle script: `bash scripts/e2e-test.sh [optional spec paths]` — swaps `.env` ← `.env.e2e`, `config:clear` + `route:clear`, `migrate:fresh --seed` on `h_dashboard_e2e`, creates the password-mutation user, serves on `:8001`, runs Playwright, restores `.env`.
 - **`.env.e2e` is gitignored — generate it locally with `bash scripts/build-env-e2e.sh`** (issue #703), which copies `APP_KEY` / `DB_PASSWORD` / `REDIS_PASSWORD` out of `.env` into a copy of `.env.e2e.example` **without printing the values** (the terminal masks secrets, so a read-and-rewrite would write a literal `***` into the file). Fill `DB_USERNAME` yourself. It **must** carry `APP_LOCALE=fa` — `.env.e2e.example` **does** include it now (`7485043`), but a hand-written copy from an older example does not, and `config/app.php` falls back to `en`, failing **11 Persian-text specs** (`Showing 1 to 20 of 318 results`, English validation messages instead of `نمایش…` / `باید مطابقت داشته باشند`).
-- `h_dashboard_e2e` is created once from `TEMPLATE=template_postgis` and **wiped every run** — never point it at `h_dashboard` or `h_dashboard_test`.
+- `h_dashboard_e2e` is created once as a **plain** database (PostGIS comes from the migrations) and **wiped every run** — never point it at `h_dashboard` or `h_dashboard_test`.
 - Required vars (no fallbacks — `tests/e2e/shared/fixtures.ts` throws): `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
 - On a failing run the script's `set -e` skips restore: `cp .env.dev.bak .env`, delete the backup, and kill only the `:8001` server (`pgrep -f 'artisan serve --port=800[1]'`).
 - One-time per machine: `npx playwright install chromium`.
