@@ -72,3 +72,108 @@ test.describe('maps — ancillary pages', () => {
     expect(await page.locator('.leaflet-marker-icon').count()).toBeGreaterThan(100);
   });
 });
+
+test.describe('maps — issue #769 marker zoom after filter toggle', () => {
+  /**
+   * The map store must hand out the raw Leaflet instance, never an Alpine
+   * reactive proxy. A proxied map breaks Leaflet's strict-identity (===)
+   * listener removal in Marker.onRemove, so every clearLayers() leaked the
+   * removed markers' zoomanim handlers; on the next zoom they threw
+   * (reading '_latLngToNewLayerPoint' of null) and aborted the zoom
+   * animation, freezing every marker in place.
+   */
+  test('filter toggle leaks no zoomanim listeners and markers follow zoom', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await login(page);
+    await page.goto('/maps/point');
+    await page.waitForFunction(
+      () => document.querySelectorAll('#map .leaflet-marker-icon').length > 100,
+      { timeout: 30000 },
+    );
+
+    const isRaw = await page.evaluate(() => {
+      const m = (window as any).Alpine.store('map').get();
+      return (window as any).Alpine.raw(m) === m;
+    });
+    expect(isRaw).toBe(true);
+
+    const before = await page.evaluate(() => ({
+      markers: document.querySelectorAll('#map .leaflet-marker-icon').length,
+      zoomanim: ((window as any).Alpine.store('map').get()._events?.zoomanim || []).length,
+    }));
+
+    await page.locator('.controls-panel input[type="checkbox"]').first().check();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll('#map .leaflet-marker-icon').length !== n,
+      before.markers,
+      { timeout: 30000 },
+    );
+    await page.waitForTimeout(1000);
+
+    const after = await page.evaluate(() => {
+      const map = (window as any).Alpine.store('map').get();
+      const zs: any[] = map._events?.zoomanim || [];
+      let zombies = 0;
+      for (const h of zs) {
+        if (h.ctx && h.ctx._latlng && h.ctx._map === null) zombies++;
+      }
+      return {
+        markers: document.querySelectorAll('#map .leaflet-marker-icon').length,
+        zoomanim: zs.length,
+        zombies,
+      };
+    });
+
+    // No orphaned listeners: the count must track the live markers, not grow.
+    expect(after.zombies).toBe(0);
+    expect(after.zoomanim - after.markers).toBeLessThanOrEqual(
+      before.zoomanim - before.markers,
+    );
+
+    // Animated zoom must move the markers instead of freezing them. Note:
+    // { animate: false } would take the _resetView path which never fires
+    // 'zoomanim', so it cannot exercise the orphaned-listener bug — click the
+    // real zoom control like a user would.
+    const beforeZoom = await page.evaluate(() => {
+      const w = window as any;
+      const map = w.Alpine.store('map').get();
+      const xs = new Map<number, number>();
+      map.eachLayer((l: any) => {
+        if (l._latlng && l._icon) xs.set(w.L.stamp(l), l._icon.getBoundingClientRect().x);
+      });
+      return { zoom: map.getZoom(), xs: [...xs.entries()] };
+    });
+
+    await page.locator('.leaflet-control-zoom-in').click();
+    await page.waitForFunction(
+      (z) => (window as any).Alpine.store('map').get().getZoom() !== z,
+      beforeZoom.zoom,
+      { timeout: 10000 },
+    );
+    await page.waitForTimeout(1000); // let the CSS zoom transition settle
+
+    const moved = await page.evaluate((entries: [number, number][]) => {
+      const w = window as any;
+      const map = w.Alpine.store('map').get();
+      const prev = new Map<number, number>(entries);
+      let movedCount = 0;
+      map.eachLayer((l: any) => {
+        if (l._latlng && l._icon) {
+          const x0 = prev.get(w.L.stamp(l));
+          if (x0 !== undefined && Math.abs(x0 - l._icon.getBoundingClientRect().x) > 2) {
+            movedCount++;
+          }
+        }
+      });
+      return { total: prev.size, movedCount };
+    }, beforeZoom.xs);
+
+    expect(moved.total).toBeGreaterThan(50);
+    expect(moved.movedCount).toBeGreaterThan(moved.total * 0.9);
+    expect(errors.filter((m) => m.includes('_latLngToNewLayerPoint'))).toHaveLength(0);
+  });
+});
