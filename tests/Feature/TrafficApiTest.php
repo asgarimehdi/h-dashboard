@@ -171,6 +171,65 @@ class TrafficApiTest extends TestCase
         );
     }
 
+    // -----------------------------------------------------------
+    //  ناسازگاری کلید کش (#764)
+    // -----------------------------------------------------------
+
+    public function test_traffic_ignores_the_sync_job_cache_for_other_item_ids(): void
+    {
+        // #764: SyncZabbixJob warms `zabbix_traffic_data` with the CONFIGURED
+        // default items every 5 minutes (the dashboard banner also reads it
+        // via Cache::has). A request for different item IDs must be served
+        // its own items' data — the job's cache must not short-circuit it,
+        // and the response keeps the `out`/`in` shape the chart widget reads.
+        Cache::put('zabbix_traffic_data', [['x' => 1, 'y' => 9.9]], now()->addMinutes(5));
+
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andReturn([['x' => 1, 'y' => 1.5]]);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('200', 3600)
+            ->andReturn([['x' => 1, 'y' => 2.5]]);
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(200)
+            ->assertJsonPath('out.0.y', 1.5)
+            ->assertJsonPath('in.0.y', 2.5)
+            ->assertJsonMissingPath('data');
+    }
+
+    public function test_traffic_reads_back_its_own_per_request_cache(): void
+    {
+        // #764: the dynamic `traffic_{out}_{in}_{duration}` key used to be a
+        // dead write — written on every fresh fetch, read by nothing. It is
+        // now a real read-through cache: a warm key serves the request
+        // without touching Zabbix.
+        Cache::put(
+            'traffic_100_200_3600',
+            ['out' => [['x' => 1, 'y' => 3.5]], 'in' => [['x' => 1, 'y' => 4.5]]],
+            30
+        );
+
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(200)
+            ->assertJsonPath('out.0.y', 3.5)
+            ->assertJsonPath('in.0.y', 4.5);
+    }
+
     protected function createUser(): User
     {
         $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);

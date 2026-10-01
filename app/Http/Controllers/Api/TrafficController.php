@@ -25,33 +25,39 @@ class TrafficController extends Controller
         $duration = $validated['duration'] ?? 3600;
 
         try {
-            $cached = Cache::get('zabbix_traffic_data');
+            $cacheKey = "traffic_{$outItemId}_{$inItemId}_{$duration}";
 
-            if ($cached !== null) {
-                return response()->json(['data' => $cached]);
+            // #764: read the per-request cache back — it used to be a
+            // write-only key while EVERY request was short-circuited by the
+            // sync job's `zabbix_traffic_data` (default config items, wrong
+            // `['data' => ...]` shape) regardless of the requested item IDs.
+            // The job's cache stays for the dashboard banner (`Cache::has`),
+            // but the controller must not serve another request's data.
+            $data = Cache::get($cacheKey);
+
+            if ($data === null) {
+                // #741: the transport now returns a typed result instead of
+                // throwing; the mapping below (connection problem -> 503 with the
+                // exact same body) is the contract the existing tests pin.
+                $out = $zabbix->traffic($outItemId, $duration);
+
+                if ($out->failed()) {
+                    return $this->unavailable('out', $out->failure(), $out->message());
+                }
+
+                $in = $zabbix->traffic($inItemId, $duration);
+
+                if ($in->failed()) {
+                    return $this->unavailable('in', $in->failure(), $in->message());
+                }
+
+                $data = [
+                    'out' => $out->data(),
+                    'in' => $in->data(),
+                ];
+
+                Cache::put($cacheKey, $data, 30);
             }
-
-            // #741: the transport now returns a typed result instead of
-            // throwing; the mapping below (connection problem -> 503 with the
-            // exact same body) is the contract the existing tests pin.
-            $out = $zabbix->traffic($outItemId, $duration);
-
-            if ($out->failed()) {
-                return $this->unavailable('out', $out->failure(), $out->message());
-            }
-
-            $in = $zabbix->traffic($inItemId, $duration);
-
-            if ($in->failed()) {
-                return $this->unavailable('in', $in->failure(), $in->message());
-            }
-
-            $data = [
-                'out' => $out->data(),
-                'in' => $in->data(),
-            ];
-
-            Cache::put("traffic_{$outItemId}_{$inItemId}_{$duration}", $data, 30);
 
             return response()->json($data);
         } catch (Throwable $e) {
