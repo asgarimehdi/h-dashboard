@@ -56,10 +56,7 @@ class MapDashboardTest extends TestCase
             ->assertSet('layers', 'units')
             ->assertSet('filterHardware', '')
             ->assertSet('filterPriority', '')
-            ->assertSet('filterStatus', '')
-            ->assertSet('statsUnits', 0)
-            ->assertSet('statsHardware', 0)
-            ->assertSet('statsOpenTickets', 0);
+            ->assertSet('filterStatus', '');
     }
 
     /** @test */

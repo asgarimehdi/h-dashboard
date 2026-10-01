@@ -21,9 +21,6 @@ return new class extends Component
     public $mapCenterLat = 36.669343;
     public $mapCenterLng = 48.47163;
     public $mapZoom = 10;
-    public $statsUnits = 0;
-    public $statsHardware = 0;
-    public $statsOpenTickets = 0;
     
     public $mapToken = '';
     public $mapTileTemplate = '';
@@ -44,7 +41,6 @@ return new class extends Component
         $user->tokens()->where('name', 'map-dashboard')->delete();
         $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
         $this->mapTileTemplate = config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-        $this->loadStats();
     }
 
     public function onMapMoved($data)
@@ -53,7 +49,6 @@ return new class extends Component
         $this->mapCenterLng = $data['center'][1] ?? $this->mapCenterLng;
         $this->mapZoom = $data['zoom'] ?? $this->mapZoom;
         $this->bbox = $data['bbox'] ?? $this->bbox;
-        $this->loadStats();
         $this->dispatch('mapViewportChanged', [
             'bbox' => $this->bbox,
             'zoom' => $this->mapZoom,
@@ -108,26 +103,6 @@ return new class extends Component
         ];
     }
 
-    public function loadStats()
-    {
-        if (!$this->bbox) return;
-        
-        try {
-            $response = \Illuminate\Support\Facades\Http::withToken($this->mapToken)
-                ->get(route('api.gis.stats'), [
-                    'bbox' => $this->bbox,
-                ]);
-            
-            if ($response->successful()) {
-                $data = $response->json();
-                $this->statsUnits = $data['units'] ?? 0;
-                $this->statsHardware = $data['hardware'] ?? 0;
-                $this->statsOpenTickets = $data['open_tickets'] ?? 0;
-            }
-        } catch (\Exception $e) {
-            // Silently fail - stats are optional
-        }
-    }
 };
 ?>
 
@@ -374,21 +349,18 @@ return new class extends Component
                     let marker;
                     const iconColor = this.getIconColor(type, props);
 
-                    if (type === 'unit') {
-                        marker = L.marker([lat, lng], {
-                            icon: L.divIcon({
-                                className: 'unit-marker',
-                                html: `<div style="width:18px;height:18px;border-radius:50%;background:${iconColor};border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                                iconSize: [18, 18],
-                            })
-                        });
-                    } else if (type === 'hardware') {
-                        marker = L.marker([lat, lng], {
-                            icon: L.divIcon({
-                                className: 'hardware-marker',
-                                html: `<div style="width:14px;height:14px;border-radius:50%;background:${iconColor};border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                                iconSize: [14, 14],
-                            })
+                    if (type === 'unit' || type === 'hardware') {
+                        // Perf: one lightweight SVG shape per point instead of a
+                        // divIcon DOM node + inner div (same look: white ring,
+                        // filled dot; class kept so the e2e count still works).
+                        marker = L.circleMarker([lat, lng], {
+                            className: type === 'unit' ? 'unit-marker' : 'hardware-marker',
+                            radius: type === 'unit' ? 8 : 6,
+                            color: '#ffffff',
+                            weight: 2,
+                            opacity: 1,
+                            fillColor: iconColor,
+                            fillOpacity: 1,
                         });
                     } else if (type === 'ticket') {
                         marker = L.marker([lat, lng], {
@@ -401,7 +373,8 @@ return new class extends Component
                     }
 
                     if (marker) {
-                        marker.bindPopup(this.createPopup(type, props));
+                        // Lazy: popup HTML is only built when a point is opened.
+                        marker.bindPopup(() => this.createPopup(type, props));
                         marker.on('click', () => this.onFeatureClick(type, props));
                         marker.addTo(layerGroup);
                     }

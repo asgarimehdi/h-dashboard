@@ -182,40 +182,55 @@ return new class extends Component
 
     const defaultIcon = '/icons/default.svg';
 
+    // Perf: one L.icon per type (was: a fresh L.icon for every marker).
+    const iconCache = new Map();
     function getIcon(typeId) {
-        return L.icon({
-            iconUrl: typeIcons[typeId] ?? defaultIcon,
-            iconSize: [32, 32],
-            iconAnchor: [16, 32],
-            popupAnchor: [0, -32],
-        });
-    }
-
-    function getDepth(loc, allLocations) {
-        let depth = 0;
-        let current = loc;
-        while (current && current.parent_id) {
-            current = allLocations.find(u => u.id === current.parent_id);
-            depth++;
+        let icon = iconCache.get(typeId);
+        if (!icon) {
+            icon = L.icon({
+                iconUrl: typeIcons[typeId] ?? defaultIcon,
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32],
+            });
+            iconCache.set(typeId, icon);
         }
-        return depth;
+        return icon;
     }
 
     const lineColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
+
+    // Perf: single canvas renderer for all connection lines (was: one SVG path per line).
+    let lineRenderer = null;
 
     function renderMarkers(markersLayer, linesLayer, locations) {
         markersLayer.clearLayers();
         linesLayer.clearLayers();
 
+        if (!lineRenderer) lineRenderer = L.canvas({ padding: 0.5 });
+
+        // Perf: id → location Map + memoised depth (was: Array.find inside a
+        // nested loop plus a full re-scan per node — O(N²)/O(N·depth)).
+        const byId = new Map(locations.map(l => [l.id, l]));
+        const depthCache = new Map();
+        const depthOf = (id) => {
+            if (depthCache.has(id)) return depthCache.get(id);
+            const node = byId.get(id);
+            if (!node || !node.parent_id) { depthCache.set(id, 0); return 0; }
+            depthCache.set(id, 0); // placeholder — also breaks parent cycles
+            const depth = depthOf(node.parent_id) + 1;
+            depthCache.set(id, depth);
+            return depth;
+        };
+
         locations.forEach(loc => {
             if (loc.parent_id && loc.lat && loc.lng) {
-                const parent = locations.find(u => u.id === loc.parent_id);
+                const parent = byId.get(loc.parent_id);
                 if (parent && parent.lat && parent.lng) {
-                    const depth = getDepth(parent, locations);
-                    const color = lineColors[Math.min(depth, lineColors.length - 1)];
+                    const color = lineColors[Math.min(depthOf(parent.id), lineColors.length - 1)];
                     L.polyline(
                         [[loc.lat, loc.lng], [parent.lat, parent.lng]],
-                        { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
+                        { color, weight: 2, opacity: 0.7, dashArray: '6 4', renderer: lineRenderer }
                     ).addTo(linesLayer);
                 }
             }

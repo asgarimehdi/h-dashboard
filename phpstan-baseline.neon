@@ -3576,11 +3576,6 @@ parameters:
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:loadStats\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:loadUnitDetails\(\) has no return type specified\.$#'
@@ -3714,23 +3709,8 @@ parameters:
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$statsHardware has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
 
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$statsOpenTickets has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
 
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$statsUnits has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
