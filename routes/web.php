@@ -96,6 +96,12 @@ Route::middleware('auth')->group(function () {
         // HR Dashboard (Issue #223)
         Route::middleware('role_or_permission:view_hr_dashboard')->group(function () {
             Route::livewire('/hr-dashboard', 'hr.dashboard')->name('hr.dashboard');
+        });
+
+        // چارت سازمانی — `manage_org_chart` تا امروز مجوزی مرده بود (فقط در
+        // PermissionSeeder). اینجا اعمال می‌شود و `view_hr_dashboard` هم
+        // پذیرفته می‌شود تا دسترسی فعلی از دست نرود.
+        Route::middleware('role_or_permission:manage_org_chart|view_hr_dashboard')->group(function () {
             Route::livewire('/hr/org-chart', 'hr.org-chart')->name('hr.org-chart');
         });
 
@@ -107,11 +113,19 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/maps/interactive', 'maps/interactive');
             Route::livewire('/maps/point', 'maps/point');
 
-            Route::livewire('/it/wireless', 'it/wireless');
-            Route::livewire('/it/networks', 'it/networks');
-
             // GIS Dashboard
             Route::livewire('/map', 'map.map-dashboard')->name('map');
+        });
+
+        // ابزارهای مدیریتی (IT) — هر مسیر با همان مجوزی که آیتم منو با آن رندر
+        // می‌شود. `/it/networks` و `/it/wireless` عمداً `map` **یا** `bw` می‌پذیرند
+        // (`bw` از قبل مجوز «آنالیز شبکه» بود و نگه داشته شد؛ قبلاً منو با `map`
+        // و روت با `bw` گیت می‌شدند → دارنده‌ی `map` لینک را می‌دید و ۴۰۳ می‌گرفت).
+        // توجه: بیرون از گروه `map` باشند، وگرنه عضو گروهِ تودرتو هم لازم می‌شود و
+        // دارنده‌ی `bw` دوباره ۴۰۳ می‌گیرد.
+        Route::middleware('role_or_permission:map|bw')->group(function () {
+            Route::livewire('/it/wireless', 'it/wireless');
+            Route::livewire('/it/networks', 'it/networks');
         });
 
         // مدیریت دستگاه‌های مانیتورینگ زبیکس (Issue #698) — مشاهده صفحات
@@ -163,12 +177,17 @@ Route::middleware('auth')->group(function () {
         // جستجوی سراسری
         Route::livewire('/search', 'search.index')->name('search');
 
-        // گزارش‌ها
-        Route::livewire('/reports/tickets', 'reports.advanced')->name('reports.tickets');
-        Route::livewire('/reports/units', 'reports.units')->name('reports.units');
-        Route::livewire('/reports/todos', 'reports.todos')->name('reports.todos');
-        Route::livewire('/reports/persons', 'reports.persons')->name('reports.persons');
-        Route::livewire('/reports/map-no-boundary', 'reports.map-no-boundary')->name('reports.map-no-boundary');
+        // گزارش‌ها — با `manage_personnel` (هم‌راستا با API «persons:write»)،
+        // نه پرمیشن جدید: ۱۸ پرمیشن موجود روی همه‌ی کاربران production تعریف
+        // شده‌اند، پس افزودن پرمیشن تازه بدون seed روی دیتابیس موجود یعنی هیچ‌کس
+        // (به‌جز admin که فقط در PermissionSeeder همگام می‌شود) گزارش‌ها را نبیند.
+        Route::middleware('role_or_permission:manage_personnel')->group(function () {
+            Route::livewire('/reports/tickets', 'reports.advanced')->name('reports.tickets');
+            Route::livewire('/reports/units', 'reports.units')->name('reports.units');
+            Route::livewire('/reports/todos', 'reports.todos')->name('reports.todos');
+            Route::livewire('/reports/persons', 'reports.persons')->name('reports.persons');
+            Route::livewire('/reports/map-no-boundary', 'reports.map-no-boundary')->name('reports.map-no-boundary');
+        });
 
         // تنظیمات کاربر
         Route::livewire('/settings', 'settings.index')->name('settings');

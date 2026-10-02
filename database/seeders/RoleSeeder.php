@@ -34,6 +34,10 @@ class RoleSeeder extends Seeder
             'manage_unit_tickets',
             'view_assigned_tickets',
             'organization',
+            // گزارش‌ها (routes/web.php) — مدیر واحد قبلاً گزارش‌ها را در منو
+            // می‌دید (بدون هیچ گیتی)؛ اکنون که روت پشت `manage_personnel` است
+            // این مجوز را می‌گیرد تا دسترسی‌اش از دست نرود.
+            'manage_personnel',
         ]);
 
         // ۳. ایجاد نقش کارشناس واحد
