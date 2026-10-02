@@ -3754,17 +3754,7 @@ parameters:
 			count: 1
 			path: resources/views/livewire/maps/point.blade.php
 
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$selectedRegions type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/maps/point.blade.php
 
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$selectedTypes type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/maps/point.blade.php
 
 		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$types has no type specified\.$#'
