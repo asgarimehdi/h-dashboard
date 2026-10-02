@@ -126,7 +126,7 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 |---|---|---|
 | GET | `/kargozini/persons/export` | xlsx download of the **filtered** personnel list |
 
-- Route name `kargozini.persons.export`, controller `App\Http\Controllers\Api\PersonsExportController`, in the same permission group as the personnel list (`role_or_permission:manage_personnel`).
+- Route name `kargozini.persons.export`, controller `App\Http\Controllers\Api\PersonsExportController`, in the same permission group as the personnel list (`role_or_permission:kargozini|manage_personnel`, issue #775).
 - **Exports what you are looking at**, not the whole table — search and every active filter are reapplied server-side via `applySearch()`/`applyFilters()`.
 - **12 columns:** `کد ملی`, `نام`, `نام خانوادگی`, `نام کامل`, `سمت`, `تحصیالات`, `نوع استخدام`, `ردیف سازمانی`, `واحد سازمانی`, `وضعیت`, `تاریخ تولد`, `تاریخ استخدام`. «تاریخ تولد» arrived in #755 — `birth_date`/`hire_date` had **no cast**, so they returned raw strings.
 - The unit column is the **full breadcrumb** from `UnitTreeService::ancestorChain()`, same contract as the units export's «مسیر کامل».
@@ -279,7 +279,7 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 ### Maps (`/maps`)
 
-- Unit map, interactive map, county map, point map, route maps — all with organizational scope applied
+- Unit map, county map, point map, route maps — all with organizational scope applied (the old interactive map was removed as dead code, issue #775)
 - GIS data via PostGIS (boundaries as MULTIPOLYGON, SRID 4326); unit lat/lng with bounding-box queries (`withinBounds`)
 - **Map container:** shared `maps.map` component renders `#map` with `h-[80lvh]`; pages must NOT wrap it in a Bootstrap `container` class (restricts width) — use `relative` so overlays position correctly; `invalidateSize()` runs after init + on resize so Leaflet never locks a half-width
 - **Gotchas:** county map query joins `boundaries` — always qualify `regions.id` (ambiguous column error on pgsql otherwise)

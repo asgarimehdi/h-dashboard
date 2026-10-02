@@ -44,8 +44,8 @@
             پرسنل، کارگزینی و سازمان
         </h4>
         <div class="grid grid-cols-2 gap-2 text-sm">
-            <span class="badge badge-outline">kargozini</span> <span class="text-base-content/70">کارگزینی و لیست پرسنل</span>
-            <span class="badge badge-outline">manage_personnel</span> <span class="text-base-content/70">مدیریت پرسنل (API) و گزارش‌ها</span>
+            <span class="badge badge-outline">kargozini</span> <span class="text-base-content/70">جداول پایه کارگزینی و مشاهده لیست پرسنل</span>
+            <span class="badge badge-outline">manage_personnel</span> <span class="text-base-content/70">لیست پرسنل، ورود اطلاعات پرسنل (import)، گزارش‌ها و نوشتن از API</span>
             <span class="badge badge-outline">organization</span> <span class="text-base-content/70">ساختار سازمانی و مدیریت واحدها</span>
             <span class="badge badge-outline">view_hr_dashboard</span> <span class="text-base-content/70">داشبورد منابع انسانی</span>
             <span class="badge badge-outline">manage_org_chart</span> <span class="text-base-content/70">چارت سازمانی</span>

@@ -224,14 +224,15 @@
                 @endcanany
 
                 {{-- مدیریت سازمان --}}
-                @canany(['organization', 'kargozini', 'view_hr_dashboard', 'manage_org_chart'])
+                @canany(['organization', 'kargozini', 'view_hr_dashboard', 'manage_org_chart', 'manage_personnel'])
                 <x-menu-sub title="مدیریت سازمان" icon="o-building-library">
                     @can('organization')
                     <x-menu-item title="مدیریت واحدها" icon="o-building-office-2" link="/units" wire:navigate />
                     @endcan
-                    @can('kargozini')
+                    {{-- پرسنل — روت خواندن union است (#775): kargozini یا manage_personnel --}}
+                    @canany(['kargozini', 'manage_personnel'])
                     <x-menu-item title="پرسنل" icon="o-user-group" link="/kargozini/persons" wire:navigate />
-                    @endcan
+                    @endcanany
                     @can('view_hr_dashboard')
                     <x-menu-item title="آمار پرسنل" icon="o-chart-bar" link="/hr-dashboard" wire:navigate />
                     @endcan

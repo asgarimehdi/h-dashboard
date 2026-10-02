@@ -19,7 +19,7 @@ beforeEach(function () {
 });
 
 test('guest is redirected from maps pages', function () {
-    foreach (['/maps/route', '/maps/route2', '/maps/county', '/maps/unit', '/maps/interactive', '/maps/point'] as $url) {
+    foreach (['/maps/route', '/maps/route2', '/maps/county', '/maps/unit', '/maps/point'] as $url) {
         $this->get($url)->assertRedirect('/login');
     }
 });
@@ -27,7 +27,7 @@ test('guest is redirected from maps pages', function () {
 test('authenticated user with map permission can load maps pages', function () {
     $this->actingAs($this->user);
 
-    foreach (['maps/route', 'maps/route2', 'maps/unit', 'maps/interactive', 'maps/point'] as $component) {
+    foreach (['maps/route', 'maps/route2', 'maps/unit', 'maps/point'] as $component) {
         Livewire::test($component)->assertStatus(200);
     }
 });

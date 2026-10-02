@@ -79,6 +79,11 @@ link's visibility in both directions, plus a real `GET` per link.
   `hasAnyPermission()` answers `false` for an unknown name instead of throwing. `RoleSeeder` grants
   `manage_personnel` to `unit_manager` so that role keeps the report access it had before the gate existed,
   and `PermissionSeeder` `givePermissionTo`s it for admin.
+- Personnel (issue #775 decision): **read** (list `/kargozini/persons` + export) is the union
+  `role_or_permission:kargozini|manage_personnel` — `kargozini` is the lookup-table permission, NOT the
+  personnel gate. **Write** (import `/kargozini/persons/import`) requires `manage_personnel` alone,
+  matching the API (`abilities:persons:write` + `manage_personnel`). The lookup tables
+  (estekhdams/tahsils/semats/radifs) stay `kargozini`-only.
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
@@ -224,7 +229,7 @@ These components and routes were removed — do not recreate:
 
 ### Personnel Export (issue #729, columns #755)
 
-`GET /kargozini/persons/export` → `persons-Ymd-His.xlsx`, named `kargozini.persons.export`, in the **same permission group as the personnel list** (`role_or_permission:manage_personnel`), controller `App\Http\Controllers\Api\PersonsExportController`.
+`GET /kargozini/persons/export` → `persons-Ymd-His.xlsx`, named `kargozini.persons.export`, in the **same permission group as the personnel list** (`role_or_permission:kargozini|manage_personnel`, issue #775), controller `App\Http\Controllers\Api\PersonsExportController`.
 
 - **Exports the filtered result**, not the whole table — search and every active filter are reapplied server-side, so what you download is what you were looking at.
 - **12 columns:** `کد ملی`, `نام`, `نام خانوادگی`, `نام کامل`, `سمت`, `تحصیلات`, `نوع استخدام`, `ردیف سازمانی`, `واحد سازمانی`, `وضعیت`, **`تاریخ تولد`**, `تاریخ استخدام`. «تاریخ تولد» was added in #755 — `birth_date`/`hire_date` had **no cast** and were returning raw strings, so the export would have printed unformatted values.
@@ -277,8 +282,9 @@ why `invalidateSize()` and the `resize` listener are preserved.
 
 > **Out of scope, deliberately untouched:** `map/map-dashboard.blade.php` (`/map`) and
 > `units/map.blade.php` (`/units/{id}/map`) each own a separate instance (`map-dashboard` via
-> `x-data`, `units/map` on `#unitMap`, whose E2E spec depends on `window._drawnItems`), and
-> `maps/interactive` owns `#unitsMap`. Do not migrate them without a separate decision.
+> `x-data`, `units/map` on `#unitMap`, whose E2E spec depends on `window._drawnItems`).
+> Do not migrate them without a separate decision. (`maps/interactive` was removed as dead
+> code in issue #775.)
 
 ---
 

@@ -45,7 +45,7 @@ class SidebarPermissionsTest extends TestCase
         '/maps/unit' => ['map'],
         '/hr-dashboard' => ['view_hr_dashboard'],
         '/hr/org-chart' => ['manage_org_chart', 'view_hr_dashboard'],
-        '/kargozini/persons' => ['kargozini'],
+        '/kargozini/persons' => ['kargozini', 'manage_personnel'],
         '/units' => ['organization'],
         '/todo' => ['calendar'],
         '/roles' => ['manage_roles'],

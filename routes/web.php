@@ -88,8 +88,19 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/tahsils', 'kargozini.tahsil');
             Route::livewire('/kargozini/semats', 'kargozini.semat');
             Route::livewire('/kargozini/radifs', 'kargozini.radif');
+        });
+
+        // پرسنل — تصمیم ایشو #775: خواندن (لیست + خروجی) با unionـِ `kargozini`
+        // و `manage_personnel` است (هر دو حوزه‌ی پرسنل‌اند و دارنده‌ی هرکدام
+        // نباید لینک کور ببیند)، ولی نوشتن (import) فقط `manage_personnel`
+        // می‌خواهد — هم‌راستا با API که برای write همین را می‌خواهد. جداول
+        // lookup بالا فقط `kargozini` می‌مانند.
+        Route::middleware('role_or_permission:kargozini|manage_personnel')->group(function () {
             Route::livewire('/kargozini/persons', 'kargozini.person');
             Route::get('/kargozini/persons/export', [PersonsExportController::class, 'export'])->name('kargozini.persons.export');
+        });
+
+        Route::middleware('role_or_permission:manage_personnel')->group(function () {
             Route::livewire('/kargozini/persons/import', 'kargozini.import-persons.import-persons')->name('kargozini.persons.import');
         });
 
@@ -110,7 +121,6 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/maps/route2', 'maps/route2');
             Route::livewire('/maps/county', 'maps/county');
             Route::livewire('/maps/unit', 'maps/unit');
-            Route::livewire('/maps/interactive', 'maps/interactive');
             Route::livewire('/maps/point', 'maps/point');
 
             // GIS Dashboard

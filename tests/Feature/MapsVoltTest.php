@@ -38,7 +38,6 @@ test('map pages are protected by map permission', function () {
         '/maps/route2',
         '/maps/county',
         '/maps/unit',
-        '/maps/interactive',
         '/maps/point',
     ];
 
@@ -81,7 +80,6 @@ test('all map components mount successfully for user with map permission', funct
         'maps.route' => 'نقشه مسیر',
         'maps.route2' => 'نقشه مسیر',
         'maps.unit' => 'واحد',
-        'maps.interactive' => 'تعاملی',
         'maps.point' => 'مکان‌ها',
     ];
 
