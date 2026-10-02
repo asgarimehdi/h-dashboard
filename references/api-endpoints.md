@@ -551,8 +551,6 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
-
 `.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
 - **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)
 - **Tests & Coverage (blocking, timeout 10 min)** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov

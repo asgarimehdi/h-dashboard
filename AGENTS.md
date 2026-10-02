@@ -648,8 +648,6 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
-
 `.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
 - **Code Style (Pint)** — `vendor/bin/pint --test` (blocking)
 - **Tests & Coverage (blocking)** — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov
