@@ -3692,12 +3692,6 @@ parameters:
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$mapTileTemplate has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/map/map-dashboard.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$mapToken has no type specified\.$#'
 			identifier: missingType.property
 			count: 1

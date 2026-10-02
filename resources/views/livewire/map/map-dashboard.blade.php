@@ -23,7 +23,6 @@ return new class extends Component
     public $mapZoom = 10;
     
     public $mapToken = '';
-    public $mapTileTemplate = '';
 
     protected $listeners = [
         'mapMoved' => 'onMapMoved',
@@ -40,7 +39,6 @@ return new class extends Component
         // Delete old map-dashboard tokens first to avoid accumulation.
         $user->tokens()->where('name', 'map-dashboard')->delete();
         $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
-        $this->mapTileTemplate = config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     }
 
     public function onMapMoved($data)
@@ -109,9 +107,8 @@ return new class extends Component
 <div
     wire:ignore
     id="map-container"
-    class="w-full h-[calc(100vh-4rem)] relative"
-    x-data="mapDashboard()"
-    x-init="initMap()"
+    class="w-full relative"
+    x-data="mapDashboard"
 >
     <!-- Map Toolbar -->
     <div class="absolute top-4 left-4 right-4 z-10 flex flex-wrap gap-2 justify-between p-2 bg-base-100/90 backdrop-blur rounded-box shadow-lg">
@@ -186,8 +183,9 @@ return new class extends Component
         </div>
     </div>
 
-    <!-- Map Element -->
-    <div id="map" class="w-full h-full"></div>
+    <!-- Map Element: the shared maps.map component owns the Leaflet instance
+         (Alpine.store('map')); this page only attaches its layers via onReady. -->
+    <livewire:maps.map />
 
     <!-- Unit Details Modal -->
     <div x-data="{ unitId: null, unitDetails: null, loading: false }"
@@ -221,12 +219,19 @@ return new class extends Component
     </script>
 </div>
 
+@script
 <script>
-    function mapDashboard() {
+    Alpine.data('mapDashboard', () => {
+        // The Leaflet instance and its layer groups live in closure locals,
+        // never on the Alpine data object: Alpine proxies reactive data,
+        // which breaks Leaflet's listener bookkeeping (issue #769). The map
+        // itself is owned by the shared maps.map component
+        // (Alpine.store('map')); this page only attaches its layers to it.
+        let map = null;
+        let layerGroups = {};
+        let moveTimer = null;
+
         return {
-            map: null,
-            markers: {},
-            layers: {},
             activeLayers: ['units'],
             filters: {
                 hardware_type: '',
@@ -240,39 +245,30 @@ return new class extends Component
             center: [{{ $mapCenterLat }}, {{ $mapCenterLng }}],
             zoom: {{ $mapZoom }},
 
-            initMap() {
-                if (!window.L) return;
+            init() {
+                window.Alpine.store('map').onReady((readyMap) => {
+                    map = readyMap;
+                    map.setView(this.center, this.zoom);
 
-                this.map = L.map('map', {
-                    center: this.center,
-                    zoom: this.zoom,
-                    zoomControl: true,
-                    attributionControl: true,
+                    layerGroups = {
+                        units: L.layerGroup().addTo(map),
+                        hardware: L.layerGroup(),
+                        tickets: L.layerGroup(),
+                    };
+
+                    map.on('moveend', () => this.onMapMove());
+
+                    this.onMapMove();
                 });
-
-                L.tileLayer('{{ $mapTileTemplate }}', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(this.map);
-
-                this.layers = {
-                    units: L.layerGroup().addTo(this.map),
-                    hardware: L.layerGroup(),
-                    tickets: L.layerGroup(),
-                };
-
-                this.map.on('moveend', () => this.onMapMove());
-
-                this.onMapMove();
             },
 
             onMapMove() {
-                if (!this.map) return;
+                if (!map) return;
 
-                clearTimeout(this._moveTimer);
+                clearTimeout(moveTimer);
 
-                this._moveTimer = setTimeout(() => {
-                    const bounds = this.map.getBounds();
+                moveTimer = setTimeout(() => {
+                    const bounds = map.getBounds();
                     this.currentBbox = [
                         bounds.getWest(),
                         bounds.getSouth(),
@@ -294,18 +290,18 @@ return new class extends Component
                 };
 
                 if (this.activeLayers.includes('units')) {
-                    this.fetchAndRender(`${this.apiBase}/units?bbox=${bbox}`, this.layers.units, 'unit', headers);
+                    this.fetchAndRender(`${this.apiBase}/units?bbox=${bbox}`, layerGroups.units, 'unit', headers);
                 }
                 if (this.activeLayers.includes('hardware')) {
                     let url = `${this.apiBase}/hardware?bbox=${bbox}`;
                     if (this.filters.hardware_type) url += `&type=${this.filters.hardware_type}`;
-                    this.fetchAndRender(url, this.layers.hardware, 'hardware', headers);
+                    this.fetchAndRender(url, layerGroups.hardware, 'hardware', headers);
                 }
                 if (this.activeLayers.includes('tickets')) {
                     let url = `${this.apiBase}/tickets?bbox=${bbox}`;
                     if (this.filters.ticket_priority) url += `&priority=${this.filters.ticket_priority}`;
                     if (this.filters.ticket_status) url += `&status=${this.filters.ticket_status}`;
-                    this.fetchAndRender(url, this.layers.tickets, 'ticket', headers);
+                    this.fetchAndRender(url, layerGroups.tickets, 'ticket', headers);
                 }
 
                 // Load stats
@@ -472,12 +468,14 @@ return new class extends Component
             toggleLayer(layer) {
                 if (this.activeLayers.includes(layer)) {
                     this.activeLayers = this.activeLayers.filter(l => l !== layer);
-                    this.layers[layer]?.clearLayers();
-                    this.map.removeLayer(this.layers[layer]);
+                    layerGroups[layer]?.clearLayers();
+                    if (map && layerGroups[layer]) {
+                        map.removeLayer(layerGroups[layer]);
+                    }
                 } else {
                     this.activeLayers.push(layer);
-                    if (this.layers[layer] && !this.map.hasLayer(this.layers[layer])) {
-                        this.layers[layer].addTo(this.map);
+                    if (map && layerGroups[layer] && !map.hasLayer(layerGroups[layer])) {
+                        layerGroups[layer].addTo(map);
                     }
                     this.loadLayers();
                 }
@@ -490,10 +488,6 @@ return new class extends Component
                 this.loadLayers();
             },
         };
-    }
+    });
 </script>
-
-@push('scripts')
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-@endpush
+@endscript
