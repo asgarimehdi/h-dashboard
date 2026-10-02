@@ -51,7 +51,6 @@ $guestProtectedRoutes = [
     '/maps/route' => 'maps/route',
     '/maps/route2' => 'maps/route2',
     '/maps/unit' => 'maps/unit',
-    '/maps/interactive' => 'maps/interactive',
     '/maps/point' => 'maps/point',
     '/it/networks' => 'it/networks',
     '/it/wireless' => 'it/wireless',
