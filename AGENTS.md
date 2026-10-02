@@ -280,11 +280,13 @@ Three rules, each of which cost real debugging time:
 and `class="h-[80lvh] rounded"` — the E2E map specs assert on both plus `clientWidth > 400`, which is
 why `invalidateSize()` and the `resize` listener are preserved.
 
-> **Out of scope, deliberately untouched:** `map/map-dashboard.blade.php` (`/map`) and
-> `units/map.blade.php` (`/units/{id}/map`) each own a separate instance (`map-dashboard` via
-> `x-data`, `units/map` on `#unitMap`, whose E2E spec depends on `window._drawnItems`).
-> Do not migrate them without a separate decision. (`maps/interactive` was removed as dead
-> code in issue #775.)
+> **Out of scope, deliberately untouched:** `units/map.blade.php` (`/units/{id}/map`) owns a
+> separate instance on `#unitMap`, whose E2E spec depends on `window._drawnItems`. Do not
+> migrate it without a separate decision. (`maps/interactive` was removed as dead code in
+> issue #775.) `map/map-dashboard.blade.php` (`/map`) used to own one too; it was migrated
+> onto the shared component on 2026-10-02 at Mehdi's decision — it embeds
+> `livewire:maps.map`, holds the instance and its layer groups in closure locals inside its
+> Alpine factory (never on the reactive data object), and attaches via `onReady`.
 
 ---
 
