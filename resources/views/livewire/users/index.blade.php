@@ -81,13 +81,35 @@ return new class extends Component
 
     public function delete(User $user): void
     {
+        $this->authorize('manage_users');
+
+        if ($user->id === auth()->id()) {
+            abort(403, 'شما نمی‌توانید خودتان را غیرفعال کنید.');
+        }
+
+        if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+            abort(403, 'تنها مدیران می‌توانند کاربران مدیر را غیرفعال کنند.');
+        }
+
         $user->delete();
         $this->warning("$user->name غیرفعال شد", 'غیرفعال شد!', position: 'toast-bottom');
     }
 
     public function restore($userId): void
     {
+        $this->authorize('manage_users');
         $user = User::withTrashed()->findOrFail($userId);
+
+        if ($user->id === auth()->id()) {
+            $this->error('شما نمی‌توانید خودتان را فعال کنید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+            abort(403, 'تنها مدیران می‌توانند کاربران مدیر را فعال کنند.');
+        }
+
         $user->restore();
         $this->success("$user->name فعال شد", 'کاربر برگشت!', position: 'toast-bottom');
     }
@@ -100,12 +122,14 @@ return new class extends Component
 
     public function openFormForCreate(): void
     {
+        $this->authorize('manage_users');
         $this->resetForm();
         $this->formOpen = true;
     }
 
     public function edit($userId): void
     {
+        $this->authorize('manage_users');
         $this->resetValidation();
         $user = User::withTrashed()->findOrFail($userId);
         $this->editing_user_id = $user->id;
@@ -131,6 +155,12 @@ return new class extends Component
 
     public function createUser(): void
     {
+        $this->authorize('manage_users');
+
+        if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
+            $this->authorize('manage_roles');
+        }
+
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
             'password' => 'required|string|min:6',
@@ -169,6 +199,12 @@ return new class extends Component
 
     public function updateUser(): void
     {
+        $this->authorize('manage_users');
+
+        if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
+            $this->authorize('manage_roles');
+        }
+
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code,'.$this->editing_user_id,
             'password' => 'nullable|string|min:6',
@@ -186,6 +222,11 @@ return new class extends Component
 
         try {
             $user = User::withTrashed()->findOrFail($this->editing_user_id);
+
+            if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+                abort(403, 'تنها مدیران می‌توانند کاربران مدیر را ویرایش کنند.');
+            }
+
             $data = ['n_code' => $this->n_code];
 
             if ($this->password) {
