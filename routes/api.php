@@ -101,10 +101,11 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/{hardware}/audits', [HardwareAuditController::class, 'index']);
         Route::get('/{hardware}/audits/export', [HardwareAuditController::class, 'export']);
         Route::get('/{hardware}/audits/{audit}', [HardwareAuditController::class, 'show']);
-        Route::post('/{hardware}/audits/{audit}/rollback', [HardwareAuditController::class, 'rollback'])
-            ->middleware('permission:manage_hardware');
-        Route::post('/audits/{audit}/restore-record', [HardwareAuditController::class, 'restoreRecord'])
-            ->middleware('permission:manage_hardware');
+
+        Route::middleware(['abilities:hardware:write', 'role_or_permission:manage_hardware'])->group(function () {
+            Route::post('/{hardware}/audits/{audit}/rollback', [HardwareAuditController::class, 'rollback']);
+            Route::post('/audits/{audit}/restore-record', [HardwareAuditController::class, 'restoreRecord']);
+        });
     });
 
     // Ticket API routes — ability:tickets:read (Issue #690)

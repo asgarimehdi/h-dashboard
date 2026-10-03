@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Hardware;
+use App\Models\HardwareAudit;
+use App\Models\Person;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -72,6 +75,14 @@ class ApiAbilityTest extends TestCase
         ];
     }
 
+    private function createHardwareForUnit(int $unitId, array $data = []): Hardware
+    {
+        $person = Person::factory()->create(['u_id' => $unitId]);
+        $data['n_code'] = $person->n_code;
+
+        return Hardware::factory()->create($data);
+    }
+
     // ──────────────────────────────────────────────
     // Units
     // ──────────────────────────────────────────────
@@ -124,6 +135,60 @@ class ApiAbilityTest extends TestCase
     {
         $token = $this->createTokenWithAbilities(['hardware:read'], ['manage_hardware']);
         $this->apiPost('/api/hardware', ['n_code' => '123', 'pc_name' => 'test'], $token)->assertForbidden();
+    }
+
+    public function test_hardware_audit_rollback_denied_with_read_only_token(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['manage_hardware']);
+        $hardware = $this->createHardwareForUnit($user->units->first()->id);
+        $hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $hardware->id)
+            ->where('action', 'updated')
+            ->first();
+
+        $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
+        $this->apiPost("/api/hardware/{$hardware->id}/audits/{$audit->id}/rollback", ['field' => 'cpu'], $token)->assertForbidden();
+    }
+
+    public function test_hardware_audit_rollback_allowed_with_write_ability(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['manage_hardware']);
+        $hardware = $this->createHardwareForUnit($user->units->first()->id);
+        $hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $hardware->id)
+            ->where('action', 'updated')
+            ->first();
+
+        $token = $user->createToken('test-token', ['hardware:read', 'hardware:write'])->plainTextToken;
+        $response = $this->apiPost("/api/hardware/{$hardware->id}/audits/{$audit->id}/rollback", ['field' => 'cpu'], $token);
+        $this->assertNotEquals(403, $response->getStatusCode());
+    }
+
+    public function test_hardware_audit_restore_record_denied_with_read_only_token(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['manage_hardware']);
+        $hardware = $this->createHardwareForUnit($user->units->first()->id);
+        $createdAudit = HardwareAudit::where('hardware_id', $hardware->id)
+            ->where('action', 'created')
+            ->first();
+        $hardware->forceDelete();
+
+        $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
+        $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token)->assertForbidden();
+    }
+
+    public function test_hardware_audit_restore_record_allowed_with_write_ability(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['manage_hardware']);
+        $hardware = $this->createHardwareForUnit($user->units->first()->id);
+        $createdAudit = HardwareAudit::where('hardware_id', $hardware->id)
+            ->where('action', 'created')
+            ->first();
+        $hardware->forceDelete();
+
+        $token = $user->createToken('test-token', ['hardware:read', 'hardware:write'])->plainTextToken;
+        $response = $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token);
+        $this->assertNotEquals(403, $response->getStatusCode());
     }
 
     // ──────────────────────────────────────────────

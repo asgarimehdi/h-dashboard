@@ -51,3 +51,9 @@ test-results/
 blob-report/
 playwright/.cache/
 .server.pid
+
+# Debug/log files
+install.log
+npm-install.log
+serve.out
+vite-build.log
