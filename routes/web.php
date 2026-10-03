@@ -1,11 +1,29 @@
 <?php
 
 use App\Http\Controllers\Api\HardwareExportController;
+use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
 use App\Services\ActivityLogService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/login', 'auth.login')->name('login');
+
+// CSP violation reports (#742) — public, unauthenticated, throttled: the
+// Reporting-Endpoints header (SecurityHeaders) points browsers here.
+// Same-app destination is a temporary decision (recorded on #742); the
+// final target is a separate-domain endpoint once that infra exists.
+Route::post('/csp-report', function (Request $request) {
+    // Browsers post `application/csp-report` (Chrome) or `application/json`;
+    // json() decodes whatever the body holds, [] for garbage.
+    Log::warning('csp-report', [
+        'content_type' => $request->header('Content-Type'),
+        'report' => $request->json()->all(),
+    ]);
+
+    return response()->noContent();
+})->middleware('throttle:60,1')->name('csp.report');
 
 // Hardware routes — require authentication and manage_hardware permission
 // (Issue #216: guests must NOT see sensitive hardware data)
@@ -70,13 +88,31 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/kargozini/tahsils', 'kargozini.tahsil');
             Route::livewire('/kargozini/semats', 'kargozini.semat');
             Route::livewire('/kargozini/radifs', 'kargozini.radif');
+        });
+
+        // پرسنل — تصمیم ایشو #775: خواندن (لیست + خروجی) با unionـِ `kargozini`
+        // و `manage_personnel` است (هر دو حوزه‌ی پرسنل‌اند و دارنده‌ی هرکدام
+        // نباید لینک کور ببیند)، ولی نوشتن (import) فقط `manage_personnel`
+        // می‌خواهد — هم‌راستا با API که برای write همین را می‌خواهد. جداول
+        // lookup بالا فقط `kargozini` می‌مانند.
+        Route::middleware('role_or_permission:kargozini|manage_personnel')->group(function () {
             Route::livewire('/kargozini/persons', 'kargozini.person');
+            Route::get('/kargozini/persons/export', [PersonsExportController::class, 'export'])->name('kargozini.persons.export');
+        });
+
+        Route::middleware('role_or_permission:manage_personnel')->group(function () {
             Route::livewire('/kargozini/persons/import', 'kargozini.import-persons.import-persons')->name('kargozini.persons.import');
         });
 
         // HR Dashboard (Issue #223)
         Route::middleware('role_or_permission:view_hr_dashboard')->group(function () {
             Route::livewire('/hr-dashboard', 'hr.dashboard')->name('hr.dashboard');
+        });
+
+        // چارت سازمانی — `manage_org_chart` تا امروز مجوزی مرده بود (فقط در
+        // PermissionSeeder). اینجا اعمال می‌شود و `view_hr_dashboard` هم
+        // پذیرفته می‌شود تا دسترسی فعلی از دست نرود.
+        Route::middleware('role_or_permission:manage_org_chart|view_hr_dashboard')->group(function () {
             Route::livewire('/hr/org-chart', 'hr.org-chart')->name('hr.org-chart');
         });
 
@@ -85,14 +121,21 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/maps/route2', 'maps/route2');
             Route::livewire('/maps/county', 'maps/county');
             Route::livewire('/maps/unit', 'maps/unit');
-            Route::livewire('/maps/interactive', 'maps/interactive');
             Route::livewire('/maps/point', 'maps/point');
-
-            Route::livewire('/it/wireless', 'it/wireless');
-            Route::livewire('/it/networks', 'it/networks');
 
             // GIS Dashboard
             Route::livewire('/map', 'map.map-dashboard')->name('map');
+        });
+
+        // ابزارهای مدیریتی (IT) — هر مسیر با همان مجوزی که آیتم منو با آن رندر
+        // می‌شود. `/it/networks` و `/it/wireless` عمداً `map` **یا** `bw` می‌پذیرند
+        // (`bw` از قبل مجوز «آنالیز شبکه» بود و نگه داشته شد؛ قبلاً منو با `map`
+        // و روت با `bw` گیت می‌شدند → دارنده‌ی `map` لینک را می‌دید و ۴۰۳ می‌گرفت).
+        // توجه: بیرون از گروه `map` باشند، وگرنه عضو گروهِ تودرتو هم لازم می‌شود و
+        // دارنده‌ی `bw` دوباره ۴۰۳ می‌گیرد.
+        Route::middleware('role_or_permission:map|bw')->group(function () {
+            Route::livewire('/it/wireless', 'it/wireless');
+            Route::livewire('/it/networks', 'it/networks');
         });
 
         // مدیریت دستگاه‌های مانیتورینگ زبیکس (Issue #698) — مشاهده صفحات
@@ -144,12 +187,17 @@ Route::middleware('auth')->group(function () {
         // جستجوی سراسری
         Route::livewire('/search', 'search.index')->name('search');
 
-        // گزارش‌ها
-        Route::livewire('/reports/tickets', 'reports.advanced')->name('reports.tickets');
-        Route::livewire('/reports/units', 'reports.units')->name('reports.units');
-        Route::livewire('/reports/todos', 'reports.todos')->name('reports.todos');
-        Route::livewire('/reports/persons', 'reports.persons')->name('reports.persons');
-        Route::livewire('/reports/map-no-boundary', 'reports.map-no-boundary')->name('reports.map-no-boundary');
+        // گزارش‌ها — با `manage_personnel` (هم‌راستا با API «persons:write»)،
+        // نه پرمیشن جدید: ۱۸ پرمیشن موجود روی همه‌ی کاربران production تعریف
+        // شده‌اند، پس افزودن پرمیشن تازه بدون seed روی دیتابیس موجود یعنی هیچ‌کس
+        // (به‌جز admin که فقط در PermissionSeeder همگام می‌شود) گزارش‌ها را نبیند.
+        Route::middleware('role_or_permission:manage_personnel')->group(function () {
+            Route::livewire('/reports/tickets', 'reports.advanced')->name('reports.tickets');
+            Route::livewire('/reports/units', 'reports.units')->name('reports.units');
+            Route::livewire('/reports/todos', 'reports.todos')->name('reports.todos');
+            Route::livewire('/reports/persons', 'reports.persons')->name('reports.persons');
+            Route::livewire('/reports/map-no-boundary', 'reports.map-no-boundary')->name('reports.map-no-boundary');
+        });
 
         // تنظیمات کاربر
         Route::livewire('/settings', 'settings.index')->name('settings');

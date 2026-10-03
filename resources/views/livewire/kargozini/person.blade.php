@@ -42,6 +42,8 @@ return new class extends Component
 
     public $u_id;
 
+    public ?string $phone = null;
+
     public ?int $editingId = null;
 
     public string $search = '';
@@ -75,10 +77,35 @@ return new class extends Component
         $this->reset(['filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
     }
 
+    /**
+     * The list filters carried into the Excel export as query params, so the
+     * download contains exactly the rows the table is showing.
+     *
+     * Livewire cannot return a file download, so the control is a plain
+     * `<a href>` — the parameters have to travel in the URL. The export
+     * re-applies them server-side and can only ever narrow the caller's
+     * accessible scope, never widen it.
+     *
+     * @return array<string, string|int>
+     */
+    public function exportQuery(): array
+    {
+        $params = array_filter([
+            'search' => trim($this->search),
+            'filter_u_id' => $this->filter_u_id,
+            'filter_s_id' => $this->filter_s_id,
+            'filter_t_id' => $this->filter_t_id,
+            'filter_e_id' => $this->filter_e_id,
+            'filter_r_id' => $this->filter_r_id,
+        ], fn ($value) => $value !== null && $value !== '' && $value !== false);
+
+        return $params;
+    }
+
     public function resetForm(): void
     {
         $this->resetValidation();
-        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'editingId', 'formOpen', 'unitModal', 'showFilters', 'filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
+        $this->reset(['n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'phone', 'editingId', 'formOpen', 'unitModal', 'showFilters', 'filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
     }
 
     public function startCreate(): void
@@ -116,6 +143,9 @@ return new class extends Component
             's_id' => 'required|exists:semats,id',
             'r_id' => 'required|exists:radifs,id',
             'u_id' => 'required|exists:units,id',
+            // #738: free-text phone, optional, simple max length — no format
+            // constraint (see the migration's docblock).
+            'phone' => 'nullable|string|max:20',
         ]);
 
         if ($this->editingId) {
@@ -138,6 +168,7 @@ return new class extends Component
                 's_id' => $this->s_id,
                 'r_id' => $this->r_id,
                 'u_id' => $this->u_id,
+                'phone' => $this->phone,
             ]);
 
             if ($user = $person->user) {
@@ -164,6 +195,7 @@ return new class extends Component
                 's_id' => $this->s_id,
                 'r_id' => $this->r_id,
                 'u_id' => $this->u_id,
+                'phone' => $this->phone,
             ]);
 
             if ($user = $person->user) {
@@ -199,6 +231,7 @@ return new class extends Component
         $this->s_id = $person->s_id;
         $this->r_id = $person->r_id;
         $this->u_id = $person->u_id;
+        $this->phone = $person->phone;
         $this->formOpen = true;
         $this->unitModal = false;
     }
@@ -308,6 +341,7 @@ return new class extends Component
             'units' => $units,
             'selectedUnitName' => $selectedUnitName,
             'filterUnitName' => $filterUnitName,
+            'exportUrl' => route('kargozini.persons.export', $this->exportQuery()),
         ];
     }
 };
@@ -326,6 +360,12 @@ return new class extends Component
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
             <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+            <a href="{{ $exportUrl }}"
+               class="btn btn-outline btn-sm"
+               title="خروجی اکسل پرسنل در دسترس با فیلترهای فعال">
+                <x-icon name="o-arrow-down-tray" class="w-5 h-5"/>
+                <span class="hidden 2xl:inline">خروجی اکسل</span>
+            </a>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -393,6 +433,7 @@ return new class extends Component
                     <x-select wire:model="e_id" label="استخدام" :options="$estekhdams" required placeholder="انتخاب نوع استخدام"/>
                     <x-select wire:model="s_id" label="سمت" :options="$semats" required placeholder="انتخاب سمت"/>
                     <x-select wire:model="r_id" label="ردیف سازمانی" :options="$radifs" required placeholder="انتخاب ردیف سازمانی"/>
+                    <x-input wire:model="phone" label="شماره تماس" placeholder="شماره تماس" maxlength="20"/>
 
                     <div class="sm:col-span-2">
                         <label class="text-sm font-medium block mb-1">واحد</label>

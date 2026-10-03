@@ -5,59 +5,61 @@
             مدیریت مجوزها (Permissions)
         </h4>
         <p class="text-sm text-base-content/70 leading-relaxed">
-            مجوزهای دقیق برای کنترل دسترسی به عملیات مختلف سیستم.
+            فهرست دقیق پرمیشن‌هایی که در <code>PermissionSeeder</code> تعریف شده و در
+            <code>routes/web.php</code> روی مسیرها و در سایدبار روی آیتم‌های منو اعمال می‌شوند.
         </p>
     </div>
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
-            <x-icon name="o-list-bullet" class="w-5 h-5 text-info" />
-            مجوزهای سخت‌افزار
+            <x-icon name="o-cpu-chip" class="w-5 h-5 text-info" />
+            سخت‌افزار و زیرساخت
         </h4>
         <div class="grid grid-cols-2 gap-2 text-sm">
-            <span class="badge badge-outline">manage_hardware</span> <span class="text-base-content/70">مدیریت کامل سخت‌افزار (CRUD + AI)</span>
-            <span class="badge badge-outline">view_hardware</span> <span class="text-base-content/70">مشاهده سخت‌افزار</span>
-            <span class="badge badge-outline">import_hardware</span> <span class="text-base-content/70">ایمپورت از اکسل</span>
-            <span class="badge badge-outline">export_hardware</span> <span class="text-base-content/70">خروجی CSV/Excel</span>
+            <span class="badge badge-outline">manage_hardware</span> <span class="text-base-content/70">شناسنامه سخت‌افزار و زمان‌بندی تعمیرات (CRUD + AI)</span>
+            <span class="badge badge-outline">manage_zabbix</span> <span class="text-base-content/70">مدیریت دستگاه‌های مانیتورینگ زبیکس</span>
+            <span class="badge badge-outline">map</span> <span class="text-base-content/70">نقشه‌ها و داشبورد GIS</span>
+            <span class="badge badge-outline">bw</span> <span class="text-base-content/70">آنالیز شبکه (صفحات شبکه‌ها و وایرلس‌ها)</span>
+            <span class="badge badge-outline">op-cache</span> <span class="text-base-content/70">دسترسی به کش سرور (فقط خارج از production)</span>
         </div>
     </div>
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
             <x-icon name="o-ticket" class="w-5 h-5 text-warning" />
-            مجوزهای تیکتینگ
+            تیکتینگ و وظایف
         </h4>
         <div class="grid grid-cols-2 gap-2 text-sm">
+            <span class="badge badge-outline">create_ticket</span> <span class="text-base-content/70">ثبت تیکت جدید</span>
+            <span class="badge badge-outline">view_assigned_tickets</span> <span class="text-base-content/70">مشاهده تیکت‌های ارجاع‌شده به خود</span>
+            <span class="badge badge-outline">view_all_tickets</span> <span class="text-base-content/70">مانیتورینگ کل تیکت‌ها</span>
             <span class="badge badge-outline">manage_unit_tickets</span> <span class="text-base-content/70">مدیریت و ارجاع تیکت‌های واحد</span>
-            <span class="badge badge-outline">view_tickets</span> <span class="text-base-content/70">مشاهده تیکت‌ها</span>
-            <span class="badge badge-outline">create_tickets</span> <span class="text-base-content/70">ایجاد تیکت جدید</span>
-            <span class="badge badge-outline">assign_tickets</span> <span class="text-base-content/70">ارجاع/تخصیص تیکت</span>
+            <span class="badge badge-outline">calendar</span> <span class="text-base-content/70">تقویم کارها (وظایف)</span>
         </div>
     </div>
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
             <x-icon name="o-user-group" class="w-5 h-5 text-success" />
-            مجوزهای پرسنل و کارگزینی
+            پرسنل، کارگزینی و سازمان
         </h4>
         <div class="grid grid-cols-2 gap-2 text-sm">
-            <span class="badge badge-outline">manage_personnel</span> <span class="text-base-content/70">مدیریت پرسنل</span>
-            <span class="badge badge-outline">view_personnel</span> <span class="text-base-content/70">مشاهده پرسنل</span>
-            <span class="badge badge-outline">manage_units</span> <span class="text-base-content/70">مدیریت واحدها</span>
-            <span class="badge badge-outline">view_units</span> <span class="text-base-content/70">مشاهده واحدها</span>
+            <span class="badge badge-outline">kargozini</span> <span class="text-base-content/70">جداول پایه کارگزینی و مشاهده لیست پرسنل</span>
+            <span class="badge badge-outline">manage_personnel</span> <span class="text-base-content/70">لیست پرسنل، ورود اطلاعات پرسنل (import)، گزارش‌ها و نوشتن از API</span>
+            <span class="badge badge-outline">organization</span> <span class="text-base-content/70">ساختار سازمانی و مدیریت واحدها</span>
+            <span class="badge badge-outline">view_hr_dashboard</span> <span class="text-base-content/70">داشبورد منابع انسانی</span>
+            <span class="badge badge-outline">manage_org_chart</span> <span class="text-base-content/70">چارت سازمانی</span>
         </div>
     </div>
 
     <div class="border-t border-base-200 pt-6">
         <h4 class="font-bold text-base mb-3 flex items-center gap-2">
             <x-icon name="o-cog-6-tooth" class="w-5 h-5 text-secondary" />
-            مجوزهای تنظیمات و ادمین
+            مدیریت سیستم
         </h4>
         <div class="grid grid-cols-2 gap-2 text-sm">
-            <span class="badge badge-outline">manage_roles</span> <span class="text-base-content/70">مدیریت نقش‌ها</span>
-            <span class="badge badge-outline">manage_permissions</span> <span class="text-base-content/70">مدیریت مجوزها</span>
-            <span class="badge badge-outline">manage_settings</span> <span class="text-base-content/70">تنظیمات سیستم</span>
-            <span class="badge badge-outline">view_reports</span> <span class="text-base-content/70">مشاهده گزارش‌ها</span>
+            <span class="badge badge-outline">manage_users</span> <span class="text-base-content/70">مدیریت کاربران، گزارش فعالیت و ابزارها</span>
+            <span class="badge badge-outline">manage_roles</span> <span class="text-base-content/70">مدیریت نقش‌ها و دسترسی‌ها</span>
         </div>
     </div>
 
@@ -67,11 +69,11 @@
             نحوه اعمال مجوزها
         </h4>
         <ul class="space-y-1 text-sm text-base-content/70">
-            <li>• مجوزها به <strong>نقش‌ها (Roles)</strong> اختصاص داده می‌شوند</li>
-            <li>• کاربران از طریق نقش‌ها مجوز می‌گیرند</li>
-            <li>• کنترل در کنترلرها: <code>can('manage_hardware')</code></li>
-            <li>• کنترل در Blade: <code>@@can('manage_hardware')</code></li>
-            <li>• میدل‌ویر مسیرها: <code>middleware('permission:manage_hardware')</code></li>
+            <li>• هر پرمیشن با <strong>همان نام</strong> در سه جا اعمال می‌شود: میدل‌ویر مسیر، گیت آیتم منو و کنترل Blade — این سه باید همیشه یکی باشند</li>
+            <li>• کنترل در مسیرها: <code>middleware('role_or_permission:manage_hardware')</code> — با <code>|</code> می‌توان چند مجوز را «هرکدام» کرد</li>
+            <li>• کنترل در Blade: <code>@@can('manage_hardware')</code> و <code>@@canany([...])</code> برای چند مجوز</li>
+            <li>• <code>role_or_permission</code> هم نقش و هم پرمیشن را می‌پذیرد؛ روت‌های داخل UI از همین استفاده می‌کنند</li>
+            <li>• پرمیشن‌های سطح بخش (مثل <code>map</code>) همیشه با «دسترسی سازمانی» (AccessService) ترکیب می‌شوند</li>
         </ul>
     </div>
 
@@ -81,9 +83,10 @@
             نکات مهم
         </h4>
         <ul class="space-y-1 text-xs text-base-content/70">
-            <li>• مجوز <code>manage_hardware</code> برای دسترسی به چت AI سخت‌افزار ضروری است</li>
+            <li>• نقش <strong>admin</strong> در <code>RoleSeeder</code> همه مجوزها را می‌گیرد؛ <strong>unit_manager</strong>، <strong>expert</strong> و <strong>user</strong> زیرمجموعه‌ای از آن هستند</li>
+            <li>• با تغییر فهرست پرمیشن‌ها، <code>PermissionSeeder</code> و <code>RoleSeeder</code> باید روی دیتابیس هر محیط اجرا شوند؛ وگرنه پرمیشن تازه فقط برای ادمین‌های همگام‌شده معنا دارد</li>
             <li>• تغییر مجوزها بلافاصله اثر می‌کند (بدون نیاز به logout/login)</li>
-            <li>• محدودیت واحد سازمانی (Organizational Scope) در کنار مجوزها بررسی می‌شود</li>
+            <li>• برای محروم کردن یک کاربر از صفحه‌ای، همان پرمیشن را در صفحه «مدیریت دسترسی‌ها» از او بگیرید</li>
         </ul>
     </div>
 </div>

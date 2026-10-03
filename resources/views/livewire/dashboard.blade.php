@@ -1,37 +1,67 @@
 <?php
 
-use App\Models\{User, Person, Unit, Ticket, Todo, ActivityLog};
+use App\Models\ActivityLog;
+use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\Todo;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\AccessService;
+use App\Services\DailySeries;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
-return new class extends Component {
+return new class extends Component
+{
+    /** Days covered by the ticket trend chart — one definition shared with /api/reports (#736). */
+    private const TICKET_CHART_DAYS = 30;
+
     public int $totalUsers = 0;
+
     public int $totalPersons = 0;
+
     public int $totalUnits = 0;
+
     public int $totalTickets = 0;
+
     public int $openTickets = 0;
+
     public int $completedTickets = 0;
+
     public int $totalTodos = 0;
+
     public int $pendingTodos = 0;
+
     public int $completedTodos = 0;
+
     public int $linkedTodos = 0;
+
     public int $totalRoles = 0;
+
     // آمار امروز
     public int $todayTickets = 0;
+
     public int $todayTodos = 0;
+
     public int $todayActivities = 0;
+
     // آمار تفصیلی تیکت‌ها
     public int $urgentTickets = 0;
+
     public int $normalTickets = 0;
+
     public int $lowTickets = 0;
+
     public int $overdueTickets = 0;
+
     public float $avgResolutionDays = 0;
 
     public bool $showHelpModal = false;
+
     public int $refreshInterval = 0;
+    public bool $emptyScope = false;
 
     public function mount(): void
     {
@@ -39,6 +69,7 @@ return new class extends Component {
         $this->refreshInterval = $settings['dashboard_refresh'] ?? 0;
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $this->emptyScope = $accessibleIds === [];
         $scopeKey = md5(implode(',', $accessibleIds));
         $v = Cache::get('dashboard_version', 0);
 
@@ -54,14 +85,28 @@ return new class extends Component {
 
         // Scoped stats — consolidated with PostgreSQL FILTER
         $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
-            $ids = implode(',', $accessibleIds);
+            if ($accessibleIds === []) {
+                return [
+                    'totalPersons'     => 0,
+                    'totalUnits'       => 0,
+                    'totalTickets'     => 0,
+                    'openTickets'      => 0,
+                    'completedTickets' => 0,
+                    'totalTodos'       => 0,
+                    'pendingTodos'     => 0,
+                    'completedTodos'   => 0,
+                    'linkedTodos'      => 0,
+                ];
+            }
+
+            $idList = implode(',', array_fill(0, count($accessibleIds), '?'));
 
             // Persons + Units in one shot
             $row = DB::selectOne("
                 SELECT
-                    (SELECT COUNT(*) FROM persons WHERE u_id IN ({$ids})) AS total_persons,
-                    (SELECT COUNT(*) FROM units WHERE id IN ({$ids})) AS total_units
-            ");
+                    (SELECT COUNT(*) FROM persons WHERE u_id IN ({$idList})) AS total_persons,
+                    (SELECT COUNT(*) FROM units WHERE id IN ({$idList})) AS total_units
+            ", array_merge($accessibleIds, $accessibleIds));
 
             // Tickets: total, open, completed
             $ticketRow = DB::selectOne("
@@ -69,8 +114,8 @@ return new class extends Component {
                     COUNT(*) AS total_tickets,
                     COUNT(*) FILTER (WHERE status IN ('created','forwarded')) AS open_tickets,
                     COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets
-                FROM tickets WHERE unit_id IN ({$ids})
-            ");
+                FROM tickets WHERE unit_id IN ({$idList})
+            ", $accessibleIds);
 
             // Todos: total, pending, completed
             $todoRow = DB::selectOne("
@@ -78,34 +123,41 @@ return new class extends Component {
                     COUNT(*) AS total_todos,
                     COUNT(*) FILTER (WHERE is_completed = false) AS pending_todos,
                     COUNT(*) FILTER (WHERE is_completed = true) AS completed_todos
-                FROM todos WHERE unit_id IN ({$ids})
-            ");
+                FROM todos WHERE unit_id IN ({$idList})
+            ", $accessibleIds);
 
             // Linked todos (tickets.task_id -> todos.id)
             $linkedTodos = DB::selectOne("
                 SELECT COUNT(DISTINCT t.id) AS cnt
                 FROM todos t
-                WHERE t.unit_id IN ({$ids})
+                WHERE t.unit_id IN ({$idList})
                   AND EXISTS (SELECT 1 FROM tickets WHERE task_id = t.id)
-            ");
+            ", $accessibleIds);
 
             return [
-                'totalPersons'     => (int) ($row->total_persons ?? 0),
-                'totalUnits'       => (int) ($row->total_units ?? 0),
-                'totalTickets'     => (int) ($ticketRow->total_tickets ?? 0),
-                'openTickets'      => (int) ($ticketRow->open_tickets ?? 0),
+                'totalPersons' => (int) ($row->total_persons ?? 0),
+                'totalUnits' => (int) ($row->total_units ?? 0),
+                'totalTickets' => (int) ($ticketRow->total_tickets ?? 0),
+                'openTickets' => (int) ($ticketRow->open_tickets ?? 0),
                 'completedTickets' => (int) ($ticketRow->completed_tickets ?? 0),
-                'totalTodos'       => (int) ($todoRow->total_todos ?? 0),
-                'pendingTodos'     => (int) ($todoRow->pending_todos ?? 0),
-                'completedTodos'   => (int) ($todoRow->completed_todos ?? 0),
-                'linkedTodos'      => (int) ($linkedTodos->cnt ?? 0),
+                'totalTodos' => (int) ($todoRow->total_todos ?? 0),
+                'pendingTodos' => (int) ($todoRow->pending_todos ?? 0),
+                'completedTodos' => (int) ($todoRow->completed_todos ?? 0),
+                'linkedTodos' => (int) ($linkedTodos->cnt ?? 0),
             ];
         });
 
         // Today stats — 1 consolidated query
         $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
+            if ($accessibleIds === []) {
+                return [
+                    'todayTickets'    => 0,
+                    'todayTodos'      => 0,
+                    'todayActivities' => 0,
+                ];
+            }
+
             $today = now()->startOfDay()->toDateTimeString();
-            $ids = implode(',', $accessibleIds);
             $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
                 ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
@@ -123,7 +175,17 @@ return new class extends Component {
 
         // Ticket details — 1 consolidated query
         $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
-            $ids = implode(',', $accessibleIds);
+            if ($accessibleIds === []) {
+                return [
+                    'urgentTickets'     => 0,
+                    'normalTickets'     => 0,
+                    'lowTickets'        => 0,
+                    'overdueTickets'    => 0,
+                    'avgResolutionDays' => 0.0,
+                ];
+            }
+
+            $idList = implode(',', array_fill(0, count($accessibleIds), '?'));
             $diffExpr = match (DB::getDriverName()) {
                 'pgsql' => 'EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400',
                 'sqlite' => 'julianday(completed_at) - julianday(created_at)',
@@ -137,14 +199,14 @@ return new class extends Component {
                     COUNT(*) FILTER (WHERE priority = 'low' AND status IN ('created','forwarded')) AS low,
                     COUNT(*) FILTER (WHERE status IN ('created','forwarded') AND deadline < NOW()) AS overdue,
                     AVG(CASE WHEN status = 'completed' AND completed_at IS NOT NULL THEN {$diffExpr} END) AS avg_days
-                FROM tickets WHERE unit_id IN ({$ids})
-            ");
+                FROM tickets WHERE unit_id IN ({$idList})
+            ", $accessibleIds);
 
             return [
-                'urgentTickets'    => (int) ($row->urgent ?? 0),
-                'normalTickets'    => (int) ($row->normal ?? 0),
-                'lowTickets'       => (int) ($row->low ?? 0),
-                'overdueTickets'   => (int) ($row->overdue ?? 0),
+                'urgentTickets' => (int) ($row->urgent ?? 0),
+                'normalTickets' => (int) ($row->normal ?? 0),
+                'lowTickets' => (int) ($row->low ?? 0),
+                'overdueTickets' => (int) ($row->overdue ?? 0),
                 'avgResolutionDays' => (float) ($row->avg_days ?? 0),
             ];
         });
@@ -178,16 +240,20 @@ return new class extends Component {
 
         return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-            $tickets = Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw("date(created_at) as day, count(*) as count")
-                ->groupBy('day')
-                ->orderBy('day')
-                ->limit(30)
-                ->get();
+
+            // Issue #736: the window is 30 days ending today, with every day
+            // present (zeros included). The previous `ORDER BY day` +
+            // `LIMIT 30` returned the *oldest* 30 days, so recent days were
+            // missing from the chart entirely.
+            $days = DailySeries::lastDays(self::TICKET_CHART_DAYS)
+                ->counts(Ticket::query()->whereIn('unit_id', $accessibleIds), 'created_at');
 
             return [
-                'categories' => $tickets->pluck('day')->map(fn($d) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($d))->format('m/d'))->toArray(),
-                'series' => $tickets->pluck('count')->toArray(),
+                'categories' => array_map(
+                    fn (array $row) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($row['day']))->format('m/d'),
+                    $days
+                ),
+                'series' => array_column($days, 'count'),
             ];
         });
     }
@@ -200,8 +266,9 @@ return new class extends Component {
 
         return Cache::remember("dashboard:ticket_status:v{$v}:{$scopeKey}", 300, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
             return Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw("status, count(*) as count")
+                ->selectRaw('status, count(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status')
                 ->toArray();
@@ -213,17 +280,61 @@ return new class extends Component {
     {
         $v = Cache::get('dashboard_version', 0);
         $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
-        
+
         return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-            $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))
-                ->orWhereHas('units', fn($q) => $q->whereIn('units.id', $accessibleIds))
+            $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+                ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
-            
+
             return ActivityLog::with('user')
                 ->whereIn('user_id', $userIds)
                 ->latest()->take(10)->get();
         });
+    }
+
+    /**
+     * Zabbix sync state for the status banner (#740).
+     *
+     * The traffic charts can only be showing fresh numbers when the LAST
+     * run succeeded inside the 5-minute cache TTL — this separates "sync
+     * سالم" from "reading stale cache" (and from a job that stopped running
+     * entirely), which the cache alone could never tell apart.
+     *
+     * Reads the row through the DB facade so the import block (and with it
+     * the anonymous class line the PHPStan baseline is keyed on) stays
+     * untouched.
+     *
+     * @return array{state: string, time: string, failures: int, cache: bool}
+     */
+    public function getZabbixSyncStatusProperty(): array
+    {
+        $latest = DB::table('zabbix_sync_logs')->orderByDesc('id')->first();
+
+        if ($latest === null) {
+            return ['state' => 'unknown', 'time' => '', 'failures' => 0, 'cache' => false];
+        }
+
+        $ranAt = strtotime((string) $latest->ran_at);
+        $time = $ranAt !== false ? date('H:i', $ranAt) : '';
+        $cache = Cache::has('zabbix_traffic_data');
+
+        if ($latest->success) {
+            return [
+                // Fresh = last success inside the 5-minute cache TTL.
+                'state' => ($ranAt !== false && $ranAt > time() - 300) ? 'ok' : 'stale',
+                'time' => $time,
+                'failures' => 0,
+                'cache' => $cache,
+            ];
+        }
+
+        return [
+            'state' => 'failing',
+            'time' => $time,
+            'failures' => (int) $latest->consecutive_failures,
+            'cache' => $cache,
+        ];
     }
 }; ?>
 <div x-data="{ interval: {{ $refreshInterval * 1000 }} }" x-init="if(interval > 0) { setInterval(() => { $wire.mount() }, interval) }">
@@ -235,6 +346,30 @@ return new class extends Component {
     </x-header>
 
     <x-help:modal wireModel="showHelpModal" />
+
+    @if($emptyScope)
+        <div class="alert alert-info mb-6" role="alert">
+            <x-icon name="o-information-circle" class="w-5 h-5" />
+            <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
+
+    {{-- وضعیت sync زیبکس — سالم / کش قدیمی / ناموفق (#740) --}}
+    @if(($zabbixSync = $this->zabbixSyncStatus)['state'] !== 'unknown')
+        <div class="mb-6 alert {{ ['ok' => 'alert-success', 'stale' => 'alert-warning', 'failing' => 'alert-error'][$zabbixSync['state']] }} shadow-sm" role="alert">
+            <x-icon name="o-server-stack" class="w-5 h-5" />
+            <span>
+                @if($zabbixSync['state'] === 'ok')
+                    sync زیبکس سالم — آخرین: {{ $zabbixSync['time'] }}
+                @elseif($zabbixSync['state'] === 'failing')
+                    sync زیبکس ناموفق ({{ $zabbixSync['failures'] }} بار متوالی)
+                    — {{ $zabbixSync['cache'] ? 'نمایش از کش قدیمی' : 'داده ترافیک در دسترس نیست' }}
+                @else
+                    آخرین sync زیبکس قدیمی است — {{ $zabbixSync['time'] }}
+                @endif
+            </span>
+        </div>
+    @endif
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <x-stat

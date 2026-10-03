@@ -180,7 +180,7 @@ class UnitModelTest extends TestCase
         // via direct writes, seeders, or a bad type-relationship edit. The
         // recursive CTE must dedupe (UNION, not UNION ALL) or it recurses
         // forever and takes the connection with it.
-        $this->withStatementTimeout(3000, function () {
+        $this->withStatementTimeout(10000, function () {
             $a = Unit::create(['name' => 'الف', 'is_active' => true]);
             $b = Unit::create(['name' => 'ب', 'is_active' => true, 'parent_id' => $a->id]);
             $a->update(['parent_id' => $b->id]);
@@ -198,7 +198,7 @@ class UnitModelTest extends TestCase
 
     public function test_descendant_ids_terminates_on_a_longer_cycle(): void
     {
-        $this->withStatementTimeout(3000, function () {
+        $this->withStatementTimeout(10000, function () {
             $a = Unit::create(['name' => 'الف', 'is_active' => true]);
             $b = Unit::create(['name' => 'ب', 'is_active' => true, 'parent_id' => $a->id]);
             $c = Unit::create(['name' => 'ج', 'is_active' => true, 'parent_id' => $b->id]);
@@ -215,7 +215,7 @@ class UnitModelTest extends TestCase
         // never traversed: a cycle through one already terminated even with
         // UNION ALL. Pinned here so the UNION change cannot silently alter it —
         // the inactive unit is EXCLUDED from the result, not included.
-        $this->withStatementTimeout(3000, function () {
+        $this->withStatementTimeout(10000, function () {
             $a = Unit::create(['name' => 'الف', 'is_active' => true]);
             $b = Unit::create(['name' => 'ب', 'is_active' => false, 'parent_id' => $a->id]);
             $a->update(['parent_id' => $b->id]);
@@ -230,6 +230,13 @@ class UnitModelTest extends TestCase
     /**
      * Run a callback under a Postgres statement_timeout, so a non-terminating
      * recursive query fails fast instead of hanging the whole suite.
+     *
+     * The budget is deliberately generous (10s) relative to the ~2ms query it
+     * guards. The point is to catch a UNION ALL regression — which on a cycle
+     * is infinite, so any seconds-long deadline stops it — NOT to measure
+     * speed. A tight deadline turned a loaded machine (PHPStan and Pest on the
+     * same cores) into flaky failures that looked like flakiness, not a budget
+     * problem, and re-running always went green (issue #739).
      *
      * The timeout is NOT reset afterwards: a timed-out statement aborts the
      * test's transaction, so any reset would raise a second, misleading error.

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Mockery;
+use RuntimeException;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\TestCase;
 
@@ -97,6 +98,136 @@ class TrafficApiTest extends TestCase
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
         $this->assertNotEmpty(Cache::get('traffic_100_200_3600'));
+    }
+
+    // -----------------------------------------------------------
+    //  مسیرهای خطا (#741)
+    // -----------------------------------------------------------
+
+    public function test_a_failure_on_the_out_side_answers_503_without_touching_the_in_side(): void
+    {
+        // The two sides are fetched in sequence, so a failing `out` must stop
+        // the request before the `in` call — a 503 with the same body either
+        // way, but only one Zabbix call was made.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andThrow(new RuntimeException('cURL error 28: Operation timed out'));
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
+
+        $response->assertStatus(503)
+            ->assertJsonPath('error', 'Service temporarily unavailable');
+    }
+
+    public function test_a_failure_on_the_in_side_answers_503(): void
+    {
+        // The out side already succeeded; the in side is the one that breaks.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andReturn([['x' => 1, 'y' => 1.5]]);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('200', 3600)
+            ->andThrow(new RuntimeException('Zabbix API HTTP error: 503'));
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(503)
+            ->assertJsonPath('error', 'Service temporarily unavailable');
+    }
+
+    public function test_a_failure_is_never_written_to_the_cache(): void
+    {
+        // #741: same rule as multi-latest — a broken Zabbix must not pin its
+        // own error for the TTL, so a later healthy request is served fresh.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andThrow(new RuntimeException('Zabbix API returned invalid JSON'));
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(503);
+
+        $this->assertNull(
+            Cache::get('traffic_100_200_3600'),
+            'A failed sync must not be cached.'
+        );
+    }
+
+    // -----------------------------------------------------------
+    //  ناسازگاری کلید کش (#764)
+    // -----------------------------------------------------------
+
+    public function test_traffic_ignores_the_sync_job_cache_for_other_item_ids(): void
+    {
+        // #764: SyncZabbixJob warms `zabbix_traffic_data` with the CONFIGURED
+        // default items every 5 minutes (the dashboard banner also reads it
+        // via Cache::has). A request for different item IDs must be served
+        // its own items' data — the job's cache must not short-circuit it,
+        // and the response keeps the `out`/`in` shape the chart widget reads.
+        Cache::put('zabbix_traffic_data', [['x' => 1, 'y' => 9.9]], now()->addMinutes(5));
+
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('100', 3600)
+            ->andReturn([['x' => 1, 'y' => 1.5]]);
+        $mock->shouldReceive('getInterfaceTraffic')
+            ->once()
+            ->with('200', 3600)
+            ->andReturn([['x' => 1, 'y' => 2.5]]);
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(200)
+            ->assertJsonPath('out.0.y', 1.5)
+            ->assertJsonPath('in.0.y', 2.5)
+            ->assertJsonMissingPath('data');
+    }
+
+    public function test_traffic_reads_back_its_own_per_request_cache(): void
+    {
+        // #764: the dynamic `traffic_{out}_{in}_{duration}` key used to be a
+        // dead write — written on every fresh fetch, read by nothing. It is
+        // now a real read-through cache: a warm key serves the request
+        // without touching Zabbix.
+        Cache::put(
+            'traffic_100_200_3600',
+            ['out' => [['x' => 1, 'y' => 3.5]], 'in' => [['x' => 1, 'y' => 4.5]]],
+            30
+        );
+
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        $user = $this->createUser();
+        $token = $this->createApiToken($user, ['traffic:read']);
+
+        $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
+            ->assertStatus(200)
+            ->assertJsonPath('out.0.y', 3.5)
+            ->assertJsonPath('in.0.y', 4.5);
     }
 
     protected function createUser(): User

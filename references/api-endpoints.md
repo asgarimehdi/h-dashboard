@@ -116,8 +116,24 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 - **Inactive units are included** with وضعیت = `غیرفعال` (visibility, not hidden filtering).
 - **RTL:** sheet direction set via `WithEvents` → `AfterSheet` → `setRightToLeft(true)`.
 - **Naming:** `units-Ymd-His.xlsx`. Button is a plain `<a href>` (Livewire cannot return file downloads) in the `/units` page header.
+- **Columns (8):** `شناسه`, `نام واحد`, `نوع واحد`, **`شهرستان`**, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. `شهرستان` was added so the sheet filters by county as a plain Excel filter instead of matching a path substring. A county unit writes **its own county name**; a province-level or region-less unit writes `-` — never the province name, or one filter value would swallow every unit beneath it.
 - `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, gated by `role_or_permission:organization`.
-- ⚠️ `buildHierarchy()` guards against a `parent_id` cycle, but note `Unit::descendantIds()` (used for scoping) uses `WITH RECURSIVE ... UNION ALL` and will **not terminate** on an active-node cycle — a data problem, not a code one.
+- ⚠️ `buildHierarchy()` guards against a `parent_id` cycle, and so does `Unit::descendantIds()` — the recursive CTE uses **`UNION`, not `UNION ALL`** (`e5a756d`, 2026-09-26). The set operator dedupes, so a cycle terminates in ~2ms instead of running until `statement_timeout`. Do not "optimize" it back to `UNION ALL`.
+
+### Personnel Export (`/kargozini/persons/export`, issue #729, columns #755)
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/kargozini/persons/export` | xlsx download of the **filtered** personnel list |
+
+- Route name `kargozini.persons.export`, controller `App\Http\Controllers\Api\PersonsExportController`, in the same permission group as the personnel list (`role_or_permission:kargozini|manage_personnel`, issue #775).
+- **Exports what you are looking at**, not the whole table — search and every active filter are reapplied server-side via `applySearch()`/`applyFilters()`.
+- **12 columns:** `کد ملی`, `نام`, `نام خانوادگی`, `نام کامل`, `سمت`, `تحصیالات`, `نوع استخدام`, `ردیف سازمانی`, `واحد سازمانی`, `وضعیت`, `تاریخ تولد`, `تاریخ استخدام`. «تاریخ تولد» arrived in #755 — `birth_date`/`hire_date` had **no cast**, so they returned raw strings.
+- The unit column is the **full breadcrumb** from `UnitTreeService::ancestorChain()`, same contract as the units export's «مسیر کامل».
+- Relations (`semat`, `tahsil`, `estekhdam`, `radif`, `unit`) are eager-loaded in the controller so mapping a row never queries; an empty scope uses `whereRaw('1 = 0')` rather than a raw empty `IN ()`.
+- `app/Exports/PersonsExport.php`, `tests/Feature/PersonsExportTest.php`, e2e `tests/e2e/personnel/list.spec.ts`.
+
+> `persons.phone` (#738) is free text, `string(20)` nullable, with **no format validation** (`nullable|string|max:20`) — `0912…`, `+98…` and `0912 345 6789` are all valid, so a regex would reject real rows.
 
 ### Ticket CRUD (`/api/tickets`)
 
@@ -167,6 +183,35 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | GET | `/api/reports/todos` | Todo statistics |
 | GET | `/api/reports/tickets` | Ticket statistics |
 
+#### The daily window (issue #736)
+
+`by_day` in both `/api/reports/todos` and `/api/reports/tickets` covers a **window**, not the whole
+history. One definition is shared by the API and every UI chart:
+
+| Param | Default | Range | Behaviour |
+|---|---|---|---|
+| `?days=` | `30` | 1–365 | Days back from today, inclusive of today (`days=1` is today alone) |
+| `?days=abc` | — | — | Falls back to 30 — a sloppy value still renders a chart |
+| `?days=0`, `?days=-5` | — | — | `422` — a zero/negative window is meaningless |
+| `?days=5000` | — | — | `422` — the cap keeps the query from growing with the table |
+
+`by_day` returns **one entry per day in the window, including days with no rows**, as
+`{"day": "YYYY/MM/DD" (Jalali), "count": 0}`. A missing day previously read as "no data" rather
+than "zero that day", so the line collapsed whenever the data was sparse.
+
+Implementation: `App\Services\DailySeries` materialises the window with `generate_series` and
+left-joins the caller's own aggregate, so it fills gaps in an existing (already filtered) query
+instead of re-deriving its filters. The API takes the window from `?days=`; the UI report pages
+pass their own date-from/date-to picker bounds, and the dashboard trend uses
+`Dashboard::TICKET_CHART_DAYS`.
+
+> Deliberately **not** read from `daily_reports`: that table is written by
+> `reports:generate-daily` at 06:00, so it is always a day behind, and a failed schedule
+> silently becomes a hole in the chart.
+
+`tickets.completed_at` is indexed (`2026_09_29_000001`) — every average-resolution-time aggregate
+filters on `completed_at IS NOT NULL`, and without it those queries full-scan.
+
 ### HR (`/api/hr`)
 
 | Method | URL | Description |
@@ -183,8 +228,31 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 | Method | URL | Description |
 |---|---|---|
-| GET | `/api/zabbix/traffic` | Network traffic from Zabbix (via `ZabbixService`) |
+| GET | `/api/zabbix/traffic` | Network traffic from Zabbix |
 | GET | `/api/zabbix/multi-latest` | Multi-item latest values (cached) |
+
+**Typed transport (issue #741):** controllers depend on the `App\Services\Zabbix\ZabbixClient` interface, not on `ZabbixService` directly.
+
+- `ZabbixResult` is a final value object: `success($data)` / `fail($failure, $message)`, read via `isOk()`, `failed()`, `data()`, `failure()`, `message()`. Failure kinds are `timeout`, `connection`, `invalid_response`, `error`.
+- `ServiceZabbixClient` is the only implementation (bound in `AppServiceProvider`); it is the single place raw service calls get classified.
+- Both controllers map a failure to **503**, unchanged. The old `catch (\Throwable)` around these calls is **gone** — the typed result is what guards them now, so do not restore the try/catch or drop the 503 mapping.
+- `tests/Unit/ZabbixAdapterTest.php` proves every classification (timeout, connection refused, HTTP error status, invalid JSON, unexpected throw) against a **stub client, with no Zabbix server**.
+- **Connection test (issue #713):** `ZabbixService::testApiConnection()` calls the real `apiinfo.version` RPC and throws unless the response carries a string `result`; `testConnection()` checks API reachability before item existence and surfaces the reported version.
+- **Per-page batching:** `/it/networks` and `/it/wireless` each issue **one batched poll**, not one request per gauge/widget.
+- **Client-side unreachable state (#703):** the two widgets show «دسترسی به سرور مقدور نمی باشد» for a **connection failure only**; a 400 from bad item ids must keep surfacing as an error so real bugs stay visible. Both widgets clear `error` at the start of each fetch, so it does not linger after recovery. e2e `tests/e2e/it/zabbix-unavailable.spec.ts`.
+
+### Zabbix sync observability (issue #740)
+
+`zabbix_sync_logs` — one row per `SyncZabbixJob` run (migration `2026_09_30_000002_create_zabbix_sync_logs_table.php`), model `App\Models\ZabbixSyncLog`.
+
+- Columns: `success`, `consecutive_failures`, `error`, `ran_at` (indexed). `consecutive_failures` is **precomputed including the current row** (0 on a success row) so the threshold check and the dashboard widget are single-row reads.
+- `failed()` runs **only after the queue exhausts its tries**, so one job failure produces exactly one row — retries do not inflate the streak. It also calls `report($exception)` alongside `Log::error()`, so a dead log channel still records the failure.
+- **A missing item-id configuration is now a recorded failure**, not a warning nobody reads: with `services.zabbix.out_item_id`/`in_item_id` unset the job writes a failure row (before #740 a misconfigured deployment stayed silently broken for weeks).
+- At streak **exactly** `ZabbixSyncLog::ALERT_THRESHOLD` (= 3) it notifies **every admin user once** through `NotificationService::send()` — in-app only, no new email/webhook infrastructure. Further failures stay visible on the dashboard without re-firing; any success resets the streak to 0.
+- **Dashboard banner:** `getZabbixSyncStatusProperty()` reads the **latest row only** and renders `ok` / `stale` (last run old) / `failing` (streak), distinguishing «نمایش از کش قدیمی» from «داده ترافیک در دسترس نیست».
+- Tests: `tests/Feature/SyncZabbixObservabilityTest.php`.
+
+> The streak is derived by reading the previous row (`orderByDesc('id')->first()`), so run recording is **serial by nature** — parallelising it would let two runs compute the same streak value.
 
 ---
 
@@ -211,7 +279,7 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 ### Maps (`/maps`)
 
-- Unit map, interactive map, county map, point map, route maps — all with organizational scope applied
+- Unit map, county map, point map, route maps — all with organizational scope applied (the old interactive map was removed as dead code, issue #775)
 - GIS data via PostGIS (boundaries as MULTIPOLYGON, SRID 4326); unit lat/lng with bounding-box queries (`withinBounds`)
 - **Map container:** shared `maps.map` component renders `#map` with `h-[80lvh]`; pages must NOT wrap it in a Bootstrap `container` class (restricts width) — use `relative` so overlays position correctly; `invalidateSize()` runs after init + on resize so Leaflet never locks a half-width
 - **Gotchas:** county map query joins `boundaries` — always qualify `regions.id` (ambiguous column error on pgsql otherwise)
@@ -224,7 +292,7 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - **Seed:** `database/seeders/ZabbixDeviceSeeder` copies the 39 formerly hardcoded rows verbatim (25 network + 14 wireless) and runs from `DatabaseSeeder`; re-running it is idempotent.
 - **Display pages** read `ZabbixDevice::query()->active()->ofType(...)->ordered()` through `CacheInvalidationService::remember('zabbix_devices', …, 5 min)` and map to the exact array shape the child components already take — `it.network-traffic-chart` and `it.multi-gauge` are untouched. When the table is empty they render «دستگاهی برای نمایش ثبت نشده است.»
 - **Permissions:** viewing stays behind `map`; managing requires the new `manage_zabbix` permission (created in `PermissionSeeder`, granted to `admin` by `RoleSeeder`). Guest → 302 `/login`, authenticated without the permission → 403.
-- **«تست اتصال»** per row calls `ZabbixService::getLatestValues($device->itemIds())`; missing item IDs and any `Throwable` become an inline red badge (`connectionResults`) — never a 500, same rule as `TrafficController`.
+- **«تست اتصال»** per row calls `ZabbixService::testApiConnection()` **first** (issue #713), then the item values; missing item IDs and any `Throwable` become an inline red badge (`connectionResults`) — never a 500. A reachable API reports its Zabbix version.
 - **Cache namespace:** `zabbix_devices`, registered in `PruneStaleCache::NAMESPACES`.
 - **Tests:** `tests/Feature/ZabbixDeviceTest.php` (22) and e2e `tests/e2e/it/monitoring.spec.ts` (7).
 
@@ -373,7 +441,7 @@ php artisan db:seed --force
 
 Pest is the test runner (`vendor/bin/pest`). The suite uses **Livewire 4.4**, which hashes the update endpoint based on `APP_KEY` (`livewire-{hash}/update`), and `phpunit.xml` expects a **separate PostgreSQL test database** named `h_dashboard_test` (DB name is hard-coded; `DB_USERNAME`/`DB_PASSWORD` are NOT set in phpunit.xml, so they fall back to `.env` and the local run uses the `h_dashboard` role). The suite is **hermetic** — no Redis dependency (see step 3). Getting the environment right is the most common failure mode — follow these steps exactly.
 
-> **✅ Verified 2026-09-25:** **`composer test`** is the one-command way to run the full suite (**1461 passed, 2 risky, 3621 assertions**, ~4 min serial, ~50s parallel). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
+> **✅ Verified 2026-10-01:** **`composer test`** is the one-command way to run the full suite (**1687 passed, 2 risky, 4268 assertions**, ~289s serial). It bakes in the three environment gotchas discovered 2026-08-26: config/route cache clear (Livewire endpoint-hash mismatch) and `XDEBUG_MODE=off` (see failure table — Xdebug develop mode breaks `after_or_equal:date` validation).
 
 #### 1. Prerequisites (services must be up)
 ```bash
@@ -393,12 +461,14 @@ The committed `phpunit.xml` expects:
 <env name="SESSION_DRIVER" value="array" force="true"/>
 <env name="QUEUE_CONNECTION" value="sync" force="true"/>
 ```
-Create them once (the `postgis` extension must be enabled — build from the `template_postgis` template):
+Create them once (the `postgis` extension must be **available** on the server — the migrations enable it inside the database themselves, so a plain `CREATE DATABASE` is enough):
 ```bash
 # Local run: phpunit.xml does NOT set DB_USERNAME/PASSWORD, so they come from .env
-# (the `h_dashboard` role). Only the empty test DB (from template_postgis) is needed:
+# (the `h_dashboard` role). Only the empty test DB is needed — plain, because the
+# migrations run CREATE EXTENSION IF NOT EXISTS postgis themselves (see the boundaries
+# migration); do NOT pass TEMPLATE=template_postgis, which fails on a plain postgis image:
 psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
-  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard TEMPLATE=template_postgis;"
+  "CREATE DATABASE h_dashboard_test WITH OWNER=h_dashboard;"
 # CI only: the runner rewrites .env.testing to postgres/secret, so it ALSO creates that role:
 # psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
 #   "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='postgres') \
@@ -427,7 +497,7 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 - **Why `XDEBUG_MODE=off`:** Xdebug loads in `develop` mode; when Laravel's date validation (`after_or_equal:start_at` etc.) throws its *expected* parse exception, Xdebug tries to attach a `$xdebug_message` dynamic property to `DateMalformedStringException`, PHP 8.3 turns that into an `Error`, and it escapes Laravel's `catch (Exception)` → HTTP 500. Symptom: `Failed to parse time string (start_at) … timezone could not be found in the database` plus `Cannot create dynamic property DateMalformedStringException::$xdebug_message`. Not a code bug — env only.
 - **No pcov needed for normal runs** — `phpunit.xml` deliberately has **no `<coverage>` block** (see failure table below). Request coverage explicitly when you want it: `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` (what CI runs, with pcov installed).
 - **`php artisan test` works with no path** — the old `vendor/bin/pest tests/` caveat is gone (phpunit.xml has `<testsuites>`).
-- Expected: **1461 passed, 2 risky** (0 skipped) — `risky` = tests with no assertions (non-blocking).
+- Expected: **1687 passed, 2 risky** (0 skipped) — `risky` = tests with no assertions (non-blocking).
 
 #### Common failure → cause
 
@@ -444,11 +514,11 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 
 ### E2E Testing (Playwright)
 
-**152 tests** across **34 spec files** in `tests/e2e/` (verified 2026-09-25). Full setup, credentials, and failure table: **AGENTS.md → "E2E Testing (Playwright)"**. Essentials:
+**~165 tests** across **40 spec files** in `tests/e2e/` (static counts re-checked 2026-10-01; not verified by a run — no browser/.env.e2e on that machine). Full setup, credentials, and failure table: **AGENTS.md → "E2E Testing (Playwright)"**. Essentials:
 
 - Always run through the lifecycle script: `bash scripts/e2e-test.sh [optional spec paths]` — swaps `.env` ← `.env.e2e`, `config:clear` + `route:clear`, `migrate:fresh --seed` on `h_dashboard_e2e`, creates the password-mutation user, serves on `:8001`, runs Playwright, restores `.env`.
-- **`.env.e2e` is gitignored — create it locally from `.env.e2e.example` and fill `APP_KEY`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_PASSWORD`.** It **must** carry `APP_LOCALE=fa`: the example file omits it, `config/app.php` falls back to `en`, and **11 Persian-text specs fail** (`Showing 1 to 20 of 318 results`, English validation messages instead of `نمایش…` / `باید مطابقت داشته باشند`).
-- `h_dashboard_e2e` is created once from `TEMPLATE=template_postgis` and **wiped every run** — never point it at `h_dashboard` or `h_dashboard_test`.
+- **`.env.e2e` is gitignored — generate it locally with `bash scripts/build-env-e2e.sh`** (issue #703), which copies `APP_KEY` / `DB_PASSWORD` / `REDIS_PASSWORD` out of `.env` into a copy of `.env.e2e.example` **without printing the values** (the terminal masks secrets, so a read-and-rewrite would write a literal `***` into the file). Fill `DB_USERNAME` yourself. It **must** carry `APP_LOCALE=fa` — `.env.e2e.example` **does** include it now (`7485043`), but a hand-written copy from an older example does not, and `config/app.php` falls back to `en`, failing **11 Persian-text specs** (`Showing 1 to 20 of 318 results`, English validation messages instead of `نمایش…` / `باید مطابقت داشته باشند`).
+- `h_dashboard_e2e` is created once as a **plain** database (PostGIS comes from the migrations) and **wiped every run** — never point it at `h_dashboard` or `h_dashboard_test`.
 - Required vars (no fallbacks — `tests/e2e/shared/fixtures.ts` throws): `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
 - On a failing run the script's `set -e` skips restore: `cp .env.dev.bak .env`, delete the backup, and kill only the `:8001` server (`pgrep -f 'artisan serve --port=800[1]'`).
 - One-time per machine: `npx playwright install chromium`.
@@ -480,8 +550,6 @@ codegraph status .
 > Note: the graph auto-syncs via a file watcher, so it stays current as code changes — no need to re-run `init`. If a session edited files while no MCP/index was running, `codegraph sync` catches up against the working tree.
 
 ### CI/CD
-
-`.github/workflows/deploy.yml` deploys on push to `main` (self-hosted runner).
 
 `.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
 - **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)

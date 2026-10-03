@@ -1,11 +1,11 @@
 <?php
 
+use App\Models\Region;
 use App\Models\Unit;
 use App\Models\UnitType;
-use App\Models\Region;
 use App\Services\AccessService;
-use Livewire\Component;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Component;
 
 return new class extends Component
 {
@@ -15,25 +15,21 @@ return new class extends Component
 
     public $regions = [];
 
-    public array $selectedRegions = [];
-
-    public array $selectedTypes = [];
-
     public function mount(): void
     {
         $excludedRegionIds = [1];
-        $excludedTypeIds   = [1, 2, 3];
+        $excludedTypeIds = [1, 2, 3];
 
         $v = Cache::get('maps_version', 0);
 
-        $this->regions = Cache::remember('point_map:regions:v' . $v, 300, function () use ($excludedRegionIds) {
+        $this->regions = Cache::remember('point_map:regions:v'.$v, 300, function () use ($excludedRegionIds) {
             return Region::whereNotIn('id', $excludedRegionIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
         });
 
-        $this->types = Cache::remember('point_map:types:v' . $v, 300, function () use ($excludedTypeIds) {
+        $this->types = Cache::remember('point_map:types:v'.$v, 300, function () use ($excludedTypeIds) {
             return UnitType::whereNotIn('id', $excludedTypeIds)
                 ->select('id', 'name')
                 ->get()
@@ -43,24 +39,20 @@ return new class extends Component
         $this->fetchLocation();
     }
 
+    /**
+     * Load every accessible located unit once. Region/type filtering happens
+     * client-side from this payload (filtering used to round-trip through
+     * Livewire and re-send + re-render the whole set on every toggle —
+     * ~2s per switch, issue #776).
+     */
     public function fetchLocation(): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = Unit::query()
+        $baseUnits = Unit::query()
             ->whereIn('id', $accessibleIds)  // Organizational Scope: only accessible units + descendants
             ->whereNotNull('lat')
-            ->whereNotNull('lng');
-
-        if ($this->selectedRegions) {
-            $query->whereIn('region_id', $this->selectedRegions);
-        }
-
-        if ($this->selectedTypes) {
-            $query->whereIn('unit_type_id', $this->selectedTypes);
-        }
-
-        $baseUnits = $query
+            ->whereNotNull('lng')
             ->limit(2000)
             ->select([
                 'id',
@@ -69,6 +61,7 @@ return new class extends Component
                 'lng',
                 'unit_type_id',
                 'parent_id',
+                'region_id',
             ])
             ->get();
 
@@ -79,21 +72,9 @@ return new class extends Component
         $this->location = Unit::whereIn('id', $allIds)
             ->whereNotNull('lat')
             ->whereNotNull('lng')
-            ->select(['id', 'name', 'lat', 'lng', 'unit_type_id', 'parent_id'])
+            ->select(['id', 'name', 'lat', 'lng', 'unit_type_id', 'parent_id', 'region_id'])
             ->get()
             ->toArray();
-
-        $this->dispatch('locations-updated', locations: $this->location);
-    }
-
-    public function updatedSelectedRegions(): void
-    {
-        $this->fetchLocation();
-    }
-
-    public function updatedSelectedTypes(): void
-    {
-        $this->fetchLocation();
     }
 };
 ?>
@@ -112,22 +93,20 @@ return new class extends Component
             </div>
 
             <div class="controls-panel space-y-4">
-                <div>
+                <div data-filter-group="regions">
                     <label class="font-bold block mb-2">انتخاب شهرستان</label>
                     @foreach ($regions as $region)
                         <x-toggle
-                            wire:model.live="selectedRegions"
                             value="{{ $region['id'] }}"
                             label="{{ $region['name'] }}"
                         />
                     @endforeach
                 </div>
 
-                <div>
+                <div data-filter-group="types">
                     <label class="font-bold block mb-2">انتخاب نوع</label>
                     @foreach ($types as $type)
                         <x-toggle
-                            wire:model.live="selectedTypes"
                             value="{{ $type['id'] }}"
                             label="{{ $type['name'] }}"
                         />
@@ -161,20 +140,6 @@ return new class extends Component
 
 @script
 <script>
-    function waitForMap(callback) {
-        var tries = 0;
-        function check() {
-            if (window.map && typeof window.map.getSize === 'function') {
-                callback();
-            } else if (++tries > 50) {
-                console.error('Map not ready within 10s');
-            } else {
-                setTimeout(check, 200);
-            }
-        }
-        check();
-    }
-
     const typeIcons = {
         4: '/icons/network.svg',
         5: '/icons/urban-health.svg',
@@ -196,78 +161,145 @@ return new class extends Component
 
     const defaultIcon = '/icons/default.svg';
 
+    // Perf: one L.icon per type (was: a fresh L.icon for every marker).
+    const iconCache = new Map();
     function getIcon(typeId) {
-        return L.icon({
-            iconUrl: typeIcons[typeId] ?? defaultIcon,
-            iconSize: [32, 32],
-            iconAnchor: [16, 32],
-            popupAnchor: [0, -32],
-        });
-    }
-
-    function getDepth(loc, allLocations) {
-        let depth = 0;
-        let current = loc;
-        while (current && current.parent_id) {
-            current = allLocations.find(u => u.id === current.parent_id);
-            depth++;
+        let icon = iconCache.get(typeId);
+        if (!icon) {
+            icon = L.icon({
+                iconUrl: typeIcons[typeId] ?? defaultIcon,
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32],
+            });
+            iconCache.set(typeId, icon);
         }
-        return depth;
+        return icon;
     }
 
     const lineColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
 
-    function renderMarkers(locations) {
-        if (!window.markersLayer) return;
+    // Perf: single canvas renderer for all connection lines (was: one SVG path per line).
+    let lineRenderer = null;
 
-        window.markersLayer.clearLayers();
-        window.linesLayer.clearLayers();
+    // Issue #028 — take a LIVE map from the store instead of waiting for a
+    // `window.map` that a previous page may still own. onReady() removes the
+    // script-ordering race with maps.map entirely.
+    window.Alpine.store('map').onReady(function (map) {
+        const markersLayer = L.layerGroup().addTo(map);
+        const linesLayer = L.layerGroup().addTo(map);
 
-        locations.forEach(loc => {
-            if (loc.parent_id && loc.lat && loc.lng) {
-                const parent = locations.find(u => u.id === loc.parent_id);
-                if (parent && parent.lat && parent.lng) {
-                    const depth = getDepth(parent, locations);
-                    const color = lineColors[Math.min(depth, lineColors.length - 1)];
-                    L.polyline(
-                        [[loc.lat, loc.lng], [parent.lat, parent.lng]],
-                        { color, weight: 2, opacity: 0.7, dashArray: '6 4' }
-                    ).addTo(window.linesLayer);
+        // Attach the shared canvas renderer up front: it registers its
+        // zoomanim listener once, here, instead of whenever the first line
+        // happens to be drawn.
+        if (!lineRenderer) lineRenderer = L.canvas({ padding: 0.5 });
+        lineRenderer.addTo(map);
+
+        // The locations already crossed the wire once, inside this
+        // component's Livewire snapshot — read them from $wire instead of
+        // embedding a second copy of the payload in the page (issue #776).
+        const allLocations = $wire.get('location') ?? [];
+        const byId = new Map(allLocations.map(l => [l.id, l]));
+
+        // Perf: memoised depth (was: a full re-scan per node — O(N·depth)).
+        const depthCache = new Map();
+        const depthOf = (id) => {
+            if (depthCache.has(id)) return depthCache.get(id);
+            const node = byId.get(id);
+            if (!node || !node.parent_id) { depthCache.set(id, 0); return 0; }
+            depthCache.set(id, 0); // placeholder — also breaks parent cycles
+            const depth = depthOf(node.parent_id) + 1;
+            depthCache.set(id, depth);
+            return depth;
+        };
+
+        // Client-side filtering with the same semantics the server query had:
+        // a unit is visible when it matches the selected regions AND types,
+        // and every visible unit's ancestors stay visible so the connection
+        // lines keep their parent markers.
+        function visibleLocations() {
+            const selected = (group) => new Set(
+                [...document.querySelectorAll(`[data-filter-group="${group}"] input[type="checkbox"]:checked`)]
+                    .map(cb => Number(cb.value))
+            );
+            const regions = selected('regions');
+            const types = selected('types');
+            if (!regions.size && !types.size) return allLocations;
+
+            const visible = new Map();
+            for (const loc of allLocations) {
+                if (regions.size && !regions.has(loc.region_id)) continue;
+                if (types.size && !types.has(loc.unit_type_id)) continue;
+                let cur = loc;
+                while (cur && !visible.has(cur.id)) {
+                    visible.set(cur.id, cur);
+                    cur = byId.get(cur.parent_id);
                 }
             }
-        });
-
-        locations.forEach(loc => {
-            L.marker(
-                [loc.lat, loc.lng],
-                { icon: getIcon(loc.unit_type_id) }
-            )
-                .bindPopup(loc.name)
-                .addTo(window.markersLayer);
-        });
-    }
-
-    waitForMap(function() {
-        // Always bind layers to the CURRENT map instance. Stale layers from a
-        // previous page (bound to an older Leaflet instance) are useless here.
-        if (window.markersLayer && window.map.hasLayer(window.markersLayer)) {
-            window.markersLayer.clearLayers();
-        } else {
-            window.markersLayer = L.layerGroup().addTo(window.map);
+            return [...visible.values()];
         }
-        if (window.linesLayer && window.map.hasLayer(window.linesLayer)) {
-            window.linesLayer.clearLayers();
-        } else {
-            window.linesLayer = L.layerGroup().addTo(window.map);
+
+        // Perf: chunked rendering — building ~800 markers + ~800 lines in one
+        // synchronous pass froze the main thread for ~1s on load and on every
+        // filter switch. Markers go first (they are what the user waits for),
+        // in requestAnimationFrame slices, so the page never locks up.
+        let renderToken = 0;
+        function renderMarkers(locations) {
+            const token = ++renderToken;
+            markersLayer.clearLayers();
+            linesLayer.clearLayers();
+
+            const linePairs = [];
+            for (const loc of locations) {
+                if (!loc.parent_id) continue;
+                const parent = byId.get(loc.parent_id);
+                if (parent && parent.lat && parent.lng) linePairs.push([loc, parent]);
+            }
+
+            const MARKER_CHUNK = 250;
+            const LINE_CHUNK = 400;
+            let mi = 0;
+            let li = 0;
+
+            const markerStep = () => {
+                if (token !== renderToken) return;
+                const end = Math.min(mi + MARKER_CHUNK, locations.length);
+                for (; mi < end; mi++) {
+                    const loc = locations[mi];
+                    L.marker(
+                        [loc.lat, loc.lng],
+                        { icon: getIcon(loc.unit_type_id) }
+                    )
+                        .bindPopup(loc.name)
+                        .addTo(markersLayer);
+                }
+                if (mi < locations.length) requestAnimationFrame(markerStep);
+                else requestAnimationFrame(lineStep);
+            };
+
+            const lineStep = () => {
+                if (token !== renderToken) return;
+                const end = Math.min(li + LINE_CHUNK, linePairs.length);
+                for (; li < end; li++) {
+                    const [loc, parent] = linePairs[li];
+                    const color = lineColors[Math.min(depthOf(parent.id), lineColors.length - 1)];
+                    L.polyline(
+                        [[loc.lat, loc.lng], [parent.lat, parent.lng]],
+                        { color, weight: 2, opacity: 0.7, dashArray: '6 4', renderer: lineRenderer }
+                    ).addTo(linesLayer);
+                }
+                if (li < linePairs.length) requestAnimationFrame(lineStep);
+            };
+
+            requestAnimationFrame(markerStep);
         }
 
         // Render initial locations
-        var initialLocations = {{ Js::from($location) }};
-        renderMarkers(initialLocations);
+        renderMarkers(allLocations);
 
-        // Listen for future updates from Livewire
-        Livewire.on('locations-updated', ({ locations }) => {
-            renderMarkers(locations);
+        // Filter toggles re-render locally — no Livewire round-trip.
+        document.querySelectorAll('.controls-panel input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => renderMarkers(visibleLocations()));
         });
     });
 </script>

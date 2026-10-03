@@ -56,6 +56,10 @@ class PermissionSeeder extends Seeder
         // permission the role already has, silently stripping admins of
         // access to the other sections.
         $adminRole->givePermissionTo('manage_zabbix');
+        // گزارش‌ها پشت `manage_personnel` است؛ بدون این grant، یک اجرای
+        // تک‌کلاسه‌ی PermissionSeeder ادمین را از گزارش‌ها می‌اندازد
+        // (RoleSeeder همگام‌سازی کامل را انجام می‌دهد).
+        $adminRole->givePermissionTo('manage_personnel');
         // update cache to know about the newly created permissions (required if using WithoutModelEvents in seeders)
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 

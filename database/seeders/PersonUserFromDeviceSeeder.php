@@ -79,6 +79,7 @@ class PersonUserFromDeviceSeeder extends Seeder
                 }
             }
         });
+
     }
 
     /**

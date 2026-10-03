@@ -134,16 +134,11 @@ return new class extends Component
 
 @script
 <script>
-    function waitForMap(callback, attempts = 0) {
-        if (window.map && typeof window.map.getSize === 'function') { callback(); return; }
-        if (attempts > 100) { console.error('Map not ready'); return; }
-        setTimeout(() => waitForMap(callback, attempts + 1), 50);
-    }
-
     var markers = {};
 
-    waitForMap(function() {
-        var map = window.map;
+    // Issue #028 — bind to the live map the store owns instead of waiting for a
+    // `window.map` a previous page may still own.
+    window.Alpine.store('map').onReady(function (map) {
         var noBoundaryUnits = {{ Js::from($this->allUnits) }};
 
         noBoundaryUnits.forEach(function(unit) {

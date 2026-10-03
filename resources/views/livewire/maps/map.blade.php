@@ -16,8 +16,62 @@ return new class extends Component {
 };
 ?>
 
-<div wire:ignore>
-    <div id="map" class="h-[80lvh] rounded"></div>
+{{--
+    Issue #028 — this component is the ONLY place allowed to create a Leaflet map.
+    Ownership lives in Alpine.store('map') instead of window.map, which is never
+    cleared and therefore leaked a detached instance across SPA navigation (host
+    pages bound their layers to it, then this component replaced it and wiped
+    the layers).
+
+    Two placement rules that cost real debugging time, both verified in a browser:
+
+    1. The x-data element must NOT be the component root. Livewire puts wire:id
+       on the OUTERMOST element of a component's markup, so an x-data there is
+       claimed by Livewire and its init() never runs — the map silently never
+       gets created. Hence the extra <div> wrapper.
+    2. $refs.map resolves fine ACROSS the wire:ignore boundary (verified), so
+       the container can stay inside it and keep its id="map" + class, which the
+       E2E map specs assert on.
+
+    Alpine fires destroy() before init() on SPA navigation, so release() tears
+    the old map down before use() builds the new one. The container id and class
+    are unchanged — the E2E map specs assert on #map and on clientWidth > 400.
+--}}
+<div>
+    <div x-data="{
+            init() {
+                $store.map.configure({
+                    view: {{ $setview }},
+                    zoom: {{ $zoom }},
+                    tileUrl: '{{ $map_tile_template }}',
+                });
+
+                // Keep the raw instance in a closure local — assigning it to
+                // this.map would put it back through Alpine's reactivity
+                // (see the note in map-store.js).
+                const map = $store.map.use(this.$refs.map);
+
+                if (map) {
+                    // Issue (map width): Leaflet captures dimensions at
+                    // construction, so a page/layout still settling (SPA
+                    // navigation, fonts, hidden containers) can lock in a
+                    // smaller width and render half-page.
+                    this._invalidate = () => map.invalidateSize();
+                    setTimeout(this._invalidate, 100);
+                    window.addEventListener('resize', this._invalidate);
+                }
+            },
+            destroy() {
+                if (this._invalidate) {
+                    window.removeEventListener('resize', this._invalidate);
+                }
+                $store.map.release(this.$refs.map);
+            },
+        }">
+        <div wire:ignore>
+            <div id="map" x-ref="map" class="h-[80lvh] rounded"></div>
+        </div>
+    </div>
 </div>
 
 @assets
@@ -34,74 +88,3 @@ return new class extends Component {
     }
 </style>
 @endassets
-
-@script
-<script>
-    function initMap() {
-        var container = document.getElementById('map');
-        if (!container) return;
-
-        // Reuse existing Leaflet instance on this container (SPA navigation)
-        if (container._leaflet_id && window.map && window.map.getContainer() === container) {
-            return;
-        }
-
-        // Remove old Leaflet content from container if any
-        if (container._leaflet_id) {
-            container.innerHTML = '';
-            delete container._leaflet_id;
-        }
-
-        var map = L.map('map').setView({{ $setview }}, {{ $zoom }});
-
-        L.tileLayer('{{ $map_tile_template }}', {
-            attribution: '&copy; Health-Dashboard',
-            className: 'map-tiles'
-        }).addTo(map);
-
-        window.map = map;
-
-        // Reset any global layers that depended on the previous map instance
-        // (SPA navigation reuses window.map but marker/line layers from the prior
-        // page would otherwise stay attached to a stale Leaflet instance).
-        ['markersLayer', 'linesLayer', 'geojsonLayers', 'countyLayers'].forEach(function (name) {
-            if (window[name]) {
-                try { window[name].remove?.(); } catch (e) {}
-                delete window[name];
-            }
-        });
-
-        // Issue (map width): after init, force Leaflet to measure the real
-        // container size. Leaflet captures dimensions at construction; if the
-        // page/layout was still settling (SPA navigation, fonts, hidden
-        // containers) it can lock in a smaller width and render half-page.
-        // invalidateSize() recalculates to the actual container and fires
-        // 'moveend' so dependent scripts (markers, fitBounds) can react.
-        setTimeout(function () {
-            map.invalidateSize();
-        }, 100);
-
-        // Keep the map full-width on window resize / sidebar toggle.
-        window.addEventListener('resize', function () {
-            map.invalidateSize();
-        });
-    }
-
-    // Wait for the #map DOM element to exist (SPA navigation may not have it yet)
-    if (document.getElementById('map')) {
-        initMap();
-    } else {
-        var tries = 0;
-        var waitForEl = setInterval(() => {
-            tries++;
-            if (document.getElementById('map')) {
-                clearInterval(waitForEl);
-                initMap();
-            } else if (tries > 50) {
-                clearInterval(waitForEl);
-                console.error('Map container #map not found within 10s');
-            }
-        }, 200);
-    }
-</script>
-@endscript

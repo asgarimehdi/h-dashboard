@@ -79,4 +79,35 @@ test.describe('personnel list', () => {
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
     expect(await page.locator('table tbody tr').count()).toBe(20);
   });
+
+  test('export link carries the active filters', async ({ page }) => {
+    // Livewire cannot return a file download, so the control is a plain
+    // <a href>. Its query string must reflect the filters currently set, or
+    // the download silently contains the unfiltered table.
+    const link = page.locator(`a[href*="/kargozini/persons/export"]`);
+    await expect(link).toHaveCount(1);
+
+    const before = new URL((await link.getAttribute('href'))!, page.url());
+    expect(before.searchParams.get('search')).toBeNull();
+
+    await page.locator('input[placeholder^="جستجو"]').first().fill('عسگری');
+    await page.waitForTimeout(1500);
+
+    const after = new URL((await link.getAttribute('href'))!, page.url());
+    expect(after.searchParams.get('search')).toBe('عسگری');
+  });
+
+  test('export link is cleared by the reset-filters button', async ({ page }) => {
+    const link = page.locator(`a[href*="/kargozini/persons/export"]`);
+
+    await page.locator(FILTER_BTN).click();
+    await page.waitForTimeout(800);
+    await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
+    await page.waitForTimeout(1500);
+    expect(new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('filter_s_id')).toBeTruthy();
+
+    await page.locator('button:has-text("پاک کردن فیلترها")').first().click();
+    await page.waitForTimeout(1500);
+    expect(new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('filter_s_id')).toBeNull();
+  });
 });

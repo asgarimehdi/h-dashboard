@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $s_id
  * @property int $r_id
  * @property int $u_id
+ * @property string|null $phone
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $birth_date
@@ -48,7 +49,20 @@ class Person extends Model
         return 'n_code';
     }
 
-    protected $fillable = ['n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'birth_date', 'hire_date', 'status'];
+    protected $fillable = ['n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'phone', 'birth_date', 'hire_date', 'status'];
+
+    /**
+     * `birth_date` and `hire_date` are `date` columns. Without these casts they
+     * come back as raw strings, so `Jalalian::fromCarbon()` and any date
+     * arithmetic on them fail on a type error. `@property Carbon|null` above
+     * documents the contract these casts fulfil.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'birth_date' => 'date',
+        'hire_date' => 'date',
+    ];
 
     protected $table = 'persons';
 

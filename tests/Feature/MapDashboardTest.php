@@ -56,10 +56,7 @@ class MapDashboardTest extends TestCase
             ->assertSet('layers', 'units')
             ->assertSet('filterHardware', '')
             ->assertSet('filterPriority', '')
-            ->assertSet('filterStatus', '')
-            ->assertSet('statsUnits', 0)
-            ->assertSet('statsHardware', 0)
-            ->assertSet('statsOpenTickets', 0);
+            ->assertSet('filterStatus', '');
     }
 
     /** @test */
@@ -219,16 +216,16 @@ class MapDashboardTest extends TestCase
     }
 
     /** @test */
-    public function test_map_page_renders_leaflet_assets(): void
+    public function test_map_page_uses_shared_map_component(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['map']);
 
         $response = $this->actingAs($user)->get('/map');
         $response->assertStatus(200);
-        $response->assertSee('leaflet');
-        $response->assertSee('unpkg.com/leaflet');
-        $response->assertSee('OpenStreetMap');
         $response->assertSee('map-container');
+        // The map (and its Leaflet assets) comes from the shared maps.map
+        // component; the page no longer loads its own copy from the unpkg CDN.
+        $response->assertDontSee('unpkg.com/leaflet');
     }
 
     /** @test */
@@ -239,11 +236,16 @@ class MapDashboardTest extends TestCase
         $component = Livewire::actingAs($user)
             ->test('map.map-dashboard');
 
-        $component->assertSee('mapDashboard()');
-        $component->assertSee('initMap()');
+        $component->assertSee('mapDashboard');
+        $component->assertSeeLivewire('maps.map');
+        $component->assertSee('onReady');
         $component->assertSee('toggleLayer');
         $component->assertSee('setFilter');
-        $component->assertSee('loadLayers');
-        $component->assertSee('renderGeoJSON');
+
+        // loadLayers/renderGeoJSON live in the component's @script payload
+        // (wire:effects), which assertSee strips — assert on the raw html.
+        $html = $component->html();
+        $this->assertStringContainsString('loadLayers', $html);
+        $this->assertStringContainsString('renderGeoJSON', $html);
     }
 }

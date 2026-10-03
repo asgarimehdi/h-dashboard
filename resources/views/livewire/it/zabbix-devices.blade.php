@@ -369,7 +369,10 @@ return new class extends Component
     /** @return LengthAwarePaginator<int, ZabbixDevice> */
     public function devices(): LengthAwarePaginator
     {
-        $query = ZabbixDevice::query()->ordered();
+        // `ordered()` must NOT run here: it would put `ORDER BY sort_order, id`
+        // in front of the column the user clicked, demoting it to a tie-break
+        // and making every header sort a no-op.
+        $query = ZabbixDevice::query();
 
         if ($this->search !== '') {
             $needle = '%'.PersianNormalizer::normalizeForQuery($this->search).'%';
@@ -381,6 +384,12 @@ return new class extends Component
             : 'sort_order';
         $direction = $this->sortBy['direction'] === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
+
+        // Stable tie-break, same as scopeOrdered() — skip it on `id` itself,
+        // where a second `id asc` would cancel a descending click.
+        if ($column !== 'id') {
+            $query->orderBy('id');
+        }
 
         return $query->paginate($this->perPage);
     }

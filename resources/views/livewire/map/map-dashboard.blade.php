@@ -21,12 +21,8 @@ return new class extends Component
     public $mapCenterLat = 36.669343;
     public $mapCenterLng = 48.47163;
     public $mapZoom = 10;
-    public $statsUnits = 0;
-    public $statsHardware = 0;
-    public $statsOpenTickets = 0;
     
     public $mapToken = '';
-    public $mapTileTemplate = '';
 
     protected $listeners = [
         'mapMoved' => 'onMapMoved',
@@ -43,8 +39,6 @@ return new class extends Component
         // Delete old map-dashboard tokens first to avoid accumulation.
         $user->tokens()->where('name', 'map-dashboard')->delete();
         $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
-        $this->mapTileTemplate = config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-        $this->loadStats();
     }
 
     public function onMapMoved($data)
@@ -53,7 +47,6 @@ return new class extends Component
         $this->mapCenterLng = $data['center'][1] ?? $this->mapCenterLng;
         $this->mapZoom = $data['zoom'] ?? $this->mapZoom;
         $this->bbox = $data['bbox'] ?? $this->bbox;
-        $this->loadStats();
         $this->dispatch('mapViewportChanged', [
             'bbox' => $this->bbox,
             'zoom' => $this->mapZoom,
@@ -108,35 +101,14 @@ return new class extends Component
         ];
     }
 
-    public function loadStats()
-    {
-        if (!$this->bbox) return;
-        
-        try {
-            $response = \Illuminate\Support\Facades\Http::withToken($this->mapToken)
-                ->get(route('api.gis.stats'), [
-                    'bbox' => $this->bbox,
-                ]);
-            
-            if ($response->successful()) {
-                $data = $response->json();
-                $this->statsUnits = $data['units'] ?? 0;
-                $this->statsHardware = $data['hardware'] ?? 0;
-                $this->statsOpenTickets = $data['open_tickets'] ?? 0;
-            }
-        } catch (\Exception $e) {
-            // Silently fail - stats are optional
-        }
-    }
 };
 ?>
 
 <div
     wire:ignore
     id="map-container"
-    class="w-full h-[calc(100vh-4rem)] relative"
-    x-data="mapDashboard()"
-    x-init="initMap()"
+    class="w-full relative"
+    x-data="mapDashboard"
 >
     <!-- Map Toolbar -->
     <div class="absolute top-4 left-4 right-4 z-10 flex flex-wrap gap-2 justify-between p-2 bg-base-100/90 backdrop-blur rounded-box shadow-lg">
@@ -211,8 +183,9 @@ return new class extends Component
         </div>
     </div>
 
-    <!-- Map Element -->
-    <div id="map" class="w-full h-full"></div>
+    <!-- Map Element: the shared maps.map component owns the Leaflet instance
+         (Alpine.store('map')); this page only attaches its layers via onReady. -->
+    <livewire:maps.map />
 
     <!-- Unit Details Modal -->
     <div x-data="{ unitId: null, unitDetails: null, loading: false }"
@@ -246,12 +219,19 @@ return new class extends Component
     </script>
 </div>
 
+@script
 <script>
-    function mapDashboard() {
+    Alpine.data('mapDashboard', () => {
+        // The Leaflet instance and its layer groups live in closure locals,
+        // never on the Alpine data object: Alpine proxies reactive data,
+        // which breaks Leaflet's listener bookkeeping (issue #769). The map
+        // itself is owned by the shared maps.map component
+        // (Alpine.store('map')); this page only attaches its layers to it.
+        let map = null;
+        let layerGroups = {};
+        let moveTimer = null;
+
         return {
-            map: null,
-            markers: {},
-            layers: {},
             activeLayers: ['units'],
             filters: {
                 hardware_type: '',
@@ -265,39 +245,30 @@ return new class extends Component
             center: [{{ $mapCenterLat }}, {{ $mapCenterLng }}],
             zoom: {{ $mapZoom }},
 
-            initMap() {
-                if (!window.L) return;
+            init() {
+                window.Alpine.store('map').onReady((readyMap) => {
+                    map = readyMap;
+                    map.setView(this.center, this.zoom);
 
-                this.map = L.map('map', {
-                    center: this.center,
-                    zoom: this.zoom,
-                    zoomControl: true,
-                    attributionControl: true,
+                    layerGroups = {
+                        units: L.layerGroup().addTo(map),
+                        hardware: L.layerGroup(),
+                        tickets: L.layerGroup(),
+                    };
+
+                    map.on('moveend', () => this.onMapMove());
+
+                    this.onMapMove();
                 });
-
-                L.tileLayer('{{ $mapTileTemplate }}', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(this.map);
-
-                this.layers = {
-                    units: L.layerGroup().addTo(this.map),
-                    hardware: L.layerGroup(),
-                    tickets: L.layerGroup(),
-                };
-
-                this.map.on('moveend', () => this.onMapMove());
-
-                this.onMapMove();
             },
 
             onMapMove() {
-                if (!this.map) return;
+                if (!map) return;
 
-                clearTimeout(this._moveTimer);
+                clearTimeout(moveTimer);
 
-                this._moveTimer = setTimeout(() => {
-                    const bounds = this.map.getBounds();
+                moveTimer = setTimeout(() => {
+                    const bounds = map.getBounds();
                     this.currentBbox = [
                         bounds.getWest(),
                         bounds.getSouth(),
@@ -319,18 +290,18 @@ return new class extends Component
                 };
 
                 if (this.activeLayers.includes('units')) {
-                    this.fetchAndRender(`${this.apiBase}/units?bbox=${bbox}`, this.layers.units, 'unit', headers);
+                    this.fetchAndRender(`${this.apiBase}/units?bbox=${bbox}`, layerGroups.units, 'unit', headers);
                 }
                 if (this.activeLayers.includes('hardware')) {
                     let url = `${this.apiBase}/hardware?bbox=${bbox}`;
                     if (this.filters.hardware_type) url += `&type=${this.filters.hardware_type}`;
-                    this.fetchAndRender(url, this.layers.hardware, 'hardware', headers);
+                    this.fetchAndRender(url, layerGroups.hardware, 'hardware', headers);
                 }
                 if (this.activeLayers.includes('tickets')) {
                     let url = `${this.apiBase}/tickets?bbox=${bbox}`;
                     if (this.filters.ticket_priority) url += `&priority=${this.filters.ticket_priority}`;
                     if (this.filters.ticket_status) url += `&status=${this.filters.ticket_status}`;
-                    this.fetchAndRender(url, this.layers.tickets, 'ticket', headers);
+                    this.fetchAndRender(url, layerGroups.tickets, 'ticket', headers);
                 }
 
                 // Load stats
@@ -374,21 +345,18 @@ return new class extends Component
                     let marker;
                     const iconColor = this.getIconColor(type, props);
 
-                    if (type === 'unit') {
-                        marker = L.marker([lat, lng], {
-                            icon: L.divIcon({
-                                className: 'unit-marker',
-                                html: `<div style="width:18px;height:18px;border-radius:50%;background:${iconColor};border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                                iconSize: [18, 18],
-                            })
-                        });
-                    } else if (type === 'hardware') {
-                        marker = L.marker([lat, lng], {
-                            icon: L.divIcon({
-                                className: 'hardware-marker',
-                                html: `<div style="width:14px;height:14px;border-radius:50%;background:${iconColor};border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                                iconSize: [14, 14],
-                            })
+                    if (type === 'unit' || type === 'hardware') {
+                        // Perf: one lightweight SVG shape per point instead of a
+                        // divIcon DOM node + inner div (same look: white ring,
+                        // filled dot; class kept so the e2e count still works).
+                        marker = L.circleMarker([lat, lng], {
+                            className: type === 'unit' ? 'unit-marker' : 'hardware-marker',
+                            radius: type === 'unit' ? 8 : 6,
+                            color: '#ffffff',
+                            weight: 2,
+                            opacity: 1,
+                            fillColor: iconColor,
+                            fillOpacity: 1,
                         });
                     } else if (type === 'ticket') {
                         marker = L.marker([lat, lng], {
@@ -401,7 +369,8 @@ return new class extends Component
                     }
 
                     if (marker) {
-                        marker.bindPopup(this.createPopup(type, props));
+                        // Lazy: popup HTML is only built when a point is opened.
+                        marker.bindPopup(() => this.createPopup(type, props));
                         marker.on('click', () => this.onFeatureClick(type, props));
                         marker.addTo(layerGroup);
                     }
@@ -499,12 +468,14 @@ return new class extends Component
             toggleLayer(layer) {
                 if (this.activeLayers.includes(layer)) {
                     this.activeLayers = this.activeLayers.filter(l => l !== layer);
-                    this.layers[layer]?.clearLayers();
-                    this.map.removeLayer(this.layers[layer]);
+                    layerGroups[layer]?.clearLayers();
+                    if (map && layerGroups[layer]) {
+                        map.removeLayer(layerGroups[layer]);
+                    }
                 } else {
                     this.activeLayers.push(layer);
-                    if (this.layers[layer] && !this.map.hasLayer(this.layers[layer])) {
-                        this.layers[layer].addTo(this.map);
+                    if (map && layerGroups[layer] && !map.hasLayer(layerGroups[layer])) {
+                        layerGroups[layer].addTo(map);
                     }
                     this.loadLayers();
                 }
@@ -517,10 +488,6 @@ return new class extends Component
                 this.loadLayers();
             },
         };
-    }
+    });
 </script>
-
-@push('scripts')
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-@endpush
+@endscript

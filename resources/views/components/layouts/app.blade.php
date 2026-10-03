@@ -206,7 +206,7 @@
                 @endcan
 
                 {{-- مدیریت تیکت‌ها --}}
-                @canany(['create_ticket', 'view_assigned_tickets', 'view_all_tickets'])
+                @canany(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'calendar'])
                 <x-menu-sub title="مدیریت تیکت‌ها" icon="o-ticket">
                     @can('create_ticket')
                     <x-menu-item title="تیکت جدید" icon="o-plus-circle" link="/tickets/new" wire:navigate />
@@ -224,18 +224,21 @@
                 @endcanany
 
                 {{-- مدیریت سازمان --}}
-                @canany(['organization', 'kargozini', 'view_hr_dashboard'])
+                @canany(['organization', 'kargozini', 'view_hr_dashboard', 'manage_org_chart', 'manage_personnel'])
                 <x-menu-sub title="مدیریت سازمان" icon="o-building-library">
                     @can('organization')
                     <x-menu-item title="مدیریت واحدها" icon="o-building-office-2" link="/units" wire:navigate />
                     @endcan
-                    @can('kargozini')
+                    {{-- پرسنل — روت خواندن union است (#775): kargozini یا manage_personnel --}}
+                    @canany(['kargozini', 'manage_personnel'])
                     <x-menu-item title="پرسنل" icon="o-user-group" link="/kargozini/persons" wire:navigate />
-                    @endcan
+                    @endcanany
                     @can('view_hr_dashboard')
                     <x-menu-item title="آمار پرسنل" icon="o-chart-bar" link="/hr-dashboard" wire:navigate />
-                    <x-menu-item title="چارت سازمانی" icon="o-beaker" link="/hr/org-chart" wire:navigate />
                     @endcan
+                    @canany(['manage_org_chart', 'view_hr_dashboard'])
+                    <x-menu-item title="چارت سازمانی" icon="o-beaker" link="/hr/org-chart" wire:navigate />
+                    @endcanany
                 </x-menu-sub>
                 @endcanany
 
@@ -251,37 +254,65 @@
                 </x-menu-sub>
                 @endcan
 
-                {{-- ابزارهای مدیریتی --}}
-                @can('bw')
+                {{-- ابزارهای مدیریتی (IT) — هر آیتم با همان گیتی که روتش دارد:
+                     شبکه/وایرلس → `map` یا `bw`، زبیکس → `manage_zabbix`، کش سرور → `op-cache`.
+                     قبلاً کل گروه زیر `bw` بود، پس دارنده‌ی `map` بدون `bw` صفحه‌ها را پنهان
+                     می‌دید و دارنده‌ی `bw` بدون `map` با ۴۰۳ روبه‌رو می‌شد. --}}
+                @canany(['map', 'bw', 'manage_zabbix', 'op-cache'])
                 <x-menu-sub title="ابزارهای مدیریتی" icon="o-wrench-screwdriver">
+                    @canany(['map', 'bw'])
                     <x-menu-item title="شبکه‌ها" icon="o-globe-alt" link="/it/networks" wire:navigate />
                     <x-menu-item title="وایرلس‌ها" icon="o-signal" link="/it/wireless" wire:navigate />
+                    @endcanany
                     @can('manage_zabbix')
                     <x-menu-item title="مدیریت دستگاه‌های زبیکس" icon="o-server-stack" link="/it/zabbix-devices" wire:navigate />
                     @endcan
+                    {{-- `op-cache` gate, not the bare link that used to show on every
+                         environment: /op exists only outside production (routes/web.php). --}}
+                    @can('op-cache')
+                    @production
+                    @else
                     <a href="/op" class="flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-base-200 transition-colors">
                         <x-icon name="o-server" class="w-5 h-5" />
                         <span>کش سرور</span>
                     </a>
-                    @can('manage_hardware')
-                    <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
-                    <x-menu-item title="زمانبندی تعمیرات" icon="o-wrench-screwdriver" link="/maintenance" wire:navigate />
+                    @endproduction
                     @endcan
+                </x-menu-sub>
+                @endcanany
+
+                {{-- ابزارهای نرم‌افزاری — روت /tools پشت `manage_users` است، نه `bw`. --}}
+                @can('manage_users')
+                <x-menu-sub title="ابزار مدیریتی" icon="o-wrench">
                     <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
                 </x-menu-sub>
                 @endcan
 
-                {{-- گزارش‌ها --}}
+                {{-- سخت‌افزار — /hardware و /maintenance هر دو پشت `manage_hardware`؛
+                     قبلاً داخل گروه IT بودند و دارندگان manage_hardware بدون `bw` آن‌ها را نمی‌دیدند. --}}
+                @can('manage_hardware')
+                <x-menu-sub title="سخت‌افزار" icon="o-cpu-chip">
+                    <x-menu-item title="شناسنامه سخت افزار" icon="o-cpu-chip" link="/hardware" wire:navigate />
+                    <x-menu-item title="زمانبندی تعمیرات" icon="o-wrench-screwdriver" link="/maintenance" wire:navigate />
+                </x-menu-sub>
+                @endcan
+
+                {{-- گزارش‌ها — روت‌ها پشت `manage_personnel` هستند؛ «گزارش فعالیت»
+                     جدا پشت `manage_users` است، پس گروه برای هر دو باز می‌شود. --}}
+                @canany(['manage_personnel', 'manage_users'])
                 <x-menu-sub title="گزارش‌ها" icon="o-chart-bar">
+                    @can('manage_personnel')
                     <x-menu-item title="گزارش واحدها و مراکز" icon="o-building-office" link="/reports/units" wire:navigate />
                     <x-menu-item title="گزارش پرسنل" icon="o-users" link="/reports/persons" wire:navigate />
                     <x-menu-item title="گزارش وظایف" icon="o-check-circle" link="/reports/todos" wire:navigate />
                     <x-menu-item title="نقاط فاقد مرز" icon="o-no-symbol" link="/reports/map-no-boundary" wire:navigate />
                     <x-menu-item title="گزارش تیکت‌ها" icon="o-ticket" link="/reports/tickets" wire:navigate />
+                    @endcan
                     @can('manage_users')
                     <x-menu-item title="گزارش فعالیت" icon="o-clock" link="/activity-log" wire:navigate />
                     @endcan
                 </x-menu-sub>
+                @endcanany
 
                 {{-- مدیریت سیستم --}}
                 @canany(['manage_users', 'manage_roles'])

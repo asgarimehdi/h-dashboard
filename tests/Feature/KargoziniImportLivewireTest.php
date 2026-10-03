@@ -70,6 +70,24 @@ class KargoziniImportLivewireTest extends TestCase
         $this->get('/kargozini/persons/import')->assertStatus(403);
     }
 
+    // ایشو #775: import نوشتن است — فقط `manage_personnel`؛ دارنده‌ی صرفِ
+    // `kargozini` دیگر به صفحه‌ی import دسترسی ندارد (هم‌راستا با API).
+    public function test_kargozini_only_holder_gets_403_on_import(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        $this->actingAs($user);
+
+        $this->get('/kargozini/persons/import')->assertStatus(403);
+    }
+
+    public function test_manage_personnel_holder_can_open_import(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $this->actingAs($user);
+
+        $this->get('/kargozini/persons/import')->assertStatus(200);
+    }
+
     public function test_renders(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['kargozini']);
