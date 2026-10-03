@@ -178,9 +178,15 @@ class AccessServiceTest extends TestCase
         Session::forget('current_unit_id');
 
         // Second call - should hit same cache regardless of pluck order
+        DB::enableQueryLog();
         $second = app(AccessService::class)->accessibleUnitIds($user);
+        $queries = DB::getQueryLog();
 
         $this->assertEqualsCanonicalizing($first, $second);
         $this->assertNotEmpty($first);
+
+        // Filter to only CTE queries (descendant recursive CTE query used by AccessService)
+        $cteQueries = array_filter($queries, fn ($q) => str_contains($q['query'] ?? '', 'WITH RECURSIVE unit_tree'));
+        $this->assertCount(0, $cteQueries, 'No new CTE query should run for different baseUnitIds order');
     }
 }
