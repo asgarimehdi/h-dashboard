@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Models\User;
 use App\Services\ZabbixService;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Tests\Support\Concerns\InteractsWithApiTokens;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(MultiLatestValueController::class);
@@ -16,13 +18,21 @@ covers(MultiLatestValueController::class);
 class MultiLatestValueControllerTest extends TestCase
 {
     use InteractsWithApiTokens;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(PermissionSeeder::class);
+    }
 
     private function authUser(): string
     {
         $user = User::factory()->create(['password' => Hash::make('password')]);
+        $user->givePermissionTo('map');
 
-        return $this->createApiToken($user, ['traffic:read']);
+        return $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
     }
 
     public function test_returns_latest_values_for_given_item_ids(): void

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithApiTokens;
@@ -23,6 +24,8 @@ class ReportApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(PermissionSeeder::class);
+        $this->seedLookupTables();
         Session::flush();
     }
 
@@ -34,8 +37,8 @@ class ReportApiTest extends TestCase
 
     public function test_units_report_returns_summary(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $response = $this->apiGet('/api/reports/units', $token);
 
@@ -45,9 +48,9 @@ class ReportApiTest extends TestCase
 
     public function test_units_report_counts_correctly(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         Unit::create(['name' => 'No Boundary']);
-        $token = $this->createApiToken($user, ['reports:read']);
+        $token = $this->createApiToken($user);
 
         $response = $this->apiGet('/api/reports/units', $token);
 
@@ -57,10 +60,10 @@ class ReportApiTest extends TestCase
 
     public function test_todos_report_returns_summary(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         Todo::create(['title' => 'Done', 'unit_id' => $unit->id, 'is_completed' => true, 'start_at' => now(), 'end_at' => now()]);
         Todo::create(['title' => 'Pending', 'unit_id' => $unit->id, 'is_completed' => false, 'start_at' => now()]);
-        $token = $this->createApiToken($user, ['reports:read']);
+        $token = $this->createApiToken($user);
 
         $response = $this->apiGet('/api/reports/todos', $token);
 
@@ -70,9 +73,9 @@ class ReportApiTest extends TestCase
 
     public function test_todos_report_by_day_uses_jalali_dates(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         Todo::create(['title' => 'Task', 'unit_id' => $unit->id, 'is_completed' => false, 'start_at' => now()]);
-        $token = $this->createApiToken($user, ['reports:read']);
+        $token = $this->createApiToken($user);
 
         $response = $this->apiGet('/api/reports/todos', $token);
 
@@ -85,9 +88,9 @@ class ReportApiTest extends TestCase
 
     public function test_tickets_report_returns_summary(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         Ticket::create(['ticket_code' => 'T-001', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Test', 'content' => 'Body', 'priority' => 'urgent', 'status' => 'created']);
-        $token = $this->createApiToken($user, ['reports:read']);
+        $token = $this->createApiToken($user);
 
         $response = $this->apiGet('/api/reports/tickets', $token);
 
@@ -97,9 +100,9 @@ class ReportApiTest extends TestCase
 
     public function test_tickets_report_by_day_uses_jalali_dates(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         Ticket::create(['ticket_code' => 'T-002', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Test', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
-        $token = $this->createApiToken($user, ['reports:read']);
+        $token = $this->createApiToken($user);
 
         $response = $this->apiGet('/api/reports/tickets', $token);
 

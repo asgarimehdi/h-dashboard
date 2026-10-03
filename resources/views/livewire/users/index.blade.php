@@ -81,13 +81,35 @@ return new class extends Component
 
     public function delete(User $user): void
     {
+        $this->authorize('manage_users');
+
+        if ($user->id === auth()->id()) {
+            abort(403, 'شما نمی‌توانید خودتان را غیرفعال کنید.');
+        }
+
+        if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+            abort(403, 'تنها مدیران می‌توانند کاربران مدیر را غیرفعال کنند.');
+        }
+
         $user->delete();
         $this->warning("$user->name غیرفعال شد", 'غیرفعال شد!', position: 'toast-bottom');
     }
 
     public function restore($userId): void
     {
+        $this->authorize('manage_users');
         $user = User::withTrashed()->findOrFail($userId);
+
+        if ($user->id === auth()->id()) {
+            $this->error('شما نمی‌توانید خودتان را فعال کنید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+            abort(403, 'تنها مدیران می‌توانند کاربران مدیر را فعال کنند.');
+        }
+
         $user->restore();
         $this->success("$user->name فعال شد", 'کاربر برگشت!', position: 'toast-bottom');
     }
@@ -100,12 +122,14 @@ return new class extends Component
 
     public function openFormForCreate(): void
     {
+        $this->authorize('manage_users');
         $this->resetForm();
         $this->formOpen = true;
     }
 
     public function edit($userId): void
     {
+        $this->authorize('manage_users');
         $this->resetValidation();
         $user = User::withTrashed()->findOrFail($userId);
         $this->editing_user_id = $user->id;
@@ -131,6 +155,12 @@ return new class extends Component
 
     public function createUser(): void
     {
+        $this->authorize('manage_users');
+
+        if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
+            $this->authorize('manage_roles');
+        }
+
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
             'password' => 'required|string|min:6',
@@ -169,6 +199,12 @@ return new class extends Component
 
     public function updateUser(): void
     {
+        $this->authorize('manage_users');
+
+        if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
+            $this->authorize('manage_roles');
+        }
+
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code,'.$this->editing_user_id,
             'password' => 'nullable|string|min:6',
@@ -186,6 +222,11 @@ return new class extends Component
 
         try {
             $user = User::withTrashed()->findOrFail($this->editing_user_id);
+
+            if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+                abort(403, 'تنها مدیران می‌توانند کاربران مدیر را ویرایش کنند.');
+            }
+
             $data = ['n_code' => $this->n_code];
 
             if ($this->password) {
@@ -226,14 +267,13 @@ return new class extends Component
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
             ->when($this->search, function (Builder $q) {
-                // Persian-normalize the raw input (ي/ك variants, ZWNJ,
-                // Persian digits) so «محمدی» typed with Arabic Yeh still
-                // matches the stored name (#494 follow-up).
-                $search = \App\Traits\PersianNormalizer::normalizeForQuery($this->search);
+                // Fold both the column (CONCAT) and the term for Persian char equivalence.
+                $term = \App\Traits\PersianNormalizer::foldedTerm($this->search);
+                $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
 
-                $q->whereHas('person', function ($query) use ($search) {
-                    $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
-                        ->orWhere('n_code', 'like', "%{$search}%");
+                $q->whereHas('person', function ($query) use ($term, $foldedConcat) {
+                    $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
+                        ->orWhere('n_code', 'like', "%{$term}%");
                 });
             })
             ->whereNot('id', auth()->id());
@@ -263,12 +303,13 @@ return new class extends Component
             return [];
         }
 
-        $search = \App\Traits\PersianNormalizer::normalizeForQuery($this->person_search);
+        $term = \App\Traits\PersianNormalizer::foldedTerm($this->person_search);
+        $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
 
         return Person::query()
-            ->where(function ($query) use ($search) {
-                $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
-                    ->orWhere('n_code', 'like', "%{$search}%");
+            ->where(function ($query) use ($term, $foldedConcat) {
+                $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
+                    ->orWhere('n_code', 'like', "%{$term}%");
             })
             ->limit(20)
             ->get()

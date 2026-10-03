@@ -10,6 +10,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -95,7 +96,7 @@ class ApiAbilityTest extends TestCase
 
     public function test_units_read_allowed_with_ability(): void
     {
-        $token = $this->createTokenWithAbilities(['units:read']);
+        $token = $this->createTokenWithAbilities(['units:read'], ['organization']);
         $this->apiGet('/api/units', $token)->assertOk();
     }
 
@@ -127,7 +128,7 @@ class ApiAbilityTest extends TestCase
 
     public function test_hardware_read_allowed_with_ability(): void
     {
-        $token = $this->createTokenWithAbilities(['hardware:read']);
+        $token = $this->createTokenWithAbilities(['hardware:read'], ['manage_hardware']);
         $this->apiGet('/api/hardware', $token)->assertOk();
     }
 
@@ -231,7 +232,7 @@ class ApiAbilityTest extends TestCase
 
     public function test_persons_read_allowed_with_ability(): void
     {
-        $token = $this->createTokenWithAbilities(['persons:read']);
+        $token = $this->createTokenWithAbilities(['persons:read'], ['kargozini']);
         $this->apiGet('/api/persons', $token)->assertOk();
     }
 
@@ -303,7 +304,7 @@ class ApiAbilityTest extends TestCase
 
     public function test_reports_read_allowed_with_ability(): void
     {
-        $token = $this->createTokenWithAbilities(['reports:read']);
+        $token = $this->createTokenWithAbilities(['reports:read'], ['manage_personnel']);
         $this->apiGet('/api/reports/units', $token)->assertOk();
     }
 
@@ -357,7 +358,7 @@ class ApiAbilityTest extends TestCase
 
     public function test_traffic_read_allowed_with_ability(): void
     {
-        $token = $this->createTokenWithAbilities(['traffic:read']);
+        $token = $this->createTokenWithAbilities(['traffic:read'], ['map']);
         // Multi-latest requires item_ids — 422 means ability check passed, validation ran next
         $response = $this->apiGet('/api/zabbix/multi-latest', $token);
         $this->assertContains($response->getStatusCode(), [200, 422]);
@@ -430,5 +431,229 @@ class ApiAbilityTest extends TestCase
     public function test_unauthenticated_request_returns_401(): void
     {
         $this->getJson('/api/units')->assertUnauthorized();
+    }
+
+    // ──────────────────────────────────────────────
+    // Token abilities derived from user permissions (Plan 003)
+    // ──────────────────────────────────────────────
+
+    /**
+     * Get the raw abilities array from a user's login token by hitting /api/login.
+     * Returns the token string; decode it to inspect abilities if needed.
+     */
+    private function loginAndGetToken(string $nCode, string $password = 'password'): string
+    {
+        $response = $this->postJson('/api/login', [
+            'n_code' => $nCode,
+            'password' => $password,
+        ]);
+        $response->assertOk();
+
+        return $response->json('token');
+    }
+
+    /**
+     * Decode a Sanctum token's abilities by looking up the PersonalAccessToken.
+     * This avoids JWT parsing and uses Laravel's token storage directly.
+     */
+    private function getTokenAbilities(string $token): array
+    {
+        $plain = PersonalAccessToken::findToken($token);
+
+        return $plain?->abilities ?? [];
+    }
+
+    public function test_user_role_token_carries_only_its_own_abilities(): void
+    {
+        // user role has only 'create_ticket' permission
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket']);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $this->assertContains('notifications:read', $abilities);
+        $this->assertContains('tickets:write', $abilities); // from create_ticket
+        $this->assertNotContains('hardware:read', $abilities);
+        $this->assertNotContains('reports:read', $abilities);
+        $this->assertNotContains('persons:read', $abilities);
+        $this->assertNotContains('units:read', $abilities);
+        $this->assertNotContains('todos:read', $abilities);
+        $this->assertNotContains('hr:read', $abilities);
+        $this->assertNotContains('gis:read', $abilities);
+        $this->assertNotContains('traffic:read', $abilities);
+    }
+
+    public function test_expert_role_token_includes_tickets_read(): void
+    {
+        // expert role has create_ticket + view_assigned_tickets
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket', 'view_assigned_tickets']);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $this->assertContains('tickets:read', $abilities); // from view_assigned_tickets
+        $this->assertContains('tickets:write', $abilities); // from create_ticket
+        $this->assertNotContains('hardware:read', $abilities);
+        $this->assertNotContains('reports:read', $abilities);
+    }
+
+    public function test_unit_manager_role_token_includes_reports_and_units(): void
+    {
+        // unit_manager has: create_ticket, manage_unit_tickets, view_assigned_tickets, organization, manage_personnel
+        ['user' => $user] = $this->createUserWithUnit(
+            permissions: ['create_ticket', 'manage_unit_tickets', 'view_assigned_tickets', 'organization', 'manage_personnel']
+        );
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $this->assertContains('units:read', $abilities);
+        $this->assertContains('units:write', $abilities);
+        $this->assertContains('tickets:read', $abilities);
+        $this->assertContains('tickets:write', $abilities);
+        $this->assertContains('persons:read', $abilities); // from manage_personnel
+        $this->assertContains('persons:write', $abilities); // from manage_personnel
+        $this->assertContains('reports:read', $abilities); // from manage_personnel
+        $this->assertNotContains('hardware:read', $abilities);
+        $this->assertNotContains('hr:read', $abilities);
+        $this->assertNotContains('gis:read', $abilities);
+        $this->assertNotContains('traffic:read', $abilities);
+    }
+
+    public function test_admin_role_token_includes_all_abilities(): void
+    {
+        // admin gets all permissions via RoleSeeder::syncPermissions(Permission::all())
+        ['user' => $user] = $this->createUserWithUnit(permissions: [
+            'view_all_tickets', 'create_ticket', 'manage_unit_tickets',
+            'calendar', 'view_hr_dashboard', 'map',
+            'organization', 'manage_hardware', 'manage_personnel',
+        ]);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $expected = [
+            'units:read', 'units:write',
+            'hardware:read', 'hardware:write',
+            'tickets:read', 'tickets:write',
+            'persons:read', 'persons:write',
+            'todos:read', 'todos:write',
+            'hr:read',
+            'notifications:read',
+            'gis:read',
+            'reports:read',
+            'traffic:read',
+        ];
+
+        foreach ($expected as $ability) {
+            $this->assertContains($ability, $abilities, "Missing ability: $ability");
+        }
+    }
+
+    public function test_kargozini_permission_token_includes_persons_read(): void
+    {
+        // kargozini permission alone grants persons:read (not write, not reports)
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['kargozini']);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $this->assertContains('persons:read', $abilities);
+        $this->assertNotContains('persons:write', $abilities);
+        $this->assertNotContains('reports:read', $abilities);
+    }
+
+    // ──────────────────────────────────────────────
+    // New Spatie gates on read groups (Plan 003)
+    // ──────────────────────────────────────────────
+
+    public function test_user_role_cannot_access_reports_read(): void
+    {
+        // user role has only create_ticket → no manage_personnel → 403 on /api/reports/*
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->apiGet('/api/reports/units', $token)->assertForbidden();
+        $this->apiGet('/api/reports/todos', $token)->assertForbidden();
+        $this->apiGet('/api/reports/tickets', $token)->assertForbidden();
+    }
+
+    public function test_user_role_cannot_access_hardware_read(): void
+    {
+        // user role has only create_ticket → no manage_hardware → 403 on /api/hardware
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->apiGet('/api/hardware', $token)->assertForbidden();
+        $this->apiGet('/api/hardware/stats', $token)->assertForbidden();
+    }
+
+    public function test_user_role_cannot_access_units_read(): void
+    {
+        // user role has only create_ticket → no organization → 403 on /api/units
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->apiGet('/api/units', $token)->assertForbidden();
+    }
+
+    public function test_user_role_cannot_access_zabbix_read(): void
+    {
+        // user role has only create_ticket → no map|bw → 403 on /api/zabbix/*
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        // Multi-latest requires item_ids — 422 means gate passed, validation ran next
+        $response = $this->apiGet('/api/zabbix/multi-latest', $token);
+        $this->assertEquals(403, $response->getStatusCode());
+
+        $this->apiGet('/api/zabbix/traffic', $token)->assertForbidden();
+    }
+
+    public function test_user_role_cannot_access_persons_read(): void
+    {
+        // user role has only create_ticket → no kargozini|manage_personnel → 403 on /api/persons
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['create_ticket']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->apiGet('/api/persons', $token)->assertForbidden();
+    }
+
+    public function test_kargozini_permission_can_access_persons_read(): void
+    {
+        // kargozini permission grants persons:read + the Spatie gate kargozini|manage_personnel
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['kargozini']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->apiGet('/api/persons', $token)->assertOk();
+    }
+
+    public function test_map_permission_can_access_zabbix_read(): void
+    {
+        // map permission grants traffic:read + gis:read + the Spatie gate map|bw
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        // Multi-latest requires item_ids — 422 means gate passed, validation ran next
+        $response = $this->apiGet('/api/zabbix/multi-latest', $token);
+        $this->assertContains($response->getStatusCode(), [200, 422]);
+
+        // Traffic endpoint also requires item_ids — 422 means gate passed
+        $response = $this->apiGet('/api/zabbix/traffic', $token);
+        $this->assertContains($response->getStatusCode(), [200, 422]);
+        $this->apiGet('/api/gis/stats', $token)->assertOk();
+    }
+
+    public function test_bw_permission_can_access_zabbix_read(): void
+    {
+        // bw permission also grants map|bw gate
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['bw']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $response = $this->apiGet('/api/zabbix/multi-latest', $token);
+        $this->assertContains($response->getStatusCode(), [200, 422]);
+
+        $response = $this->apiGet('/api/zabbix/traffic', $token);
+        $this->assertContains($response->getStatusCode(), [200, 422]);
     }
 }

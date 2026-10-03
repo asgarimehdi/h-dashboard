@@ -42,18 +42,7 @@ Route::post('/login', function (Request $request) {
         return response()->json(['message' => 'Credentials not match'], 401);
     }
 
-    $abilities = [
-        'units:read',
-        'hardware:read', 'hardware:write',
-        'tickets:read', 'tickets:write',
-        'persons:read', 'persons:write',
-        'todos:read', 'todos:write',
-        'hr:read',
-        'notifications:read',
-        'gis:read',
-        'reports:read',
-        'traffic:read',
-    ];
+    $abilities = $user->getApiTokenAbilities();
 
     $token = $user->createToken('flutter-app', $abilities)->plainTextToken;
 
@@ -67,7 +56,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     });
 
     // Unit API routes — ability:units:read (Issue #690)
-    Route::middleware('ability:units:read')->group(function () {
+    Route::middleware(['ability:units:read', 'role_or_permission:organization'])->group(function () {
         Route::get('/units', [UnitController::class, 'index']);
         Route::get('/units/{unit}', [UnitController::class, 'show']);
         Route::middleware(['abilities:units:write', 'role_or_permission:organization'])->group(function () {
@@ -78,13 +67,13 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     });
 
     // Zabbix / Traffic API routes — ability:traffic:read (Issue #690)
-    Route::middleware('ability:traffic:read')->group(function () {
+    Route::middleware(['ability:traffic:read', 'role_or_permission:map|bw'])->group(function () {
         Route::get('/zabbix/traffic', [TrafficController::class, 'index']);
         Route::get('/zabbix/multi-latest', [MultiLatestValueController::class, 'index']);
     });
 
     // Hardware API routes — ability:hardware:read (Issue #690)
-    Route::prefix('hardware')->middleware('ability:hardware:read')->group(function () {
+    Route::prefix('hardware')->middleware(['ability:hardware:read', 'role_or_permission:manage_hardware'])->group(function () {
         Route::get('/', [HardwareController::class, 'index']);
         Route::get('/stats', [HardwareController::class, 'stats']);
         Route::get('/{hardware}', [HardwareController::class, 'show']);
@@ -155,14 +144,14 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     });
 
     // Report API routes — ability:reports:read (Issue #690)
-    Route::middleware('ability:reports:read')->group(function () {
+    Route::middleware(['ability:reports:read', 'role_or_permission:manage_personnel'])->group(function () {
         Route::get('/reports/units', [ReportController::class, 'units']);
         Route::get('/reports/todos', [ReportController::class, 'todos']);
         Route::get('/reports/tickets', [ReportController::class, 'tickets']);
     });
 
     // Person API routes — ability:persons:read (Issue #690)
-    Route::prefix('persons')->middleware('ability:persons:read')->group(function () {
+    Route::prefix('persons')->middleware(['ability:persons:read', 'role_or_permission:kargozini|manage_personnel'])->group(function () {
         Route::get('/', [PersonController::class, 'index']);
         Route::get('/{person}', [PersonController::class, 'show']);
 
