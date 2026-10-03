@@ -262,22 +262,23 @@ return new class extends Component
             ->withAggregate('unit', 'name');
 
         if (! empty($this->search)) {
-            // normalizeForQuery normalizes Persian/Arabic chars + escapes LIKE wildcards.
-            $search = PersianNormalizer::normalizeForQuery($this->search);
-
+            // Fold both the column and the term for Persian char equivalence.
             // Each whitespace-separated term must match (AND); within a term,
-            // any of n_code / "first last" / "last first" / unit name counts,
-            // so "عسگری مهدی" finds «مهدی عسگری» too (#494).
-            $terms = array_values(array_filter(explode(' ', $search), fn ($t) => $t !== ''));
+            // any of n_code / "first last" / "last first" / unit name counts.
+            $terms = array_values(array_filter(explode(' ', PersianNormalizer::normalizeForSearch($this->search)), fn ($t) => $t !== ''));
 
             $query->where(function ($q) use ($terms) {
                 foreach ($terms as $term) {
-                    $q->where(function ($tq) use ($term) {
-                        $tq->where('n_code', 'LIKE', '%'.$term.'%')
-                            ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$term}%"])
-                            ->orWhereRaw("CONCAT(l_name, ' ', f_name) LIKE ?", ["%{$term}%"])
-                            ->orWhereHas('unit', function ($uq) use ($term) {
-                                $uq->where('name', 'LIKE', "%{$term}%");
+                    $foldedTerm = PersianNormalizer::foldedTerm($term);
+                    $q->where(function ($tq) use ($foldedTerm) {
+                        // n_code is numeric only - keep raw LIKE
+                        $tq->where('n_code', 'LIKE', "%{$foldedTerm}%")
+                            // Fold CONCAT columns for Persian equivalence
+                            ->orWhereRaw(PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$foldedTerm}%"])
+                            ->orWhereRaw(PersianNormalizer::foldSeparatorsSql("CONCAT(l_name, ' ', f_name)").' LIKE ?', ["%{$foldedTerm}%"])
+                            // Fold unit name column
+                            ->orWhereHas('unit', function ($uq) use ($foldedTerm) {
+                                $uq->whereRaw(PersianNormalizer::foldSeparatorsSql('name').' LIKE ?', ["%{$foldedTerm}%"]);
                             });
                     });
                 }

@@ -245,3 +245,56 @@ test('admin can still create update delete normally', function () {
 
     $this->assertSoftDeleted($targetUser);
 });
+
+test('users search folds zwj in stored person name', function () {
+    $nCode = (string) fake()->unique()->numerify('##########');
+    $person = Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'مهدی',
+        'l_name' => "حرفه\u{200C}ای", // ZWNJ in last name — normalized to space on save
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $person->refresh();
+
+    User::factory()->create(['n_code' => $nCode]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'حرفه ای')
+        ->assertViewHas('users', fn ($users) => $users->count() === 1);
+});
+
+test('users search folds arabic alef in stored person name', function () {
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'آموزش', // Arabic alef-madda — normalized to plain alef on save
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    User::factory()->create(['n_code' => $nCode]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'اموزش')
+        ->assertSee('اموزش کاربر'); // Alef normalized on save
+});
+
+test('users search folds persian digits in stored person name', function () {
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'تست۴۵', // Persian digits — normalized to Latin on save
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    User::factory()->create(['n_code' => $nCode]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'تست45')
+        ->assertSee('تست45 کاربر'); // Digits normalized on save
+});

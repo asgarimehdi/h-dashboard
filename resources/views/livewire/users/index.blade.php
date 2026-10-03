@@ -267,14 +267,13 @@ return new class extends Component
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
             ->when($this->search, function (Builder $q) {
-                // Persian-normalize the raw input (ي/ك variants, ZWNJ,
-                // Persian digits) so «محمدی» typed with Arabic Yeh still
-                // matches the stored name (#494 follow-up).
-                $search = \App\Traits\PersianNormalizer::normalizeForQuery($this->search);
+                // Fold both the column (CONCAT) and the term for Persian char equivalence.
+                $term = \App\Traits\PersianNormalizer::foldedTerm($this->search);
+                $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
 
-                $q->whereHas('person', function ($query) use ($search) {
-                    $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
-                        ->orWhere('n_code', 'like', "%{$search}%");
+                $q->whereHas('person', function ($query) use ($term, $foldedConcat) {
+                    $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
+                        ->orWhere('n_code', 'like', "%{$term}%");
                 });
             })
             ->whereNot('id', auth()->id());
@@ -304,12 +303,13 @@ return new class extends Component
             return [];
         }
 
-        $search = \App\Traits\PersianNormalizer::normalizeForQuery($this->person_search);
+        $term = \App\Traits\PersianNormalizer::foldedTerm($this->person_search);
+        $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
 
         return Person::query()
-            ->where(function ($query) use ($search) {
-                $query->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$search}%"])
-                    ->orWhere('n_code', 'like', "%{$search}%");
+            ->where(function ($query) use ($term, $foldedConcat) {
+                $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
+                    ->orWhere('n_code', 'like', "%{$term}%");
             })
             ->limit(20)
             ->get()
