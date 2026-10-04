@@ -99,7 +99,7 @@ class GisController extends Controller
     {
         $scopeHash = md5(implode(',', array_map('strval', $accessibleIds)));
         $extra = array_merge(['endpoint' => $endpoint], $extra);
-        $extraHash = empty($extra) ? 'none' : md5(serialize($extra));
+        $extraHash = md5(serialize($extra));
 
         return $this->cache->cacheKey('gis', $scopeHash, "{$bbox}:{$extraHash}");
     }

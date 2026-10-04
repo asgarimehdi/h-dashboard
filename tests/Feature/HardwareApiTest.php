@@ -261,6 +261,7 @@ class HardwareApiTest extends TestCase
         ]);
         $userB = User::create(['n_code' => $nCodeB, 'password' => Hash::make('password')]);
         $userB->units()->attach($unitB->id, ['role' => 'staff', 'is_primary' => true]);
+        $userB->givePermissionTo('manage_hardware');
 
         // Create hardware for both units
         Hardware::create(['n_code' => $personA->n_code, 'pc_name' => 'PC-A1', 'type' => 'desktop', 'shutdown' => false]);

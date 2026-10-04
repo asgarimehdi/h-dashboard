@@ -79,15 +79,39 @@ return new class extends Component
         $this->success('فیلترها پاک شدند.', position: 'toast-bottom');
     }
 
+    /**
+     * The acting user, typed as the Eloquent model so static analysis can
+     * resolve the permission and role checks below.
+     */
+    private function actor(): User
+    {
+        $actor = \Illuminate\Support\Facades\Auth::user();
+
+        if (! $actor instanceof User) {
+            abort(403);
+        }
+
+        return $actor;
+    }
+
+    /**
+     * The acting user's id, resolved through the typed actor() so static
+     * analysis does not flag it on the auth factory contract.
+     */
+    private function actorId(): int
+    {
+        return $this->actor()->id;
+    }
+
     public function delete(User $user): void
     {
         $this->authorize('manage_users');
 
-        if ($user->id === auth()->id()) {
+        if ($user->id === $this->actorId()) {
             abort(403, 'شما نمی‌توانید خودتان را غیرفعال کنید.');
         }
 
-        if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+        if ($user->hasRole('admin') && ! $this->actor()->hasRole('admin')) {
             abort(403, 'تنها مدیران می‌توانند کاربران مدیر را غیرفعال کنند.');
         }
 
@@ -100,13 +124,13 @@ return new class extends Component
         $this->authorize('manage_users');
         $user = User::withTrashed()->findOrFail($userId);
 
-        if ($user->id === auth()->id()) {
+        if ($user->id === $this->actorId()) {
             $this->error('شما نمی‌توانید خودتان را فعال کنید.', position: 'toast-bottom');
 
             return;
         }
 
-        if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+        if ($user->hasRole('admin') && ! $this->actor()->hasRole('admin')) {
             abort(403, 'تنها مدیران می‌توانند کاربران مدیر را فعال کنند.');
         }
 
@@ -223,7 +247,7 @@ return new class extends Component
         try {
             $user = User::withTrashed()->findOrFail($this->editing_user_id);
 
-            if ($user->hasRole('admin') && ! auth()->user()->hasRole('admin')) {
+            if ($user->hasRole('admin') && ! $this->actor()->hasRole('admin')) {
                 abort(403, 'تنها مدیران می‌توانند کاربران مدیر را ویرایش کنند.');
             }
 
@@ -276,7 +300,7 @@ return new class extends Component
                         ->orWhere('n_code', 'like', "%{$term}%");
                 });
             })
-            ->whereNot('id', auth()->id());
+            ->whereNot('id', $this->actorId());
 
         if ($this->filterStatus === 'active') {
             $query->whereNull('deleted_at');

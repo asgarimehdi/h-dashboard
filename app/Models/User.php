@@ -129,6 +129,8 @@ class User extends Authenticatable
      *
      * Maps each permission to its corresponding API ability(ies).
      * Admins (who have all permissions via RoleSeeder) get the full set.
+     *
+     * @return array<int, string>
      */
     public function getApiTokenAbilities(): array
     {
