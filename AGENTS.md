@@ -67,8 +67,8 @@ link's visibility in both directions, plus a real `GET` per link.
 
 - Groups: **ابزارهای مدیریتی** (`map`|`bw` → `/it/networks` + `/it/wireless`; `manage_zabbix` →
   `/it/zabbix-devices`; `op-cache` → `/op`, with `@production` so the link never renders where the route
-  does not exist), **ابزار مدیریتی** (`manage_users` → `/tools`), **سخت‌افزار** (`manage_hardware` →
-  `/hardware` + `/maintenance`), **گزارش‌ها** (`manage_personnel`, plus `manage_users` for `/activity-log`).
+  does not exist), **ابزار مدیریتی** (`manage_users` → `/tools`), **سخت افزار** (`manage_hardware` →
+  `/hardware` + `/maintenance`), **گزارش ها** (`manage_personnel`, plus `manage_users` for `/activity-log`).
 - `/it/networks` and `/it/wireless` live in their **own** `role_or_permission:map|bw` group — **not**
   nested inside the `map` group. Nesting re-adds `map` as an extra requirement and 403s a `bw`-only user
   (there is a regression test for exactly this). Nested `middleware(['a', 'b'])` means **AND**, not OR.
