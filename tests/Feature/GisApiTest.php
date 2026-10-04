@@ -318,4 +318,20 @@ class GisApiTest extends TestCase
         $names = array_column($features, 'properties.name');
         $this->assertNotContains('Unit B', $names);
     }
+
+    /** @test */
+    public function test_gis_cache_key_is_independent_of_accessible_ids_order(): void
+    {
+        $controller = $this->app->make(GisController::class);
+
+        $method = new \ReflectionMethod($controller, 'gisCacheKey');
+        $method->setAccessible(true);
+
+        $key1 = $method->invoke($controller, 'units', [3, 1, 2], 'bbox');
+        $key2 = $method->invoke($controller, 'units', [1, 2, 3], 'bbox');
+        $key3 = $method->invoke($controller, 'units', [2, 3, 1], 'bbox');
+
+        $this->assertSame($key1, $key2);
+        $this->assertSame($key1, $key3);
+    }
 }
