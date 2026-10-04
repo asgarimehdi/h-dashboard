@@ -43,7 +43,9 @@ class AccessService
         $sessionUnitId = session('current_unit_id', 'none');
         $cache = app(CacheInvalidationServiceInterface::class);
         $version = $cache->getVersion('unit_hierarchy');
-        $cacheKey = "accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
+        $sortedBase = $baseUnitIds;
+        sort($sortedBase);
+        $cacheKey = "accessible_units:v{$version}:{$user->id}:{$sessionUnitId}:".md5(json_encode($sortedBase));
 
         return Cache::remember(
             $cacheKey,

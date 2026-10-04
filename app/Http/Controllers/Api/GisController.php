@@ -91,13 +91,17 @@ class GisController extends Controller
 
     /**
      * Build a cache key for GIS endpoints via the unified service.
+     * Uses the shared 'gis' namespace (incremented on hardware/person changes)
+     * and includes the endpoint in extra data for per-endpoint separation.
+     * Sorts accessibleIds to ensure consistent cache keys regardless of DB result order.
      */
     protected function gisCacheKey(string $endpoint, array $accessibleIds, string $bbox, array $extra = []): string
     {
-        $scopeHash = md5(implode(',', $accessibleIds));
-        $extraHash = empty($extra) ? 'none' : md5(serialize($extra));
+        $scopeHash = md5(implode(',', array_map('strval', $accessibleIds)));
+        $extra = array_merge(['endpoint' => $endpoint], $extra);
+        $extraHash = md5(serialize($extra));
 
-        return $this->cache->cacheKey("gis_{$endpoint}", $scopeHash, "{$bbox}:{$extraHash}");
+        return $this->cache->cacheKey('gis', $scopeHash, "{$bbox}:{$extraHash}");
     }
 
     /**

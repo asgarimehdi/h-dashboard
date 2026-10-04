@@ -155,4 +155,38 @@ class AccessServiceTest extends TestCase
         $this->assertEquals($first, $second);
         $this->assertCount(1, $first);
     }
+
+    public function test_accessible_unit_ids_cache_key_independent_of_base_units_order(): void
+    {
+        $parent1 = Unit::create(['name' => 'Parent 1']);
+        $parent2 = Unit::create(['name' => 'Parent 2']);
+        $child1 = Unit::create(['name' => 'Child 1', 'parent_id' => $parent1->id]);
+        $child2 = Unit::create(['name' => 'Child 2', 'parent_id' => $parent2->id]);
+        $user = $this->makeUserInUnit($parent1);
+        // Attach both parent units to user (no current_unit_id set)
+        $user->units()->attach($parent1->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->units()->attach($parent2->id, ['role' => 'staff', 'is_primary' => false]);
+        // No current_unit_id -> baseUnitIds = [$parent1->id, $parent2->id] (order from pluck)
+        $this->actingAs($user);
+
+        Cache::put('unit_hierarchy_version', 0);
+
+        // First call - baseUnitIds order depends on DB pluck order
+        $first = app(AccessService::class)->accessibleUnitIds($user);
+
+        // Clear user's session to force re-derivation (but keep cache version same)
+        Session::forget('current_unit_id');
+
+        // Second call - should hit same cache regardless of pluck order
+        DB::enableQueryLog();
+        $second = app(AccessService::class)->accessibleUnitIds($user);
+        $queries = DB::getQueryLog();
+
+        $this->assertEqualsCanonicalizing($first, $second);
+        $this->assertNotEmpty($first);
+
+        // Filter to only CTE queries (descendant recursive CTE query used by AccessService)
+        $cteQueries = array_filter($queries, fn ($q) => str_contains($q['query'] ?? '', 'WITH RECURSIVE unit_tree'));
+        $this->assertCount(0, $cteQueries, 'No new CTE query should run for different baseUnitIds order');
+    }
 }

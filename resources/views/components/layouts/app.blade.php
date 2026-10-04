@@ -267,16 +267,14 @@
                     @can('manage_zabbix')
                     <x-menu-item title="مدیریت دستگاه‌های زبیکس" icon="o-server-stack" link="/it/zabbix-devices" wire:navigate />
                     @endcan
-                    {{-- `op-cache` gate, not the bare link that used to show on every
-                         environment: /op exists only outside production (routes/web.php). --}}
+                    {{-- `op-cache` gate: /op route only exists when app()->isLocal() (routes/web.php). --}}
                     @can('op-cache')
-                    @production
-                    @else
+                    @if (app()->isLocal())
                     <a href="/op" class="flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-base-200 transition-colors">
                         <x-icon name="o-server" class="w-5 h-5" />
                         <span>کش سرور</span>
                     </a>
-                    @endproduction
+                    @endif
                     @endcan
                 </x-menu-sub>
                 @endcanany

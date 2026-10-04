@@ -140,6 +140,35 @@ class UnitModelTest extends TestCase
         $this->assertEquals($result1->toArray(), $result2->toArray());
     }
 
+    public function test_ancestor_ids_cache_key_independent_of_input_order(): void
+    {
+        $unit = Unit::create(['name' => 'واحد']);
+        $parent = Unit::create(['name' => 'والد', 'parent_id' => $unit->id]);
+        $child = Unit::create(['name' => 'فرزند', 'parent_id' => $parent->id]);
+        $grandchild = Unit::create(['name' => 'نوه', 'parent_id' => $child->id]);
+
+        Cache::put('unit_hierarchy_version', 0);
+
+        // Use three IDs where sort order differs from both input orders
+        $ids1 = [$grandchild->id, $parent->id, $child->id];
+        $ids2 = [$child->id, $grandchild->id, $parent->id];
+
+        // First call with one order - populates cache (runs CTE query)
+        $result1 = Unit::ancestorIds($ids1);
+
+        // Second call with different order - should hit cache, no new CTE query
+        DB::enableQueryLog();
+        $result2 = Unit::ancestorIds($ids2);
+        $queries = DB::getQueryLog();
+
+        // Results should be identical
+        $this->assertEqualsCanonicalizing($result1->toArray(), $result2->toArray());
+
+        // Filter to only CTE queries (ancestor JOIN query)
+        $cteQueries = array_filter($queries, fn ($q) => str_contains($q['query'] ?? '', 'INNER JOIN units parent'));
+        $this->assertCount(0, $cteQueries, 'No new CTE query should run for different input order');
+    }
+
     // --- descendantIds ---
 
     public function test_descendant_ids_returns_all_descendants(): void
@@ -260,6 +289,34 @@ class UnitModelTest extends TestCase
         $result2 = Unit::descendantIds([$parent->id]);
 
         $this->assertEquals($result1->toArray(), $result2->toArray());
+    }
+
+    public function test_descendant_ids_cache_key_independent_of_input_order(): void
+    {
+        $parent = Unit::create(['name' => 'والد']);
+        $child1 = Unit::create(['name' => 'فرزند ۱', 'parent_id' => $parent->id]);
+        $child2 = Unit::create(['name' => 'فرزند ۲', 'parent_id' => $parent->id]);
+
+        Cache::put('unit_hierarchy_version', 0);
+
+        // Use three IDs where sort order differs from both input orders
+        $ids1 = [$child1->id, $child2->id, $parent->id];
+        $ids2 = [$parent->id, $child2->id, $child1->id];
+
+        // First call with one order - populates cache (runs CTE query)
+        $result1 = Unit::descendantIds($ids1);
+
+        // Second call with different order - should hit cache, no new CTE query
+        DB::enableQueryLog();
+        $result2 = Unit::descendantIds($ids2);
+        $queries = DB::getQueryLog();
+
+        // Results should be identical
+        $this->assertEqualsCanonicalizing($result1->toArray(), $result2->toArray());
+
+        // Filter to only CTE queries (descendant recursive CTE query)
+        $cteQueries = array_filter($queries, fn ($q) => str_contains($q['query'] ?? '', 'WITH RECURSIVE unit_tree'));
+        $this->assertCount(0, $cteQueries, 'No new CTE query should run for different input order');
     }
 
     // --- withinBounds scope ---

@@ -5125,12 +5125,6 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\User\>\:\:onlyTrashed\(\)\.$#'
 			identifier: method.notFound
 			count: 1

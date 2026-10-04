@@ -8,6 +8,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\CacheInvalidationService;
 use App\Services\CacheInvalidationServiceInterface;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -17,6 +18,11 @@ covers(CacheInvalidationService::class);
 
 uses(InteractsWithTestSetup::class);
 uses(TestCase::class, RefreshDatabase::class);
+
+beforeEach(function () {
+    $this->seed(PermissionSeeder::class);
+    $this->seedLookupTables();
+});
 
 it('does not double-increment gis on hardware create', function () {
     // Create hardware (factory creates Unit + Person + Hardware, each bumping gis)
@@ -128,4 +134,77 @@ it('batch deduplicates multiple gis increments into one', function () {
     // gis bumped once (deduplicated), hardware_stats bumped once
     $this->assertEquals(1, Cache::get('gis_version'));
     $this->assertEquals(1, Cache::get('hardware_stats_version'));
+});
+
+it('gis cache is busted when unit is mutated', function () {
+    ['user' => $user, 'unit' => $userUnit] = $this->createUserWithUnit(['map']);
+    $this->actingAs($user);
+
+    // Create a unit within the user's accessible scope (child of their unit)
+    $unit = Unit::factory()->create([
+        'parent_id' => $userUnit->id,
+        'lat' => 35.6892,
+        'lng' => 51.3890,
+        'is_active' => true,
+    ]);
+
+    $bbox = '51.0,35.0,52.0,36.0';
+
+    // First request - should cache the result
+    $response1 = $this->getJson("/api/gis/units?bbox={$bbox}");
+    $response1->assertOk();
+    $data1 = $response1->json('features');
+    $count1 = count($data1);
+    $this->assertGreaterThan(0, $count1, 'First request should return units');
+
+    // Mutate the unit (change is_active - this triggers gis increment via Unit model observer)
+    $unit->update(['is_active' => false]);
+
+    // Second request with same bbox - should NOT serve stale cache
+    $response2 = $this->getJson("/api/gis/units?bbox={$bbox}");
+    $response2->assertOk();
+    $data2 = $response2->json('features');
+    $count2 = count($data2);
+
+    // The cache should have been busted, so the second response should differ
+    $this->assertNotEquals($count1, $count2, 'GIS cache should be invalidated when unit changes');
+});
+
+it('gis cache is busted when hardware is added', function () {
+    ['user' => $user, 'unit' => $userUnit] = $this->createUserWithUnit(['map']);
+
+    // Ensure the unit's lat/lng falls within the test bbox
+    $userUnit->update([
+        'lat' => 35.5,
+        'lng' => 51.5,
+    ]);
+
+    $this->actingAs($user);
+
+    $person = Person::factory()->create([
+        'u_id' => $userUnit->id,
+    ]);
+
+    $bbox = '51.0,35.0,52.0,36.0';
+
+    // First request - no hardware for this person yet
+    $response1 = $this->getJson("/api/gis/hardware?bbox={$bbox}");
+    $response1->assertOk();
+    $data1 = $response1->json('features');
+    $count1 = count($data1);
+
+    // Add hardware for this person (triggers gis increment via Hardware model observer)
+    Hardware::factory()->create([
+        'n_code' => $person->n_code,
+        'pc_name' => 'GIS-Test-HW',
+    ]);
+
+    // Second request with same bbox - should NOT serve stale cache
+    $response2 = $this->getJson("/api/gis/hardware?bbox={$bbox}");
+    $response2->assertOk();
+    $data2 = $response2->json('features');
+    $count2 = count($data2);
+
+    // The cache should have been busted, so the second response should differ
+    $this->assertNotEquals($count1, $count2, 'GIS cache should be invalidated when hardware is added');
 });

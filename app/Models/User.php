@@ -123,4 +123,63 @@ class User extends Authenticatable
 
     protected $hidden = ['password',
         'settings', 'remember_token'];
+
+    /**
+     * Derive API token abilities from the user's Spatie permissions.
+     *
+     * Maps each permission to its corresponding API ability(ies).
+     * Admins (who have all permissions via RoleSeeder) get the full set.
+     *
+     * @return array<int, string>
+     */
+    public function getApiTokenAbilities(): array
+    {
+        $abilities = ['notifications:read'];
+
+        if ($this->hasPermissionTo('organization')) {
+            $abilities[] = 'units:read';
+            $abilities[] = 'units:write';
+        }
+
+        if ($this->hasPermissionTo('manage_hardware')) {
+            $abilities[] = 'hardware:read';
+            $abilities[] = 'hardware:write';
+        }
+
+        if ($this->hasAnyPermission(['view_assigned_tickets', 'view_all_tickets'])) {
+            $abilities[] = 'tickets:read';
+        }
+
+        if ($this->hasPermissionTo('create_ticket')) {
+            $abilities[] = 'tickets:write';
+        }
+
+        if ($this->hasAnyPermission(['kargozini', 'manage_personnel'])) {
+            $abilities[] = 'persons:read';
+        }
+
+        if ($this->hasPermissionTo('manage_personnel')) {
+            $abilities[] = 'persons:write';
+        }
+
+        if ($this->hasPermissionTo('calendar')) {
+            $abilities[] = 'todos:read';
+            $abilities[] = 'todos:write';
+        }
+
+        if ($this->hasPermissionTo('view_hr_dashboard')) {
+            $abilities[] = 'hr:read';
+        }
+
+        if ($this->hasAnyPermission(['map', 'bw'])) {
+            $abilities[] = 'traffic:read';
+            $abilities[] = 'gis:read';
+        }
+
+        if ($this->hasPermissionTo('manage_personnel')) {
+            $abilities[] = 'reports:read';
+        }
+
+        return $abilities;
+    }
 }
