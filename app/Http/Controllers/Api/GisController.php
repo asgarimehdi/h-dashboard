@@ -97,7 +97,9 @@ class GisController extends Controller
      */
     protected function gisCacheKey(string $endpoint, array $accessibleIds, string $bbox, array $extra = []): string
     {
-        $scopeHash = md5(implode(',', array_map('strval', $accessibleIds)));
+        $idStrings = array_map('strval', $accessibleIds);
+        sort($idStrings, SORT_STRING);
+        $scopeHash = md5(implode(',', $idStrings));
         $extra = array_merge(['endpoint' => $endpoint], $extra);
         $extraHash = md5(serialize($extra));
 
