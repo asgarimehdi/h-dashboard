@@ -129,7 +129,7 @@ jobs:
         run: ./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         if: always()
         with:
           files: ./coverage.xml
