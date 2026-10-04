@@ -82,8 +82,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_tickets_by_day_defaults_to_thirty_days(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTicket($user, 'OLD-1', now()->subDays(45));
         $this->createTicket($user, 'NEW-1', now()->subDays(2));
@@ -99,8 +99,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_tickets_by_day_honours_a_custom_days_parameter(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTicket($user, 'OLD-1', now()->subDays(45));
         $this->createTicket($user, 'NEW-1', now()->subDays(2));
@@ -116,8 +116,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_tickets_by_day_contains_every_day_in_the_window_with_a_zero_count(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTicket($user, 'T-1', now()->subDays(1));
         $this->createTicket($user, 'T-2', now());
@@ -148,8 +148,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_tickets_by_day_window_is_inclusive_of_today(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTicket($user, 'T-1', now());
 
@@ -164,8 +164,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_todos_by_day_honours_the_same_window_as_tickets(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTodo($user, 'قدیمی', now()->subDays(40));
         $this->createTodo($user, 'اخیر', now()->subDays(1));
@@ -181,8 +181,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_todos_by_day_fills_empty_days(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTodo($user, 'یک', now()->subDays(1));
 
@@ -201,8 +201,8 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_by_day_rejects_a_non_positive_window(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->apiGet('/api/reports/tickets?days=0', $token)->assertStatus(422);
         $this->apiGet('/api/reports/tickets?days=-5', $token)->assertStatus(422);
@@ -210,16 +210,16 @@ class ReportsByDayRangeTest extends TestCase
 
     public function test_by_day_rejects_a_window_above_the_cap(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->apiGet('/api/reports/tickets?days=5000', $token)->assertStatus(422);
     }
 
     public function test_by_day_clamps_a_nonsense_value_instead_of_erroring(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $token = $this->createApiToken($user, ['reports:read']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user);
 
         $this->createTicket($user, 'T-1', now());
 

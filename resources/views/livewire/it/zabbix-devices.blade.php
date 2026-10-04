@@ -375,8 +375,8 @@ return new class extends Component
         $query = ZabbixDevice::query();
 
         if ($this->search !== '') {
-            $needle = '%'.PersianNormalizer::normalizeForQuery($this->search).'%';
-            $query->where('name', 'like', $needle);
+            $term = PersianNormalizer::foldedTerm($this->search);
+            $query->whereRaw(PersianNormalizer::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
         }
 
         $column = in_array($this->sortBy['column'], self::SORTABLE_COLUMNS, true)

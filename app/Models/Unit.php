@@ -207,7 +207,9 @@ class Unit extends Model
         // Cache by sorted IDs to get consistent results regardless of input order
         $cache = app(CacheInvalidationServiceInterface::class);
         $version = $cache->getVersion('unit_hierarchy');
-        $cacheKey = 'unit_ancestors:v'.$version.':'.md5(implode(',', array_map('strval', $ids)));
+        $sorted = array_map('strval', $ids);
+        sort($sorted, SORT_STRING);
+        $cacheKey = 'unit_ancestors:v'.$version.':'.md5(implode(',', $sorted));
 
         return Cache::remember(
             $cacheKey,
@@ -249,7 +251,9 @@ class Unit extends Model
         // Cache by sorted IDs to get consistent results regardless of input order
         $cache = app(CacheInvalidationServiceInterface::class);
         $version = $cache->getVersion('unit_hierarchy');
-        $cacheKey = 'unit_descendants:v'.$version.':'.md5(implode(',', array_map('strval', $ids)));
+        $sorted = array_map('strval', $ids);
+        sort($sorted, SORT_STRING);
+        $cacheKey = 'unit_descendants:v'.$version.':'.md5(implode(',', $sorted));
 
         return Cache::remember(
             $cacheKey,

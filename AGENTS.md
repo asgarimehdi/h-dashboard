@@ -67,8 +67,8 @@ link's visibility in both directions, plus a real `GET` per link.
 
 - Groups: **ابزارهای مدیریتی** (`map`|`bw` → `/it/networks` + `/it/wireless`; `manage_zabbix` →
   `/it/zabbix-devices`; `op-cache` → `/op`, with `@production` so the link never renders where the route
-  does not exist), **ابزار مدیریتی** (`manage_users` → `/tools`), **سخت‌افزار** (`manage_hardware` →
-  `/hardware` + `/maintenance`), **گزارش‌ها** (`manage_personnel`, plus `manage_users` for `/activity-log`).
+  does not exist), **ابزار مدیریتی** (`manage_users` → `/tools`), **سخت افزار** (`manage_hardware` →
+  `/hardware` + `/maintenance`), **گزارش ها** (`manage_personnel`, plus `manage_users` for `/activity-log`).
 - `/it/networks` and `/it/wireless` live in their **own** `role_or_permission:map|bw` group — **not**
   nested inside the `map` group. Nesting re-adds `map` as an extra requirement and 403s a `bw`-only user
   (there is a regression test for exactly this). Nested `middleware(['a', 'b'])` means **AND**, not OR.
@@ -111,16 +111,16 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 
 | Route group | Read (GET) | Write (POST/PUT/DELETE) |
 |---|---|---|
-| `/api/units` | `ability:units:read` | `abilities:units:write` + `role_or_permission:organization` |
-| `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` | — |
-| `/api/hardware/*` | `ability:hardware:read` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
-| `/api/tickets*` (+ comments) | `ability:tickets:read` | `abilities:tickets:write` |
-| `/api/reports/*` | `ability:reports:read` | — |
-| `/api/persons/*` | `ability:persons:read` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
-| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) | same middleware + `role_or_permission:calendar` |
-| `/api/hr/*` | `ability:hr:read` | `role_or_permission:view_hr_dashboard` |
+| `/api/units` | `ability:units:read` + `role_or_permission:organization` | `abilities:units:write` + `role_or_permission:organization` |
+| `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` + `role_or_permission:map\|bw` | — |
+| `/api/hardware/*` | `ability:hardware:read` + `role_or_permission:manage_hardware` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
+| `/api/tickets*` (+ comments) | `ability:tickets:read` + `role_or_permission:view_assigned_tickets\|view_all_tickets` (per-route) | `abilities:tickets:write` + per-route `permission:create_ticket` / `permission:manage_unit_tickets` |
+| `/api/reports/*` | `ability:reports:read` + `role_or_permission:manage_personnel` | — |
+| `/api/persons/*` | `ability:persons:read` + `role_or_permission:kargozini\|manage_personnel` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
+| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | same middleware + `role_or_permission:calendar` |
+| `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | `role_or_permission:view_hr_dashboard` |
 | `/api/notifications*` | `ability:notifications:read` | — |
-| `/api/gis*` | `ability:gis:read` | `role_or_permission:map` |
+| `/api/gis*` | `ability:gis:read` + `role_or_permission:map` | `role_or_permission:map` |
 
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.

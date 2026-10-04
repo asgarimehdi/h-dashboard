@@ -9,16 +9,17 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAuditController::class);
 
 class HardwareAuditControllerTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $tId;
@@ -40,10 +41,7 @@ class HardwareAuditControllerTest extends TestCase
         parent::setUp();
         Session::flush();
 
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        $this->seedLookupTables();
 
         $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);
@@ -51,10 +49,10 @@ class HardwareAuditControllerTest extends TestCase
             'n_code' => $nCode,
             'f_name' => 'Test',
             'l_name' => 'User',
-            't_id' => $this->tId,
-            'e_id' => $this->eId,
-            's_id' => $this->sId,
-            'r_id' => $this->rId,
+            't_id' => 1,
+            'e_id' => 1,
+            's_id' => 1,
+            'r_id' => 1,
             'u_id' => $this->unit->id,
         ]);
         $this->user = User::create([
@@ -65,8 +63,6 @@ class HardwareAuditControllerTest extends TestCase
         Permission::firstOrCreate(['name' => 'manage_hardware']);
         $this->user->givePermissionTo('manage_hardware');
         Session::put('current_unit_id', $this->unit->id);
-
-        $this->actingAs($this->user);
 
         $this->hardware = Hardware::create([
             'n_code' => $nCode,
@@ -81,11 +77,37 @@ class HardwareAuditControllerTest extends TestCase
         ]);
     }
 
-    private function authHeaders(): array
+    private function createTokenWithAbilities(array $abilities, array $permissions = []): string
     {
-        $token = $this->user->createToken('test')->plainTextToken;
+        $args = [];
+        if ($permissions) {
+            $args['permissions'] = $permissions;
+        }
+        ['user' => $user] = $this->createUserWithUnit(...$args);
 
-        return ['Authorization' => 'Bearer '.$token];
+        return $user->createToken('test-token', $abilities)->plainTextToken;
+    }
+
+    private function createTokenForUser(User $user, array $abilities): string
+    {
+        return $user->createToken('test-token', $abilities)->plainTextToken;
+    }
+
+    private function apiGet(string $url, string $token)
+    {
+        return $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'Accept' => 'application/json',
+        ])->getJson($url);
+    }
+
+    private function apiPost(string $url, array $data, string $token)
+    {
+        return $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])->postJson($url, $data);
     }
 
     public function test_show_returns_single_audit_with_full_diff(): void
@@ -95,8 +117,8 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'updated')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}");
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits/{$audit->id}", $token);
 
         $response->assertStatus(200)
             ->assertJsonPath('data.id', $audit->id)
@@ -115,8 +137,8 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'created')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits/{$otherAudit->id}");
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits/{$otherAudit->id}", $token);
 
         $response->assertStatus(404);
     }
@@ -127,8 +149,8 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'created')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", []);
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [], $token);
 
         $response->assertStatus(422);
     }
@@ -139,11 +161,10 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'created')
             ->first();
 
-        // 'switch' is fillable but not in the created audit's changes (hardware has no switch set)
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
-                'field' => 'switch',
-            ]);
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
+            'field' => 'switch',
+        ], $token);
 
         $response->assertStatus(422)
             ->assertJsonPath('message', 'Field not found in audit record.');
@@ -156,10 +177,10 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'updated')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
-                'field' => 'mark',
-            ]);
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
+            'field' => 'mark',
+        ], $token);
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true);
@@ -173,8 +194,8 @@ class HardwareAuditControllerTest extends TestCase
     {
         $this->hardware->update(['cpu' => 'Intel i9']);
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits/export");
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits/export", $token);
 
         $response->assertStatus(200);
         $this->assertStringContainsString(
@@ -185,8 +206,8 @@ class HardwareAuditControllerTest extends TestCase
 
     public function test_export_with_csv_format(): void
     {
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits/export?format=csv");
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits/export?format=csv", $token);
 
         $response->assertStatus(200);
     }
@@ -198,13 +219,11 @@ class HardwareAuditControllerTest extends TestCase
             ->first();
         $this->hardware->forceDelete();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/hardware/audits/{$createdAudit->id}/restore-record");
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token);
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true);
-        // A new hardware row is recreated from the audit (id may differ because
-        // 'id' is not mass-assignable, so assert on a restored field instead).
         $this->assertDatabaseHas('hardwares', [
             'pc_name' => 'TEST-PC-001',
             'cpu' => 'Intel i5',
@@ -218,8 +237,8 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'updated')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/hardware/audits/{$audit->id}/restore-record");
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/audits/{$audit->id}/restore-record", [], $token);
 
         $response->assertStatus(422)
             ->assertJsonPath('message', 'Only "created" audits can be used to restore a record.');
@@ -231,8 +250,8 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'created')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->postJson("/api/hardware/audits/{$createdAudit->id}/restore-record");
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token);
 
         $response->assertStatus(422)
             ->assertJsonPath('message', 'This hardware record still exists — use rollback instead.');
@@ -245,8 +264,8 @@ class HardwareAuditControllerTest extends TestCase
             ->where('action', 'updated')
             ->first();
 
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits?user_id={$audit->user_id}");
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits?user_id={$audit->user_id}", $token);
 
         $response->assertStatus(200);
         $data = $response->json('data');
@@ -258,10 +277,62 @@ class HardwareAuditControllerTest extends TestCase
 
     public function test_index_filters_invalid_field_returns_empty(): void
     {
-        $response = $this->withHeaders($this->authHeaders())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits?field=nonexistent_field");
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits?field=nonexistent_field", $token);
 
         $response->assertStatus(200);
         $this->assertEquals(0, $response->json('meta.total'));
+    }
+
+    // ──────────────────────────────────────────────
+    // Explicit-ability token tests
+    // ──────────────────────────────────────────────
+
+    public function test_rollback_denied_with_read_only_token(): void
+    {
+        $this->hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->first();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", ['field' => 'cpu'], $token);
+        $response->assertForbidden();
+    }
+
+    public function test_rollback_allowed_with_write_ability(): void
+    {
+        $this->hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->first();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", ['field' => 'cpu'], $token);
+        $this->assertNotEquals(403, $response->getStatusCode());
+    }
+
+    public function test_restore_record_denied_with_read_only_token(): void
+    {
+        $createdAudit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'created')
+            ->first();
+        $this->hardware->forceDelete();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token);
+        $response->assertForbidden();
+    }
+
+    public function test_restore_record_allowed_with_write_ability(): void
+    {
+        $createdAudit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'created')
+            ->first();
+        $this->hardware->forceDelete();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token);
+        $this->assertNotEquals(403, $response->getStatusCode());
     }
 }

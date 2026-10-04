@@ -474,3 +474,42 @@ test('type select options carry the model value (issue #706)', function () {
         ->toContain('value="network"')
         ->toContain('value="wireless"');
 });
+
+test('zabbix devices search folds zwj in stored name', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    ZabbixDevice::factory()->create(['name' => "سویچ\u{200C}مرکزی"]); // ZWNJ in name
+
+    $devices = Livewire::test('it.zabbix-devices')
+        ->set('search', 'سویچ مرکزی')
+        ->viewData('devices');
+
+    expect($devices->count())->toBe(1);
+});
+
+test('zabbix devices search folds arabic alef in stored name', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    ZabbixDevice::factory()->create(['name' => 'آموزش']); // Arabic alef-madda
+
+    $devices = Livewire::test('it.zabbix-devices')
+        ->set('search', 'اموزش')
+        ->viewData('devices');
+
+    expect($devices->count())->toBe(1);
+});
+
+test('zabbix devices search folds persian digits in stored name', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    ZabbixDevice::factory()->create(['name' => 'دستگاه۴۵']); // Persian digits
+
+    $devices = Livewire::test('it.zabbix-devices')
+        ->set('search', 'دستگاه45')
+        ->viewData('devices');
+
+    expect($devices->count())->toBe(1);
+});

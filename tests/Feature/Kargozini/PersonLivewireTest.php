@@ -431,4 +431,68 @@ class PersonLivewireTest extends TestCase
 
         $this->assertDatabaseMissing('persons', ['n_code' => $data['n_code']]);
     }
+
+    public function test_search_folds_zwj_in_stored_name(): void
+    {
+        // Stored name contains ZWNJ (U+200C): "حرفه\u{200C}ای"
+        // User searches "حرفه ای" (space) — both column and term are folded.
+        $nCode = (string) fake()->unique()->numerify('##########');
+        $person = PersonModel::create([
+            'n_code' => $nCode,
+            'f_name' => 'مهدی',
+            'l_name' => "حرفه\u{200C}ای", // ZWNJ in last name (double quotes for Unicode escape)
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
+            'u_id' => $this->unit->id,
+        ]);
+        $person->refresh();
+
+        Livewire::test('kargozini.person')
+            ->set('search', 'حرفه ای')
+            ->assertViewHas('persons', fn ($p) => $p->count() === 1);
+    }
+
+    public function test_search_folds_arabic_alef_in_stored_name(): void
+    {
+        // Stored name contains Arabic alef-madda (U+0622): "آموزش"
+        // User searches "اموزش" (plain alef) — both column and term are folded.
+        $nCode = (string) fake()->unique()->numerify('##########');
+        PersonModel::create([
+            'n_code' => $nCode,
+            'f_name' => 'آموزش',
+            'l_name' => 'کاربر',
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
+            'u_id' => $this->unit->id,
+        ]);
+
+        Livewire::test('kargozini.person')
+            ->set('search', 'اموزش')
+            ->assertViewHas('persons', fn ($p) => $p->count() === 1);
+    }
+
+    public function test_search_folds_persian_digits_in_stored_name(): void
+    {
+        // Stored n_code uses Latin digits, but we also test Persian digits in name columns.
+        // A user types Persian digits; term is folded, column is folded.
+        $nCode = (string) fake()->unique()->numerify('##########');
+        PersonModel::create([
+            'n_code' => $nCode,
+            'f_name' => 'تست۴۵', // Persian digits in first name
+            'l_name' => 'کاربر',
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
+            'u_id' => $this->unit->id,
+        ]);
+
+        Livewire::test('kargozini.person')
+            ->set('search', 'تست45') // Latin digits in search
+            ->assertViewHas('persons', fn ($p) => $p->count() === 1);
+    }
 }

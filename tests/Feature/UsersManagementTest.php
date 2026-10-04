@@ -142,3 +142,159 @@ test('users management pages are protected by RBAC', function () {
             ->assertStatus(403);
     }
 });
+
+test('non-admin with manage_users cannot assign roles without manage_roles', function () {
+    $operator = User::factory()->create();
+    $operator->givePermissionTo('manage_users');
+
+    $targetPerson = Person::create([
+        'n_code' => '1111111111',
+        'f_name' => 'هدف',
+        'l_name' => 'تست',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $targetUser = User::create(['n_code' => '1111111111', 'password' => bcrypt('password')]);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    $response = Livewire::actingAs($operator)
+        ->test('users.index')
+        ->call('edit', $targetUser->id)
+        ->set('role_ids', [$role->id])
+        ->call('updateUser');
+
+    $response->assertForbidden();
+});
+
+test('manage_users holder cannot delete themselves', function () {
+    $operator = User::factory()->create();
+    $operator->givePermissionTo('manage_users');
+
+    $response = Livewire::actingAs($operator)
+        ->test('users.index')
+        ->call('delete', $operator->id);
+
+    $response->assertForbidden();
+    $this->assertDatabaseHas('users', ['id' => $operator->id, 'deleted_at' => null]);
+});
+
+test('non-admin with manage_users cannot edit admin user', function () {
+    $adminPerson = Person::create([
+        'n_code' => '2222222222',
+        'f_name' => 'مدیر',
+        'l_name' => 'کل',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $adminUser = User::create(['n_code' => '2222222222', 'password' => bcrypt('password')]);
+    $adminUser->assignRole('admin');
+
+    $operator = User::factory()->create();
+    $operator->givePermissionTo('manage_users');
+
+    $response = Livewire::actingAs($operator)
+        ->test('users.index')
+        ->call('edit', $adminUser->id)
+        ->call('updateUser');
+
+    $response->assertForbidden();
+});
+
+test('admin can still create update delete normally', function () {
+    $person = Person::create([
+        'n_code' => '3333333333',
+        'f_name' => 'کاربر',
+        'l_name' => 'جدید',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '3333333333')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->call('createUser');
+
+    $createdUser = User::where('n_code', '3333333333')->first();
+    $this->assertNotNull($createdUser);
+    $this->assertTrue($createdUser->hasRole('operator'));
+
+    $targetPerson = Person::create([
+        'n_code' => '4444444444',
+        'f_name' => 'کاربر',
+        'l_name' => 'ویرایش',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $targetUser = User::create(['n_code' => '4444444444', 'password' => bcrypt('password')]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('edit', $targetUser->id)
+        ->set('role_ids', [$role->id])
+        ->call('updateUser');
+
+    $this->assertTrue($targetUser->fresh()->hasRole('operator'));
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('delete', $targetUser->id);
+
+    $this->assertSoftDeleted($targetUser);
+});
+
+test('users search folds zwj in stored person name', function () {
+    $nCode = (string) fake()->unique()->numerify('##########');
+    $person = Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'مهدی',
+        'l_name' => "حرفه\u{200C}ای", // ZWNJ in last name — normalized to space on save
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $person->refresh();
+
+    User::factory()->create(['n_code' => $nCode]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'حرفه ای')
+        ->assertViewHas('users', fn ($users) => $users->count() === 1);
+});
+
+test('users search folds arabic alef in stored person name', function () {
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'آموزش', // Arabic alef-madda — normalized to plain alef on save
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    User::factory()->create(['n_code' => $nCode]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'اموزش')
+        ->assertSee('اموزش کاربر'); // Alef normalized on save
+});
+
+test('users search folds persian digits in stored person name', function () {
+    $nCode = (string) fake()->unique()->numerify('##########');
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'تست۴۵', // Persian digits — normalized to Latin on save
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    User::factory()->create(['n_code' => $nCode]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('search', 'تست45')
+        ->assertSee('تست45 کاربر'); // Digits normalized on save
+});

@@ -3,17 +3,15 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\TrafficController;
-use App\Models\Person;
-use App\Models\Unit;
-use App\Models\User;
 use App\Services\ZabbixService;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Mockery;
 use RuntimeException;
 use Tests\Support\Concerns\InteractsWithApiTokens;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(TrafficController::class);
@@ -21,11 +19,14 @@ covers(TrafficController::class);
 class TrafficApiTest extends TestCase
 {
     use InteractsWithApiTokens;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(PermissionSeeder::class);
+        $this->seedLookupTables();
         Session::flush();
 
         // Bind a mock ZabbixService up-front so the TrafficController (resolved
@@ -51,8 +52,8 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_requires_out_item_id(): void
     {
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
         $response = $this->apiGet('/api/zabbix/traffic?in_item_id=2', $token);
 
         $response->assertStatus(422)
@@ -61,8 +62,8 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_requires_in_item_id(): void
     {
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
         $response = $this->apiGet('/api/zabbix/traffic?out_item_id=1', $token);
 
         $response->assertStatus(422)
@@ -71,8 +72,8 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_returns_out_and_in_data(): void
     {
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
@@ -82,8 +83,8 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_respects_duration_parameter(): void
     {
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200&duration=7200', $token);
 
@@ -92,8 +93,8 @@ class TrafficApiTest extends TestCase
 
     public function test_traffic_caches_results(): void
     {
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
@@ -117,8 +118,8 @@ class TrafficApiTest extends TestCase
         $mock->shouldReceive('getInterfaceTraffic')->never();
         $this->app->instance(ZabbixService::class, $mock);
 
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token);
 
@@ -140,8 +141,8 @@ class TrafficApiTest extends TestCase
             ->andThrow(new RuntimeException('Zabbix API HTTP error: 503'));
         $this->app->instance(ZabbixService::class, $mock);
 
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
             ->assertStatus(503)
@@ -159,8 +160,8 @@ class TrafficApiTest extends TestCase
             ->andThrow(new RuntimeException('Zabbix API returned invalid JSON'));
         $this->app->instance(ZabbixService::class, $mock);
 
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
             ->assertStatus(503);
@@ -195,8 +196,8 @@ class TrafficApiTest extends TestCase
             ->andReturn([['x' => 1, 'y' => 2.5]]);
         $this->app->instance(ZabbixService::class, $mock);
 
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
             ->assertStatus(200)
@@ -221,25 +222,12 @@ class TrafficApiTest extends TestCase
         $mock->shouldReceive('getInterfaceTraffic')->never();
         $this->app->instance(ZabbixService::class, $mock);
 
-        $user = $this->createUser();
-        $token = $this->createApiToken($user, ['traffic:read']);
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
 
         $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=200', $token)
             ->assertStatus(200)
             ->assertJsonPath('out.0.y', 3.5)
             ->assertJsonPath('in.0.y', 4.5);
-    }
-
-    protected function createUser(): User
-    {
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
-        $unit = Unit::create(['name' => 'واحد تست']);
-        $nCode = (string) fake()->unique()->numerify('##########');
-        Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
-
-        return User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
     }
 }
