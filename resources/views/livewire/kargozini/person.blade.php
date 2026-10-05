@@ -110,12 +110,20 @@ return new class extends Component
 
     public function startCreate(): void
     {
+        // #805: opening the write form is part of writing personnel.
+        $this->authorize('manage_personnel');
+
         $this->resetForm();
         $this->formOpen = true;
     }
 
     public function delete(PersonModel $person): void
     {
+        // #805: the route gate is the READ union `kargozini|manage_personnel`,
+        // but a delete is a write — the API refuses it without
+        // `manage_personnel` (routes/api.php), so the UI must too.
+        $this->authorize('manage_personnel');
+
         // Check organizational scope
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         if (! in_array($person->u_id, $accessibleIds)) {
@@ -134,6 +142,12 @@ return new class extends Component
 
     public function savePerson(): void
     {
+        // #805: create/update are writes. The page's route gate is the READ
+        // union, so without this a `kargozini`-only user could create, edit
+        // and delete HR records — and the linked-user `user_units` sync
+        // below rewrites authorization reach, not just data.
+        $this->authorize('manage_personnel');
+
         $this->validate([
             'n_code' => 'required|string|size:10|unique:persons,n_code,'.($this->editingId ?: 'NULL'),
             'f_name' => 'required|string|max:255',
@@ -155,6 +169,15 @@ return new class extends Component
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             if (! in_array($person->u_id, $accessibleIds)) {
                 $this->error('شما مجاز به ویرایش این پرسنل نیستید.', position: 'toast-bottom');
+
+                return;
+            }
+
+            // #805: the check above validates the STORED u_id, but the update
+            // writes the submitted one — so a unit the actor cannot reach was
+            // writable. Re-validate the submitted value before it is stored.
+            if (! in_array($this->u_id, $accessibleIds)) {
+                $this->error('شما مجاز به انتقال این پرسنل به این واحد نیستید.', position: 'toast-bottom');
 
                 return;
             }
@@ -211,6 +234,8 @@ return new class extends Component
 
     public function editPerson($id): void
     {
+        $this->authorize('manage_personnel');
+
         $this->resetValidation();
         $person = PersonModel::findOrFail($id);
 
@@ -360,7 +385,12 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+            {{-- #805: the page opens on the READ union `kargozini|manage_personnel`,
+                 so the create button is wrapped in the write permission — a
+                 read-only user must not be shown a control that only 403s. --}}
+            @can('manage_personnel')
+                <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+            @endcan
             <a href="{{ $exportUrl }}"
                class="btn btn-outline btn-sm"
                title="خروجی اکسل پرسنل در دسترس با فیلترهای فعال">
@@ -466,16 +496,20 @@ return new class extends Component
         <x-table :headers="$headers" :rows="$persons" :sort-by="$sortBy" with-pagination per-page="perPage"
                  :per-page-values="[10, 20, 50]">
             @scope('actions', $person)
-                <div class="flex w-1/12">
-                    <x-button icon="o-pencil"
-                              wire:click="editPerson({{ $person->id }})"
-                              class="btn-ghost btn-sm text-primary" />
-                    <x-button icon="o-trash"
-                              wire:click="delete({{ $person->id }})"
-                              wire:confirm="آیا مطمئن هستید"
-                              spinner
-                              class="btn-ghost btn-sm text-error" />
-                </div>
+                {{-- #805: edit/delete are writes; hide them from a `kargozini`-only
+                     reader instead of rendering buttons that 403 on click. --}}
+                @can('manage_personnel')
+                    <div class="flex w-1/12">
+                        <x-button icon="o-pencil"
+                                  wire:click="editPerson({{ $person->id }})"
+                                  class="btn-ghost btn-sm text-primary" />
+                        <x-button icon="o-trash"
+                                  wire:click="delete({{ $person->id }})"
+                                  wire:confirm="آیا مطمئن هستید"
+                                  spinner
+                                  class="btn-ghost btn-sm text-error" />
+                    </div>
+                @endcan
             @endscope
         </x-table>
     </x-card>

@@ -84,6 +84,16 @@ link's visibility in both directions, plus a real `GET` per link.
   personnel gate. **Write** (import `/kargozini/persons/import`) requires `manage_personnel` alone,
   matching the API (`abilities:persons:write` + `manage_personnel`). The lookup tables
   (estekhdams/tahsils/semats/radifs) stay `kargozini`-only.
+- The personnel **component** re-checks the write permission itself (issue #805). Because its route
+  gate is the read union, `kargozini.person` calls `$this->authorize('manage_personnel')` in
+  `startCreate()`, `savePerson()`, `editPerson()` and `delete()`, and the create/edit/delete controls
+  are wrapped in `@can('manage_personnel')`. Rule of thumb: **a page on a read-union gate that also
+  writes must authorize inside the component, not only in the route.** The write path also
+  `syncWithoutDetaching()`s `user_units` (role `staff`, primary unit) for a linked user — it rewrites
+  the actor's reachable units, so an ungated write there is a privilege escalation, not data entry.
+  The update branch re-validates the **submitted** `u_id` against `accessibleUnitIds()`, not just the
+  stored one, or a record can be moved into a unit the actor never had read access to. Pinned by
+  `tests/Feature/Kargozini/PersonLivewireTest.php` (the `#805` block).
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
