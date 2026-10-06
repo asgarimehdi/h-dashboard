@@ -112,7 +112,22 @@ return new class extends Component
 
     public function showDetail($id): void
     {
-        $this->selectedLog = ActivityLog::with('user')->findOrFail($id);
+        // Scoped exactly like logs()/getTypeStats(): this is a public Livewire
+        // method, so an unscoped findOrFail would let any manage_users holder
+        // read another unit's audit row by guessing a sequential id. An empty
+        // accessible list compiles to `0 = 1`, so an unscoped caller gets a 404
+        // rather than a row — 404 rather than 403 so it does not confirm the
+        // row exists.
+        //
+        // The predicate sits inside a where(Closure) on purpose: a top-level
+        // whereIn() resolves through Eloquent's `@mixin Query\Builder` and
+        // re-types the rest of the chain, and Query\Builder has no findOrFail().
+        $this->selectedLog = ActivityLog::query()
+            ->with('user')
+            ->where(function ($query) {
+                $query->whereIn('user_id', $this->getAccessibleUserIds());
+            })
+            ->findOrFail($id);
         $this->showModal = true;
     }
 
