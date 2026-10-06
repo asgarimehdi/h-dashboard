@@ -55,6 +55,29 @@ class AccessService
     }
 
     /**
+     * تمام واحدهای سازمان، بدون وابستگی به کاربر یا نشست جاری
+     *
+     * `accessibleUnitIds()` به `auth()` و `session()` وابسته است، پس در
+     * scheduler یا queue worker همیشه `[]` برمی‌گرداند و هر مصرف‌کننده‌ای
+     * آن را «کاری برای انجام نیست» می‌خواند. نگهداشت داده (retention) و
+     * تولید گزارش وظیفه سراسری‌اند، نه وابسته به اینکه چه کسی دکمه را
+     * زده — وگرنه دو مدیر با دامنه‌های متفاوت دو برش متفاوت از یک جدول را
+     * پاک می‌کردند. این متد جایگزین آن است، نه مکملش.
+     *
+     * عمداً بدون کش: یک کوئری ساده در مسیرهای کم‌تکرار (زمان‌بند و worker)
+     * و بدون نیاز به نسخه‌بندی کش جدید در `PruneStaleCache::NAMESPACES`.
+     *
+     * @return array<int>
+     */
+    public function allUnitIds(): array
+    {
+        return Unit::query()
+            ->get(['id'])
+            ->map(fn (Unit $unit): int => $unit->id)
+            ->all();
+    }
+
+    /**
      * پاک کردن کش دسترسی کاربر (هنگام تغییر context یا تغییر واحدها)
      */
     public function clearCache(?User $user = null): void
