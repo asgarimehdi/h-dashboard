@@ -5,6 +5,7 @@ use App\Models\Region;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
 use App\Services\AccessService;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -16,6 +17,7 @@ return new class extends Component {
 
     public $name, $description, $unit_type_id, $region_id, $province_id, $parent_id;
     public bool $can_receive_tickets = false;
+    #[Locked]
     public int|null $editingId = null;
     public string $search = '';
     public int $perPage = 20;
@@ -92,6 +94,25 @@ return new class extends Component {
         $query->orderBy(...array_values($this->sortBy));
 
         return $query->paginate($this->perPage);
+    }
+
+    /**
+     * Issue #817: the org tree IS the authorization model — every write
+     * must prove the target (and the new parent) sit inside the caller's
+     * reachable set. Returns true when in scope, flashes an error toast
+     * and returns false otherwise.
+     */
+    private function assertUnitInScope(int $unitId): bool
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (! in_array($unitId, $accessibleIds, true)) {
+            $this->error('شما مجاز به انجام این عملیات روی این واحد نیستید.', position: 'toast-bottom');
+
+            return false;
+        }
+
+        return true;
     }
 
     public function loadDropdowns(): void
@@ -206,7 +227,17 @@ return new class extends Component {
         }
         
         $this->validate($rules);
-        
+
+        // #817: scope-check the unit being edited AND the new parent — the
+        // parent check below only validates type compatibility, never scope.
+        if ($this->editingId && ! $this->assertUnitInScope((int) $this->editingId)) {
+            return;
+        }
+
+        if ($this->parent_id && ! $this->assertUnitInScope((int) $this->parent_id)) {
+            return;
+        }
+
         if ($this->parent_id) {
             $parentUnit = Unit::find($this->parent_id);
             $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
@@ -214,6 +245,17 @@ return new class extends Component {
             if (!in_array($parentUnit->unit_type_id, $allowedParentTypeIds)) {
                 $this->error('واحد بالادستی انتخاب‌شده مجاز نیست.');
                 return;
+            }
+
+            // #817: descendant-cycle guard, parity with UnitController::update.
+            // editingId is now #[Locked], but the check is still load-bearing:
+            // a client can re-parent a unit under its own descendant.
+            if ($this->editingId) {
+                $forbiddenIds = Unit::descendantIds($this->editingId)->push($this->editingId)->all();
+                if (in_array((int) $this->parent_id, array_map('intval', $forbiddenIds), true)) {
+                    $this->error('نمی‌توان واحد را زیرمجموعه خودش یا یکی از زیرمجموعه‌هایش قرار داد.');
+                    return;
+                }
             }
         }
         
@@ -260,6 +302,11 @@ return new class extends Component {
 
     public function editUnit($id): void
     {
+        // #817: no scope check here used to leak any unit's data into the form.
+        if (! $this->assertUnitInScope((int) $id)) {
+            return;
+        }
+
         $unit = Unit::findOrFail($id);
         $this->editingId = $id;
         $this->name = $unit->name;
@@ -283,6 +330,18 @@ return new class extends Component {
 
     public function deleteUnit(Unit $unit): void
     {
+        // #817: Livewire model hydration applies no scope — check it here.
+        if (! $this->assertUnitInScope($unit->id)) {
+            return;
+        }
+
+        // #817: explicit children guard (parity with UnitController::destroy)
+        // instead of relying on the swallowed FK exception below.
+        if ($unit->children()->exists()) {
+            $this->error('امکان حذف واحدی که زیرمجموعه دارد وجود ندارد.', position: 'toast-bottom');
+            return;
+        }
+
         try {
             $unit->delete();
             $this->warning("$unit->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
@@ -328,6 +387,11 @@ return new class extends Component {
         $unit = Unit::find($unitId);
         if (! $unit) {
             $this->error('واحد یافت نشد.', position: 'toast-bottom');
+            return;
+        }
+
+        // #817: the permission check above is not a scope check.
+        if (! $this->assertUnitInScope($unit->id)) {
             return;
         }
 

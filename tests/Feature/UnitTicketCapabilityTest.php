@@ -67,24 +67,34 @@ it('can_receive_tickets defaults to false', function () {
 
 it('toggleTicketCapability enables ticket reception', function () {
     $user = makeTicketManager();
-    $unit = Unit::create(['name' => 'Toggle Unit', 'can_receive_tickets' => false]);
+    $unit = Unit::where('id', session('current_unit_id'))->first()
+        ?? Unit::create(['name' => 'Ticket Manager Unit', 'can_receive_tickets' => false]);
+    $toggle = Unit::create([
+        'name' => 'Toggle Unit', 'can_receive_tickets' => false,
+        'parent_id' => $unit->id,
+    ]);
 
     Livewire::actingAs($user)
         ->test('units.index')
-        ->call('toggleTicketCapability', $unit->id);
+        ->call('toggleTicketCapability', $toggle->id);
 
-    expect(Unit::find($unit->id)->can_receive_tickets)->toBeTrue();
+    expect(Unit::find($toggle->id)->can_receive_tickets)->toBeTrue();
 });
 
 it('toggleTicketCapability disables ticket reception', function () {
     $user = makeTicketManager();
-    $unit = Unit::create(['name' => 'Toggle Unit 2', 'can_receive_tickets' => true]);
+    $unit = Unit::where('id', session('current_unit_id'))->first()
+        ?? Unit::create(['name' => 'Ticket Manager Unit', 'can_receive_tickets' => true]);
+    $toggle = Unit::create([
+        'name' => 'Toggle Unit 2', 'can_receive_tickets' => true,
+        'parent_id' => $unit->id,
+    ]);
 
     Livewire::actingAs($user)
         ->test('units.index')
-        ->call('toggleTicketCapability', $unit->id);
+        ->call('toggleTicketCapability', $toggle->id);
 
-    expect(Unit::find($unit->id)->can_receive_tickets)->toBeFalse();
+    expect(Unit::find($toggle->id)->can_receive_tickets)->toBeFalse();
 });
 
 it('toggleTicketCapability requires manage_unit_tickets permission', function () {
