@@ -95,6 +95,14 @@ link's visibility in both directions, plus a real `GET` per link.
   The update branch re-validates the **submitted** `u_id` against `accessibleUnitIds()`, not just the
   stored one, or a record can be moved into a unit the actor never had read access to. Pinned by
   `tests/Feature/Kargozini/PersonLivewireTest.php` (the `#805` block).
+- Todo rows (issue #838 decision): **null-unit todo = creator-owned; UI and API enforce the same
+  rule.** A `todos` row with `unit_id = null` belongs to its creator (`user_id`) — it is listed
+  (`getEvents()`), readable and mutable only by that user, on both surfaces. The Livewire
+  component (`todo.todo`: `getEvents()`, `isTodoAccessible()`, `save()` target-row check,
+  `#[Locked]` on `$editingId`) and `Api\TodoController` (`show`/`update`/`destroy`/
+  `toggleComplete`) apply the identical predicate, so a row the UI edits is never a row the API
+  403s and vice versa. Pinned by `tests/Feature/TodoLivewireTest.php` (the `#838` block) and the
+  creator/non-creator parity tests in `tests/Feature/TodoApiTest.php`.
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
