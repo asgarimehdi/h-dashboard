@@ -65,6 +65,9 @@ return new class extends Component
 
     public function importPreview(): void
     {
+        // لایه‌ی دوم مجوز (ایشو #814 / الگوی #805): همان مجوزِ گیتِ مسیر
+        // (`manage_hardware`) باید داخل کامپوننت هم اعمال شود.
+        $this->authorize('manage_hardware');
         $this->validate();
 
         try {
@@ -96,6 +99,8 @@ return new class extends Component
 
     public function confirmImport(): void
     {
+        $this->authorize('manage_hardware');
+
         if (! $this->importResults) {
             $this->error('داده‌ای برای ایمپورت وجود ندارد.', 'خطا');
 
