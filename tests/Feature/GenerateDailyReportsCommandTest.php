@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -64,5 +65,41 @@ class GenerateDailyReportsCommandTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('daily_reports', 0);
+    }
+
+    /**
+     * Issue #836: the scheduler runs this command with no authenticated user
+     * and no `--unit`, so an empty scope must mean "every unit", not "none".
+     */
+    public function test_report_generated_for_all_units_without_authenticated_user(): void
+    {
+        Session::flush();
+        $first = Unit::create(['name' => 'Ward X']);
+        $second = Unit::create(['name' => 'Ward Y']);
+
+        $this->assertNull(auth()->user(), 'Precondition: no authenticated user.');
+
+        $this->artisan('reports:generate-daily')
+            ->expectsOutputToContain('Generated 2 daily report(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('daily_reports', 2);
+        $this->assertEqualsCanonicalizing(
+            [$first->id, $second->id],
+            DailyReport::pluck('unit_id')->all()
+        );
+    }
+
+    public function test_unit_filter_still_scopes_to_one_unit(): void
+    {
+        $target = Unit::create(['name' => 'Ward Target']);
+        Unit::create(['name' => 'Ward Other']);
+
+        $this->artisan('reports:generate-daily', ['--unit' => $target->id])
+            ->expectsOutputToContain('Generated 1 daily report(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('daily_reports', 1);
+        $this->assertEquals($target->id, DailyReport::first()->unit_id);
     }
 }

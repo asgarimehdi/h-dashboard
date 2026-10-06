@@ -11,7 +11,7 @@ class GenerateDailyReports extends Command
 {
     protected $signature = 'reports:generate-daily {--unit= : فقط برای یک واحد خاص} {--dry-run : فقط نمایش، بدون ذخیره}';
 
-    protected $description = 'Generate daily reports for all accessible units';
+    protected $description = 'Generate daily reports for all units (or one unit via --unit)';
 
     public function handle(AccessService $access): int
     {
@@ -20,18 +20,21 @@ class GenerateDailyReports extends Command
 
         $this->info('Generating daily reports...');
 
+        // Without --unit the scope is org-wide: the scheduler has no actor,
+        // so accessibleUnitIds() is always `[]` there and the command would
+        // exit 0 having written nothing (issue #836).
         $unitIds = $unitFilter
             ? [(int) $unitFilter]
-            : $access->accessibleUnitIds();
+            : $access->allUnitIds();
 
         if (empty($unitIds)) {
-            $this->warn('  No accessible units found — nothing to report.');
+            $this->warn('  No units found — nothing to report.');
             $this->info('Daily report generation complete.');
 
             return 0;
         }
 
-        $this->line('  Scoped to '.count($unitIds).' accessible unit(s).');
+        $this->line('  Scoped to '.count($unitIds).' unit(s).');
 
         $today = now()->toDateString();
         $created = 0;

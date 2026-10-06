@@ -14,7 +14,7 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 | `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todo instances from `todos.recurrence_rule` templates |
 | `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
 | `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
-| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per accessible unit |
+| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per unit, org-wide (no actor at 06:00 — see #836) |
 | `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
 
 > `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
@@ -24,7 +24,7 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 - `todos:generate-recurring` — reads `todos` where `recurrence_rule != 'none'` and `last_generated_at <= now()`. For each due template it creates a fresh instance (`recurrence_rule = 'none'`) and advances `last_generated_at` to `nextOccurrence()` (`daily`/`weekly`/`monthly` × `recurrence_interval`, based on `last_generated_at ?? start_at`). Recurrence fields added in `2026_08_29_000002_add_recurrence_fields_to_todos_table.php`.
 - `maintenance:generate-due` — reads `maintenance_schedules` where `next_due_at <= now()` (or null), creates a `Ticket` (`ticket_code = 'T-'.Str::random(8)`, `status = 'created'`) on the schedule's `unit_id`, then advances `last_generated_at` and `next_due_at` by the schedule frequency.
 - `data:archive` — chunks `activity_logs` older than `--months=12` (default), copies them to `activity_log_archives` (preserving `original_created_at`/`original_updated_at`) and deletes the originals. Supports `--dry-run`.
-- `reports:generate-daily` — iterates `AccessService::accessibleUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`.
+- `reports:generate-daily` — iterates `AccessService::allUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`. **Org-wide by default, not actor-scoped** (#836): the 06:00 schedule runs with no authenticated user, so `accessibleUnitIds()` would be `[]` and the command would write nothing. `--unit=N` scopes a manual single-unit run.
 
 > All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
 
