@@ -63,6 +63,10 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح — این تست‌ها پیش از این پلن با
+        // اسکوپ خالیِ ضمنی اجرا می‌شدند و گاردِ fail-open
+        // (`if (! empty(...))`) سبزشان نگه می‌داشت.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -87,6 +91,9 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح — پیش از این پلن با اسکوپ خالیِ
+        // ضمنی اجرا می‌شد و گاردِ fail-open سبزش نگه می‌داشت.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -111,6 +118,9 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح — پیش از این پلن با اسکوپ خالیِ
+        // ضمنی اجرا می‌شد و گاردِ fail-open سبزش نگه می‌داشت.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -172,6 +182,9 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح — پیش از این پلن با اسکوپ خالیِ
+        // ضمنی اجرا می‌شد و گاردِ fail-open سبزش نگه می‌داشت.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         $import->setSelectedActions([
             'row_2' => 'create',
         ]);
@@ -191,7 +204,7 @@ class PersonImportTest extends TestCase
 
     public function test_import_handles_validation_errors(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
         $csvContent .= "\t\t\t1\t1\t1\t1\t1\n"; // Missing required fields
@@ -200,6 +213,9 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح — پیش از این پلن با اسکوپ خالیِ
+        // ضمنی اجرا می‌شد و گاردِ fail-open سبزش نگه می‌داشت.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -229,6 +245,9 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح — پیش از این پلن با اسکوپ خالیِ
+        // ضمنی اجرا می‌شد و گاردِ fail-open سبزش نگه می‌داشت.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -267,6 +286,8 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -289,6 +310,8 @@ class PersonImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         $import = new PersonImport;
+        // ایشو #839 (Plan 50): اسکوپ صریح.
+        $import->setAccessibleUnitIds([$data['unit']->id]);
         $import->setSelectedActions(['row_2' => 'update']);
         Excel::import($import, $file);
 

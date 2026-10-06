@@ -95,13 +95,115 @@ class HardwareImportEdgeCasesTest extends TestCase
         ]);
     }
 
-    public function test_preview_pass_without_actions_persists_nothing(): void
+    /**
+     * ایشو #839 (Plan 50): هر تست باید اسکوپ را *صریح* ست کند — پیش از این
+     * پلن این تست‌ها با اسکوپ خالیِ ضمنی اجرا می‌شدند و گاردِ fail-openِ
+     * `if (! empty(...))` نگهشان می‌داشت. واحد از `createPerson()` در
+     * `$this->unit` نگه داشته می‌شود.
+     */
+    private function scopedImport(): HardwareImport
+    {
+        $import = new HardwareImport;
+        $import->setAccessibleUnitIds([$this->unit->id]);
+
+        return $import;
+    }
+
+    // -----------------------------------------------------------
+    //  ایشو #839 (Plan 50): اسکوپ خالی باید fail-closed باشد
+    // -----------------------------------------------------------
+
+    /**
+     * رگرسیون: `setAccessibleUnitIds([])` + ردیفی که با `mac` یک رکوردِ
+     * سخت‌افزاری متعلق به پرسنلِ واحدِ غریبه تطبیق می‌کند.
+     *
+     * پیش از این پلن، گاردِ `if (! empty($this->accessibleUnitIds))` در
+     * `loadExistingRecords()`/`loadExistingPersons()` هیچ پیشوندی نمی‌ساخت؛
+     * ایندکسِ `mac`/`pc_name` شامل **همه‌ی** سخت‌افزارهای سازمان می‌شد و
+     * یک ردیف CSV می‌توانست رکوردِ غریبه را بازنویسی کند، ضمن اینکه پیش‌نمایش
+     * مقادیرش را لو می‌داد.
+     */
+    public function test_empty_scope_never_matches_or_rewrites_foreign_hardware(): void
+    {
+        $foreignUnit = Unit::create(['name' => 'واحد غریبه']);
+        $this->createPerson('1234567890', $foreignUnit->id);
+
+        Hardware::create([
+            'n_code' => '1234567890',
+            'pc_name' => 'PC-FOREIGN',
+            'mac' => 'AA:BB:CC:DD:EE:01',
+            'cpu' => 'i5',
+            'shutdown' => false,
+        ]);
+
+        // Same mac as the foreign row — must NOT be matched under an empty scope.
+        $file = $this->writeCsv([$this->row([
+            'pc_name' => 'PC-RENAMED',
+            'cpu' => 'i9',
+            'shutdown' => '1',
+        ])]);
+
+        $import = new HardwareImport;
+        $import->setAccessibleUnitIds([]);
+        $import->setCompareKey('mac');
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+
+        // No create, no update — the foreign row is untouched.
+        $this->assertDatabaseCount('hardwares', 1);
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-FOREIGN',
+            'cpu' => 'i5',
+            'shutdown' => false,
+        ]);
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-RENAMED']);
+
+        // The preview must not disclose the foreign record's stored values.
+        $encoded = json_encode($results['preview'], JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('PC-FOREIGN', $encoded);
+        $this->assertStringNotContainsString('i5', $encoded);
+
+        @unlink($file);
+    }
+
+    /**
+     * همان سناریو برای ردیفی که پرسنلش در اسکوپ نیست — مسیر «person not
+     * found» باید آن را رد کند، نه اینکه کل سازمان را ایمپورت کند.
+     */
+    public function test_empty_scope_rejects_a_row_whose_person_is_out_of_scope(): void
     {
         $this->createPerson();
 
         $file = $this->writeCsv([$this->row()]);
 
         $import = new HardwareImport;
+        $import->setAccessibleUnitIds([]);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['skipped']);
+        $this->assertSame(0, $results['created']);
+        $this->assertCount(1, $results['preview']);
+        $this->assertSame('error', $results['preview'][0]['status']);
+        $this->assertDatabaseCount('hardwares', 0);
+
+        @unlink($file);
+    }
+
+    public function test_preview_pass_without_actions_persists_nothing(): void
+    {
+        $this->createPerson();
+
+        $file = $this->writeCsv([$this->row()]);
+
+        $import = $this->scopedImport();
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -121,7 +223,7 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $file = $this->writeCsv([$this->row()]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'skip']);
         Excel::import($import, $file);
 
@@ -143,7 +245,7 @@ class HardwareImportEdgeCasesTest extends TestCase
             $this->row(['pc_name' => 'PC-B']),
         ]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -163,7 +265,7 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $file = $this->writeCsv([$this->row(['n_code' => '', 'pc_name' => ''])]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -187,7 +289,7 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $file = $this->writeCsv([$this->row(['n_code' => '9999999999'])]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -221,7 +323,7 @@ class HardwareImportEdgeCasesTest extends TestCase
             'shutdown' => '1',
         ])]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setCompareKey('mac');
         $import->setSelectedActions(['row_2' => 'update']);
         Excel::import($import, $file);
@@ -274,7 +376,7 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $file = $this->writeCsv([$this->row()]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'update']);
         Excel::import($import, $file);
 
@@ -296,7 +398,7 @@ class HardwareImportEdgeCasesTest extends TestCase
             $this->row(['pc_name' => 'PC-B', 'clean_at' => '05/01/2026']),
         ]);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
         Excel::import($import, $file);
 

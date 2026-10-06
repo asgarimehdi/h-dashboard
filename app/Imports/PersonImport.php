@@ -95,10 +95,12 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     {
         $query = Person::query();
 
-        // Apply organizational scope
-        if (! empty($this->accessibleUnitIds)) {
-            $query->whereIn('u_id', $this->accessibleUnitIds);
-        }
+        // Apply organizational scope — UNCONDITIONAL (issue #839 / Plan 50).
+        // `[]` is a legitimate `AccessService` output, so an emptiness guard
+        // here would drop the predicate and put the whole org in scope.
+        // An empty array compiles to `0 = 1`, which is fail-closed by
+        // construction. Never re-add `if (! empty($this->accessibleUnitIds))`.
+        $query->whereIn('u_id', $this->accessibleUnitIds);
 
         // NOTE: 'id' MUST be selected — records are later updated via these
         // models; without the PK, update() issues WHERE id IS NULL and
@@ -119,10 +121,10 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     private function loadReferenceData(): void
     {
         // Load units
-        $unitQuery = Unit::query();
-        if (! empty($this->accessibleUnitIds)) {
-            $unitQuery->whereIn('id', $this->accessibleUnitIds);
-        }
+        // UNCONDITIONAL scope (issue #839): an empty scope loads NO unit, so the
+        // "unit not found" check downstream fires for every row instead of
+        // accepting an org-wide import.
+        $unitQuery = Unit::query()->whereIn('id', $this->accessibleUnitIds);
         foreach ($unitQuery->get(['id', 'name']) as $unit) {
             $this->units[$unit->id] = $unit;
         }
@@ -197,7 +199,11 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
                 return;
             }
 
-            if (! empty($this->accessibleUnitIds) && ! in_array($unit->id, $this->accessibleUnitIds)) {
+            // UNCONDITIONAL membership test (issue #839): the `! empty(...)`
+            // conjunct made this `! empty([]) && ...` = false, i.e. ACCEPT.
+            // Under an empty scope `$this->units` is empty, so the check above
+            // already rejected the row — this is a defence-in-depth backstop.
+            if (! in_array($unit->id, $this->accessibleUnitIds)) {
                 $this->importResults['preview'][] = [
                     'row' => $rowNumber,
                     'status' => 'error',
@@ -356,7 +362,11 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             return;
         }
 
-        if (! empty($this->accessibleUnitIds) && ! in_array($unit->id, $this->accessibleUnitIds)) {
+        // UNCONDITIONAL membership test (issue #839): the `! empty(...)` conjunct
+        // made this `! empty([]) && ...` = false, i.e. ACCEPT the row. Under an
+        // empty scope `$this->units` is empty, so the "not found" check above
+        // already rejected it — this is a defence-in-depth backstop.
+        if (! in_array($unit->id, $this->accessibleUnitIds)) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
                 'error' => "Unit {$data['u_id']} is not in your accessible units",

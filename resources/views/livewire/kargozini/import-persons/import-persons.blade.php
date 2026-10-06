@@ -70,6 +70,15 @@ return new class extends Component
         $this->authorize('manage_personnel');
         $this->validate();
 
+        // ایشو #839 (Plan 50): حساب بدون واحد «اسکوپ خالی» دارد و
+        // `accessibleUnitIds()` برایش `[]` برمی‌گرداند — که یک خروجی معتبر
+        // است، نه «بدون محدودیت». ایمپورت برای چنین حسابی معنا ندارد، پس
+        // پیش از هر پردازشی صریح رد می‌شود (لایه‌ی UX + دفاع در عمق؛ خودِ
+        // کلاس‌ها هم جداگانه fail-closed هستند).
+        if (! $this->hasImportScope()) {
+            return;
+        }
+
         try {
             $import = new PersonImport;
             $import->setCompareKey($this->compareKey);
@@ -107,6 +116,12 @@ return new class extends Component
             return;
         }
 
+        // ایشو #839 (Plan 50): همان امتناعِ اسکوپ خالی در مسیر تایید —
+        // وگرنه وضعیتِ پیش‌نمایشِ یک اسکوپِ قبلی به ایمپورتِ کامل سازمان تبدیل می‌شود.
+        if (! $this->hasImportScope()) {
+            return;
+        }
+
         try {
             $import = new PersonImport;
             $import->setCompareKey($this->compareKey);
@@ -139,6 +154,24 @@ return new class extends Component
         if ($this->showPreview && $this->importResults) {
             $this->importPreview(); // Re-process with new compare key
         }
+    }
+
+    /**
+     * ایشو #839 (Plan 50): آیا این حساب اصلاً واحدی برای ایمپورت دارد؟
+     *
+     * `[]` یک خروجی *معتبر* از `AccessService` است (حسابی بدون ردیف
+     * `user_units` و بدون `person.u_id` که `ValidateUnitContext` هم عمداً
+     * راهش می‌دهد) — نه «محدودیتی ندارد». پس اسکوپ خالی باید صریح رد شود.
+     */
+    private function hasImportScope(): bool
+    {
+        if (app(AccessService::class)->accessibleUnitIds() !== []) {
+            return true;
+        }
+
+        $this->error('حساب شما به هیچ واحدی تخصیص نیافته است؛ ایمپورت ممکن نیست.', 'خطا');
+
+        return false;
     }
 
     private function getSelectedActions(): array

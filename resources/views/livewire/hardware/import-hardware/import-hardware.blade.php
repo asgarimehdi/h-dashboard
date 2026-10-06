@@ -70,6 +70,14 @@ return new class extends Component
         $this->authorize('manage_hardware');
         $this->validate();
 
+        // ایشو #839 (Plan 50): حساب بدون واحد، `accessibleUnitIds()` خالی
+        // می‌گیرد — که خروجی معتبر است، نه «بدون محدودیت». ایمپورت سخت‌افزار
+        // برای چنین حسابی معنا ندارد و صریح رد می‌شود (دفاع در عمق؛ کلاس
+        // `HardwareImport` هم جداگانه fail-closed است).
+        if (! $this->hasImportScope()) {
+            return;
+        }
+
         try {
             $import = new HardwareImport;
             $import->setCompareKey($this->compareKey);
@@ -107,6 +115,11 @@ return new class extends Component
             return;
         }
 
+        // ایشو #839 (Plan 50): همان امتناعِ اسکوپ خالی در مسیر تایید.
+        if (! $this->hasImportScope()) {
+            return;
+        }
+
         try {
             $import = new HardwareImport;
             $import->setCompareKey($this->compareKey);
@@ -139,6 +152,23 @@ return new class extends Component
         if ($this->showPreview && $this->importResults) {
             $this->importPreview(); // Re-process with new compare key
         }
+    }
+
+    /**
+     * ایشو #839 (Plan 50): آیا این حساب اصلاً واحدی برای ایمپورت دارد؟
+     *
+     * `[]` یک خروجی *معتبر* از `AccessService` است — نه «محدودیتی ندارد».
+     * اسکوپ خالی باید صریح رد شود، نه اینکه ایمپورت کل سازمان را شروع کند.
+     */
+    private function hasImportScope(): bool
+    {
+        if (app(AccessService::class)->accessibleUnitIds() !== []) {
+            return true;
+        }
+
+        $this->error('حساب شما به هیچ واحدی تخصیص نیافته است؛ ایمپورت ممکن نیست.', 'خطا');
+
+        return false;
     }
 
     private function getSelectedActions(): array
