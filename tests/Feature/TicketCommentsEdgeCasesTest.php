@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -137,7 +138,9 @@ class TicketCommentsEdgeCasesTest extends TestCase
             ->assertSet('ticket', null);
     }
 
-    public function test_start_edit_by_non_author_is_ignored(): void
+    // ایشو #814: startEdit دیگر قاعله‌ی مالکیت را کپی نمی‌کند — فقط state
+    // می‌گذارد؛ جلوی ویرایشِ غیرمجاز را saveEdit از راه policy می‌گیرد.
+    public function test_save_edit_by_non_author_is_refused(): void
     {
         $otherUser = $this->makeUserWithPerson();
         $comment = TicketComment::create([
@@ -150,7 +153,11 @@ class TicketCommentsEdgeCasesTest extends TestCase
         Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
             ->call('startEdit', $comment->id)
-            ->assertSet('editCommentId', null);
+            ->set('editBody', 'Hacked')
+            ->call('saveEdit')
+            ->assertForbidden();
+
+        $this->assertSame('Not mine', $comment->fresh()->body);
     }
 
     public function test_save_edit_after_15_minutes_is_rejected(): void
@@ -170,7 +177,8 @@ class TicketCommentsEdgeCasesTest extends TestCase
             ->call('openForTicket', $this->ticket->id)
             ->call('startEdit', $comment->id)
             ->set('editBody', 'Edited late')
-            ->call('saveEdit');
+            ->call('saveEdit')
+            ->assertForbidden();
 
         $this->assertSame('Old comment', $comment->fresh()->body);
     }
@@ -186,10 +194,12 @@ class TicketCommentsEdgeCasesTest extends TestCase
         ]);
 
         // $this->user is the authenticated user but neither the author nor an
-        // admin / manage_unit_tickets holder, so deleteComment must be a no-op.
+        // admin / manage_unit_tickets holder, so deleteComment must be refused
+        // by TicketCommentPolicy (ایشو #814).
         Livewire::test('tickets.ticket-comments')
             ->call('openForTicket', $this->ticket->id)
-            ->call('deleteComment', $comment->id);
+            ->call('deleteComment', $comment->id)
+            ->assertForbidden();
 
         $this->assertDatabaseHas('ticket_comments', ['id' => $comment->id]);
     }
@@ -207,5 +217,115 @@ class TicketCommentsEdgeCasesTest extends TestCase
             ->call('openForTicket', $this->ticket->id)
             ->call('refreshComments')
             ->assertSet('ticket', fn ($ticket) => $ticket && $ticket->comments->count() === 1);
+    }
+
+    // ==================== ایشو #814 — عبور از تیکت (IDOR) ====================
+
+    public function test_author_cannot_edit_comment_belonging_to_another_ticket(): void
+    {
+        $foreign = $this->foreignComment('کامنت تیکت دیگر');
+
+        // stateِ نوشتن مستقیم ست می‌شود تا مسیر writeِ خودِ saveEdit سنجیده شود
+        // (startEdit دیگر اصلاً به کامنتِ خارجی اجازه‌ی بارگذاری نمی‌دهد).
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('editCommentId', $foreign->id)
+            ->set('editBody', 'ویرایش غیرمجاز')
+            ->call('saveEdit')
+            ->assertForbidden();
+
+        $this->assertSame('کامنت تیکت دیگر', $foreign->fresh()->body);
+    }
+
+    // نشت خواندنیِ گزارش‌شده در review: editBody یک state عمومیِ Livewire است،
+    // پس startEdit نباید بدنه‌ی کامنتِ تیکتِ دیگر را اصلاً بارگذاری کند.
+    public function test_start_edit_refuses_comment_of_another_ticket_without_loading_its_body(): void
+    {
+        $foreign = $this->foreignComment('کامنت محرمانه');
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->call('startEdit', $foreign->id)
+            ->assertForbidden()
+            ->assertSet('editBody', '')
+            ->assertSet('editing', false)
+            ->assertSet('editCommentId', null);
+    }
+
+    /**
+     * A comment authored by $this->user but on a different ticket of the same
+     * unit (so the modal can open) — the cross-ticket IDOR shape.
+     */
+    protected function foreignComment(string $body): TicketComment
+    {
+        $otherTicket = Ticket::create([
+            'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
+            'subject' => 'Other Subject',
+            'content' => 'Desc',
+            'unit_id' => $this->unit->id,
+            'user_id' => $this->user->id,
+        ]);
+
+        return TicketComment::create([
+            'ticket_id' => $otherTicket->id,
+            'user_id' => $this->user->id,
+            'parent_id' => null,
+            'body' => $body,
+        ]);
+    }
+
+    public function test_reply_to_comment_belonging_to_another_ticket_is_refused(): void
+    {
+        $otherTicket = Ticket::create([
+            'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
+            'subject' => 'Other Subject',
+            'content' => 'Desc',
+            'unit_id' => $this->unit->id,
+            'user_id' => $this->user->id,
+        ]);
+        $foreignParent = TicketComment::create([
+            'ticket_id' => $otherTicket->id,
+            'user_id' => $this->user->id,
+            'parent_id' => null,
+            'body' => 'والد تیکت دیگر',
+        ]);
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('replyBody', 'پاسخ غیرمجاز')
+            ->call('addReply', $foreignParent->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'پاسخ غیرمجاز']);
+    }
+
+    public function test_manage_unit_tickets_holder_cannot_delete_comment_on_out_of_scope_ticket(): void
+    {
+        $this->seed(PermissionSeeder::class);
+
+        $foreignUnit = Unit::create(['name' => 'واحد دیگر']);
+        $foreignTicket = Ticket::create([
+            'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
+            'subject' => 'Out of scope',
+            'content' => 'Desc',
+            'unit_id' => $foreignUnit->id,
+            'user_id' => $this->user->id,
+        ]);
+        $comment = TicketComment::create([
+            'ticket_id' => $foreignTicket->id,
+            'user_id' => $this->user->id,
+            'parent_id' => null,
+            'body' => 'خارج از محدوده',
+        ]);
+
+        // دارنده‌ی `manage_unit_tickets` خارج از زیردرختِ خودش نباید حذف کند.
+        $this->user->givePermissionTo('manage_unit_tickets');
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->call('deleteComment', $comment->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('ticket_comments', ['id' => $comment->id]);
     }
 }

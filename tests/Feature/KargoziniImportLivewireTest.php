@@ -116,7 +116,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_file_validation_rejects_missing_file(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')
@@ -126,7 +126,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_file_validation_rejects_invalid_mime(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $file = UploadedFile::fake()->createWithContent('test.txt', 'hello');
@@ -141,7 +141,8 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_valid_preview_populates_data(): void
     {
-        $result = $this->createUserWithUnit(['kargozini']);
+        // ایشو #814: import نوشتن است و داخل کامپوننت هم `manage_personnel` می‌خواهد.
+        $result = $this->createUserWithUnit(['manage_personnel']);
         $user = $result['user'];
         $unit = $result['unit'];
         $this->actingAs($user);
@@ -169,7 +170,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_confirm_without_preview_shows_error(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('kargozini.import-persons.import-persons')
@@ -181,7 +182,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_cancel_clears_state(): void
     {
-        $result = $this->createUserWithUnit(['kargozini']);
+        $result = $this->createUserWithUnit(['manage_personnel']);
         $user = $result['user'];
         $unit = $result['unit'];
         $this->actingAs($user);
@@ -209,7 +210,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_zero_rows_shows_total_zero(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // TSV with header only (no data rows)
@@ -226,7 +227,7 @@ class KargoziniImportLivewireTest extends TestCase
 
     public function test_exception_during_preview_shows_error(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // Upload a file that is not valid Excel/CSV to trigger an exception

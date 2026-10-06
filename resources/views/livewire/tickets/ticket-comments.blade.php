@@ -2,6 +2,7 @@
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Services\AccessService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -94,10 +95,14 @@ return new class extends Component
             return;
         }
 
+        // والد باید متعلق به همین تیکت باشد (ایشو #814) — وگرنه پاسخ به
+        // کامنتِ تیکتِ دیگری گره می‌خورد.
+        $parent = $this->findTicketComment($commentId);
+
         TicketComment::create([
             'ticket_id' => $ticket->id,
             'user_id' => auth()->id(),
-            'parent_id' => $commentId,
+            'parent_id' => $parent->id,
             'body' => $this->replyBody,
             'body_html' => nl2br(e($this->replyBody)),
         ]);
@@ -121,10 +126,12 @@ return new class extends Component
 
     public function startEdit(int $commentId): void
     {
-        $comment = TicketComment::find($commentId);
-        if (! $comment || $comment->user_id !== auth()->id()) {
-            return;
-        }
+        // فقط وضعیت UI؛ قاعله‌ی مالکیت/پنجره‌ی ۱۵ دقیقه‌ای در
+        // TicketCommentPolicy زندگی می‌کند (ایشو #814) — اینجا کپی نمی‌شود.
+        // عبور از findTicketComment لازم است: editBody state عمومیِ Livewire
+        // است و سپردن بدنه‌ی کامنتِ تیکتِ دیگر به آن = نشت خواندنی.
+        $comment = $this->findTicketComment($commentId);
+
         $this->editCommentId = $commentId;
         $this->editBody = $comment->body;
         $this->editing = true;
@@ -134,14 +141,12 @@ return new class extends Component
     {
         $this->validate(['editBody' => 'required|string|min:1|max:5000']);
 
-        $comment = TicketComment::find($this->editCommentId);
-        if (! $comment || $comment->user_id !== auth()->id()) {
+        if (! $this->editCommentId) {
             return;
         }
-        if ($comment->created_at->diffInMinutes(now()) > 15) {
-            session()->flash('comment_error', 'فقط تا ۱۵ دقیقه بعد از ثبت می‌توانید ویرایش کنید.');
-            return;
-        }
+
+        $comment = $this->findTicketComment($this->editCommentId);
+        $this->authorize('update', $comment);
 
         $comment->update([
             'body' => $this->editBody,
@@ -162,15 +167,28 @@ return new class extends Component
 
     public function deleteComment(int $commentId): void
     {
+        $comment = $this->findTicketComment($commentId);
+        $this->authorize('delete', $comment);
+
+        $comment->delete();
+        $this->refreshComments();
+    }
+
+    /**
+     * Load a comment only if it belongs to the ticket whose modal is open.
+     * Anything else (missing comment, no open ticket, a comment from another
+     * ticket) is refused — that is the cross-ticket IDOR of issue #814; the
+     * API already enforces the same `$comment->ticket_id === $ticket->id`.
+     */
+    private function findTicketComment(int $commentId): TicketComment
+    {
         $comment = TicketComment::find($commentId);
-        if (! $comment) {
-            return;
+
+        if (! $comment || ! $this->ticket || $comment->ticket_id !== $this->ticket->id) {
+            throw new AuthorizationException;
         }
-        // author or admin
-        if ($comment->user_id === auth()->id() || auth()->user()->hasRole('admin') || auth()->user()->can('manage_unit_tickets')) {
-            $comment->delete();
-            $this->refreshComments();
-        }
+
+        return $comment;
     }
 };
 ?>
