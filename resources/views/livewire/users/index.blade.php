@@ -62,7 +62,13 @@ return new class extends Component
 
         $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
         $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
-        $units = Unit::with('unitType')->where('is_active', true)->orderBy('name')->get();
+
+        // Issue #849: this picker is the WRITE target list, so it may only
+        // offer units inside the actor's reachable set. The whereIn is
+        // unconditional — an empty scope renders an empty picker (0 = 1),
+        // never the whole organization (AGENTS.md fail-closed rule).
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $units = Unit::with('unitType')->whereIn('id', $accessibleIds)->where('is_active', true)->orderBy('name')->get();
         $this->allUnits = $units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->all();
         $this->allUnitsTree = $units->map(fn ($u) => [
             'id' => $u->id,
@@ -103,6 +109,55 @@ return new class extends Component
         return $this->actor()->id;
     }
 
+    /**
+     * Issue #849: EVERY unit id handed to a mutation must sit inside the
+     * actor's reachable set. `accessibleUnitIds()` is legitimately `[]`, and
+     * `[]` means "in scope of nothing", never "unrestricted" (AGENTS.md) —
+     * a plain `in_array` against it therefore fails closed and there is no
+     * `when($ids, …)` / `! empty($ids)` guard anywhere in this file.
+     *
+     * @param  array<int|string>  $unitIds
+     */
+    private function assertUnitIdsInScope(array $unitIds): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        foreach ($unitIds as $unitId) {
+            if (! in_array((int) $unitId, $accessibleIds, true)) {
+                abort(403, 'شما مجاز به دسترسی به این واحد سازمانی نیستید.');
+            }
+        }
+    }
+
+    /**
+     * Issue #849: a target user is reachable only when its linked person's
+     * unit OR one of its `user_units` rows falls inside the actor's scope.
+     * The disjunction matters — `whereHas('person', …)` alone would hide
+     * accounts with no linked person (admin accounts), which is exactly why
+     * `users()` filters on the same two branches.
+     *
+     * `edit()` uses this so foreign state never lands in the public Livewire
+     * properties; the mutating methods re-check it themselves, because
+     * `editing_user_id` is public, client-settable state and a check inside
+     * `edit()` alone is bypassable.
+     */
+    private function assertUserInScope(User $user): void
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        $personUnitId = $user->person?->u_id;
+        $inScope = $personUnitId !== null && in_array((int) $personUnitId, $accessibleIds, true);
+
+        if (! $inScope) {
+            $inScope = $user->units()->pluck('units.id')
+                ->contains(fn ($unitId): bool => in_array((int) $unitId, $accessibleIds, true));
+        }
+
+        if (! $inScope) {
+            abort(403, 'این کاربر خارج از محدوده واحد سازمانی شماست.');
+        }
+    }
+
     public function delete(User $user): void
     {
         $this->authorize('manage_users');
@@ -110,6 +165,10 @@ return new class extends Component
         if ($user->id === $this->actorId()) {
             abort(403, 'شما نمی‌توانید خودتان را غیرفعال کنید.');
         }
+
+        // Issue #849: deactivating a user of another unit is cross-unit.
+        // Checked before the admin guard so scope and role stay independent.
+        $this->assertUserInScope($user);
 
         if ($user->hasRole('admin') && ! $this->actor()->hasRole('admin')) {
             abort(403, 'تنها مدیران می‌توانند کاربران مدیر را غیرفعال کنند.');
@@ -129,6 +188,9 @@ return new class extends Component
 
             return;
         }
+
+        // Issue #849: re-activating a user of another unit is cross-unit.
+        $this->assertUserInScope($user);
 
         if ($user->hasRole('admin') && ! $this->actor()->hasRole('admin')) {
             abort(403, 'تنها مدیران می‌توانند کاربران مدیر را فعال کنند.');
@@ -156,6 +218,13 @@ return new class extends Component
         $this->authorize('manage_users');
         $this->resetValidation();
         $user = User::withTrashed()->findOrFail($userId);
+
+        // Issue #849: `edit()` fills PUBLIC Livewire state (unit_ids,
+        // user_permissions, n_code), so a foreign target is a read leak even
+        // before any write. Mutations re-check regardless — see
+        // assertUserInScope() and the direct `editing_user_id` path.
+        $this->assertUserInScope($user);
+
         $this->editing_user_id = $user->id;
         $this->n_code = $user->n_code;
         $person = Person::where('n_code', $user->n_code)->first();
@@ -170,8 +239,17 @@ return new class extends Component
 
     public function selectPerson($n_code): void
     {
-        $this->n_code = $n_code;
         $person = Person::where('n_code', $n_code)->first();
+
+        // Issue #849: `n_code` is the account key, and this method resolves
+        // an arbitrary one from client state — the dropdown is already
+        // scoped by getFilteredPersonsProperty(), so a direct call that lands
+        // outside the actor's units is an out-of-scope read, not a lookup.
+        if ($person && ! in_array((int) $person->u_id, app(AccessService::class)->accessibleUnitIds(), true)) {
+            abort(403, 'این پرسنل خارج از محدوده واحد سازمانی شماست.');
+        }
+
+        $this->n_code = $n_code;
         if ($person) {
             $this->person_search = "{$person->f_name} {$person->l_name} ({$person->n_code})";
         }
@@ -181,6 +259,11 @@ return new class extends Component
     {
         $this->authorize('manage_users');
 
+        // Issue #849: every submitted unit must be inside the actor's own
+        // scope — before validation, so the guard is the first thing an
+        // out-of-scope write meets.
+        $this->assertUnitIdsInScope($this->unit_ids);
+
         if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
             $this->authorize('manage_roles');
         }
@@ -188,7 +271,10 @@ return new class extends Component
         $this->validate([
             'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
             'password' => 'required|string|min:6',
-            'role_ids' => 'nullable|array',
+            // Issue #849: aligned with updateUser() — `nullable|array` let a
+            // manage_users-only holder plant a role-less account in any unit;
+            // the two paths must not be able to diverge again.
+            'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'exists:roles,id',
             'user_permissions' => 'nullable|array',
             'user_permissions.*' => 'exists:permissions,name',
@@ -198,6 +284,7 @@ return new class extends Component
             'n_code.exists' => 'این کد ملی در سیستم موجود نیست.',
             'password.required' => 'رمز عبور الزامی است.',
             'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
+            'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
         ]);
 
         try {
@@ -224,6 +311,23 @@ return new class extends Component
     public function updateUser(): void
     {
         $this->authorize('manage_users');
+
+        // Issue #849: the scope guard lives HERE, not only in edit() —
+        // `editing_user_id` is public, client-settable Livewire state with no
+        // #[Locked], so a direct state write reaches this method without the
+        // form ever being opened. Both the loaded target and every submitted
+        // unit_id are checked (same rule as kargozini.person validates the
+        // stored AND the submitted u_id).
+        $target = User::withTrashed()->find($this->editing_user_id);
+        if ($target instanceof User) {
+            $this->assertUserInScope($target);
+
+            // `units()->sync()` below is a full REPLACE, so the target's
+            // CURRENT units must be in scope too — otherwise a straddling
+            // user could be re-parented out of a unit the actor never had.
+            $this->assertUnitIdsInScope($target->units()->pluck('units.id')->all());
+        }
+        $this->assertUnitIdsInScope($this->unit_ids);
 
         if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
             $this->authorize('manage_roles');
@@ -286,10 +390,24 @@ return new class extends Component
 
     public function users(): LengthAwarePaginator
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         $query = User::query()
             ->with('roles')
             ->withAggregate('person', 'f_name')
             ->withAggregate('person', 'l_name')
+            // Issue #849: scope the directory. A DISJUNCTION, not the
+            // activity-log predicate verbatim — `whereHas('person', …)` alone
+            // would hide accounts with no linked person or a null u_id (admin
+            // accounts). Unconditional whereIn on both branches: an empty
+            // scope compiles to 0 = 1 on each side, so [] shows nobody.
+            ->where(function (Builder $q) use ($accessibleIds) {
+                $q->whereHas('person', function (Builder $personQuery) use ($accessibleIds) {
+                    $personQuery->whereIn('u_id', $accessibleIds);
+                })->orWhereHas('units', function (Builder $unitQuery) use ($accessibleIds) {
+                    $unitQuery->whereIn('units.id', $accessibleIds);
+                });
+            })
             ->when($this->search, function (Builder $q) {
                 // Fold both the column (CONCAT) and the term for Persian char equivalence.
                 $term = \App\Traits\PersianNormalizer::foldedTerm($this->search);
@@ -329,8 +447,19 @@ return new class extends Component
 
         $term = \App\Traits\PersianNormalizer::foldedTerm($this->person_search);
         $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         return Person::query()
+            // Issue #849: the only component-side path that hands a full name
+            // + national code of an arbitrary person to a manage_users holder.
+            // Same predicate as `->accessible('u_id')`, written out because a
+            // local scope call is not resolvable without larastan: an
+            // unconditional whereIn, so an empty scope is 0 = 1 (never "no
+            // filter"), and it sits in its own AND-group so the LIKE/OR below
+            // cannot bypass it.
+            ->where(function ($query) use ($accessibleIds) {
+                $query->whereIn('u_id', $accessibleIds);
+            })
             ->where(function ($query) use ($term, $foldedConcat) {
                 $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
                     ->orWhere('n_code', 'like', "%{$term}%");
