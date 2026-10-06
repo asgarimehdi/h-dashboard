@@ -50,7 +50,7 @@ Uses **Spatie Permission** package:
 - Permission `manage_hardware` required for hardware CRUD
 - Roles: admin, operator, viewer
 
-**AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated.
+**AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated. It also provides `allUnitIds()` → every unit id, with **no actor and no session**, deliberately uncached (#836) — use it in scheduler/worker paths, where `accessibleUnitIds()` is always `[]`.
 
 **Key permissions:** `manage_users`, `organization`, `kargozini`, `map`, `manage_zabbix`, `calendar`, `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache`, `manage_hardware`, `bw`, `view_hr_dashboard`, `manage_personnel`, `manage_unit_tickets`, `manage_org_chart`.
 
@@ -401,7 +401,7 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
 | `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
-The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+The first three jobs accept a `$unitIds` array; **empty resolves `AccessService::allUnitIds()` (org-wide), NOT `accessibleUnitIds()`** (#836). `accessibleUnitIds()` reads `auth()`/`session()` and is therefore always `[]` in a scheduler or queue worker — every caller used to read that as "nothing to do" and exit successfully. `accessibleUnitIds()` is request-scoped UI code only. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
 
 > Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
 
