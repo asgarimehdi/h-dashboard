@@ -4111,12 +4111,6 @@ parameters:
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:9\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/reports/persons.blade.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 4
@@ -4150,12 +4144,6 @@ parameters:
 			message: '#^Parameter \#1 \$carbon of static method Morilog\\Jalali\\Jalalian\:\:fromCarbon\(\) expects Carbon\\Carbon, Carbon\\CarbonInterface given\.$#'
 			identifier: argument.type
 			count: 2
-			path: resources/views/livewire/reports/todos.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:10\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-

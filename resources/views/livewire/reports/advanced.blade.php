@@ -33,13 +33,17 @@ return new class extends Component
 
     public $units = [];
 
+    /** Issue #819 — see the dashboard's `emptyScope` banner for the rationale. */
+    public bool $emptyScope = false;
+
     public function mount(): void
     {
         $this->dateFrom = Jalalian::fromCarbon(now()->subDays(30))->format('Y/m/d');
         $this->dateTo = Jalalian::fromCarbon(now())->format('Y/m/d');
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        if (empty($accessibleIds)) {
+        $this->emptyScope = $accessibleIds === [];
+        if ($accessibleIds === []) {
             $this->units = [];
         } else {
             $cacheKey = 'advanced_report:units:'.md5(implode(',', $accessibleIds));
@@ -192,21 +196,21 @@ return new class extends Component
             $details = [
                 'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
                     ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-                    ->when($accessibleIds, fn ($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->whereIn('persons.u_id', $accessibleIds)
                     ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
                     ->groupBy('name')
                     ->pluck('count', 'name')
                     ->toArray(),
                 'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
                     ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-                    ->when($accessibleIds, fn ($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->whereIn('persons.u_id', $accessibleIds)
                     ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
                     ->groupBy('name')
                     ->pluck('count', 'name')
                     ->toArray(),
                 'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
                     ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-                    ->when($accessibleIds, fn ($q) => $q->whereIn('persons.u_id', $accessibleIds))
+                    ->whereIn('persons.u_id', $accessibleIds)
                     ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
                     ->groupBy('name')
                     ->pluck('count', 'name')
@@ -238,6 +242,13 @@ return new class extends Component
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    @if($emptyScope)
+        <div class="alert alert-info mb-6" role="alert">
+            <x-icon name="o-information-circle" class="w-5 h-5" />
+            <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
 
     {{-- فیلترها --}}
     <x-card shadow class="mb-6">

@@ -14,19 +14,26 @@ return new class extends Component
     public ?string $selectedTahsilId = null;
     public ?string $selectedSematId = null;
     public ?string $selectedEstekhdamId = null;
-    public $units = [];
     public $tahsils = [];
     public $semats = [];
     public $estekhdams = [];
+
+    /**
+     * Issue #819: an empty scope now renders zero rows instead of every unit's
+     * rows, so the page has to say why it is empty — same treatment as the
+     * dashboard's `emptyScope` banner.
+     */
+    public bool $emptyScope = false;
 
     public function mount(): void
     {
         $this->dateFrom = Jalalian::fromCarbon(now()->subYears(1))->format('Y/m/d');
         $this->dateTo = Jalalian::fromCarbon(now())->format('Y/m/d');
-        $this->units = \App\Models\Unit::all();
         $this->tahsils = \App\Models\Tahsil::all();
         $this->semats = \App\Models\Semat::all();
         $this->estekhdams = \App\Models\Estekhdam::all();
+
+        $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
     }
 
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
@@ -45,7 +52,7 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $baseQuery = Person::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('u_id', $accessibleIds))
+            ->whereIn('u_id', $accessibleIds)
             ->when($this->selectedUnitId, fn($q) => $q->where('u_id', $this->selectedUnitId))
             ->when($this->selectedTahsilId, fn($q) => $q->where('t_id', $this->selectedTahsilId))
             ->when($this->selectedSematId, fn($q) => $q->where('s_id', $this->selectedSematId))
@@ -55,7 +62,7 @@ return new class extends Component
 
         $byTahsil = Person::selectRaw('COALESCE(tahsils.name, ?) as tahsil_name, COUNT(*) as count', ['نامشخص'])
             ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->whereIn('persons.u_id', $accessibleIds)
             ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
             ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
             ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
@@ -65,7 +72,7 @@ return new class extends Component
 
         $bySemat = Person::selectRaw('COALESCE(semats.name, ?) as semat_name, COUNT(*) as count', ['نامشخص'])
             ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->whereIn('persons.u_id', $accessibleIds)
             ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
             ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
             ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
@@ -75,7 +82,7 @@ return new class extends Component
 
         $byEstekhdam = Person::selectRaw('COALESCE(estekhdams.name, ?) as estekhdam_name, COUNT(*) as count', ['نامشخص'])
             ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->whereIn('persons.u_id', $accessibleIds)
             ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
             ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
             ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
@@ -85,7 +92,7 @@ return new class extends Component
 
         $byUnit = Person::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
             ->leftJoin('units', 'persons.u_id', '=', 'units.id')
-            ->when($accessibleIds, fn($q) => $q->whereIn('persons.u_id', $accessibleIds))
+            ->whereIn('persons.u_id', $accessibleIds)
             ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
             ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
             ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
@@ -131,6 +138,13 @@ return new class extends Component
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    @if($emptyScope)
+        <div class="alert alert-info mb-6" role="alert">
+            <x-icon name="o-information-circle" class="w-5 h-5" />
+            <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
 
     {{-- فیلترها --}}
     <x-card shadow class="mb-6">
