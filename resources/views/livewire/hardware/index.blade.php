@@ -334,14 +334,30 @@ return new class extends Component
 
     public function updateHardware(): void
     {
+        $accessibleIds = $this->accessibleUnitIds();
+
+        // Issue #842: the destination person must be inside the caller's scope before
+        // anything is written. The explicit check comes FIRST so a legitimate user who
+        // types another unit's n_code gets the Persian message instead of a bare
+        // validation error; the scoped exists rule is the second layer of the same
+        // contract (same two-layer shape as createHardware()).
+        if (filled($this->n_code)) {
+            $person = Person::where('n_code', $this->n_code)->first();
+
+            if (! in_array($person?->u_id, $accessibleIds)) {
+                $this->error('شما به این پرسنل دسترسی ندارید.', position: 'toast-bottom');
+
+                return;
+            }
+        }
+
         $this->validate([
-            'n_code' => 'required|string|exists:persons,n_code',
+            'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $accessibleIds))],
             'pc_name' => 'required|string|max:255',
         ]);
 
         $hw = Hardware::with('person')->findOrFail($this->editingId);
 
-        $accessibleIds = $this->accessibleUnitIds();
         if (! in_array($hw->person?->u_id, $accessibleIds)) {
             $this->error('شما به این سخت‌افزار دسترسی ندارید.', position: 'toast-bottom');
 

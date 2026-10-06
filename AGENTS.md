@@ -45,12 +45,27 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 Uses **Spatie Permission** package:
 
 - `HasOrganizationalScope` trait on models for **opt-in** unit-based filtering via `->accessible($column)`. It is a single local scope — **there is no global scope**, so a query is unscoped until it calls it. Its `whereIn` is unconditional, so an empty scope compiles to `0 = 1` (fail-closed).
-- **Never guard a unit scope with `->when($accessibleIds, fn ($q) => $q->whereIn(...))`** — `Conditionable::when()` runs the callback only for a **truthy** value, so an EMPTY `$accessibleIds` drops the predicate and the page renders rows from **every unit** (the #819 leak in five `/reports/*` components). `AccessibleUnitIds()` is legitimately `[]` for an account with no `user_units` row and no `person.u_id`, and such a user is deliberately allowed through `ValidateUnitContext`. Use a plain `->whereIn($column, $accessibleIds)` (or `->accessible($column)`) instead. The two-`when` form in `UnitsExportController` / `PersonsExportController` (`when($accessibleIds === [], whereRaw('1 = 0'))`) is also correct — but the unconditional one is one condition instead of two that must both stay right.
+- **Never special-case an empty scope as "no restriction."** There are **three spellings**, and a sweep that only greps one of them will miss the other two (issue #839):
+
+  | Spelling | Why it fails open |
+  |---|---|
+  | `->when($accessibleIds, fn ($q) => …)` | `Conditionable::when()` runs the callback only for a **truthy** value, so `[]` drops the predicate — the #819 leak in five `/reports/*` components |
+  | `if (! empty($accessibleIds)) { $q->whereIn(…); }` | the predicate is simply never added — #839, all **8** sites in `PersonImport` / `HardwareImport` |
+  | `if (! empty($accessibleIds) && ! in_array($id, $accessibleIds)) { reject }` | the **first conjunct is false**, so `&&` short-circuits and the row is **ACCEPTED** — the same bug with extra steps, and the most dangerous spelling because it *looks* like a scope check |
+
+  `AccessibleUnitIds()` is legitimately `[]` for an account with no `user_units` row and no `person.u_id`, and such a user is deliberately allowed through `ValidateUnitContext`. **`[]` means "in scope of nothing", never "unrestricted".** Use a plain `->whereIn($column, $accessibleIds)` (or `->accessible($column)`) instead — an empty array compiles to `0 = 1`. The two-`when` form in `UnitsExportController` / `PersonsExportController` (`when($accessibleIds === [], whereRaw('1 = 0'))`) is also correct — but the unconditional one is one condition instead of two that must both stay right.
+- **The sweep to run after any scope change** (covers all three spellings at once):
+  ```bash
+  grep -rnE '(when\(\s*\$[a-zA-Z]*[Ii]ds|! *empty\(\$[a-zA-Z]*[Ii]ds\))' app/ resources/views/
+  ```
+  A hit is only a leak if it **guards a scope predicate** — `empty($rootIds) return collect()` and
+  `empty($deletedHardwareIds)` are early-returns, not scope bypasses. Still read each one: the two-`when`
+  export form and `map-no-boundary`'s `:28` early-return are load-bearing.
 - Users see only their own unit's data (plus sub-units via recursive CTE)
 - Permission `manage_hardware` required for hardware CRUD
 - Roles: admin, operator, viewer
 
-**AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated.
+**AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated. It also provides `allUnitIds()` → every unit id, with **no actor and no session**, deliberately uncached (#836) — use it in scheduler/worker paths, where `accessibleUnitIds()` is always `[]`.
 
 **Key permissions:** `manage_users`, `organization`, `kargozini`, `map`, `manage_zabbix`, `calendar`, `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache`, `manage_hardware`, `bw`, `view_hr_dashboard`, `manage_personnel`, `manage_unit_tickets`, `manage_org_chart`.
 
@@ -95,6 +110,14 @@ link's visibility in both directions, plus a real `GET` per link.
   The update branch re-validates the **submitted** `u_id` against `accessibleUnitIds()`, not just the
   stored one, or a record can be moved into a unit the actor never had read access to. Pinned by
   `tests/Feature/Kargozini/PersonLivewireTest.php` (the `#805` block).
+- Todo rows (issue #838 decision): **null-unit todo = creator-owned; UI and API enforce the same
+  rule.** A `todos` row with `unit_id = null` belongs to its creator (`user_id`) — it is listed
+  (`getEvents()`), readable and mutable only by that user, on both surfaces. The Livewire
+  component (`todo.todo`: `getEvents()`, `isTodoAccessible()`, `save()` target-row check,
+  `#[Locked]` on `$editingId`) and `Api\TodoController` (`show`/`update`/`destroy`/
+  `toggleComplete`) apply the identical predicate, so a row the UI edits is never a row the API
+  403s and vice versa. Pinned by `tests/Feature/TodoLivewireTest.php` (the `#838` block) and the
+  creator/non-creator parity tests in `tests/Feature/TodoApiTest.php`.
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
@@ -128,7 +151,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 | `/api/tickets*` (+ comments) | `ability:tickets:read` + `role_or_permission:view_assigned_tickets\|view_all_tickets` (per-route) | `abilities:tickets:write` + per-route `permission:create_ticket` / `permission:manage_unit_tickets` |
 | `/api/reports/*` | `ability:reports:read` + `role_or_permission:manage_personnel` | — |
 | `/api/persons/*` | `ability:persons:read` + `role_or_permission:kargozini\|manage_personnel` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
-| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | same middleware + `role_or_permission:calendar` |
+| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | `abilities:todos:write` (nested inside the outer group, ALL) + `role_or_permission:calendar` (#837) |
 | `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | `role_or_permission:view_hr_dashboard` |
 | `/api/notifications*` | `ability:notifications:read` | — |
 | `/api/gis*` | `ability:gis:read` + `role_or_permission:map` | `role_or_permission:map` |
@@ -136,6 +159,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
 - **`/api/tickets*` and `/api/tickets/{ticket}/comments/*` also need `role_or_permission:view_assigned_tickets|view_all_tickets`** on top of the ability — they are in neither the "read" nor "write" column of that permission set, so the table above understates the gate.
+- **`/api/notifications*` has no `notifications:write` ability**, and needs none: `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` act only on the **caller's own** notifications, so they are read-side acknowledgements by design (#837). Do not mint a `notifications:write` ability to "fix" this — `getApiTokenAbilities()` bundles it with `read` anyway.
 - Tokens are **scoped and revoked on password change** (#678). API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
 
 
@@ -401,7 +425,7 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
 | `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
-The first three jobs accept a `$unitIds` array; empty defaults to `AccessService::accessibleUnitIds()`. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+The first three jobs accept a `$unitIds` array; **empty resolves `AccessService::allUnitIds()` (org-wide), NOT `accessibleUnitIds()`** (#836). `accessibleUnitIds()` reads `auth()`/`session()` and is therefore always `[]` in a scheduler or queue worker — every caller used to read that as "nothing to do" and exit successfully. `accessibleUnitIds()` is request-scoped UI code only. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
 
 > Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
 

@@ -16,10 +16,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Carbon|null $start_at
  * @property Carbon|null $end_at
  * @property bool $is_completed
- * @property int $unit_id
+ * @property int|null $unit_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property int $user_id
+ * @property int|null $user_id
  * @property string $recurrence_rule
  * @property int $recurrence_interval
  * @property Carbon|null $last_generated_at

@@ -162,14 +162,17 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         });
     });
 
-    // Todo API routes — ability:todos:read|todos:write (Issue #690)
+    // Todo API routes — ability:todos:read|todos:write (Issue #690), writes nested under abilities:todos:write (#837)
     Route::middleware(['ability:todos:read,todos:write', 'role_or_permission:calendar'])->group(function () {
         Route::get('/todos', [TodoController::class, 'index']);
         Route::get('/todos/{todo}', [TodoController::class, 'show']);
-        Route::post('/todos', [TodoController::class, 'store']);
-        Route::put('/todos/{todo}', [TodoController::class, 'update']);
-        Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
-        Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+
+        Route::middleware('abilities:todos:write')->group(function () {
+            Route::post('/todos', [TodoController::class, 'store']);
+            Route::put('/todos/{todo}', [TodoController::class, 'update']);
+            Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
+            Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+        });
     });
 
     // HR API routes (Issue #223, #444) — ability:hr:read (Issue #690)

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
+use App\Models\Todo;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,6 +59,23 @@ class ApiAbilityTest extends TestCase
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
         ])->postJson($url, $data);
+    }
+
+    private function apiPut(string $url, array $data, string $token): TestResponse
+    {
+        return $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])->putJson($url, $data);
+    }
+
+    private function apiDelete(string $url, string $token): TestResponse
+    {
+        return $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'Accept' => 'application/json',
+        ])->deleteJson($url);
     }
 
     private function flutterAbilities(): array
@@ -268,6 +286,70 @@ class ApiAbilityTest extends TestCase
     {
         $token = $this->createTokenWithAbilities(['todos:read']);
         $this->apiGet('/api/todos', $token)->assertForbidden();
+    }
+
+    // ──────────────────────────────────────────────
+    // Todos writes (Plan 48, issue #837)
+    // ──────────────────────────────────────────────
+
+    private function createTodoInOwnUnit(): array
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(permissions: ['calendar']);
+        $todo = Todo::factory()->create(['unit_id' => $unit->id]);
+
+        return ['user' => $user, 'unit' => $unit, 'todo' => $todo];
+    }
+
+    private function todoPayload(int $unitId): array
+    {
+        return [
+            'title' => 'Ability gated todo',
+            'start_at' => '2026-07-15 10:00:00',
+            'unit_id' => $unitId,
+        ];
+    }
+
+    public function test_todos_store_denied_with_read_only_ability(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createTodoInOwnUnit();
+        $token = $user->createToken('test-token', ['todos:read'])->plainTextToken;
+        $this->apiPost('/api/todos', $this->todoPayload($unit->id), $token)->assertForbidden();
+    }
+
+    public function test_todos_update_denied_with_read_only_ability(): void
+    {
+        ['user' => $user, 'todo' => $todo] = $this->createTodoInOwnUnit();
+        $token = $user->createToken('test-token', ['todos:read'])->plainTextToken;
+        $this->apiPut("/api/todos/{$todo->id}", ['title' => 'Blocked rename'], $token)->assertForbidden();
+    }
+
+    public function test_todos_destroy_denied_with_read_only_ability(): void
+    {
+        ['user' => $user, 'todo' => $todo] = $this->createTodoInOwnUnit();
+        $token = $user->createToken('test-token', ['todos:read'])->plainTextToken;
+        $this->apiDelete("/api/todos/{$todo->id}", $token)->assertForbidden();
+    }
+
+    public function test_todos_toggle_complete_denied_with_read_only_ability(): void
+    {
+        ['user' => $user, 'todo' => $todo] = $this->createTodoInOwnUnit();
+        $token = $user->createToken('test-token', ['todos:read'])->plainTextToken;
+        $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token)->assertForbidden();
+    }
+
+    public function test_todos_writes_allowed_with_write_only_ability(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createTodoInOwnUnit();
+        $writeToken = $user->createToken('test-token', ['todos:write'])->plainTextToken;
+
+        $store = $this->apiPost('/api/todos', $this->todoPayload($unit->id), $writeToken);
+        $store->assertCreated();
+        $todoId = $store->json('data.id');
+        $this->assertNotNull($todoId);
+
+        $this->apiPut("/api/todos/{$todoId}", ['title' => 'Renamed by writer'], $writeToken)->assertOk();
+        $this->apiPost("/api/todos/{$todoId}/toggle-complete", [], $writeToken)->assertOk();
+        $this->apiDelete("/api/todos/{$todoId}", $writeToken)->assertOk();
     }
 
     // ──────────────────────────────────────────────

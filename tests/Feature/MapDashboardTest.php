@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Unit;
+use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -57,6 +59,162 @@ class MapDashboardTest extends TestCase
             ->assertSet('filterHardware', '')
             ->assertSet('filterPriority', '')
             ->assertSet('filterStatus', '');
+    }
+
+    // ──────────────────────────────────────────────
+    // Token abilities (issue #840)
+    //
+    // The page used to mint `createToken('map-dashboard')` with no abilities
+    // argument, so Sanctum's default `['*']` was stored. `PersonalAccessToken::can()`
+    // short-circuits on `'*'`, so that token passed every `abilities:*write`
+    // gate in `routes/api.php` — a wildcard token from a read-only page.
+    // ──────────────────────────────────────────────
+
+    /** @test */
+    public function test_map_dashboard_token_is_scoped_to_gis_read_ability(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        Livewire::actingAs($user)->test('map.map-dashboard');
+
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+            'name' => 'map-dashboard',
+            'abilities' => json_encode(['gis:read']),
+        ]);
+    }
+
+    /** @test */
+    public function test_map_dashboard_token_is_not_a_wildcard(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        Livewire::actingAs($user)->test('map.map-dashboard');
+
+        $abilities = $user->tokens()->where('name', 'map-dashboard')->firstOrFail()->abilities;
+
+        $this->assertNotContains('*', $abilities);
+        $this->assertSame(['gis:read'], $abilities);
+    }
+
+    /** @test */
+    public function test_map_dashboard_token_cannot_write_hardware(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map', 'manage_hardware']);
+
+        $token = $this->mountAndDetach($user);
+
+        // The user HAS manage_hardware, so the rejection can only come from the
+        // ability layer: the map token must not carry `hardware:write`.
+        $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ])->postJson('/api/hardware', ['n_code' => '123', 'pc_name' => 'test'])->assertForbidden();
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'test']);
+    }
+
+    /** @test */
+    public function test_map_dashboard_token_can_read_the_gis_endpoints_it_uses(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        $token = $this->mountAndDetach($user);
+
+        $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
+
+        $this->withHeaders($headers)->getJson('/api/gis/stats')->assertOk();
+    }
+
+    /**
+     * Mount the page, then drop the session so the request authenticates from
+     * the Bearer token ALONE.
+     *
+     * This matters. `Laravel\Sanctum\Guard::__invoke()` checks the `web` guard
+     * first and, when a session resolves, returns a `TransientToken` whose
+     * `can()` is unconditionally true — the stored abilities are never read.
+     * Asserting against a still-logged-in session therefore proves nothing
+     * (it yields 422 from validation, not 403 from the ability gate).
+     *
+     * A pure bearer request is also the real threat model: the plaintext is in
+     * the rendered HTML, so whoever reads it uses it with no session of their own.
+     */
+    private function mountAndDetach(User $user): string
+    {
+        $token = Livewire::actingAs($user)->test('map.map-dashboard')->get('mapToken');
+
+        $this->assertIsString($token);
+
+        $this->app['auth']->guard('web')->logout();
+        $this->app['auth']->forgetGuards();
+
+        return $token;
+    }
+
+    /** @test */
+    public function test_map_dashboard_token_expires_within_the_page_ttl(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        Livewire::actingAs($user)->test('map.map-dashboard');
+
+        $token = $user->tokens()->where('name', 'map-dashboard')->firstOrFail();
+
+        $this->assertNotNull($token->expires_at);
+        $this->assertTrue($token->expires_at->isFuture());
+        // 60 minutes, and never the 24h config default.
+        $this->assertLessThanOrEqual(now()->addMinutes(61), $token->expires_at);
+        $this->assertGreaterThan(now()->addMinutes(59), $token->expires_at);
+    }
+
+    /** @test */
+    public function test_map_dashboard_reuses_the_same_token_across_page_loads(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        $first = Livewire::actingAs($user)->test('map.map-dashboard')->get('mapToken');
+
+        // A second tab / reload must not mint a second token, and must not
+        // revoke the first one (that was the two-tab bug).
+        $second = Livewire::actingAs($user)->test('map.map-dashboard')->get('mapToken');
+
+        $this->assertSame($first, $second);
+        $this->assertSame(1, $user->tokens()->where('name', 'map-dashboard')->count());
+    }
+
+    /** @test */
+    public function test_map_dashboard_prunes_expired_map_tokens(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        $user->createToken('map-dashboard', ['gis:read'], now()->subMinute());
+
+        Livewire::actingAs($user)->test('map.map-dashboard');
+
+        $tokens = $user->tokens()->where('name', 'map-dashboard')->get();
+
+        $this->assertCount(1, $tokens);
+        $this->assertTrue($tokens->first()->expires_at->isFuture());
+    }
+
+    /** @test */
+    public function test_map_dashboard_token_is_locked_against_client_updates(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+
+        $component = Livewire::actingAs($user)->test('map.map-dashboard');
+
+        // Defence in depth only: `#[Locked]` stops the client from swapping the
+        // value, it does not remove the plaintext from the HTML.
+        //
+        // `CannotUpdateLockedPropertyException::render()` maps to 419 only when
+        // `app.debug` is off, so with debug on the exception surfaces here
+        // rather than as an HTTP status. Either way the forged value must not
+        // stick.
+        $this->expectException(CannotUpdateLockedPropertyException::class);
+
+        $component->set('mapToken', 'forged-token');
     }
 
     /** @test */

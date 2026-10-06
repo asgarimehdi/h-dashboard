@@ -27,7 +27,7 @@ class CleanNotificationsJob implements ShouldQueue
 
     /**
      * @param  int  $days  حذف اعلان‌های قدیمی‌تر از این تعداد روز
-     * @param  array<int>  $unitIds  آی‌دی واحدها (خالی = از AccessService)
+     * @param  array<int>  $unitIds  آی‌دی واحدها؛ خالی یعنی سراسری (`allUnitIds()`)
      */
     public function __construct(int $days = 7, array $unitIds = [])
     {
@@ -37,13 +37,19 @@ class CleanNotificationsJob implements ShouldQueue
 
     public function handle(): int
     {
-        $unitIds = $this->unitIds ?: app(AccessService::class)->accessibleUnitIds();
+        // Org-wide retention: an empty scope must NOT fall back to
+        // accessibleUnitIds(), which is request-scoped and therefore always
+        // `[]` on a real queue worker — the job would silently delete nothing
+        // (issue #836). A caller that wants a scoped run passes $unitIds.
+        $unitIds = $this->unitIds ?: app(AccessService::class)->allUnitIds();
 
         $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $unitIds))
             ->pluck('id')
             ->toArray();
 
         if (empty($userIds)) {
+            Log::info('CleanNotificationsJob: no users in scope, nothing cleaned');
+
             return 0;
         }
 
