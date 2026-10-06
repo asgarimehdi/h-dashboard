@@ -2,6 +2,7 @@
 
 use App\Models\{Todo, Ticket};
 use App\Services\AccessService;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Mary\Traits\Toast;
 use Carbon\Carbon;
@@ -16,6 +17,7 @@ return new class extends Component {
     public string $title = '';
     public $start_at;
     public $end_at;
+    #[Locked]
     public ?int $editingId = null;
     public bool $is_completed = false;
     public ?int $unit_id = null;
@@ -51,11 +53,14 @@ return new class extends Component {
         $cacheKey = 'calendar:events:' . $user->id . ':' . $calendarVersion . ':' . md5(implode(',', $accessibleIds)) . ':' . ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all');
 
         return Cache::remember($cacheKey, 120, function () use ($accessibleIds) {
-            // Base query with date range filtering for performance
+            // Base query with date range filtering for performance.
+            // Null-unit contract (#838): a null-unit todo belongs to its creator —
+            // listed only to the creator, never to every calendar holder.
+            $userId = Auth::id();
             $todoQuery = Todo::query()
-                ->where(function ($q) use ($accessibleIds) {
+                ->where(function ($q) use ($accessibleIds, $userId) {
                     $q->whereIn('unit_id', $accessibleIds)
-                      ->orWhereNull('unit_id');
+                      ->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
                 });
 
             $ticketQuery = Ticket::accessible()
@@ -204,9 +209,28 @@ return new class extends Component {
 
         // Validate unit_id is accessible
         $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
-        if ($this->unit_id && ! in_array($this->unit_id, $accessibleIds)) {
+        if ($this->unit_id !== null && ! in_array($this->unit_id, $accessibleIds, true)) {
             $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
             return;
+        }
+
+        // #838: scope-check the TARGET row, not just the submitted unit_id.
+        // Without this, editingId can point at a foreign-unit todo and
+        // updateOrCreate rewrites + relocates it into the actor's unit.
+        if ($this->editingId) {
+            $stored = Todo::find($this->editingId);
+
+            if (! $this->isTodoAccessible($stored)) {
+                $this->error('شما دسترسی به این تسک را ندارید');
+                return;
+            }
+
+            // Relocation-safe: an edit must not park a unit-scoped row into
+            // the ownerless null-unit bucket.
+            if ($this->unit_id === null && $stored->unit_id !== null) {
+                $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
+                return;
+            }
         }
 
         $startDateTime = $this->start_date_picker . ' ' . ($this->start_time_picker ?: '00:00');
@@ -322,8 +346,12 @@ return new class extends Component {
         if (! $todo) {
             return false;
         }
+        // Null-unit contract (#838): a null-unit todo belongs to its creator.
+        if ($todo->unit_id === null) {
+            return $todo->user_id === Auth::id();
+        }
         $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
-        return $todo->unit_id === null || in_array($todo->unit_id, $accessibleIds);
+        return in_array($todo->unit_id, $accessibleIds);
     }
 }; ?>
 

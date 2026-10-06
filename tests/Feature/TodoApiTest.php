@@ -330,6 +330,37 @@ class TodoApiTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_creator_can_view_own_null_unit_todo(): void
+    {
+        // Null-unit contract (#838): a null-unit todo belongs to its creator —
+        // the API and the Livewire UI enforce the same rule row-for-row.
+        ['user' => $user] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create(['unit_id' => null, 'user_id' => $user->id]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiGet("/api/todos/{$todo->id}", $token);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'id' => $todo->id,
+                ],
+            ]);
+    }
+
+    public function test_non_creator_cannot_view_null_unit_todo(): void
+    {
+        ['user' => $creator] = $this->createUserWithUnit(['calendar']);
+        ['user' => $other] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create(['unit_id' => null, 'user_id' => $creator->id]);
+        $token = $this->createApiToken($other, ['todos:read', 'todos:write']);
+
+        $response = $this->apiGet("/api/todos/{$todo->id}", $token);
+
+        $response->assertStatus(403);
+    }
+
     public function test_todo_with_null_unit_not_created_via_store(): void
     {
         // Regression for issue #249: even when unit_id is omitted entirely,
