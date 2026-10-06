@@ -241,6 +241,60 @@ it('filterOs escapes LIKE wildcards — percent does not match all', function ()
     expect($component->html())->not->toContain('PC-2');
 });
 
+it('updateHardware refuses to re-point hardware to a person in an inaccessible unit', function () {
+    [$ownUnit, $ownPerson] = makeUnitAndPerson('Unit A', '1111111111', 'Ali', 'Rezaei');
+    [$otherUnit, $otherPerson] = makeUnitAndPerson('Unit B', '2222222222', 'Sara', 'Ahmadi');
+
+    $user = makeUserInUnit($ownUnit);
+
+    $hw = Hardware::create([
+        'n_code' => '1111111111',
+        'pc_name' => 'PC-OWN-UNIT',
+        'type' => 'pc',
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->call('editHardware', $hw->id)
+        ->set('n_code', '2222222222') // person of the inaccessible Unit B
+        ->call('updateHardware')
+        ->assertHasNoErrors();
+
+    $hw->refresh();
+    expect($hw->n_code)->toBe('1111111111');
+
+    // The user gets the Persian message (MaryUI toast), not a bare validation error.
+    $toastJs = collect($component->effects['xjs'] ?? [])
+        ->pluck('expression')
+        ->first(fn (string $expression) => str_starts_with($expression, 'toast('));
+    $toast = $toastJs ? json_decode(substr($toastJs, 6, -1), true) : null;
+
+    expect($toast['toast']['type'] ?? null)->toBe('error');
+    expect($toast['toast']['title'] ?? null)->toBe('شما به این پرسنل دسترسی ندارید.');
+});
+
+it('updateHardware allows reassigning hardware to a person within the accessible unit', function () {
+    [$ownUnit, $ownPerson] = makeUnitAndPerson('Unit A', '3333333333', 'Ali', 'Rezaei');
+
+    $user = makeUserInUnit($ownUnit); // creates a second person inside Unit A
+
+    $hw = Hardware::create([
+        'n_code' => '3333333333',
+        'pc_name' => 'PC-OWN-UNIT',
+        'type' => 'pc',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->call('editHardware', $hw->id)
+        ->set('n_code', $user->n_code) // person of the same accessible Unit A
+        ->call('updateHardware')
+        ->assertHasNoErrors();
+
+    $hw->refresh();
+    expect($hw->n_code)->toBe($user->n_code);
+});
+
 it('filterUnit escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Test Unit']);
     $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
