@@ -233,11 +233,146 @@ class UnitsIndexLivewireTest extends TestCase
         $unit = $result['unit'];
         $this->actingAs($user);
 
-        $target = Unit::create(['name' => 'واحد قابل حذف', 'unit_type_id' => 5, 'region_id' => 2]);
+        // #817: in-scope child of the caller's unit (the old version created
+        // a rootless unit outside the subtree and asserted the delete — i.e.
+        // it pinned the vulnerable behaviour).
+        $target = Unit::create([
+            'name' => 'واحد قابل حذف', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
 
         Livewire::test('units.index')->call('deleteUnit', $target->id);
 
         $this->assertDatabaseMissing('units', ['id' => $target->id]);
+    }
+
+    // ==================== #817: out-of-scope delete refused ====================
+
+    public function test_delete_unit_denied_out_of_scope(): void
+    {
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
+
+        $outsider = Unit::create([
+            'name' => 'واحد خارجی', 'unit_type_id' => 5, 'region_id' => 2,
+        ]);
+
+        Livewire::test('units.index')->call('deleteUnit', $outsider->id);
+
+        $this->assertDatabaseHas('units', ['id' => $outsider->id]);
+    }
+
+    // ==================== #817: edit refused out of scope ====================
+
+    public function test_edit_unit_denied_out_of_scope(): void
+    {
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
+
+        $outsider = Unit::create([
+            'name' => 'واحد خارجی', 'unit_type_id' => 5, 'region_id' => 2,
+        ]);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $outsider->id)
+            ->assertSet('editingId', null)
+            ->assertSet('modal', false);
+    }
+
+    // ==================== #817: cross-unit parent_id refused ====================
+
+    public function test_save_unit_denied_with_out_of_scope_parent(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        $outsider = Unit::create(['name' => 'والد خارجی', 'unit_type_id' => 4]);
+
+        Livewire::test('units.index')
+            ->set('name', 'واحد نباید ساخته شود')
+            ->set('unit_type_id', 3)
+            ->set('parent_id', $outsider->id)
+            ->call('saveUnit');
+
+        $this->assertDatabaseMissing('units', ['name' => 'واحد نباید ساخته شود']);
+        $this->assertEquals($outsider->id, Unit::find($outsider->id)->id);
+    }
+
+    // ==================== #817: self/descendant parent (cycle) refused ====================
+
+    public function test_save_unit_denied_with_descendant_parent(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        $child = Unit::create([
+            'name' => 'فرزند', 'unit_type_id' => 3,
+            'region_id' => 2, 'parent_id' => $parent->id,
+        ]);
+        $grandchild = Unit::create([
+            'name' => 'نوه', 'unit_type_id' => 4,
+            'region_id' => 2, 'parent_id' => $child->id,
+        ]);
+        $originalParentId = $child->parent_id;
+
+        Livewire::test('units.index')
+            ->call('editUnit', $child->id)
+            ->set('parent_id', $grandchild->id)
+            ->call('saveUnit');
+
+        // Tree unchanged: the cycle write was rejected.
+        $this->assertEquals($originalParentId, $child->fresh()->parent_id);
+    }
+
+    // ==================== #817: toggle refused out of scope ====================
+
+    public function test_toggle_ticket_capability_denied_out_of_scope(): void
+    {
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $user->givePermissionTo('manage_unit_tickets');
+        $this->actingAs($user);
+
+        $outsider = Unit::create([
+            'name' => 'واحد خارجی', 'unit_type_id' => 5,
+            'region_id' => 2, 'can_receive_tickets' => false,
+        ]);
+
+        Livewire::test('units.index')->call('toggleTicketCapability', $outsider->id);
+
+        $this->assertDatabaseHas('units', ['id' => $outsider->id, 'can_receive_tickets' => false]);
+    }
+
+    // ==================== #817: delete with children refused ====================
+
+    public function test_delete_unit_with_children_denied_with_message(): void
+    {
+        $result = $this->createUserWithUnit(['organization']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
+
+        $parentUnit = Unit::create([
+            'name' => 'والد درون محدوده', 'unit_type_id' => 4,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Unit::create([
+            'name' => 'فرزند درون محدوده', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $parentUnit->id,
+        ]);
+
+        Livewire::test('units.index')->call('deleteUnit', $parentUnit->id);
+
+        // Explicit children guard keeps both rows instead of relying on the
+        // swallowed FK exception.
+        $this->assertDatabaseHas('units', ['id' => $parentUnit->id]);
     }
 
     // ==================== Delete FK blocked ====================
@@ -294,9 +429,11 @@ class UnitsIndexLivewireTest extends TestCase
         $user->givePermissionTo('manage_unit_tickets');
         $this->actingAs($user);
 
+        // #817: in-scope child of the caller's unit (the old version toggled
+        // a rootless unit outside the subtree and pinned the hole).
         $target = Unit::create([
             'name' => 'واحد تیکت', 'unit_type_id' => 5,
-            'region_id' => 2, 'can_receive_tickets' => false,
+            'region_id' => 2, 'parent_id' => $unit->id, 'can_receive_tickets' => false,
         ]);
 
         Livewire::test('units.index')->call('toggleTicketCapability', $target->id);

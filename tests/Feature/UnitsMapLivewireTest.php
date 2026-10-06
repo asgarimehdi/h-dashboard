@@ -370,4 +370,54 @@ class UnitsMapLivewireTest extends TestCase
         $this->assertDatabaseHas('units', ['id' => $unit->id]);
         $this->assertNull($unit->fresh()->boundary_id);
     }
+
+    // ==================== #817: cross-unit boundary writes refused ====================
+
+    public function test_mount_out_of_scope_renders_no_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $outsider = Unit::create(['name' => 'واحد خارجی']);
+
+        Livewire::test('units.map', ['id' => $outsider->id])
+            ->assertSet('unit', null)
+            ->assertSet('hasBoundary', false);
+    }
+
+    public function test_save_boundary_denied_out_of_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $outsider = Unit::create(['name' => 'واحد خارجی']);
+
+        Livewire::test('units.map', ['id' => $outsider->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson());
+
+        $this->assertNull($outsider->fresh()->boundary_id);
+        $this->assertDatabaseCount('boundaries', 0);
+    }
+
+    public function test_delete_boundary_denied_out_of_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $outsider = Unit::create(['name' => 'واحد خارجی']);
+        $boundaryId = DB::table('boundaries')->insertGetId([
+            'boundary' => DB::raw("ST_GeomFromGeoJSON('".json_encode([
+                'type' => 'Polygon',
+                'coordinates' => [[[50.0, 37.0], [50.1, 37.0], [50.1, 37.1], [50.0, 37.1], [50.0, 37.0]]],
+            ])."' )"),
+        ]);
+        $outsider->update(['boundary_id' => $boundaryId]);
+
+        Livewire::test('units.map', ['id' => $outsider->id])
+            ->call('deleteBoundary');
+
+        // Foreign boundary row untouched.
+        $this->assertDatabaseHas('boundaries', ['id' => $boundaryId]);
+        $this->assertEquals($boundaryId, $outsider->fresh()->boundary_id);
+    }
 }

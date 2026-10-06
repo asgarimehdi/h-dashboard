@@ -1,13 +1,16 @@
 <?php
 
 use App\Models\Unit;
+use App\Services\AccessService;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Mary\Traits\Toast;
 
 return new class extends Component {
     use Toast;
 
+    #[Locked]
     public int $unitId;
     public ?array $unit = null;
     public ?string $geojson = null;
@@ -19,8 +22,36 @@ return new class extends Component {
         $this->loadUnit();
     }
 
+    /**
+     * Issue #817: the org tree IS the authorization model — boundary reads
+     * and writes must prove the unit sits inside the caller's reachable set.
+     */
+    private function assertUnitInScope(int $unitId): bool
+    {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (! in_array($unitId, $accessibleIds, true)) {
+            $this->error('شما مجاز به مشاهده یا ویرایش این واحد نیستید.');
+
+            return false;
+        }
+
+        return true;
+    }
+
     public function loadUnit(): void
     {
+        // #817: unitId is a mount parameter but stays client-settable between
+        // calls — #[Locked] alone only rejects tampering, it does not hide
+        // other units. The explicit scope check is the fix.
+        if (! $this->assertUnitInScope($this->unitId)) {
+            $this->unit = null;
+            $this->hasBoundary = false;
+            $this->geojson = null;
+
+            return;
+        }
+
         $unit = Unit::with('boundary')->find($this->unitId);
 
         if (! $unit) {
@@ -35,6 +66,11 @@ return new class extends Component {
 
     public function saveBoundary($geojsonData): void
     {
+        // #817: scope-check before touching the boundary rows.
+        if (! $this->assertUnitInScope($this->unitId)) {
+            return;
+        }
+
         $feature = json_decode($geojsonData, true);
 
         if (! isset($feature['geometry']['type']) || ! in_array($feature['geometry']['type'], ['Polygon', 'MultiPolygon'])) {
@@ -67,6 +103,11 @@ return new class extends Component {
 
     public function deleteBoundary(): void
     {
+        // #817: scope-check before nulling the FK or deleting geometry.
+        if (! $this->assertUnitInScope($this->unitId)) {
+            return;
+        }
+
         $unit = Unit::find($this->unitId);
 
         if (! $unit || ! $unit->boundary_id) {
@@ -125,6 +166,8 @@ return new class extends Component {
         </div>
 
         <div class="flex justify-end gap-2 mt-4">
+            {{-- #817: out-of-scope mounts render no actionable controls. --}}
+            @if($unit)
             <button type="button" class="btn btn-primary" onclick="saveMapBoundary()">
                 <x-icon name="o-check" class="w-5 h-5"/>
                 ذخیره
@@ -132,6 +175,7 @@ return new class extends Component {
             @if($hasBoundary)
                 <x-button label="حذف مرز" icon="o-trash" class="btn-error" wire:click="deleteBoundary"
                           wire:confirm="آیا از حذف مرز مطمئن هستید؟"/>
+            @endif
             @endif
         </div>
     </x-card>
