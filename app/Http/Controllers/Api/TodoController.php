@@ -73,7 +73,7 @@ class TodoController extends Controller
 
     public function show(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
+        if (! $this->isTodoAccessible($request, $todo)) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -85,7 +85,7 @@ class TodoController extends Controller
 
     public function update(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
+        if (! $this->isTodoAccessible($request, $todo)) {
             return response()->json(['message' => 'Unauthorized to update this todo.'], 403);
         }
 
@@ -106,7 +106,7 @@ class TodoController extends Controller
 
     public function destroy(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
+        if (! $this->isTodoAccessible($request, $todo)) {
             return response()->json(['message' => 'Unauthorized to delete this todo.'], 403);
         }
 
@@ -120,7 +120,7 @@ class TodoController extends Controller
 
     public function toggleComplete(UnitScopedRequest $request, Todo $todo): JsonResponse
     {
-        if (! $todo->unit_id || ! in_array($todo->unit_id, $request->accessibleIds())) {
+        if (! $this->isTodoAccessible($request, $todo)) {
             return response()->json(['message' => 'Unauthorized to modify this todo.'], 403);
         }
 
@@ -130,5 +130,19 @@ class TodoController extends Controller
             'success' => true,
             'data' => new TodoResource($todo->load('unit')),
         ]);
+    }
+
+    /**
+     * Null-unit contract (#838): a null-unit todo belongs to its creator —
+     * the same rule the Livewire component enforces, so UI and API agree
+     * row-for-row.
+     */
+    private function isTodoAccessible(UnitScopedRequest $request, Todo $todo): bool
+    {
+        if ($todo->unit_id === null) {
+            return $todo->user_id === $request->user()->id;
+        }
+
+        return in_array($todo->unit_id, $request->accessibleIds());
     }
 }

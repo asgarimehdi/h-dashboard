@@ -11,7 +11,9 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Livewire\Mechanisms\HandleComponents\Checksum;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -292,10 +294,162 @@ test('cannot delete todo from inaccessible unit', function () {
         'title' => 'تسک غیرمجاز',
     ]);
 
-    // Set editingId to the inaccessible todo
-    Livewire::test('todo.todo')
-        ->set('editingId', $todo->id)
+    // Point editingId at the inaccessible todo (tampered-payload simulation —
+    // #[Locked] rejects a plain ->set(), so the snapshot is tampered + resigned)
+    tamperEditingId(Livewire::test('todo.todo'), $todo->id)
         ->call('delete');
 
     $this->assertDatabaseHas('todos', ['id' => $todo->id]);
+});
+
+// ==================== #838: save() scope-checks the target row ====================
+
+/**
+ * Simulate a tampered client payload pointing editingId at $todoId.
+ *
+ * $editingId is #[Locked], so a plain ->set() throws before reaching the
+ * component — exactly as a real tampered request would. Re-signing the
+ * snapshot delivers the forged id to the component, proving the server-side
+ * scope-check (not just Locked) refuses the write.
+ *
+ * @param  Testable  $component
+ */
+function tamperEditingId($component, int $todoId)
+{
+    $snapshot = $component->snapshot;
+    $snapshot['data']['editingId'] = $todoId;
+    unset($snapshot['checksum']);
+    $snapshot['checksum'] = Checksum::generate($snapshot);
+    $component->snapshot = $snapshot;
+
+    return $component;
+}
+
+test('cannot save over a todo from an inaccessible unit', function () {
+    $this->actingAs($this->user);
+
+    $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+    $todo = Todo::factory()->create([
+        'unit_id' => $otherUnit->id,
+        'title' => 'عنوان اصلی',
+    ]);
+
+    // Attacker points editingId at the foreign row but submits their own unit —
+    // the old guard passed and updateOrCreate rewrote + relocated the row.
+    tamperEditingId(Livewire::test('todo.todo'), $todo->id)
+        ->set('title', 'عنوان هک‌شده')
+        ->set('unit_id', $this->unit->id)
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save');
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'title' => 'عنوان اصلی',
+        'unit_id' => $otherUnit->id,
+    ]);
+});
+
+test('cannot relocate a todo into the null-unit bucket via save', function () {
+    $this->actingAs($this->user);
+
+    $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+    $todo = Todo::factory()->create([
+        'unit_id' => $otherUnit->id,
+        'title' => 'عنوان اصلی',
+    ]);
+
+    // unit_id = null short-circuited the old truthy-only guard.
+    tamperEditingId(Livewire::test('todo.todo'), $todo->id)
+        ->set('title', 'عنوان هک‌شده')
+        ->set('unit_id', null)
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save');
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'title' => 'عنوان اصلی',
+        'unit_id' => $otherUnit->id,
+    ]);
+});
+
+// ==================== #838: null-unit contract (creator-owned) ====================
+
+test('null-unit todo is invisible and untouchable to a non-creator', function () {
+    $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+    $otherPerson = Person::create([
+        'n_code' => '1111111111',
+        'f_name' => 'تست',
+        'l_name' => 'دوم',
+        'u_id' => $otherUnit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    $otherUser = User::factory()->create(['n_code' => '1111111111']);
+    $otherUser->units()->attach($otherUnit->id, ['role' => 'staff', 'is_primary' => true]);
+    $otherUser->givePermissionTo('calendar');
+
+    $todo = Todo::factory()->create([
+        'unit_id' => null,
+        'user_id' => $this->user->id,
+        'title' => 'تسک شخصی',
+    ]);
+
+    $this->actingAs($otherUser);
+
+    // Not listed in the other user's calendar …
+    $events = Livewire::test('todo.todo')->viewData('events');
+    $this->assertNotContains('todo-'.$todo->id, array_column($events, 'id'));
+
+    // … not editable …
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->assertSet('modal', false);
+
+    // … not deletable …
+    tamperEditingId(Livewire::test('todo.todo'), $todo->id)
+        ->call('delete');
+    $this->assertDatabaseHas('todos', ['id' => $todo->id]);
+
+    // … not toggleable.
+    $this->assertFalse((bool) $todo->fresh()->is_completed);
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+    $this->assertFalse((bool) $todo->fresh()->is_completed);
+});
+
+test('creator can list, edit, toggle and delete their own null-unit todo', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => null,
+        'user_id' => $this->user->id,
+        'title' => 'تسک شخصی',
+    ]);
+
+    // Listed in the creator's own calendar …
+    $events = Livewire::test('todo.todo')->viewData('events');
+    $this->assertContains('todo-'.$todo->id, array_column($events, 'id'));
+
+    // … editable …
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->assertSet('modal', true)
+        ->set('title', 'عنوان جدید')
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertHasNoErrors();
+    $this->assertDatabaseHas('todos', ['id' => $todo->id, 'title' => 'عنوان جدید']);
+
+    // … toggleable …
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+    $this->assertTrue((bool) $todo->fresh()->is_completed);
+
+    // … deletable (editingId arrives via the legitimate editEvent path).
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->call('delete');
+    $this->assertDatabaseMissing('todos', ['id' => $todo->id]);
 });
