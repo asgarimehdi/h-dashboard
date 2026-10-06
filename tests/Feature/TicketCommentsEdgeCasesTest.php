@@ -223,6 +223,41 @@ class TicketCommentsEdgeCasesTest extends TestCase
 
     public function test_author_cannot_edit_comment_belonging_to_another_ticket(): void
     {
+        $foreign = $this->foreignComment('کامنت تیکت دیگر');
+
+        // stateِ نوشتن مستقیم ست می‌شود تا مسیر writeِ خودِ saveEdit سنجیده شود
+        // (startEdit دیگر اصلاً به کامنتِ خارجی اجازه‌ی بارگذاری نمی‌دهد).
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('editCommentId', $foreign->id)
+            ->set('editBody', 'ویرایش غیرمجاز')
+            ->call('saveEdit')
+            ->assertForbidden();
+
+        $this->assertSame('کامنت تیکت دیگر', $foreign->fresh()->body);
+    }
+
+    // نشت خواندنیِ گزارش‌شده در review: editBody یک state عمومیِ Livewire است،
+    // پس startEdit نباید بدنه‌ی کامنتِ تیکتِ دیگر را اصلاً بارگذاری کند.
+    public function test_start_edit_refuses_comment_of_another_ticket_without_loading_its_body(): void
+    {
+        $foreign = $this->foreignComment('کامنت محرمانه');
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->call('startEdit', $foreign->id)
+            ->assertForbidden()
+            ->assertSet('editBody', '')
+            ->assertSet('editing', false)
+            ->assertSet('editCommentId', null);
+    }
+
+    /**
+     * A comment authored by $this->user but on a different ticket of the same
+     * unit (so the modal can open) — the cross-ticket IDOR shape.
+     */
+    protected function foreignComment(string $body): TicketComment
+    {
         $otherTicket = Ticket::create([
             'ticket_code' => 'TC-'.fake()->unique()->numerify('#####'),
             'subject' => 'Other Subject',
@@ -230,22 +265,13 @@ class TicketCommentsEdgeCasesTest extends TestCase
             'unit_id' => $this->unit->id,
             'user_id' => $this->user->id,
         ]);
-        // همان نویسنده، تیکتِ دیگر — دقیقاً حفره‌ی IDORِ ایشو.
-        $foreign = TicketComment::create([
+
+        return TicketComment::create([
             'ticket_id' => $otherTicket->id,
             'user_id' => $this->user->id,
             'parent_id' => null,
-            'body' => 'کامنت تیکت دیگر',
+            'body' => $body,
         ]);
-
-        Livewire::test('tickets.ticket-comments')
-            ->call('openForTicket', $this->ticket->id)
-            ->call('startEdit', $foreign->id)
-            ->set('editBody', 'ویرایش غیرمجاز')
-            ->call('saveEdit')
-            ->assertForbidden();
-
-        $this->assertSame('کامنت تیکت دیگر', $foreign->fresh()->body);
     }
 
     public function test_reply_to_comment_belonging_to_another_ticket_is_refused(): void

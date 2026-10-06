@@ -4329,7 +4329,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\TicketComment\:\:find\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 1
 			path: resources/views/livewire/tickets/ticket-comments.blade.php
 
 		-

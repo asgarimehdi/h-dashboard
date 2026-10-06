@@ -126,12 +126,12 @@ return new class extends Component
 
     public function startEdit(int $commentId): void
     {
-        // فقط وضعیت UI. قاعله‌ی مالکیت/پنجره‌ی ۱۵ دقیقه‌ای در
+        // فقط وضعیت UI؛ قاعله‌ی مالکیت/پنجره‌ی ۱۵ دقیقه‌ای در
         // TicketCommentPolicy زندگی می‌کند (ایشو #814) — اینجا کپی نمی‌شود.
-        $comment = TicketComment::find($commentId);
-        if (! $comment) {
-            return;
-        }
+        // عبور از findTicketComment لازم است: editBody state عمومیِ Livewire
+        // است و سپردن بدنه‌ی کامنتِ تیکتِ دیگر به آن = نشت خواندنی.
+        $comment = $this->findTicketComment($commentId);
+
         $this->editCommentId = $commentId;
         $this->editBody = $comment->body;
         $this->editing = true;
