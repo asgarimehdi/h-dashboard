@@ -92,15 +92,15 @@ class HardwareExportController extends Controller
             });
         }
         if ($request->filled('unit')) {
-            $normalized = self::normalizeForQuery($request->unit);
-            $query->whereHas('person.unit', function ($q) use ($normalized) {
-                $q->where('name', 'LIKE', "%{$normalized}%");
+            $term = self::foldedTerm($request->unit);
+            $query->whereHas('person.unit', function ($q) use ($term) {
+                $q->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
             });
         }
         if ($request->filled('semat')) {
-            $normalized = self::normalizeForQuery($request->semat);
-            $query->whereHas('person.semat', function ($q) use ($normalized) {
-                $q->where('name', 'LIKE', "%{$normalized}%");
+            $term = self::foldedTerm($request->semat);
+            $query->whereHas('person.semat', function ($q) use ($term) {
+                $q->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
             });
         }
 

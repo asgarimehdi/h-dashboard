@@ -235,7 +235,14 @@ class HardwareTrashModalLivewireTest extends TestCase
             ->assertSee("restoreRecord({$audit->id})");
     }
 
-    public function test_not_restorable_warning_when_no_ncode_in_changes(): void
+    /**
+     * Issue #816: a deleted row whose scope cannot be proven (no n_code in
+     * the snapshot, no live row to read it from) must not be listed at all —
+     * hiding it is the fix, not a regression. The «قابل بازگردانی نیست»
+     * warning is therefore unreachable for listed rows: everything listed has
+     * already proved its n_code.
+     */
+    public function test_row_without_ncode_is_not_listed(): void
     {
         $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
@@ -273,8 +280,11 @@ class HardwareTrashModalLivewireTest extends TestCase
 
         Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
-            ->assertSee('PC-NoNcode')
-            ->assertSee('قابل بازگردانی نیست');
+            ->assertDontSee('PC-NoNcode')
+            ->assertSet('deletedHardware', [])
+            ->assertSee('هیچ سخت‌افزار حذف شده‌ای در دسترس شما نیست.');
+
+        $this->assertNotNull($auditId);
     }
 
     // ==================== S7: Restore Record ====================
@@ -500,5 +510,100 @@ class HardwareTrashModalLivewireTest extends TestCase
             'pc_name' => 'PC-Concurrent',
             'n_code' => $data['user']->n_code,
         ]);
+    }
+
+    // ==================== S8: Organizational scope (issue #816) ====================
+
+    public function test_trash_list_hides_other_units_deleted_hardware(): void
+    {
+        $caller = $this->createUserWithUnit(['manage_hardware']);
+        $foreign = $this->createUserWithUnit(['manage_hardware']);
+
+        // createUserWithUnit overwrites the session unit every time
+        Session::put('current_unit_id', $caller['unit']->id);
+        $this->actingAs($caller['user']);
+
+        $own = $this->createHardwareForUser($caller['user'], $caller['unit'], [
+            'pc_name' => 'PC-OwnUnit',
+        ]);
+        $ownId = $own->id;
+        $own->delete();
+
+        $foreignHw = Hardware::create([
+            'n_code' => $foreign['user']->n_code,
+            'pc_name' => 'PC-ForeignUnit',
+            'type' => 'PC',
+        ]);
+        $foreignId = $foreignHw->id;
+        $foreignHw->delete();
+
+        // Assert on the listed contents, not just the count — an empty list
+        // must not be able to satisfy this by accident.
+        Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSee('PC-OwnUnit')
+            ->assertDontSee('PC-ForeignUnit')
+            ->assertSet('deletedHardware', function (array $dh) use ($ownId, $foreignId): bool {
+                $ids = collect($dh)->pluck('hardware_id')->all();
+
+                return in_array($ownId, $ids, true) && ! in_array($foreignId, $ids, true);
+            });
+    }
+
+    public function test_restore_denied_for_other_units_audit(): void
+    {
+        $caller = $this->createUserWithUnit(['manage_hardware']);
+        $foreign = $this->createUserWithUnit(['manage_hardware']);
+
+        Session::put('current_unit_id', $caller['unit']->id);
+        $this->actingAs($caller['user']);
+
+        $foreignHw = Hardware::create([
+            'n_code' => $foreign['user']->n_code,
+            'pc_name' => 'PC-ForeignRestore',
+            'type' => 'PC',
+        ]);
+        $audit = HardwareAudit::where('hardware_id', $foreignHw->id)
+            ->where('action', 'created')
+            ->firstOrFail();
+        $foreignId = $foreignHw->id;
+        $foreignHw->delete();
+
+        Livewire::test('hardware.index')
+            ->call('restoreRecord', $audit->id);
+
+        $this->assertDatabaseMissing('hardwares', ['id' => $foreignId]);
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-ForeignRestore']);
+    }
+
+    public function test_second_restore_does_not_create_a_duplicate(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-RestoreTwice',
+        ]);
+        $originalId = $hw->id;
+        $audit = $this->getCreatedAudit($hw);
+        $hw->delete();
+
+        $component = Livewire::test('hardware.index')
+            ->call('restoreRecord', $audit->id)
+            ->call('restoreRecord', $audit->id);
+
+        // Exactly one row, back on its original primary key
+        $this->assertSame(1, Hardware::where('pc_name', 'PC-RestoreTwice')->count());
+        $this->assertDatabaseHas('hardwares', [
+            'id' => $originalId,
+            'pc_name' => 'PC-RestoreTwice',
+        ]);
+
+        // …and the restored row has dropped out of the trash list
+        $component->call('loadDeletedHardware')
+            ->assertSet('deletedHardware', function (array $dh) use ($originalId): bool {
+                return ! in_array($originalId, collect($dh)->pluck('hardware_id')->all(), true);
+            });
     }
 }

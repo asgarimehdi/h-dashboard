@@ -510,4 +510,123 @@ class HardwareAuditModalLivewireTest extends TestCase
             $this->assertNotNull($entry['created_at']);
         }
     }
+
+    // ==================== E6: Organizational scope (issue #816) ====================
+
+    public function test_rollback_denied_for_other_units_audit_even_after_load_history(): void
+    {
+        $caller = $this->createUserWithUnit(['manage_hardware']);
+        $foreign = $this->createUserWithUnit(['manage_hardware']);
+
+        // createUserWithUnit overwrites the session unit every time
+        Session::put('current_unit_id', $caller['unit']->id);
+        $this->actingAs($caller['user']);
+
+        $foreignHw = Hardware::create([
+            'n_code' => $foreign['user']->n_code,
+            'pc_name' => 'PC-ForeignScope',
+            'cpu' => 'Intel i9',
+        ]);
+        $foreignHw->update(['cpu' => 'Ryzen 9']);
+        $audit = HardwareAudit::where('hardware_id', $foreignHw->id)
+            ->where('action', 'updated')
+            ->firstOrFail();
+
+        // The exploit from the issue: loadHistory() primes historyHardwareId
+        // through an ordinary authorized call, so the old self-referential
+        // check passed. Scope now lives inside rollbackHistoryField() itself.
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $foreignHw->id)
+            ->call('rollbackHistoryField', $audit->id, 'cpu');
+
+        $foreignHw->refresh();
+        $this->assertSame('Ryzen 9', $foreignHw->cpu);
+    }
+
+    public function test_rollback_refuses_field_outside_fillable(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardware($data['user']);
+        $createdAt = (string) $hw->created_at;
+
+        // Crafted audit carrying a column that is deliberately not fillable
+        $audit = HardwareAudit::create([
+            'hardware_id' => $hw->id,
+            'user_id' => $data['user']->id,
+            'action' => 'updated',
+            'changes' => [
+                ['field' => 'created_at', 'old' => '2020-01-01 00:00:00', 'new' => '2021-01-01 00:00:00'],
+            ],
+            'source' => 'web',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('rollbackHistoryField', $audit->id, 'created_at');
+
+        $this->assertSame($createdAt, (string) $hw->refresh()->created_at);
+    }
+
+    public function test_rollback_refuses_value_that_does_not_round_trip(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardware($data['user'], [
+            'clean_at' => '2024-05-01',
+        ]);
+
+        // clean_at is date-cast: a stored display value that is not a date
+        // must be refused instead of being written into the column.
+        $audit = HardwareAudit::create([
+            'hardware_id' => $hw->id,
+            'user_id' => $data['user']->id,
+            'action' => 'updated',
+            'changes' => [
+                ['field' => 'clean_at', 'old' => 'تاریخ نامعتبر', 'new' => '2024-05-01'],
+            ],
+            'source' => 'web',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('rollbackHistoryField', $audit->id, 'clean_at');
+
+        $this->assertSame('2024-05-01', $hw->refresh()->clean_at?->toDateString());
+    }
+
+    public function test_rollback_n_code_to_out_of_scope_person_denied(): void
+    {
+        $caller = $this->createUserWithUnit(['manage_hardware']);
+        $foreign = $this->createUserWithUnit(['manage_hardware']);
+
+        Session::put('current_unit_id', $caller['unit']->id);
+        $this->actingAs($caller['user']);
+
+        $hw = $this->createHardware($caller['user'], [
+            'pc_name' => 'PC-NCodeScope',
+        ]);
+
+        // Rolling n_code back would move the hardware into another unit —
+        // the same guard HardwareAuditController::rollback() applies.
+        $audit = HardwareAudit::create([
+            'hardware_id' => $hw->id,
+            'user_id' => $caller['user']->id,
+            'action' => 'updated',
+            'changes' => [
+                ['field' => 'n_code', 'old' => $foreign['user']->n_code, 'new' => $caller['user']->n_code],
+            ],
+            'source' => 'web',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('rollbackHistoryField', $audit->id, 'n_code');
+
+        $this->assertSame($caller['user']->n_code, $hw->refresh()->n_code);
+    }
 }

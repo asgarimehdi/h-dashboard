@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Attachment;
+use App\Models\Person;
+use App\Models\TaskActivity;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
@@ -38,6 +40,19 @@ class TicketsInboxLivewireTest extends TestCase
             'is_active' => true,
             'can_receive_tickets' => true,
         ]);
+    }
+
+    /**
+     * A plain user attached to $unit — `createUserWithUnit()` creates its own
+     * unit, so a recipient on a *specific* unit needs this.
+     */
+    protected function createUserOnUnit(Unit $unit): User
+    {
+        $person = Person::factory()->create(['u_id' => $unit->id]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        return $user;
     }
 
     protected function createTicket(array $overrides = []): Ticket
@@ -383,7 +398,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_reject_ticket(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
@@ -406,7 +421,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_forward_validates_target_unit_id(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
@@ -419,7 +434,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_forward_updates_unit_and_creates_activity(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $target = $this->createTargetUnit();
@@ -444,12 +459,339 @@ class TicketsInboxLivewireTest extends TestCase
     }
 
     // =====================================================================
+    // Issue #818 — forward/submitAction gated on manage_unit_tickets
+    // =====================================================================
+
+    public function test_forward_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['status' => 'created']);
+        $originalUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->call('forward')
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+        $this->assertSame('created', $ticket->status);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_submit_action_forward_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['status' => 'accepted']);
+        $originalUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('completionNote', 'ارسال به مقصد')
+            ->call('submitAction')
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+        $this->assertSame('accepted', $ticket->status);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_submit_action_completes_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted']);
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('completionNote', 'گزارش نهایی تست')
+            ->call('submitAction')
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+        $this->assertNull($ticket->completed_at);
+    }
+
+    public function test_reject_ticket_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        Livewire::test('tickets.inbox')
+            ->call('rejectTicket', $ticket->id)
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+    }
+
+    public function test_bulk_complete_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted']);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+    }
+
+    public function test_forward_to_unit_that_cannot_receive_tickets_is_rejected(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد غیرقابل دریافت',
+            'is_active' => true,
+            'can_receive_tickets' => false,
+        ]);
+        $ticket = $this->createTicket(['status' => 'created']);
+        $originalUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->call('forward')
+            ->assertHasErrors(['targetUnitId']);
+
+        $ticket->refresh();
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+    }
+
+    public function test_submit_action_forward_to_unit_that_cannot_receive_tickets_is_rejected(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد غیرقابل دریافت دو',
+            'is_active' => true,
+            'can_receive_tickets' => false,
+        ]);
+        $ticket = $this->createTicket(['status' => 'accepted']);
+        $originalUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('completionNote', 'ارسال به مقصد')
+            ->call('submitAction')
+            ->assertHasErrors(['targetUnitId']);
+
+        $ticket->refresh();
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+        $this->assertSame('accepted', $ticket->status);
+    }
+
+    public function test_forward_to_inactive_unit_is_rejected(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد غیرفعال',
+            'is_active' => false,
+            'can_receive_tickets' => true,
+        ]);
+        $ticket = $this->createTicket(['status' => 'created']);
+        $originalUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->call('forward')
+            ->assertHasErrors(['targetUnitId']);
+
+        $ticket->refresh();
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+    }
+
+    public function test_forward_records_target_unit_in_activity(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit('واحد ثبت فعالیت');
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('forwardNote', 'لطفا بررسی شود')
+            ->call('forward');
+
+        $this->assertDatabaseHas('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+            'to_unit_id' => $target->id,
+        ]);
+    }
+
+    public function test_forward_ignores_client_supplied_target_unit_name(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit('واحد واقعی');
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', 'واحد جعلی مهاجم')
+            ->call('forward');
+
+        $activity = TaskActivity::where('ticket_id', $ticket->id)
+            ->where('action', 'forwarded')
+            ->firstOrFail();
+
+        $this->assertStringContainsString($target->name, $activity->description);
+        $this->assertStringNotContainsString('جعلی', $activity->description);
+    }
+
+    public function test_select_target_unit_resolves_name_server_side(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit('واحد معتبر مقصد');
+
+        Livewire::test('tickets.inbox')
+            ->call('selectTargetUnit', $target->id, 'نام جعلی که کلاینت فرستاد')
+            ->assertSet('targetUnitId', $target->id)
+            ->assertSet('targetUnitName', 'واحد معتبر مقصد');
+    }
+
+    public function test_submit_action_target_unit_id_is_validated(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted']);
+        $originalUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('targetUnitId', 99999)
+            ->set('completionNote', 'ارسال به واحد نامعتبر')
+            ->call('submitAction')
+            ->assertHasErrors(['targetUnitId']);
+
+        $ticket->refresh();
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+        $this->assertSame('accepted', $ticket->status);
+    }
+
+    public function test_accept_ticket_still_allowed_for_expert_without_manage_unit_tickets(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        Livewire::test('tickets.inbox')
+            ->call('acceptTicket', $ticket->id)
+            ->assertDispatched('swal');
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+    }
+
+    public function test_forward_notifies_target_unit_like_submit_action_does(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit('واحد اعلان تست');
+        $recipient = $this->createUserOnUnit($target);
+
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('forwardNote', 'لطفا بررسی شود')
+            ->call('forward');
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'ticket_forwarded',
+            'title' => 'تیکت ارجاع شد',
+        ]);
+    }
+
+    public function test_forward_controls_hidden_without_manage_unit_tickets(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted']);
+
+        // The completion modal itself is always in the DOM (x-modal hides it with
+        // CSS), so the contract to assert is the bulk bar and the row button that
+        // OPEN it — submitAction() is what actually refuses, server-side.
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->assertDontSee('تکمیل دسته‌ای')
+            ->assertDontSee('ارجاع دسته‌ای')
+            ->assertSee('لغو انتخاب');
+
+        Livewire::test('tickets.inbox')
+            ->assertDontSee('تکمیل دسته‌ای');
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+    }
+
+    public function test_forward_controls_visible_with_manage_unit_tickets(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted']);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->assertSee('تکمیل دسته‌ای')
+            ->assertSee('ارجاع دسته‌ای');
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+    }
+
+    // =====================================================================
     // S11 — bulk actions
     // =====================================================================
 
     public function test_bulk_actions(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $t1 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت یک']);
@@ -521,7 +863,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_execute_bulk_action_only_completed_warning(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $t = $this->createTicket(['status' => 'completed']);
@@ -543,7 +885,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_completes_ticket(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);
@@ -566,7 +908,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_validates_completion_note(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);
@@ -583,7 +925,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_forward_with_target_unit(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $target = $this->createTargetUnit();
@@ -609,7 +951,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_rejects_non_accepted_without_target(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
@@ -626,7 +968,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_submit_action_completes_todo_when_all_tickets_done(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $todo = Todo::create([
@@ -694,7 +1036,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_forward_without_target_unit_id_validation_error(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'created']);
@@ -832,7 +1174,7 @@ class TicketsInboxLivewireTest extends TestCase
     {
         Storage::fake('public');
 
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $ticket = $this->createTicket(['status' => 'accepted']);

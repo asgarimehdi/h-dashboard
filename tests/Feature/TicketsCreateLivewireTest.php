@@ -497,6 +497,58 @@ class TicketsCreateLivewireTest extends TestCase
             ->assertHasErrors(['files'])
             ->assertSet('files', []);
     }
+
+    // =====================================================================
+    // Issue #818 — the destination unit must be an eligible one
+    // =====================================================================
+
+    public function test_save_rejects_unit_that_cannot_receive_tickets(): void
+    {
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
+
+        $target = Unit::create([
+            'name' => 'واحد غیرقابل دریافت',
+            'is_active' => true,
+            'can_receive_tickets' => false,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('subject', 'تیکت به واحد غیرقابل دریافت')
+            ->set('content', 'محتوای تستی برای واحد غیرقابل دریافت تیکت')
+            ->call('saveTicket')
+            ->assertHasErrors(['unit_id']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت به واحد غیرقابل دریافت']);
+    }
+
+    public function test_save_rejects_inactive_unit(): void
+    {
+        $result = $this->createUserWithUnit(['create_ticket']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        Session::put('current_unit_id', $unit->id);
+
+        $target = Unit::create([
+            'name' => 'واحد غیرفعال مقصد',
+            'is_active' => false,
+            'can_receive_tickets' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('subject', 'تیکت به واحد غیرفعال')
+            ->set('content', 'محتوای تستی برای واحد غیرفعال دریافت تیکت')
+            ->call('saveTicket')
+            ->assertHasErrors(['unit_id']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت به واحد غیرفعال']);
+    }
 }
 
 if (! function_exists('Tests\Feature\StorageFake')) {

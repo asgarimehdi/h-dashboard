@@ -65,6 +65,9 @@ return new class extends Component
 
     public function importPreview(): void
     {
+        // لایه‌ی دوم مجوز (ایشو #814 / الگوی #805): مسیر فقط `manage_personnel`
+        // را می‌پذیرد؛ نوشتن داخل کامپوننت هم باید همان را بخواهد.
+        $this->authorize('manage_personnel');
         $this->validate();
 
         try {
@@ -96,6 +99,8 @@ return new class extends Component
 
     public function confirmImport(): void
     {
+        $this->authorize('manage_personnel');
+
         if (! $this->importResults) {
             $this->error('داده‌ای برای ایمپورت وجود ندارد.', 'خطا');
 

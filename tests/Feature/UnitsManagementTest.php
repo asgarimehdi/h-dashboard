@@ -58,16 +58,21 @@ test('units index renders and respects organizational scope', function () {
         ->assertDontSee('واحد خارجی');
 });
 
-test('unit map renders for accessible unit and out-of-scope', function () {
+test('unit map renders for accessible unit and denies out-of-scope', function () {
     Livewire::actingAs($this->user)
         ->test('units.map', ['id' => $this->unit->id])
-        ->assertOk();
+        ->assertOk()
+        ->assertSet('unit.name', $this->unit->name);
 
     $otherUnit = Unit::create(['name' => 'واحد خارجی']);
 
+    // #817: out-of-scope mount must not render the foreign unit (denial
+    // toast + cleared state instead of the old assertOk-with-data).
     Livewire::actingAs($this->user)
         ->test('units.map', ['id' => $otherUnit->id])
-        ->assertOk();
+        ->assertOk()
+        ->assertSet('unit', null)
+        ->assertSet('hasBoundary', false);
 });
 
 test('units pages are protected by RBAC', function () {

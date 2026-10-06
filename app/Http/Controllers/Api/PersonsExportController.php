@@ -64,20 +64,27 @@ class PersonsExportController extends Controller
         $normalized = self::normalizeForQuery($search);
 
         $terms = array_values(array_filter(explode(' ', $normalized), fn (string $term) => $term !== ''));
+        // Persons/n_code columns are PersianNormalizer-hooked on save; the unit
+        // name column is not, so its filter must fold the column (#815). Build
+        // the unit term from the RAW term — re-escaping an already-escaped term
+        // would double-escape LIKE wildcards.
+        $rawTerms = array_values(array_filter(explode(' ', trim($search)), fn (string $t) => $t !== ''));
+        $foldedTerms = array_map(static fn (string $term): string => self::foldedTerm($term), $rawTerms);
 
         if ($terms === []) {
             return;
         }
 
-        $query->where(function (Builder $outer) use ($terms): void {
-            foreach ($terms as $term) {
-                $outer->where(function (Builder $termQuery) use ($term): void {
+        $query->where(function (Builder $outer) use ($terms, $foldedTerms): void {
+            foreach ($terms as $i => $term) {
+                $foldedTerm = $foldedTerms[$i];
+                $outer->where(function (Builder $termQuery) use ($term, $foldedTerm): void {
                     // whereHas first: it is declared on the Eloquent builder and
                     // returns $this, so the OR group below keeps its type. The
                     // orWhereRaw() calls are forwarded to the query builder and
                     // would degrade the chain's type mid-expression.
-                    $termQuery->whereHas('unit', function (Builder $unitQuery) use ($term): void {
-                        $unitQuery->where('name', 'LIKE', "%{$term}%");
+                    $termQuery->whereHas('unit', function (Builder $unitQuery) use ($foldedTerm): void {
+                        $unitQuery->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$foldedTerm}%"]);
                     });
 
                     $termQuery->orWhere('n_code', 'LIKE', "%{$term}%")

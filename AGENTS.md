@@ -44,7 +44,8 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 Uses **Spatie Permission** package:
 
-- `HasOrganizationalScope` trait on models for automatic unit-based filtering
+- `HasOrganizationalScope` trait on models for **opt-in** unit-based filtering via `->accessible($column)`. It is a single local scope — **there is no global scope**, so a query is unscoped until it calls it. Its `whereIn` is unconditional, so an empty scope compiles to `0 = 1` (fail-closed).
+- **Never guard a unit scope with `->when($accessibleIds, fn ($q) => $q->whereIn(...))`** — `Conditionable::when()` runs the callback only for a **truthy** value, so an EMPTY `$accessibleIds` drops the predicate and the page renders rows from **every unit** (the #819 leak in five `/reports/*` components). `AccessibleUnitIds()` is legitimately `[]` for an account with no `user_units` row and no `person.u_id`, and such a user is deliberately allowed through `ValidateUnitContext`. Use a plain `->whereIn($column, $accessibleIds)` (or `->accessible($column)`) instead. The two-`when` form in `UnitsExportController` / `PersonsExportController` (`when($accessibleIds === [], whereRaw('1 = 0'))`) is also correct — but the unconditional one is one condition instead of two that must both stay right.
 - Users see only their own unit's data (plus sub-units via recursive CTE)
 - Permission `manage_hardware` required for hardware CRUD
 - Roles: admin, operator, viewer
@@ -84,6 +85,16 @@ link's visibility in both directions, plus a real `GET` per link.
   personnel gate. **Write** (import `/kargozini/persons/import`) requires `manage_personnel` alone,
   matching the API (`abilities:persons:write` + `manage_personnel`). The lookup tables
   (estekhdams/tahsils/semats/radifs) stay `kargozini`-only.
+- The personnel **component** re-checks the write permission itself (issue #805). Because its route
+  gate is the read union, `kargozini.person` calls `$this->authorize('manage_personnel')` in
+  `startCreate()`, `savePerson()`, `editPerson()` and `delete()`, and the create/edit/delete controls
+  are wrapped in `@can('manage_personnel')`. Rule of thumb: **a page on a read-union gate that also
+  writes must authorize inside the component, not only in the route.** The write path also
+  `syncWithoutDetaching()`s `user_units` (role `staff`, primary unit) for a linked user — it rewrites
+  the actor's reachable units, so an ungated write there is a privilege escalation, not data entry.
+  The update branch re-validates the **submitted** `u_id` against `accessibleUnitIds()`, not just the
+  stored one, or a record can be moved into a unit the actor never had read access to. Pinned by
+  `tests/Feature/Kargozini/PersonLivewireTest.php` (the `#805` block).
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
@@ -751,7 +762,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Person search | 500ms debounce applied — do not remove, causes Livewire update floods |
 | Toast auto-dismiss | Default 5s timeout; `timeout: 0` means never dismiss |
 | Search | Multi-word queries split and matched independently via `scopeFilterSearch` |
-| `normalizeForQuery` | Use `PersianNormalizer::normalizeForQuery()` for ALL user-supplied LIKE queries — combines Persian normalization + wildcard escaping. Do NOT inline `str_replace(['%', '_'], ...)` |
+| `normalizeForQuery` | Use `PersianNormalizer::normalizeForQuery()` for user-supplied LIKE queries ONLY on columns the model normalizes on save (`Person` fields, `Hardware` fields like `pc_name`/`type`/`os`/`comments`) — combines Persian normalization + wildcard escaping. Do NOT inline `str_replace(['%', '_'], ...)`. Lookup-table columns (`units.name`, `semats.name`, `radifs.name`, `tahsils.name`, `estekhdams.name`) have no save hook: fold the COLUMN with `foldSeparatorsSql($col)` and the term with `foldedTerm($input)` (#815) — see the "fold the COLUMN" row below |
 | `PersianNormalizer` trait | Located at `app/Traits/PersianNormalizer.php`. Methods: `normalizeForSearch()` (Arabic→Persian + Unicode), `escapeLikeWildcards()`, `normalizeForQuery()` (normalize + escape combined) |
 | `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` map a **failed `ZabbixResult`** to 503, never 500. Since #741 they do **not** wrap the call in `catch (\Throwable)` — that try/catch is gone, and the 503 mapping is what guards them |
 | Controllers must depend on `ZabbixClient` | `App\Services\Zabbix\ZabbixClient` is the transport boundary (#741). Calling `ZabbixService` directly from a controller throws away the failure-as-value design and re-couples you to a live server |
@@ -764,6 +775,9 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | API token abilities | `/api/*` needs `auth:sanctum` **and** a token ability; `ability:a,b` = ANY of them, `abilities:a,b` = ALL. Tests mint real tokens (`ApiAbilityTest`) |
 | Shared test trait | New Feature tests use `InteractsWithTestSetup` (`tests/Support/Concerns`) — `createUserWithUnit()`, `seedLookupTables()`, `resyncSequence()`, `assertNoNPlusOne()` |
 | `zabbix:sync` scheduling | Schedule dispatches `SyncZabbixJob` (queued) every 5 min; the `zabbix:sync` command itself is manual-only |
+| `when($scope)` on an empty array fails **open** | `Conditionable::when($accessibleIds, …)` applies the callback only when the value is truthy, so `[]` **drops** the `whereIn` and the page shows **every unit's rows** — issue #819, five `/reports/*` components. Scope with a plain `->whereIn($col, $accessibleIds)` (`[]` compiles to `0 = 1`) or `->accessible($col)`. Never `when($ids, fn ($q) => $q->whereIn(...))` |
+| `HasOrganizationalScope` is not a global scope | It is one opt-in `->accessible($column)` local scope on `Person`/`Ticket`/`Todo` — **`Unit` does not use the trait at all**. A query is unscoped until it calls it, so `AGENTS.md` used to call it "automatic" and mislead implementers |
+| `map-no-boundary`'s early return is load-bearing | Its `when($accessibleIds, …)` at :36 is unreachable because :28 returns `collect()` for `[]` — keep that guard. Beyond the query it also keeps an empty result out of `Cache::remember('report:no_boundary:'.md5(implode(',',$accessibleIds)))`, which for `[]` is `md5('')` — ONE shared cache slot for every empty-scope user |
 | `descendantIds` CTE | Uses `UNION`, **not** `UNION ALL` — deliberate. `UNION ALL` does not dedupe, so a `parent_id` cycle recurses forever and hangs the connection (this query scopes every authenticated page via `AccessService`). Tested in `UnitModelTest` under a `statement_timeout` |
 | `@property` on models | All **26** Eloquent models under `app/Models/` carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
 | x-select option keys | MaryUI defaults to `optionValue='id'`/`optionLabel='name'`. Options keyed `value`/`label` need explicit `option-value="value" option-label="label"` or every `<option>` renders empty and the field looks blank (#706). Pass `:options="$this->someOptions()"` — a bare `$someOptions` is undefined in the view |
@@ -796,3 +810,5 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Sidebar link must match its route's gate | Every `x-menu-item` in `resources/views/components/layouts/app.blade.php` needs the same permission as the route it links to (`routes/web.php`). `SidebarPermissionsTest` pins it in both directions (link visible to every permission the route accepts, invisible otherwise — both a 403 invite and a hidden working page are bugs). `@production`-only routes (`/op`) need the same environment guard on the link |
 | Spatie `canAny` is FALSE for an unknown permission name | `hasAnyPermission(['nosuchperm'])` returns `false` — it does **not** throw `PermissionDoesNotExist`. So a route gated on a permission that is missing from a deployment's DB 403s **every non-admin** (only role bypasses), silently. Before adding a NEW permission to a gate, either seed it everywhere or reuse an existing one — and remember `PermissionSeeder` alone only re-grants the permissions it explicitly lists |
 | `@can`/`@canany` nesting prunes child items | A menu item can be hidden by an ancestor gate, not just its own: `/hr/org-chart` is gated `manage_org_chart|view_hr_dashboard` **and** sits inside the «مدیریت سازمان» group's `@canany`, and «تقویم» sits inside «مدیریت تیکتها». When you add an item or change a gate, add its permission to the parent `@canany` too or the item is unreachable |
+| Hardware audit scope is resolved by ONE service (#816) | `App\Services\HardwareAuditScope` (live `n_code` → audit `n_code` snapshot → `persons.u_id`) is shared by `HardwareAuditController` and `HardwareIndexHelpers`. **Deny by default** — a null unit id means out of scope, so a trash row with no `n_code` in its snapshot is *hidden*, never listed (this deliberately changed the old `test_not_restorable_warning…` behaviour). Scope checks run **inside** `rollbackHistoryField()`/`restoreRecord()` before the shape/existence guards, never through `historyHardwareId` (the caller primes it with an authorized `loadHistory()`), and `restoreRecord()` reuses the **original** primary key — that is the duplicate-restore guard (`forceFill` + `setval`, because `id` is not fillable) |
+| `#[Locked]` on `historyHardwareId` (#816) | First use of the attribute in this repo (it lives on the property in `app/Traits/HardwareIndexHelpers.php`, and trait attributes do reach the class). It is **defence in depth only**: the property is written server-side by `loadHistory()`/`fetchHistory()`, and `Locked` throws `CannotUpdateLockedPropertyException` (a 500, not a 422) if a legitimate flow ever lets the client set it. Do not cite it as the scope mitigation |
