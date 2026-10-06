@@ -80,12 +80,14 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     {
         $query = Hardware::query();
 
-        // Apply organizational scope
-        if (! empty($this->accessibleUnitIds)) {
-            $query->whereHas('person', function ($q) {
-                $q->whereIn('u_id', $this->accessibleUnitIds);
-            });
-        }
+        // Apply organizational scope — UNCONDITIONAL (issue #839 / Plan 50).
+        // `[]` is a legitimate `AccessService` output, so an emptiness guard
+        // here would index EVERY hardware row org-wide by pc_name / mac and a
+        // matching CSV row would rewrite a record the actor cannot see.
+        // An empty array compiles to `0 = 1` (fail-closed by construction).
+        $query->whereHas('person', function ($q) {
+            $q->whereIn('u_id', $this->accessibleUnitIds);
+        });
 
         $hardwares = $query->get(['id', 'pc_name', 'mac', 'n_code', 'type', 'os', 'ip_valid', 'ip_local', 'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at']);
 
@@ -107,10 +109,9 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     {
         $query = Person::query();
 
-        // Apply organizational scope
-        if (! empty($this->accessibleUnitIds)) {
-            $query->whereIn('u_id', $this->accessibleUnitIds);
-        }
+        // Apply organizational scope — UNCONDITIONAL (issue #839). `[]` must not
+        // fall through to "every person in the org".
+        $query->whereIn('u_id', $this->accessibleUnitIds);
 
         $persons = $query->get(['n_code', 'u_id', 'f_name', 'l_name']);
 
@@ -167,7 +168,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             return;
         }
 
-        if (! empty($this->accessibleUnitIds) && ! in_array($person->u_id, $this->accessibleUnitIds)) {
+        // UNCONDITIONAL membership test (issue #839): the `! empty(...)` conjunct
+        // made this `! empty([]) && ...` = false, i.e. ACCEPT the row. Under an
+        // empty scope `$this->existingPersons` is empty, so the "person not
+        // found" check above already rejected it — defence in depth.
+        if (! in_array($person->u_id, $this->accessibleUnitIds)) {
             $this->importResults['preview'][] = [
                 'row' => $rowNumber,
                 'status' => 'error',
@@ -297,7 +302,9 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             return;
         }
 
-        if (! empty($this->accessibleUnitIds) && ! in_array($person->u_id, $this->accessibleUnitIds)) {
+        // UNCONDITIONAL membership test (issue #839): the `! empty(...)` conjunct
+        // made this `! empty([]) && ...` = false, i.e. ACCEPT the row.
+        if (! in_array($person->u_id, $this->accessibleUnitIds)) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
                 'error' => "Person {$data['n_code']} is not in your accessible units",

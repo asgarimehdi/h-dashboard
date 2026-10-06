@@ -108,11 +108,113 @@ class PersonImportEdgeCasesTest extends TestCase
         ];
     }
 
-    public function test_preview_pass_without_actions_persists_nothing(): void
+    /**
+     * ایشو #839 (Plan 50): هر تست باید اسکوپ را *صریح* ست کند.
+     *
+     * پیش از این پلن، اکثر این تست‌ها `setAccessibleUnitIds()` نداشتند و
+     * بدون احراز هویت با یک اسکوپ خالیِ ضمنی اجرا می‌شدند — و گاردِ
+     * fail-openِ `if (! empty(...))` باعث می‌شد سبز بمانند. کلاس‌ها حالا
+     * fail-closed هستند، پس تست باید واحدی را که fixture‌اش در آن است
+     * اعلام کند.
+     */
+    private function scopedImport(): PersonImport
+    {
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$this->unit->id]);
+
+        return $import;
+    }
+
+    // -----------------------------------------------------------
+    //  ایشو #839 (Plan 50): اسکوپ خالی باید fail-closed باشد
+    // -----------------------------------------------------------
+
+    /**
+     * رگرسیون: `setAccessibleUnitIds([])` + ردیفی که به رکوردِ یک واحد
+     * غریبه اشاره می‌کند.
+     *
+     * پیش از این پلن، گاردِ `if (! empty($this->accessibleUnitIds))` در
+     * `loadExistingRecords()` هیچ پیشوندی نمی‌ساخت، ایندکسِ `n_code` شامل
+     * **همه‌ی** پرسنل سازمان می‌شد، و `u_id` یک ستون مقایسه‌ای است — پس یک
+     * ردیف CSV می‌توانست نامِ یک فردِ خارج از اسکوپ را بازنویسی **کند** یا
+     * او را به واحد دیگری **منتقل** کند، و پیش‌نمایش هم مقادیرش را لو می‌داد.
+     */
+    public function test_empty_scope_never_matches_or_rewrites_a_foreign_person(): void
+    {
+        $foreignUnit = Unit::create(['name' => 'واحد غریبه']);
+        $foreign = Person::create([
+            'n_code' => '5555555555',
+            'f_name' => 'محرم',
+            'l_name' => 'خارجی',
+            't_id' => $this->tahsil->id,
+            'e_id' => $this->estekhdam->id,
+            's_id' => $this->semat->id,
+            'r_id' => $this->radif->id,
+            'u_id' => $foreignUnit->id,
+        ]);
+
+        // Same n_code as the foreign person, new names + a different unit.
+        $file = $this->csv([
+            ['5555555555', 'دستکاری', 'شده', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $this->radif->id, $foreignUnit->id],
+        ]);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([]);
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+
+        // No create, no update — the foreign row is untouched.
+        $this->assertDatabaseCount('persons', 1);
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '5555555555',
+            'f_name' => 'محرم',
+            'l_name' => 'خارجی',
+            'u_id' => $foreignUnit->id,
+        ]);
+        $this->assertDatabaseMissing('persons', ['f_name' => 'دستکاری']);
+
+        // The preview must not disclose the foreign record's stored values.
+        $encoded = json_encode($results['preview'], JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('محرم', $encoded);
+        $this->assertStringNotContainsString('خارجی', $encoded);
+
+        @unlink($file);
+    }
+
+    /**
+     * همان سناریو برای ردیفی که واحدش اصلاً در اسکوپ نیست ولی `u_id` معتبر
+     * دارد — مسیر «unit not found» باید آن را رد کند.
+     */
+    public function test_empty_scope_rejects_a_row_whose_unit_is_out_of_scope(): void
     {
         $file = $this->csv([$this->personRow('9876543210')]);
 
         $import = new PersonImport;
+        $import->setAccessibleUnitIds([]);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['skipped']);
+        $this->assertSame(0, $results['created']);
+        $this->assertCount(1, $results['preview']);
+        $this->assertSame('error', $results['preview'][0]['status']);
+        $this->assertDatabaseCount('persons', 0);
+
+        @unlink($file);
+    }
+
+    public function test_preview_pass_without_actions_persists_nothing(): void
+    {
+        $file = $this->csv([$this->personRow('9876543210')]);
+
+        $import = $this->scopedImport();
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -128,7 +230,7 @@ class PersonImportEdgeCasesTest extends TestCase
     {
         $file = $this->csv([$this->personRow('9876543210')]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'skip']);
         Excel::import($import, $file);
 
@@ -158,7 +260,7 @@ class PersonImportEdgeCasesTest extends TestCase
             $row('9876543211', 'B'),
         ]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -178,7 +280,7 @@ class PersonImportEdgeCasesTest extends TestCase
 
         $file = $this->csv([$this->personRow('1234567890', 'اکبر', 'احمدی')]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'update']);
         Excel::import($import, $file);
 
@@ -204,7 +306,7 @@ class PersonImportEdgeCasesTest extends TestCase
 
         $file = $this->csv([$this->personRow('1234567890', 'احمد', 'محمدی')]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'update']);
         Excel::import($import, $file);
 
@@ -221,7 +323,7 @@ class PersonImportEdgeCasesTest extends TestCase
     {
         $file = $this->csv([['', '', '', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $this->radif->id, $this->unit->id]]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -242,7 +344,7 @@ class PersonImportEdgeCasesTest extends TestCase
     {
         $file = $this->csv([['9876543210', 'علی', 'رضایی', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $this->radif->id, 999999]]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -263,7 +365,7 @@ class PersonImportEdgeCasesTest extends TestCase
         // Bad t_id (education level does not exist)
         $file = $this->csv([['9876543210', 'علی', 'رضایی', 999991, $this->estekhdam->id, $this->semat->id, $this->radif->id, $this->unit->id]]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         $import->setSelectedActions(['row_2' => 'create']);
         Excel::import($import, $file);
 
@@ -282,7 +384,7 @@ class PersonImportEdgeCasesTest extends TestCase
     {
         $file = $this->csv([['9876543210', 'علی', 'رضایی', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $this->radif->id, '']]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -307,7 +409,7 @@ class PersonImportEdgeCasesTest extends TestCase
             ['9876543214', 'د', 'چهار', $this->tahsil->id, $this->estekhdam->id, $this->semat->id, $rId, $unitId],
         ]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -328,7 +430,7 @@ class PersonImportEdgeCasesTest extends TestCase
         // (reference checks skip null ids); row still previews as creatable.
         $file = $this->csv([['9876543210', 'علی', 'رضایی', $this->tahsil->id, '', $this->semat->id, '\\N', $this->unit->id]]);
 
-        $import = new PersonImport;
+        $import = $this->scopedImport();
         Excel::import($import, $file);
 
         $results = $import->getImportResults();

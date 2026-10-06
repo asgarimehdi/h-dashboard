@@ -65,9 +65,22 @@ class HardwareImportTest extends TestCase
         return compact('unit', 'person', 'hardware', 'semat', 'tahsil', 'estekhdam', 'radif');
     }
 
+    /**
+     * ایشو #839 (Plan 50): اسکوپ صریح — این تست‌ها پیش از این پلن با اسکوپ
+     * خالیِ ضمنی اجرا می‌شدند و گاردِ fail-openِ `if (! empty(...))` در
+     * `HardwareImport` سبزشان نگه می‌داشت.
+     */
+    private function scopedImport(array $data): HardwareImport
+    {
+        $import = new HardwareImport;
+        $import->setAccessibleUnitIds([$data['unit']->id]);
+
+        return $import;
+    }
+
     public function test_import_preview_creates_new_records(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-NEW\tpc\tWindows 11\tIntel i7\t\"16384\"\tSSD 512GB\t11:22:33:44:55:66\n";
@@ -75,7 +88,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -94,7 +107,7 @@ class HardwareImportTest extends TestCase
 
     public function test_import_preview_updates_existing_records(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-001\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
@@ -102,7 +115,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -118,7 +131,7 @@ class HardwareImportTest extends TestCase
 
     public function test_import_preview_skips_unchanged_records(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         // Include shutdown and mark columns to match database defaults
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\tshutdown\tmark\n";
@@ -127,7 +140,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -165,8 +178,7 @@ class HardwareImportTest extends TestCase
         file_put_contents($file, $csvContent);
 
         // Import with only the first unit's accessible IDs
-        $import = new HardwareImport;
-        $import->setAccessibleUnitIds([$data['unit']->id]);
+        $import = $this->scopedImport($data);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -180,7 +192,7 @@ class HardwareImportTest extends TestCase
 
     public function test_import_creates_records_with_confirmation(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-CONFIRM\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t33:44:55:66:77:88\n";
@@ -188,7 +200,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         $import->setSelectedActions([
             'row_2' => 'create',
         ]);
@@ -207,7 +219,7 @@ class HardwareImportTest extends TestCase
 
     public function test_import_matches_by_mac_when_pc_name_differs(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-RENAMED\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
@@ -215,7 +227,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         $import->setCompareKey('mac');
         Excel::import($import, $file);
 
@@ -231,7 +243,7 @@ class HardwareImportTest extends TestCase
 
     public function test_import_handles_validation_errors(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tpc_name\ttype\tos\n";
         $csvContent .= "\t\tpc\tWindows 10\n"; // Missing required fields
@@ -239,7 +251,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
@@ -254,7 +266,7 @@ class HardwareImportTest extends TestCase
 
     public function test_import_detects_changes_correctly(): void
     {
-        $this->createTestData();
+        $data = $this->createTestData();
 
         $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
         $csvContent .= "1234567890\tPC-001\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\tAA:BB:CC:DD:EE:FF\n";
@@ -262,7 +274,7 @@ class HardwareImportTest extends TestCase
         $file = tempnam(sys_get_temp_dir(), 'import_').'.csv';
         file_put_contents($file, $csvContent);
 
-        $import = new HardwareImport;
+        $import = $this->scopedImport($data);
         Excel::import($import, $file);
 
         $results = $import->getImportResults();
