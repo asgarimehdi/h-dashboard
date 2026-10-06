@@ -128,7 +128,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 | `/api/tickets*` (+ comments) | `ability:tickets:read` + `role_or_permission:view_assigned_tickets\|view_all_tickets` (per-route) | `abilities:tickets:write` + per-route `permission:create_ticket` / `permission:manage_unit_tickets` |
 | `/api/reports/*` | `ability:reports:read` + `role_or_permission:manage_personnel` | — |
 | `/api/persons/*` | `ability:persons:read` + `role_or_permission:kargozini\|manage_personnel` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
-| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | same middleware + `role_or_permission:calendar` |
+| `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | `abilities:todos:write` (nested inside the outer group, ALL) + `role_or_permission:calendar` (#837) |
 | `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | `role_or_permission:view_hr_dashboard` |
 | `/api/notifications*` | `ability:notifications:read` | — |
 | `/api/gis*` | `ability:gis:read` + `role_or_permission:map` | `role_or_permission:map` |
@@ -136,6 +136,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
 - **`/api/tickets*` and `/api/tickets/{ticket}/comments/*` also need `role_or_permission:view_assigned_tickets|view_all_tickets`** on top of the ability — they are in neither the "read" nor "write" column of that permission set, so the table above understates the gate.
+- **`/api/notifications*` has no `notifications:write` ability**, and needs none: `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` act only on the **caller's own** notifications, so they are read-side acknowledgements by design (#837). Do not mint a `notifications:write` ability to "fix" this — `getApiTokenAbilities()` bundles it with `read` anyway.
 - Tokens are **scoped and revoked on password change** (#678). API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
 
 
