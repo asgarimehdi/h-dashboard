@@ -9,6 +9,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
+use App\Services\HardwareAuditScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -402,39 +403,19 @@ class HardwareAuditController extends Controller
     /**
      * Check organizational access from an audit record (hardware may be gone).
      *
+     * Scope resolution itself lives in App\Services\HardwareAuditScope, the
+     * single implementation shared with the Livewire hardware trail.
      * For a live hardware row we read its n_code directly; for a hard-deleted
      * row (the common case for restoreRecord) we fall back to the n_code stored
      * in the audit snapshot so the org-scope check is never skipped.
      */
     private function assertAccessibleFromAudit(UnitScopedRequest $request, HardwareAudit $audit): void
     {
-        $user = $request->user();
-        $accessibleIds = $request->accessibleIds();
-
-        $nCode = null;
-
-        $hw = DB::table('hardwares')->where('id', $audit->hardware_id)->first();
-        if ($hw && isset($hw->n_code)) {
-            $nCode = $hw->n_code;
-        } elseif (is_array($audit->changes)) {
-            foreach ($audit->changes as $change) {
-                if (($change['field'] ?? null) === 'n_code' && isset($change['new'])) {
-                    // The observer stores formatted display value; guard against
-                    // the em-dash placeholder which is not a valid national code.
-                    $nCode = is_string($change['new']) && $change['new'] !== '—' ? $change['new'] : null;
-                    break;
-                }
-            }
-        }
+        $unitId = app(HardwareAuditScope::class)->unitIdForAudit($audit);
 
         // Deny by default when scope cannot be proven — prevents IDOR when
         // audit data is missing n_code (legacy/corrupted/manual inserts).
-        if ($nCode === null) {
-            abort(403, 'Hardware record not accessible.');
-        }
-
-        $unitId = DB::table('persons')->where('n_code', $nCode)->value('u_id');
-        if (! $unitId || ! in_array($unitId, $accessibleIds, true)) {
+        if ($unitId === null || ! in_array($unitId, $request->accessibleIds(), true)) {
             abort(403, 'Hardware record not accessible.');
         }
     }
