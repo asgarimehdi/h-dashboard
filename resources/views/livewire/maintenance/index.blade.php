@@ -2,7 +2,10 @@
 
 use App\Models\MaintenanceSchedule;
 use App\Models\Unit;
+use App\Models\User;
+use App\Services\AccessService;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
@@ -44,6 +47,10 @@ return new class extends Component
     {
         $this->authorize('manage_hardware');
 
+        if (! $this->assertScheduleInScope($schedule)) {
+            return;
+        }
+
         try {
             $schedule->delete();
             $this->warning("«{$schedule->title}» حذف شد", 'با موفقیت', position: 'toast-bottom');
@@ -63,6 +70,12 @@ return new class extends Component
             'unitId' => 'nullable|exists:units,id',
         ]);
 
+        // Creating inside a unit the actor cannot reach would plant a schedule
+        // the `maintenance:generate-due` cron later fires tickets for.
+        if (! $this->assertSubmittedUnitInScope()) {
+            return;
+        }
+
         $nextDue = $this->calculateNextDue();
 
         MaintenanceSchedule::create([
@@ -81,8 +94,13 @@ return new class extends Component
     {
         $this->authorize('manage_hardware');
 
-        $this->resetValidation();
         $schedule = MaintenanceSchedule::findOrFail($id);
+
+        if (! $this->assertScheduleInScope($schedule)) {
+            return;
+        }
+
+        $this->resetValidation();
         $this->editingId = $id;
         $this->title = $schedule->title;
         $this->frequency = $schedule->frequency;
@@ -102,9 +120,20 @@ return new class extends Component
             'unitId' => 'nullable|exists:units,id',
         ]);
 
-        try {
-            $schedule = MaintenanceSchedule::findOrFail($this->editingId);
+        $schedule = MaintenanceSchedule::findOrFail($this->editingId);
 
+        // Both halves matter: the loaded record must be in scope (else a scoped
+        // user edits another unit's row) AND the submitted unit must be in
+        // scope (else the same user relocates a row across the boundary).
+        if (! $this->assertScheduleInScope($schedule)) {
+            return;
+        }
+
+        if (! $this->assertSubmittedUnitInScope()) {
+            return;
+        }
+
+        try {
             $schedule->update([
                 'title' => $this->title,
                 'frequency' => $this->frequency,
@@ -160,9 +189,127 @@ return new class extends Component
         ];
     }
 
+    /**
+     * @return array<int>
+     */
+    private function accessibleUnitIds(): array
+    {
+        return app(AccessService::class)->accessibleUnitIds();
+    }
+
+    /**
+     * آیا کاربر فعلی دامنه‌ی سازمانی نامحدود دارد؟
+     *
+     * تنها استثنای قاعده‌ی «رکورد null-unit فقط برای مدیر سیستم»: برنامه‌های
+     * سراسری (`unit_id = null`) ذاتاً متعلق به کل سازمان‌اند و کسی جز مدیر
+     * سیستم نباید بتواند آن‌ها را ببیند یا تغییر دهد.
+     */
+    private function hasUnrestrictedScope(): bool
+    {
+        $user = Auth::user();
+
+        return $user instanceof User && $user->hasRole('admin');
+    }
+
+    /**
+     * آیا این زمانبندی در دامنه‌ی کاربر فعلی هست؟
+     *
+     * - واحد null (سراسری): فقط مدیر سیستم.
+     * - واحد مشخص: واحد باید در دامنه‌ی دسترسی کاربر باشد.
+     * - واحد ناموجود (FK روی delete set null شده): فقط مدیر سیستم.
+     *
+     * قاعده عمداً «بی‌احتیاط بسته» است: دامنه‌ی خالی یعنی `false`، نه دسترسی
+     * آزاد (همان دام fail-open که در #819 باعث نشت کل سازمان شد).
+     */
+    private function isScheduleInScope(MaintenanceSchedule $schedule): bool
+    {
+        if ($schedule->unit_id === null) {
+            return $this->hasUnrestrictedScope();
+        }
+
+        return in_array($schedule->unit_id, $this->accessibleUnitIds(), true);
+    }
+
+    /**
+     * بررسی دامنه‌ی رکورد بارگذاری‌شده؛ در صورت خروج، پیام مناسب می‌دهد.
+     */
+    private function assertScheduleInScope(MaintenanceSchedule $schedule): bool
+    {
+        if ($this->isScheduleInScope($schedule)) {
+            return true;
+        }
+
+        $this->error('شما به این زمانبندی دسترسی ندارید.', position: 'toast-bottom');
+
+        return false;
+    }
+
+    /**
+     * بررسی دامنه‌ی واحد ارسالی فرم.
+     *
+     * واحد مشخص باید در دامنه باشد وگرنه فرم رکورد را به واحدی منتقل می‌کند
+     * که کاربر به آن دسترسی ندارد — و همان‌جا cron تیکت تولید می‌کند.
+     *
+     * `null` («همه واحدها») یعنی نوشتن یک رکورد **سراسری**. چون رکورد
+     * null-unit فقط در اختیار مدیر سیستم است (قاعده‌ی بالا)، اجازه‌ی ساختن یا
+     * جابه‌جا کردن آن هم باید در همان دامنه بماند؛ وگرنه یک کاربر دامنه‌دار
+     * رکوردی می‌سازد/ارتقا می‌دهد که دیگر خودش هم حق ویرایشش را ندارد و در
+     * عین حال برای کل سازمان قابل مشاهده است. گزینه‌ی «همه» در انتخابگر
+     * می‌ماند چون رکوردهای سراسری موجود باید قابل نمایش باشند.
+     */
+    private function assertSubmittedUnitInScope(): bool
+    {
+        if ($this->hasUnrestrictedScope()) {
+            return true;
+        }
+
+        if ($this->unitId !== null && in_array($this->unitId, $this->accessibleUnitIds(), true)) {
+            return true;
+        }
+
+        $this->error('شما به این واحد دسترسی ندارید.', position: 'toast-bottom');
+
+        return false;
+    }
+
+    /**
+     * گزینه‌های انتخابگر واحد — فقط واحدهای در دامنه
+     *
+     * کلیدها 'value'/'label' هستند، پهنای Blade باید صریحاً
+     * option-value/option-label بگیرد: پیش‌فرض MaryUI روی 'id'/'name'
+     * است و با رشته/آرایه، `data_get()` مقدار null برمی‌گرداند و همه‌ی
+     * گزینه‌ها خالی رندر می‌شوند (همان ریشه‌ی #706).
+     *
+     * @return array<int, array{value: int, label: string}>
+     */
+    public function unitOptions(): array
+    {
+        $names = Unit::query()
+            ->whereIn('id', $this->accessibleUnitIds())
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        $options = [];
+        foreach ($names as $id => $name) {
+            $options[] = ['value' => (int) $id, 'label' => (string) $name];
+        }
+
+        return $options;
+    }
+
     public function schedules(): LengthAwarePaginator
     {
         $query = MaintenanceSchedule::query();
+
+        // پیش‌وند بی‌قیدوشر: دامنه‌ی خالی نباید پیش‌وند را حذف کند و کل
+        // سازمان را برگرداند. واحدهای در دامنه به‌علاوه‌ی رکوردهای null-unit.
+        $query->where(function ($q) {
+            $q->whereNull('unit_id');
+
+            if (! empty($this->accessibleUnitIds())) {
+                $q->orWhereIn('unit_id', $this->accessibleUnitIds());
+            }
+        });
 
         if (!empty($this->search)) {
             $query->where('title', 'LIKE', '%' . $this->search . '%');
@@ -181,7 +328,8 @@ return new class extends Component
         return [
             'schedules' => $this->schedules(),
             'headers' => $this->headers(),
-            'units' => Unit::orderBy('name')->pluck('name', 'id'),
+            // انتخابگر واحد فقط واحدهای در دامنه
+            'unitOptions' => $this->unitOptions(),
         ];
     }
 
@@ -240,7 +388,17 @@ return new class extends Component
                         <x-input wire:model="recurrenceInterval" label="هر" type="number" min="1" />
                     </div>
                     <div class="w-full sm:w-48">
-                        <x-select wire:model="unitId" label="واحد" :options="$units->prepend('— همه —', null)" />
+                        {{-- option-value/option-label required: MaryUI defaults to
+                             optionValue='id' / optionLabel='name', so the
+                             'value'/'label' keys would render empty options. --}}
+                        <x-select
+                            wire:model="unitId"
+                            label="واحد"
+                            :options="$unitOptions"
+                            option-value="value"
+                            option-label="label"
+                            placeholder="— همه —"
+                        />
                     </div>
                 </div>
                 <div class="flex gap-2">
