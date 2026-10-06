@@ -274,13 +274,13 @@ class Hardware extends Model
             return;
         }
 
-        $normalized = self::normalizeForQuery($term);
+        $folded = self::foldedTerm($term);
 
-        $query->whereExists(function ($q) use ($normalized) {
+        $query->whereExists(function ($q) use ($folded) {
             $q->selectRaw('1')
                 ->from('units')
                 ->whereColumn('units.id', 'persons.u_id')
-                ->where('units.name', 'LIKE', "%{$normalized}%");
+                ->whereRaw(self::foldSeparatorsSql('units.name').' LIKE ?', ["%{$folded}%"]);
         });
     }
 
@@ -293,13 +293,13 @@ class Hardware extends Model
             return;
         }
 
-        $normalized = self::normalizeForQuery($term);
+        $folded = self::foldedTerm($term);
 
-        $query->whereExists(function ($q) use ($normalized) {
+        $query->whereExists(function ($q) use ($folded) {
             $q->selectRaw('1')
                 ->from('semats')
                 ->whereColumn('semats.id', 'persons.s_id')
-                ->where('semats.name', 'LIKE', "%{$normalized}%");
+                ->whereRaw(self::foldSeparatorsSql('semats.name').' LIKE ?', ["%{$folded}%"]);
         });
     }
 }

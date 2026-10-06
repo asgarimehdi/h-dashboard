@@ -155,6 +155,9 @@ class HardwareExportNormalizationTest extends TestCase
 
         expect($src)->toContain('use App\Traits\PersianNormalizer;');
         expect($src)->toContain('use PersianNormalizer;');
-        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(9);
+        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(8);
+        // #815: the hook-less lookup columns (unit/semat) fold the column instead.
+        expect($src)->toContain('foldSeparatorsSql');
+        expect($src)->toContain('foldedTerm');
     }
 }
