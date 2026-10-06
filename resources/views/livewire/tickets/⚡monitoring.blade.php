@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
 use Livewire\Component;
@@ -9,6 +10,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Attributes\Computed;
 use Mary\Traits\Toast;
+use Illuminate\Support\Facades\Auth;
 
 new class extends Component
 {
@@ -118,6 +120,7 @@ new class extends Component
     {
         // Check organizational scope
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        /** @var Ticket|null $ticket */
         $ticket = Ticket::with([
             'user',
             'unit',
@@ -131,8 +134,32 @@ new class extends Component
             return;
         }
 
+        // #847: same leak as the inbox — the ticket is scoped, the `task`
+        // relation is not. Gate it on the viewer's scope so legacy
+        // cross-unit links stop rendering their todo here. `setRelation()`
+        // rather than a plain assignment: see the inbox for why.
+        $ticket->setRelation('task', $this->taskIfInScope($ticket->task_id, $accessibleIds));
+
         $this->showingTicket = $ticket;
         $this->showModal = true;
+    }
+
+    /**
+     * The ticket's task, or null when it is outside the viewer's scope.
+     *
+     * @param  array<int>  $accessibleIds
+     */
+    private function taskIfInScope(?int $taskId, array $accessibleIds): ?Todo
+    {
+        if (! $taskId) {
+            return null;
+        }
+
+        return Todo::query()
+            ->whereKey($taskId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds)
+                ->orWhere(fn ($q) => $q->whereNull('unit_id')->where('user_id', Auth::id())))
+            ->first();
     }
 
     public function closeDetail(): void

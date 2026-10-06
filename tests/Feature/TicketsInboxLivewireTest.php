@@ -12,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
@@ -335,6 +336,121 @@ class TicketsInboxLivewireTest extends TestCase
         Livewire::test('tickets.inbox')
             ->call('showTicket', $other->id)
             ->assertSet('showModal', false);
+    }
+
+    // =====================================================================
+    // #847 — the ticket was scoped, its `task` relation was not
+    //
+    // A ticket linked to an out-of-scope todo leaked that todo's title,
+    // dates and status into this modal. Legacy rows predating #847's
+    // validation still exist, so the read side is gated on its own.
+    // =====================================================================
+
+    public function test_show_ticket_hides_a_task_outside_the_viewers_scope(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $victimUnit = Unit::create(['name' => 'واحد قربانی']);
+        $secretTodo = Todo::create([
+            'title' => 'عنوان محرمانه واحد دیگر',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $victimUnit->id,
+        ]);
+
+        $ticket = $this->createTicket(['subject' => 'تیکت با وظیفه بیگانه', 'task_id' => $secretTodo->id]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->assertSet('showModal', true)
+            ->assertSet('showingTicket.task', null)
+            ->assertSee('تیکت با وظیفه بیگانه')
+            ->assertDontSee('عنوان محرمانه واحد دیگر')
+            // The block's own label, not the bare phrase: «وظیفه مرتبط»
+            // also appears in a PHP comment that ships inside the rendered
+            // HTML, so a plain assertDontSee would fail for the wrong reason.
+            ->assertDontSee('وظیفه مرتبط:');
+    }
+
+    public function test_show_ticket_still_renders_a_task_inside_the_viewers_scope(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $myUnit = $user->units()->first();
+        $todo = Todo::create([
+            'title' => 'وظیفه خودم در دسترس',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $myUnit->id,
+        ]);
+
+        $ticket = $this->createTicket(['subject' => 'تیکت با وظیفه مجاز', 'task_id' => $todo->id]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->assertSet('showModal', true)
+            ->assertSet('showingTicket.task.id', $todo->id)
+            ->assertSee('وظیفه خودم در دسترس')
+            ->assertSee('وظیفه مرتبط:');
+    }
+
+    public function test_destination_viewer_sees_the_ticket_but_not_the_creators_task(): void
+    {
+        // The deliberate consequence of the #847 decision: the task block is
+        // gated on the VIEWER's scope, so a recipient who cannot reach the
+        // creator's todo sees the ticket with no task details. The ticket
+        // itself is never hidden. Pinned so this stays a stated contract —
+        // the alternative (gating on the ticket's own unit as well) was
+        // considered and rejected, since it would re-expose the creator's
+        // todo to the destination unit.
+        ['user' => $creator, 'unit' => $creatorUnit] = $this->createUserWithUnit(['create_ticket']);
+
+        $destination = Unit::create(['name' => 'واحد گیرنده', 'is_active' => true, 'can_receive_tickets' => true]);
+        $creatorTodo = Todo::create([
+            'title' => 'وظیفه سازنده',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $creatorUnit->id,
+        ]);
+
+        $ticket = $this->createTicket([
+            // `createTicket()` reads `unit`/`user` for its defaults but also
+            // merges them into the create array, where they are NOT fillable
+            // and are silently dropped. The real columns must be set, or the
+            // ticket lands in `Unit::first()` (the creator's unit) and the
+            // viewer cannot see it at all.
+            'unit_id' => $destination->id,
+            'user_id' => $creator->id,
+            'subject' => 'تیکت بین دو واحد',
+            'task_id' => $creatorTodo->id,
+        ]);
+
+        // The recipient needs `view_assigned_tickets` or the inbox page itself is
+        // gated off and `showTicket` never runs — the assertion would then be
+        // passing for the wrong reason.
+        $viewer = $this->createUserOnUnit($destination);
+        $viewer->givePermissionTo('view_assigned_tickets');
+
+        $this->actingAs($viewer);
+
+        // `accessibleUnitIds()` reads `current_unit_id` first and only falls
+        // back to the pivot when the session has none. Without this the viewer
+        // resolves an empty scope and `showTicket` returns early — the modal
+        // would never open and the assertion below would fail for the wrong
+        // reason (an unseeded context, not the task gate).
+        Session::put('current_unit_id', $destination->id);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->assertSet('showModal', true)
+            ->assertSet('showingTicket.id', $ticket->id)
+            ->assertSee('تیکت بین دو واحد')
+            ->assertDontSee('وظیفه سازنده');
     }
 
     // =====================================================================
@@ -975,6 +1091,12 @@ class TicketsInboxLivewireTest extends TestCase
             'title' => 'وظیفه تست',
             'start_at' => now(),
             'is_completed' => false,
+            // #847: the detail modal now gates `task` on the viewer's scope,
+            // so this todo needs a unit the viewer can actually reach. It was
+            // built with no `unit_id` at all, which put it in the ownerless
+            // bucket — readable only under the blanket null-unit rule this
+            // issue removes.
+            'unit_id' => $user->units()->first()->id,
         ]);
 
         $t1 = $this->createTicket(['status' => 'accepted', 'task_id' => $todo->id]);

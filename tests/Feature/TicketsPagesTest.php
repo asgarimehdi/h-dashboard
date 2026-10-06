@@ -90,7 +90,10 @@ test('creating ticket persists data', function () {
         ->set('unit_id', $targetUnit->id)
         ->set('subject', 'تیکت جدید تست')
         ->set('content', 'توضیحات تست تست تست')
-        ->set('priority', 'high')
+        // `high` used to be accepted here because `priority` carried no
+        // validation at all (#847). It is not offered by the picker and
+        // `TicketController` refuses it, so the form now uses the same set.
+        ->set('priority', 'urgent')
         ->call('saveTicket');
 
     $this->assertDatabaseHas('tickets', [

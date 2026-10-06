@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Person;
+use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
@@ -452,4 +453,73 @@ test('creator can list, edit, toggle and delete their own null-unit todo', funct
         ->call('editEvent', $todo->id)
         ->call('delete');
     $this->assertDatabaseMissing('todos', ['id' => $todo->id]);
+});
+
+// ==================== #847 — ticket task_title scope ====================
+//
+// `getEvents()` built ticket events with `with('task')` and put
+// `$ticket->task?->title` straight into `extendedProps.task_title`. This page
+// is gated by `calendar` alone — not a ticket permission at all — so it was
+// the cheapest read in the whole chain: a user with only `calendar` received
+// the title of a todo in a unit they cannot reach.
+// =======================================================================
+
+test('calendar hides a ticket task title from another unit', function () {
+    $this->actingAs($this->user);
+
+    $victimUnit = Unit::create(['name' => 'واحد قربانی تقویم']);
+    $secretTodo = Todo::factory()->create([
+        'unit_id' => $victimUnit->id,
+        'title' => 'عنوان محرمانه تقویم',
+        'is_completed' => false,
+    ]);
+
+    // A ticket the viewer legitimately sees (their own unit) which points at
+    // the victim's todo — the legacy shape #847's validation now prevents.
+    $ticket = Ticket::create([
+        'ticket_code' => 'TKT-847-CAL',
+        'user_id' => $this->user->id,
+        'unit_id' => $this->unit->id,
+        'subject' => 'تیکت تقویم',
+        'content' => 'محتوا',
+        'priority' => 'normal',
+        'status' => 'created',
+        'task_id' => $secretTodo->id,
+    ]);
+
+    $events = Livewire::test('todo.todo')->instance()->getEvents();
+
+    $event = collect($events)->firstWhere('extendedProps.ticket_code', 'TKT-847-CAL');
+
+    expect($event)->not->toBeNull();
+    expect($event['extendedProps']['task_title'])->toBeNull();
+    expect($event['extendedProps']['task_id'])->toBeNull();
+});
+
+test('calendar still shows a ticket task title inside the viewer scope', function () {
+    $this->actingAs($this->user);
+
+    $myTodo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'وظیفه مجاز تقویم',
+        'is_completed' => false,
+    ]);
+
+    Ticket::create([
+        'ticket_code' => 'TKT-847-OK',
+        'user_id' => $this->user->id,
+        'unit_id' => $this->unit->id,
+        'subject' => 'تیکت تقویم مجاز',
+        'content' => 'محتوا',
+        'priority' => 'normal',
+        'status' => 'created',
+        'task_id' => $myTodo->id,
+    ]);
+
+    $events = Livewire::test('todo.todo')->instance()->getEvents();
+
+    $event = collect($events)->firstWhere('extendedProps.ticket_code', 'TKT-847-OK');
+
+    expect($event)->not->toBeNull();
+    expect($event['extendedProps']['task_title'])->toBe('وظیفه مجاز تقویم');
 });

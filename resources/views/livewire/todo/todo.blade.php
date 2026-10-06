@@ -63,9 +63,19 @@ return new class extends Component {
                       ->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
                 });
 
+            // تیکت‌ها.
+            // #847: `task_title` leaked a todo the viewer cannot reach. This
+            // page is gated by `calendar` alone — not a ticket permission at
+            // all — so it was the cheapest read in the whole chain. The scope
+            // goes on the eager-load itself, so an out-of-scope task arrives as
+            // `null` and the title is never emitted. A null-unit todo belongs
+            // to its creator (#838 contract).
+            $taskScope = fn ($q) => $q->whereIn('unit_id', $accessibleIds)
+                ->orWhere(fn ($q) => $q->whereNull('unit_id')->where('user_id', \Illuminate\Support\Facades\Auth::id()));
+
             $ticketQuery = Ticket::accessible()
                 ->whereHas('task')
-                ->with('task')
+                ->with(['task' => $taskScope])
                 ->whereIn('status', ['created', 'forwarded', 'accepted']);
 
             // Apply date range filter when available
@@ -102,6 +112,7 @@ return new class extends Component {
                 ->map(function ($ticket) {
                     $priorityColors = ['urgent' => '#ef4444', 'normal' => '#f59e0b', 'low' => '#6b7280'];
                     $priorityLabels = ['urgent' => 'فوری', 'normal' => 'عادی', 'low' => 'کم‌اهمیت'];
+
                     return [
                         'id' => 'ticket-' . $ticket->id,
                         'title' => '🎫 ' . $ticket->subject,
@@ -113,7 +124,7 @@ return new class extends Component {
                             'ticket_code' => $ticket->ticket_code,
                             'status' => $ticket->status_name,
                             'priority' => $priorityLabels[$ticket->priority] ?? 'عادی',
-                            'task_id' => $ticket->task_id,
+                            'task_id' => $ticket->task?->id,
                             'task_title' => $ticket->task?->title,
                         ],
                     ];

@@ -2,7 +2,8 @@
 
 use App\Models\{Unit, Todo};
 use App\Models\Ticket;
-use App\Rules\TicketTargetUnit;
+use App\Rules\{AccessibleTodo, TicketTargetUnit};
+use App\Services\AccessService;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\Attributes\Layout;
@@ -34,7 +35,6 @@ new class extends Component
     public function loadData(): void
     {
         $units = [];
-        $todos = [];
 
         if (mb_strlen($this->search) >= 2) {
             $userUnitId = auth()->user()->person?->u_id;
@@ -48,15 +48,27 @@ new class extends Component
             $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get()->toArray();
         }
 
-        // لود وظایف انجام‌نشده واحد فعلی
-        $currentUnitId = session('current_unit_id', auth()->user()->person?->u_id);
-        $todos = Todo::where('unit_id', $currentUnitId)
+        // وظایف باز در اسکوپ سازنده — نه فقط واحد جاری (تصمیم #847، گزینهٔ ج).
+        // `->accessible('unit_id')` یک `whereIn` بدون شرط است، پس اسکوپ خالی
+        // به `0 = 1` تبدیل می‌شود و هیچ ردیف بی‌واحدی لو نمی‌رود؛ برخلاف
+        // `where('unit_id', $currentUnitId)` که برای کاربر بدون واحد
+        // به `unit_id IS NULL` کامپایل می‌شد و همهٔ todoهای orphan را
+        // برمی‌گرداند.
+        // Explicit `whereIn` rather than the `accessible()` scope: the scope lives on
+        // a trait, so PHPStan cannot resolve `Builder::accessible()`, and this
+        // form is also what keeps the empty scope failing closed (`0 = 1`)
+        // instead of dropping the predicate. See `AccessibleTodo` for the same
+        // reasoning on the write side.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        $this->todos = Todo::query()
+            ->whereIn('unit_id', $accessibleIds)
             ->where('is_completed', false)
+            ->take(50)
             ->get()
             ->toArray();
 
         $this->units = $units;
-        $this->todos = $todos;
     }
 
     public function selectUnit($id, $name): void
@@ -112,6 +124,15 @@ new class extends Component
             ],
             'subject' => 'required|string|min:5|max:255',
             'content' => 'required|string|min:10',
+            // #847: priority was also unvalidated, so the web form stored
+            // values (`medium`, `high`) the CHECK constraint allows but the
+            // picker and the API both refuse — and anything outside the set
+            // raised SQLSTATE[23514]. Same three values as `TicketController`.
+            'priority' => 'required|in:low,normal,urgent',
+            // #847: the last unvalidated input on this form. Existence and
+            // scope are both the rule's job, so a foreign todo and a missing
+            // id are validation errors rather than a FK violation.
+            'task_id' => ['nullable', new AccessibleTodo],
         ]);
 
         $ticketCode = 'TK-' . strtoupper(Str::random(8));
@@ -128,14 +149,25 @@ new class extends Component
             'task_id' => $this->task_id,
         ]);
 
-        // اگر وظیفه‌ای انتخاب نشده، وظیفه جدید ایجاد کن
+        // اگر وظیفه‌ای انتخاب نشده، وظیفه جدید ایجاد کن.
+        // #847 (تصمیم محصول، گزینهٔ ج): وظیفه باید در اسکوپ سازنده باشد.
+        // رفتار قبلی همیشه واحد مقصد را می‌نوشت، حتی وقتی آن واحد در
+        // `accessibleUnitIds()` سازنده نبود — یعنی تیکت به todoای در
+        // واحدی لینک می‌شد که خودِ آن todo هم بلافاصله از اسکوپ خواننده
+        // خارج می‌شد و در read-side مخفی می‌شد.
         if (! $this->task_id) {
+            $destinationInScope = in_array(
+                $this->unit_id,
+                app(\App\Services\AccessService::class)->accessibleUnitIds(),
+                true
+            );
+
             $todo = Todo::create([
                 'title' => $this->subject,
                 'start_at' => now(),
                 'end_at' => now()->addWeek(),
                 'is_completed' => false,
-                'unit_id' => $this->unit_id,
+                'unit_id' => $destinationInScope ? $this->unit_id : session('current_unit_id', auth()->user()->person?->u_id),
             ]);
             $ticket->update(['task_id' => $todo->id]);
         }
@@ -203,7 +235,7 @@ new class extends Component
         <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
-        <x-errors :only="['unit_id', 'subject', 'content', 'files']" title="خطا در ثبت تیکت" />
+        <x-errors :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">
             <div class="relative">
                 <x-input
