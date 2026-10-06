@@ -279,7 +279,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$field\.$#'
 			identifier: property.notFound
-			count: 9
+			count: 3
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
@@ -3576,7 +3576,6 @@ parameters:
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
-
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:loadUnitDetails\(\) has no return type specified\.$#'
 			identifier: missingType.return
@@ -3703,9 +3702,6 @@ parameters:
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
-
-
-
 		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
@@ -3747,8 +3743,6 @@ parameters:
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/maps/point.blade.php
-
-
 
 		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$types has no type specified\.$#'
@@ -3963,7 +3957,7 @@ parameters:
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 3
+			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
@@ -4111,12 +4105,6 @@ parameters:
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:9\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/reports/persons.blade.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 4
@@ -4150,12 +4138,6 @@ parameters:
 			message: '#^Parameter \#1 \$carbon of static method Morilog\\Jalali\\Jalalian\:\:fromCarbon\(\) expects Carbon\\Carbon, Carbon\\CarbonInterface given\.$#'
 			identifier: argument.type
 			count: 2
-			path: resources/views/livewire/reports/todos.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:10\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-

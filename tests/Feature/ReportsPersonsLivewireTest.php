@@ -134,10 +134,12 @@ class ReportsPersonsLivewireTest extends TestCase
 
     // ==================== Edge cases ====================
 
-    public function test_empty_accessible_ids_renders_without_error(): void
+    public function test_empty_accessible_ids_scopes_to_zero_rows(): void
     {
         // Person with null u_id, user with no units → accessibleUnitIds = []
-        // Component should render without error (no filter applied)
+        // Issue #819: an empty scope must FAIL CLOSED — the roster is scoped to
+        // nothing, so an out-of-scope person's n_code never renders. This used
+        // to assert only assertStatus(200), which passed *because* of the leak.
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'بدون واحد', 'l_name' => 'تست',
@@ -145,10 +147,24 @@ class ReportsPersonsLivewireTest extends TestCase
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
 
+        // A whole other unit's person, which an empty-scope viewer must not see.
+        $outside = Unit::create(['name' => 'خارج']);
+        $foreignNCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $foreignNCode, 'f_name' => 'خارجی', 'l_name' => 'کاربر',
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $outside->id,
+        ]);
+
         $this->actingAs($user);
 
-        Livewire::test('reports.persons')
-            ->assertStatus(200);
+        $this->assertSame([], app(AccessService::class)->accessibleUnitIds(), 'the fixture must really be an empty scope');
+
+        $component = Livewire::test('reports.persons')->assertStatus(200);
+
+        $component->assertDontSee($foreignNCode)
+            ->assertDontSee('خارجی');
+
+        $this->assertSame(0, $component->instance()->chartPayload()['total']);
     }
 
     public function test_zero_persons_shows_empty_table(): void

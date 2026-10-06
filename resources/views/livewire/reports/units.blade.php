@@ -10,6 +10,9 @@ return new class extends Component
 {
     public bool $showHelpModal = false;
 
+    /** Issue #819 — see the dashboard's `emptyScope` banner for the rationale. */
+    public bool $emptyScope = false;
+
     public string $dateFrom = '';
     public string $dateTo = '';
     public ?int $selectedUnitTypeId = null;
@@ -18,6 +21,8 @@ return new class extends Component
     public function mount(): void
     {
         $this->loadUnitTypes();
+
+        $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
     }
 
     public function loadUnitTypes(): void
@@ -35,7 +40,7 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $query = Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
+            ->whereIn('id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->when($this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '', function ($q) {
                 if ($this->showOnlyNoBoundary == '1') {
@@ -52,7 +57,7 @@ return new class extends Component
         $byType = Unit::query()
             ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
             ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
-            ->when($accessibleIds, fn($q) => $q->whereIn('units.id', $accessibleIds))
+            ->whereIn('units.id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
             ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
             ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
@@ -61,23 +66,25 @@ return new class extends Component
             ->toArray();
 
         $noBoundary = Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
+            ->whereIn('id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->whereNull('boundary_id')
             ->count();
 
         $withBoundary = Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
+            ->whereIn('id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->whereNotNull('boundary_id')
             ->count();
 
+        // Eager loads first: a top-level whereIn() degrades the chain to
+        // Query\Builder, on which `with()` is undefined (issue #819).
         $units = Unit::query()
-            ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('boundary_id'))
             ->with('unitType:id,name', 'region:id,name')
+            ->whereIn('id', $accessibleIds)
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
             ->orderBy('name')
             ->get()
             ->map(fn($u) => [
@@ -109,6 +116,13 @@ return new class extends Component
     </x-header>
 
     <x-help:modal wireModel="showHelpModal" />
+
+    @if($emptyScope)
+        <div class="alert alert-info mb-6" role="alert">
+            <x-icon name="o-information-circle" class="w-5 h-5" />
+            <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
 
     {{-- فیلترها --}}
     <x-card shadow class="mb-6">

@@ -17,15 +17,17 @@ return new class extends Component
 
     public ?string $statusFilter = null; // completed, pending, overdue, null=all
 
-    public $units = [];
-
     public bool $showHelpModal = false;
+
+    /** Issue #819 — see the dashboard's `emptyScope` banner for the rationale. */
+    public bool $emptyScope = false;
 
     public function mount(): void
     {
         $this->dateFrom = Jalalian::fromCarbon(now()->subDays(30))->format('Y/m/d');
         $this->dateTo = Jalalian::fromCarbon(now()->addDays(30))->format('Y/m/d');
-        $this->units = \App\Models\Unit::all();
+
+        $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
     }
 
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
@@ -64,8 +66,14 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
+        // Issue #819: unconditional scope predicate. `whereIn()` at the top level
+        // would degrade the builder to Query\Builder for `(clone $query)->with()`,
+        // so the predicate goes inside a closure — still unconditional, still
+        // fail-closed on an empty scope (`[]` compiles to `0 = 1`).
         $query = Todo::query()
-            ->when($accessibleIds, fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->where(function ($q) use ($accessibleIds) {
+                $q->whereIn('unit_id', $accessibleIds);
+            })
             ->when($this->selectedUnitId, fn ($q) => $q->where('unit_id', $this->selectedUnitId));
 
         if ($from = $this->parseJalaliDate($this->dateFrom)) {
@@ -156,6 +164,13 @@ return new class extends Component
     </x-header>
 
     <x-help:modal wireModel="showHelpModal" />
+
+    @if($emptyScope)
+        <div class="alert alert-info mb-6" role="alert">
+            <x-icon name="o-information-circle" class="w-5 h-5" />
+            <span>واحدی برای نمایش انتخاب نشده</span>
+        </div>
+    @endif
 
     {{-- فیلترها --}}
     <x-card shadow class="mb-6">

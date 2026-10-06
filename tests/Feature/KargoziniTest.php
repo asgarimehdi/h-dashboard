@@ -66,7 +66,24 @@ test('kargozini lookup pages render and allow CRUD', function ($component, $mode
 ]);
 
 test('persons page allows CRUD and respects organizational scope', function () {
-    $component = Livewire::actingAs($this->user)
+    // #805: writes on this page need `manage_personnel`; the shared
+    // $this->user holds only `kargozini` (the read union), so CRUD uses a
+    // writer persona. The reader is asserted refused below.
+    $writerPerson = Person::create([
+        'n_code' => '9876500011',
+        'f_name' => 'نویسنده',
+        'l_name' => 'تست',
+        'u_id' => $this->unit->id,
+        's_id' => $this->semat->id,
+        't_id' => $this->tahsil->id,
+        'e_id' => $this->estekhdam->id,
+        'r_id' => $this->radif->id,
+    ]);
+    $writer = User::factory()->create(['n_code' => $writerPerson->n_code]);
+    $writer->givePermissionTo(['kargozini', 'manage_personnel']);
+    Session::put('current_unit_id', $this->unit->id);
+
+    $component = Livewire::actingAs($writer)
         ->test('kargozini.person')
         ->assertOk();
 
@@ -74,8 +91,23 @@ test('persons page allows CRUD and respects organizational scope', function () {
     $component->assertSee('تست');
     $component->assertSee('کاربر');
 
-    // Create new person
+    // A `kargozini`-only user is refused the very same write (#805).
     Livewire::actingAs($this->user)
+        ->test('kargozini.person')
+        ->set('n_code', '5550001112')
+        ->set('f_name', 'علی')
+        ->set('l_name', 'رضایی')
+        ->set('u_id', $this->unit->id)
+        ->set('s_id', $this->semat->id)
+        ->set('t_id', $this->tahsil->id)
+        ->set('e_id', $this->estekhdam->id)
+        ->set('r_id', $this->radif->id)
+        ->call('savePerson')
+        ->assertForbidden();
+    $this->assertDatabaseMissing('persons', ['n_code' => '5550001112']);
+
+    // Create new person
+    Livewire::actingAs($writer)
         ->test('kargozini.person')
         ->set('n_code', '9876543210')
         ->set('f_name', 'علی')

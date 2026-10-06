@@ -44,7 +44,8 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 Uses **Spatie Permission** package:
 
-- `HasOrganizationalScope` trait on models for automatic unit-based filtering
+- `HasOrganizationalScope` trait on models for **opt-in** unit-based filtering via `->accessible($column)`. It is a single local scope — **there is no global scope**, so a query is unscoped until it calls it. Its `whereIn` is unconditional, so an empty scope compiles to `0 = 1` (fail-closed).
+- **Never guard a unit scope with `->when($accessibleIds, fn ($q) => $q->whereIn(...))`** — `Conditionable::when()` runs the callback only for a **truthy** value, so an EMPTY `$accessibleIds` drops the predicate and the page renders rows from **every unit** (the #819 leak in five `/reports/*` components). `AccessibleUnitIds()` is legitimately `[]` for an account with no `user_units` row and no `person.u_id`, and such a user is deliberately allowed through `ValidateUnitContext`. Use a plain `->whereIn($column, $accessibleIds)` (or `->accessible($column)`) instead. The two-`when` form in `UnitsExportController` / `PersonsExportController` (`when($accessibleIds === [], whereRaw('1 = 0'))`) is also correct — but the unconditional one is one condition instead of two that must both stay right.
 - Users see only their own unit's data (plus sub-units via recursive CTE)
 - Permission `manage_hardware` required for hardware CRUD
 - Roles: admin, operator, viewer
@@ -84,6 +85,16 @@ link's visibility in both directions, plus a real `GET` per link.
   personnel gate. **Write** (import `/kargozini/persons/import`) requires `manage_personnel` alone,
   matching the API (`abilities:persons:write` + `manage_personnel`). The lookup tables
   (estekhdams/tahsils/semats/radifs) stay `kargozini`-only.
+- The personnel **component** re-checks the write permission itself (issue #805). Because its route
+  gate is the read union, `kargozini.person` calls `$this->authorize('manage_personnel')` in
+  `startCreate()`, `savePerson()`, `editPerson()` and `delete()`, and the create/edit/delete controls
+  are wrapped in `@can('manage_personnel')`. Rule of thumb: **a page on a read-union gate that also
+  writes must authorize inside the component, not only in the route.** The write path also
+  `syncWithoutDetaching()`s `user_units` (role `staff`, primary unit) for a linked user — it rewrites
+  the actor's reachable units, so an ungated write there is a privilege escalation, not data entry.
+  The update branch re-validates the **submitted** `u_id` against `accessibleUnitIds()`, not just the
+  stored one, or a record can be moved into a unit the actor never had read access to. Pinned by
+  `tests/Feature/Kargozini/PersonLivewireTest.php` (the `#805` block).
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
@@ -764,6 +775,9 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | API token abilities | `/api/*` needs `auth:sanctum` **and** a token ability; `ability:a,b` = ANY of them, `abilities:a,b` = ALL. Tests mint real tokens (`ApiAbilityTest`) |
 | Shared test trait | New Feature tests use `InteractsWithTestSetup` (`tests/Support/Concerns`) — `createUserWithUnit()`, `seedLookupTables()`, `resyncSequence()`, `assertNoNPlusOne()` |
 | `zabbix:sync` scheduling | Schedule dispatches `SyncZabbixJob` (queued) every 5 min; the `zabbix:sync` command itself is manual-only |
+| `when($scope)` on an empty array fails **open** | `Conditionable::when($accessibleIds, …)` applies the callback only when the value is truthy, so `[]` **drops** the `whereIn` and the page shows **every unit's rows** — issue #819, five `/reports/*` components. Scope with a plain `->whereIn($col, $accessibleIds)` (`[]` compiles to `0 = 1`) or `->accessible($col)`. Never `when($ids, fn ($q) => $q->whereIn(...))` |
+| `HasOrganizationalScope` is not a global scope | It is one opt-in `->accessible($column)` local scope on `Person`/`Ticket`/`Todo` — **`Unit` does not use the trait at all**. A query is unscoped until it calls it, so `AGENTS.md` used to call it "automatic" and mislead implementers |
+| `map-no-boundary`'s early return is load-bearing | Its `when($accessibleIds, …)` at :36 is unreachable because :28 returns `collect()` for `[]` — keep that guard. Beyond the query it also keeps an empty result out of `Cache::remember('report:no_boundary:'.md5(implode(',',$accessibleIds)))`, which for `[]` is `md5('')` — ONE shared cache slot for every empty-scope user |
 | `descendantIds` CTE | Uses `UNION`, **not** `UNION ALL` — deliberate. `UNION ALL` does not dedupe, so a `parent_id` cycle recurses forever and hangs the connection (this query scopes every authenticated page via `AccessService`). Tested in `UnitModelTest` under a `statement_timeout` |
 | `@property` on models | All **26** Eloquent models under `app/Models/` carry `@property` PHPDoc — update it when a column/cast changes (PHPStan level 6) |
 | x-select option keys | MaryUI defaults to `optionValue='id'`/`optionLabel='name'`. Options keyed `value`/`label` need explicit `option-value="value" option-label="label"` or every `<option>` renders empty and the field looks blank (#706). Pass `:options="$this->someOptions()"` — a bare `$someOptions` is undefined in the view |
