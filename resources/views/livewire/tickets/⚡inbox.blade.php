@@ -3,6 +3,7 @@
 use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\TaskActivity;
+use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -23,9 +24,11 @@ new class extends Component
     public string $search = '';
     #[Url]
     public string $unitSearch = '';
-    #[Url]
+    // Issue #818: the routing target is deliberately NOT a #[Url] property — it
+    // was settable from the query string, so a crafted link pre-selected a unit
+    // the user never picked. It is only ever set through selectTargetUnit(),
+    // which resolves the name itself.
     public ?int $targetUnitId = null;
-    #[Url]
     public string $targetUnitName = '';
     #[Url]
     public string $forwardNote = '';
@@ -70,8 +73,11 @@ new class extends Component
         $units = [];
 
         if (mb_strlen($this->unitSearch) > 1) {
+            // Issue #818: same eligibility as App\Rules\TicketTargetUnit —
+            // a hidden filter here was never re-checked server-side.
             $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
                 ->where('can_receive_tickets', true)
+                ->where('is_active', true)
                 ->where('id', '!=', auth()->user()->person?->u_id)
                 ->limit(5)
                 ->get()
@@ -79,6 +85,28 @@ new class extends Component
         }
 
         $this->units = $units;
+    }
+
+    /**
+     * Issue #818: one validation shape for the destination unit, shared by
+     * `forward()` and `submitAction()`.
+     *
+     * `submitAction()` had no `targetUnitId` rule at all — the branch it
+     * chose, the `unit_id` it wrote and the notification it fanned out all came
+     * straight from a client property, and the FK's ON DELETE RESTRICT turned a
+     * bogus id into a generic error toast instead of a validation message.
+     *
+     * The target is NOT constrained to `accessibleUnitIds()`: forwarding across
+     * units is legitimate. Permission + eligibility is the contract.
+     *
+     * @return array<int, \Illuminate\Contracts\Validation\ValidationRule|string>
+     */
+    protected function targetUnitRule(bool $required): array
+    {
+        return [
+            $required ? 'required' : 'nullable',
+            new TicketTargetUnit,
+        ];
     }
 
     #[Computed]
@@ -228,6 +256,15 @@ new class extends Component
     {
         if (empty($this->selectedTickets)) return;
 
+        // Issue #818: the bulk `complete` branch closes tickets in bulk, which is
+        // the same state change the single-ticket path needed
+        // manage_unit_tickets for. `forward` stays open to the route gate
+        // because it does not move the ticket out of its unit (its own latent
+        // issue — see #818 "Out of scope").
+        if ($this->bulkAction === 'complete') {
+            $this->authorize('manage_unit_tickets');
+        }
+
         $count = count($this->selectedTickets);
         $now = now();
         $userId = auth()->id();
@@ -375,15 +412,26 @@ new class extends Component
         $this->showModal = false;
     }
 
-    public function selectTargetUnit($id, $name): void
+    public function selectTargetUnit($id): void
     {
-        $this->targetUnitId = $id;
-        $this->targetUnitName = $name;
+        // Issue #818: the name is resolved here, never taken from the client —
+        // it is written verbatim into activity descriptions and notifications,
+        // so a client-supplied name was attacker-controlled audit-trail text.
+        // The eligibility check still happens in forward()/submitAction(); an
+        // unknown id simply resolves to an empty name here.
+        $this->targetUnitId = $id === null ? null : (int) $id;
+        $this->targetUnitName = (string) (Unit::query()->whereKey($this->targetUnitId)->value('name') ?? '');
         $this->unitSearch = '';
     }
 
     public function forward(): void
     {
+        // Issue #818: /tickets/inbox is gated only on view_assigned_tickets
+        // (which `expert` holds), so without this the web path could move a
+        // ticket to any unit while the API required manage_unit_tickets for
+        // the same operation. Match the API (routes/api.php:110-119).
+        $this->authorize('manage_unit_tickets');
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         
         // Verify showingTicket is accessible
@@ -393,12 +441,16 @@ new class extends Component
         }
         
         $this->validate([
-            'targetUnitId' => 'required|exists:units,id',
+            'targetUnitId' => $this->targetUnitRule(required: true),
             'forwardNote' => 'nullable|string|max:500',
         ]);
 
+        // Re-resolve server-side: targetUnitName is display state the client can
+        // still set, and it lands in the audit trail.
+        $targetUnitName = $this->resolveTargetUnitName();
+
         try {
-            \DB::transaction(function () {
+            \DB::transaction(function () use ($targetUnitName) {
                 $this->showingTicket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
@@ -408,8 +460,24 @@ new class extends Component
                 $this->showingTicket->activities()->create([
                     'user_id' => auth()->id(),
                     'action' => 'forwarded',
-                    'description' => "ارجاع تیکت به واحد: " . $this->targetUnitName . " - توضیحات: " . $this->forwardNote,
+                    'description' => "ارجاع تیکت به واحد: " . $targetUnitName . " - توضیحات: " . $this->forwardNote,
+                    // Issue #818: the destination was only in the description;
+                    // nothing recorded it structurally on this path.
+                    'to_unit_id' => $this->targetUnitId,
                 ]);
+
+                // Issue #818 (correction 5): forward() sent no notification while
+                // submitAction() did, so two ways of doing the same thing behaved
+                // differently. Both paths now notify the destination unit, and both
+                // do it inside the transaction — so a failed fan-out rolls the
+                // move back instead of leaving a ticket forwarded silently.
+                \App\Services\NotificationService::notifyUnit(
+                    $this->targetUnitId,
+                    'ticket_forwarded',
+                    'تیکت ارجاع شد',
+                    "تیکت #{$this->showingTicket->ticket_code} به واحد شما ارجاع شد - موضوع: {$this->showingTicket->subject}",
+                    '/tickets/inbox'
+                );
             });
 
             $this->dispatch('swal', ['title' => 'تیکت با موفقیت ارجاع شد', 'icon' => 'success']);
@@ -417,6 +485,20 @@ new class extends Component
         } catch (\Exception $e) {
             $this->dispatch('swal', ['title' => 'خطا در انجام عملیات', 'icon' => 'error']);
         }
+    }
+
+    /**
+     * Issue #818: the unit name is display state that travels through the
+     * request, so it is re-read from the database before it is written into an
+     * activity description or a notification body.
+     */
+    protected function resolveTargetUnitName(): string
+    {
+        $name = $this->targetUnitId
+            ? Unit::query()->whereKey($this->targetUnitId)->value('name')
+            : null;
+
+        return (string) ($name ?? '');
     }
 
     public function acceptTicket($ticketId): void
@@ -480,6 +562,11 @@ new class extends Component
 
     public function rejectTicket($ticketId): void
     {
+        // Issue #818: no API counterpart exists, so manage_unit_tickets is the
+        // right proxy — rejecting is the same class of state change as
+        // completing, and the route gate alone never checked it.
+        $this->authorize('manage_unit_tickets');
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
 
@@ -524,6 +611,10 @@ new class extends Component
 
     public function submitAction($id = null): void
     {
+        // Issue #818: same gate as forward() — this path could complete a ticket
+        // or move it to any unit in the system under view_assigned_tickets alone.
+        $this->authorize('manage_unit_tickets');
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         
         $finalId = $id ?? $this->showingTicketId;
@@ -538,10 +629,18 @@ new class extends Component
         $actionType = $this->targetUnitId ? 'forwarded' : 'completed';
 
         $this->validate([
+            // Issue #818: this rule did not exist here — only completionNote and
+            // completionFiles were validated, while the branch, the unit_id and
+            // the notification all came from targetUnitId.
+            'targetUnitId' => $this->targetUnitRule(required: false),
             'completionNote' => $actionType === 'completed' ? 'required|min:5' : 'nullable|max:1000',
             'completionFiles' => 'nullable|array|max:5',
             'completionFiles.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar,docx,xlsx|max:5120',
         ]);
+
+        // Issue #818: never write the client-supplied name into the audit trail
+        // or the notification body.
+        $targetUnitName = $this->resolveTargetUnitName();
 
         try {
             DB::beginTransaction();
@@ -552,11 +651,11 @@ new class extends Component
                     'status' => 'forwarded',
                     'current_assignee_id' => null,
                 ]);
-                $description = "ارجاع تیکت به واحد: {$this->targetUnitName}";
+                $description = "ارجاع تیکت به واحد: {$targetUnitName}";
                 if ($this->completionNote) {
                     $description .= " | توضیحات: {$this->completionNote}";
                 }
-                $message = "تیکت با موفقیت به واحد {$this->targetUnitName} ارجاع شد.";
+                $message = "تیکت با موفقیت به واحد {$targetUnitName} ارجاع شد.";
 
                 // ارسال اعلان به واحد مقصد
                 \App\Services\NotificationService::notifyUnit(
@@ -689,13 +788,15 @@ new class extends Component
             </div>
         </div>
 
-        {{-- نوار Bulk Actions --}}
+        {{-- نوار Bulk Actions — Issue #818: تکمیل دسته‌ای نیاز به manage_unit_tickets دارد --}}
         @if(count($this->selectedTickets) > 0)
         <div class="flex items-center gap-3 p-3 mb-4 bg-primary/10 rounded-xl border border-primary/20">
             <span class="text-sm font-bold text-primary">{{ count($this->selectedTickets) }} تیکت انتخاب شده</span>
             <div class="flex gap-2 mr-auto">
+                @can('manage_unit_tickets')
                 <x-button icon="o-check-circle" label="تکمیل دسته‌ای" wire:click="openBulkModal('complete')" class="btn-success btn-sm" spinner />
                 <x-button icon="o-arrow-right" label="ارجاع دسته‌ای" wire:click="openBulkModal('forward')" class="btn-warning btn-sm" spinner />
+                @endcan
                 <x-button icon="o-x-mark" label="لغو انتخاب" wire:click="$set('selectedTickets', [])" class="btn-ghost btn-sm" />
             </div>
         </div>
@@ -753,17 +854,25 @@ new class extends Component
             <div class="flex gap-1">
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
                 <x-button icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
+                @endif
+                {{-- Issue #818: reject پشت manage_unit_tickets است، پس دکمه‌اش هم همان‌جا نمایش داده می‌شود --}}
+                @can('manage_unit_tickets')
+                @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
                 <x-button icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
                     wire:confirm="آیا مطمئن هستید؟" class="btn-ghost btn-sm text-error" spinner />
                 @endif
+                @endcan
 
                 <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
 
                 <x-button icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
 
+                {{-- Issue #818: مودال تکمیل/ارجاع پشت manage_unit_tickets است --}}
+                @can('manage_unit_tickets')
                 @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
                 <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
                 @endif
+                @endcan
             </div>
             @endscope
         </x-table>
@@ -857,7 +966,7 @@ new class extends Component
                 @if(!empty($units))
                 <div class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl max-h-40 overflow-y-auto">
                     @foreach($units as $u)
-                    <button type="button" wire:click="selectTargetUnit({{ $u['id'] }}, @js($u['name']))"
+                    <button type="button" wire:click="selectTargetUnit({{ $u['id'] }})"
                         class="w-full text-right px-4 py-2 hover:bg-primary hover:text-white text-sm transition-colors border-b last:border-0">
                         {{ $u['name'] }}
                     </button>
