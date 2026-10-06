@@ -2,6 +2,7 @@
 
 use App\Models\{Unit, Todo};
 use App\Models\Ticket;
+use App\Rules\TicketTargetUnit;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\Attributes\Layout;
@@ -102,7 +103,7 @@ new class extends Component
         $this->validate([
             'unit_id' => [
                 'required',
-                'exists:units,id',
+                new TicketTargetUnit,
                 function ($attribute, $value, $fail) {
                     if ($value == auth()->user()->person?->u_id) {
                         $fail('شما نمی‌توانید به واحد خودتان تیکت ارسال کنید.');
