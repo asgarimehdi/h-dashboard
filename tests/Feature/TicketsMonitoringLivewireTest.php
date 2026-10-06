@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -407,5 +408,67 @@ class TicketsMonitoringLivewireTest extends TestCase
         // First item in the paginator should be the most recently created one
         $first = $tickets->first();
         $this->assertEquals('TKT-OR02', $first->ticket_code);
+    }
+
+    // ==================== #847 — task relation scope ====================
+    //
+    // Same leak as the inbox: the ticket was scoped by unit, its `task`
+    // relation was not, so the detail modal rendered a foreign todo's title.
+    // ================================================================
+
+    public function test_show_ticket_hides_a_task_outside_the_viewers_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $victimUnit = Unit::create(['name' => 'واحد قربانی نظارت']);
+        $secretTodo = Todo::create([
+            'title' => 'عنوان محرمانه نظارت',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $victimUnit->id,
+        ]);
+
+        $ticket = $this->makeTicket($unit, [
+            'subject' => 'تیکت نظارت با وظیفه بیگانه',
+            'ticket_code' => 'TKT-847A',
+            'task_id' => $secretTodo->id,
+        ]);
+
+        Livewire::test('tickets.monitoring')
+            ->call('showTicket', $ticket->id)
+            ->assertSet('showModal', true)
+            ->assertSet('showingTicket.task', null)
+            ->assertSee('تیکت نظارت با وظیفه بیگانه')
+            ->assertDontSee('عنوان محرمانه نظارت')
+            ->assertDontSee('وظیفه مرتبط:');
+    }
+
+    public function test_show_ticket_still_renders_a_task_inside_the_viewers_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه مجاز نظارت',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $unit->id,
+        ]);
+
+        $ticket = $this->makeTicket($unit, [
+            'subject' => 'تیکت نظارت با وظیفه مجاز',
+            'ticket_code' => 'TKT-847B',
+            'task_id' => $todo->id,
+        ]);
+
+        Livewire::test('tickets.monitoring')
+            ->call('showTicket', $ticket->id)
+            ->assertSet('showModal', true)
+            ->assertSet('showingTicket.task.id', $todo->id)
+            ->assertSee('وظیفه مجاز نظارت')
+            ->assertSee('وظیفه مرتبط:');
     }
 }

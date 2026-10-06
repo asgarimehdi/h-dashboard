@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\TaskActivity;
 use App\Rules\TicketTargetUnit;
@@ -14,6 +15,7 @@ use Livewire\Attributes\Computed;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use App\Services\CacheInvalidationServiceInterface;
+use Illuminate\Support\Facades\Auth;
 
 new class extends Component
 {
@@ -393,7 +395,9 @@ new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $ticket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
+        /** @var Ticket|null $ticket */
+        $ticket = Ticket::query()
+            ->with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
             ->whereIn('unit_id', $accessibleIds)
             ->find($id);
 
@@ -401,8 +405,43 @@ new class extends Component
             return;
         }
 
+        // #847: the ticket is scoped, but its `task` relation was not — so a
+        // ticket linked to an out-of-scope todo leaked that todo's title,
+        // dates and status here. Legacy rows predating validation still
+        // exist, so the read side is gated independently of the write side.
+        // A null-unit task is in scope for its own creator (#838 contract).
+        //
+        // `setRelation()`, not `$ticket->task = …`: a plain assignment would go
+        // through `setAttribute()` and park the Todo in `$attributes`, from
+        // where any later `save()` tries to write a non-existent `task`
+        // column. The `@var` above is what lets PHPStan see the model here —
+        // without it the chain resolves to `Query\Builder` via `@mixin`.
+        $ticket->setRelation('task', $this->taskIfInScope($ticket->task_id, $accessibleIds));
+
         $this->showingTicket = $ticket;
         $this->showModal = true;
+    }
+
+    /**
+     * The ticket's task, or null when it is outside the viewer's scope.
+     *
+     * Returns the row with a null relation when it is not visible, so every
+     * `@if($this->showingTicket->task)` block in the detail modal simply
+     * hides itself instead of rendering a foreign todo.
+     *
+     * @param  array<int>  $accessibleIds
+     */
+    private function taskIfInScope(?int $taskId, array $accessibleIds): ?Todo
+    {
+        if (! $taskId) {
+            return null;
+        }
+
+        return Todo::query()
+            ->whereKey($taskId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds)
+                ->orWhere(fn ($q) => $q->whereNull('unit_id')->where('user_id', Auth::id())))
+            ->first();
     }
 
     public function closeDetail(): void
