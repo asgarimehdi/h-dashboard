@@ -3565,127 +3565,127 @@ parameters:
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:loadUnitDetails\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:loadUnitDetails\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:loadUnitDetails\(\) has parameter \$unitId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:loadUnitDetails\(\) has parameter \$unitId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:mount\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:mount\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onFilterChanged\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onFilterChanged\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onFilterChanged\(\) has parameter \$filters with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onFilterChanged\(\) has parameter \$filters with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onLayerToggled\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onLayerToggled\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onLayerToggled\(\) has parameter \$layer with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onLayerToggled\(\) has parameter \$layer with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onMapMoved\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onMapMoved\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onMapMoved\(\) has parameter \$data with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onMapMoved\(\) has parameter \$data with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onUnitSelected\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onUnitSelected\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:onUnitSelected\(\) has parameter \$unitId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:onUnitSelected\(\) has parameter \$unitId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$bbox has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$bbox has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$filterHardware has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$filterHardware has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$filterPriority has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$filterPriority has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$filterStatus has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$filterStatus has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$layers has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$layers has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$listeners has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$listeners has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$mapCenterLat has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$mapCenterLat has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$mapCenterLng has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$mapCenterLng has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$mapToken has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$mapToken has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:4\:\:\$mapZoom has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/map/map\-dashboard\.blade\.php\:6\:\:\$mapZoom has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/map/map-dashboard.blade.php
