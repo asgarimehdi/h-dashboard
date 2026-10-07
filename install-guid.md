@@ -13,7 +13,7 @@ Tested on: Ubuntu with PHP 8.5.x, nginx 1.2x, Docker Compose v2.
 | Component | Version |
 |---|---|
 | OS | Ubuntu 22.04 / 24.04 / newer |
-| PHP | ^8.3 (tested on 8.5.x) |
+| PHP | ^8.4.1 (tested on 8.5.x) |
 | Composer | 2.x |
 | Node + npm | Node 20+ (builds Vite assets only) |
 | PostgreSQL | 16 **with PostGIS 3.4** (via Docker) |
