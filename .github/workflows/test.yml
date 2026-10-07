@@ -24,15 +24,22 @@ jobs:
           php-version: '8.5'
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
 
       - name: Check code style
         run: vendor/bin/pint --test
@@ -78,15 +85,22 @@ jobs:
           coverage: pcov
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -183,15 +197,22 @@ jobs:
           extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -242,15 +263,22 @@ jobs:
           extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
 
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress
