@@ -79,9 +79,7 @@ return new class extends Component {
             ->withAggregate('parent', 'name')
             ->addSelect('can_receive_tickets', 'is_active');
 
-        if (! empty($accessibleIds)) {
-            $query->whereIn('id', $accessibleIds);
-        }
+        $query->whereIn('id', $accessibleIds);
 
         if ($this->userUnitId) {
             $query->where('id', '!=', $this->userUnitId);
