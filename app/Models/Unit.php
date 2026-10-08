@@ -118,7 +118,7 @@ class Unit extends Model
      * Replaces the N+1 recursive eager loading pattern (childrenRecursive).
      *
      * @param  array<int>  $rootIds
-     * @param  array<int>|null  $accessibleIds  If null, no scope filter applied
+     * @param  array<int>|null  $accessibleIds  If null, no scope filter applied; an empty array means "in scope of nothing" and intersects to zero rows
      * @return Collection<int, static>
      */
     public static function buildTree(array $rootIds, ?array $accessibleIds = null): Collection
@@ -130,7 +130,7 @@ class Unit extends Model
         // Single CTE: fetch all descendants of root units (inclusive)
         $allIds = self::descendantIds($rootIds)->all();
 
-        if (! empty($accessibleIds)) {
+        if ($accessibleIds !== null) {
             $allIds = array_values(array_intersect($allIds, $accessibleIds));
         }
 

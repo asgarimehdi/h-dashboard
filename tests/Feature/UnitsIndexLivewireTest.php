@@ -2,11 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\Person;
 use App\Models\Unit;
+use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -65,6 +69,47 @@ class UnitsIndexLivewireTest extends TestCase
         } catch (\Exception $e) {
             // Sequence might not exist — safe to ignore
         }
+    }
+
+    // ==================== #857: empty unit scope must not list the org ====================
+
+    public function test_index_leaks_nothing_on_an_empty_scope(): void
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode, 'f_name' => 'بدون واحد', 'l_name' => 'کاربر',
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => null,
+        ]);
+
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('organization');
+
+        $foreignUnit = Unit::create(['name' => 'واحد بیرونی تست']);
+
+        $this->actingAs($user);
+
+        $this->assertSame([], app(AccessService::class)->accessibleUnitIds(), 'the fixture must really be an empty scope');
+
+        Livewire::test('units.index')
+            ->assertDontSee('واحد بیرونی تست');
+
+        $component = Livewire::test('units.index');
+
+        $this->assertSame(0, $component->instance()->units()->total(), 'the paginator must fail closed on an empty scope');
+    }
+
+    public function test_build_tree_with_empty_accessible_ids_returns_empty(): void
+    {
+        $parent = Unit::create(['name' => 'والد درخت']);
+        $child = Unit::create(['name' => 'فرزند درخت', 'parent_id' => $parent->id]);
+
+        // [] means "in scope of nothing" — fail closed (#857)
+        $roots = Unit::buildTree([$parent->id], []);
+        $this->assertCount(0, $roots);
+
+        // null keeps the caller-wants-no-filter contract
+        $roots = Unit::buildTree([$parent->id], null);
+        $this->assertCount(1, $roots);
     }
 
     // ==================== Smoke tests ====================
