@@ -337,13 +337,12 @@ jobs:
         # 11 Persian-text specs fail. Fail fast here, not after a 20-min run.
         run: grep -q '^APP_LOCALE=fa' .env.e2e
 
-      - name: Create the isolated e2e database
-        # NEVER point e2e at h_dashboard — every run migrate:fresh --seeds
-        # this database. PGPASSWORD avoids the password prompt.
-        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE DATABASE h_dashboard_e2e;"
-
-      - name: Run migrations with seed
-        run: php artisan migrate --seed --force
+      - name: Verify the isolated e2e database exists
+        # The postgres service creates h_dashboard_e2e from POSTGRES_DB at
+        # startup — no manual CREATE needed (it errors as "already exists").
+        # NEVER point e2e at h_dashboard: scripts/e2e-test.sh runs
+        # migrate:fresh --seed on this database every run.
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
 
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium

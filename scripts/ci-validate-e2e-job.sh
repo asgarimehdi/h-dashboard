@@ -69,6 +69,12 @@ check_e2e "e2e asserts an executed-test count" "tests? (executed|passed|ran)|Exe
 
 check_e2e "e2e asserts APP_LOCALE=fa" "APP_LOCALE=fa"
 
+if echo "$E2E_BLOCK" | grep -vE '^[[:space:]]*#' | grep -qE "CREATE DATABASE"; then
+    fail "e2e job must not CREATE DATABASE (the postgres service creates it from POSTGRES_DB)"
+else
+    pass "e2e job does not redundantly create the database"
+fi
+
 if echo "$E2E_BLOCK" | grep -vE '^[[:space:]]*#' | grep -qE "h_dashboard[^_]"; then
     fail "e2e job references the dev database 'h_dashboard' (must use the isolated e2e DB)"
 else
