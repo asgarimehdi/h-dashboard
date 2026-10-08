@@ -33,6 +33,7 @@ coverage.xml
 coverage/
 /deploy
 *.lock
+!composer.lock
 package-lock.json
 /.claude
 
