@@ -335,15 +335,16 @@ jobs:
 
       - name: Build .env.e2e (secret-safe)
         # CI redis is passwordless, so build-env-e2e.sh leaves the EXAMPLE
-        # placeholders (`<same as dev>`) for empty secrets — and
+        # placeholders (`<same as dev>`) for secrets it could not copy — and
         # `set -a; source .env.e2e` in e2e-test.sh chokes on the `<...>`
-        # metacharacters (syntax error, first CI run). Strip every leftover
-        # placeholder: an unreplaced one is by definition not a usable value,
-        # and CI services need no passwords.
+        # metacharacters (syntax error, first CI run). Clear ONLY lines that
+        # still carry a `<...>` placeholder: a real copied value (e.g.
+        # DB_PASSWORD=secret) must survive — emptying it breaks pg auth
+        # (fe_sendauth, second CI run). Then guard: no `<...>` may remain.
         run: |
           bash scripts/build-env-e2e.sh
-          sed -i 's/^\(REDIS_PASSWORD\|DB_PASSWORD\|DB_USERNAME\)=.*/\1=/' .env.e2e
-          grep -qE '^[^#]*<.*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
 
       - name: Assert APP_LOCALE=fa in .env.e2e
         # MANDATORY (issue #867): without it Laravel falls back to `en` and
