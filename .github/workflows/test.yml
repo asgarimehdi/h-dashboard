@@ -241,7 +241,11 @@ jobs:
           php artisan view:clear
 
       - name: Run tests with coverage (report only, never gates)
-        run: ./vendor/bin/pest --parallel --coverage --coverage-clover=coverage.xml
+        # `|| true`: this job REPORTS — a test failure must not fail the job
+        # (continue-on-error already ensures non-blocking, but an exit-1 step
+        # still renders the job red). The clover is written even on failure;
+        # coverage-report.sh parses whatever exists and says so explicitly.
+        run: ./vendor/bin/pest --parallel --coverage --coverage-clover=coverage.xml || true
 
       - name: Report the real coverage picture (app/ + Blade)
         # Proves coverage was really computed: the script parses the clover
@@ -330,7 +334,16 @@ jobs:
           php artisan key:generate --force
 
       - name: Build .env.e2e (secret-safe)
-        run: bash scripts/build-env-e2e.sh
+        # CI redis is passwordless, so build-env-e2e.sh leaves the EXAMPLE
+        # placeholders (`<same as dev>`) for empty secrets — and
+        # `set -a; source .env.e2e` in e2e-test.sh chokes on the `<...>`
+        # metacharacters (syntax error, first CI run). Strip every leftover
+        # placeholder: an unreplaced one is by definition not a usable value,
+        # and CI services need no passwords.
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i 's/^\(REDIS_PASSWORD\|DB_PASSWORD\|DB_USERNAME\)=.*/\1=/' .env.e2e
+          grep -qE '^[^#]*<.*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
 
       - name: Assert APP_LOCALE=fa in .env.e2e
         # MANDATORY (issue #867): without it Laravel falls back to `en` and

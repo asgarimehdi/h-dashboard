@@ -68,6 +68,7 @@ check_e2e "e2e proves execution with --reporter=list" "reporter.?list"
 check_e2e "e2e asserts an executed-test count" "tests? (executed|passed|ran)|Executed [0-9]|passed \("
 
 check_e2e "e2e asserts APP_LOCALE=fa" "APP_LOCALE=fa"
+check_e2e "e2e strips leftover placeholders after build-env-e2e" "leftover"
 
 if echo "$E2E_BLOCK" | grep -vE '^[[:space:]]*#' | grep -qE "CREATE DATABASE"; then
     fail "e2e job must not CREATE DATABASE (the postgres service creates it from POSTGRES_DB)"
