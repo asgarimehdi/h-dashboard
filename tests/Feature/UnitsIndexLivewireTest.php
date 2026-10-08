@@ -32,6 +32,11 @@ class UnitsIndexLivewireTest extends TestCase
             ['id' => 3, 'name' => 'معاونت بهداشت', 'created_at' => now(), 'updated_at' => now()],
             ['id' => 4, 'name' => 'شبکه بهداشت', 'created_at' => now(), 'updated_at' => now()],
             ['id' => 5, 'name' => 'مرکز خدمات جامع سلامت شهری', 'created_at' => now(), 'updated_at' => now()],
+            // #875: the two seeded self-referencing types. They encode real
+            // intent (ستادی under ستادی, فوریت under فوریت) and stay in the
+            // seeder — the walker is what has to terminate on them.
+            ['id' => 17, 'name' => 'فوریت', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 22, 'name' => 'واحد ستادی', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         DB::table('unit_type_relationships')->insert([
@@ -39,6 +44,10 @@ class UnitsIndexLivewireTest extends TestCase
             ['child_unit_type_id' => 3, 'allowed_parent_unit_type_id' => 2, 'created_at' => now(), 'updated_at' => now()],
             ['child_unit_type_id' => 4, 'allowed_parent_unit_type_id' => 3, 'created_at' => now(), 'updated_at' => now()],
             ['child_unit_type_id' => 5, 'allowed_parent_unit_type_id' => 4, 'created_at' => now(), 'updated_at' => now()],
+            // #875: the cycle that hung getAllowedUnitTypes() for every
+            // account whose unit carries one of these types.
+            ['child_unit_type_id' => 22, 'allowed_parent_unit_type_id' => 22, 'created_at' => now(), 'updated_at' => now()],
+            ['child_unit_type_id' => 17, 'allowed_parent_unit_type_id' => 17, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         DB::table('regions')->insert([
@@ -207,6 +216,121 @@ class UnitsIndexLivewireTest extends TestCase
         Livewire::test('units.index')
             ->set('region_id', 2)
             ->assertSet('parent_id', null);
+    }
+
+    // ==================== #875: self-referencing unit types must not hang the walker ====================
+
+    /**
+     * A user in a ستادی (type 22) unit. The seeded [22,22] relationship is a
+     * self-edge, so a walker with no visited set never empties its frontier.
+     * The unit must also carry a county region, otherwise determineUserLevel()
+     * falls through to the branch that leaves userUnitLevel null.
+     */
+    private function userInSelfReferencingUnit(int $unitTypeId): User
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => $unitTypeId, 'region_id' => 2]);
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    public function test_allowed_unit_types_terminate_on_self_referencing_type_22(): void
+    {
+        $this->userInSelfReferencingUnit(22);
+
+        // Does not return at all without the fix.
+        Livewire::test('units.index')->assertStatus(200);
+    }
+
+    public function test_allowed_unit_types_terminate_on_self_referencing_type_17(): void
+    {
+        $this->userInSelfReferencingUnit(17);
+
+        Livewire::test('units.index')->assertStatus(200);
+    }
+
+    public function test_self_referencing_type_is_deduped_not_truncated(): void
+    {
+        $this->userInSelfReferencingUnit(22);
+
+        $unitTypes = Livewire::test('units.index')->instance()->unitTypes;
+
+        // The [22,22] row encodes real intent, so a ستادی manager must still
+        // be offered ستادی — the cycle is deduped, not cut away. Asserting the
+        // member (rather than only "no hang") is what separates a visited-set
+        // fix from a depth cap that silently truncates the dropdown.
+        $this->assertCount(1, $unitTypes);
+        $this->assertSame(22, $unitTypes->first()->id);
+    }
+
+    public function test_allowed_unit_types_are_unique_on_an_acyclic_chain(): void
+    {
+        // The fixture chain is 1 → 2 → 3 → 4 → 5, so a type-2 user reaches the
+        // descendants {3, 4, 5} — not their own type. Nothing may repeat.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 2, 'region_id' => 1]);
+        $this->actingAs($user);
+
+        $ids = Livewire::test('units.index')->instance()->unitTypes->pluck('id')->all();
+
+        $this->assertSame([3, 4, 5], $ids);
+        $this->assertSame($ids, array_values(array_unique($ids)), 'the dropdown must not repeat a type');
+    }
+
+    public function test_allowed_unit_types_stay_finite_on_the_dropdown_reentry_path(): void
+    {
+        $this->userInSelfReferencingUnit(22);
+
+        // updatedUnitTypeId() re-runs loadDropdowns(), so the same walk runs
+        // again on every cascading change of the form.
+        Livewire::test('units.index')
+            ->set('unit_type_id', 22)
+            ->assertStatus(200);
+    }
+
+    public function test_depth_cap_truncates_rather_than_hanging_on_a_long_chain(): void
+    {
+        // A chain far deeper than any real hierarchy (100 → 101 → … → 139),
+        // with the seeded self-edges removed so this exercises the cap alone.
+        // Ids start at 100 to clear the fixture rows (1-5, 17, 22) — and the
+        // matching unit_types rows must exist too, otherwise the final
+        // UnitType::whereIn() would filter the answer back down and the
+        // assertion would pass for the wrong reason.
+        DB::table('unit_type_relationships')->delete();
+
+        $base = 100;
+        $length = 40;
+        $types = [];
+        $chain = [];
+        for ($i = 0; $i < $length; $i++) {
+            $types[] = ['id' => $base + $i, 'name' => 'نوع '.($base + $i), 'created_at' => now(), 'updated_at' => now()];
+        }
+        for ($i = 0; $i < $length - 1; $i++) {
+            $chain[] = [
+                'child_unit_type_id' => $base + $i + 1,
+                'allowed_parent_unit_type_id' => $base + $i,
+                'created_at' => now(), 'updated_at' => now(),
+            ];
+        }
+        DB::table('unit_types')->insert($types);
+        DB::table('unit_type_relationships')->insert($chain);
+
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => $base, 'region_id' => 1]);
+        $this->actingAs($user);
+
+        $ids = Livewire::test('units.index')->instance()->unitTypes->pluck('id')->all();
+
+        // All 39 descendants are reachable, but the guard must truncate the
+        // walk rather than return them: a future data error degrades into a
+        // short dropdown instead of a hung request.
+        $this->assertNotEmpty($ids);
+        $this->assertLessThan(
+            $length - 1,
+            count($ids),
+            'the depth cap must bound the walk rather than return every descendant'
+        );
     }
 
     // ==================== Create unit ====================
