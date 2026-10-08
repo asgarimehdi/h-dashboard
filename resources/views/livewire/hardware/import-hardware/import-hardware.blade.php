@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 use Maatwebsite\Excel\Facades\Excel;
 use Mary\Traits\Toast;
+
 return new class extends Component
 {
     use PersianNormalizer;
@@ -131,7 +132,12 @@ return new class extends Component
             $results = $import->getImportResults();
 
             $this->success(
-                "ایمپورت با موفقیت انجام شد. جدید: {$results['created']}, بروزرسانی: {$results['updated']}, خطا: {$results['errors']}",
+                // ایشو #872: `errors` یک آرایه است، نه یک شمارش — درجِ مستقیمش
+                // `Array to string conversion` می‌داد و `catch (\Exception)` پایین‌تر
+                // آن را می‌بلعید، پس `resetForm()` و `dispatch()` هرگز اجرا
+                // نمی‌شدند. همان idiom خطِ `importStats['errors']` بالاتر در همین
+                // فایل: شمارش، نه درج. جزئیات در PR #872.
+                'ایمپورت با موفقیت انجام شد. جدید: '.$results['created'].', بروزرسانی: '.$results['updated'].', خطا: '.count($results['errors'] ?? []),
                 'موفقیت'
             );
 
