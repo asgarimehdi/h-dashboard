@@ -3859,12 +3859,6 @@ parameters:
 			path: resources/views/livewire/profile/index.blade.php
 
 		-
-			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:\$reportData\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Person\:\:selectRaw\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 3
@@ -3895,39 +3889,9 @@ parameters:
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:childUnits\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:grandChildUnits\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
 			message: '#^Parameter \#1 \$carbon of static method Morilog\\Jalali\\Jalalian\:\:fromCarbon\(\) expects Carbon\\Carbon, Carbon\\CarbonInterface given\.$#'
 			identifier: argument.type
 			count: 2
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:16\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
@@ -5201,3 +5165,39 @@ parameters:
 			identifier: method.notFound
 			count: 4
 			path: resources/views/livewire/tickets/⚡create.blade.php
+
+		-
+			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:19\:\:\$reportData\.$#'
+			identifier: property.notFound
+			count: 1
+			path: resources/views/livewire/reports/advanced.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:19\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/reports/advanced.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:19\:\:childUnits\(\) has no return type specified\.$#'
+			identifier: missingType.return
+			count: 1
+			path: resources/views/livewire/reports/advanced.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:19\:\:grandChildUnits\(\) has no return type specified\.$#'
+			identifier: missingType.return
+			count: 1
+			path: resources/views/livewire/reports/advanced.blade.php
+
+		-
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:19\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: resources/views/livewire/reports/advanced.blade.php
+
+		-
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:19\:\:\$units has no type specified\.$#'
+			identifier: missingType.property
+			count: 1
+			path: resources/views/livewire/reports/advanced.blade.php
