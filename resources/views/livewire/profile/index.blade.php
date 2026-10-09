@@ -35,8 +35,17 @@ return new class extends Component
         // (HasOrganizationalScope compiles it to a single `whereIn('unit_id')`),
         // so it can never express ownership. The owner predicate is
         // unconditional, so an empty unit scope still compiles to `0 = 1`.
-        $this->totalTodos = Todo::where('user_id', $userId)->accessible()->count();
-        $this->completedTodos = Todo::where('user_id', $userId)->accessible()->where('is_completed', true)->count();
+        // Issue #917: null-unit contract — a unit-less todo belongs to its
+        // creator, so "mine" also matches the viewer's own null-unit rows.
+        // The predicate rides on the owner filter above: a bare `orWhereNull`
+        // at the top level would re-open the #893 leak, but inside this group
+        // the `user_id` constraint stays in force on both branches.
+        $this->totalTodos = Todo::where('user_id', $userId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds)->orWhereNull('unit_id'))
+            ->count();
+        $this->completedTodos = Todo::where('user_id', $userId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds)->orWhereNull('unit_id'))
+            ->where('is_completed', true)->count();
     }
 
     public function getUserTicketsProperty()
@@ -52,12 +61,14 @@ return new class extends Component
     {
         // Issue #893: the tab body had the same missing owner predicate as the
         // stats above. `where('user_id', auth()->id())` leads the chain so it
-        // stays independent of the unit scope — under the #838 null-unit
-        // contract a unit-less todo belongs to its creator, so "mine" is the
-        // owner predicate on its own and no `orWhereNull('unit_id')` disjunct is
-        // needed (that disjunct would re-open the leak).
+        // stays independent of the unit scope.
+        // Issue #917: null-unit contract — under #838 a unit-less todo belongs
+        // to its creator, so "mine" also matches the viewer's own null-unit
+        // rows. The unit predicate rides on the owner filter: `orWhereNull`
+        // inside this group cannot leak foreign rows the way a top-level
+        // `orWhereNull` would (that disjunct would re-open the leak).
         return Todo::where('user_id', auth()->id())
-            ->accessible()
+            ->where(fn ($q) => $q->whereIn('unit_id', app(AccessService::class)->accessibleUnitIds())->orWhereNull('unit_id'))
             ->latest()
             ->paginate(10, pageName: 'todos_page');
     }
