@@ -32,9 +32,15 @@ return new class extends Component
 
     public function delete(Permission $permission): void
     {
+        $this->authorize('manage_roles');
+
         try {
             $permission->delete();
             $this->warning("$permission->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892: re-throw so a 403 is not reported to the user as the
+            // generic "still used in another table" foreign-key toast.
+            throw $e;
         } catch (\Exception $e) {
             $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
         }
@@ -42,6 +48,8 @@ return new class extends Component
 
     public function createPermission(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => [
                 'required',
@@ -68,6 +76,8 @@ return new class extends Component
 
     public function editPermission($id): void
     {
+        $this->authorize('manage_roles');
+
         $permission = Permission::findOrFail($id);
         $this->editingId = $id;
         $this->name = $permission->name;
@@ -76,6 +86,8 @@ return new class extends Component
 
     public function updatePermission(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => [
                 'required',

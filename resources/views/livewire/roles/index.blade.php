@@ -49,9 +49,17 @@ return new class extends Component
 
     public function delete(Role $role): void
     {
+        $this->authorize('manage_roles');
+
         try {
             $role->delete();
             $this->warning("$role->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892: the generic `catch (\Exception $e)` swallowed the
+            // 403 into a friendly toast, which is what made a revoked
+            // holder's delete look like a harmless failure. Re-throw so a
+            // 403 stays distinguishable from a foreign-key violation.
+            throw $e;
         } catch (\Exception $e) {
             $this->error("امکان حذف وجود ندارد.", position: 'toast-bottom');
         }
@@ -59,6 +67,8 @@ return new class extends Component
 
     public function createRole(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
             'label' => 'required|string|max:255|unique:roles,label',
@@ -74,6 +84,8 @@ return new class extends Component
 
     public function editRole($id): void
     {
+        $this->authorize('manage_roles');
+
         $role = Role::with('permissions')->findOrFail($id);
         $this->editingId = $id;
         $this->name = $role->name;
@@ -87,6 +99,8 @@ return new class extends Component
 
     public function updateRole(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name,' . $this->editingId,
             'label' => 'required|string|max:255|unique:roles,label,' . $this->editingId,
