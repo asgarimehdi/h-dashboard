@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Services\UnitTreeService;
@@ -14,7 +15,6 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use Morilog\Jalali\Jalalian;
 
 /**
  * One row per person (flat table), mirroring the personnel list columns so the
@@ -23,6 +23,8 @@ use Morilog\Jalali\Jalalian;
  */
 class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHeadings, WithMapping, WithTitle
 {
+    use FormatsJalaliDates;
+
     /**
      * Column definitions: key => ['label' => Persian]
      *
@@ -127,9 +129,17 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
         return $name !== '' ? $name : '-';
     }
 
+    /**
+     * #890: delegates to the shared formatter so `birth_date` / `hire_date`
+     * cannot re-introduce the "one unformattable date 500s the whole export"
+     * failure the hardware export had. PersonImport carries neither
+     * birth_date nor hire_date as importable columns today, so this is
+     * prevention rather than a live bug fix — the guard is here so that if
+     * those columns are ever added to the personnel sheet, they inherit it.
+     */
     protected function resolveJalaliDate(?Carbon $date): string
     {
-        return $date !== null ? Jalalian::fromCarbon($date)->format('Y/m/d') : '-';
+        return $this->formatJalaliOrDash($date);
     }
 
     /**

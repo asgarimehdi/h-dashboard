@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Services\AccessService;
@@ -12,6 +13,8 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
+    use FormatsJalaliDates;
+
     private array $accessibleUnitIds = [];
 
     private array $existingRecords = [];
@@ -377,9 +380,21 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         return $changes;
     }
 
+    /**
+     * #890: this is a TYPE-AWARE comparison, not a string comparison.
+     *
+     * The old version ended in `trim((string) $value)`, so a `date`-cast Carbon
+     * from the database became `'2026-02-08 00:00:00'` while the freshly parsed
+     * CSV value was `'2026-02-08'`. The two never matched, so every preview
+     * reported a change that was not one and every re-import wrote a bogus
+     * diff. Normalising both sides to the same shape is what removes it.
+     */
     private function normalizeForComparison($value): ?string
     {
-        if ($value === null || $value === '' || $value === '\\\\\\\\\\\\\\\\N') {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+        if ($value === null || $value === '' || $value === '\\\\\\\\\\N') {
             return '0'; // Treat null/empty as false for boolean comparison
         }
         if (is_bool($value)) {
@@ -396,6 +411,17 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         return trim((string) $value);
     }
 
+    /**
+     * #890: the importer must understand the tokens the EXPORTER writes.
+     *
+     * `HardwareExport` renders `shutdown` as «روشن»/«خاموش» and `mark` as
+     * «علامت‌دار»/«-», so re-importing an exported sheet fed those labels into a
+     * parser that only knew latin tokens: every `true` came back `false`. The
+     * measured round-trip in HardwareExportImportRoundTripTest is what proved it.
+     *
+     * «روشن» is the on state; «خاموش» and «-» are off. The export's own `mark`
+     * column writes «-» for false, so that has to read as false here too.
+     */
     private function parseBoolean($value): ?bool
     {
         if ($value === null || $value === '' || $value === '\\N') {
@@ -403,20 +429,43 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         }
         $val = strtolower(trim((string) $value));
 
-        return in_array($val, ['1', 'true', 'yes', 'on', 'بله', 'تایید']);
+        if (in_array($val, ['1', 'true', 'yes', 'on', 'بله', 'تایید'], true)) {
+            return true;
+        }
+
+        // The Persian labels this repo's own exports emit (#890).
+        if (in_array($val, ['روشن', 'فعال', 'علامت‌دار', 'علامت', 'دارد'], true)) {
+            return true;
+        }
+
+        // Explicit false tokens, including the exporter's own dash.
+        if (in_array($val, ['0', 'false', 'no', 'off', 'خیر', 'خاموش', '-', 'بدون علامت'], true)) {
+            return false;
+        }
+
+        // Unknown token: previously anything not in the true-list became false,
+        // which is how an unrecognised value silently flipped a flag. Anything
+        // else is "not stated", and `?? false` at the call site keeps the
+        // caller's default rather than inventing a change.
+        return null;
     }
 
+    /**
+     * #890: one date contract shared with the exporters.
+     *
+     * The sheet is operator-facing and every export in this repo emits Jalali
+     * `Y/m/d`, so a `clean_at` cell can legitimately hold a Jalali date. The
+     * old implementation accepted only ISO Gregorian, so re-importing an
+     * exported sheet silently set `clean_at` to NULL on every row that had one
+     * — the operator's own file, read back, destroyed the field.
+     *
+     * Accepts ISO `2026-02-08`, Jalali `1404/11/19` and Jalali `1404-11-19`,
+     * and returns canonical Gregorian `Y-m-d` for storage. Returns null for
+     * anything else, including a shape that matches but is not a real date.
+     */
     private function parseDate($value): ?string
     {
-        if ($value === null || $value === '' || $value === '\\N') {
-            return null;
-        }
-        $value = trim((string) $value);
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
-            return $value;
-        }
-
-        return null;
+        return $this->parseGregorianOrJalaliDate($value);
     }
 
     private function clean($value): ?string
@@ -428,30 +477,20 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         return trim((string) $value);
     }
 
-    public function rules(): array
-    {
-        return [
-            'n_code' => 'required',
-            'pc_name' => 'required|string|max:255',
-            'type' => 'nullable|string|max:50',
-            'os' => 'nullable|string|max:100',
-            'ip_valid' => 'nullable|string|max:45',
-            'ip_local' => 'nullable|string|max:45',
-            'mac' => 'nullable|string|max:17',
-            'net_type' => 'nullable|string|max:50',
-            'switch' => 'nullable|string|max:100',
-            'port' => 'nullable|string|max:50',
-            'shutdown' => 'nullable|boolean',
-            'vlan' => 'nullable|string|max:50',
-            'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|max:100',
-            'ram' => 'nullable|max:50',
-            'hdd' => 'nullable|max:100',
-            'comments' => 'nullable|string',
-            'mark' => 'nullable|boolean',
-            'clean_at' => 'nullable|date_format:Y-m-d',
-        ];
-    }
+    // #890: `rules()` was REMOVED, not activated.
+    //
+    // This class declares ToCollection, WithCustomCsvSettings and
+    // WithHeadingRow — never WithValidation — so every rule in the old method
+    // was dead code: Maatwebsite\Excel guards its own validation on
+    // `$import instanceof WithValidation`, so `'clean_at' =>
+    // 'nullable|date_format:Y-m-d'` was never evaluated while reading as an
+    // enforced contract.
+    //
+    // Activating it instead was rejected: PersonImport carries the same three
+    // traits and no rules() either, and the manual per-row validation in
+    // processRow() is the designed preview/confirm path. Turning on framework
+    // validation here would change import behaviour well beyond this bug and
+    // deserves its own issue if it is ever wanted.
 
     public function getImportResults(): array
     {
