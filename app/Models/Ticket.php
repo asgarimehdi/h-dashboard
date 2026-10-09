@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @property int $id
@@ -136,5 +137,46 @@ class Ticket extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(TicketComment::class);
+    }
+
+    /**
+     * Issue #880 — delete the attachment FILES with the ticket.
+     *
+     * `attachments.ticket_id` is `ON DELETE CASCADE`, so deleting a ticket
+     * erased every attachment row — and with it the only database record of
+     * each file. The file itself stayed under `storage/app/public/attachments/`,
+     * still reachable at its public URL forever, with no row left to locate or
+     * purge it.
+     *
+     * This runs on `deleting`, not `deleted`: the FK cascade happens in the
+     * database AFTER Eloquent's events, so by `deleted` the paths are already
+     * gone and a hook on `Attachment` would never have fired on this path at
+     * all.
+     *
+     * The rows are deleted explicitly (before the cascade) so the file and its
+     * row disappear as one unit. `config/filesystems.php` sets `throw => false`
+     * on the `public` disk, so a row whose file was already removed by hand
+     * still deletes cleanly.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (self $ticket): void {
+            $attachments = $ticket->attachments()->get(['id', 'file_path']);
+
+            $paths = $attachments
+                ->pluck('file_path')
+                ->filter(fn (?string $path): bool => filled($path))
+                ->values()
+                ->all();
+
+            if ($paths !== []) {
+                Storage::disk('public')->delete($paths);
+            }
+
+            $ids = $attachments->pluck('id')->all();
+            if ($ids !== []) {
+                Attachment::query()->whereIn('id', $ids)->delete();
+            }
+        });
     }
 }
