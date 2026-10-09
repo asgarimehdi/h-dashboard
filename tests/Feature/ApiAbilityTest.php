@@ -5,11 +5,16 @@ namespace Tests\Feature;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\Todo;
+use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -239,6 +244,193 @@ class ApiAbilityTest extends TestCase
     }
 
     // ──────────────────────────────────────────────
+    // Ticket writes do not require tickets:read (issue #895)
+    // ──────────────────────────────────────────────
+
+    /**
+     * Issue #895: the six ticket write routes and the five comment write routes
+     * used to sit INSIDE the outer `ability:tickets:read` group, and nested
+     * middleware is AND. The `user` role holds `create_ticket` only, so
+     * `getApiTokenAbilities()` minted `tickets:write` WITHOUT `tickets:read`
+     * and every write 403'd with "Invalid ability provided." — while the same
+     * account worked on the web UI, which gates `tickets/new` on `create_ticket`
+     * alone. The writes now have their own group; only the redundant read
+     * ability came off, the `permission:*` gates are untouched.
+     *
+     * This is the exact token shape `POST /api/login` produces, and the suite
+     * has never made this assertion.
+     */
+    public function test_user_role_token_can_create_ticket(): void
+    {
+        $this->seed(RoleSeeder::class);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit([], 'user');
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        // Sanity: this role holds create_ticket and nothing that grants tickets:read.
+        $this->assertNotContains('tickets:read', $this->getTokenAbilities($token));
+
+        $this->apiPost('/api/tickets', [
+            'subject' => 'Created by a user-role token',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'unit_id' => $unit->id,
+        ], $token)->assertCreated();
+    }
+
+    public function test_ticket_read_still_denied_without_tickets_read_ability(): void
+    {
+        $this->seed(RoleSeeder::class);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit([], 'user');
+        // A real row, so route-model binding resolves and the ability gate —
+        // not a 404 from the implicit binding — is what answers.
+        $ticket = Ticket::create([
+            'ticket_code' => 'T-895-READ',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Readable only with tickets:read',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'status' => 'created',
+        ]);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        // Lifting the read ability off the write group must not open the read routes.
+        $this->apiGet('/api/tickets', $token)->assertForbidden();
+        $this->apiGet("/api/tickets/{$ticket->id}", $token)->assertForbidden();
+        $this->apiGet("/api/tickets/{$ticket->id}/comments", $token)->assertForbidden();
+    }
+
+    /**
+     * Lifting `ability:tickets:read` off the write group makes five ticket
+     * handlers and one comment handler reachable by a token that previously
+     * could not reach them at all. Each one is `UnitScopedRequest`-based and
+     * re-checks the unit itself, so a foreign `unit_id` must still be rejected
+     * — this block pins that, because a request shape that was previously
+     * impossible is exactly where a fail-open scope check would hide.
+     *
+     * The token is minted from `getApiTokenAbilities()` (what login issues) and
+     * carries only `tickets:write` — never `tickets:read`.
+     *
+     * `assign` and `complete` are gated on `manage_unit_tickets`, so the actor
+     * is granted it ON PURPOSE: otherwise the permission gate, not the unit
+     * scope, would be what answers 403 and the assertion would prove nothing
+     * (same reasoning as the #849 block in tests/Feature/UsersManagementTest.php).
+     */
+    private function createTicketWriterInOwnUnit(array $extraPermissions = []): array
+    {
+        $this->seed(RoleSeeder::class);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(
+            array_merge(['create_ticket'], $extraPermissions),
+            'user'
+        );
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $this->assertNotContains('tickets:read', $this->getTokenAbilities($token));
+
+        return ['user' => $user, 'unit' => $unit, 'token' => $token];
+    }
+
+    private function createTicketInUnit(int $unitId, array $overrides = []): Ticket
+    {
+        return Ticket::create(array_merge([
+            'ticket_code' => 'T-'.Str::upper(Str::random(8)),
+            'user_id' => null,
+            'unit_id' => $unitId,
+            'subject' => 'Scope probe',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'status' => 'created',
+        ], $overrides));
+    }
+
+    public function test_ticket_store_rejects_foreign_unit_with_write_only_ability(): void
+    {
+        ['user' => $user, 'token' => $token] = $this->createTicketWriterInOwnUnit();
+        $foreignUnit = Unit::factory()->create();
+
+        $this->apiPost('/api/tickets', [
+            'subject' => 'Foreign unit',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'unit_id' => $foreignUnit->id,
+        ], $token)
+            ->assertForbidden()
+            // 'Unit not accessible.' is the SCOPE check. Sanctum's ability gate
+            // answers 'Invalid ability provided.' instead, so this message is
+            // what proves the request reached the handler at all — a bare 403
+            // would still pass while the ability gate rejected it earlier, and
+            // the assertion would pin nothing.
+            ->assertJson(['message' => 'Unit not accessible.']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Foreign unit']);
+        $this->assertSame(0, Ticket::count());
+        $this->assertNotNull($user->id);
+    }
+
+    public function test_ticket_assign_rejects_foreign_unit_with_write_only_ability(): void
+    {
+        ['token' => $token] = $this->createTicketWriterInOwnUnit(['manage_unit_tickets']);
+        $foreignUnit = Unit::factory()->create();
+        $ticket = $this->createTicketInUnit($foreignUnit->id);
+        ['user' => $assignee] = $this->createUserWithUnit();
+
+        $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $assignee->id,
+        ], $token)
+            ->assertForbidden()
+            ->assertJson(['message' => 'Unit not accessible.']);
+
+        $this->assertNull($ticket->fresh()->current_assignee_id);
+    }
+
+    public function test_ticket_accept_rejects_foreign_unit_with_write_only_ability(): void
+    {
+        ['user' => $user, 'token' => $token] = $this->createTicketWriterInOwnUnit();
+        $foreignUnit = Unit::factory()->create();
+        $ticket = $this->createTicketInUnit($foreignUnit->id, ['user_id' => $user->id]);
+
+        $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token)
+            ->assertForbidden()
+            ->assertJson(['message' => 'Unit not accessible.']);
+
+        $this->assertSame('created', $ticket->fresh()->status);
+    }
+
+    public function test_ticket_complete_rejects_foreign_unit_with_write_only_ability(): void
+    {
+        ['user' => $user, 'token' => $token] = $this->createTicketWriterInOwnUnit(['manage_unit_tickets']);
+        $foreignUnit = Unit::factory()->create();
+        $ticket = $this->createTicketInUnit($foreignUnit->id, [
+            'user_id' => $user->id,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+
+        $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token)
+            ->assertForbidden()
+            ->assertJson(['message' => 'Unit not accessible.']);
+
+        $this->assertSame('accepted', $ticket->fresh()->status);
+    }
+
+    public function test_ticket_comment_store_rejects_foreign_unit_with_write_only_ability(): void
+    {
+        ['user' => $user, 'token' => $token] = $this->createTicketWriterInOwnUnit();
+        $foreignUnit = Unit::factory()->create();
+        $ticket = $this->createTicketInUnit($foreignUnit->id, ['user_id' => $user->id]);
+
+        $this->apiPost("/api/tickets/{$ticket->id}/comments", [
+            'body' => 'Should never land',
+        ], $token)
+            ->assertForbidden()
+            ->assertJson(['message' => 'Ticket not accessible.']);
+
+        $this->assertSame(0, TicketComment::count());
+    }
+
+    // ──────────────────────────────────────────────
     // Persons
     // ──────────────────────────────────────────────
 
@@ -426,6 +618,21 @@ class ApiAbilityTest extends TestCase
     {
         $token = $this->createTokenWithAbilities(['gis:read']);
         $this->apiGet('/api/gis/stats', $token)->assertForbidden();
+    }
+
+    /**
+     * Issue #895: `getApiTokenAbilities()` grants `gis:read` on `map|bw`, but the
+     * route group asked for `role_or_permission:map` alone, so a `bw`-only
+     * holder received an ability no route would accept. The gate now matches the
+     * grant — the same `map|bw` the traffic group at routes/api.php:70 already
+     * uses and the `AGENTS.md` web-route precedent.
+     */
+    public function test_bw_permission_can_access_gis_read(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['bw']);
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->apiGet('/api/gis/stats', $token)->assertOk();
     }
 
     // ──────────────────────────────────────────────
