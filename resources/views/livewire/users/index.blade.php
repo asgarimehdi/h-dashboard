@@ -428,7 +428,12 @@ return new class extends Component
             $query->withTrashed();
         }
 
-        return $query->orderBy('n_code', $this->sortBy['direction'])
+        // #914: the column is pinned, but `direction` is client-settable and
+        // was never validated — an unknown value raised InvalidArgumentException
+        // and a missing key raised ErrorException under error_reporting(-1).
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        return $query->orderBy('n_code', $direction)
             ->paginate($this->perPage);
     }
 

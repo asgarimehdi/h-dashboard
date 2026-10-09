@@ -47,7 +47,13 @@ return new class extends Component
 
     public int $perPage = 20;
 
-    /** @var array{column: string, direction: string} */
+    /**
+     * #914: the shape is client-settable, so the keys may be absent or
+     * unknown at runtime — `array{column, direction}` would only describe
+     * the default, and every read below has to stay `??`-guarded.
+     *
+     * @var array<string, string>
+     */
     public array $sortBy = ['column' => 'sort_order', 'direction' => 'asc'];
 
     /**
@@ -379,10 +385,10 @@ return new class extends Component
             $query->whereRaw(PersianNormalizer::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
         }
 
-        $column = in_array($this->sortBy['column'], self::SORTABLE_COLUMNS, true)
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
             ? $this->sortBy['column']
             : 'sort_order';
-        $direction = $this->sortBy['direction'] === 'desc' ? 'desc' : 'asc';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
 
         // Stable tie-break, same as scopeOrdered() — skip it on `id` itself,

@@ -72,6 +72,10 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    // #914: `sortBy` is client-settable, so only real columns are sortable.
+    // The `*_name` entries are the `withAggregate` aliases loaded above.
+    private const SORTABLE_COLUMNS = ['id', 'n_code', 'f_name', 'l_name', 'tahsil_name', 'estekhdam_name', 'semat_name', 'radif_name', 'unit_name'];
+
     public function clearFilters(): void
     {
         $this->reset(['filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
@@ -327,7 +331,10 @@ return new class extends Component
             $query->where('r_id', $this->filter_r_id);
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
 
         return $query->paginate($this->perPage);
     }

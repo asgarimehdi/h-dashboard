@@ -25,6 +25,10 @@ return new class extends Component {
     public bool $showHelpModal = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    // #914: `sortBy` is client-settable, so only real columns are sortable.
+    // The `*_name` entries are the `withAggregate` aliases loaded in units().
+    private const SORTABLE_COLUMNS = ['id', 'name', 'description', 'unit_type_name', 'region_name', 'parent_name', 'can_receive_tickets'];
+
     public $unitTypes, $provinces, $counties, $parentUnits;
     public $userUnitLevel;
     public $userRegionId;
@@ -89,7 +93,10 @@ return new class extends Component {
             $query->where('name', 'LIKE', '%' . $this->search . '%');
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
 
         return $query->paginate($this->perPage);
     }
