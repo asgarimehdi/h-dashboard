@@ -28,8 +28,15 @@ return new class extends Component
         $this->completedTickets = Ticket::where('user_id', $userId)->accessible()->where('status', 'completed')->count();
         $this->pendingTickets = $this->totalTickets - $this->completedTickets;
 
-        $this->totalTodos = Todo::accessible()->count();
-        $this->completedTodos = Todo::accessible()->where('is_completed', true)->count();
+        // Issue #893: these two counts used to be `Todo::accessible()` alone, so
+        // the profile page reported every todo in the unit as the viewer's own —
+        // on a route with no permission gate at all. Mirroring the ticket stats
+        // above is the whole fix: `accessible()` is a unit predicate only
+        // (HasOrganizationalScope compiles it to a single `whereIn('unit_id')`),
+        // so it can never express ownership. The owner predicate is
+        // unconditional, so an empty unit scope still compiles to `0 = 1`.
+        $this->totalTodos = Todo::where('user_id', $userId)->accessible()->count();
+        $this->completedTodos = Todo::where('user_id', $userId)->accessible()->where('is_completed', true)->count();
     }
 
     public function getUserTicketsProperty()
@@ -43,7 +50,14 @@ return new class extends Component
 
     public function getUserTodosProperty()
     {
-        return Todo::accessible()
+        // Issue #893: the tab body had the same missing owner predicate as the
+        // stats above. `where('user_id', auth()->id())` leads the chain so it
+        // stays independent of the unit scope — under the #838 null-unit
+        // contract a unit-less todo belongs to its creator, so "mine" is the
+        // owner predicate on its own and no `orWhereNull('unit_id')` disjunct is
+        // needed (that disjunct would re-open the leak).
+        return Todo::where('user_id', auth()->id())
+            ->accessible()
             ->latest()
             ->paginate(10, pageName: 'todos_page');
     }
