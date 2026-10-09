@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, Ticket> $tickets
  *
  * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static> accessibleTo(array<int> $unitIds, ?int $userId)
  */
 class Todo extends Model
 {
@@ -68,6 +70,29 @@ class Todo extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class, 'task_id');
+    }
+
+    /**
+     * Null-unit contract (#838, #917): a null-unit todo belongs to its
+     * creator. Lists match a row in the actor's unit scope, or a unit-less
+     * row the actor created. The `whereIn` stays unconditional inside the
+     * group so an empty scope compiles to `0 = 1` (fail-closed, #813/#819).
+     * A null `$userId` builds no `orWhere` branch: `where('user_id', null)`
+     * would compile to `IS NULL` and return owner-less orphan rows.
+     *
+     * @param  Builder<Todo>  $query
+     * @param  array<int>  $unitIds
+     * @return Builder<Todo>
+     */
+    public function scopeAccessibleTo(Builder $query, array $unitIds, ?int $userId): Builder
+    {
+        return $query->where(function ($q) use ($unitIds, $userId): void {
+            $q->whereIn('unit_id', $unitIds);
+
+            if ($userId !== null) {
+                $q->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
+            }
+        });
     }
 
     /**

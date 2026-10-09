@@ -8,7 +8,6 @@ use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
-use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 return new class extends Component
@@ -71,7 +70,7 @@ return new class extends Component
         $extraHash = md5(serialize(['uid' => $user->id, 'tickets' => $canViewTickets, 'users' => $canViewUsers]));
         $cacheKey = app(CacheInvalidationServiceInterface::class)->cacheKey('global_search', $scopeHash, $extraHash);
 
-        $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $userIds, $canViewTickets, $canViewUsers) {
+        $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $user, $userIds, $canViewTickets, $canViewUsers) {
             // Split query into words for multi-word search (e.g. "مهدی عسگری")
             $words = preg_split('/\s+/', trim($q), -1, PREG_SPLIT_NO_EMPTY);
 
@@ -102,7 +101,17 @@ return new class extends Component
 
                 // Issue #897: projections, not models — Blade reads only
                 // title/start_at/is_completed.
-                'todos' => Todo::accessible()
+                // Issue #917: null-unit contract — the grouped predicate from
+                // getEvents()/AccessibleTodo, written out because PHPStan
+                // cannot resolve a local scope without larastan. The owner
+                // constraint lives INSIDE the group, so no leak; the search
+                // cache key already carries `uid`, so the owner branch cannot
+                // leak to another user through the cache.
+                'todos' => Todo::query()
+                    ->where(function ($scopeQuery) use ($accessibleIds, $user) {
+                        $scopeQuery->whereIn('unit_id', $accessibleIds)
+                            ->orWhere(fn ($ownerQuery) => $ownerQuery->whereNull('unit_id')->where('user_id', $user->id));
+                    })
                     ->where(function ($query) use ($words) {
                         foreach ($words as $word) {
                             $query->where('title', 'like', "%{$word}%");
@@ -111,7 +120,7 @@ return new class extends Component
                     ->latest()
                     ->take(10)
                     ->get(['id', 'title', 'start_at', 'is_completed'])
-                    ->map(fn (Todo $todo) => [
+                    ->map(fn ($todo) => [
                         'id' => $todo->id,
                         'title' => $todo->title,
                         'start_at' => $todo->start_at?->toDateTimeString(),

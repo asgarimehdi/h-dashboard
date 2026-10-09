@@ -15,8 +15,22 @@ class TodoController extends Controller
     public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
         $accessibleIds = $request->accessibleIds();
+        $userId = $request->user()->id;
 
-        $query = Todo::whereIn('unit_id', $accessibleIds)->with('unit:id,name');
+        // Null-unit contract (#917): the same grouped predicate as
+        // getEvents()/AccessibleTodo — a null-unit todo belongs to its
+        // creator. Written out instead of ->accessibleTo(): PHPStan cannot
+        // resolve a trait/model local scope without larastan. The whereIn
+        // stays unconditional so an empty scope compiles to `0 = 1`.
+        $query = Todo::query()
+            ->where(function ($q) use ($accessibleIds, $userId): void {
+                $q->whereIn('unit_id', $accessibleIds);
+
+                if ($userId !== null) {
+                    $q->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
+                }
+            })
+            ->with('unit:id,name');
 
         if ($request->filled('date')) {
             $query->whereDate('start_at', $request->date);
@@ -139,14 +153,13 @@ class TodoController extends Controller
     /**
      * Null-unit contract (#838): a null-unit todo belongs to its creator —
      * the same rule the Livewire component enforces, so UI and API agree
-     * row-for-row.
+     * row-for-row. Delegates to the shared scope so the single-row and list
+     * predicates cannot drift apart again (#917).
      */
     private function isTodoAccessible(UnitScopedRequest $request, Todo $todo): bool
     {
-        if ($todo->unit_id === null) {
-            return $todo->user_id === $request->user()->id;
-        }
-
-        return in_array($todo->unit_id, $request->accessibleIds());
+        return Todo::accessibleTo($request->accessibleIds(), $request->user()->id)
+            ->whereKey($todo->id)
+            ->exists();
     }
 }

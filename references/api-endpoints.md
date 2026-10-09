@@ -175,6 +175,8 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | DELETE | `/api/todos/{todo}` | Delete |
 | POST | `/api/todos/{todo}/toggle-complete` | Toggle completion |
 
+Null-unit contract (#838, #917): a todo with `unit_id = null` belongs to its creator — the list, profile, search, and ticket picker show it only to the creator, and it serializes with `"unit": null` (key present, value null).
+
 ### Reports (`/api/reports`)
 
 | Method | URL | Description |

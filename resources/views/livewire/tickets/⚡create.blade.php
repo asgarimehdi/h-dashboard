@@ -59,10 +59,22 @@ new class extends Component
         // form is also what keeps the empty scope failing closed (`0 = 1`)
         // instead of dropping the predicate. See `AccessibleTodo` for the same
         // reasoning on the write side.
+        // Issue #917: null-unit contract — a unit-less todo belongs to its
+        // creator, so the picker offers the creator's own null-unit rows too
+        // (the same grouped predicate `AccessibleTodo` enforces, written out
+        // for the same PHPStan reason as above). The owner constraint lives
+        // INSIDE the group, so foreign null-unit rows stay hidden.
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $creatorId = auth()->id();
 
         $this->todos = Todo::query()
-            ->whereIn('unit_id', $accessibleIds)
+            ->where(function ($q) use ($accessibleIds, $creatorId): void {
+                $q->whereIn('unit_id', $accessibleIds);
+
+                if ($creatorId !== null) {
+                    $q->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $creatorId));
+                }
+            })
             ->where('is_completed', false)
             ->take(50)
             ->get()
