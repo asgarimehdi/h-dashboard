@@ -4,6 +4,8 @@ use App\Http\Middleware\LastUserActivity;
 use App\Http\Middleware\SafeRoleOrPermission;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ValidateUnitContext;
+use App\Jobs\SyncZabbixJob;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -24,6 +26,34 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withSchedule(function (Schedule $schedule) {
+        // Issue #864: the schedule used to live in App\Console\Kernel, which
+        // nothing ever bound — withKernels() binds the base console kernel, so
+        // `schedule:list` reported no tasks and `schedule:run` exited 0 having
+        // done nothing. In the Laravel 11+ skeleton the schedule belongs here.
+        // These definitions are moved verbatim from Kernel::schedule(); do not
+        // retype a frequency or a timezone.
+        //
+        // Cache maintenance — hourly
+        $schedule->command('cache:prune-stale')->hourly();
+
+        // Recurring todos — daily at 02:00 Tehran time
+        $schedule->command('todos:generate-recurring')->dailyAt('02:00');
+
+        // Maintenance tasks — daily at 03:00 Tehran time
+        $schedule->command('maintenance:generate-due')->dailyAt('03:00');
+
+        // Data archival — weekly Monday 04:00 Tehran time
+        $schedule->command('data:archive')->weeklyOn(1, '04:00');
+
+        // Report generation — daily at 06:00 Tehran time
+        $schedule->command('reports:generate-daily')->dailyAt('06:00');
+
+        // Zabbix sync — every 5 minutes (dispatched as queued job)
+        $schedule->job(new SyncZabbixJob)
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+    })
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
         // Browser-submitted CSP reports arrive without a CSRF token (#742).
