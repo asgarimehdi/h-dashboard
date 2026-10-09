@@ -116,7 +116,12 @@ new class extends Component
     {
         $user = auth()->user();
 
-        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name']);
+        // #906: `deleted_at` is selected on purpose — `ActorLabel` tells a
+        // soft-deleted creator («کاربر غیرفعال») from a genuinely ownerless
+        // ticket («سیستم»), and `trashed()` reads that column. Without the
+        // soft-deleted rows in the result both cases resolve to `null` and are
+        // indistinguishable.
+        $query = Ticket::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q), 'unit:id,name']);
 
         if ($this->viewMode === 'received') {
             $query->accessible();
@@ -397,7 +402,16 @@ new class extends Component
 
         /** @var Ticket|null $ticket */
         $ticket = Ticket::query()
-            ->with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
+            // #906: soft-deleted users are kept in the result so their creator
+            // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
+            // truly ownerless ticket gets.
+            ->with([
+                'attachments',
+                'activities.attachments',
+                'activities.user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+                'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+                'unit',
+            ])
             ->whereIn('unit_id', $accessibleIds)
             ->find($id);
 
@@ -860,7 +874,7 @@ new class extends Component
 
             @scope('cell_user.person.f_name', $ticket)
             <div class="flex flex-col">
-                <span class="font-bold text-sm">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
+                <span class="font-bold text-sm">{{ \App\Support\ActorLabel::for($ticket->user) }}</span>
                 <span class="text-xs opacity-50 font-mono">#{{ $ticket->ticket_code }}</span>
             </div>
             @endscope
@@ -969,7 +983,7 @@ new class extends Component
                         </div>
                         <div class="bg-base-200/50 p-3 rounded-lg w-full">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-xs">{{ $activity->user->person?->f_name }} {{ $activity->user->person?->l_name }}</span>
+                                <span class="font-bold text-xs">{{ \App\Support\ActorLabel::for($activity->user) }}</span>
                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($activity->created_at)->format('H:i - Y/m/d') }}</span>
                             </div>
                             <p class="text-xs opacity-70">{{ $activity->description }}</p>

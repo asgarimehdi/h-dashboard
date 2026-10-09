@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Person;
+use App\Models\TaskActivity;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
@@ -33,35 +34,69 @@ class TicketsMonitoringLivewireTest extends TestCase
 
     /**
      * Create a ticket in the given unit, owned by a user.
+     *
+     * `user_id` may be omitted (a throwaway owner is built), explicitly null
+     * (a system ticket, as `maintenance:generate-due` writes one), a `User`
+     * model, or a bare id.
      */
     protected function makeTicket(Unit $unit, array $overrides = []): Ticket
     {
-        $owner = $overrides['user_id'] ?? null;
-        if (! $owner) {
-            // Create a simple owner if none provided.
-            $ownerNCode = (string) fake()->unique()->numerify('##########');
-            Person::create([
-                'n_code' => $ownerNCode,
-                'f_name' => 'مالک',
-                'l_name' => 'تیکت',
-                't_id' => DB::table('tahsils')->first()->id,
-                'e_id' => DB::table('estekhdams')->first()->id,
-                's_id' => DB::table('semats')->first()->id,
-                'r_id' => DB::table('radifs')->first()->id,
-                'u_id' => $unit->id,
-            ]);
-            $owner = User::create(['n_code' => $ownerNCode, 'password' => Hash::make('password')]);
-        }
+        $overrides = $this->normalizeOwner($overrides);
 
-        return Ticket::create(array_merge([
+        $attributes = array_merge([
             'ticket_code' => 'TKT-'.fake()->unique()->numerify('####'),
-            'user_id' => $owner->id,
             'unit_id' => $unit->id,
             'subject' => 'تیکت تست',
             'content' => 'شرح تیکت تست',
             'status' => 'created',
             'priority' => 'normal',
-        ], $overrides));
+        ], $overrides);
+
+        if (! array_key_exists('user_id', $overrides)) {
+            $attributes['user_id'] = $this->makeUser($unit, 'مالک', 'تیکت')->id;
+        }
+
+        return Ticket::create($attributes);
+    }
+
+    /**
+     * Accept `user_id` as a `User` model or a bare id, and as an explicit null
+     * — `?? null` would fold "explicitly ownerless" and "not supplied" into the
+     * same case, which is exactly the distinction #906 is about.
+     */
+    protected function normalizeOwner(array $overrides): array
+    {
+        if (! array_key_exists('user_id', $overrides)) {
+            return $overrides;
+        }
+
+        $owner = $overrides['user_id'];
+        $overrides['user_id'] = $owner instanceof User ? $owner->id : $owner;
+
+        return $overrides;
+    }
+
+    /**
+     * A user backed by a real person in $unit, so the creator cell has a name
+     * to render. `makeTicket()` builds its own owner inline; the #906 cases need
+     * to soft-delete that user afterwards.
+     */
+    protected function makeUser(Unit $unit, string $firstName, string $lastName): User
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+
+        Person::create([
+            'n_code' => $nCode,
+            'f_name' => $firstName,
+            'l_name' => $lastName,
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $unit->id,
+        ]);
+
+        return User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
     }
 
     // ==================== Smoke / auth tests ====================
@@ -470,5 +505,92 @@ class TicketsMonitoringLivewireTest extends TestCase
             ->assertSet('showingTicket.task.id', $todo->id)
             ->assertSee('وظیفه مجاز نظارت')
             ->assertSee('وظیفه مرتبط:');
+    }
+
+    // =====================================================================
+    // #906 — creator column is null-safe
+    //
+    // Two independent producers make `$ticket->user` null: a truly ownerless
+    // maintenance ticket (`user_id = null`), and a soft-deleted creator (the
+    // `User` row survives, so `user_id` stays non-null but the relation no
+    // longer resolves). The second one also breaks the activity timeline,
+    // because `task_activities.user_id` is NOT NULL — only soft-delete spoils
+    // it — so `?->` is the only thing standing between that row and a 500.
+    //
+    // The poison ticket MUST sit in the viewer's own unit: parked in
+    // `Unit::first()` while the viewer sits elsewhere the row is out of scope,
+    // and the test passes without proving anything.
+    //
+    // Labels are asserted against the exact span the cell renders, with
+    // `escape: false`. A bare `assertSee('سیستم')` is vacuous — the help modal
+    // on every page contains that word 18 times.
+    // =====================================================================
+
+    public function test_ownerless_ticket_renders_the_system_label(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $this->makeTicket($unit, [
+            'subject' => 'تیکت بدون سازنده',
+            'ticket_code' => 'T906-NULL',
+            'user_id' => null,
+        ]);
+
+        Livewire::test('tickets.monitoring')
+            ->assertStatus(200)
+            ->assertSee('#T906-NULL')
+            ->assertSee('<span class="text-sm font-bold">سیستم</span>', escape: false);
+    }
+
+    public function test_ticket_of_a_soft_deleted_creator_renders_the_inactive_user_label(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $creatorUser = $this->makeUser($unit, 'سازنده', 'غیرفعال');
+        $creatorUser->delete();
+
+        $this->makeTicket($unit, [
+            'subject' => 'تیکت با سازنده غیرفعال',
+            'ticket_code' => 'T906-SOFT',
+            'user_id' => $creatorUser,
+        ]);
+
+        Livewire::test('tickets.monitoring')
+            ->assertStatus(200)
+            ->assertSee('#T906-SOFT')
+            ->assertSee('<span class="text-sm font-bold">کاربر غیرفعال</span>', escape: false);
+    }
+
+    public function test_activity_of_a_soft_deleted_author_renders_the_inactive_user_label(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $authorUser = $this->makeUser($unit, 'نویسنده', 'غیرفعال');
+        $authorUser->delete();
+
+        // `task_activities.user_id` is NOT NULL with onDelete('restrict'), so
+        // this column can never be null — soft-delete is the only way to break
+        // the relation here.
+        $ticket = $this->makeTicket($unit, [
+            'subject' => 'تیکت با فعالیت حذف‌شده',
+            'ticket_code' => 'T906-ACT',
+            'user_id' => $authorUser,
+        ]);
+
+        TaskActivity::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $authorUser->id,
+            'action' => 'commented',
+            'description' => 'توضیح فعالیت',
+        ]);
+
+        Livewire::test('tickets.monitoring')
+            ->call('showTicket', $ticket->id)
+            ->assertStatus(200)
+            ->assertSee('توضیح فعالیت')
+            ->assertSee('<span class="font-bold text-xs">کاربر غیرفعال</span>', escape: false);
     }
 }

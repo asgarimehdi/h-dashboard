@@ -68,7 +68,12 @@ new class extends Component
     #[Computed]
     public function tickets()
     {
-        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name'])->accessible();
+        // #906: `deleted_at` is selected on purpose — `ActorLabel` tells a
+        // soft-deleted creator («کاربر غیرفعال») from a genuinely ownerless
+        // ticket («سیستم»), and `trashed()` reads that column. Without the
+        // soft-deleted rows in the result both cases resolve to `null` and are
+        // indistinguishable.
+        $query = Ticket::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q), 'unit:id,name'])->accessible();
 
         if ($this->selectedUnitId) {
             $query->where('unit_id', $this->selectedUnitId);
@@ -122,10 +127,13 @@ new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         /** @var Ticket|null $ticket */
         $ticket = Ticket::with([
-            'user',
+            // #906: soft-deleted users are kept in the result so their creator
+            // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
+            // truly ownerless ticket gets.
+            'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
             'unit',
             'attachments',
-            'activities.user',
+            'activities.user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
             'activities.attachments'
         ])->findOrFail($id);
 
@@ -248,7 +256,7 @@ new class extends Component
             @endscope
 
             @scope('cell_user.person.f_name', $ticket)
-            <span class="text-sm font-bold">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
+            <span class="text-sm font-bold">{{ \App\Support\ActorLabel::for($ticket->user) }}</span>
             @endscope
 
             @scope('cell_unit.name', $ticket)
@@ -327,7 +335,7 @@ new class extends Component
                         </div>
                         <div class="bg-base-200/50 p-3 rounded-lg w-full">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-xs">{{ $activity->user->person?->f_name }} {{ $activity->user->person?->l_name }}</span>
+                                <span class="font-bold text-xs">{{ \App\Support\ActorLabel::for($activity->user) }}</span>
                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($activity->created_at)->format('H:i - Y/m/d') }}</span>
                             </div>
                             <p class="text-xs opacity-70">{{ $activity->description }}</p>
