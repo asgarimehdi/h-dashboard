@@ -123,7 +123,12 @@ link's visibility in both directions, plus a real `GET` per link.
   `#[Locked]` on `$editingId`) and `Api\TodoController` (`show`/`update`/`destroy`/
   `toggleComplete`) apply the identical predicate, so a row the UI edits is never a row the API
   403s and vice versa. Pinned by `tests/Feature/TodoLivewireTest.php` (the `#838` block) and the
-  creator/non-creator parity tests in `tests/Feature/TodoApiTest.php`.
+  creator/non-creator parity tests in `tests/Feature/TodoApiTest.php`. The same grouped predicate
+  also governs the list surfaces (#917): `Api\TodoController::index()` (written out in the
+  controller; the shared form is the `Todo::accessibleTo()` scope that `isTodoAccessible()`
+  delegates to), the profile counters and `getUserTodosProperty()`, the global search todos
+  branch, and the `tickets.create` picker — the owner constraint sits inside the grouped
+  predicate, so UI and API agree row-for-row and cannot drift again.
 - `resources/views/components/help/content/permissions.blade.php` used to list permissions that never
   existed (`view_hardware`, `view_tickets`, `create_tickets`, `assign_tickets`, `manage_units`,
   `view_units`, `manage_permissions`, `view_reports`, …). Do not re-add them; keep that page in sync with
@@ -370,6 +375,9 @@ whole history) and a day without a ticket was a *missing column*, not a zero.
 - `App\Services\DailySeries` owns the shape. It materialises the window with `generate_series`
   and **left-joins the caller's own aggregate query** — it fills gaps in an already-filtered query
   instead of re-deriving its filters, so unit/status/date filters keep working untouched.
+  `between()` **keeps the picked range** (clamped to `MAX_DAYS`) rather than only its length —
+  discarding it charted the wrong axis and dropped the picked rows (#866); `lastDays()` fills the
+  same two fields from `now()`.
 - `?days=abc` falls back to 30 (a sloppy value still renders a chart); `?days=0`, `?days=-5` and
   `?days=5000` return **422** (`App\Rules\ReportDays`).
 - Output days are Jalali `Y/m/d`, ascending, oldest first. The dashboard chart labels are `m/d`.
@@ -439,7 +447,7 @@ The first three jobs accept a `$unitIds` array; **empty resolves `AccessService:
 
 ## Scheduler & Console Commands
 
-**Five commands plus one queued job** are scheduled in `app/Console/Kernel.php` (`protected function schedule(Schedule $schedule)`, the Laravel 11+ skeleton style). The commands all take `--dry-run`:
+**Five commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`:
 
 | Scheduled item | Schedule |
 |---|---|
@@ -634,9 +642,9 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 ## E2E Testing (Playwright)
 
-**~165 tests** across **40 spec files** in `tests/e2e/` (file count + `test(` count re-checked 2026-10-01). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
+**202 tests** across **42 spec files** in `tests/e2e/` (`npx playwright test --list` count, verified 2026-10-08; static `test(` grep undercounts loop-generated suites). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
 
-> Not verified by an actual run on 2026-10-01 — no browser installed and no `.env.e2e` on that machine. The numbers are **static counts** from the spec files. Run `bash scripts/e2e-test.sh` to get a real total.
+> CI runs the suite in the e2e job of `.github/workflows/test.yml` (non-blocking ramp, `continue-on-error: true` until two consecutive green runs — see #867).
 
 Newest suites since the 2026-09-25 review: `reports/daily-window`, `dashboard/ticket-trend-window`, `it/zabbix-unavailable`, `it/monitoring`, `organization/units-tree`, `organization/unit-map-boundary`, `hr/org-chart`, `personnel/list`.
 
@@ -679,7 +687,7 @@ bash scripts/e2e-test.sh tests/e2e/auth    # single suite (fast loop)
 npx playwright test --reporter=list    # only if .env is already swapped and the server is already running
 ```
 
-> **Cleanup trap:** `scripts/e2e-test.sh` uses `set -e` **without** a `trap`, so a failing Playwright run exits before restore — `.env` stays swapped and the `:8001` server keeps running. Always run afterwards:
+> **Cleanup:** teardown in `scripts/e2e-test.sh` runs from a `trap` (`trap teardown EXIT`, plus INT/TERM traps), so even a failing Playwright run restores `.env` and removes run-state (verified on `beta`; the old no-`trap` warning was stale). Only if a run is hard-killed before the trap fires, recover manually:
 > ```bash
 > [ -f .env.dev.bak ] && cp .env.dev.bak .env && rm -f .env.dev.bak
 > pgrep -f 'artisan serve --port=800[1]' | xargs -r kill
@@ -785,7 +793,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `_mapGeojson` must be seeded on load | `saveMapBoundary()` calls `deleteBoundary()` whenever `_mapGeojson` is falsy, so a boundary that is never re-serialised on page load is destroyed by a plain "ذخیره" click. Call `updateGeojson()` right after loading the saved layer (issue #702) |
 | Playwright on map pages | Never `await networkidle` — Leaflet keeps fetching tiles so it never goes idle and the wait times out. Wait for `#unitMap` + `.leaflet-draw-edit-edit` instead |
 | Leaflet + Alpine reactivity | Never put a Leaflet instance (map or layers) in Alpine reactive state — `x-data` or `Alpine.store`. Alpine deep-wraps it in proxies and Leaflet's identity-based listener cleanup (`===` in `Marker.onRemove`) silently leaks `zoomanim` handlers; after `clearLayers()` the next zoom throws `_latLngToNewLayerPoint` and freezes markers (issue #769). Keep the instance in module scope / closure locals — see `resources/js/map-store.js` |
-| `scripts/e2e-test.sh` has no `trap` | A failing run exits before restore, leaving `.env` swapped to `h_dashboard_e2e`. Recover with `cp .env.dev.bak .env && rm -f .env.dev.bak`, then kill `:8001` (use `kill $(pgrep -f 'artisan serve')` — `pkill -f` kills the calling shell) |
+| `scripts/e2e-test.sh` teardown is trap-based | Teardown runs from `trap teardown EXIT` (INT/TERM too), so a failing run still restores `.env` and removes run-state. Manual recovery (`cp .env.dev.bak .env && rm -f .env.dev.bak`, then kill `:8001`) is only for a hard-killed run — and use `kill $(pgrep -f 'artisan serve')`, never `pkill -f`, which kills the calling shell |
 | Rebuilding a lost `.env` | `.env` is gitignored. Rebuild from `.env-example-github` (the committed dev template) plus the secrets already resolved in `.env.e2e`, override `APP_URL=http://127.0.0.1:8000` and `DB_DATABASE=h_dashboard`, then drop any line whose value still contains `secrets.` (CI placeholders) or artisan dies with "environment file is invalid". Confirm with `php artisan about --only=environment` (expect `local`, locale `fa`). `parse_ini_file('.env')` fails here — unquoted parens — so scan lines with a regex instead |
 | Dead routes removed | `/users/create`, `/users/{user}/edit`, `/docs/{page?}` — views never existed or were deleted |
 | Todo calendar | Must use `@script` block (not inline JS) for wire:navigate compatibility |
@@ -800,7 +808,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `/csp-report` is public and CSRF-exempt | That is deliberate (#742): browsers post reports with no token. It is throttled `60,1` but the body is **not size-capped**, and it logs a user-controlled payload at `warning` — never point a log-volume assumption at it |
 | Root `/` route | `Route::redirect('/', '/dashboard')` — NOT a Livewire component. The old `index` Livewire component is removed |
 | E2E locale | `.env.e2e` **must** set `APP_LOCALE=fa`. `.env.e2e.example` **does** include it now (`7485043`); a hand-written `.env.e2e` from an older copy omits it, the app falls back to `en`, and 11 Persian-text specs fail (`Showing…`, English validation messages) |
-| E2E env lifecycle | `scripts/e2e-test.sh` swaps `.env` and, on a failing run, `set -e` skips restore — restore `.env.dev.bak` and kill the `:8001` server yourself |
+| E2E env lifecycle | `scripts/e2e-test.sh` swaps `.env` for the run; teardown is trap-based (`trap teardown EXIT`), so `.env` is restored and run-state removed even when Playwright fails — restore `.env.dev.bak` manually only after a hard kill |
 | `.env.e2e` / `h_dashboard_e2e` | Both gitignored/local-only; the e2e DB is `migrate:fresh --seed`ed every run — never point it at `h_dashboard` or `h_dashboard_test` |
 | API token abilities | `/api/*` needs `auth:sanctum` **and** a token ability; `ability:a,b` = ANY of them, `abilities:a,b` = ALL. Tests mint real tokens (`ApiAbilityTest`) |
 | Shared test trait | New Feature tests use `InteractsWithTestSetup` (`tests/Support/Concerns`) — `createUserWithUnit()`, `seedLookupTables()`, `resyncSequence()`, `assertNoNPlusOne()` |
@@ -842,3 +850,6 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | `@can`/`@canany` nesting prunes child items | A menu item can be hidden by an ancestor gate, not just its own: `/hr/org-chart` is gated `manage_org_chart|view_hr_dashboard` **and** sits inside the «مدیریت سازمان» group's `@canany`, and «تقویم» sits inside «مدیریت تیکتها». When you add an item or change a gate, add its permission to the parent `@canany` too or the item is unreachable |
 | Hardware audit scope is resolved by ONE service (#816) | `App\Services\HardwareAuditScope` (live `n_code` → audit `n_code` snapshot → `persons.u_id`) is shared by `HardwareAuditController` and `HardwareIndexHelpers`. **Deny by default** — a null unit id means out of scope, so a trash row with no `n_code` in its snapshot is *hidden*, never listed (this deliberately changed the old `test_not_restorable_warning…` behaviour). Scope checks run **inside** `rollbackHistoryField()`/`restoreRecord()` before the shape/existence guards, never through `historyHardwareId` (the caller primes it with an authorized `loadHistory()`), and `restoreRecord()` reuses the **original** primary key, and there are **two** implementations of it — `HardwareAuditController::restoreRecord()` (API) and `HardwareIndexHelpers::restoreRecord()` (Livewire) — which must both build the row with `(new Hardware)->forceFill($restoreData)->save()` and then advance the sequence. `Hardware::create()` is **wrong** here: `id` is not in `$fillable`, so it drops the key silently, the row lands under a fresh auto-increment id, the `exists` guard can never see it and the audit trail orphans (#888). The `setval`/`advanceHardwareSequence()` step is **not** redundant once the id is reused — `MAX(id)` already includes the restored row, and advancing the sequence is what stops the next auto-increment colliding with it. |
 | `#[Locked]` on `historyHardwareId` (#816) | First use of the attribute in this repo (it lives on the property in `app/Traits/HardwareIndexHelpers.php`, and trait attributes do reach the class). It is **defence in depth only**: the property is written server-side by `loadHistory()`/`fetchHistory()`, and `Locked` throws `CannotUpdateLockedPropertyException` (a 500, not a 422) if a legitimate flow ever lets the client set it. Do not cite it as the scope mitigation |
+| A test must not assert a fixed cell address across a `latest('created_at')` export | `hardware_audits.created_at` is `timestamp(0)` on Postgres, so rows written in the same second tie and their order under `latest('created_at')` is undefined — Postgres decides by physical page layout, so the same test passes on an author machine and fails on CI (issue #886's escape test was red in #920/#923/#924, green in #921/#922, with no commit to blame). In an export test, resolve the column from `headings()` and find the row by its own content; never `getCell('F2')` to mean "the row this test created". Note `paginate()` has the same shape: with a count of 0 it never runs the ORDER BY, so a sort test that seeds nothing passes vacuously |
+| Every `$x->user` in a view is nullable, regardless of the foreign key (#906) | `User` uses `SoftDeletes`, so a soft-deleted user keeps its row, leaves `user_id` non-null, and still resolves the relation to `null`. The nullable-FK migration is a second, independent path — **not** the root cause, and it does not bound the class. This holds even on `NOT NULL` columns such as `task_activities.user_id`. To tell a genuinely ownerless row from a soft-deleted actor, eager-load the relation with soft-deleted users included **and** select `deleted_at`, or `trashed()` silently answers "not deleted". `App\Support\ActorLabel` owns the label contract («سیستم» for a null `user_id`, «کاربر غیرفعال» for a soft-deleted creator) |
+| reports.advanced status filter is type-aware (#915) | `STATUS_OPTIONS` keyed by `reportType` feeds both the select and the whitelist; todos maps status onto `is_completed`/`end_at`, tickets/persons filter their real `status` columns; `updatedReportType()` resets the filter to `all` |

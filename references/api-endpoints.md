@@ -202,7 +202,9 @@ than "zero that day", so the line collapsed whenever the data was sparse.
 Implementation: `App\Services\DailySeries` materialises the window with `generate_series` and
 left-joins the caller's own aggregate, so it fills gaps in an existing (already filtered) query
 instead of re-deriving its filters. The API takes the window from `?days=`; the UI report pages
-pass their own date-from/date-to picker bounds, and the dashboard trend uses
+pass their own date-from/date-to picker bounds — `DailySeries::between()` **keeps that range**
+(capped at `MAX_DAYS = 365`) rather than only its day count, so a past window charts the days the
+user picked instead of "N days ending today" (#866) — and the dashboard trend uses
 `Dashboard::TICKET_CHART_DAYS`.
 
 > Deliberately **not** read from `daily_reports`: that table is written by
