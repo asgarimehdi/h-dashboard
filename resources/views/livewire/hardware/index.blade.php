@@ -62,6 +62,15 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'id', 'direction' => 'desc'];
 
+    // #914: `$sortBy` is client-settable public Livewire state and MaryUI
+    // writes the clicked header's key into it, so it can never be trusted
+    // as a column name. Only real `hardwares` columns are accepted here.
+    private const SORTABLE_COLUMNS = [
+        'id', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
+        'net_type', 'switch', 'port', 'vlan', 'motherboard', 'cpu', 'ram',
+        'hdd', 'shutdown', 'mark', 'comments', 'clean_at', 'n_code',
+    ];
+
     // Filter fields
     public ?string $filterType = null;
 
@@ -482,12 +491,16 @@ return new class extends Component
 
     public function headers(): array
     {
+        // #914: the 8 keys marked `sortable => false` below are PHP-only
+        // aliases fabricated in `with()` (or no column at all), so sorting by
+        // them is impossible. Key names stay unchanged — `status` and
+        // `person_name` are read by `hardware/table.blade.php`.
         return [
-            ['key' => 'checkbox', 'label' => '', 'class' => 'w-10'],
+            ['key' => 'checkbox', 'label' => '', 'class' => 'w-10', 'sortable' => false],
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
-            ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
-            ['key' => 'unit_name', 'label' => 'واحد', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['unit_name']],
+            ['key' => 'person_name', 'label' => 'صاحب', 'class' => '', 'sortable' => false],
+            ['key' => 'unit_name', 'label' => 'واحد', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['unit_name'], 'sortable' => false],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
             ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
             ['key' => 'ip_valid', 'label' => 'IP عمومی', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
@@ -501,11 +514,11 @@ return new class extends Component
             ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['cpu']],
             ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['ram']],
             ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['hdd']],
-            ['key' => 'shutdown_display', 'label' => 'خاموشی', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['shutdown']],
-            ['key' => 'mark_display', 'label' => 'علامت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['mark']],
-            ['key' => 'comments_display', 'label' => 'توضیحات', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['comments']],
-            ['key' => 'clean_at_display', 'label' => 'تاریخ نظافت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['clean_at']],
-            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24', 'hidden' => ! $this->visibleCols['status']],
+            ['key' => 'shutdown_display', 'label' => 'خاموشی', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['shutdown'], 'sortable' => false],
+            ['key' => 'mark_display', 'label' => 'علامت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['mark'], 'sortable' => false],
+            ['key' => 'comments_display', 'label' => 'توضیحات', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['comments'], 'sortable' => false],
+            ['key' => 'clean_at_display', 'label' => 'تاریخ نظافت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['clean_at'], 'sortable' => false],
+            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24', 'hidden' => ! $this->visibleCols['status'], 'sortable' => false],
         ];
     }
 
@@ -600,7 +613,10 @@ return new class extends Component
             });
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($column, $direction);
 
         return $this->hardwaresCache = $query->paginate($this->perPage);
     }

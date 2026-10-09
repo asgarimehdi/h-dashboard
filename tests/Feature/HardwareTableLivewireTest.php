@@ -202,6 +202,82 @@ class HardwareTableLivewireTest extends TestCase
             ->assertSet('sortBy', ['column' => 'id', 'direction' => 'asc']);
     }
 
+    // ==================== S6b: ORDER BY whitelist (#914) ====================
+
+    /**
+     * Every header key a client can send must survive a full render.
+     *
+     * 8 of the 23 keys (checkbox, person_name, unit_name, the four
+     * `*_display` aliases and status) exist only in the PHP array built by
+     * `with()`, never as a `hardwares` column, so passing them straight to
+     * `orderBy()` raised 42703 and 500'd the page.
+     */
+    public function test_sort_by_every_header_key_renders(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+
+        $this->createHardware([], $data['unit']->id);
+
+        foreach ($this->headerKeys() as $key) {
+            Livewire::test('hardware.index')
+                ->set('sortBy', ['column' => $key, 'direction' => 'asc'])
+                ->assertOk();
+        }
+    }
+
+    public function test_sort_by_non_header_keys_fall_back_to_default(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+
+        $this->createHardware([], $data['unit']->id);
+
+        // Empty array — the raw spread raised ArgumentCountError.
+        Livewire::test('hardware.index')->set('sortBy', [])->assertOk();
+
+        // Direction is client-settable and was never validated.
+        Livewire::test('hardware.index')
+            ->set('sortBy', ['column' => 'id', 'direction' => 'sideways'])
+            ->assertOk();
+
+        // A key that is not a header and not a column.
+        Livewire::test('hardware.index')
+            ->set('sortBy', ['column' => 'pc_name asc, (select 1)', 'direction' => 'asc'])
+            ->assertOk();
+    }
+
+    /**
+     * The 8 alias headers are not sortable at all, so MaryUI must not
+     * render a sort cursor/icon for them.
+     */
+    public function test_alias_headers_are_not_sortable(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+
+        $headers = Livewire::test('hardware.index')->instance()->headers();
+        $byKey = collect($headers)->keyBy('key');
+
+        foreach (['checkbox', 'person_name', 'unit_name', 'shutdown_display', 'mark_display', 'comments_display', 'clean_at_display', 'status'] as $key) {
+            $this->assertArrayHasKey($key, $byKey, "header {$key} disappeared");
+            $this->assertFalse($byKey[$key]['sortable'] ?? true, "header {$key} is still sortable");
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function headerKeys(): array
+    {
+        // Must reuse the acting user — a second one would move the seeded
+        // hardware out of scope, and `paginate()` never runs the ORDER BY
+        // when the count is 0, which would make this loop pass vacuously.
+        return collect(Livewire::test('hardware.index')->instance()->headers())
+            ->pluck('key')
+            ->all();
+    }
+
     // ==================== S7: editHardware opens edit modal ====================
 
     public function test_edit_opens_modal(): void
