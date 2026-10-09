@@ -1,16 +1,24 @@
 <?php
 
-use Livewire\Component;
-use App\Models\{Ticket, Todo, User, Unit};
+use App\Models\Ticket;
+use App\Models\Todo;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\AccessService;
-use Livewire\Attributes\Layout;
+use App\Services\CacheInvalidationServiceInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Layout;
+use Livewire\Component;
 
 return new class extends Component
 {
     public string $query = '';
+
     public array $results = ['tickets' => [], 'todos' => [], 'users' => [], 'units' => []];
+
     public bool $hasSearched = false;
+
     public bool $showHelpModal = false;
 
     public function updatedQuery(): void
@@ -18,6 +26,7 @@ return new class extends Component
         if (strlen($this->query) < 2) {
             $this->results = ['tickets' => [], 'todos' => [], 'users' => [], 'units' => []];
             $this->hasSearched = false;
+
             return;
         }
         $this->search();
@@ -25,35 +34,74 @@ return new class extends Component
 
     public function search(): void
     {
-        if (strlen($this->query) < 2) return;
+        if (strlen($this->query) < 2) {
+            return;
+        }
 
+        /** @var User $user */
+        $user = auth()->user();
         $q = $this->query;
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
+        // Issue #897: mirror users/index.blade.php:404-410 — person.u_id in
+        // scope OR a user_units row in scope. whereHas('person') alone drops
+        // person-less admin accounts that users.index lists.
+        $userIds = User::query()
+            ->where(function (Builder $query) use ($accessibleIds) {
+                $query->whereHas('person', fn (Builder $personQuery) => $personQuery->whereIn('u_id', $accessibleIds))
+                    ->orWhereHas('units', fn (Builder $unitQuery) => $unitQuery->whereIn('units.id', $accessibleIds));
+            })
+            ->pluck('id')
+            ->toArray();
 
-        // Cache key includes query, accessible units, and user IDs
-        $cacheKey = 'global_search:' . md5($q . ':' . implode(',', $accessibleIds) . ':' . implode(',', $userIds));
+        // Issue #897: gate INSIDE search(), before the cache — a route-level
+        // role_or_permission middleware is NOT re-applied on
+        // POST /livewire/update (#892), so updatedQuery()/search() stays
+        // reachable from an already-serialized snapshot without this check.
+        $canViewTickets = $user->canAny(['view_assigned_tickets', 'view_all_tickets']);
+        $canViewUsers = $user->can('manage_users');
 
-        $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $userIds) {
+        // Issue #897: versioned per-user key. The old
+        // global_search:md5(...) key collided across users with identical
+        // scopes and bypassed CacheInvalidationService invalidation.
+        // cacheKey() prefixes {namespace}:v{version}: so a namespace bump
+        // invalidates; uid + gate flags in $extra isolate users from each
+        // other. TTL stays 30s as before — remember() would reinterpret it
+        // as minutes.
+        $scopeHash = md5($q.':'.implode(',', $accessibleIds).':'.implode(',', $userIds));
+        $extraHash = md5(serialize(['uid' => $user->id, 'tickets' => $canViewTickets, 'users' => $canViewUsers]));
+        $cacheKey = app(CacheInvalidationServiceInterface::class)->cacheKey('global_search', $scopeHash, $extraHash);
+
+        $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $userIds, $canViewTickets, $canViewUsers) {
             // Split query into words for multi-word search (e.g. "مهدی عسگری")
             $words = preg_split('/\s+/', trim($q), -1, PREG_SPLIT_NO_EMPTY);
 
             return [
-                'tickets' => Ticket::accessible()
+                // Issue #897: projections, not models — Blade reads only
+                // id/subject/ticket_code/status + unit name.
+                'tickets' => $canViewTickets ? Ticket::accessible()
                     ->where(function ($query) use ($words) {
                         foreach ($words as $word) {
                             $query->where(function ($inner) use ($word) {
                                 $inner->where('subject', 'like', "%{$word}%")
-                                      ->orWhere('ticket_code', 'like', "%{$word}%");
+                                    ->orWhere('ticket_code', 'like', "%{$word}%");
                             });
                         }
                     })
-                    ->with(['user.person', 'unit'])
+                    ->with(['unit:id,name'])
                     ->latest()
                     ->take(10)
-                    ->get()
-                    ->toArray(),
+                    ->get(['id', 'ticket_code', 'subject', 'status', 'unit_id'])
+                    ->map(fn (Ticket $ticket) => [
+                        'id' => $ticket->id,
+                        'ticket_code' => $ticket->ticket_code,
+                        'subject' => $ticket->subject,
+                        'status' => $ticket->status,
+                        'unit' => $ticket->unit->only(['id', 'name']),
+                    ])
+                    ->all() : [],
 
+                // Issue #897: projections, not models — Blade reads only
+                // title/start_at/is_completed.
                 'todos' => Todo::accessible()
                     ->where(function ($query) use ($words) {
                         foreach ($words as $word) {
@@ -62,23 +110,40 @@ return new class extends Component
                     })
                     ->latest()
                     ->take(10)
-                    ->get()
-                    ->toArray(),
+                    ->get(['id', 'title', 'start_at', 'is_completed'])
+                    ->map(fn (Todo $todo) => [
+                        'id' => $todo->id,
+                        'title' => $todo->title,
+                        'start_at' => $todo->start_at?->toDateTimeString(),
+                        'is_completed' => (bool) $todo->is_completed,
+                    ])
+                    ->all(),
 
-                'users' => User::with('person')
+                // Issue #897: behind manage_users; projection covers only the
+                // person f_name/l_name + semat name Blade renders.
+                'users' => $canViewUsers ? User::with(['person:id,n_code,f_name,l_name,s_id', 'person.semat:id,name'])
                     ->whereIn('id', $userIds)
                     ->whereHas('person', function ($query) use ($words) {
                         foreach ($words as $word) {
                             $query->where(function ($inner) use ($word) {
                                 $inner->where('f_name', 'like', "%{$word}%")
-                                      ->orWhere('l_name', 'like', "%{$word}%");
+                                    ->orWhere('l_name', 'like', "%{$word}%");
                             });
                         }
                     })
                     ->take(10)
-                    ->get()
-                    ->toArray(),
+                    ->get(['id', 'n_code'])
+                    ->map(fn (User $found) => [
+                        'id' => $found->id,
+                        'person' => $found->person ? [
+                            'f_name' => $found->person->f_name,
+                            'l_name' => $found->person->l_name,
+                            'semat' => $found->person->semat->only(['name']),
+                        ] : null,
+                    ])
+                    ->all() : [],
 
+                // Issue #897: projections, not models — Blade reads only name.
                 'units' => Unit::whereIn('id', $accessibleIds)
                     ->where(function ($query) use ($words) {
                         foreach ($words as $word) {
@@ -86,8 +151,9 @@ return new class extends Component
                         }
                     })
                     ->take(10)
-                    ->get()
-                    ->toArray(),
+                    ->get(['id', 'name'])
+                    ->map(fn (Unit $unit) => ['id' => $unit->id, 'name' => $unit->name])
+                    ->all(),
             ];
         });
 
@@ -104,7 +170,7 @@ return new class extends Component
 
     public function getTicketStatusColor(string $status): string
     {
-        return match($status) {
+        return match ($status) {
             'created' => 'badge-neutral',
             'forwarded' => 'badge-warning',
             'accepted' => 'badge-info',
@@ -113,7 +179,6 @@ return new class extends Component
             default => 'badge-ghost',
         };
     }
-
 }; ?>
 
 <div dir="rtl">
@@ -144,6 +209,7 @@ return new class extends Component
                 </div>
 
                 {{-- تیکت‌ها --}}
+                @canany(['view_assigned_tickets', 'view_all_tickets'])
                 @if(count($results['tickets']))
                     <div class="mb-6">
                         <h3 class="font-bold text-lg mb-3 flex items-center gap-2">
@@ -174,8 +240,10 @@ return new class extends Component
                         </div>
                     </div>
                 @endif
+                @endcanany
 
                 {{-- کاربران --}}
+                @can('manage_users')
                 @if(count($results['users']))
                     <div class="mb-6">
                         <h3 class="font-bold text-lg mb-3 flex items-center gap-2">
@@ -204,6 +272,7 @@ return new class extends Component
                         </div>
                     </div>
                 @endif
+                @endcan
 
                 {{-- واحدها --}}
                 @if(count($results['units']))
