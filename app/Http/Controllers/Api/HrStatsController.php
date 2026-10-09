@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
 use App\Models\Unit;
+use App\Rules\PerPage;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -136,6 +137,9 @@ class HrStatsController extends Controller
             }
         }
 
+        // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
+        // clamp; `min()` kept as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min((int) $request->get('per_page', 20), 100);
         $persons = $query->paginate($perPage);
 

@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketCommentReaction;
 use App\Models\User;
+use App\Rules\PerPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -45,6 +46,9 @@ class TicketCommentController extends Controller
         }
 
         $threaded = $request->boolean('threaded');
+        // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
+        // clamp; `min()` kept as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min($request->integer('per_page', 20), 100);
 
         $query = $ticket->comments()

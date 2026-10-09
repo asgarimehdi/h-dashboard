@@ -9,6 +9,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
+use App\Rules\PerPage;
 use App\Services\HardwareAuditScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,12 @@ class HardwareAuditController extends Controller
             $query->where('source', $request->source);
         }
 
+        // Issue #894: see UnitController::index(). `min(...)` bounds only the upper
+        // side; a negative `per_page` reaches `limit(-1)`, which the query builder
+        // drops, so the SQL loses its LIMIT clause. 422 is the contract; the
+        // `min()` stays as defence in depth. This endpoint's own cap is 50, so
+        // the rule is parametrised to match it.
+        $request->validate(['per_page' => ['sometimes', new PerPage(50)]]);
         $perPage = min((int) $request->get('per_page', 20), 50);
         $audits = $query->paginate($perPage);
 

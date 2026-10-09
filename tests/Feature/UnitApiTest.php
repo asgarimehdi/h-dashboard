@@ -177,9 +177,56 @@ class UnitApiTest extends TestCase
 
         $user = User::first();
         $token = $this->createApiToken($user, ['units:read']);
-        $response = $this->apiGet('/api/units?per_page=1000', $token);
+
+        // Issue #894: over the cap is now a 422 rather than a silent clamp —
+        // the `min(...)` stays as defence in depth, but the contract the client
+        // sees is a validation error, matching `ReportDays` for `?days`.
+        $this->apiGet('/api/units?per_page=1000', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
+        // The cap itself still succeeds and is still honoured.
+        $response = $this->apiGet('/api/units?per_page=100', $token);
 
         $response->assertStatus(200);
-        $this->assertLessThanOrEqual(100, $response->json('meta.per_page'));
+        $this->assertEquals(100, $response->json('meta.per_page'));
+        $this->assertCount(100, $response->json('data'));
+    }
+
+    /**
+     * Issue #894: the test above asserts the upper bound only, never a row
+     * count, which is how a one-sided clamp survived — `per_page=-1` is
+     * truthy, reaches `limit(-1)`, and the query builder DROPS the clause, so
+     * the SQL loses its LIMIT and returns all 151 units while still reporting a
+     * plausible `meta.per_page`. `per_page=0` fell back to the model default via
+     * paginate()'s `?:` and was silently accepted.
+     *
+     * The contract is now 422 for both, matching `ReportDays` for `?days`.
+     */
+    public function test_pagination_rejects_out_of_range_per_page(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+
+        for ($i = 0; $i < 150; $i++) {
+            Unit::create([
+                'name' => "Unit {$i}",
+                'parent_id' => $unit->id,
+            ]);
+        }
+
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read']);
+
+        $this->apiGet('/api/units?per_page=-1', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
+        $this->apiGet('/api/units?per_page=0', $token)->assertStatus(422);
+
+        // Junk input keeps the existing fallback rather than failing, and a
+        // valid page is still bounded.
+        $ok = $this->apiGet('/api/units?per_page=20', $token);
+        $ok->assertStatus(200);
+        $this->assertCount(20, $ok->json('data'));
     }
 }
