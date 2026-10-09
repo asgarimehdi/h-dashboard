@@ -26,6 +26,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ActivityLogArchive extends Model
 {
+    /**
+     * #870: the archive table keeps the source row's own timestamps as
+     * `original_created_at` / `original_updated_at` and records its own as
+     * `archived_at`. There is no `created_at` / `updated_at` column, so Eloquent
+     * must not try to write them when a row is saved through the model.
+     */
+    public $timestamps = false;
+
     protected $fillable = [
         'user_id',
         'type',

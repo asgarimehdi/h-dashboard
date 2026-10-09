@@ -7,18 +7,6 @@ parameters:
 			path: app/Console/Commands/ArchiveOldRecords.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\ActivityLogArchive\:\:insert\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,stdClass\>\:\:map\(\) expects callable\(stdClass, int\)\: array\{user_id\: int\|null, type\: string\|null, subject_type\: string\|null, subject_id\: int\|null, description\: string\|null, old_values\: array\|null, new_values\: array\|null, ip_address\: string\|null, user_agent\: string\|null, original_created_at\: Carbon\\Carbon\|null, original_updated_at\: Carbon\\Carbon\|null, archived_at\: Carbon\\CarbonInterface\}, Closure\(App\\Models\\ActivityLog\)\: array\{user_id\: int\|null, type\: string\|null, subject_type\: string\|null, subject_id\: int\|null, description\: string\|null, old_values\: array\|null, new_values\: array\|null, ip_address\: string\|null, user_agent\: string\|null, original_created_at\: Carbon\\Carbon\|null, original_updated_at\: Carbon\\Carbon\|null, archived_at\: Carbon\\CarbonInterface\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Console/Commands/ArchiveOldRecords.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\DailyReport\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
