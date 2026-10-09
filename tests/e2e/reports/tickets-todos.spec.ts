@@ -39,4 +39,11 @@ test.describe('reports tickets', () => {
     await expect(page.locator('body')).toContainText('وظایف');
     await expect(page.locator('body')).toContainText('پرسنل');
   });
+
+  test('status filter survives switching to todos without a 500', async ({ page }) => {
+    const statusSelect = page.locator('select[wire\\:model\\.live="statusFilter"]');
+    await statusSelect.selectOption('created');
+    await page.locator('select[wire\\:model\\.live="reportType"]').selectOption('todos');
+    await expect(page.locator('body')).toContainText('گزارش تیکت‌ها');
+  });
 });
