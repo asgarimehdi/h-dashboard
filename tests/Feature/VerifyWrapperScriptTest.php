@@ -234,5 +234,18 @@ class VerifyWrapperScriptTest extends TestCase
         // there while passing locally. Naming the file is environment-blind.
         $this->assertMatchesRegularExpression('/AppBrandTest/', $output);
         $this->assertMatchesRegularExpression('/app brand component class exists/i', $output);
+
+        // The discriminating half, and the reason this test locks anything:
+        // a sibling test in the SAME directory must be absent. If the path
+        // argument were silently dropped, `composer test` would run the FULL
+        // suite, and the full suite prints AppBrandTest too — so the two
+        // assertions above would pass against a completely broken script.
+        // A narrowed run is the only thing that can produce "AppBrandTest
+        // present" together with "PersianNormalizerTest absent".
+        $this->assertStringNotContainsString(
+            'PersianNormalizerTest',
+            $output,
+            'the whole suite ran, so the path argument was dropped rather than forwarded'
+        );
     }
 }
