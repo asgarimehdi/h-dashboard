@@ -156,4 +156,28 @@ class ReportsEmptyScopeTest extends TestCase
         $this->assertSame([], $data['details']['byTahsil']);
         $this->assertSame([], $data['details']['bySemat']);
     }
+
+    /**
+     * Issue #915 — an empty scope plus a non-`all` status on `todos` must
+     * not throw. The #819 fail-closed guard (`whereIn('unit_id', [])`) does
+     * not shield this: Eloquent still compiles the `status` column reference
+     * and Postgres answers 42703.
+     */
+    public function test_advanced_todos_status_filter_fails_closed_on_an_empty_scope(): void
+    {
+        $this->actingAsUserWithoutUnit();
+
+        $component = Livewire::test('reports.advanced')
+            ->set('reportType', 'todos')
+            ->set('statusFilter', 'completed')
+            ->assertStatus(200);
+
+        $component->assertDontSee(self::FOREIGN_TODO_TITLE)
+            ->assertSee('واحدی برای نمایش انتخاب نشده');
+
+        $data = $component->instance()->reportData();
+
+        $this->assertSame(0, $data['total'], 'the scoped base query already fails closed');
+        $this->assertSame([], $data['byUnit']);
+    }
 }

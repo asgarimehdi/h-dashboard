@@ -90,7 +90,7 @@ class Ticket extends Model
     public function getStatusNameAttribute()
     {
         return match ($this->status) {
-            'created' => 'جدید ',
+            'created' => 'جدید',
             'forwarded' => 'ارجاع شده',
             'accepted' => 'در حال پیگیری',
             'completed' => 'پایان یافته',
