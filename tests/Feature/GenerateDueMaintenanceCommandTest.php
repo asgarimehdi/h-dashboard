@@ -36,6 +36,13 @@ class GenerateDueMaintenanceCommandTest extends TestCase
         $this->assertEquals('HVAC inspection', $ticket->subject);
         $this->assertEquals('created', $ticket->status);
 
+        // #906: the command writes no `user_id`, and `tickets.user_id` is
+        // nullable on purpose. This is what makes the ticket creator cell
+        // resolve to null on /tickets/inbox and /tickets/monitoring — pin the
+        // contract so the null-safe cell stays load-bearing instead of
+        // incidental.
+        $this->assertNull($ticket->user_id);
+
         $schedule->refresh();
         $this->assertNotNull($schedule->last_generated_at);
         $this->assertNotNull($schedule->next_due_at);
