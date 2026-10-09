@@ -47,6 +47,12 @@ return new class extends Component {
 
     public function archiveTickets(): void
     {
+        // Issue #892: the route gate (`role_or_permission:manage_users`) does
+        // not run on `/livewire/update`, so this mutator re-checks the same
+        // permission mount() uses. It must come FIRST — the org-wide update
+        // below is not scoped by anything a later check could undo.
+        $this->authorize('manage_users');
+
         $this->validate([
             'archiveDays' => 'required|integer|min:7|max:365',
         ]);
@@ -61,6 +67,10 @@ return new class extends Component {
 
     public function cleanActivities(): void
     {
+        // Issue #892 — see archiveTickets(). A revoked holder must not be able
+        // to dispatch the org-wide activity-log purge.
+        $this->authorize('manage_users');
+
         $this->validate([
             'activityDays' => 'required|integer|min:30|max:365',
         ]);
@@ -72,6 +82,10 @@ return new class extends Component {
 
     public function cleanNotifications(): void
     {
+        // Issue #892 — see archiveTickets(). A revoked holder must not be able
+        // to dispatch the org-wide notification purge.
+        $this->authorize('manage_users');
+
         $this->validate([
             'notificationDays' => 'required|integer|min:1|max:90',
         ]);
