@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\FormatsJalaliDates;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -10,10 +11,11 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use Morilog\Jalali\Jalalian;
 
 class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading, WithHeadings, WithMapping, WithTitle
 {
+    use FormatsJalaliDates;
+
     protected Builder $query;
 
     protected array $columns;
@@ -94,9 +96,7 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
             'unit_name' => $hardware->person?->unit?->name ?? '-',
             'shutdown' => $hardware->shutdown ? 'روشن' : 'خاموش',
             'mark' => $hardware->mark ? 'علامت‌دار' : '-',
-            'clean_at' => $hardware->clean_at
-                ? Jalalian::fromCarbon($hardware->clean_at)->format('Y/m/d')
-                : '-',
+            'clean_at' => $this->formatJalaliOrDash($hardware->clean_at),
             'comments' => $hardware->comments ?? '-',
             'status' => $hardware->mark
                 ? 'علامت'

@@ -955,12 +955,6 @@ parameters:
 			path: app/Imports/HardwareImport.php
 
 		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:rules\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
 			message: '#^Method App\\Imports\\HardwareImport\:\:setAccessibleUnitIds\(\) has parameter \$ids with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
