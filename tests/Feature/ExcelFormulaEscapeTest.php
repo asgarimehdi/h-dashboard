@@ -15,6 +15,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
 use Maatwebsite\Excel\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -195,6 +196,19 @@ class ExcelFormulaEscapeTest extends TestCase
         $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
         $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
 
+        // `Hardware::factory()` fires HardwareAuditObserver::created, so this
+        // hardware has TWO audit rows: the observer's (user_agent = the test
+        // client UA) and the payload row above. Both land in the same second —
+        // `hardware_audits.created_at` is `timestamp(0)` — and the export sorts
+        // by `latest('created_at')`, so their relative order is undefined. A
+        // hardcoded cell address therefore reads whichever row Postgres
+        // happened to place first, which is what made this test flake. Locate
+        // the payload row by its own content instead, so the assertion is
+        // about the escaping and not about row order.
+        $userAgentColumn = array_search('کاربر آژنت', (new HardwareAuditsExport(HardwareAudit::query()))->headings(), true);
+
+        $this->assertNotFalse($userAgentColumn, 'headings() lost the user_agent column');
+
         // xlsx: the stored user_agent cell must bind as string, not formula.
         $xlsx = $this->withHeaders($headers)
             ->getJson("/api/hardware/{$hardware->id}/audits/export");
@@ -202,7 +216,27 @@ class ExcelFormulaEscapeTest extends TestCase
         $tmp = tempnam(sys_get_temp_dir(), 'audit-xlsx').'.xlsx';
         file_put_contents($tmp, $xlsx->streamedContent());
         $spreadsheet = IOFactory::load($tmp);
-        $cell = $spreadsheet->getActiveSheet()->getCell('F2');
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Scan the user_agent column only — column A is the audit id, so a
+        // whole-row scan would match on the wrong thing.
+        $letter = Coordinate::stringFromColumnIndex($userAgentColumn + 1);
+        $userAgents = [];
+        for ($r = 2; $r <= $sheet->getHighestDataRow(); $r++) {
+            $value = $sheet->getCell($letter.$r)->getValue();
+            $userAgents[$r] = $value === null ? '' : (string) $value;
+        }
+
+        $this->assertTrue(
+            in_array("'".self::PAYLOAD, $userAgents, true),
+            'The exported sheet has no row carrying the escaped user_agent; got: '
+                .json_encode($userAgents)
+        );
+
+        // Assert on the cell that actually carries the payload, whatever row
+        // the tie-breaking left it in.
+        $row = array_search("'".self::PAYLOAD, $userAgents, true);
+        $cell = $sheet->getCell($letter.$row);
         $this->assertSame(DataType::TYPE_STRING, $cell->getDataType());
         $this->assertSame("'".self::PAYLOAD, $cell->getValue());
         $spreadsheet->disconnectWorksheets();
