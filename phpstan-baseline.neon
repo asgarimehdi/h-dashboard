@@ -3835,14 +3835,14 @@ parameters:
 			path: resources/views/livewire/profile/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:where\(\)\.$#'
-			identifier: staticMethod.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\Todo\>\:\:accessible\(\)\.$#'
+			identifier: method.notFound
 			count: 3
 			path: resources/views/livewire/profile/index.blade.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\Todo\>\:\:accessible\(\)\.$#'
-			identifier: method.notFound
+			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:where\(\)\.$#'
+			identifier: staticMethod.notFound
 			count: 3
 			path: resources/views/livewire/profile/index.blade.php
 
@@ -4177,6 +4177,12 @@ parameters:
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
+			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: resources/views/livewire/search/index.blade.php
+
+		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Query\\Builder\:\:whereHas\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -4197,12 +4203,6 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/search/index.blade.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
-			identifier: method.notFound
 			count: 1
 			path: resources/views/livewire/search/index.blade.php
 
@@ -4533,12 +4533,6 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\Ticket\>\:\:accessible\(\)\.$#'
 			identifier: method.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡monitoring.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\Unit\:\:find\(\)\.$#'
-			identifier: staticMethod.notFound
 			count: 1
 			path: resources/views/livewire/tickets/⚡monitoring.blade.php
 

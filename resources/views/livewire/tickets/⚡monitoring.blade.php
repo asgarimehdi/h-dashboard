@@ -54,15 +54,46 @@ new class extends Component
 
     public function loadData(): void
     {
+        // #918: both unit lookups were org-wide, so a county-scoped viewer
+        // could enumerate every ticket-receiving unit in the organization —
+        // the dropdown by name, `$currentUnit` by `?selectedUnitId=` alone
+        // (`#[Url]`, no interaction needed). Ticket rows were always scoped
+        // (`tickets()` is `->accessible()`, `showTicket()` re-checks
+        // `in_array`), so this was a unit-directory disclosure, not a
+        // data-access bypass.
+        //
+        // Both predicates are UNCONDITIONAL `whereIn`, never `when($ids, …)`
+        // or `! empty($ids)`: those are the fail-open spellings behind #813 /
+        // #819 / #833, where an empty scope drops the predicate instead of
+        // returning nobody. `accessibleUnitIds()` is legitimately `[]` for an
+        // account with no `user_units` row and no `person.u_id`, and `[]`
+        // means "in scope of nothing" — it must compile to `0 = 1`.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         $units = [];
         if (mb_strlen($this->unitSearch) > 1) {
             $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
                 ->where('can_receive_tickets', true)
+                ->whereIn('id', $accessibleIds)
                 ->limit(10)->get()->toArray();
         }
         $this->filterUnits = $units;
 
-        $this->currentUnit = $this->selectedUnitId ? Unit::find($this->selectedUnitId) : null;
+        // Scope only — deliberately NOT `can_receive_tickets`. This lookup
+        // previously leaked ANY unit in the org, including units that cannot
+        // receive tickets (the province headquarters among them), so it is
+        // broader than the dropdown. Eligibility is a separate question and
+        // belongs on the dropdown, not here.
+        // The `whereIn` sits inside a closure so the chain stays an
+        // `Eloquent\Builder` and `find()` keeps its `Unit|null` return type —
+        // a bare `whereIn()` re-types the rest of the chain through
+        // `Query\Builder`'s `@mixin` and yields `stdClass`. See AGENTS.md,
+        // "Eloquent chains vs PHPStan (no larastan)".
+        $this->currentUnit = $this->selectedUnitId
+            ? Unit::query()
+                ->where(fn ($q) => $q->whereIn('id', $accessibleIds))
+                ->find($this->selectedUnitId)
+            : null;
     }
 
     #[Computed]
@@ -108,8 +139,23 @@ new class extends Component
         return $query->latest()->paginate(20);
     }
 
+    /**
+     * A node was clicked: apply it as this page's unit filter.
+     *
+     * #918: this is a PUBLIC Livewire method, so the id arrives from the
+     * client and the guard belongs here rather than being inherited from the
+     * caller's ordering — same contract as `unit.tree`'s `selectNode`
+     * (resources/views/livewire/unit/tree.blade.php:29-31). `loadData()`
+     * scopes the lookup too, but that makes this method safe only by
+     * consequence; keeping the check local means the guarantee does not
+     * depend on that ordering holding.
+     */
     public function selectUnitForFilter($id): void
     {
+        if (! in_array((int) $id, app(AccessService::class)->accessibleUnitIds(), true)) {
+            return;
+        }
+
         $this->selectedUnitId = $id;
         $this->unitSearch = '';
         $this->resetPage();
@@ -227,7 +273,7 @@ new class extends Component
             </div>
         </div>
 
-        @if($this->selectedUnitId)
+        @if($this->selectedUnitId && $this->currentUnit)
         <div class="mb-4">
             <x-badge value="فیلتر: {{ $currentUnit?->name ?? 'نامشخص' }}" class="badge-warning" icon-right="o-x-mark" wire:click="$set('selectedUnitId', null)" />
         </div>
