@@ -220,11 +220,21 @@ class TicketsMonitoringLivewireTest extends TestCase
         $unit = $result['unit'];
         $this->actingAs($user);
 
-        // Recipient unit that can receive tickets
+        // Recipient unit that can receive tickets.
+        //
+        // #918: `parent_id` is load-bearing. `tickets.monitoring` now scopes
+        // both unit lookups to `accessibleUnitIds()`, and that scope comes
+        // from the `descendantIds` CTE, which returns the viewer's own units
+        // plus their `is_active = true` descendants. Without `parent_id` this
+        // unit is a root that appears in nobody's scope, so the dropdown comes
+        // back empty and the test would pin the leak this issue closes. As a
+        // child of the viewer's unit it is in scope, which is what a recipient
+        // unit the viewer may filter by actually looks like.
         $recipient = Unit::create([
             'name' => 'واحد مقصد تست',
             'can_receive_tickets' => true,
             'is_active' => true,
+            'parent_id' => $unit->id,
         ]);
 
         // unitSearch > 1 char → filterUnits populated
@@ -363,10 +373,17 @@ class TicketsMonitoringLivewireTest extends TestCase
         $unit = $result['unit'];
         $this->actingAs($user);
 
+        // #918: `parent_id` is load-bearing here too — see the note in
+        // `test_unit_filter`. `selectUnitForFilter()` now refuses an id that is
+        // not in `accessibleUnitIds()`, and the `descendantIds` CTE reaches
+        // only the viewer's own units and their `is_active = true`
+        // descendants. A parentless unit is in nobody's scope, so this test
+        // would assert the `in_array` guard never fires.
         $recipient = Unit::create([
             'name' => 'واحد حذف شونده',
             'can_receive_tickets' => true,
             'is_active' => true,
+            'parent_id' => $unit->id,
         ]);
 
         $component = Livewire::test('tickets.monitoring')
