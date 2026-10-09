@@ -133,32 +133,76 @@ return new class extends Component {
         $this->parentUnits = $this->getAllowedParentUnitsProperty();
     }
 
+    /**
+     * How deep the unit-type walk may descend before it is truncated.
+     *
+     * The relationship table is shallow — the deepest real walk is 7 rounds
+     * from type 1 — so this is a belt-and-braces guard, not a design limit:
+     * it turns a future bad import into a short dropdown instead of a hung
+     * request. The visited set is what actually makes the walk terminate.
+     */
+    private const int ALLOWED_UNIT_TYPES_MAX_DEPTH = 10;
+
     public function getAllowedUnitTypes()
     {
         if ($this->userUnitLevel === 'ministry') {
             return UnitType::where('id', '!=', 1)->get();
         }
-        
+
+        return $this->walkAllowedUnitTypes();
+    }
+
+    /**
+     * Breadth-first walk over unit_type_relationships.
+     *
+     * Issue #875: the previous loop replaced the frontier with its own
+     * children and had no visited set, so the two seeded self-referencing
+     * rows ([22,22] ستادی under ستادی and [17,17] فوریت under فوریت) kept the
+     * frontier non-empty forever — one SELECT per round until the request
+     * timed out. This mirrors the reasoning behind the UNION (not UNION ALL)
+     * in Unit::recursiveDescendantQuery(): the set operator dedupes so a
+     * cycle terminates; here the visited set does the same job in PHP.
+     *
+     * The self-edges stay in the seeder — they encode real intent, so a
+     * ستادی manager must still be offered ستادی. That is why every child is
+     * *collected* into the result while only the not-yet-visited ones are
+     * *queued* for the next round: skipping already-seen ids before collecting
+     * would return an empty dropdown for exactly the accounts the rows exist
+     * for.
+     *
+     * @return \Illuminate\Support\Collection<int, UnitType>
+     */
+    private function walkAllowedUnitTypes(): \Illuminate\Support\Collection
+    {
+        $visited = [$this->userUnitTypeId => true];
+        $frontier = [$this->userUnitTypeId];
         $allowedUnitTypeIds = [];
-        $childUnitTypeIds = UnitTypeRelationship::where('allowed_parent_unit_type_id', $this->userUnitTypeId)
-            ->pluck('child_unit_type_id')
-            ->toArray();
-        $allowedUnitTypeIds = array_merge($allowedUnitTypeIds, $childUnitTypeIds);
-        
-        while (!empty($childUnitTypeIds)) {
-            $newChildUnitTypeIds = UnitTypeRelationship::whereIn('allowed_parent_unit_type_id', $childUnitTypeIds)
+
+        for ($depth = 0; $depth < self::ALLOWED_UNIT_TYPES_MAX_DEPTH && $frontier !== []; $depth++) {
+            // distinct() bounds the round's own result even if a bad import
+            // ever inserts the same edge twice.
+            $childUnitTypeIds = UnitTypeRelationship::whereIn('allowed_parent_unit_type_id', $frontier)
+                ->distinct()
                 ->pluck('child_unit_type_id')
-                ->toArray();
-            $allowedUnitTypeIds = array_merge($allowedUnitTypeIds, $newChildUnitTypeIds);
-            $childUnitTypeIds = $newChildUnitTypeIds;
+                ->all();
+
+            $allowedUnitTypeIds = array_merge($allowedUnitTypeIds, $childUnitTypeIds);
+
+            $frontier = [];
+            foreach ($childUnitTypeIds as $childUnitTypeId) {
+                if (! isset($visited[$childUnitTypeId])) {
+                    $visited[$childUnitTypeId] = true;
+                    $frontier[] = $childUnitTypeId;
+                }
+            }
         }
-        
-        $allowedUnitTypeIds = array_unique($allowedUnitTypeIds);
-        
+
+        $allowedUnitTypeIds = array_values(array_unique($allowedUnitTypeIds));
+
         if (empty($allowedUnitTypeIds)) {
             return collect();
         }
-        
+
         return UnitType::whereIn('id', $allowedUnitTypeIds)->get();
     }
 

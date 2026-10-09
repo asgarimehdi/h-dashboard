@@ -152,6 +152,237 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  coverage-report:
+    name: Coverage Report (Blade-aware, informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Non-blocking signal (issue #865): this job REPORTS the real coverage
+    # picture — the app/ number plus the Blade component logic that sits
+    # outside the --min=80 denominator — and must never fail the build.
+    # The hard gate stays exactly where it is until a real total exists;
+    # changing min= is out of scope for #865 (locked decision).
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          coverage: pcov
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for testing
+        run: |
+          cp .env.example .env.testing
+          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
+          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+
+      - name: Generate application key
+        run: php artisan key:generate --env=testing
+
+      - name: Run migrations
+        run: php artisan migrate --env=testing --force
+
+      - name: Clear cached config/routes before tests
+        run: |
+          php artisan config:clear --env=testing
+          php artisan route:clear --env=testing
+          php artisan view:clear
+
+      - name: Run tests with coverage (report only, never gates)
+        # `|| true`: this job REPORTS — a test failure must not fail the job
+        # (continue-on-error already ensures non-blocking, but an exit-1 step
+        # still renders the job red). The clover is written even on failure;
+        # coverage-report.sh parses whatever exists and says so explicitly.
+        run: ./vendor/bin/pest --parallel --coverage --coverage-clover=coverage.xml || true
+
+      - name: Report the real coverage picture (app/ + Blade)
+        # Proves coverage was really computed: the script parses the clover
+        # file CI just produced and prints covered/valid statement counts —
+        # a run with no coverage data says so explicitly instead of going
+        # green silently (the #865 trap).
+        run: bash scripts/coverage-report.sh --clover=coverage.xml
+
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Non-blocking ramp (issue #867): the suite has never run in CI, so the
+    # first executions will surface real latent failures (the inert
+    # waitForLivewire() wait, the self-skipping unit-map-boundary spec).
+    # Ship continue-on-error:true now; promote to required only after two
+    # consecutive green runs AND the two collateral fixes land (separate PRs,
+    # preconditions for required status — see #867's git review).
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_e2e
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for the app (CI services)
+        run: |
+          cp .env.example .env
+          # CI services: postgres/postgres/secret + passwordless redis.
+          # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
+          # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
+          # ever printing the values.
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+          php artisan key:generate --force
+
+      - name: Build .env.e2e (secret-safe)
+        # CI redis is passwordless, so build-env-e2e.sh leaves the EXAMPLE
+        # placeholders (`<same as dev>`) for secrets it could not copy — and
+        # `set -a; source .env.e2e` in e2e-test.sh chokes on the `<...>`
+        # metacharacters (syntax error, first CI run). Clear ONLY lines that
+        # still carry a `<...>` placeholder: a real copied value (e.g.
+        # DB_PASSWORD=secret) must survive — emptying it breaks pg auth
+        # (fe_sendauth, second CI run). Then guard: no `<...>` may remain.
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+
+      - name: Assert APP_LOCALE=fa in .env.e2e
+        # MANDATORY (issue #867): without it Laravel falls back to `en` and
+        # 11 Persian-text specs fail. Fail fast here, not after a 20-min run.
+        run: grep -q '^APP_LOCALE=fa' .env.e2e
+
+      - name: Verify the isolated e2e database exists
+        # The postgres service creates h_dashboard_e2e from POSTGRES_DB at
+        # startup — no manual CREATE needed (it errors as "already exists").
+        # NEVER point e2e at h_dashboard: scripts/e2e-test.sh runs
+        # migrate:fresh --seed on this database every run.
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E suite (list reporter proves execution)
+        # Through scripts/e2e-test.sh ONLY — never bare `npx playwright test`:
+        # fixtures.ts needs tests/e2e/.run-state.json, which only this script
+        # writes (migrate:fresh → pwd user → serve :8001 → test → restore).
+        # The script swaps .env, so it must NEVER run in parallel with
+        # anything (not concurrency-safe). --reporter=list makes the log
+        # itself the proof that tests executed; the count assertion below
+        # turns the #865 trap (green with zero tests) into a hard failure.
+        # Output is tee'd to e2e-list.log so the next step can count real
+        # executions from the reporter stream itself.
+        run: bash scripts/e2e-test.sh --reporter=list 2>&1 | tee e2e-list.log
+
+      - name: Assert tests really executed
+        # A green job that executed zero tests is a failure, not a pass.
+        # The list reporter prints one line per executed test; the summary
+        # line looks like "  202 passed (3.5m)". Both must be present.
+        run: |
+          EXECUTED=$(grep -cE '✓|✔|passed \(' e2e-list.log || true)
+          echo "e2e executed-test lines: ${EXECUTED}"
+          grep -qE '[0-9]+ passed' e2e-list.log
+          test "${EXECUTED}" -gt 0
+
   mutation:
     name: Mutation Testing
     runs-on: ubuntu-latest

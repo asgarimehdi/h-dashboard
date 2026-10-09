@@ -3,8 +3,9 @@
 namespace Tests\Feature;
 
 use App\Console\Commands\PruneStaleCache;
-use App\Console\Kernel;
 use App\Jobs\SyncZabbixJob;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
@@ -15,14 +16,38 @@ class ScheduledJobInfrastructureTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_console_kernel_schedule_has_expected_tasks(): void
+    /**
+     * Boot the console application the way `schedule:run` does.
+     *
+     * Issue #864, second layer: ApplicationBuilder::withSchedule() registers
+     * its callback through Artisan::starting(), which only fires once the
+     * console app is constructed. A bare make(Schedule::class) therefore
+     * sees ZERO events even after the wiring is correct — which is why the
+     * original test had to hand-resolve App\Console\Kernel to see anything at
+     * all. Running any artisan command boots that app, so this is the public
+     * path (no reflection into the protected getArtisan()).
+     */
+    private function bootConsoleSchedule(): void
     {
-        $kernel = $this->app->make(Kernel::class);
-        $schedule = $kernel->resolveConsoleSchedule();
+        Artisan::call('schedule:list');
+    }
 
-        // Collect scheduled event descriptions
-        $events = $schedule->events();
-        $this->assertNotEmpty($events, 'Schedule should have registered events');
+    /**
+     * Issue #864: this must read the schedule the way `schedule:run` does —
+     * off the container's Schedule::class binding, which is what
+     * bootstrap/app.php's withSchedule() populates. The old version resolved
+     * App\Console\Kernel by hand and called resolveConsoleSchedule() on it,
+     * which dispatches to that object's own schedule() override: a code path
+     * production never took, and it stayed green while
+     * `schedule:list` reported no tasks at all.
+     */
+    public function test_scheduler_reads_expected_tasks_from_the_container(): void
+    {
+        $this->bootConsoleSchedule();
+
+        $events = $this->app->make(Schedule::class)->events();
+
+        $this->assertNotEmpty($events, 'the schedule must register events via bootstrap/app.php');
 
         $commands = [];
         foreach ($events as $event) {
@@ -41,6 +66,44 @@ class ScheduledJobInfrastructureTest extends TestCase
         // zabbix:sync is now dispatched as SyncZabbixJob, not an artisan command
         $descriptions = array_map(fn ($event) => $event->description ?? '', $events);
         $this->assertContains(SyncZabbixJob::class, $descriptions);
+    }
+
+    /**
+     * The gate that would have caught this: any edit to bootstrap/app.php that
+     * empties the schedule must fail here instead of silently disabling every
+     * scheduled command.
+     */
+    public function test_schedule_never_regresses_to_zero_events(): void
+    {
+        $this->bootConsoleSchedule();
+
+        $events = $this->app->make(Schedule::class)->events();
+
+        $this->assertCount(
+            6,
+            $events,
+            'the schedule must keep exactly the six registered items — zero means the wiring was dropped'
+        );
+    }
+
+    /**
+     * App\Console\Kernel must not come back: the framework binds the base
+     * console kernel, so a re-added subclass would again be a dead file that
+     * a hand-resolved test could pass on.
+     */
+    public function test_the_dead_console_kernel_is_not_the_bound_one(): void
+    {
+        $kernelClass = $this->app->make(Kernel::class)::class;
+
+        $this->assertNotSame(
+            'App\\Console\\Kernel',
+            $kernelClass,
+            'bootstrap/app.php must not restore the dead App\Console\Kernel'
+        );
+        $this->assertFalse(
+            class_exists(\App\Console\Kernel::class),
+            'app/Console/Kernel.php must stay deleted — the schedule lives in bootstrap/app.php now'
+        );
     }
 
     public function test_prune_stale_cache_command_runs(): void

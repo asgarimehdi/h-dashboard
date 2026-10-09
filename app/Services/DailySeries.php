@@ -30,26 +30,57 @@ class DailySeries
     public const MAX_DAYS = 365;
 
     public function __construct(
-        private readonly int $days = self::DEFAULT_DAYS
+        private readonly int $days = self::DEFAULT_DAYS,
+        private readonly ?Carbon $from = null,
+        private readonly ?Carbon $to = null,
     ) {}
 
     /**
      * The last N days, ending today (inclusive). `days = 1` is today alone.
+     *
+     * This is the `?days=` path (`/api/reports/*`, the dashboard trend): there is
+     * no picked range, so the window is derived from `now()`.
      */
     public static function lastDays(int $days): self
     {
-        return new self($days);
+        // `now()` is a CarbonInterface; `Carbon::instance()` is the documented
+        // narrowing (Carbon ≥ 3), so the stored bounds are plain Carbon.
+        $to = Carbon::instance(now()->startOfDay());
+
+        return new self($days, $to->copy()->subDays($days - 1), $to);
     }
 
     /**
      * An explicit inclusive range — for pages that already offer a
      * date-from/date-to picker and therefore have no single "last N days".
+     *
+     * The range itself is kept, because it *is* the contract: previously only the
+     * day count survived and `window()` rebuilt "N days ending today", so every
+     * past window charted the wrong axis and `counts()`' LEFT JOIN dropped the
+     * rows that sat inside the range the user actually picked (issue #866).
+     *
+     * A range wider than MAX_DAYS is clamped back to MAX_DAYS ending on the
+     * picked to-day. `?days=` is already rejected above the cap by `ReportDays`,
+     * but a picker page takes free-text Jalali dates straight through, and an
+     * unclamped 40-year range materialises 14610 rows — one Highcharts point each.
      */
     public static function between(Carbon $from, Carbon $to): self
     {
-        $days = (int) $from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay()) + 1;
+        $start = $from->copy()->startOfDay();
+        $end = $to->copy()->startOfDay();
 
-        return new self(max(1, $days));
+        if ($start->gt($end)) {
+            [$start, $end] = [$end, $start];
+        }
+
+        $days = (int) $start->diffInDays($end) + 1;
+
+        if ($days > self::MAX_DAYS) {
+            $start = $end->copy()->subDays(self::MAX_DAYS - 1);
+            $days = self::MAX_DAYS;
+        }
+
+        return new self($days, $start, $end);
     }
 
     /**
@@ -115,16 +146,17 @@ class DailySeries
     }
 
     /**
-     * The window as Gregorian `Y-m-d` bounds, oldest first.
+     * The window as Gregorian `Y-m-d` bounds, oldest first — the range itself,
+     * not a recomputed one.
      *
      * @return array{0: string, 1: string}
      */
     public function window(): array
     {
-        $to = now()->startOfDay();
-        $from = $to->copy()->subDays($this->days - 1);
+        $to = $this->to ?? now()->startOfDay();
+        $from = $this->from ?? $to->copy()->subDays($this->days - 1);
 
-        return [$from->toDateString(), $to->toDateString()];
+        return [$from->copy()->startOfDay()->toDateString(), $to->copy()->startOfDay()->toDateString()];
     }
 
     /**
