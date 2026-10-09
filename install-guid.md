@@ -68,7 +68,7 @@ Use a dedicated service account (substitute your own username throughout):
 sudo adduser --disabled-password --gecos "" dashboard
 sudo usermod -aG docker dashboard     # only if it should manage compose
 sudo su - dashboard
-git clone https://github.com/Shabakebehdasht/h-dashboard.git h-dashboard
+git clone https://github.com/asgarimehdi/h-dashboard.git h-dashboard
 cd h-dashboard
 git checkout dev                      # or main / beta
 ```
