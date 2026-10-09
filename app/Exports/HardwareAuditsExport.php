@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Support\ExcelCell;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -87,25 +88,27 @@ class HardwareAuditsExport implements FromCollection, WithChunkReading, WithHead
     {
         $changesSummary = '';
         if ($audit->changes && is_array($audit->changes)) {
-            $changesSummary = implode(' | ', array_map(
+            $changesSummary = ExcelCell::escape(implode(' | ', array_map(
                 fn ($c) => "{$c['field']}: {$c['old']} → {$c['new']}",
                 $audit->changes
-            ));
+            )));
         }
 
+        // #886 (CWE-1236): user_agent / changes / user.name are
+        // attacker-controlled; escape at map() time (also fixes ?format=csv).
         return [
             $audit->id,
             $this->getActionLabel($audit->action),
             $this->getSourceLabel($audit->source),
             $changesSummary,
-            $audit->ip_address ?? '',
-            $audit->user_agent ?? '',
+            ExcelCell::escape($audit->ip_address ?? ''),
+            ExcelCell::escape($audit->user_agent ?? ''),
             $audit->created_at?->toIso8601String() ?? '',
             $audit->created_at
                 ? Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')
                 : '',
-            $audit->user?->n_code ?? '',
-            $audit->user?->name ?? '',
+            ExcelCell::escape($audit->user?->n_code ?? ''),
+            ExcelCell::escape($audit->user?->name ?? ''),
         ];
     }
 
