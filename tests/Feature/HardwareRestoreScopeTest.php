@@ -139,7 +139,12 @@ it('restore succeeds when audit n_code is in-scope', function () {
         ->postJson("/api/hardware/audits/{$audit->id}/restore-record");
 
     $response->assertStatus(200)->assertJsonPath('success', true);
-    // id is not in $fillable, so Hardware::create() assigns a new auto-increment id
+    // The restore reuses the audit's original primary key (#888): Hardware::create()
+    // dropped `id` because it is not in $fillable, which left the `exists` guard
+    // blind and let a second restore of the same audit create a duplicate row.
+    $restored = Hardware::where('pc_name', 'INSOPE_HW')->first();
+    expect($restored)->not->toBeNull();
+    expect($restored->id)->toBe($audit->hardware_id);
     $this->assertDatabaseHas('hardwares', ['pc_name' => 'INSOPE_HW', 'n_code' => $nCode]);
 });
 
