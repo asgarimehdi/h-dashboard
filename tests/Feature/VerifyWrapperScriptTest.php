@@ -227,6 +227,12 @@ class VerifyWrapperScriptTest extends TestCase
 
         // And the named file really ran, which is what "the argument was
         // forwarded" actually means.
-        $this->assertMatchesRegularExpression('/Tests?:.*passed/is', $output);
+        //
+        // Assert on the test's IDENTITY, not on the summary wording: CI runs
+        // PHP 8.5, where AppBrandTest emits a PDO deprecation and Pest prints
+        // "1 deprecated" instead of "1 passed", so a `/passed/` pattern fails
+        // there while passing locally. Naming the file is environment-blind.
+        $this->assertMatchesRegularExpression('/AppBrandTest/', $output);
+        $this->assertMatchesRegularExpression('/app brand component class exists/i', $output);
     }
 }
