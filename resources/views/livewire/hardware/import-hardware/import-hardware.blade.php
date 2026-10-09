@@ -6,7 +6,6 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 use Maatwebsite\Excel\Facades\Excel;
 use Mary\Traits\Toast;
-
 return new class extends Component
 {
     use PersianNormalizer;
