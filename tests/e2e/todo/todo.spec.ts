@@ -77,4 +77,73 @@ test.describe('todo calendar', () => {
     // Modal should be hidden
     await expect(page.locator('input[wire\\:model="title"]')).not.toBeVisible();
   });
+
+  /**
+   * Issue #891 (behavioural half): the calendar used to return
+   * `{ html: ... }` from `eventContent`, which FullCalendar assigns through
+   * `dangerouslySetInnerHTML`, so a user-controlled title was executed as
+   * markup in every viewer's browser.
+   *
+   * The Feature test can only assert the raw-HTML path is absent from the
+   * source; this runs the real `eventContent` in Chromium and checks what the
+   * browser actually did with a hostile title — it must become text, never a
+   * node. `window.calendarInstance` is exposed by the component, so the hook
+   * is invoked directly with a synthetic event.
+   */
+  test('a hostile todo title renders as text, never as markup', async ({ page }) => {
+    await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).calendarInstance);
+
+    const result = await page.evaluate(() => {
+      const payload = '<img src=x onerror="window.__xssFired=1">';
+      const calendar = (window as unknown as Record<string, unknown>).calendarInstance as {
+        getOption: (name: string) => (arg: unknown) => { domNodes: HTMLElement[] };
+      };
+      const hook = calendar.getOption('eventContent');
+
+      type Probe = {
+        injectedElements: number;
+        rawTagsInDom: boolean;
+        textPreserved: boolean;
+      };
+      const out: Record<string, Probe> = {};
+
+      for (const type of ['todo', 'ticket']) {
+        const nodes = hook({
+          event: {
+            id: type === 'todo' ? 'todo-42' : 'ticket-42',
+            title: type === 'todo' ? payload : '🎫 ' + payload,
+            extendedProps: { type, is_completed: false, status: payload },
+          },
+          timeText: payload,
+        }).domNodes;
+
+        const wrapper = document.createElement('div');
+        nodes.forEach((n: HTMLElement) => wrapper.appendChild(n));
+        document.body.appendChild(wrapper);
+
+        out[type] = {
+          // Anything that became an ELEMENT is the bug; text is the goal.
+          injectedElements: wrapper.querySelectorAll('img, script, iframe, svg image').length,
+          rawTagsInDom: wrapper.innerHTML.includes('<img') || wrapper.innerHTML.includes('<script'),
+          textPreserved: wrapper.textContent.includes(payload),
+        };
+        wrapper.remove();
+      }
+      return out;
+    });
+
+    expect(result.todo.injectedElements).toBe(0);
+    expect(result.todo.rawTagsInDom).toBe(false);
+    expect(result.todo.textPreserved).toBe(true);
+
+    expect(result.ticket.injectedElements).toBe(0);
+    expect(result.ticket.rawTagsInDom).toBe(false);
+    expect(result.ticket.textPreserved).toBe(true);
+
+    // And nothing executed while we were building it.
+    const fired = await page.evaluate(
+      () => (window as unknown as Record<string, unknown>).__xssFired ?? 0
+    );
+    expect(fired).toBe(0);
+  });
 });

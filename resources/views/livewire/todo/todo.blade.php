@@ -535,15 +535,97 @@ return new class extends Component {
             editable: true,
             eventContent: function(arg) {
                 const type = arg.event.extendedProps.type || 'todo';
+
+                // Issue #891: every user-controlled value below (event title,
+                // time text, status) is assigned with `.textContent`, never
+                // concatenated into an HTML string. The previous return built
+                // that string and handed it to FullCalendar as raw markup,
+                // which the library assigns through `dangerouslySetInnerHTML`
+                // — so a `create_ticket` holder could plant a `Todo::title`
+                // (or a `Ticket::subject` copied into one by the ticket-create
+                // page) and have it execute in every calendar viewer's browser.
+                // `domNodes` removes the sink rather than escaping its
+                // contents: there is no string left to escape incorrectly, so
+                // the bug cannot recur.
                 if (type === 'ticket') {
                     const status = arg.event.extendedProps.status || '';
-                    return { html: '<div class="flex items-center gap-1"><span class="text-sm">🎫</span><span class="fc-event-title text-xs">' + arg.event.title.replace('🎫 ', '') + ' <span class="badge badge-xs badge-ghost">' + status + '</span></span></div>' };
+
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center gap-1';
+
+                    const icon = document.createElement('span');
+                    icon.className = 'text-sm';
+                    icon.textContent = '🎫';
+                    row.appendChild(icon);
+
+                    const title = document.createElement('span');
+                    title.className = 'fc-event-title text-xs';
+                    // Strip only the marker this component prepends server-side.
+                    title.textContent = arg.event.title.replace('🎫 ', '');
+
+                    const badge = document.createElement('span');
+                    badge.className = 'badge badge-xs badge-ghost';
+                    badge.textContent = status;
+
+                    title.appendChild(document.createTextNode(' '));
+                    title.appendChild(badge);
+                    row.appendChild(title);
+
+                    return { domNodes: [row] };
                 }
+
                 const todoId = arg.event.id.replace('todo-', '');
-                const checkIcon = arg.event.extendedProps.is_completed
-                    ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
-                    : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
-                return { html: '<div class="flex items-center gap-1">' + checkIcon + '<span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span></div>' };
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-1';
+
+                const isCompleted = !!arg.event.extendedProps.is_completed;
+                const NS = 'http://www.w3.org/2000/svg';
+
+                const checkIcon = document.createElementNS(NS, 'svg');
+                checkIcon.setAttribute('fill', 'none');
+                checkIcon.setAttribute('viewBox', '0 0 24 24');
+                checkIcon.setAttribute('stroke-width', '2');
+                checkIcon.setAttribute('stroke', 'currentColor');
+                checkIcon.setAttribute('aria-hidden', 'true');
+                checkIcon.style.width = '1rem';
+                checkIcon.style.height = '1rem';
+                checkIcon.style.cursor = 'pointer';
+                checkIcon.classList.add(isCompleted ? 'text-success' : 'text-base-content/40');
+                if (! isCompleted) {
+                    checkIcon.classList.add('hover:text-success');
+                }
+
+                const circle = document.createElementNS(NS, 'path');
+                circle.setAttribute('stroke-linecap', 'round');
+                circle.setAttribute('stroke-linejoin', 'round');
+                circle.setAttribute('d', 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z');
+
+                const tick = document.createElementNS(NS, 'path');
+                tick.setAttribute('stroke-linecap', 'round');
+                tick.setAttribute('stroke-linejoin', 'round');
+                tick.setAttribute('d', 'M9 12.75L11.25 15 15 9.75');
+
+                // The completed and open states draw the same circle + tick and
+                // differ only in colour, which the class list above carries.
+                checkIcon.appendChild(circle);
+                checkIcon.appendChild(tick);
+
+                // Issue #891: the toggle used to be an inline `onclick`
+                // attribute. That pattern is what the report-only CSP's
+                // 'unsafe-inline' permits, so it is removed in the same change.
+                checkIcon.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    Livewire.find(@js($this->getId())).call('toggleComplete', parseInt(todoId, 10));
+                });
+
+                row.appendChild(checkIcon);
+
+                const label = document.createElement('span');
+                label.className = 'fc-event-title';
+                label.textContent = arg.timeText + ' ' + arg.event.title;
+                row.appendChild(label);
+
+                return { domNodes: [row] };
             },
             events: @json($events),
             datesSet: function(info) {
