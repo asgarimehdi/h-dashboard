@@ -15,6 +15,25 @@ use Illuminate\Support\Facades\DB;
 class TicketCommentController extends Controller
 {
     /**
+     * Issue #863: hard cap on how many `@handle`s one comment may resolve to.
+     *
+     * A body is capped at `max:10000` characters and every valid handle is
+     * 11 characters (`@` + a 10-digit n_code, `\w+` stops at the next
+     * non-word character so no separator is needed), so ONE maximum-length
+     * comment fits 909 distinct handles — measured, not estimated. Without a
+     * bound that becomes 909 `IN` values and 909 queued `SendNotificationJob`s
+     * from a single request on a route gated only by `create_ticket`, which
+     * the lowest role holds.
+     *
+     * The cap is applied to the MATCHED HANDLES, before the database lookup,
+     * not to the notifications actually created: the amplification is the
+     * 909-element `whereIn` plus one job per match, and unmatched handles are
+     * the majority of any spam attempt, so counting only the recipients that
+     * resolved would let unknown names consume the whole quota.
+     */
+    public const MAX_MENTIONS = 20;
+
+    /**
      * List comments for a ticket.
      */
     public function index(UnitScopedRequest $request, Ticket $ticket): JsonResponse
@@ -82,7 +101,7 @@ class TicketCommentController extends Controller
 
         // Process @mentions and markdown
         $bodyHtml = $this->processMarkdown($validated['body']);
-        $mentions = $this->extractMentions($validated['body']);
+        $mentions = $this->extractMentions($validated['body'], $accessibleIds);
 
         $comment = TicketComment::create([
             'ticket_id' => $ticket->id,
@@ -332,18 +351,49 @@ class TicketCommentController extends Controller
     }
 
     /**
-     * Extract @mentions from body.
+     * Extract @mentions from body, capped and unit-scoped (issue #863).
+     *
+     * Two independent bounds, both applied BEFORE the lookup so neither the
+     * `whereIn` nor the job count can be inflated by the other:
+     *
+     * 1. `MAX_MENTIONS` on the matched handles — the amplification is a
+     *    909-value `IN` list, not the notifications, so the cap sits here.
+     * 2. The author's own `accessibleUnitIds()` — a mention can only reach a user
+     *    whose linked person sits in a unit the author can see, which is the same
+     *    contract every other user-visible query in the app follows. A target the
+     *    author cannot read must not be able to receive a notification about a
+     *    comment they will never see.
+     *
+     * The unit predicate is an UNCONDITIONAL `whereIn`, never `when($ids, …)` or
+     * `! empty($ids)`: `accessibleUnitIds()` is legitimately `[]` for an account
+     * with no `user_units` row and no `person.u_id`, and `[]` must compile to
+     * `0 = 1` (zero recipients), not to "no restriction". A NULL `persons.u_id`
+     * never matches a `whereIn`, so a unit-less person is in scope of nothing —
+     * also fail-closed, and deliberate.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return array<string, int> n_code => user id
      */
-    private function extractMentions(string $body): array
+    private function extractMentions(string $body, array $accessibleIds): array
     {
         preg_match_all('/@(\w+)/', $body, $matches);
-        $usernames = array_unique($matches[1] ?? []);
 
-        if (empty($usernames)) {
+        // `true` preserves the n_code keys notifyMentions() re-emits as the
+        // notification body, and `array_slice` bounds the `whereIn` below.
+        $usernames = array_slice(array_unique($matches[1] ?? []), 0, self::MAX_MENTIONS, true);
+
+        if ($usernames === []) {
             return [];
         }
 
-        return User::whereIn('n_code', $usernames)->pluck('id', 'n_code')->toArray();
+        return User::query()
+            // The IN-filter lives inside a `where()` closure on purpose: a
+            // top-level `whereIn()` re-types the chain to Query\Builder (no
+            // larastan), which makes the `whereHas()` below unresolvable.
+            ->where(fn ($userQuery) => $userQuery->whereIn('n_code', $usernames))
+            ->whereHas('person', fn ($personQuery) => $personQuery->whereIn('u_id', $accessibleIds))
+            ->pluck('id', 'n_code')
+            ->all();
     }
 
     /**
