@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Exports\Concerns\FormatsJalaliDates;
+use App\Support\ExcelCell;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -81,8 +82,9 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
 
     public function map($hardware): array
     {
+        // #886 (CWE-1236): escape user-originated values at map() time.
         return array_map(
-            fn ($key) => $this->resolveValue($hardware, $key),
+            fn ($key) => ExcelCell::escape($this->resolveValue($hardware, $key)),
             $this->columns
         );
     }

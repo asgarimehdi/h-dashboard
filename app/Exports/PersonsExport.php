@@ -6,6 +6,7 @@ use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Services\UnitTreeService;
+use App\Support\ExcelCell;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -96,8 +97,11 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
      */
     public function map($person): array
     {
+        // #886 (CWE-1236): escape at map() time so '='-leading values bind
+        // as text. Only map() also fixes the audits CSV route, which carries
+        // no cell-type metadata.
         return array_map(
-            fn (string $key) => $this->resolveValue($person, $key),
+            fn (string $key) => ExcelCell::escape($this->resolveValue($person, $key)),
             $this->columns
         );
     }

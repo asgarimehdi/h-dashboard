@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
+use App\Support\ExcelCell;
 use Illuminate\Support\Facades\Auth;
 
 class HardwareAuditObserver
@@ -111,10 +112,12 @@ class HardwareAuditObserver
             'hardware_id' => $hardware->id,
             'user_id' => $userId ?? Auth::id(),
             'action' => 'rollback',
-            'changes' => $rollbackChanges,
+            'changes' => $this->sanitizeChanges($rollbackChanges),
             'source' => $this->detectSource(),
             'ip_address' => request()?->ip(),
-            'user_agent' => request()?->userAgent(),
+            // #886 (CWE-1236): user_agent is attacker-controlled; neutralise
+            // '='-leading values at the source so the payload never persists.
+            'user_agent' => ExcelCell::escape(request()?->userAgent()),
         ]);
     }
 
@@ -148,11 +151,36 @@ class HardwareAuditObserver
             'hardware_id' => $hardwareId ?? $hardware->id,
             'user_id' => $user?->id,
             'action' => $action,
-            'changes' => $changes,
+            'changes' => $this->sanitizeChanges($changes),
             'source' => $source,
             'ip_address' => $request?->ip(),
-            'user_agent' => $request?->userAgent(),
+            // #886 (CWE-1236): see recordRollbackAudit.
+            'user_agent' => ExcelCell::escape($request?->userAgent()),
         ]);
+    }
+
+    /**
+     * Neutralise formula-injection payloads in stored change values (#886,
+     * CWE-1236) so a later export serves text, not a live formula.
+     *
+     * @param  array<int, mixed>|null  $changes
+     * @return array<int, mixed>|null
+     */
+    protected function sanitizeChanges(?array $changes): ?array
+    {
+        if ($changes === null) {
+            return null;
+        }
+
+        return array_map(
+            fn ($entry) => is_array($entry)
+                ? array_map(
+                    fn ($value) => is_string($value) ? ExcelCell::escape($value) : $value,
+                    $entry
+                )
+                : $entry,
+            $changes
+        );
     }
 
     /**
