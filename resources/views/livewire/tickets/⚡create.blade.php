@@ -133,6 +133,22 @@ new class extends Component
             // scope are both the rule's job, so a foreign todo and a missing
             // id are validation errors rather than a FK violation.
             'task_id' => ['nullable', new AccessibleTodo],
+            // Issue #873: the allowlist and the size cap existed only in
+            // `updatedFiles()`, which runs on the upload hook. That error is a
+            // per-request artefact — `saveTicket()` is a separate POST with a
+            // fresh error bag — so it never guarded the write loop below, and
+            // any holder of `create_ticket` (the lowest role) could store a
+            // file of any type, up to Livewire's 12MB temporary-upload
+            // ceiling, into `public/storage/attachments`. Validate in the
+            // method that writes, same shape as `⚡inbox.blade.php:676-677`
+            // (`submitAction()`). The allowlist and the 5120KB cap are the
+            // ones this component already documents in `updatedFiles()` —
+            // deliberately NOT widened to docx/xlsx (out of scope for #873),
+            // and deliberately NOT pushed into `config/livewire.php`, where a
+            // global allowlist would break the two import components that
+            // legitimately take `mimes:xlsx,xls,csv`.
+            'files' => 'nullable|array|max:5',
+            'files.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar|max:5120',
         ]);
 
         $ticketCode = 'TK-' . strtoupper(Str::random(8));
