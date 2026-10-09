@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
+use App\Rules\PerPage;
 use App\Services\AccessService;
 use Illuminate\Http\JsonResponse;
 
@@ -13,6 +14,13 @@ class UnitController extends Controller
     public function index(UnitScopedRequest $request): array
     {
         $ids = $request->accessibleIds();
+        // Issue #894: `min(...)` alone bounds the upper side only. A negative
+        // value is truthy, survives paginate()'s `?:` fallback and reaches
+        // limit(-1), which the query builder drops — the SQL loses its LIMIT and
+        // returns the whole scoped table. `PerPage` turns that into a 422, the
+        // contract `ReportDays` already sets for `?days`. The `min()` stays as
+        // defence in depth in case validation is ever bypassed.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min($request->integer('per_page', 15), 100);
         $units = Unit::whereIn('id', $ids)
             ->with('unitType:id,name')

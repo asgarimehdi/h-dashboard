@@ -8,6 +8,7 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
+use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -145,6 +146,11 @@ class HardwareController extends Controller
 
         $query->orderBy($sortBy, $sortDir);
 
+        // Issue #894: see UnitController::index(). `min(...)` bounds only the upper
+        // side; a negative `per_page` reaches `limit(-1)`, which the query builder
+        // drops, so the SQL loses its LIMIT clause. 422 is the contract; the
+        // `min()` stays as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min((int) $request->get('per_page', 10), 100);
 
         $paginator = $query->paginate($perPage);

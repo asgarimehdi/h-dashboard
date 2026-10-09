@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
+use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -74,6 +75,10 @@ class OrgChartController extends Controller
     public function orgChartExpandable(UnitScopedRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
+        // Issue #894: see UnitController::index(). The more dangerous site of the two:
+        // this one calls `->limit()` directly, and the value is hashed into the
+        // cache key, so every distinct negative minted a fresh full-scope entry.
+        $request->validate(['initial_limit' => ['sometimes', new PerPage(100)]]);
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
         $scopeHash = md5(implode(',', $accessibleIds));

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
+use App\Rules\PerPage;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 
@@ -50,6 +51,9 @@ class PersonController extends Controller
 
         $query->orderBy($sortBy, $sortDir);
 
+        // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
+        // clamp; `min()` kept as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min((int) $request->get('per_page', 20), 100);
         $persons = $query->paginate($perPage);
 

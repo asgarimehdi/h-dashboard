@@ -162,11 +162,52 @@ class HardwareAuditDetailTest extends TestCase
             $this->hardware->update(['comments' => "Update {$i}"]);
         }
 
+        $url = "/api/hardware/{$this->hardware->id}/audits";
+
+        // Issue #894: over the cap is now a 422 rather than a silent clamp, and
+        // the cap itself is pinned with a row count rather than `meta` alone.
+        $this->withHeaders($this->headers())
+            ->getJson("{$url}?per_page=10000")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
         $response = $this->withHeaders($this->headers())
-            ->getJson("/api/hardware/{$this->hardware->id}/audits?per_page=10000");
+            ->getJson("{$url}?per_page=50");
 
         $response->assertStatus(200);
         $this->assertEquals(50, $response->json('meta.per_page')); // capped at 50
+    }
+
+    /**
+     * Issue #894: this endpoint caps at 50, and the cap was enforced from above
+     * only. A negative `per_page` is truthy, survives `paginate()`'s `?:`
+     * fallback and reaches `limit(-1)`, which the query builder drops — the SQL
+     * loses its LIMIT clause and returns every audit. Out-of-range values are
+     * now a 422, like `ReportDays` for `?days`; 50 stays valid because the rule
+     * is parametrised to this endpoint's own cap.
+     */
+    public function test_index_rejects_out_of_range_per_page(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->hardware->update(['comments' => "Update {$i}"]);
+        }
+
+        $url = "/api/hardware/{$this->hardware->id}/audits";
+
+        $this->withHeaders($this->headers())
+            ->getJson("{$url}?per_page=-1")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
+        $this->withHeaders($this->headers())->getJson("{$url}?per_page=0")->assertStatus(422);
+
+        // Above this endpoint's own cap of 50.
+        $this->withHeaders($this->headers())->getJson("{$url}?per_page=51")->assertStatus(422);
+
+        // The cap itself is still accepted, and non-numeric input still falls
+        // back to the default rather than failing.
+        $this->withHeaders($this->headers())->getJson("{$url}?per_page=50")->assertStatus(200);
+        $this->withHeaders($this->headers())->getJson("{$url}?per_page=abc")->assertStatus(200);
     }
 
     // ---- Show / detail ----

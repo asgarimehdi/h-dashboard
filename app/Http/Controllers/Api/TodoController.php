@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Http\Resources\TodoResource;
 use App\Models\Todo;
+use App\Rules\PerPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -30,6 +31,9 @@ class TodoController extends Controller
             $query->where('is_completed', $request->boolean('is_completed'));
         }
 
+        // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
+        // clamp; `min()` kept as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min((int) $request->input('per_page', 15), 100);
         $todos = $query->latest()->paginate($perPage);
 
