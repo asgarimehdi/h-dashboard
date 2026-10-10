@@ -85,11 +85,7 @@ class AccessibilityInfrastructureTest extends TestCase
 
     public function test_toast_renders_inside_a_polite_live_region(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
-        $this->actingAs($user);
-        Session::put('current_unit_name', 'واحد تست');
-
-        $xpath = $this->xpath(Blade::render('<x-layouts.app>محتوا</x-layouts.app>'));
+        $xpath = $this->xpath($this->renderAppLayout());
 
         // `@persist('mary-toaster')` تنها نشانهٔ پایدارِ ریشهٔ توست است؛
         // `@mary-toast.window` را پارسر HTML4 پاک می‌کند چون `@` نام معتبر نیست.
@@ -305,8 +301,74 @@ class AccessibilityInfrastructureTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // قدم ۳ — لینک پرش و نشانه‌های ناوبری
+    // ---------------------------------------------------------------------
+
+    public function test_the_layout_offers_a_skip_link_that_targets_the_main_region(): void
+    {
+        $xpath = $this->xpath($this->renderAppLayout());
+
+        $skip = $xpath->query('//a[@href="#main-content"]')->item(0);
+        $this->assertNotNull($skip, 'لایوت باید لینک پرش داشته باشد؛ بدون آن، کاربر صفحه‌کلید هر بار از کل منو عبور می‌کند.');
+        $this->assertNotSame('', trim($skip->textContent), 'لینک پرش باید متن داشته باشد، نه فقط آیکون.');
+
+        $target = $xpath->query('//*[@id="main-content"]')->item(0);
+        $this->assertNotNull($target, 'هدف لینک پرش باید در صفحه وجود داشته باشد، وگرنه لینک به جایی می‌رود که نیست.');
+
+        $this->assertSame(
+            '-1',
+            $target->getAttribute('tabindex'),
+            'هدف باید tabindex="-1" داشته باشد وگرنه مرورگر فوکوس را روی آن نمی‌برد و لینک بی‌اثر است.'
+        );
+
+        $this->assertSame(
+            'main',
+            $this->closestMatch($xpath, $target, 'ancestor::main')?->nodeName,
+            'هدف لینک پرش باید داخل ناحیهٔ اصلی باشد.'
+        );
+    }
+
+    public function test_the_skip_link_is_hidden_until_it_takes_focus(): void
+    {
+        $skip = $this->xpath($this->renderAppLayout())->query('//a[@href="#main-content"]')->item(0);
+
+        $this->assertStringContainsString('sr-only', $skip->getAttribute('class'));
+        $this->assertStringContainsString(
+            'focus:not-sr-only',
+            $skip->getAttribute('class'),
+            'لینک پرش باید با فوکوس ظاهر شود؛ sr-only تنها یک عنصر نامرئیِ دیگر است.'
+        );
+    }
+
+    public function test_the_sidebar_is_a_labelled_navigation_landmark(): void
+    {
+        $xpath = $this->xpath($this->renderAppLayout());
+
+        $navs = $xpath->query('//nav[@aria-label]');
+        $this->assertGreaterThan(0, $navs->length, 'سایدبار باید یک نشانهٔ <nav> با برچسب باشد.');
+
+        $nav = $navs->item(0);
+        $this->assertNotSame('', trim($nav->getAttribute('aria-label')), 'نشانهٔ nav باید برچسب داشته باشد؛ نام‌دادنش اجباری است.');
+
+        $this->assertGreaterThan(
+            0,
+            $xpath->query('.//ul[contains(@class, "menu")]//a', $nav)->length,
+            'این <nav> باید همان منوی اصلی را در بر بگیرد.'
+        );
+    }
+
+    // ---------------------------------------------------------------------
     // قدم ۴ — نام دسترس‌پذیر برای چک‌باکس‌ها و تاگل‌های خام
     // ---------------------------------------------------------------------
+
+    private function renderAppLayout(): string
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
+        $this->actingAs($user);
+        Session::put('current_unit_name', 'واحد تست');
+
+        return Blade::render('<x-layouts.app>محتوا</x-layouts.app>');
+    }
 
     private function sematTableHtml(): string
     {

@@ -43,6 +43,12 @@
 </head>
 
 <body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
+    {{-- #957: لینک پرش. `focus:absolute` لازم است چون `not-sr-only` حالتِ
+         static می‌گذارد و بدون آن با هر بار فوکوس، کل صفحه یک خط پایین می‌رود. --}}
+    <a href="#main-content"
+       class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[1000] focus:rounded-lg focus:bg-base-100 focus:px-4 focus:py-2 focus:shadow-lg">
+        رفتن به محتوای اصلی
+    </a>
     <!-- Stitch-style animated background JavaScript -->
     <script>
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
@@ -163,7 +169,10 @@
             {{-- BRAND --}}
             <x-app-brand class="px-5 pt-4" />
 
-            <x-menu activate-by-route>
+            {{-- #957: برچسب‌دار کردن نشانهٔ ناوبری. بدون `aria-label` چند
+                 ناوبری روی صفحه برای صفحه‌خوان یکسان و بی‌نام می‌شوند. --}}
+            <nav aria-label="منوی اصلی">
+                <x-menu activate-by-route>
                 @if($user = auth()->user())
                 <x-menu-separator />
                 <x-list-item :item="auth()->user()" value="name" no-separator no-hover
@@ -338,9 +347,13 @@
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
-            </x-menu>
+                </x-menu>
+            </nav>
         </x-slot:sidebar>
-        <x-slot:content>
+        {{-- #957: هدف لینک پرش. Mary's Main روی `<main>` هیچ کیسهٔ صفتی نمی‌دهد،
+             اما صفت‌های این اسلات را روی div محتوا merge می‌کند؛ `tabindex="-1"`
+             بدون آن لازم است چون مرورگر فقط با فوکوس برنامه‌نویسی‌شده کار می‌کند. --}}
+        <x-slot:content id="main-content" tabindex="-1">
             {{ $slot }}
         </x-slot:content>
     </x-main>
