@@ -866,9 +866,11 @@ new class extends Component
         ]" :rows="$this->tickets" with-pagination>
 
             @scope('cell_checkbox', $ticket)
+            {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. --}}
             <input type="checkbox"
                 class="checkbox checkbox-sm checkbox-primary"
                 wire:click="toggleTicketSelection({{ $ticket->id }})"
+                aria-label="انتخاب تیکت {{ $ticket->ticket_code }}"
                 @if(in_array($ticket->id, $this->selectedTickets)) checked @endif />
             @endscope
 

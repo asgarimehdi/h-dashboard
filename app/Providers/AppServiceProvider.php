@@ -12,6 +12,8 @@ use App\Services\CacheInvalidationServiceInterface;
 use App\Services\Zabbix\ServiceZabbixClient;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\ZabbixService;
+use App\View\Components\AccessibleMenuItem;
+use App\View\Components\AccessibleTable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -47,6 +49,27 @@ class AppServiceProvider extends ServiceProvider
         // Register anonymous help components with colon syntax for Blade
         Blade::component('components.help.button', 'help:button');
         Blade::component('components.help.modal', 'help:modal');
+
+        // #957 (step 2): maryUI's sortable `<th>` carries no `aria-sort` and no
+        // `tabindex`, and it is built inside the vendor component's own render()
+        // heredoc — no call-site attribute can reach it. Re-registering the
+        // alias is the only faithful fix; `<x-table>` keeps working unchanged
+        // because AccessibleTable extends Mary's Table.
+        //
+        // #957 (step 2, second half): the sidebar marks the current page with a
+        // CSS class only, so a screen reader reports no location at all.
+        // `mary-active-menu` must survive — Mary's MenuSub greps the rendered
+        // child markup for it to decide that a submenu is open.
+        //
+        // Both must run AFTER MaryServiceProvider::boot(), which registers the
+        // same aliases. It does: package providers boot before
+        // bootstrap/providers.php.
+        //
+        // Deploys must run `view:clear` before `view:cache` — Blade keys a
+        // compiled view on the source file's mtime, not on the alias table, so
+        // a cache carried over from before this change keeps Mary's markup.
+        Blade::component('table', AccessibleTable::class);
+        Blade::component('menu-item', AccessibleMenuItem::class);
 
         // Register help-content components dynamically with colon syntax
         $helpContents = [
