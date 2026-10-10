@@ -58,3 +58,8 @@ install.log
 npm-install.log
 serve.out
 vite-build.log
+
+# Pest run logs (CI: .github/workflows/test.yml tees them for the
+# "Assert tests really executed" step, issue #935)
+pest-list.log
+pest-plain.log
