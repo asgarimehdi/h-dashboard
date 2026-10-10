@@ -3,6 +3,7 @@
 #
 # 1. preflight  — fails fast (exit 2) if this machine cannot run the suite the
 #                 way CI does, BEFORE anything destructive runs
+# 1b. APP_KEY   — fails if a tracked env file commits a real APP_KEY (#953)
 # 2. caches     — `composer test` already clears config/routes; view:clear is
 #                 the one CI does that composer test does not, so add it here
 # 3. pint       — `pint --test`, the exact command CI's lint job runs
@@ -50,6 +51,18 @@ if [ "$preflight_status" -ne 0 ]; then
     echo "✗ Preflight failed (exit ${preflight_status}). Nothing was run, nothing was touched."
     echo "  Fix the environment above, then run composer verify again."
     exit "$preflight_status"
+fi
+
+# 1b. Committed APP_KEY guard (issue #953). Runs before every expensive gate
+#     below, because a leaked master secret is the one finding that must not
+#     wait five minutes for Pint and PHPStan to finish first. Cheap, and it
+#     needs no database — but it reads the git index, so it is a repository
+#     check, not an environment one.
+step "Committed APP_KEY"
+if ! php scripts/check-app-key-leak.php; then
+    echo ""
+    echo "✗ Committed APP_KEY. See the list above."
+    exit 1
 fi
 
 # 2. Caches. `composer test` clears config and routes on its own; a stale
