@@ -12,6 +12,7 @@ use App\Services\CacheInvalidationServiceInterface;
 use App\Services\Zabbix\ServiceZabbixClient;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\ZabbixService;
+use App\View\Components\AccessibleMenuItem;
 use App\View\Components\AccessibleTable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Blade;
@@ -55,13 +56,20 @@ class AppServiceProvider extends ServiceProvider
         // alias is the only faithful fix; `<x-table>` keeps working unchanged
         // because AccessibleTable extends Mary's Table.
         //
-        // Must run AFTER MaryServiceProvider::boot(), which registers the same
-        // alias. It does: package providers boot before bootstrap/providers.php.
+        // #957 (step 2, second half): the sidebar marks the current page with a
+        // CSS class only, so a screen reader reports no location at all.
+        // `mary-active-menu` must survive — Mary's MenuSub greps the rendered
+        // child markup for it to decide that a submenu is open.
+        //
+        // Both must run AFTER MaryServiceProvider::boot(), which registers the
+        // same aliases. It does: package providers boot before
+        // bootstrap/providers.php.
         //
         // Deploys must run `view:clear` before `view:cache` — Blade keys a
         // compiled view on the source file's mtime, not on the alias table, so
-        // a cache carried over from before this change keeps Mary's `<th>`.
+        // a cache carried over from before this change keeps Mary's markup.
         Blade::component('table', AccessibleTable::class);
+        Blade::component('menu-item', AccessibleMenuItem::class);
 
         // Register help-content components dynamically with colon syntax
         $helpContents = [

@@ -242,6 +242,69 @@ class AccessibilityInfrastructureTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // قدم ۲ — aria-current روی آیتم فعال منو
+    // ---------------------------------------------------------------------
+
+    public function test_the_active_sidebar_link_is_marked_as_the_current_page(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
+        $this->actingAs($user);
+
+        $xpath = $this->xpath($this->get('/users')->assertOk()->getContent());
+
+        $current = $xpath->query('//a[@aria-current="page"]');
+        $this->assertSame(
+            1,
+            $current->length,
+            'دقیقاً یک لینک باید aria-current="page" داشته باشد — همان صفحه‌ای که در آن هستیم.'
+        );
+
+        $this->assertSame('/users', $current->item(0)->getAttribute('href'));
+    }
+
+    public function test_inactive_sidebar_links_are_not_marked_as_current(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
+        $this->actingAs($user);
+
+        $xpath = $this->xpath($this->get('/users')->assertOk()->getContent());
+
+        $this->assertSame(
+            0,
+            $xpath->query('//nav//a[@href="/activity-log"][@aria-current]')->length,
+            'لینکی که صفحهٔ جاری نیست نباید aria-current بگیرد؛ اعلامِ اشتباه از نبودِ اعلام بدتر است.'
+        );
+    }
+
+    public function test_the_active_link_keeps_the_class_mary_menu_sub_reads(): void
+    {
+        // Mary's MenuSub decides a submenu is open with
+        // `Str::contains($slot, 'mary-active-menu')` over the ALREADY RENDERED
+        // child HTML. Dropping that class while adding aria-current would leave
+        // every submenu silently collapsed — a regression no assertion on the
+        // <a> alone would catch, so the enclosing <details> is checked too.
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
+        $this->actingAs($user);
+
+        $xpath = $this->xpath($this->get('/users')->assertOk()->getContent());
+
+        $active = $xpath->query('//a[@aria-current="page"]')->item(0);
+
+        $this->assertStringContainsString(
+            'mary-active-menu',
+            $active->getAttribute('class'),
+            'کلاس mary-active-menu باید بماند؛ MenuSub به آن وابسته است.'
+        );
+
+        $submenu = $this->closestMatch($xpath, $active, 'ancestor::details[1]');
+        $this->assertNotNull($submenu, 'آیتم فعال داخل یک زیرمنو است.');
+        $this->assertTrue(
+            $submenu->hasAttribute('open'),
+            'زیرمنویی که آیتم فعال در آن است باید باز رندر شود — این همان چیزی است که به کلاس وابسته است.'
+        );
+    }
+
+    // ---------------------------------------------------------------------
     // قدم ۴ — نام دسترس‌پذیر برای چک‌باکس‌ها و تاگل‌های خام
     // ---------------------------------------------------------------------
 
