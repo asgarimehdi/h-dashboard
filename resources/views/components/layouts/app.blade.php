@@ -345,7 +345,12 @@
         </x-slot:content>
     </x-main>
 
-    <x-toast />
+    {{-- #957: توست تا حالا فقط بصری بود؛ `x-show` آن را در DOM نگه می‌دارد
+         ولی بدون ناحیهٔ زنده هیچ صفحه‌خوانی متوجه باز شدنش نمی‌شود. زنده‌بودن
+         باید روی ظرفی باشد که همیشه در DOM است، نه روی خودِ توست. --}}
+    <div aria-live="polite" aria-atomic="true">
+        <x-toast />
+    </div>
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
     // Register service worker for browser notifications

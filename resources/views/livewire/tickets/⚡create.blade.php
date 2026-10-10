@@ -263,7 +263,8 @@ new class extends Component
         <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
-        <x-errors :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
+        {{-- #957: role="alert" تا خطای اعتبارسنجی تیکت واقعاً اعلام شود، نه فقط دیده. --}}
+        <x-errors role="alert" :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">
             <div class="relative">
                 <x-input
