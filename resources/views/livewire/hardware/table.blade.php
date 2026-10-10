@@ -49,7 +49,10 @@
     <x-table :headers="$headers" :rows="$hardwares" :sort-by="$sortBy" with-pagination per-page="perPage"
             :per-page-values="[10, 20, 50, 100]" :row-decoration="['bg-warning/20 border-r-4 border-r-warning' => fn($row) => $row['mark']]">
         @scope('cell_checkbox', $hw)
-            <input type="checkbox" wire:model.live="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm" />
+            {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. نام باید
+                 ردیف را مشخص کند، وگرنه انتخاب گروهی عملاً غیرقابل‌انجام است. --}}
+            <input type="checkbox" wire:model.live="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm"
+                aria-label="انتخاب سخت افزار {{ $hw['pc_name'] }}" />
         @endscope
         @scope('cell_status', $hw)
             @if($hw['status'] === 'mark')

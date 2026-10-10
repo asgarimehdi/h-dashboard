@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Person;
+use App\Models\Ticket;
 use Database\Seeders\PermissionSeeder;
 use DOMDocument;
 use DOMElement;
@@ -158,6 +160,121 @@ class AccessibilityInfrastructureTest extends TestCase
             '',
             trim($xpath->query('//*[@role="alert"]//li')->item(0)?->textContent ?? ''),
             'بلوک alert باید متن خطا را در خود داشته باشد، نه فقط یک نقش خالی.'
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // قدم ۴ — نام دسترس‌پذیر برای چک‌باکس‌ها و تاگل‌های خام
+    // ---------------------------------------------------------------------
+
+    public function test_every_hardware_page_checkbox_has_an_accessible_name(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($user);
+        $this->seedLookupTables();
+
+        // سخت‌افزار باید در اسکوپ همان کاربر باشد وگرنه جدول خالی رندر می‌شود
+        // و چک‌باکسِ انتخاب ردیف اصلاً تولید نمی‌شود.
+        $person = Person::factory()->create(['u_id' => $unit->id]);
+        $this->createHardware(['n_code' => $person->n_code, 'pc_name' => 'PC-NAMED-1']);
+
+        $html = Livewire::test('hardware.index')->html();
+
+        $this->assertEveryCheckboxHasAnAccessibleName($html);
+    }
+
+    public function test_every_ticket_inbox_checkbox_has_an_accessible_name(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+        $this->seedLookupTables();
+
+        // صندوق به‌طور پیش‌فرض روی وضعیت‌های «در انتظار» است، پس تیکت باید
+        // `created` باشد و به کاربر نسبت داده شود تا اصلاً رندر شود.
+        Ticket::create([
+            'ticket_code' => 'T-NAMED-1',
+            'subject' => 'تیکت آزمایشی برای نام‌گذاری',
+            'content' => 'متن تیکت آزمایشی برای تست نام دسترس‌پذیر.',
+            'status' => 'created',
+            'priority' => 'normal',
+            'unit_id' => $user->person->u_id,
+            'user_id' => $user->id,
+        ]);
+
+        $html = Livewire::test('tickets.inbox')->html();
+
+        $this->assertEveryCheckboxHasAnAccessibleName($html);
+    }
+
+    /**
+     * هر `input[type=checkbox]` رندرشده باید نام دسترس‌پذیر داشته باشد: یا
+     * `aria-label`، یا `aria-labelledby`، یا `<label for>`، یا یک `<label>`
+     * که آن را در بر گرفته. چک‌باکسِ بی‌نام برای صفحه‌خوان فقط «چک‌باکس» است.
+     *
+     * توجه: عمداً روی *نام* شرط می‌گذاریم نه روی نبودِ `id`. هشت چک‌باکسِ
+     * موجود با `<label>` پوشانده شده‌اند و نام دارند؛ افزودن `aria-label`
+     * به آن‌ها نامِ قابل‌دیدن را می‌پوشاند و WCAG 2.5.3 را می‌شکند.
+     */
+    private function assertEveryCheckboxHasAnAccessibleName(string $html): void
+    {
+        $xpath = $this->xpath($html);
+
+        // `.theme-controller` کنترلر داخلی DaisyUI برای `<x-theme-toggle>` است:
+        // `<label for>` دارد ولی فقط آیکون، پس نامش تهی درمی‌آید. از آن ۱۰
+        // چک‌باکس خام این ایشو بیرون است (id و label دارد) و درست‌کردنش
+        // بازنویسی کامپوننت vendor می‌خواهد — خارج از اسکوپ این ایشو.
+        $checkboxes = $xpath->query('//input[@type="checkbox" and not(contains(@class, "theme-controller"))]');
+
+        $this->assertGreaterThan(
+            0,
+            $checkboxes->length,
+            'این صفحه باید دست‌کم یک چک‌باکس رندر کند، وگرنه این تست بی‌اثر است.'
+        );
+
+        foreach ($checkboxes as $checkbox) {
+            $this->assertNotSame(
+                '',
+                $this->accessibleName($xpath, $checkbox),
+                'چک‌باکسِ value="'.$checkbox->getAttribute('value').'" در این صفحه نام دسترس‌پذیر ندارد.'
+            );
+        }
+    }
+
+    private function accessibleName(DOMXPath $xpath, DOMElement $input): string
+    {
+        $aria = trim($input->getAttribute('aria-label'));
+        if ($aria !== '') {
+            return $aria;
+        }
+
+        $labelledBy = preg_split(
+            '/\s+/',
+            trim($input->getAttribute('aria-labelledby')),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        $text = '';
+        foreach ($labelledBy ?: [] as $id) {
+            $text .= $xpath->query('//*[@id="'.htmlspecialchars($id, ENT_QUOTES).'"]')
+                ->item(0)?->textContent ?? '';
+        }
+
+        if (trim($text) !== '') {
+            return trim($text);
+        }
+
+        $for = $input->getAttribute('for');
+        if ($for !== '') {
+            $label = $xpath->query('//label[@for="'.htmlspecialchars($for, ENT_QUOTES).'"]')->item(0);
+            if ($label !== null) {
+                return trim($label->textContent);
+            }
+        }
+
+        return trim(
+            ($this->closestMatch($xpath, $input, 'ancestor::label[1]')?->textContent ?? '')
+            .$input->getAttribute('title')
         );
     }
 }
