@@ -413,6 +413,11 @@ class PersonsExportTest extends TestCase
         // the absence of a crash.
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
 
+        // Pinned: UnitFactory draws from 15 names and 'خانه بهداشت روستایی'
+        // contains BOTH search terms, so a random $unit would match the filter
+        // and flake this exact-row-set assertion (~1/15 runs).
+        $unit->update(['name' => 'واحد مالی و اداری']);
+
         $clinic = Unit::factory()->create([
             'name' => "خانه\u{200C}بهداشت مرکزی",
             'parent_id' => $unit->id,
@@ -463,6 +468,10 @@ class PersonsExportTest extends TestCase
         // the unit carrying all three may come back, which also pins that the
         // fold does not reorder or drop a term.
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        // Pinned for the same reason as the ZWNJ-compound test above: a random
+        // factory name must never contribute a search term to this assertion.
+        $unit->update(['name' => 'واحد مالی و اداری']);
 
         $partial = Unit::factory()->create(['name' => "خانه\u{200C}بهداشت", 'parent_id' => $unit->id]);
         $full = Unit::factory()->create(['name' => "مرکز خانه\u{200C}بهداشت", 'parent_id' => $unit->id]);
