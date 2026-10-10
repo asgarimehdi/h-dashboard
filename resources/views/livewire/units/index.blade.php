@@ -506,6 +506,7 @@ return new class extends Component {
             @scope('actions', $unit)
                 <div class="flex w-1/12">
                     <a href="/units/{{ $unit->id }}/map"
+                       aria-label="نقشهٔ واحد"
                        class="btn btn-ghost btn-sm text-primary">
                         <x-icon name="o-map" class="w-5 h-5"/>
                         <span class="hidden 2xl:inline">نقشه</span>
