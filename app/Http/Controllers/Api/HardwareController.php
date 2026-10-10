@@ -10,6 +10,7 @@ use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\HardwareAuditChange;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -342,8 +343,15 @@ class HardwareController extends Controller
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
-        // Batch insert audit entries before deletion
-        $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn ($hw) => $hw->getAttributes());
+        // #927: `changes` is a field-level diff list, `[{field, old, new}]` —
+        // this used to write $hw->getAttributes(), a column => value map, which
+        // no reader could render (the export threw a TypeError on it).
+        $this->batchInsertAudits(
+            $hardwares,
+            'bulk_delete',
+            null,
+            fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
+        );
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
@@ -365,6 +373,12 @@ class HardwareController extends Controller
 
     /**
      * Batch insert audit entries in a single query instead of N+1 loop.
+     *
+     * #927: `HardwareAudit::insert()` bypasses casts, so the column-shape
+     * contract is enforced here — the only place a guard can actually bite. A
+     * payload that is not the documented diff list is coerced rather than
+     * rejected: a malformed audit row must never be the reason a bulk delete
+     * fails.
      */
     protected function batchInsertAudits($hardwares, string $action, ?array $staticChanges, ?\Closure $changesPerItem = null): void
     {
@@ -372,7 +386,9 @@ class HardwareController extends Controller
         $request = request(); // actual request, not Request::capture()
 
         $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
-            $changes = $changesPerItem ? $changesPerItem($hardware) : $staticChanges;
+            $changes = HardwareAuditChange::toDiffList(
+                $changesPerItem ? $changesPerItem($hardware) : $staticChanges
+            );
 
             return [
                 'hardware_id' => $hardware->id,
