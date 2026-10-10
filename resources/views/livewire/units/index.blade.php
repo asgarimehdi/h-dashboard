@@ -5,6 +5,8 @@ use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
 use App\Services\AccessService;
+use App\Services\UnitDeletionImpact;
+use App\Services\UnitDeletionService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -425,14 +427,61 @@ return new class extends Component
             return;
         }
 
+        // #949 steps 2–4: refuse, and say what is actually in the way.
+        // Six of the eight inbound FKs on `units` are not RESTRICT, so a delete
+        // here used to silently NULL `persons.u_id`, NULL `todos.unit_id` and
+        // CASCADE away `user_units` rows — orphaning 155 of 318 accounts from
+        // the org tree while reporting a green toast. The counts, not this
+        // component, decide what blocks: `UnitDeletionService` is shared with
+        // `UnitController::destroy()` so the two surfaces cannot disagree.
+        $impact = app(UnitDeletionService::class)->impact($unit);
+
+        if (! $impact->isClear()) {
+            $this->error($this->describeImpact($impact), position: 'toast-bottom');
+
+            return;
+        }
+
         try {
             $unit->delete();
             $this->warning("$unit->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
+            // Unreachable for every table counted above — this is only the race
+            // window between the count and the delete, so it must not claim to
+            // know which table stopped it.
+            $this->error('حذف واحد انجام نشد؛ هم‌زمان تغییری در اطلاعات آن رخ داد. دوباره تلاش کنید.', position: 'toast-bottom');
         }
 
         app(\App\Services\AccessService::class)->clearAllCaches();
+    }
+
+    /**
+     * #949 step 4 — the refusal names each blocking table and its count, in the
+     * Persian the rest of this page is written in. The old text
+     * («…زیرا در جدول دیگری استفاده شده است») described only the two RESTRICT
+     * rows and implied the six cascade tables were protected — which is exactly
+     * the belief that made the delete destructive.
+     */
+    private function describeImpact(UnitDeletionImpact $impact): string
+    {
+        $labels = [
+            'children' => 'زیرمجموعه',
+            'tickets' => 'تیکت',
+            'persons' => 'پرسنل',
+            'hardware' => 'سخت‌افزار',
+            'todos' => 'وظیفه',
+            'accounts' => 'حساب کاربری',
+        ];
+
+        $blocking = [];
+
+        foreach ($impact->blockers() as $key => $count) {
+            $blocking[] = $count.' '.$labels[$key];
+        }
+
+        return 'امکان حذف این واحد وجود ندارد؛ این واحد هنوز دارد: '
+            .implode('، ', $blocking)
+            .'. ابتدا آن‌ها را به واحد دیگری منتقل کنید یا واحد را غیرفعال کنید.';
     }
 
     /**
@@ -590,7 +639,7 @@ return new class extends Component
                               @click="$wire.modal = true" />
                     <x-button icon="o-trash"
                               wire:click="deleteUnit({{ $unit->id }})"
-                              wire:confirm="آیا مطمئن هستید"
+                              wire:confirm="حذف واحد، پرسنل و سخت‌افزار آن را از دسترس خارج می‌کند و وظایف و حساب‌های کاربری‌اش را بی‌واحد می‌سازد. اگر قصد بازنشستگی واحد را دارید، به‌جای حذف آن را غیرفعال کنید. مطمئن هستید؟"
                               spinner
                               class="btn-ghost btn-sm text-error" />
                 </div>

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Hardware;
 use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
@@ -12,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -695,4 +698,156 @@ class UnitsIndexLivewireTest extends TestCase
 
         $this->assertDatabaseHas('units', ['id' => $outsider->id, 'is_active' => true]);
     }
+
+    // ==================== #949 steps 3–4: refuse, and say what blocks ====================
+
+    /**
+     * The contract the «تأیید گیت» comment pins: with the step-3 guard,
+     * "delete a unit that still has personnel" is **refused**.
+     *
+     * Before this, `persons.u_id` went NULL and `user_units` cascaded, which is
+     * how #949 measured 155 of 318 accounts silently losing every unit they
+     * could reach. `persons.u_id` staying set is the whole assertion: a
+     * SET NULL would still leave the row in the table, so the column value —
+     * not merely the row count — is what pins the fix.
+     */
+    public function test_delete_unit_with_personnel_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای پرسنل', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        $person = Person::factory()->create(['u_id' => $target->id]);
+        $hardware = $this->createHardware(['n_code' => $person->n_code]);
+
+        Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $target->id]);
+        $this->assertDatabaseHas('hardwares', ['id' => $hardware->id]);
+    }
+
+    /**
+     * Step 4: the old message said only «…زیرا در جدول دیگری استفاده شده است»,
+     * which described the two RESTRICT rows and implied the other six tables
+     * were protected. They were not. The refusal has to name what actually
+     * blocks, with the counts.
+     */
+    public function test_delete_unit_refusal_names_the_blocking_counts(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای پرسنل', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Person::factory()->count(3)->create(['u_id' => $target->id]);
+        Todo::factory()->count(2)->create(['unit_id' => $target->id]);
+
+        $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $title = assertToastContains($component, 'پرسنل');
+        $this->assertStringContainsString('3', $title);
+        $this->assertStringContainsString('وظیفه', $title);
+        $this->assertStringContainsString('2', $title);
+    }
+
+    public function test_delete_unit_with_todos_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای وظیفه', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Todo::factory()->create(['unit_id' => $target->id]);
+
+        Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('todos', ['unit_id' => $target->id]);
+    }
+
+    /**
+     * `uu_unit_fk` is CASCADE — the one table where the row is destroyed
+     * outright rather than nulled, so it is the one that cannot be repaired by
+     * re-running a sync afterwards.
+     */
+    public function test_delete_unit_with_accounts_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای حساب', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        $staff = User::factory()->create();
+        DB::table('user_units')->insert([
+            'user_id' => $staff->id, 'unit_id' => $target->id,
+            'role' => 'staff', 'is_primary' => true,
+        ]);
+
+        Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('user_units', ['user_id' => $staff->id, 'unit_id' => $target->id]);
+    }
+
+    /**
+     * `tickets_unit_fk` is RESTRICT, so this used to reach the `catch` with a
+     * live `QueryException` — inside a Livewire request that leaves the
+     * transaction aborted. Counting it first means the guard reports it like
+     * any other blocker and the connection stays usable.
+     */
+    public function test_delete_unit_with_tickets_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای تیکت', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Ticket::create([
+            'ticket_code' => 'T-949', 'subject' => 's', 'content' => 'c',
+            'status' => 'open', 'priority' => 'normal', 'unit_id' => $target->id,
+        ]);
+
+        $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        assertToastContains($component, 'تیکت');
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        // The connection is still usable — a refused delete must not abort it.
+        $this->assertDatabaseHas('tickets', ['ticket_code' => 'T-949']);
+    }
+}
+
+/**
+ * The toast text never reaches the HTML: `Mary\Traits\Toast` ships it as a JS
+ * effect (`effects['xjs']` holding a `toast({...})` expression), so `assertSee`
+ * always fails. The expression is a JSON string inside a string, so the Persian
+ * text arrives `\uXXXX`-escaped and has to be decoded before comparison.
+ *
+ * Returns the matched title so callers can make a real assertion on it — a
+ * helper that only `return`s registers none and leaves the test "risky".
+ */
+function assertToastContains(Testable $component, string $needle): string
+{
+    $expressions = array_column($component->effects['xjs'] ?? [], 'expression');
+
+    foreach ($expressions as $expression) {
+        $inner = json_decode(substr($expression, strlen('toast('), -1), true);
+
+        if (is_array($inner) && str_contains($inner['toast']['title'] ?? '', $needle)) {
+            return (string) $inner['toast']['title'];
+        }
+    }
+
+    test()->fail('No toast contained "'.$needle.'"; got: '.implode(' | ', $expressions));
 }
