@@ -121,12 +121,38 @@ return new class extends Component
         $this->formOpen = true;
     }
 
-    public function delete(PersonModel $person): void
+    /**
+     * Delete a person by PRIMARY KEY.
+     *
+* #936: this used to be `delete(PersonModel $person)`, a typed parameter.
+     * Livewire resolves a typed model parameter through
+     * `resolveRouteBinding()`, i.e. by `getRouteKeyName()` — and `Person`
+     * overrides it to `n_code`. The Blade call site in this file's `@scope`
+     * block sends `$person->id`, so `resolveRouteBinding(3)` ran
+     * `WHERE n_code = '3'`, matched nothing, and threw `ModelNotFoundException`
+     * before this method body ever executed: the delete was 100%
+     * non-functional in the browser and the `#805` checks below were
+     * unreachable code.
+     *
+     * The parameter is therefore an `int` resolved against the primary key,
+     * matching the sibling `editPerson($id)` in this same file. Do NOT
+     * "fix" this by typing the parameter as `Person` and passing
+     * `$person->n_code` from Blade: `wire:click="delete({{ $person->n_code }})"`
+     * interpolates UNQUOTED, so the browser parses `0023548258` as a JS
+     * numeric literal and strips the leading zeros — a real convention in
+     * Iranian national codes. The id is the only value that survives the
+     * round trip untransformed.
+     */
+    public function delete(int $personId): void
     {
         // #805: the route gate is the READ union `kargozini|manage_personnel`,
         // but a delete is a write — the API refuses it without
         // `manage_personnel` (routes/api.php), so the UI must too.
+        // Authorized BEFORE the lookup so a bad id cannot be used as an
+        // existence probe.
         $this->authorize('manage_personnel');
+
+        $person = PersonModel::findOrFail($personId);
 
         // Check organizational scope
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
@@ -510,6 +536,12 @@ return new class extends Component
                      reader instead of rendering buttons that 403 on click. --}}
                 @can('manage_personnel')
                     <div class="flex w-1/12">
+                        {{-- #936: sends the PRIMARY KEY. `delete()` takes an `int` and
+                             resolves it with `findOrFail`, because `Person`'s
+                             `getRouteKeyName()` is `n_code` and a typed model
+                             parameter would bind by that instead. Keep this as
+                             `->id` — never interpolate `->n_code` unquoted, the
+                             browser strips its leading zeros. --}}
                         <x-button icon="o-pencil"
                                   wire:click="editPerson({{ $person->id }})"
                                   class="btn-ghost btn-sm text-primary" />
