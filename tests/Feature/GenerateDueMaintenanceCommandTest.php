@@ -150,4 +150,31 @@ class GenerateDueMaintenanceCommandTest extends TestCase
         $this->artisan('maintenance:generate-due')->assertExitCode(0);
         $this->assertDatabaseCount('tickets', 2);
     }
+
+    /**
+     * Issue #954: this command is the only UNATTENDED priority writer in the
+     * app. Its output must land inside `Ticket::PRIORITIES` — the nightly job
+     * used to write `medium`, which the DB CHECK accepts but no bucket,
+     * chart, calendar map or validation rule reads, so every generated
+     * ticket was invisible to the reporting it exists for.
+     */
+    public function test_generated_ticket_priority_is_a_reported_bucket(): void
+    {
+        $unit = Unit::create(['name' => 'Ward F']);
+        MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Priority contract check',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('maintenance:generate-due')->assertExitCode(0);
+
+        $ticket = Ticket::firstOrFail();
+        $this->assertContains($ticket->priority, Ticket::PRIORITIES);
+        // `normal` is the honest mapping: matters more than `low`, less than
+        // a person's `urgent` request — and it is a bucket every report has.
+        $this->assertSame('normal', $ticket->priority);
+    }
 }
