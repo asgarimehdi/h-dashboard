@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Storage;
  * @property Carbon|null $deadline
  * @property Carbon|null $accepted_at
  * @property Carbon|null $completed_at
+ * @property Carbon|null $archived_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read string $status_name
@@ -53,6 +54,7 @@ class Ticket extends Model
         'current_assignee_id',
         'accepted_at',
         'completed_at',
+        'archived_at',
     ];
 
     /** @var array<string, string> */
@@ -60,6 +62,7 @@ class Ticket extends Model
         'deadline' => 'datetime',
         'accepted_at' => 'datetime',
         'completed_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     public function canBeCompleted()
