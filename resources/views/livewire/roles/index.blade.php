@@ -156,7 +156,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <x-ui.icon-button name="نقش جدید" label="نقش جدید" class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -172,11 +172,11 @@ return new class extends Component
             {{-- بخش Actions به صورت خودکار برای هر ردیف رندر می‌شود --}}
             @scope('actions', $role)
             <div class="flex gap-2">
-                <x-button icon="o-pencil"
+                <x-ui.icon-button name="ویرایش نقش" icon="o-pencil"
                         wire:click="editRole({{ $role->id }})"
                         class="btn-ghost btn-sm text-primary" />
 
-                <x-button icon="o-trash"
+                <x-ui.icon-button name="حذف نقش" icon="o-trash"
                         wire:click="delete({{ $role->id }})"
                         wire:confirm="آیا مطمئن هستید؟"
                         spinner

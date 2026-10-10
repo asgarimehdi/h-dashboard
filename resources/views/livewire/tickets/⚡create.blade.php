@@ -339,7 +339,7 @@ new class extends Component
                             <x-icon name="o-paper-clip" class="w-4 h-4 text-gray-400" />
                             <span class="text-xs truncate">{{ $file->getClientOriginalName() }}</span>
                         </div>
-                        <x-button icon="o-x-mark" wire:click="removeFile({{ $index }})" class="btn-ghost btn-xs text-error" />
+                        <x-ui.icon-button name="حذف پیوست" icon="o-x-mark" wire:click="removeFile({{ $index }})" class="btn-ghost btn-xs text-error" />
                     </div>
                     @endforeach
                 </div>

@@ -134,7 +134,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="نوع استخدام جدید" label="نوع استخدام جدید" class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -177,8 +177,8 @@ return new class extends Component
                             class="input input-bordered input-sm flex-1"
                             autofocus
                         />
-                        <x-button icon="o-check" wire:click="updateEstekhdam" class="btn-ghost btn-sm text-success" spinner />
-                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
+                        <x-ui.icon-button name="ذخیره نوع استخدام" icon="o-check" wire:click="updateEstekhdam" class="btn-ghost btn-sm text-success" spinner />
+                        <x-ui.icon-button name="انصراف از ویرایش" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
                     @if($this->nameError()) <span class="text-error text-xs">{{ $this->nameError() }}</span> @endif
                 @else
@@ -189,12 +189,12 @@ return new class extends Component
             @scope('actions', $estekhdam)
                 <div class="flex gap-1">
                     @if($this->editingId !== $estekhdam->id)
-                        <x-button
+                        <x-ui.icon-button name="ویرایش نوع استخدام"
                             icon="o-pencil"
                             wire:click="editEstekhdam({{ $estekhdam->id }})"
                             class="btn-ghost btn-sm text-primary"
                         />
-                        <x-button
+                        <x-ui.icon-button name="حذف نوع استخدام"
                             icon="o-trash"
                             wire:click="delete({{ $estekhdam->id }})"
                             wire:confirm="آیا مطمئن هستید؟"

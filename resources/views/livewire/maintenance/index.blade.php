@@ -351,7 +351,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="برنامه نگهداری جدید" label="برنامه نگهداری جدید" class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -440,8 +440,8 @@ return new class extends Component
                             class="input input-bordered input-sm flex-1"
                             autofocus
                         />
-                        <x-button icon="o-check" wire:click="updateSchedule" class="btn-ghost btn-sm text-success" spinner />
-                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
+                        <x-ui.icon-button name="ذخیره برنامه نگهداری" icon="o-check" wire:click="updateSchedule" class="btn-ghost btn-sm text-success" spinner />
+                        <x-ui.icon-button name="انصراف از ویرایش" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
                     @if($this->titleError()) <span class="text-error text-xs">{{ $this->titleError() }}</span> @endif
                 @else
@@ -452,12 +452,12 @@ return new class extends Component
             @scope('actions', $schedule)
                 <div class="flex gap-1">
                     @if($this->editingId !== $schedule->id)
-                        <x-button
+                        <x-ui.icon-button name="ویرایش برنامه نگهداری"
                             icon="o-pencil"
                             wire:click="editSchedule({{ $schedule->id }})"
                             class="btn-ghost btn-sm text-primary"
                         />
-                        <x-button
+                        <x-ui.icon-button name="حذف برنامه نگهداری"
                             icon="o-trash"
                             wire:click="delete({{ $schedule->id }})"
                             wire:confirm="آیا مطمئن هستید؟"

@@ -134,7 +134,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="سمت جدید" label="سمت جدید" class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -171,8 +171,8 @@ return new class extends Component
                             class="input input-bordered input-sm flex-1"
                             autofocus
                         />
-                        <x-button icon="o-check" wire:click="updateSemat" class="btn-ghost btn-sm text-success" spinner />
-                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
+                        <x-ui.icon-button name="ذخیره سمت" icon="o-check" wire:click="updateSemat" class="btn-ghost btn-sm text-success" spinner />
+                        <x-ui.icon-button name="انصراف از ویرایش" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
                     @if($this->nameError()) <span class="text-error text-xs">{{ $this->nameError() }}</span> @endif
                 @else
@@ -183,8 +183,8 @@ return new class extends Component
             @scope('actions', $semat)
                 <div class="flex gap-1">
                     @if($this->editingId !== $semat->id)
-                        <x-button icon="o-pencil" wire:click="editSemat({{ $semat->id }})" class="btn-ghost btn-sm text-primary" />
-                        <x-button icon="o-trash" wire:click="delete({{ $semat->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+                        <x-ui.icon-button name="ویرایش سمت" icon="o-pencil" wire:click="editSemat({{ $semat->id }})" class="btn-ghost btn-sm text-primary" />
+                        <x-ui.icon-button name="حذف سمت" icon="o-trash" wire:click="delete({{ $semat->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
                     @endif
                 </div>
             @endscope

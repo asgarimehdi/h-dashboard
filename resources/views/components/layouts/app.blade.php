@@ -134,11 +134,11 @@
             <x-app-brand />
         </x-slot:brand>
         <x-slot:actions>
-            <a href="/search" wire:navigate class="btn btn-ghost btn-sm">
+            <a href="/search" wire:navigate aria-label="جستجو" class="btn btn-ghost btn-sm">
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">جستجو</span>
             </a>
-            <a href="/profile" wire:navigate class="btn btn-ghost btn-sm gap-2">
+            <a href="/profile" wire:navigate aria-label="پروفایل {{ Auth::user()->person?->f_name ?? 'کاربر' }}" class="btn btn-ghost btn-sm gap-2">
                 <x-icon name="o-user-circle" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">{{ Auth::user()->person?->f_name ?? 'کاربر' }}</span>
             </a>
@@ -171,7 +171,7 @@
                     <x-slot:actions>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <x-button type="submit" icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate />
+                            <x-ui.icon-button name="خروج از حساب" type="submit" icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate />
                         </form>
                     </x-slot:actions>
                 </x-list-item>
@@ -185,7 +185,7 @@
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-sm font-bold truncate">{{ session('current_unit_name') }}</span>
                         @if(auth()->user()->units()->count() > 1)
-                            <x-button icon="o-arrows-right-left" class="btn-ghost btn-xs"
+                            <x-ui.icon-button name="تغییر حوزه" icon="o-arrows-right-left" class="btn-ghost btn-xs"
                                 tooltip-right="تغییر حوزه" no-wire-navigate link="/select-context" />
                         @endif
                     </div>
