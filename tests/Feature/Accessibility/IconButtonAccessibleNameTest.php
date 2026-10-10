@@ -52,6 +52,47 @@ class IconButtonAccessibleNameTest extends TestCase
         );
     }
 
+    public function test_every_responsive_icon_button_survives_the_lg_breakpoint(): void
+    {
+        // توصیهٔ #2، و ریزه‌ای که از پاس اول جا افتاد: دکمهٔ `responsive` برچسبِ
+        // دیدنی دارد، ولی MaryUI آن را زیر `lg` با `hidden lg:block` پنهان می‌کند
+        // (Button.php:91). پس زیر `lg` تنها چیزی که دکمه را نام‌گذاری می‌کند
+        // `aria-label` است — و آیکن داخلی `aria-hidden` است. یعنی «داشتن label»
+        // برای این دکمه‌ها کافی نیست؛ `aria-label` هم لازم است.
+        //
+        // دو سایت این را نداشتند و از همین تست بیرون آمدند.
+        $violations = [];
+
+        foreach ($this->bladeFiles() as $path) {
+            $source = $this->stripBladeComments(file_get_contents($path));
+
+            foreach (['x-button', 'x-ui.icon-button'] as $tagName) {
+                foreach ($this->tags($source, $tagName) as [$offset, $tag]) {
+                    if (! str_contains($tag, 'responsive') || ! $this->hasAttribute($tag, 'icon')) {
+                        continue;
+                    }
+
+                    if ($this->hasAttribute($tag, 'aria-label') || $this->hasAttribute($tag, 'name')) {
+                        continue;
+                    }
+
+                    $violations[] = sprintf(
+                        '%s:%d  %s',
+                        $this->relative($path),
+                        substr_count(substr($source, 0, $offset), "\n") + 1,
+                        $this->condense($tag)
+                    );
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $violations,
+            "دکمه‌های responsive بدون aria-label (زیر lg بی‌نام می‌شوند):\n".implode("\n", $violations)
+        );
+    }
+
     public function test_every_named_icon_button_has_a_non_empty_name(): void
     {
         // «نامِ خالی» بدتر از «بی‌نام» نیست: تست بالا آن را سالم می‌شمارد

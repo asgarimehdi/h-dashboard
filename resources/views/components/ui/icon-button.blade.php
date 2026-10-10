@@ -14,13 +14,20 @@
         چون MaryUI آن را زیر `lg` با `hidden lg:block` پنهان می‌کند و آن‌جا
         فقط `aria-label` نام را حمل می‌کند.
 
-    چرا پارامترهای kebab صریحاً اینجا تکرار شده‌اند: `$attributes` فقط «صفت‌های
-    HTML» را حمل می‌کند، نه صفت‌های سازندهٔ MaryUI به شکل camelCase. یعنی
-    `<x-ui.icon-button tooltip-right="…">` اگر اینجا اعلام نشود، بی‌سروصدا در
-    `{{ $attributes }}` گم می‌شود و `data-tip` ساخته نمی‌شود — همان اتفاقی که
-    `no-wire-navigate` را هم از کار می‌اندازد. تستِ تفاضلی
-    (`IconButtonComponentTest`) رندرِ این کامپوننت را با `<x-button>` خام مقایسه
-    می‌کند تا هیچ صفتی در این مسیر گم نشود.
+    چرا پارامترهای kebab صریحاً اینجا تکرار شده‌اند: یک کیسهٔ صفتِ ساخته‌شده، دوباره
+    به camelCase تبدیل نمی‌شود. camelCasing را `ComponentTagCompiler` موقع کامپایلِ
+    یک تگِ لفظی انجام می‌دهد، نه موقعِ رندرِ `{{ $attributes }}`. اندازه‌گیری‌شده:
+
+        <x-button tooltip-right="X" />            → data-tip هست   (کامپایل لفظی)
+        <x-ui.icon-button tooltip-right="X" />     → data-tip نیست  (گم می‌شود)
+        <x-ui.icon-button tooltipRight="X" />      → data-tip هست   (از قبل camel)
+
+    پس صفت‌های تک‌واژه‌ای مثل `spinner`/`link`/`responsive` از `{{ $attributes }}`
+    سالم رد می‌شوند، ولی `tooltip-right`، `no-wire-navigate`، `icon-right` و
+    `badge-classes` بی‌سروصدا حذف می‌شدند. این‌ها اینجا اعلام و صریح پاس داده
+    می‌شوند. تستِ تفاضلی (`IconButtonComponentTest`) رندرِ این کامپوننت را با
+    `<x-button>` خام مقایسه می‌کند تا صفتی در این مسیر گم نشود — همان چیزی که
+    اولین نسخهٔ این کامپوننت را لو داد.
 --}}
 @props([
     'name',

@@ -7,7 +7,7 @@
 
     <x-help:modal wireModel="showHelpModal" />
         <div class="flex flex-wrap gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" label="افزودن" icon="o-plus" responsive />
+            <x-ui.icon-button name="افزودن سخت‌افزار" label="افزودن" class="btn-success" wire:click="startCreate" icon="o-plus" responsive />
             <div class="flex-1 min-w-[180px]">
                 <x-input
                     placeholder="جستجو در تمام فیلدها..."

@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 
 type Page = import('@playwright/test').Page;
 
@@ -91,6 +91,21 @@ async function unnamedActionControls(page: Page): Promise<string[]> {
   return found;
 }
 
+/**
+ * Navigate and let Livewire settle before reading the accessibility tree.
+ *
+ * `domcontentloaded` alone is not enough. A control that a Livewire request is
+ * still re-rendering is absent from the tree, and an absent control reads as a
+ * NAMED control — the snapshot would pass over a button that a user mid-click
+ * genuinely cannot reach yet. Waiting costs nothing when nothing is loading and
+ * removes the false-pass window when something is.
+ */
+async function openSettled(page: Page, path: string): Promise<void> {
+  await page.goto(path);
+  await page.waitForLoadState('domcontentloaded');
+  await waitForLivewire(page);
+}
+
 /** The pages the issue names as representative, plus the layout chrome. */
 const PAGES: { path: string; why: string }[] = [
   { path: '/dashboard', why: 'layout chrome: bell, theme toggle, logout, change-context' },
@@ -116,8 +131,7 @@ test.describe('accessible names on action controls (#956)', () => {
 
   for (const { path, why } of PAGES) {
     test(`${path} has no unnamed action control`, async ({ page }) => {
-      await page.goto(path);
-      await page.waitForLoadState('domcontentloaded');
+      await openSettled(page, path);
 
       const unnamed = await unnamedActionControls(page);
 
@@ -129,8 +143,7 @@ test.describe('accessible names on action controls (#956)', () => {
   }
 
   test('the notification bell announces its unread count', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('domcontentloaded');
+    await openSettled(page, '/dashboard');
 
     const bell = page.getByRole('button', { name: /اعلان‌ها/ });
 
@@ -145,8 +158,7 @@ test.describe('accessible names on action controls (#956)', () => {
   test('a destructive control is distinguishable from an editing one', async ({ page }) => {
     // The concrete harm the issue describes: "a screen reader cannot tell an
     // edit button from a delete button". Asserted by name, not by pixels.
-    await page.goto('/users');
-    await page.waitForLoadState('domcontentloaded');
+    await openSettled(page, '/users');
 
     await expect(page.getByRole('button', { name: 'ویرایش کاربر' }).first()).toBeVisible();
     await expect(
@@ -158,13 +170,36 @@ test.describe('accessible names on action controls (#956)', () => {
     // MaryUI hides a `responsive` label below `lg` with `hidden lg:block`
     // (Button.php:91), so below that breakpoint the aria-label is the only name
     // left. Asserted at phone width, which is where the label is gone.
+    //
+    // /hardware and /it/zabbix-devices are here because their create buttons
+    // already carried a `label=` and so looked fine to a "has a name" check —
+    // they were unnamed on mobile precisely because of that. The static guard
+    // now enforces the rule for every page; this proves it in a real browser.
+    const cases: { path: string; name: string }[] = [
+      { path: '/users', name: 'کاربر جدید' },
+      { path: '/hardware', name: 'افزودن سخت‌افزار' },
+      { path: '/it/zabbix-devices', name: 'دستگاه جدید' },
+    ];
+
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/users');
-    await page.waitForLoadState('domcontentloaded');
 
-    const create = page.getByRole('button', { name: 'کاربر جدید' }).first();
+    for (const { path, name } of cases) {
+      await openSettled(page, path);
 
-    await expect(create).toBeVisible();
-    await expect(create).toHaveAttribute('aria-label', 'کاربر جدید');
+      const create = page.getByRole('button', { name }).first();
+
+      await expect(create, `${path}: دکمهٔ «${name}» باید زیر lg نام داشته باشد`).toBeVisible();
+      await expect(create).toHaveAttribute('aria-label', name);
+    }
+  });
+
+  test('the header nav links keep names when their labels collapse', async ({ page }) => {
+    // The header search and profile links carry their text in a
+    // `hidden md:inline` span, so below `md` they are icon plus nothing.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSettled(page, '/dashboard');
+
+    await expect(page.getByRole('link', { name: 'جستجو' })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: /پروفایل/ })).toHaveCount(1);
   });
 });

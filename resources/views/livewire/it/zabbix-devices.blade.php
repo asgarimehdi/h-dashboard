@@ -420,7 +420,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" label="دستگاه جدید" icon="o-plus" responsive />
+            <x-ui.icon-button name="دستگاه جدید" label="دستگاه جدید" class="btn-success" wire:click="startCreate" icon="o-plus" responsive />
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
