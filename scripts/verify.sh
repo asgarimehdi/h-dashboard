@@ -3,9 +3,10 @@
 #
 # 1. preflight  — fails fast (exit 2) if this machine cannot run the suite the
 #                 way CI does, BEFORE anything destructive runs
-# 2. caches     — `composer test` already clears config+routes; view:clear is
+# 2. caches     — `composer test` already clears config/routes; view:clear is
 #                 the one CI does that composer test does not, so add it here
 # 3. pint       — `pint --test`, the exact command CI's lint job runs
+# 3b. dead files— no test file may run zero tests (issue #935)
 # 4. phpstan    — level 6 with the committed baseline, the exact CI command
 # 5. pest       — the full suite, or the paths given as arguments
 #
@@ -62,6 +63,17 @@ step "Pint (code style)"
 if ! vendor/bin/pint --test; then
     echo ""
     echo "✗ Code style. Fix with: composer pint"
+    exit 1
+fi
+
+# 3b. Dead test files (issue #935). `TicketWorkflowTest.php` ran ZERO tests for
+# a year — its methods lacked the `test` prefix, PHPUnit collected none of them,
+# and every gate stayed green. Cheap to check, so it runs here rather than only
+# in CI.
+step "Dead test files"
+if ! php scripts/find-dead-test-files.php; then
+    echo ""
+    echo "✗ Dead test files. See the list above."
     exit 1
 fi
 

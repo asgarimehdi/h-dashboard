@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Traits\HasOrganizationalScope;
 use Carbon\Carbon;
+use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +15,7 @@ use Illuminate\Support\Facades\Storage;
 /**
  * @property int $id
  * @property string $ticket_code
- * @property int $user_id
+ * @property int|null $user_id
  * @property int $unit_id
  * @property string $subject
  * @property string $content
@@ -39,7 +41,8 @@ use Illuminate\Support\Facades\Storage;
  */
 class Ticket extends Model
 {
-    use HasOrganizationalScope;
+    /** @use HasFactory<TicketFactory> */
+    use HasFactory, HasOrganizationalScope;
 
     protected $fillable = [
         'ticket_code',

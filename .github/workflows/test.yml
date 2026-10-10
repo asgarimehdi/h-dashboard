@@ -140,7 +140,38 @@ jobs:
           php artisan view:clear
 
       - name: Run tests with coverage
-        run: ./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml
+        # `set -o pipefail` is LOAD-BEARING. GitHub Actions runs `run:` blocks
+        # with `bash -e`, which has no pipefail, so `pest … | tee` would hand
+        # back tee's exit status and report GREEN on a red suite — the exact
+        # "a failing job that reads as a pass" trap issue #935 is about.
+        run: |
+          set -o pipefail
+          ./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml 2>&1 | tee pest-list.log
+
+      - name: Assert tests really executed
+        # A green job that executed zero tests is a failure, not a pass.
+        #
+        # The summary line is ANSI-wrapped ("…[32;1m341 passed[39m[2m (995
+        # assertions)"), so the colour codes are stripped before matching — a
+        # naive 'passed \(' never matches and the guard would be decorative.
+        #
+        # `failOnEmptyTestSuite` in phpunit.xml is NOT enough on its own: it
+        # fires when a whole RUN finds no tests, and a single dead FILE beside
+        # live ones is silently skipped even under --parallel (issue #935) —
+        # verified on this tree. The per-file sweep in the next step is the
+        # guard that actually catches that class.
+        run: |
+          sed -e 's/\x1b\[[0-9;]*m//g' pest-list.log > pest-plain.log
+          EXECUTED=$(grep -cE 'Tests:.*[0-9]+ passed' pest-plain.log || true)
+          echo "pest summary lines: ${EXECUTED}"
+          echo "summary: $(grep -E 'Tests:' pest-plain.log | tail -1)"
+          test "${EXECUTED}" -gt 0
+
+      - name: Assert no test file runs zero tests
+        # Issue #935 — `tests/Feature/TicketWorkflowTest.php` sat in the suite
+        # for a year executing nothing: seven `public function <noun>` methods
+        # that PHPUnit never collects. Coverage is a ratio, so it never moved.
+        run: php scripts/find-dead-test-files.php
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
