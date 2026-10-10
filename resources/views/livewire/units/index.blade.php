@@ -47,7 +47,7 @@ return new class extends Component
 
     // #914: `sortBy` is client-settable, so only real columns are sortable.
     // The `*_name` entries are the `withAggregate` aliases loaded in units().
-    private const SORTABLE_COLUMNS = ['id', 'name', 'description', 'unit_type_name', 'region_name', 'parent_name', 'can_receive_tickets'];
+    private const SORTABLE_COLUMNS = ['id', 'name', 'description', 'unit_type_name', 'region_name', 'parent_name', 'can_receive_tickets', 'is_active'];
 
     public $unitTypes;
 
@@ -446,9 +446,15 @@ return new class extends Component
             $unit->delete();
             $this->warning("$unit->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            // Unreachable for every table counted above — this is only the race
-            // window between the count and the delete, so it must not claim to
-            // know which table stopped it.
+            // Honest scope of this catch: it covers the two RESTRICT FKs only —
+            // `units_parent_fk` and `tickets_unit_fk` — in the window between
+            // the count above and this delete. The four non-RESTRICT tables do
+            // NOT raise here: a `persons` / `todos` / `user_units` row landing
+            // in that same window still produces a successful delete with the
+            // green toast above. READ COMMITTED does not close that race, and
+            // this issue does not claim it does. Closing it needs a decision
+            // about serialising unit deletes; until then the counts narrow the
+            // window, they do not remove it.
             $this->error('حذف واحد انجام نشد؛ هم‌زمان تغییری در اطلاعات آن رخ داد. دوباره تلاش کنید.', position: 'toast-bottom');
         }
 
@@ -476,7 +482,10 @@ return new class extends Component
         $blocking = [];
 
         foreach ($impact->blockers() as $key => $count) {
-            $blocking[] = $count.' '.$labels[$key];
+            // `?? $key` because the keys live on `UnitDeletionImpact` and the
+            // labels here; nothing links the two at compile time, and an
+            // undefined index would render «» 12 «» instead of a table name.
+            $blocking[] = $count.' '.($labels[$key] ?? $key);
         }
 
         return 'امکان حذف این واحد وجود ندارد؛ این واحد هنوز دارد: '
@@ -493,13 +502,31 @@ return new class extends Component
      * only writer was `ZabbixDevice`. So the destructive option was the only
      * option on offer, and deleting a unit is a six-table cascade.
      *
-     * This is the missing half of that feature: retire a unit and nothing is
-     * touched. `persons.u_id` stays set (delete sets it to NULL),
-     * `user_units` stays (delete cascades it), and because
-     * `Unit::descendantIds()` seeds its CTE from the caller's own base ids
-     * with no `is_active` filter, the retired unit's own accounts keep their
-     * scope. That is the exact state #949 measured losing 155 of 318 accounts
-     * to a delete.
+     * This is the missing half of that feature: retire a unit and **no row is
+     * touched**. `persons.u_id` stays set (a delete sets it to NULL),
+     * `user_units` stays (a delete cascades it), and the unit itself stays
+     * queryable. That is the half of #949's harm a delete causes and
+     * deactivation does not.
+     *
+     * What deactivation DOES change — stated plainly, because it is easy to
+     * mistake for the above — is the caller's *ancestors'* view.
+     * `Unit::recursiveDescendantQuery()` filters the recursive step with
+     * `WHERE u.is_active = true`, so a retired unit leaves the subtree of
+     * every operator above it, and so do the still-active descendants below
+     * it: retiring C in P→C→D→E moves a P-level operator's scope from
+     * {P,C,D,E} to {P}. Nothing is destroyed, but from above the unit is
+     * invisible — including in this list, which is how the operator would
+     * otherwise have re-activated it.
+     *
+     * That asymmetry is deliberate and pre-existing: that filter is pinned by
+     * `UnitModelTest::test_descendant_ids_still_terminates_on_an_inactive_node_in_a_cycle`
+     * ("the inactive unit is EXCLUDED from the result, not included"), and
+     * `TicketTargetUnit`, the users unit picker and the ticket pickers all
+     * agree with it. Before this method existed nothing ever wrote `false`, so
+     * the filter was inert. Whether retiring a unit should also hide it from
+     * its ancestors is a product decision, not an implementation detail — see
+     * the `wire:confirm` text for the decision this implementation makes
+     * visible to the operator, and issue #949 for the open question.
      */
     public function setInactive(Unit $unit, bool $active): void
     {
@@ -518,6 +545,13 @@ return new class extends Component
         // `is_active` is a predicate of `recursiveDescendantQuery()`, so a
         // retired unit leaves its parent's subtree — a stale `unit_hierarchy`
         // would keep serving the old tree to every caller.
+        //
+        // `saveQuietly()` skips the `Unit::updated` hook that invalidates
+        // `report_units` and `hr_stats` as well. That is safe today because
+        // every one of those keys hashes `accessibleUnitIds()` into its own
+        // key, so a scope change self-invalidates; it matches
+        // `toggleTicketCapability()` below. Do not "fix" this by dropping
+        // `saveQuietly()` without re-checking those keys.
         app(AccessService::class)->clearAllCaches();
     }
 
@@ -639,7 +673,7 @@ return new class extends Component
                               @click="$wire.modal = true" />
                     <x-button icon="o-trash"
                               wire:click="deleteUnit({{ $unit->id }})"
-                              wire:confirm="حذف واحد، پرسنل و سخت‌افزار آن را از دسترس خارج می‌کند و وظایف و حساب‌های کاربری‌اش را بی‌واحد می‌سازد. اگر قصد بازنشستگی واحد را دارید، به‌جای حذف آن را غیرفعال کنید. مطمئن هستید؟"
+                              wire:confirm="حذف واحد تنها وقتی انجام می‌شود که هیچ پرسنل، سخت‌افزار، وظیفه، تیکت یا حساب کاربری‌ای به آن وابسته نباشد؛ در غیر این صورت حذف رد می‌شود و دلیل آن اعلام می‌گردد. اگر قصد بازنشستگی واحد را دارید، به‌جای حذف آن را غیرفعال کنید. مطمئن هستید؟"
                               spinner
                               class="btn-ghost btn-sm text-error" />
                 </div>
@@ -660,6 +694,9 @@ return new class extends Component
             {{-- #949 step 1: the non-destructive way to retire a unit. --}}
             @scope('cell_is_active', $unit)
                 <button wire:click="setInactive({{ $unit->id }}, {{ $unit->is_active ? 'false' : 'true' }})"
+                        wire:confirm="{{ $unit->is_active
+                            ? 'این واحد و تمام زیرمجموعه‌های فعال آن از دید مدیران بالادستی حذف می‌شود. اطلاعات آن حفظ می‌شود و هر زمان می‌توانید دوباره آن را فعال کنید. مطمئن هستید؟'
+                            : 'این واحد دوباره در دسترس مدیران بالادستی و در مسیرهای تیکت قرار می‌گیرد. مطمئن هستید؟' }}"
                         class="btn btn-ghost btn-sm"
                         title="{{ $unit->is_active ? 'غیرفعال کردن واحد' : 'فعال کردن واحد' }}">
                     @if($unit->is_active)

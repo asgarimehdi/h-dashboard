@@ -170,7 +170,15 @@ class UnitController extends Controller
         // Invalidate AccessService cache as hierarchy is changing
         app(AccessService::class)->clearAllCaches();
 
-        $unit->delete();
+        try {
+            $unit->delete();
+        } catch (\Throwable $e) {
+            // The RESTRICT FKs can still fire in the window between the count
+            // above and this delete. Step 5 exists so a blocked delete is a
+            // 422 with a reason rather than an uncaught 500, and an unhandled
+            // exception here would reintroduce exactly that.
+            return response()->json(['message' => 'Cannot delete unit.'], 422);
+        }
 
         return response()->json(['success' => true]);
     }

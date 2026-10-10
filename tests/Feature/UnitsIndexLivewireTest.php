@@ -561,10 +561,14 @@ class UnitsIndexLivewireTest extends TestCase
         $parent = Unit::create(['name' => 'والد', 'unit_type_id' => 4, 'region_id' => 2]);
         Unit::create(['name' => 'فرزند', 'unit_type_id' => 5, 'region_id' => 2, 'parent_id' => $parent->id]);
 
-        // Attempting to delete a unit that has FK references should throw.
-        // We test the FK constraint behavior directly since Livewire's
-        // catch-and-toast pattern leaves Postgres in a failed-transaction
-        // state that prevents further assertions in the same test.
+        // The database still enforces `units_parent_fk`, and `deleteUnit()`
+        // now refuses on children before ever reaching the delete — so this
+        // asserts the constraint itself, not the component. The old comment
+        // here justified that by claiming Livewire's catch-and-toast left
+        // Postgres in a failed-transaction state; that stopped being true in
+        // #949, which counts children up front so a RESTRICT refusal never
+        // reaches the database. What remains is: keep testing the constraint
+        // at the layer that owns it.
         $this->expectException(QueryException::class);
         $parent->delete();
     }
@@ -680,6 +684,59 @@ class UnitsIndexLivewireTest extends TestCase
         Livewire::test('units.index')->call('setInactive', $unit->id, true);
 
         $this->assertDatabaseHas('units', ['id' => $unit->id, 'is_active' => true]);
+    }
+
+    /**
+     * The other half of `setInactive`, pinned deliberately.
+     *
+     * `Unit::recursiveDescendantQuery()` filters the recursive step with
+     * `WHERE u.is_active = true`, so retiring a unit removes it — and every
+     * still-active descendant under it — from the scope of operators ABOVE it,
+     * even though no row anywhere was changed. Measured on P→C→D→E:
+     * deactivating C moves a P-level operator's scope from {P,C,D,E} to {P}.
+     *
+     * Two consequences are asserted because both are invisible in the UI: the
+     * retired unit is no longer in this operator's `accessibleUnitIds()`, and
+     * re-activating it from above is therefore refused by
+     * `assertUnitInScope`. Nothing is lost — `persons.u_id` is untouched and the
+     * unit's own accounts keep their scope (the other half of this pair) — but
+     * from above, the unit is gone until someone re-grants access.
+     *
+     * This is NOT a claim that the behaviour is correct. The filter is pinned
+     * as intentional by
+     * `UnitModelTest::test_descendant_ids_still_terminates_on_an_inactive_node_in_a_cycle`
+     * ("the inactive unit is EXCLUDED from the result, not included"), and
+     * `TicketTargetUnit`, the users picker and the ticket pickers all agree
+     * with it. Whether retiring a unit should also hide it from its ancestors
+     * is an open product question on #949. Until it is answered, the behaviour
+     * is pinned rather than left to be discovered.
+     */
+    public function test_deactivating_a_unit_hides_its_subtree_from_operators_above(): void
+    {
+        ['user' => $user, 'unit' => $P] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $C = Unit::create(['name' => 'C', 'unit_type_id' => 5, 'region_id' => 2, 'parent_id' => $P->id]);
+        $D = Unit::create(['name' => 'D', 'unit_type_id' => 5, 'region_id' => 2, 'parent_id' => $C->id]);
+        $person = Person::factory()->create(['u_id' => $D->id]);
+
+        $this->assertContains($D->id, app(AccessService::class)->accessibleUnitIds());
+
+        Livewire::test('units.index')->call('setInactive', $C->id, false);
+
+        $scope = app(AccessService::class)->accessibleUnitIds();
+        $this->assertNotContains($C->id, $scope);
+        // D was never deactivated — it is the subtree that follows C out.
+        $this->assertTrue($D->fresh()->is_active);
+        $this->assertNotContains($D->id, $scope);
+
+        // …and the operator who retired it can no longer put it back.
+        Livewire::test('units.index')->call('setInactive', $C->id, true);
+        $this->assertFalse($C->fresh()->is_active);
+
+        // Nothing was destroyed on the way out.
+        $this->assertDatabaseHas('units', ['id' => $C->id, 'is_active' => false]);
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $D->id]);
     }
 
     /**

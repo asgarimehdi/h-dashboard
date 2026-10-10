@@ -17,9 +17,12 @@ use Illuminate\Support\Facades\DB;
  * cannot drift apart on what "safe to delete" means — which is exactly how the
  * API became strictly weaker than the UI while both claimed to guard deletes.
  *
- * `maintenance_schedules` is deliberately NOT counted. It is the other
- * `ON DELETE SET NULL` half of this same cascade and it is issue #876; adding
- * it here would silently take that issue's approved contract away from it.
+ * Three `ON DELETE SET NULL` tables are deliberately NOT counted:
+ * `maintenance_schedules` (issue #876's approved contract — counting it here
+ * would take that issue's decision away from it), plus `daily_reports` and
+ * `task_activities`, which are reporting and audit history rather than live
+ * operational data. The FK survey that started this found eight inbound
+ * constraints and six non-RESTRICT ones; five of those six are counted below.
  */
 class UnitDeletionService
 {

@@ -5,12 +5,18 @@ namespace App\Services;
 /**
  * #949 — what deleting one unit would actually destroy.
  *
- * `units` has eight inbound foreign keys. Only the two `RESTRICT` ones
- * (`units_parent_fk`, `tickets_unit_fk`) stop a delete on their own; the other
- * six obey the database silently — `persons.u_id`, `todos.unit_id` and
- * `task_activities.unit_id` go NULL, `user_units` rows are CASCADEd away. The
- * old code guarded the two the database could see and reported that as though
- * the rest were protected.
+ * `units` has eight inbound foreign keys. Two are `RESTRICT`
+ * (`units_parent_fk`, `tickets_unit_fk`) and stop a delete by themselves. Six
+ * are not: `persons.u_id`, `todos.unit_id`, `task_activities.unit_id`,
+ * `maintenance_schedules.unit_id` and `daily_reports.unit_id` go NULL, and
+ * `user_units` rows are CASCADEd away. The old code guarded the two the
+ * database could see and reported that as though the rest were protected.
+ *
+ * Only five of the six non-RESTRICT tables are counted here. `task_activities`,
+ * `daily_reports` and `maintenance_schedules` are omitted on purpose: the last
+ * is issue #876's approved contract and the first two are audit and reporting
+ * history rather than live operational data. `UnitDeletionService` is where
+ * that decision is recorded.
  *
  * This is a value object: it counts, it never queries, and it never renders.
  * The two entry points (`units.index::deleteUnit` and `UnitController::destroy`)
@@ -41,8 +47,14 @@ final readonly class UnitDeletionImpact
      * Every non-zero table, in cascade order, keyed by identity.
      *
      * An empty array is the ONLY statement "this delete is safe" — there is no
-     * second, weaker answer. Both entry points render this map directly rather
-     * than re-deciding which tables matter.
+     * second, weaker answer.
+     *
+     * Both entry points do check `children` before calling `impact()`, because
+     * their children messages are part of a pinned contract
+     * (`'Cannot delete unit with children.'` is asserted by
+     * `UnitApiTest`). So in production `children` is always 0 here: it is a
+     * completeness backstop, not a live branch, and its label in the callers'
+     * maps is defensive for the same reason.
      *
      * @return array<string, int>
      */
