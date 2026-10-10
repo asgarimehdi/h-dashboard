@@ -501,13 +501,13 @@ return new class extends Component
      * scope. That is the exact state #949 measured losing 155 of 318 accounts
      * to a delete.
      */
-    public function setInactive(int $unitId, bool $active): void
+    public function setInactive(Unit $unit, bool $active): void
     {
-        if (! $this->assertUnitInScope($unitId)) {
+        // #817 parity with `deleteUnit`: a public Livewire method hydrates its
+        // model from a client-supplied id, so the scope check is not optional.
+        if (! $this->assertUnitInScope($unit->id)) {
             return;
         }
-
-        $unit = Unit::findOrFail($unitId);
 
         $unit->is_active = $active;
         $unit->saveQuietly();
