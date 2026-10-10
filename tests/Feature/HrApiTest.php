@@ -225,4 +225,141 @@ class HrApiTest extends TestCase
         $response = $this->getJson('/api/hr/analytics/headcount-trend');
         $response->assertStatus(401);
     }
+
+    // === Issue #952: trends are cumulative stocks over a materialised window ===
+
+    /**
+     * Back-date the seeded person so the hire sits two months in the past.
+     *
+     * `created_at` is not fillable, so a plain `create()`/`update()` would
+     * silently drop it — `forceFill()` is the only way to place the hire.
+     */
+    private function backdateHireToTwoMonthsAgo(): void
+    {
+        Person::firstOrFail()->forceFill([
+            'created_at' => now()->startOfMonth()->subMonths(2),
+        ])->saveQuietly();
+    }
+
+    /**
+     * Expected `YYYY-MM` labels for a window of $months buckets ending with
+     * the current month, oldest first.
+     *
+     * @return array<int, string>
+     */
+    private function expectedMonthLabels(int $months): array
+    {
+        $labels = [];
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $labels[] = now()->startOfMonth()->subMonths($i)->format('Y-m');
+        }
+
+        return $labels;
+    }
+
+    public function test_headcount_trend_is_a_cumulative_stock_over_a_full_window(): void
+    {
+        $this->backdateHireToTwoMonthsAgo();
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend', $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        // months=12 yields exactly 12 buckets — the old GROUP BY returned only
+        // the months that contained a hire (here: a single bucket).
+        $this->assertCount(12, $data);
+        $this->assertSame($this->expectedMonthLabels(12), array_column($data, 'month'));
+
+        // Hired two months ago: nine empty months, then the hire month and the
+        // two months after it all report the headcount as 1.
+        $this->assertSame(
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+            array_column($data, 'count')
+        );
+    }
+
+    public function test_headcount_trend_months_param_sets_exact_bucket_count(): void
+    {
+        $this->backdateHireToTwoMonthsAgo();
+        $token = $this->createApiToken($this->user, ['hr:read']);
+
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend?months=3', $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(3, $data);
+        $this->assertSame($this->expectedMonthLabels(3), array_column($data, 'month'));
+        $this->assertSame([1, 1, 1], array_column($data, 'count'));
+
+        $single = $this->apiGet('/api/hr/analytics/headcount-trend?months=1', $token);
+        $single->assertStatus(200);
+        $this->assertCount(1, $single->json('data'));
+        $this->assertSame($this->expectedMonthLabels(1), array_column($single->json('data'), 'month'));
+    }
+
+    public function test_headcount_trend_rejects_out_of_range_months(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+
+        $this->apiGet('/api/hr/analytics/headcount-trend?months=0', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['months']);
+
+        $this->apiGet('/api/hr/analytics/headcount-trend?months=-6', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['months']);
+
+        $this->apiGet('/api/hr/analytics/headcount-trend?months=25', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['months']);
+    }
+
+    public function test_vacancy_trend_counts_staffed_units_as_a_stock(): void
+    {
+        $this->backdateHireToTwoMonthsAgo();
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/vacancy-trend', $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        $this->assertCount(12, $data);
+        $this->assertSame($this->expectedMonthLabels(12), array_column($data, 'month'));
+
+        // Two units in scope, one staffed two months ago: vacant is 2 before
+        // the hire month and 1 from the hire month on. The old query joined
+        // hires on month equality, so every month after the hire reported the
+        // whole organisation (2) as vacant.
+        $this->assertSame(
+            [2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1],
+            array_column($data, 'count')
+        );
+    }
+
+    public function test_vacancy_trend_rejects_out_of_range_months(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+
+        $this->apiGet('/api/hr/analytics/vacancy-trend?months=0', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['months']);
+
+        $this->apiGet('/api/hr/analytics/vacancy-trend?months=-6', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['months']);
+    }
+
+    public function test_non_numeric_months_falls_back_to_the_default_window(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend?months=abc', $token);
+
+        // Junk input renders the default window, exactly like `?days=abc`
+        // does under `ReportDays` — it must not error and must not collapse
+        // to a single bucket.
+        $response->assertStatus(200);
+        $this->assertCount(12, $response->json('data'));
+    }
 }
