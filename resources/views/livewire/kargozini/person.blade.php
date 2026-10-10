@@ -1,5 +1,6 @@
 <?php
 use App\Models\Estekhdam;
+use App\Models\Hardware;
 use App\Models\Person as PersonModel;
 use App\Models\Radif;
 use App\Models\Semat;
@@ -162,6 +163,15 @@ return new class extends Component
             return;
         }
 
+        // #959: hardwares.n_code has no FK, so deleting the person would
+        // silently orphan every hardware row it owns (invisible to every
+        // unit, uneditable by anyone). Refuse while any hardware exists.
+        if (Hardware::where('n_code', $person->n_code)->exists()) {
+            $this->error('امکان حذف وجود ندارد زیرا برای این پرسنل سخت‌افزار ثبت شده است.', position: 'toast-bottom');
+
+            return;
+        }
+
         try {
             $person->delete();
             $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
@@ -199,6 +209,16 @@ return new class extends Component
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             if (! in_array($person->u_id, $accessibleIds)) {
                 $this->error('شما مجاز به ویرایش این پرسنل نیستید.', position: 'toast-bottom');
+
+                return;
+            }
+
+            // #959: n_code is immutable on the update path — hardwares.n_code
+            // has no FK, so a rename silently orphans every hardware row of
+            // that person. The input is disabled, but a crafted Livewire call
+            // could still set it; refuse here.
+            if ((string) $this->n_code !== (string) $person->n_code) {
+                $this->addError('n_code', 'کد ملی قابل تغییر نیست.');
 
                 return;
             }
@@ -493,7 +513,7 @@ return new class extends Component
                 </div>
 
                 <x-form wire:submit.prevent="savePerson" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
+                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required :disabled="(bool) $editingId"/>
                     <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
                     <x-input wire:model="l_name" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
                     <x-select wire:model="t_id" label="تحصیلات" :options="$tahsils" required placeholder="انتخاب سطح تحصیلات"/>

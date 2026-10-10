@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\PersonController;
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
@@ -116,6 +117,35 @@ class PersonApiTest extends TestCase
         $this->assertDatabaseMissing('persons', ['n_code' => $person->n_code]);
     }
 
+    /**
+     * Issue #959: hardwares.n_code has no FK, so deleting the person would
+     * silently orphan every hardware row. Refuse the delete while any exist.
+     */
+    public function test_delete_person_with_hardware_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+
+        $person = Person::factory()->create([
+            'n_code' => '3333333333',
+            'u_id' => $unit->id,
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+        ]);
+        $this->createHardware(['n_code' => $person->n_code]);
+
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+        $response = $this->apiDelete("/api/persons/{$person->n_code}", $token);
+
+        $response->assertStatus(422);
+        // Neither the person nor the hardware row is touched.
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code]);
+        $this->assertDatabaseHas('hardwares', ['n_code' => $person->n_code]);
+        $this->assertNotNull(Hardware::where('n_code', $person->n_code)->first()->person);
+    }
+
     public function test_create_person_requires_required_fields(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
@@ -145,6 +175,52 @@ class PersonApiTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['u_id']);
+    }
+
+    /**
+     * Issue #959: n_code is immutable on the update path. hardwares.n_code
+     * has no FK, so a rename would silently orphan every hardware row of
+     * that person (invisible to every unit, uneditable by anyone).
+     */
+    public function test_update_person_cannot_change_n_code(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $person = Person::where('u_id', $unit->id)->first();
+        $this->createHardware(['n_code' => $person->n_code]);
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPut("/api/persons/{$person->n_code}", [
+            'n_code' => '9999999999',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['n_code']);
+
+        // The stored n_code is untouched and the hardware row still resolves
+        // its person — the exact orphaning #959 forbids.
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code]);
+        $this->assertNotNull(Hardware::where('n_code', $person->n_code)->first()->person);
+    }
+
+    /**
+     * Issue #959: a full-payload PUT that echoes the unchanged n_code (the
+     * normal Flutter request shape) must keep working — only a real change
+     * is refused.
+     */
+    public function test_update_person_with_unchanged_n_code_still_succeeds(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPut("/api/persons/{$person->n_code}", [
+            'n_code' => $person->n_code,
+            'f_name' => 'Updated',
+        ], $token);
+
+        $response->assertStatus(200)
+            ->assertJson(['data' => ['f_name' => 'Updated']]);
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'f_name' => 'Updated']);
     }
 
     /**
