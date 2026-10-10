@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Kargozini;
 
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Person as PersonModel;
 use App\Models\Unit;
@@ -333,6 +334,64 @@ class PersonLivewireTest extends TestCase
         $this->assertDatabaseHas('persons', [
             'id' => $person->id, 'f_name' => 'UpdatedFirst', 'l_name' => 'UpdatedLast',
         ]);
+    }
+
+    /**
+     * Issue #959: n_code is immutable on the update path — hardwares.n_code
+     * has no FK, so a rename silently orphans every hardware row of that
+     * person. The server must refuse even a crafted Livewire call.
+     */
+    public function test_save_person_update_cannot_change_n_code(): void
+    {
+        $person = PersonModel::where('u_id', $this->unit->id)->first();
+        Hardware::factory()->create(['n_code' => $person->n_code]);
+
+        $component = Livewire::test('kargozini.person')
+            ->call('editPerson', $person->id);
+        $this->fillForm($component, [
+            'n_code' => '9999999999',
+            'f_name' => 'UpdatedFirst',
+            'l_name' => 'UpdatedLast',
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
+            'u_id' => $this->unit->id,
+        ]);
+        $component->call('savePerson')
+            ->assertHasErrors(['n_code']);
+
+        // n_code untouched; other edits did not slip through either.
+        $this->assertDatabaseHas('persons', [
+            'id' => $person->id, 'n_code' => $person->n_code, 'f_name' => 'مهدی',
+        ]);
+        // The hardware row still resolves its person — no orphan.
+        $this->assertNotNull(Hardware::where('n_code', $person->n_code)->first()->person);
+    }
+
+    /**
+     * Issue #959: the UI shows the contract — the n_code input is disabled
+     * in edit mode (create mode keeps it enabled).
+     */
+    public function test_edit_form_disables_n_code_input(): void
+    {
+        $person = PersonModel::where('u_id', $this->unit->id)->first();
+
+        // Extract the full <input> tag that carries wire:model="n_code",
+        // regardless of attribute order.
+        $editHtml = Livewire::test('kargozini.person')
+            ->call('editPerson', $person->id)
+            ->html();
+        $this->assertMatchesRegularExpression('/<input[^>]*wire:model="n_code"[^>]*>/', $editHtml);
+        preg_match('/<input[^>]*wire:model="n_code"[^>]*/', $editHtml, $m);
+        $this->assertStringContainsString('disabled', $m[0], 'n_code input must be disabled in edit mode');
+
+        $createHtml = Livewire::test('kargozini.person')
+            ->call('startCreate')
+            ->html();
+        preg_match('/<input[^>]*wire:model="n_code"[^>]*/', $createHtml, $m);
+        $this->assertNotEmpty($m, 'n_code input not found in create form');
+        $this->assertStringNotContainsString('disabled', $m[0], 'n_code input must stay enabled in create mode');
     }
 
     public function test_save_person_update_denied_for_out_of_scope(): void

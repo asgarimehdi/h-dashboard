@@ -203,6 +203,16 @@ return new class extends Component
                 return;
             }
 
+            // #959: n_code is immutable on the update path — hardwares.n_code
+            // has no FK, so a rename silently orphans every hardware row of
+            // that person. The input is disabled, but a crafted Livewire call
+            // could still set it; refuse here.
+            if ((string) $this->n_code !== (string) $person->n_code) {
+                $this->addError('n_code', 'کد ملی قابل تغییر نیست.');
+
+                return;
+            }
+
             // #805: the check above validates the STORED u_id, but the update
             // writes the submitted one — so a unit the actor cannot reach was
             // writable. Re-validate the submitted value before it is stored.
@@ -493,7 +503,7 @@ return new class extends Component
                 </div>
 
                 <x-form wire:submit.prevent="savePerson" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
+                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required :disabled="(bool) $editingId"/>
                     <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
                     <x-input wire:model="l_name" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
                     <x-select wire:model="t_id" label="تحصیلات" :options="$tahsils" required placeholder="انتخاب سطح تحصیلات"/>
