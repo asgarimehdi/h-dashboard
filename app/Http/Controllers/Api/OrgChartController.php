@@ -38,26 +38,31 @@ class OrgChartController extends Controller
                 // re-query the same rows to learn something this loop can read off
                 // directly. The Livewire `unit.tree` component, which does NOT
                 // already have the flat list in hand, uses the service.
+                // Children are collected in a SEPARATE map keyed by parent id —
+                // never written onto the models. `units` has no `children` column,
+                // so `$unit->children` resolves to the real `hasMany` relation
+                // (Unit.php:106-108); reading it with `??=` lazy-loads every real
+                // child of the parent from the database and then the loop appended
+                // on top, duplicating every subtree multiplicatively (#933).
+                // See UnitsExportController::buildHierarchy() for the same shape.
                 $byId = $units->keyBy('id');
+                $childrenByParent = [];
                 $tree = [];
                 foreach ($units as $unit) {
                     if ($unit->parent_id && $byId->has($unit->parent_id)) {
-                        $byId[$unit->parent_id]->children ??= [];
-                        $byId[$unit->parent_id]->children[] = $unit;
+                        $childrenByParent[$unit->parent_id][] = $unit;
                     } else {
                         $tree[] = $unit;
                     }
                 }
 
-                $format = function ($unit) use (&$format) {
+                $format = function ($unit) use (&$format, $childrenByParent) {
                     return [
                         'id' => $unit->id,
                         'name' => $unit->name,
                         'parent_id' => $unit->parent_id,
                         'personnel_count' => $unit->personnel_count,
-                        'children' => isset($unit->children)
-                            ? collect($unit->children)->map($format)->values()
-                            : [],
+                        'children' => collect($childrenByParent[$unit->id] ?? [])->map($format)->values(),
                     ];
                 };
 
