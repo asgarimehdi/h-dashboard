@@ -52,10 +52,19 @@
                             </div>
                             <span class="text-xs opacity-50">{{ \Morilog\Jalali\Jalalian::fromDateTime($entry['created_at'])->format('Y/m/d H:i') }}</span>
                         </div>
-                        @if(!empty($entry['changes']) && is_array($entry['changes']))
+                        @php
+                            // #927: `changes` is a diff list, but rows written
+                            // before the fix decode to a column => value map.
+                            // Render whatever shape arrived — a blank panel reads
+                            // as "this action changed nothing", which is worse
+                            // than a readable one-liner.
+                            $auditChanges = $entry['changes'] ?? null;
+                            $changeLines = \App\Support\HardwareAuditChange::lines($auditChanges);
+                        @endphp
+                        @if($changeLines)
                             <div class="space-y-1 mt-1">
-                                @foreach($entry['changes'] as $change)
-                                    @if(is_array($change) && isset($change['field']))
+                                @if(\App\Support\HardwareAuditChange::isDiffList($auditChanges))
+                                    @foreach($auditChanges as $change)
                                         <div class="flex items-center justify-between gap-2 text-xs bg-base-300/30 rounded px-2 py-1"
                                              title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
                                             <span class="font-mono">
@@ -76,8 +85,12 @@
                                                 </button>
                                             @endif
                                         </div>
-                                    @endif
-                                @endforeach
+                                    @endforeach
+                                @else
+                                    <div class="text-xs bg-base-300/30 rounded px-2 py-1" title="{{ implode(' | ', $changeLines) }}">
+                                        {{ implode(' | ', $changeLines) }}
+                                    </div>
+                                @endif
                             </div>
                         @endif
                         @if($entry['ip_address'])

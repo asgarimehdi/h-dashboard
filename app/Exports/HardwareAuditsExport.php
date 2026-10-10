@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Support\ExcelCell;
+use App\Support\HardwareAuditChange;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -86,13 +87,13 @@ class HardwareAuditsExport implements FromCollection, WithChunkReading, WithHead
      */
     public function map($audit): array
     {
-        $changesSummary = '';
-        if ($audit->changes && is_array($audit->changes)) {
-            $changesSummary = ExcelCell::escape(implode(' | ', array_map(
-                fn ($c) => "{$c['field']}: {$c['old']} → {$c['new']}",
-                $audit->changes
-            )));
-        }
+        // #927: `changes` is a diff list, but rows written before the fix (and
+        // by any future writer that hands over a raw attribute map) decode to
+        // something else. Interpolating array offsets into that threw a
+        // TypeError out of the mapper and took the whole export down with it,
+        // so render whatever shape arrived and degrade instead.
+        $lines = HardwareAuditChange::lines($audit->changes);
+        $changesSummary = $lines === [] ? '' : ExcelCell::escape(implode(' | ', $lines));
 
         // #886 (CWE-1236): user_agent / changes / user.name are
         // attacker-controlled; escape at map() time (also fixes ?format=csv).

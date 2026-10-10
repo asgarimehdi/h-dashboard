@@ -7,6 +7,7 @@ use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\HardwareAuditChange;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -628,5 +629,81 @@ class HardwareAuditModalLivewireTest extends TestCase
             ->call('rollbackHistoryField', $audit->id, 'n_code');
 
         $this->assertSame($caller['user']->n_code, $hw->refresh()->n_code);
+    }
+
+    // ==================== S6: legacy map-shaped rows (#927) ====================
+
+    /**
+     * #927: `changes` is a field-level diff list, but rows written by the old
+     * `bulkDelete()` decode to a column => value map. The modal used to skip
+     * every element of such a row, so the entry appeared with no diff at all —
+     * which reads as "nothing changed" rather than "this history is unreadable".
+     */
+    public function test_a_map_shaped_row_still_renders_its_fields(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        HardwareAudit::create([
+            'hardware_id' => $hw->id,
+            'action' => 'bulk_delete',
+            'changes' => ['pc_name' => 'PC-LEGACY', 'ram' => '8192'],
+            'source' => 'bulk',
+        ]);
+
+        $component = Livewire::test('hardware.index')->call('loadHistory', $hw->id);
+
+        $entry = collect($component->get('history'))->firstWhere('action', 'bulk_delete');
+
+        $this->assertNotNull($entry);
+        $component->assertSee('PC-LEGACY');
+        $component->assertSee('8192');
+    }
+
+    public function test_a_diff_shaped_row_keeps_its_per_field_rendering(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        HardwareAudit::create([
+            'hardware_id' => $hw->id,
+            'action' => 'bulk_delete',
+            'changes' => [
+                ['field' => 'pc_name', 'old' => 'PC-NEW', 'new' => 'deleted'],
+            ],
+            'source' => 'bulk',
+        ]);
+
+        // The structured branch renders old ← new per field, not the flat
+        // `field: value` fallback used for a map.
+        Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->assertSee('PC-NEW')
+            ->assertSee('deleted')
+            ->assertSee('(pc_name)');
+    }
+
+    public function test_a_map_shaped_row_offers_no_rollback_control(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+
+        HardwareAudit::create([
+            'hardware_id' => $hw->id,
+            'action' => 'updated',
+            'changes' => ['cpu' => 'Intel i5'],
+            'source' => 'web',
+        ]);
+
+        // A map carries no per-field `old`, so there is nothing to roll back to;
+        // the button must not be offered for it.
+        $component = Livewire::test('hardware.index')->call('loadHistory', $hw->id);
+        $entry = collect($component->get('history'))->firstWhere('action', 'updated');
+
+        $this->assertNotNull($entry);
+        $this->assertFalse(HardwareAuditChange::isDiffList($entry['changes']));
     }
 }

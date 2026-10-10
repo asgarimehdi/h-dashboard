@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Support\ExcelCell;
+use App\Support\HardwareAuditChange;
 use Illuminate\Support\Facades\Auth;
 
 class HardwareAuditObserver
@@ -30,11 +31,7 @@ class HardwareAuditObserver
             return;
         }
 
-        $fields = [
-            'n_code', 'pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type',
-            'switch', 'port', 'vlan', 'motherboard', 'comments',
-            'ip_valid', 'ip_local', 'mac', 'shutdown', 'mark', 'clean_at',
-        ];
+        $fields = HardwareAuditChange::AUDITED_FIELDS;
         $changes = [];
         foreach ($fields as $field) {
             $value = $hardware->getAttribute($field);
@@ -235,19 +232,12 @@ class HardwareAuditObserver
 
     /**
      * Format a value for display in the changes log.
+     *
+     * Delegates to {@see HardwareAuditChange} so `created` and the `bulk_delete`
+     * snapshot render a value identically (#927).
      */
     protected function formatValueForDisplay(mixed $value): string
     {
-        if ($value === null) {
-            return '—';
-        }
-        if (is_bool($value)) {
-            return $value ? 'بله' : 'خیر';
-        }
-        if (is_array($value)) {
-            return json_encode($value, JSON_UNESCAPED_UNICODE);
-        }
-
-        return (string) $value;
+        return HardwareAuditChange::formatValueForDisplay($value);
     }
 }
