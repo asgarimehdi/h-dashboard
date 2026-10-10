@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Rules\PerPage;
 use App\Traits\PersianNormalizer;
@@ -157,6 +158,15 @@ class PersonController extends Controller
 
         if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
+        }
+
+        // Issue #959: hardwares.n_code has no FK, so deleting the person
+        // would silently orphan every hardware row it owns. Refuse while any
+        // hardware exists — this is the only app-level guard for that hole.
+        if (Hardware::where('n_code', $person->n_code)->exists()) {
+            return response()->json([
+                'message' => 'Cannot delete person: hardware records exist for this n_code.',
+            ], 422);
         }
 
         $person->delete();

@@ -1,5 +1,6 @@
 <?php
 use App\Models\Estekhdam;
+use App\Models\Hardware;
 use App\Models\Person as PersonModel;
 use App\Models\Radif;
 use App\Models\Semat;
@@ -158,6 +159,15 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         if (! in_array($person->u_id, $accessibleIds)) {
             $this->error('شما مجاز به حذف این پرسنل نیستید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        // #959: hardwares.n_code has no FK, so deleting the person would
+        // silently orphan every hardware row it owns (invisible to every
+        // unit, uneditable by anyone). Refuse while any hardware exists.
+        if (Hardware::where('n_code', $person->n_code)->exists()) {
+            $this->error('امکان حذف وجود ندارد زیرا برای این پرسنل سخت‌افزار ثبت شده است.', position: 'toast-bottom');
 
             return;
         }

@@ -499,6 +499,23 @@ class PersonLivewireTest extends TestCase
         $this->assertDatabaseMissing('persons', ['n_code' => '23548258']);
     }
 
+    /**
+     * Issue #959: hardwares.n_code has no FK, so deleting a person who owns
+     * hardware would silently orphan those rows. Refuse while any exist.
+     */
+    public function test_delete_person_with_hardware_is_refused(): void
+    {
+        $target = PersonModel::create($this->personData());
+        Hardware::factory()->create(['n_code' => $target->n_code]);
+
+        Livewire::test('kargozini.person')
+            ->call('delete', $target);
+
+        // Both rows survive.
+        $this->assertDatabaseHas('persons', ['id' => $target->id]);
+        $this->assertDatabaseHas('hardwares', ['n_code' => $target->n_code]);
+    }
+
     public function test_delete_denied_out_of_scope(): void
     {
         // #936: this assertion alone is VACUOUS against the broken signature —

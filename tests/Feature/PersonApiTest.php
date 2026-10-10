@@ -117,6 +117,35 @@ class PersonApiTest extends TestCase
         $this->assertDatabaseMissing('persons', ['n_code' => $person->n_code]);
     }
 
+    /**
+     * Issue #959: hardwares.n_code has no FK, so deleting the person would
+     * silently orphan every hardware row. Refuse the delete while any exist.
+     */
+    public function test_delete_person_with_hardware_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+
+        $person = Person::factory()->create([
+            'n_code' => '3333333333',
+            'u_id' => $unit->id,
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+        ]);
+        $this->createHardware(['n_code' => $person->n_code]);
+
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+        $response = $this->apiDelete("/api/persons/{$person->n_code}", $token);
+
+        $response->assertStatus(422);
+        // Neither the person nor the hardware row is touched.
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code]);
+        $this->assertDatabaseHas('hardwares', ['n_code' => $person->n_code]);
+        $this->assertNotNull(Hardware::where('n_code', $person->n_code)->first()->person);
+    }
+
     public function test_create_person_requires_required_fields(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
