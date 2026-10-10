@@ -460,10 +460,13 @@ class AccessibilityInfrastructureTest extends TestCase
     {
         $xpath = $this->xpath($html);
 
-        // `.theme-controller` کنترلر داخلی DaisyUI برای `<x-theme-toggle>` است:
-        // `<label for>` دارد ولی فقط آیکون، پس نامش تهی درمی‌آید. از آن ۱۰
-        // چک‌باکس خام این ایشو بیرون است (id و label دارد) و درست‌کردنش
-        // بازنویسی کامپوننت vendor می‌خواهد — خارج از اسکوپ این ایشو.
+        // `.theme-controller` کنترلر داخلی DaisyUI برای `<x-theme-toggle>` است.
+        // یک `<label for>` دارد ولی فقط آیکون، پس نامِ محاسبه‌شده‌اش تهی است و
+        // صفحه‌خوان آن را چک‌باکسِ بی‌نام می‌خواند. این ایشو را نمی‌شکند:
+        // موضوع قدم ۴ ده چک‌باکسِ خامِ خودمان است و این یکی نه `id` ندارد و نه در
+        // ویوهای اپ نیست. تنها راه درستش بازنویسی `Mary\View\Components\ThemeToggle`
+        // است (مثل AccessibleTable/AccessibleMenuItem این ایشو)، پس پیگیری‌اش
+        // یک ایشوی جداگانه است نه اینجا — عمداً مستند شده، نه پنهان.
         $checkboxes = $xpath->query('//input[@type="checkbox" and not(contains(@class, "theme-controller"))]');
 
         $this->assertGreaterThan(

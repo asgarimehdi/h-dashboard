@@ -59,6 +59,22 @@ test.describe('skip link', () => {
     // menu, which is exactly what the skip link exists to prevent.
     await expect(page.locator('#main-content')).toBeFocused();
   });
+
+  test('stays inside a narrow viewport when it appears', async ({ page }) => {
+    // `focus:start-2` is a logical offset, so it must land 8px from the RIGHT
+    // edge in RTL. If the link ever renders wider than the viewport it is
+    // useless exactly where the menu is largest.
+    await page.setViewportSize({ width: 320, height: 640 });
+
+    const skip = page.locator('a[href="#main-content"]').first();
+    await skip.focus();
+    await expect(skip).toBeVisible();
+
+    const box = await skip.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+  });
 });
 
 test.describe('navigation landmark', () => {
