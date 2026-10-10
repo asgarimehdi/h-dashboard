@@ -354,15 +354,18 @@ return new class extends Component
             ])
             ->all();
 
-        $selectedUnitName = null;
-        if ($this->u_id) {
-            $selectedUnitName = collect($units)->firstWhere('id', (int) $this->u_id)['name'] ?? Unit::find($this->u_id)?->name;
-        }
+        // #919: `$units` is already scoped by the unconditional `whereIn`
+        // above, so `firstWhere()` only ever resolves an in-scope unit. The
+        // former `?? Unit::find(...)` fallback therefore ran exactly when the
+        // unit was OUT of scope. Out-of-scope now falls to `null`, like a
+        // nonexistent id. In-repo pattern: `select-context.blade.php:37-43`.
+        $selectedUnitName = $this->u_id
+            ? (collect($units)->firstWhere('id', (int) $this->u_id)['name'] ?? null)
+            : null;
 
-        $filterUnitName = null;
-        if ($this->filter_u_id) {
-            $filterUnitName = collect($units)->firstWhere('id', (int) $this->filter_u_id)['name'] ?? Unit::find($this->filter_u_id)?->name;
-        }
+        $filterUnitName = $this->filter_u_id
+            ? (collect($units)->firstWhere('id', (int) $this->filter_u_id)['name'] ?? null)
+            : null;
 
         return [
             'persons' => $this->persons(),
