@@ -150,4 +150,129 @@ class GenerateDueMaintenanceCommandTest extends TestCase
         $this->artisan('maintenance:generate-due')->assertExitCode(0);
         $this->assertDatabaseCount('tickets', 2);
     }
+
+    /**
+     * Issue #876 (guard): a unit-less schedule must be skipped and counted,
+     * never crash the run with a 23502 — and the valid schedules in the same
+     * batch must still be processed.
+     */
+    public function test_unit_less_schedule_is_skipped_and_valid_schedule_still_processed(): void
+    {
+        $unit = Unit::create(['name' => 'Ward F']);
+        $valid = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'HVAC inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+        $unitLess = MaintenanceSchedule::create([
+            'unit_id' => null,
+            'title' => 'Org-wide check',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Skipping 1 schedule(s) without a unit')
+            ->expectsOutputToContain('Created 1 maintenance ticket(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertEquals('HVAC inspection', Ticket::first()->subject);
+
+        $valid->refresh();
+        $this->assertNotNull($valid->last_generated_at);
+
+        // The skipped schedule is not advanced — it stays visibly due (and
+        // visibly skipped) until the product rule for it is decided.
+        $unitLess->refresh();
+        $this->assertNull($unitLess->last_generated_at);
+    }
+
+    /**
+     * Issue #876 (guard): deleting a unit turns its schedules unit-less via
+     * the FK (on delete set null). That manufactured poison row must not
+     * take the nightly run down with it.
+     */
+    public function test_schedule_orphaned_by_unit_delete_does_not_poison_the_run(): void
+    {
+        $unitA = Unit::create(['name' => 'Ward G']);
+        $unitB = Unit::create(['name' => 'Ward H']);
+        $kept = MaintenanceSchedule::create([
+            'unit_id' => $unitA->id,
+            'title' => 'Kept schedule',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+        $orphaned = MaintenanceSchedule::create([
+            'unit_id' => $unitB->id,
+            'title' => 'Orphaned schedule',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+
+        $unitB->delete();
+        $orphaned->refresh();
+        $this->assertNull($orphaned->unit_id);
+
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Created 1 maintenance ticket(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertEquals('Kept schedule', Ticket::first()->subject);
+
+        $kept->refresh();
+        $this->assertNotNull($kept->last_generated_at);
+        $orphaned->refresh();
+        $this->assertNull($orphaned->last_generated_at);
+    }
+
+    /**
+     * Issue #876 (isolation): a schedule that genuinely fails must surface a
+     * non-zero exit code (so cron can alert) without starving the others.
+     */
+    public function test_failing_schedule_returns_non_zero_and_does_not_starve_others(): void
+    {
+        $unit = Unit::create(['name' => 'Ward I']);
+        $good = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Good schedule',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+        $bad = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Exploding schedule',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+
+        Ticket::creating(function (Ticket $ticket) {
+            if ($ticket->subject === 'Exploding schedule') {
+                throw new \RuntimeException('boom');
+            }
+        });
+
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Created 1 maintenance ticket(s)')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseCount('tickets', 1);
+        $this->assertEquals('Good schedule', Ticket::first()->subject);
+
+        $good->refresh();
+        $this->assertNotNull($good->last_generated_at);
+
+        // The failed schedule rolled back and was not advanced — it stays
+        // due and retryable instead of half-applied.
+        $bad->refresh();
+        $this->assertNull($bad->last_generated_at);
+    }
 }
