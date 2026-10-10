@@ -589,18 +589,6 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Unable to resolve the template type TKey in call to function collect$#'
-			identifier: argument.templateType
-			count: 2
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Unable to resolve the template type TValue in call to function collect$#'
-			identifier: argument.templateType
-			count: 2
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
 			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
 			identifier: property.notFound
 			count: 1
@@ -5195,3 +5183,15 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: routes/web.php
+
+		-
+			message: '#^Unable to resolve the template type TKey in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Http/Controllers/Api/OrgChartController.php
+
+		-
+			message: '#^Unable to resolve the template type TValue in call to function collect$#'
+			identifier: argument.templateType
+			count: 1
+			path: app/Http/Controllers/Api/OrgChartController.php

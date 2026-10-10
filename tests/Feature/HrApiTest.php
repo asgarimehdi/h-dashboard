@@ -61,6 +61,51 @@ class HrApiTest extends TestCase
         $this->assertEquals(1, $response->json('data.0.personnel_count'));
     }
 
+    public function test_org_chart_emits_each_unit_once_with_exact_children(): void
+    {
+        // #933: the full-tree endpoint duplicated every subtree because it wrote
+        // to `$unit->children`, which is the real hasMany relation (there is no
+        // `children` column), lazy-loading each parent's children and appending on
+        // top. A parent with N children returned > N, compounding with depth.
+        $second = Unit::create(['name' => 'خانه بهداشت ۲', 'parent_id' => $this->unit->id]);
+        Unit::create(['name' => 'خانه بهداشت ۳', 'parent_id' => $this->unit->id]);
+        Unit::create(['name' => 'پایگاه', 'parent_id' => $second->id]);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart', $token);
+
+        $response->assertStatus(200);
+
+        $tree = $response->json('data');
+
+        // One root (the accessible unit), with exactly three direct children.
+        $this->assertCount(1, $tree);
+        $this->assertSame($this->unit->id, $tree[0]['id']);
+        $this->assertCount(3, $tree[0]['children']);
+
+        // The nested child carries exactly one child — the duplication compounded
+        // multiplicatively with depth, so this is the assertion the bug escaped.
+        $secondNode = collect($tree[0]['children'])->firstWhere('id', $second->id);
+        $this->assertNotNull($secondNode);
+        $this->assertCount(1, $secondNode['children']);
+
+        // Total emitted nodes equals the number of units in scope (5): the root,
+        // its three direct children, and the grandchild.
+        $flatten = function (array $nodes) use (&$flatten): array {
+            $ids = [];
+            foreach ($nodes as $node) {
+                $ids[] = $node['id'];
+                $ids = array_merge($ids, $flatten($node['children']));
+            }
+
+            return $ids;
+        };
+
+        $ids = $flatten($tree);
+        $this->assertSame(Unit::count(), count($ids));
+        $this->assertSame(count($ids), count(array_unique($ids)));
+    }
+
     public function test_stats_returns_aggregations(): void
     {
         $token = $this->createApiToken($this->user, ['hr:read']);
