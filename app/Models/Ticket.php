@@ -40,6 +40,20 @@ class Ticket extends Model
 {
     use HasOrganizationalScope;
 
+    /**
+     * Canonical app-level ticket priority vocabulary (#954).
+     *
+     * The DB CHECK constraint deliberately accepts five values (`medium` and
+     * `high` included) but every UI bucket, aggregation and validation rule
+     * understands only these three — so this constant, not the DB, is the
+     * vocabulary. The nightly `maintenance:generate-due` writer, the API
+     * rules and the map-dashboard filter all read it; a value outside it is
+     * storable but reportable by nothing.
+     *
+     * @var array<int, string>
+     */
+    public const PRIORITIES = ['low', 'normal', 'urgent'];
+
     protected $fillable = [
         'ticket_code',
         'user_id',

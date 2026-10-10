@@ -140,7 +140,7 @@ new class extends Component
             // values (`medium`, `high`) the CHECK constraint allows but the
             // picker and the API both refuse — and anything outside the set
             // raised SQLSTATE[23514]. Same three values as `TicketController`.
-            'priority' => 'required|in:low,normal,urgent',
+            'priority' => 'required|in:'.implode(',', Ticket::PRIORITIES),
             // #847: the last unvalidated input on this form. Existence and
             // scope are both the rule's job, so a foreign todo and a missing
             // id are validation errors rather than a FK violation.
