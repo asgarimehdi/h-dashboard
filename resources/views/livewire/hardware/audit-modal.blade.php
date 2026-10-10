@@ -102,11 +102,11 @@
 
             @if($historyTotal > $historyPerPage)
                 <div class="flex justify-center items-center gap-2 mt-4">
-                    <x-button icon="o-chevron-right" class="btn-circle btn-sm"
+                    <x-ui.icon-button name="صفحه بعد" icon="o-chevron-right" class="btn-circle btn-sm"
                         :disabled="$historyCurrentPage <= 1"
                         wire:click="historyPage({{ $historyCurrentPage - 1 }})" />
                     <span class="text-sm">صفحه {{ $historyCurrentPage }} از {{ ceil($historyTotal / $historyPerPage) }}</span>
-                    <x-button icon="o-chevron-left" class="btn-circle btn-sm"
+                    <x-ui.icon-button name="صفحه قبل" icon="o-chevron-left" class="btn-circle btn-sm"
                         :disabled="$historyCurrentPage >= ceil($historyTotal / $historyPerPage)"
                         wire:click="historyPage({{ $historyCurrentPage + 1 }})" />
                 </div>

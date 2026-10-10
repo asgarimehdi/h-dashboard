@@ -140,7 +140,7 @@ new class extends Component
             // values (`medium`, `high`) the CHECK constraint allows but the
             // picker and the API both refuse — and anything outside the set
             // raised SQLSTATE[23514]. Same three values as `TicketController`.
-            'priority' => 'required|in:low,normal,urgent',
+            'priority' => 'required|in:'.implode(',', Ticket::PRIORITIES),
             // #847: the last unvalidated input on this form. Existence and
             // scope are both the rule's job, so a foreign todo and a missing
             // id are validation errors rather than a FK violation.
@@ -263,7 +263,8 @@ new class extends Component
         <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
-        <x-errors :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
+        {{-- #957: role="alert" تا خطای اعتبارسنجی تیکت واقعاً اعلام شود، نه فقط دیده. --}}
+        <x-errors role="alert" :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">
             <div class="relative">
                 <x-input
@@ -339,7 +340,7 @@ new class extends Component
                             <x-icon name="o-paper-clip" class="w-4 h-4 text-gray-400" />
                             <span class="text-xs truncate">{{ $file->getClientOriginalName() }}</span>
                         </div>
-                        <x-button icon="o-x-mark" wire:click="removeFile({{ $index }})" class="btn-ghost btn-xs text-error" />
+                        <x-ui.icon-button name="حذف پیوست" icon="o-x-mark" wire:click="removeFile({{ $index }})" class="btn-ghost btn-xs text-error" />
                     </div>
                     @endforeach
                 </div>

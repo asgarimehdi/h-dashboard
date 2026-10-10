@@ -82,7 +82,8 @@ return new class extends Component {
                     required
                 />
 
-                <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
+                {{-- #957: role="alert" تا خطای رمز واقعاً اعلام شود، نه فقط دیده. --}}
+                <x-errors role="alert" title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" dir="rtl"/>
 
                 <div class="flex gap-4">
                     <x-button

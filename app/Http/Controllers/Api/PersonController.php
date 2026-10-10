@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Rules\PerPage;
 use App\Traits\PersianNormalizer;
@@ -116,10 +117,20 @@ class PersonController extends Controller
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
+        // Issue #959: n_code is immutable on the update path. hardwares.n_code
+        // has no FK, so a rename would silently orphan every hardware row of
+        // this person. Accept the field only when it is unchanged (a
+        // full-payload PUT echoes it); any real change is a 422.
+        if ($request->filled('n_code') && (string) $request->input('n_code') !== (string) $person->n_code) {
+            return response()->json([
+                'message' => 'n_code cannot be changed.',
+                'errors' => ['n_code' => ['n_code cannot be changed.']],
+            ], 422);
+        }
+
         // Issue #532: validate FIRST, then check scope — prevents information
         // disclosure through differential error responses (403 vs 422).
         $validated = $request->validate([
-            'n_code' => 'sometimes|required|string|size:10|unique:persons,n_code,'.$person->n_code.',n_code',
             'f_name' => 'sometimes|required|string|max:255',
             'l_name' => 'sometimes|required|string|max:255',
             't_id' => 'sometimes|required|exists:tahsils,id',
@@ -147,6 +158,15 @@ class PersonController extends Controller
 
         if (! in_array($person->u_id, $accessibleIds)) {
             return response()->json(['message' => 'Person not accessible.'], 403);
+        }
+
+        // Issue #959: hardwares.n_code has no FK, so deleting the person
+        // would silently orphan every hardware row it owns. Refuse while any
+        // hardware exists — this is the only app-level guard for that hole.
+        if (Hardware::where('n_code', $person->n_code)->exists()) {
+            return response()->json([
+                'message' => 'Cannot delete person: hardware records exist for this n_code.',
+            ], 422);
         }
 
         $person->delete();

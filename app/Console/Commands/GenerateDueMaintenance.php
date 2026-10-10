@@ -114,7 +114,11 @@ class GenerateDueMaintenance extends Command
             'subject' => $schedule->title,
             'content' => 'Generated from maintenance schedule #'.$schedule->id,
             'status' => 'created',
-            'priority' => 'medium',
+            // #954: the app vocabulary is Ticket::PRIORITIES (three
+            // values). `medium` passed the DB CHECK but no report reads
+            // it — this unattended nightly writer must stay inside the
+            // buckets every aggregation has.
+            'priority' => 'normal',
             'unit_id' => $schedule->unit_id,
         ]);
 

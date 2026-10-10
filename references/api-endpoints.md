@@ -384,7 +384,7 @@ Blade:
 - Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
 - pg_trgm GIN indexes back leading-wildcard `LIKE` search on `persons` (fullname forms), `hardwares` (pc_name/comments/type/ip_valid/ip_local/mac), and `units.name` (added 2026-08-26)
-- HR analytics endpoints (`stats`, `headcountTrend`, `vacancyTrend`, `staffingRatio`, `loadSubtree`) aggregate in a single pgsql pass and cache the result; `headcountTrend`/`staffingRatio` use a SQLite fallback (strftime / two-query) for tests. `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
+- HR analytics endpoints (`stats`, `headcountTrend`, `vacancyTrend`, `staffingRatio`, `loadSubtree`) aggregate in a single pgsql pass and cache the result. `headcountTrend`/`vacancyTrend` are cumulative monthly stocks over a `generate_series` window (DailySeries pattern, #736/#952): `months=12` yields exactly 12 buckets oldest-first, empty months read as zero, the stock basis is `created_at` (`hire_date` is unpopulated), and `?months=` follows the `ReportDays` contract (0/negative/above-24 are 422). `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
 - **Monitoring note (no code change needed):** `TicketComments::loadTicket()` eager-loads only two levels (`comments.user.person` + `children.user.person`); with max comment depth = 3 this is sufficient and not an N+1. Revisit only if depth grows or tickets accumulate very large comment trees
 
 ---

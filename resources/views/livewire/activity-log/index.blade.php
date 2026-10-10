@@ -261,7 +261,7 @@ return new class extends Component
             @endscope
 
             @scope('actions', $log)
-            <x-button icon="o-eye" wire:click="showDetail({{ $log->id }})" class="btn-ghost btn-sm text-info" spinner />
+            <x-ui.icon-button name="مشاهده جزئیات فعالیت" icon="o-eye" wire:click="showDetail({{ $log->id }})" class="btn-ghost btn-sm text-info" spinner />
             @endscope
         </x-table>
     </x-card>

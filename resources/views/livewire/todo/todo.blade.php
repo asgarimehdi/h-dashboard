@@ -460,7 +460,7 @@ return new class extends Component {
 
             <x-slot:actions>
                 @if($editingId)
-                    <x-button icon="o-trash" class="btn-error" wire:click="delete" wire:confirm="مطمئنی؟" />
+                    <x-ui.icon-button name="حذف کار" icon="o-trash" class="btn-error" wire:click="delete" wire:confirm="مطمئنی؟" />
                 @endif
                 <x-button label="لغو" wire:click="closeModal" />
                 <x-button label="ذخیره" icon="o-check" class="btn-primary" type="submit" spinner="save" />

@@ -324,7 +324,7 @@ new class extends Component
             @endscope
 
             @scope('actions', $ticket)
-            <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
+            <x-ui.icon-button name="مشاهده تیکت" icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
             @endscope
         </x-table>
     </x-card>
@@ -388,7 +388,7 @@ new class extends Component
                             @if($activity->attachments->count() > 0)
                             <div class="flex gap-1 mt-2">
                                 @foreach($activity->attachments as $actFile)
-                                <x-button icon="o-paper-clip" link="{{ Storage::url($actFile->file_path) }}"
+                                <x-ui.icon-button name="دانلود پیوست" icon="o-paper-clip" link="{{ Storage::url($actFile->file_path) }}"
                                     class="btn-xs btn-ghost text-primary" external target="_blank" />
                                 @endforeach
                             </div>

@@ -1,5 +1,6 @@
 <?php
 use App\Models\Estekhdam;
+use App\Models\Hardware;
 use App\Models\Person as PersonModel;
 use App\Models\Radif;
 use App\Models\Semat;
@@ -162,6 +163,15 @@ return new class extends Component
             return;
         }
 
+        // #959: hardwares.n_code has no FK, so deleting the person would
+        // silently orphan every hardware row it owns (invisible to every
+        // unit, uneditable by anyone). Refuse while any hardware exists.
+        if (Hardware::where('n_code', $person->n_code)->exists()) {
+            $this->error('امکان حذف وجود ندارد زیرا برای این پرسنل سخت‌افزار ثبت شده است.', position: 'toast-bottom');
+
+            return;
+        }
+
         try {
             $person->delete();
             $this->warning("$person->f_name $person->l_name حذف شد", 'با موفقیت', position: 'toast-bottom');
@@ -199,6 +209,16 @@ return new class extends Component
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             if (! in_array($person->u_id, $accessibleIds)) {
                 $this->error('شما مجاز به ویرایش این پرسنل نیستید.', position: 'toast-bottom');
+
+                return;
+            }
+
+            // #959: n_code is immutable on the update path — hardwares.n_code
+            // has no FK, so a rename silently orphans every hardware row of
+            // that person. The input is disabled, but a crafted Livewire call
+            // could still set it; refuse here.
+            if ((string) $this->n_code !== (string) $person->n_code) {
+                $this->addError('n_code', 'کد ملی قابل تغییر نیست.');
 
                 return;
             }
@@ -425,7 +445,7 @@ return new class extends Component
                  so the create button is wrapped in the write permission — a
                  read-only user must not be shown a control that only 403s. --}}
             @can('manage_personnel')
-                <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+                <x-ui.icon-button name="کارمند جدید" class="btn-success" wire:click="startCreate" icon="o-plus"/>
             @endcan
             <a href="{{ $exportUrl }}"
                class="btn btn-outline btn-sm"
@@ -442,7 +462,7 @@ return new class extends Component
                     class="w-full"
                 />
             </div>
-            <x-button icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
+            <x-ui.icon-button name="نمایش فیلترها" icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
                       :class="$showFilters ? 'btn-primary' : ''" />
         </div>
 
@@ -489,11 +509,11 @@ return new class extends Component
                     <h3 class="font-bold text-sm">
                         {{ $editingId ? 'ویرایش پرسنل' : 'ثبت پرسنل جدید' }}
                     </h3>
-                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
+                    <x-ui.icon-button name="پاک کردن فرم" icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
                 </div>
 
                 <x-form wire:submit.prevent="savePerson" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
+                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required :disabled="(bool) $editingId"/>
                     <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
                     <x-input wire:model="l_name" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
                     <x-select wire:model="t_id" label="تحصیلات" :options="$tahsils" required placeholder="انتخاب سطح تحصیلات"/>
@@ -536,16 +556,16 @@ return new class extends Component
                      reader instead of rendering buttons that 403 on click. --}}
                 @can('manage_personnel')
                     <div class="flex w-1/12">
-                        {{-- #936: sends the PRIMARY KEY. `delete()` takes an `int` and
+{{-- #936: sends the PRIMARY KEY. `delete()` takes an `int` and
                              resolves it with `findOrFail`, because `Person`'s
                              `getRouteKeyName()` is `n_code` and a typed model
                              parameter would bind by that instead. Keep this as
                              `->id` — never interpolate `->n_code` unquoted, the
                              browser strips its leading zeros. --}}
-                        <x-button icon="o-pencil"
+                        <x-ui.icon-button name="ویرایش کارمند" icon="o-pencil"
                                   wire:click="editPerson({{ $person->id }})"
                                   class="btn-ghost btn-sm text-primary" />
-                        <x-button icon="o-trash"
+                        <x-ui.icon-button name="حذف کارمند" icon="o-trash"
                                   wire:click="delete({{ $person->id }})"
                                   wire:confirm="آیا مطمئن هستید"
                                   spinner

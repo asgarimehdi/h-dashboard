@@ -866,9 +866,11 @@ new class extends Component
         ]" :rows="$this->tickets" with-pagination>
 
             @scope('cell_checkbox', $ticket)
+            {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. --}}
             <input type="checkbox"
                 class="checkbox checkbox-sm checkbox-primary"
                 wire:click="toggleTicketSelection({{ $ticket->id }})"
+                aria-label="انتخاب تیکت {{ $ticket->ticket_code }}"
                 @if(in_array($ticket->id, $this->selectedTickets)) checked @endif />
             @endscope
 
@@ -906,24 +908,24 @@ new class extends Component
             @scope('actions', $ticket)
             <div class="flex gap-1">
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
+                <x-ui.icon-button name="پذیرش تیکت" icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
                 @endif
                 {{-- Issue #818: reject پشت manage_unit_tickets است، پس دکمه‌اش هم همان‌جا نمایش داده می‌شود --}}
                 @can('manage_unit_tickets')
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
+                <x-ui.icon-button name="رد تیکت" icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
                     wire:confirm="آیا مطمئن هستید؟" class="btn-ghost btn-sm text-error" spinner />
                 @endif
                 @endcan
 
-                <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
+                <x-ui.icon-button name="مشاهده تیکت" icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
 
-                <x-button icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
+                <x-ui.icon-button name="کامنت‌های تیکت" icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
 
                 {{-- Issue #818: مودال تکمیل/ارجاع پشت manage_unit_tickets است --}}
                 @can('manage_unit_tickets')
                 @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
+                <x-ui.icon-button name="تکمیل تیکت" icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
                 @endif
                 @endcan
             </div>
@@ -990,7 +992,7 @@ new class extends Component
                             @if($activity->attachments->count() > 0)
                             <div class="flex gap-1 mt-2">
                                 @foreach($activity->attachments as $actFile)
-                                <x-button icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
+                                <x-ui.icon-button name="دانلود پیوست" icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
                                     class="btn-xs btn-ghost text-primary" external target="_blank" />
                                 @endforeach
                             </div>
@@ -1031,7 +1033,7 @@ new class extends Component
                 <div class="mt-2 flex items-center gap-2 text-info text-sm">
                     <x-icon name="o-check-circle" />
                     <span class="font-bold">مقصد: {{ $this->targetUnitName }}</span>
-                    <x-button icon="o-x-mark" wire:click="$set('targetUnitId', null)" class="btn-ghost btn-xs" />
+                    <x-ui.icon-button name="پاک کردن واحد هدف" icon="o-x-mark" wire:click="$set('targetUnitId', null)" class="btn-ghost btn-xs" />
                 </div>
                 @endif
             </div>
