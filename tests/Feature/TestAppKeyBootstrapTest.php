@@ -205,6 +205,26 @@ class TestAppKeyBootstrapTest extends TestCase
             'the suite ran without a key, so scripts.test does not bootstrap one'
         );
         $this->assertMatchesRegularExpression('/SecurityHeadersMiddlewareTest/', $output);
-        $this->assertMatchesRegularExpression('/10 passed/', $output, $output);
+
+        // Pest colourises its summary, so the number and the word are separated
+        // by ANSI escapes, not spaces — measured, not guessed:
+        //   "\x1b[90mTests:\x1b[39m    \x1b[32;1m10 passed\x1b[39;22m\x1b[90m (29 assertions)\x1b[39m"
+        // Strip them before matching, or the pattern never matches.
+        $plain = preg_replace('/\e\[[0-9;]*m/', '', $output);
+
+        // `passed|deprecated`, never `passed` alone: CI runs PHP 8.5 where the
+        // same file emits a PDO deprecation and Pest prints "10 deprecated"
+        // instead. `VerifyWrapperScriptTest::test_composer_test_forwards_a_path_argument_to_the_runner`
+        // records the same trap. The FILE name proves the path argument
+        // arrived; the COUNT proves all ten ran to completion.
+        $this->assertMatchesRegularExpression(
+            '/Tests:\s+10 (passed|deprecated)/',
+            (string) $plain,
+            $output
+        );
+
+        // And no test failed — the fixture must be green WITHOUT the bootstrap
+        // for this assertion to mean anything.
+        $this->assertStringNotContainsString('FAILED', $output);
     }
 }
