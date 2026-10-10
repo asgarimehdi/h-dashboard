@@ -345,6 +345,92 @@ class PersonsExportTest extends TestCase
         $this->assertSame([], $this->rowsFromRoute(['search' => '%']));
     }
 
+    public function test_export_search_with_zwnj_does_not_throw(): void
+    {
+        // #940: a ZWNJ compound used to 500 with `Undefined array key 1`
+        // because $terms (from the normalized search) was longer than
+        // $foldedTerms (from the raw search).
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $unit->id]);
+
+        $this->actingAs($user);
+
+        $response = $this->get(route('kargozini.persons.export', ['search' => "خانه\u{200C}بهداشت"]));
+        $response->assertOk();
+    }
+
+    public function test_export_search_with_zwnj_matches_the_unit_name(): void
+    {
+        // #940: the unit arm must match post-fix, not just stop crashing.
+        // No unit name in live data carries a ZWNJ, and Unit has no save
+        // hook, so the factory value persists verbatim.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $zwnjUnit = Unit::factory()->create(['name' => "خانه\u{200C}بهداشت", 'parent_id' => $unit->id]);
+
+        $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $zwnjUnit->id]);
+        $this->createPerson(['n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $unit->id]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['0012345678'],
+            $this->column($this->rowsFromRoute(['search' => "خانه\u{200C}بهداشت"]), 'کد ملی')
+        );
+    }
+
+    public function test_export_search_with_zwnj_and_space_keeps_term_order(): void
+    {
+        // #940: ZWNJ folding must preserve AND-grouping across a mixed
+        // compound + space query.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $zwnjUnit = Unit::factory()->create(['name' => "خانه\u{200C}بهداشت", 'parent_id' => $unit->id]);
+
+        $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مرکز', 'l_name' => 'تست', 'u_id' => $zwnjUnit->id]);
+        $this->createPerson(['n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $unit->id]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['0012345678'],
+            $this->column($this->rowsFromRoute(['search' => "خانه\u{200C}بهداشت مرکز"]), 'کد ملی')
+        );
+    }
+
+    public function test_export_search_with_backslash_does_not_match_everything(): void
+    {
+        // #940: pins the fix to a single fold. `%` alone cannot distinguish
+        // single from double escaping when no fixture name carries the escaped
+        // char, so this variant proves a literal backslash neither crashes
+        // nor widens into a wildcard.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $unit->id]);
+        $this->createPerson(['n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $unit->id]);
+
+        $this->actingAs($user);
+
+        $response = $this->get(route('kargozini.persons.export', ['search' => 'a\\b']));
+        $response->assertOk();
+        $this->assertSame([], $this->rowsFromRoute(['search' => 'a\\b']));
+    }
+
+    public function test_export_search_with_persian_digits_matches_national_code(): void
+    {
+        // #940: the corrected pipeline folds digits on every arm via
+        // digitMap(), so a Persian-digit query matches the Latin n_code.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $unit->id]);
+        $this->createPerson(['n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $unit->id]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(['0098765432'], $this->column($this->rowsFromRoute(['search' => '۰۰۹۸۷۶۵']), 'کد ملی'));
+    }
+
     public function test_export_applies_the_unit_filter(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
