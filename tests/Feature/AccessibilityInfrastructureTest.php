@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Person;
+use App\Models\Semat;
 use App\Models\Ticket;
 use Database\Seeders\PermissionSeeder;
 use DOMDocument;
@@ -164,8 +165,118 @@ class AccessibilityInfrastructureTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // قدم ۲ — هدرهای جدول مرتب‌شونده: اعلام وضعیت و دسترسی با صفحه‌کلید
+    // ---------------------------------------------------------------------
+
+    public function test_the_sorted_header_announces_ascending_and_is_keyboard_reachable(): void
+    {
+        $xpath = $this->sematTableXpath();
+
+        // kargozini.semat ستون‌های id و name را مرتب می‌کند و پیش‌فرض روی
+        // id صعودی است؛ ستون آخر ستونِ «عملیات» است که اصلاً مرتب نمی‌شود.
+        $sorted = $this->headerAt($xpath, 0);
+        $this->assertSame('ascending', $sorted->getAttribute('aria-sort'));
+        $this->assertSame('0', $sorted->getAttribute('tabindex'));
+
+        $otherSortable = $this->headerAt($xpath, 1);
+        $this->assertSame('none', $otherSortable->getAttribute('aria-sort'));
+        $this->assertSame('0', $otherSortable->getAttribute('tabindex'));
+    }
+
+    public function test_sorting_another_column_moves_the_announcement(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        $this->actingAs($user);
+        $this->seedLookupTables();
+        Semat::create(['name' => 'عنوان الف']);
+
+        $component = Livewire::test('kargozini.semat')
+            ->set('sortBy', ['column' => 'name', 'direction' => 'desc']);
+
+        $xpath = $this->xpath($component->html());
+
+        $this->assertSame('none', $this->headerAt($xpath, 0)->getAttribute('aria-sort'));
+        $this->assertSame('descending', $this->headerAt($xpath, 1)->getAttribute('aria-sort'));
+    }
+
+    public function test_non_sortable_headers_get_no_affordances(): void
+    {
+        $xpath = $this->sematTableXpath();
+
+        $actions = $this->headerAt($xpath, 2);
+        $this->assertSame('', $actions->getAttribute('aria-sort'), 'ستون غیرقابل‌مرتب نباید aria-sort بگیرد.');
+        $this->assertSame('', $actions->getAttribute('tabindex'), 'ستون غیرقابل‌مرتب نباید در ترتیب تب بیاید.');
+    }
+
+    public function test_sortable_headers_bind_enter_and_space_to_the_same_action_as_the_click(): void
+    {
+        // `<th>` دکمه نیست: tabindex آن را قابل‌رسیدن می‌کند اما بدون
+        // @keydown کاربر می‌تواند روی کنترل مرتب‌سازی فوکوس کند و هیچ اتفاقی
+        // نمی‌افتد. قرارداد این است که صفحه‌کلید دقیقاً همان کار کلیک را بکند.
+        $html = $this->sematTableHtml();
+
+        preg_match('/<th[^>]*aria-sort="ascending"[^>]*>/', $html, $header);
+        $this->assertNotEmpty($header, 'هدرِ مرتب‌شده باید aria-sort داشته باشد.');
+
+        preg_match_all(
+            '/@(click|keydown\.enter\.prevent|keydown\.space\.prevent)="([^"]*)"/',
+            $header[0],
+            $directives,
+            PREG_SET_ORDER
+        );
+
+        $payloads = [];
+        foreach ($directives as [, $directive, $expression]) {
+            $payloads[$directive] = preg_replace('/\s+/', ' ', trim($expression));
+        }
+
+        $this->assertSame(
+            ['click', 'keydown.enter.prevent', 'keydown.space.prevent'],
+            array_keys($payloads),
+            'کلیک، Enter و Space باید هر سه به همان sort متصل باشند.'
+        );
+
+        $this->assertStringContainsString("\$wire.set('sortBy'", $payloads['click']);
+        $this->assertSame($payloads['click'], $payloads['keydown.enter.prevent'], 'Enter باید مثل کلیک عمل کند.');
+        $this->assertSame($payloads['click'], $payloads['keydown.space.prevent'], 'Space هم باید مثل کلیک عمل کند.');
+    }
+
+    // ---------------------------------------------------------------------
     // قدم ۴ — نام دسترس‌پذیر برای چک‌باکس‌ها و تاگل‌های خام
     // ---------------------------------------------------------------------
+
+    private function sematTableHtml(): string
+    {
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        $this->actingAs($user);
+        $this->seedLookupTables();
+        Semat::create(['name' => 'عنوان الف']);
+
+        return Livewire::test('kargozini.semat')->html();
+    }
+
+    private function sematTableXpath(): DOMXPath
+    {
+        return $this->xpath($this->sematTableHtml());
+    }
+
+    /**
+     * n-th `<th>` of the table, counting left to right. Position is the only
+     * stable handle: maryUI renders the label plus an icon and puts no column
+     * key on the `<th>`.
+     */
+    private function headerAt(DOMXPath $xpath, int $index): DOMElement
+    {
+        $headers = $xpath->query('//table/thead/tr/th');
+
+        $this->assertGreaterThan(
+            $index,
+            $headers->length,
+            "جدول {$index}. هدر ندارد — ساختار جدول عوض شده است."
+        );
+
+        return $headers->item($index);
+    }
 
     public function test_every_hardware_page_checkbox_has_an_accessible_name(): void
     {
