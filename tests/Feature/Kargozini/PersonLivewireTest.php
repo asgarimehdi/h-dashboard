@@ -508,9 +508,18 @@ class PersonLivewireTest extends TestCase
         $target = PersonModel::create($this->personData());
         Hardware::factory()->create(['n_code' => $target->n_code]);
 
-        Livewire::test('kargozini.person')
-            ->call('delete', $target);
+        // #936: pass the primary key, not a hydrated model — delete() now
+        // takes an `int`.
+        $component = Livewire::test('kargozini.person')
+            ->call('delete', $target->id);
 
+        // The refusal toast is what proves the method body actually ran and
+        // reached the #959 hardware guard; a bare "row survives" would be
+        // vacuous against a signature that never executes the body.
+        $this->assertContains(
+            'امکان حذف وجود ندارد زیرا برای این پرسنل سخت‌افزار ثبت شده است.',
+            $this->toastTitles($component)
+        );
         // Both rows survive.
         $this->assertDatabaseHas('persons', ['id' => $target->id]);
         $this->assertDatabaseHas('hardwares', ['n_code' => $target->n_code]);
