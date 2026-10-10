@@ -483,7 +483,7 @@ return new class extends Component {
     <!-- TABLE -->
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="واحد جدید" label="واحد جدید" class="btn-success" wire:click="openModalForCreate" responsive icon="o-plus"/>
             <a href="{{ route('units.export') }}"
                class="btn btn-outline btn-sm"
                title="خروجی اکسل واحدهای در دسترس">
@@ -510,11 +510,11 @@ return new class extends Component {
                         <x-icon name="o-map" class="w-5 h-5"/>
                         <span class="hidden 2xl:inline">نقشه</span>
                     </a>
-                    <x-button icon="o-pencil"
+                    <x-ui.icon-button name="ویرایش واحد" icon="o-pencil"
                               wire:click="editUnit({{ $unit->id }})"
                               class="btn-ghost btn-sm text-primary"
                               @click="$wire.modal = true" />
-                    <x-button icon="o-trash"
+                    <x-ui.icon-button name="حذف واحد" icon="o-trash"
                               wire:click="deleteUnit({{ $unit->id }})"
                               wire:confirm="آیا مطمئن هستید"
                               spinner

@@ -25,7 +25,7 @@
                                 $canRestore = collect($audit->changes)->contains('field', 'n_code');
                             @endphp
                             @if($canRestore)
-                                <x-button icon="o-arrow-uturn-left"
+                                <x-ui.icon-button name="بازگردانی سخت‌افزار" icon="o-arrow-uturn-left"
                                     class="btn-ghost btn-xs text-warning"
                                     wire:click="restoreRecord({{ $audit->id }})"
                                     spinner

@@ -134,7 +134,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="ردیف سازمانی جدید" label="ردیف سازمانی جدید" class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -171,8 +171,8 @@ return new class extends Component
                             class="input input-bordered input-sm flex-1"
                             autofocus
                         />
-                        <x-button icon="o-check" wire:click="updateRadif" class="btn-ghost btn-sm text-success" spinner />
-                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
+                        <x-ui.icon-button name="ذخیره ردیف سازمانی" icon="o-check" wire:click="updateRadif" class="btn-ghost btn-sm text-success" spinner />
+                        <x-ui.icon-button name="انصراف از ویرایش" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
                     @if($this->nameError()) <span class="text-error text-xs">{{ $this->nameError() }}</span> @endif
                 @else
@@ -183,8 +183,8 @@ return new class extends Component
             @scope('actions', $radif)
                 <div class="flex gap-1">
                     @if($this->editingId !== $radif->id)
-                        <x-button icon="o-pencil" wire:click="editRadif({{ $radif->id }})" class="btn-ghost btn-sm text-primary" />
-                        <x-button icon="o-trash" wire:click="delete({{ $radif->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
+                        <x-ui.icon-button name="ویرایش ردیف سازمانی" icon="o-pencil" wire:click="editRadif({{ $radif->id }})" class="btn-ghost btn-sm text-primary" />
+                        <x-ui.icon-button name="حذف ردیف سازمانی" icon="o-trash" wire:click="delete({{ $radif->id }})" wire:confirm="آیا مطمئن هستید؟" spinner class="btn-ghost btn-sm text-error" />
                     @endif
                 </div>
             @endscope

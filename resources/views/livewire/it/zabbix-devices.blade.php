@@ -548,7 +548,7 @@ return new class extends Component
                             {{ $result['ok'] ? 'اتصال برقرار' : 'خطا' }}
                         </span>
                     @endif
-                    <x-button
+                    <x-ui.icon-button name="تست اتصال"
                         icon="o-signal"
                         wire:click="testConnection({{ $device->id }})"
                         class="btn-ghost btn-circle btn-sm"
@@ -556,19 +556,19 @@ return new class extends Component
                         spinner
                     />
                     @if($this->editingId !== $device->id)
-                        <x-button
+                        <x-ui.icon-button name="ویرایش دستگاه"
                             icon="o-pencil"
                             wire:click="editDevice({{ $device->id }})"
                             class="btn-ghost btn-circle btn-sm text-primary"
                             title="ویرایش"
                         />
-                        <x-button
+                        <x-ui.icon-button name="فعال یا غیرفعال کردن دستگاه"
                             icon="{{ $device->is_active ? 'o-eye-slash' : 'o-eye' }}"
                             wire:click="toggle({{ $device->id }})"
                             class="btn-ghost btn-circle btn-sm"
                             title="{{ $device->is_active ? 'غیرفعال کردن' : 'فعال کردن' }}"
                         />
-                        <x-button
+                        <x-ui.icon-button name="حذف دستگاه"
                             icon="o-trash"
                             wire:click="delete({{ $device->id }})"
                             wire:confirm="آیا مطمئن هستید؟"

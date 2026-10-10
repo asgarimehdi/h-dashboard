@@ -168,7 +168,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <x-ui.icon-button name="مجوز جدید" label="مجوز جدید" class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -186,12 +186,12 @@ return new class extends Component
                 <tr wire:key="{{ $permission->id }}">
                     @scope('actions', $permission)
                     <div class="flex w-1/4">
-                        <x-button icon="o-pencil"
+                        <x-ui.icon-button name="ویرایش مجوز" icon="o-pencil"
                                   wire:click="editPermission({{ $permission->id }})"
                                   class="btn-ghost btn-sm text-primary"
                                   @click="$wire.modal = true" />
 
-                        <x-button icon="o-trash"
+                        <x-ui.icon-button name="حذف مجوز" icon="o-trash"
                                   wire:click="delete({{ $permission->id }})"
                                   wire:confirm="Are you sure?"
                                   spinner

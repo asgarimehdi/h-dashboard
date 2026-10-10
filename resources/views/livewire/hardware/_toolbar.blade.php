@@ -17,7 +17,7 @@
                     class="w-full"
                 />
             </div>
-            <x-button icon="o-funnel"
+            <x-ui.icon-button name="نمایش فیلترها" icon="o-funnel"
                 :class="$showFilters ? 'btn-primary' : 'btn-ghost'"
                 wire:click="$toggle('showFilters')"
                 />

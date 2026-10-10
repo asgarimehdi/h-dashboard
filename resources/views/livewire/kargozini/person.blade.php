@@ -425,7 +425,7 @@ return new class extends Component
                  so the create button is wrapped in the write permission — a
                  read-only user must not be shown a control that only 403s. --}}
             @can('manage_personnel')
-                <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+                <x-ui.icon-button name="کارمند جدید" class="btn-success" wire:click="startCreate" icon="o-plus"/>
             @endcan
             <a href="{{ $exportUrl }}"
                class="btn btn-outline btn-sm"
@@ -442,7 +442,7 @@ return new class extends Component
                     class="w-full"
                 />
             </div>
-            <x-button icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
+            <x-ui.icon-button name="نمایش فیلترها" icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
                       :class="$showFilters ? 'btn-primary' : ''" />
         </div>
 
@@ -489,7 +489,7 @@ return new class extends Component
                     <h3 class="font-bold text-sm">
                         {{ $editingId ? 'ویرایش پرسنل' : 'ثبت پرسنل جدید' }}
                     </h3>
-                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
+                    <x-ui.icon-button name="پاک کردن فرم" icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
                 </div>
 
                 <x-form wire:submit.prevent="savePerson" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -536,16 +536,16 @@ return new class extends Component
                      reader instead of rendering buttons that 403 on click. --}}
                 @can('manage_personnel')
                     <div class="flex w-1/12">
-                        {{-- #936: sends the PRIMARY KEY. `delete()` takes an `int` and
+{{-- #936: sends the PRIMARY KEY. `delete()` takes an `int` and
                              resolves it with `findOrFail`, because `Person`'s
                              `getRouteKeyName()` is `n_code` and a typed model
                              parameter would bind by that instead. Keep this as
                              `->id` — never interpolate `->n_code` unquoted, the
                              browser strips its leading zeros. --}}
-                        <x-button icon="o-pencil"
+                        <x-ui.icon-button name="ویرایش کارمند" icon="o-pencil"
                                   wire:click="editPerson({{ $person->id }})"
                                   class="btn-ghost btn-sm text-primary" />
-                        <x-button icon="o-trash"
+                        <x-ui.icon-button name="حذف کارمند" icon="o-trash"
                                   wire:click="delete({{ $person->id }})"
                                   wire:confirm="آیا مطمئن هستید"
                                   spinner
