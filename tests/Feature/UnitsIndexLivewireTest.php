@@ -750,7 +750,7 @@ class UnitsIndexLivewireTest extends TestCase
 
         $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
 
-        $title = assertToastContains($component, 'پرسنل');
+        $title = $this->toastContaining($component, 'پرسنل');
         $this->assertStringContainsString('3', $title);
         $this->assertStringContainsString('وظیفه', $title);
         $this->assertStringContainsString('2', $title);
@@ -821,33 +821,42 @@ class UnitsIndexLivewireTest extends TestCase
 
         $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
 
-        assertToastContains($component, 'تیکت');
+        $this->toastContaining($component, 'تیکت');
         $this->assertDatabaseHas('units', ['id' => $target->id]);
         // The connection is still usable — a refused delete must not abort it.
         $this->assertDatabaseHas('tickets', ['ticket_code' => 'T-949']);
     }
-}
 
-/**
- * The toast text never reaches the HTML: `Mary\Traits\Toast` ships it as a JS
- * effect (`effects['xjs']` holding a `toast({...})` expression), so `assertSee`
- * always fails. The expression is a JSON string inside a string, so the Persian
- * text arrives `\uXXXX`-escaped and has to be decoded before comparison.
- *
- * Returns the matched title so callers can make a real assertion on it — a
- * helper that only `return`s registers none and leaves the test "risky".
- */
-function assertToastContains(Testable $component, string $needle): string
-{
-    $expressions = array_column($component->effects['xjs'] ?? [], 'expression');
+    /**
+     * The toast text never reaches the HTML: `Mary\Traits\Toast` ships it as a
+     * JS effect (`effects['xjs']` holding a `toast({...})` expression), so
+     * `assertSee` always fails. The expression is a JSON string inside a
+     * string, so the Persian text arrives `\uXXXX`-escaped and has to be decoded
+     * before comparison.
+     *
+     * Returns the matched title so callers can make a real assertion on it — a
+     * helper that only `return`s registers none and leaves the test "risky".
+     *
+     * Deliberately a method, not a namespaced function: `ImportsLivewireTest.php`
+     * already declares `Tests\Feature\assertToastContains()`, and a second
+     * declaration of the same name is a fatal "cannot redeclare" the moment both
+     * files are loaded together — which only the full suite ever does, so it
+     * would have shipped green in every single-file run.
+     */
+    private function toastContaining(Testable $component, string $needle): string
+    {
+        $expressions = array_column($component->effects['xjs'] ?? [], 'expression');
 
-    foreach ($expressions as $expression) {
-        $inner = json_decode(substr($expression, strlen('toast('), -1), true);
+        foreach ($expressions as $expression) {
+            $inner = json_decode(substr($expression, strlen('toast('), -1), true);
 
-        if (is_array($inner) && str_contains($inner['toast']['title'] ?? '', $needle)) {
-            return (string) $inner['toast']['title'];
+            if (is_array($inner) && str_contains($inner['toast']['title'] ?? '', $needle)) {
+                return (string) $inner['toast']['title'];
+            }
         }
-    }
 
-    test()->fail('No toast contained "'.$needle.'"; got: '.implode(' | ', $expressions));
+        $this->fail('No toast contained "'.$needle.'"; got: '.implode(' | ', $expressions));
+
+        return '';
+    }
 }
