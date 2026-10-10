@@ -635,4 +635,93 @@ class PersonLivewireTest extends TestCase
             'f_name' => 'مهدی',        // and not edited either
         ]);
     }
+
+    // -----------------------------------------------------------
+    //  نشت نام واحد خارج از scope (#919)
+    // -----------------------------------------------------------
+
+    /**
+     * `with()` builds `$units` with an unconditional
+     * `whereIn('id', $accessibleUnitIds)`, so `firstWhere()` resolves the
+     * name only for an in-scope unit — the `?? Unit::find($this->...)`
+     * fallback therefore ran exactly when the unit was OUT of scope.
+     * The filter badge is reachable through `showFilters`, which carries no
+     * `authorize()` behind it at all.
+     */
+    public function test_filter_unit_name_does_not_leak_an_out_of_scope_unit(): void
+    {
+        $this->actingAsKargoziniOnlyUser();
+
+        $component = Livewire::test('kargozini.person')
+            ->set('showFilters', true)
+            ->set('filter_u_id', $this->otherUnit->id);
+
+        $this->assertStringNotContainsString($this->otherUnit->name, $component->html());
+    }
+
+    /**
+     * The same shape one step over: `formOpen` and `u_id` are unlocked
+     * public state, so a crafted payload renders the selected-unit badge
+     * without going through `startCreate()`'s authorize() check.
+     * (`formOpen`'s own bypass is out of scope here — see the #919 review —
+     * this pins the name disclosure only.)
+     */
+    public function test_selected_unit_name_does_not_leak_an_out_of_scope_unit(): void
+    {
+        $this->actingAsKargoziniOnlyUser();
+
+        $component = Livewire::test('kargozini.person')
+            ->set('formOpen', true)
+            ->set('u_id', $this->otherUnit->id);
+
+        $this->assertStringNotContainsString($this->otherUnit->name, $component->html());
+    }
+
+    /**
+     * The mirror case: deleting the fallback must not over-correct and hide
+     * a unit the caller IS allowed to see.
+     */
+    public function test_in_scope_unit_name_still_renders(): void
+    {
+        $this->actingAsKargoziniOnlyUser();
+
+        $component = Livewire::test('kargozini.person')
+            ->set('showFilters', true)
+            ->set('filter_u_id', $this->unit->id)
+            ->set('formOpen', true)
+            ->set('u_id', $this->unit->id);
+
+        $this->assertStringContainsString($this->unit->name, $component->html());
+    }
+
+    /**
+     * An empty scope must still fail closed: `with()` compiles to
+     * `0 = 1`, so no name renders for ANY id, in or out of scope.
+     * Guards against reintroducing a `when($ids, ...)` / `! empty($ids)`
+     * spelling on the `$units` array.
+     */
+    public function test_empty_scope_renders_no_unit_name_at_all(): void
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+        // Person with `u_id = NULL` (nullable since 2026_09_03_002219) and NO
+        // `user_units` row -> `accessibleUnitIds()` is legitimately [].
+        PersonModel::create([
+            'n_code' => $nCode, 'f_name' => 'بدون', 'l_name' => 'واحد',
+            't_id' => $this->tId, 'e_id' => $this->eId, 's_id' => $this->sId, 'r_id' => $this->rId,
+            'u_id' => null,
+        ]);
+        $unattached = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $unattached->givePermissionTo('kargozini');
+        session()->forget('current_unit_id');
+        $this->actingAs($unattached);
+
+        $component = Livewire::test('kargozini.person')
+            ->set('showFilters', true)
+            ->set('filter_u_id', $this->unit->id)
+            ->set('formOpen', true)
+            ->set('u_id', $this->unit->id);
+
+        $this->assertStringNotContainsString($this->unit->name, $component->html());
+        $this->assertStringNotContainsString($this->otherUnit->name, $component->html());
+    }
 }
