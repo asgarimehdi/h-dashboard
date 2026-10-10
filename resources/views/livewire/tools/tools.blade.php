@@ -77,13 +77,27 @@ return new class extends Component {
     public function cleanActivities(): void
     {
         // Issue #892 — see archiveTickets(). A revoked holder must not be able
-        // to dispatch the org-wide activity-log purge.
+        // to dispatch the activity-log purge.
         $this->authorize('manage_users');
 
         $this->validate([
             'activityDays' => 'required|integer|min:30|max:365',
         ]);
-        ArchiveActivityLogsJob::dispatch($this->activityDays);
+
+        // Issue #950 — purge exactly what the counters above counted. The job
+        // reads an empty array as "org-wide" (`$unitIds ?: allUnitIds()`, #836),
+        // so an empty scope must NOT be dispatched — that is this repo's
+        // fail-open trap in a new spelling: `[]` here would delete every unit's
+        // logs instead of none.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if ($accessibleIds === []) {
+            $this->error('هیچ واحدی در دامنهٔ دسترسی شما نیست؛ پاک‌سازی انجام نشد.');
+
+            return;
+        }
+
+        ArchiveActivityLogsJob::dispatch($this->activityDays, $accessibleIds);
         $this->success('پاک‌سازی لاگ‌ها در صف اجرا شد.');
         $this->invalidateStatsCache();
         $this->mount();
@@ -92,13 +106,23 @@ return new class extends Component {
     public function cleanNotifications(): void
     {
         // Issue #892 — see archiveTickets(). A revoked holder must not be able
-        // to dispatch the org-wide notification purge.
+        // to dispatch the notification purge.
         $this->authorize('manage_users');
 
         $this->validate([
             'notificationDays' => 'required|integer|min:1|max:90',
         ]);
-        CleanNotificationsJob::dispatch($this->notificationDays);
+
+        // Issue #950 — see cleanActivities(). Same scope, same refusal on empty.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if ($accessibleIds === []) {
+            $this->error('هیچ واحدی در دامنهٔ دسترسی شما نیست؛ پاک‌سازی انجام نشد.');
+
+            return;
+        }
+
+        CleanNotificationsJob::dispatch($this->notificationDays, $accessibleIds);
         $this->success('پاک‌سازی اعلان‌ها در صف اجرا شد.');
         $this->invalidateStatsCache();
         $this->mount();
