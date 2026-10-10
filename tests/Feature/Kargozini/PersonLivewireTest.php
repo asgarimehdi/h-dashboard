@@ -19,6 +19,27 @@ use Tests\TestCase;
  * Covers render/with(), search normalization, the #494 list filters,
  * create/update/delete with organizational-scope enforcement, the
  * FK-violation guard on delete, and linked-user unit sync.
+ *
+ * #936 — the delete tests below are the regression pin. `delete()` used to be
+ * typed `delete(PersonModel $person)`, which Livewire resolved through
+ * `getRouteKeyName()` = `n_code`, while the Blade call site sends `->id`. The
+ * binding matched nothing and threw before the method body ran, so deletion
+ * never happened in the browser.
+ *
+ * Rules these tests follow so they cannot go green for the wrong reason:
+ *
+ *  - **Pass the raw scalar** (`->call('delete', $row->id)`). A hydrated model
+ *    skips implicit binding entirely and passes against the broken code.
+ *  - **Assert on the database, and on the toast.** `assertDatabaseMissing`
+ *    alone is vacuous — the row survives when the request dies too. The
+ *    success/error toast is what proves the method body ran. Mary `Toast`
+ *    emits a JS effect, never HTML, so `assertSee` cannot find it; see
+ *    `toastTitles()`.
+ *  - **A test that only passes against broken code proves nothing** — each
+ *    delete test here fails against the old signature (verified).
+ *  - `test_delete_call_site_renders_the_primary_key_not_the_route_key` guards
+ *    the markup itself, which the method-level tests cannot see, and rejects
+ *    the tempting `->n_code` "fix" whose leading zeros the browser strips.
  */
 covers(Person::class);
 
@@ -111,6 +132,36 @@ class PersonLivewireTest extends TestCase
             ->set('s_id', $data['s_id'])
             ->set('r_id', $data['r_id'])
             ->set('u_id', $data['u_id']);
+    }
+
+    /**
+     * Mary `Toast` delivers its message as a JS effect (`toast({...})`), not
+     * as rendered HTML, so `assertSee` can never find it. Each effect payload
+     * is a JSON string nested inside the JS expression, which escapes the
+     * Persian text to `\uXXXX` — decode before matching.
+     *
+     * Returns the titles of every toast emitted by the last action, so a
+     * caller can assert on the message the user actually sees.
+     *
+     * @return list<string>
+     */
+    protected function toastTitles($component): array
+    {
+        $titles = [];
+
+        foreach (array_column($component->effects['xjs'] ?? [], 'expression') as $expression) {
+            if (! str_starts_with($expression, 'toast(')) {
+                continue;
+            }
+
+            $inner = json_decode(substr($expression, strlen('toast('), -1), true);
+
+            if (is_array($inner) && isset($inner['toast']['title'])) {
+                $titles[] = (string) $inner['toast']['title'];
+            }
+        }
+
+        return $titles;
     }
 
     protected function personData(array $overrides = []): array
@@ -343,14 +394,58 @@ class PersonLivewireTest extends TestCase
         // Fresh person with no dependent rows (no linked user) -> deletable.
         $fresh = PersonModel::create($this->personData());
 
-        Livewire::test('kargozini.person')
-            ->call('delete', $fresh);
+        // #936: a RAW SCALAR primary key, which is what the browser sends.
+        // Passing a hydrated model would skip Livewire's implicit binding
+        // entirely and would keep passing against the broken signature.
+        $component = Livewire::test('kargozini.person')
+            ->call('delete', $fresh->id);
 
         $this->assertDatabaseMissing('persons', ['id' => $fresh->id]);
+        // The success toast proves the body ran to completion — a bare
+        // `assertDatabaseMissing` would also pass if the request had died
+        // before the method was ever entered.
+        $this->assertContains('رضا کریمی حذف شد', $this->toastTitles($component));
+    }
+
+    public function test_delete_call_site_renders_the_primary_key_not_the_route_key(): void
+    {
+        // #936 guardrail: the Blade call site must keep emitting `->id`. This
+        // pins the rendered markup, because the method-level tests drive the
+        // component directly and cannot see what the browser is told to send.
+        // An `n_code` here would be an UNQUOTED JS numeric literal.
+        $leadingZero = PersonModel::create($this->personData(['n_code' => '0023548258']));
+
+        Livewire::test('kargozini.person')
+            ->assertSeeHtml('wire:click="delete('.$leadingZero->id.')"')
+            ->assertDontSeeHtml('wire:click="delete(0023548258)"');
+    }
+
+    public function test_delete_removes_a_person_whose_n_code_starts_with_a_zero(): void
+    {
+        // #936: the case that distinguishes the real fix from the naive one.
+        // `n_code` is `string(10)` and Iranian national codes commonly carry
+        // a leading zero. The tempting alternative fix —
+        // `wire:click="delete({{ $person->n_code }})"` — interpolates
+        // UNQUOTED, so the browser parses `0023548258` as a JS numeric
+        // literal and strips the zeros (verified in V8:
+        // `function d(){return arguments[0]}; d(0023548258) === 23548258`).
+        // With the row addressable ONLY by its primary key, this deletes.
+        $leadingZero = PersonModel::create($this->personData(['n_code' => '0023548258']));
+
+        Livewire::test('kargozini.person')
+            ->call('delete', $leadingZero->id);
+
+        $this->assertDatabaseMissing('persons', ['id' => $leadingZero->id]);
+        // The value the browser would have coerced cannot address the row.
+        $this->assertDatabaseMissing('persons', ['n_code' => '23548258']);
     }
 
     public function test_delete_denied_out_of_scope(): void
     {
+        // #936: this assertion alone is VACUOUS against the broken signature —
+        // the row survived back then too, because nothing was ever deleted.
+        // The toast is what proves the method body actually ran and reached the
+        // scope guard, so assert on it too.
         $otherNCode = (string) fake()->unique()->numerify('##########');
         $other = PersonModel::create([
             'n_code' => $otherNCode, 'f_name' => 'محفوظ', 'l_name' => 'سیستم',
@@ -358,35 +453,47 @@ class PersonLivewireTest extends TestCase
             'u_id' => $this->otherUnit->id,
         ]);
 
-        Livewire::test('kargozini.person')
-            ->call('delete', $other);
+        $component = Livewire::test('kargozini.person')
+            ->call('delete', $other->id);
 
+        // The refusal is a toast (Mary `Toast` sends a JS effect, never HTML),
+        // not an exception — same channel as the edit path's refusal.
+        $this->assertContains('شما مجاز به حذف این پرسنل نیستید.', $this->toastTitles($component));
         $this->assertDatabaseHas('persons', ['id' => $other->id]);
     }
 
     public function test_delete_handles_fk_violation_gracefully(): void
     {
         // persons rows referenced elsewhere are onDelete(restrict); the
-        // component must swallow the failure and keep the row. Simulate the
-        // restriction with a hydrated subclass whose delete() throws, so the
-        // wrapped test transaction is not poisoned by a real SQL error.
+        // component must swallow the failure and keep the row.
+        //
+        // #936: this used to pass a hydrated anonymous subclass whose
+        // `delete()` threw, which only worked because the parameter was a
+        // model type. `delete()` now takes an `int`, so the restriction is
+        // simulated through a `deleting` model event instead — it still fires
+        // from inside the real `Person::delete()` call the component makes.
+        //
+        // A REAL FK violation is not usable here: Postgres aborts the whole
+        // transaction on the constraint error, and `RefreshDatabase` wraps
+        // every test in one, so the assertion afterwards cannot run.
         $target = PersonModel::create($this->personData());
 
-        $stub = new class extends PersonModel
-        {
-            protected $table = 'persons';
-
-            public function delete(): bool
-            {
+        PersonModel::deleting(function (PersonModel $model) use ($target) {
+            if ($model->id === $target->id) {
                 throw new \RuntimeException('simulated FK restriction');
             }
-        };
-        $throwing = $stub->newQuery()->findOrFail($target->id);
+        });
 
-        Livewire::test('kargozini.person')
-            ->call('delete', $throwing);
+        $component = Livewire::test('kargozini.person')
+            ->call('delete', $target->id);
 
-        // Row survives (covers the catch branch).
+        // Row survives (covers the catch branch). The toast is what proves the
+        // catch branch ran rather than the row simply never being reached —
+        // against the broken #936 signature this assertion passed vacuously.
+        $this->assertContains(
+            'امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.',
+            $this->toastTitles($component)
+        );
         $this->assertDatabaseHas('persons', ['id' => $target->id]);
     }
 
@@ -567,7 +674,7 @@ class PersonLivewireTest extends TestCase
         $fresh = PersonModel::create($this->personData());
 
         Livewire::test('kargozini.person')
-            ->call('delete', $fresh)
+            ->call('delete', $fresh->id)
             ->assertForbidden();
 
         $this->assertDatabaseHas('persons', ['id' => $fresh->id]);
