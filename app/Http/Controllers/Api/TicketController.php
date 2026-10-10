@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
@@ -17,7 +18,7 @@ class TicketController extends Controller
     {
         $request->validate([
             'status' => 'sometimes|in:created,forwarded,accepted,completed,rejected',
-            'priority' => 'sometimes|in:low,normal,urgent',
+            'priority' => ['sometimes', Rule::in(Ticket::PRIORITIES)],
         ]);
 
         $user = $request->user();
@@ -65,7 +66,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
             'content' => 'required|string',
-            'priority' => 'required|in:low,normal,urgent',
+            'priority' => ['required', Rule::in(Ticket::PRIORITIES)],
             'unit_id' => 'required|exists:units,id',
             'deadline' => 'nullable|date',
         ]);
@@ -98,7 +99,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'sometimes|required|string|max:255',
             'content' => 'sometimes|required|string',
-            'priority' => 'sometimes|required|in:low,normal,urgent',
+            'priority' => ['sometimes', 'required', Rule::in(Ticket::PRIORITIES)],
             'deadline' => 'nullable|date',
         ]);
 
