@@ -544,7 +544,13 @@ which is worse than no hook. CI stays the only authority.
   `phpunit.xml`, because those `<env>` entries carry no `force="true"`. Never run
   `migrate:fresh` before it: a mis-resolved database destroys real data.
 
-- Branch-sync helper (#744): `scripts/sync-beta.sh` reports `behind X, ahead Y` against the **explicit** `origin/beta` ref and fast-forwards only when safe — never auto-merges (exit 1 on divergence).
+- Branch-sync helper (#744): `scripts/sync-beta.sh` reports `behind X, ahead Y` against the **main repo's** `beta` and fast-forwards only when safe — never auto-merges (exit 1 on divergence).
+
+  > **Fork layout — the ref names matter.** `origin` is **our fork** (`Shabakebehdasht/h-dashboard`), where each of our branches pushes to its same-named branch; `upstream` is the **main project** (`asgarimehdi/h-dashboard`), whose `beta` is the PR target. A teammate's `upstream` push URL can be set to `DISABLED` so a stray `git push` cannot write to the main repo.
+  >
+  > The script resolves the **main repo** rather than hardcoding a remote name: `upstream` if it exists, else any remote whose URL matches `asgarimehdi/h-dashboard`, else it **falls back to the old `origin/beta`** with a warning. So a clone that has not adopted the fork layout keeps working — do not make `upstream` a hard requirement. Why the main repo's beta and not the fork's: the fork's beta is a mirror and can go stale, and comparing against it reports "همگام" while the branch is genuinely behind.
+  >
+  > `--publish` first mirrors the main beta onto the fork's beta, then fast-forwards the current branch — **fast-forward only, never force-push** (a divergent fork beta is refused with exit 1). It refuses when `origin` is itself the main repo (that push would write to the project), and when the main repo cannot be identified. Without the flag the script pushes nothing.
 
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes.
