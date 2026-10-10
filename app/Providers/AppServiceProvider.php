@@ -12,7 +12,9 @@ use App\Services\CacheInvalidationServiceInterface;
 use App\Services\Zabbix\ServiceZabbixClient;
 use App\Services\Zabbix\ZabbixClient;
 use App\Services\ZabbixService;
+use App\Support\VendorRouteGuard;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -106,5 +108,24 @@ class AppServiceProvider extends ServiceProvider
         Unit::created(fn () => $invalidate($unitNamespaces));
         Unit::updated(fn () => $invalidate($unitNamespaces));
         Unit::deleted(fn () => $invalidate($unitNamespaces));
+
+        // Issue #951: the vendored maryUI upload endpoint is not mounted. See
+        // App\Support\VendorRouteGuard for why the route has to be stripped
+        // from the router rather than left unregistered-and-guessed-at.
+        //
+        // The hook is registered from INSIDE a booted callback on purpose.
+        // Routes are populated by booted callbacks too — AppRouteServiceProvider
+        // loads routes/web.php in one, and with `route:cache` the cached file is
+        // `require`d in a further one — so a hook registered directly from
+        // boot() can run BEFORE the vendor route exists and strip nothing.
+        // Application::fireAppCallbacks() re-checks the callback count on every
+        // pass, so registering again from inside a booted callback is what
+        // places this after them in both the cached and uncached paths.
+        $this->app->booted(function () {
+            $this->app->booted(fn () => VendorRouteGuard::strip(
+                $this->app->make(Router::class),
+                'mary.upload'
+            ));
+        });
     }
 }
