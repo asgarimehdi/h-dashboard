@@ -354,12 +354,19 @@ class PersonsExportTest extends TestCase
         // carries the unfodded spelling and only a folded column can match it.
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
 
+        // The helper's person is created through the model and shares this
+        // search scope, so its name is pinned to something the «عسگری» filter
+        // cannot match — assertSame() below pins the exact row set.
+        $user->person->update(['f_name' => 'بی‌نام', 'l_name' => 'آزمون']);
+
         // Inserted straight to the table: Person::$saving would have normalized
         // these names, which is exactly what this row must be missing.
         DB::table('persons')->insert([
             'n_code' => '0012345678',
             'f_name' => 'عسگري',   // Arabic yeh, never normalized
             'l_name' => 'كريبى',   // Arabic kaf, never normalized
+            // Pinned so the helper's own faker person cannot collide with the
+            // «عسگری» filter and make the exact-row-set assertion flake.
             't_id' => 1,
             'e_id' => 1,
             's_id' => 1,
@@ -369,8 +376,9 @@ class PersonsExportTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $this->resyncSequence('persons');
 
+        // No explicit id was supplied, so the sequence already advanced past
+        // this row — resyncSequence() is only for hand-seeded ids.
         $this->actingAs($user);
 
         // Searched with the Persian spelling; only the folded column bridges
