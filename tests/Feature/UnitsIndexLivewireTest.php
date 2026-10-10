@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Hardware;
 use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
@@ -11,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -557,10 +561,14 @@ class UnitsIndexLivewireTest extends TestCase
         $parent = Unit::create(['name' => 'والد', 'unit_type_id' => 4, 'region_id' => 2]);
         Unit::create(['name' => 'فرزند', 'unit_type_id' => 5, 'region_id' => 2, 'parent_id' => $parent->id]);
 
-        // Attempting to delete a unit that has FK references should throw.
-        // We test the FK constraint behavior directly since Livewire's
-        // catch-and-toast pattern leaves Postgres in a failed-transaction
-        // state that prevents further assertions in the same test.
+        // The database still enforces `units_parent_fk`, and `deleteUnit()`
+        // now refuses on children before ever reaching the delete — so this
+        // asserts the constraint itself, not the component. The old comment
+        // here justified that by claiming Livewire's catch-and-toast left
+        // Postgres in a failed-transaction state; that stopped being true in
+        // #949, which counts children up front so a RESTRICT refusal never
+        // reaches the database. What remains is: keep testing the constraint
+        // at the layer that owns it.
         $this->expectException(QueryException::class);
         $parent->delete();
     }
@@ -610,5 +618,302 @@ class UnitsIndexLivewireTest extends TestCase
 
         Livewire::test('units.index')->call('toggleTicketCapability', $target->id);
         $this->assertDatabaseHas('units', ['id' => $target->id, 'can_receive_tickets' => false]);
+    }
+
+    // ==================== #949 step 1: deactivation is the primary path ====================
+
+    /**
+     * The counter-test to `test_delete_unit_strips_personnel_when_unguarded`
+     * documents what deactivation does NOT do: it does not touch a single
+     * staff row. `persons.u_id` stays set, so `applyOrgScope()` keeps matching
+     * and the assets behind those people stay reachable.
+     */
+    public function test_deactivating_unit_keeps_its_person_and_hardware(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $person = Person::factory()->create(['u_id' => $unit->id]);
+        $hardware = $this->createHardware(['n_code' => $person->n_code]);
+
+        Livewire::test('units.index')->call('setInactive', $unit->id, false);
+
+        $this->assertDatabaseHas('units', ['id' => $unit->id, 'is_active' => false]);
+
+        // The whole point: retiring a unit is not a delete. Nothing is nulled,
+        // nothing cascades, the assets are still attached to their owner.
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $unit->id]);
+        $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'n_code' => $person->n_code]);
+    }
+
+    /**
+     * "…and in scope". An account assigned to the retired unit keeps that unit
+     * in `accessibleUnitIds()`: `Unit::descendantIds()` seeds the CTE from the
+     * caller's own base ids with no `is_active` filter, so only the *descendants*
+     * of a retired unit drop out — the unit's own staff do not lose their
+     * dashboard. This is the exact failure #949 measured after a delete
+     * (155 of 318 accounts silently seeing an empty dashboard).
+     */
+    public function test_deactivating_unit_keeps_the_account_in_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $hardware = $this->createHardware(['n_code' => $user->person->n_code]);
+
+        Livewire::test('units.index')->call('setInactive', $unit->id, false);
+
+        $accessible = app(AccessService::class)->accessibleUnitIds();
+        $this->assertContains($unit->id, $accessible);
+
+        // And the org scope still resolves the unit's hardware — the query
+        // shape `hardware/index.blade.php::applyOrgScope()` uses.
+        $visible = Hardware::query()
+            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessible))
+            ->pluck('id')
+            ->all();
+        $this->assertContains($hardware->id, $visible);
+    }
+
+    public function test_activating_a_retired_unit_restores_it(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+        $unit->update(['is_active' => false]);
+
+        Livewire::test('units.index')->call('setInactive', $unit->id, true);
+
+        $this->assertDatabaseHas('units', ['id' => $unit->id, 'is_active' => true]);
+    }
+
+    /**
+     * The other half of `setInactive`, pinned deliberately.
+     *
+     * `Unit::recursiveDescendantQuery()` filters the recursive step with
+     * `WHERE u.is_active = true`, so retiring a unit removes it — and every
+     * still-active descendant under it — from the scope of operators ABOVE it,
+     * even though no row anywhere was changed. Measured on P→C→D→E:
+     * deactivating C moves a P-level operator's scope from {P,C,D,E} to {P}.
+     *
+     * Two consequences are asserted because both are invisible in the UI: the
+     * retired unit is no longer in this operator's `accessibleUnitIds()`, and
+     * re-activating it from above is therefore refused by
+     * `assertUnitInScope`. Nothing is lost — `persons.u_id` is untouched and the
+     * unit's own accounts keep their scope (the other half of this pair) — but
+     * from above, the unit is gone until someone re-grants access.
+     *
+     * This is NOT a claim that the behaviour is correct. The filter is pinned
+     * as intentional by
+     * `UnitModelTest::test_descendant_ids_still_terminates_on_an_inactive_node_in_a_cycle`
+     * ("the inactive unit is EXCLUDED from the result, not included"), and
+     * `TicketTargetUnit`, the users picker and the ticket pickers all agree
+     * with it. Whether retiring a unit should also hide it from its ancestors
+     * is an open product question on #949. Until it is answered, the behaviour
+     * is pinned rather than left to be discovered.
+     */
+    public function test_deactivating_a_unit_hides_its_subtree_from_operators_above(): void
+    {
+        ['user' => $user, 'unit' => $P] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $C = Unit::create(['name' => 'C', 'unit_type_id' => 5, 'region_id' => 2, 'parent_id' => $P->id]);
+        $D = Unit::create(['name' => 'D', 'unit_type_id' => 5, 'region_id' => 2, 'parent_id' => $C->id]);
+        $person = Person::factory()->create(['u_id' => $D->id]);
+
+        $this->assertContains($D->id, app(AccessService::class)->accessibleUnitIds());
+
+        Livewire::test('units.index')->call('setInactive', $C->id, false);
+
+        $scope = app(AccessService::class)->accessibleUnitIds();
+        $this->assertNotContains($C->id, $scope);
+        // D was never deactivated — it is the subtree that follows C out.
+        $this->assertTrue($D->fresh()->is_active);
+        $this->assertNotContains($D->id, $scope);
+
+        // …and the operator who retired it can no longer put it back.
+        Livewire::test('units.index')->call('setInactive', $C->id, true);
+        $this->assertFalse($C->fresh()->is_active);
+
+        // Nothing was destroyed on the way out.
+        $this->assertDatabaseHas('units', ['id' => $C->id, 'is_active' => false]);
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $D->id]);
+    }
+
+    /**
+     * #817 parity: the permission gate (`organization`) is not a scope check.
+     * `setInactive` is a public Livewire method, so an out-of-scope id must be
+     * refused the same way `editUnit` / `deleteUnit` are.
+     */
+    public function test_set_inactive_denied_out_of_scope(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $outsider = Unit::create(['name' => 'واحد خارجی', 'unit_type_id' => 5, 'region_id' => 2]);
+
+        Livewire::test('units.index')->call('setInactive', $outsider->id, false);
+
+        $this->assertDatabaseHas('units', ['id' => $outsider->id, 'is_active' => true]);
+    }
+
+    // ==================== #949 steps 3–4: refuse, and say what blocks ====================
+
+    /**
+     * The contract the «تأیید گیت» comment pins: with the step-3 guard,
+     * "delete a unit that still has personnel" is **refused**.
+     *
+     * Before this, `persons.u_id` went NULL and `user_units` cascaded, which is
+     * how #949 measured 155 of 318 accounts silently losing every unit they
+     * could reach. `persons.u_id` staying set is the whole assertion: a
+     * SET NULL would still leave the row in the table, so the column value —
+     * not merely the row count — is what pins the fix.
+     */
+    public function test_delete_unit_with_personnel_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای پرسنل', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        $person = Person::factory()->create(['u_id' => $target->id]);
+        $hardware = $this->createHardware(['n_code' => $person->n_code]);
+
+        Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $target->id]);
+        $this->assertDatabaseHas('hardwares', ['id' => $hardware->id]);
+    }
+
+    /**
+     * Step 4: the old message said only «…زیرا در جدول دیگری استفاده شده است»,
+     * which described the two RESTRICT rows and implied the other six tables
+     * were protected. They were not. The refusal has to name what actually
+     * blocks, with the counts.
+     */
+    public function test_delete_unit_refusal_names_the_blocking_counts(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای پرسنل', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Person::factory()->count(3)->create(['u_id' => $target->id]);
+        Todo::factory()->count(2)->create(['unit_id' => $target->id]);
+
+        $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $title = $this->toastContaining($component, 'پرسنل');
+        $this->assertStringContainsString('3', $title);
+        $this->assertStringContainsString('وظیفه', $title);
+        $this->assertStringContainsString('2', $title);
+    }
+
+    public function test_delete_unit_with_todos_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای وظیفه', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Todo::factory()->create(['unit_id' => $target->id]);
+
+        Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('todos', ['unit_id' => $target->id]);
+    }
+
+    /**
+     * `uu_unit_fk` is CASCADE — the one table where the row is destroyed
+     * outright rather than nulled, so it is the one that cannot be repaired by
+     * re-running a sync afterwards.
+     */
+    public function test_delete_unit_with_accounts_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای حساب', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        $staff = User::factory()->create();
+        DB::table('user_units')->insert([
+            'user_id' => $staff->id, 'unit_id' => $target->id,
+            'role' => 'staff', 'is_primary' => true,
+        ]);
+
+        Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('user_units', ['user_id' => $staff->id, 'unit_id' => $target->id]);
+    }
+
+    /**
+     * `tickets_unit_fk` is RESTRICT, so this used to reach the `catch` with a
+     * live `QueryException` — inside a Livewire request that leaves the
+     * transaction aborted. Counting it first means the guard reports it like
+     * any other blocker and the connection stays usable.
+     */
+    public function test_delete_unit_with_tickets_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای تیکت', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        Ticket::create([
+            'ticket_code' => 'T-949', 'subject' => 's', 'content' => 'c',
+            'status' => 'open', 'priority' => 'normal', 'unit_id' => $target->id,
+        ]);
+
+        $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $this->toastContaining($component, 'تیکت');
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        // The connection is still usable — a refused delete must not abort it.
+        $this->assertDatabaseHas('tickets', ['ticket_code' => 'T-949']);
+    }
+
+    /**
+     * The toast text never reaches the HTML: `Mary\Traits\Toast` ships it as a
+     * JS effect (`effects['xjs']` holding a `toast({...})` expression), so
+     * `assertSee` always fails. The expression is a JSON string inside a
+     * string, so the Persian text arrives `\uXXXX`-escaped and has to be decoded
+     * before comparison.
+     *
+     * Returns the matched title so callers can make a real assertion on it — a
+     * helper that only `return`s registers none and leaves the test "risky".
+     *
+     * Deliberately a method, not a namespaced function: `ImportsLivewireTest.php`
+     * already declares `Tests\Feature\assertToastContains()`, and a second
+     * declaration of the same name is a fatal "cannot redeclare" the moment both
+     * files are loaded together — which only the full suite ever does, so it
+     * would have shipped green in every single-file run.
+     */
+    private function toastContaining(Testable $component, string $needle): string
+    {
+        $expressions = array_column($component->effects['xjs'] ?? [], 'expression');
+
+        foreach ($expressions as $expression) {
+            $inner = json_decode(substr($expression, strlen('toast('), -1), true);
+
+            if (is_array($inner) && str_contains($inner['toast']['title'] ?? '', $needle)) {
+                return (string) $inner['toast']['title'];
+            }
+        }
+
+        $this->fail('No toast contained "'.$needle.'"; got: '.implode(' | ', $expressions));
+
+        return '';
     }
 }

@@ -1,39 +1,70 @@
 <?php
 
-use App\Models\Unit;
 use App\Models\Region;
+use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\UnitTypeRelationship;
 use App\Services\AccessService;
+use App\Services\UnitDeletionImpact;
+use App\Services\UnitDeletionService;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
-use Mary\Traits\Toast;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\WithPagination;
+use Mary\Traits\Toast;
 
-return new class extends Component {
-    use WithPagination;
+return new class extends Component
+{
     use Toast;
+    use WithPagination;
 
-    public $name, $description, $unit_type_id, $region_id, $province_id, $parent_id;
+    public $name;
+
+    public $description;
+
+    public $unit_type_id;
+
+    public $region_id;
+
+    public $province_id;
+
+    public $parent_id;
+
     public bool $can_receive_tickets = false;
+
     #[Locked]
-    public int|null $editingId = null;
+    public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 20;
+
     public bool $modal = false;
+
     public bool $showHelpModal = false;
+
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     // #914: `sortBy` is client-settable, so only real columns are sortable.
     // The `*_name` entries are the `withAggregate` aliases loaded in units().
-    private const SORTABLE_COLUMNS = ['id', 'name', 'description', 'unit_type_name', 'region_name', 'parent_name', 'can_receive_tickets'];
+    private const SORTABLE_COLUMNS = ['id', 'name', 'description', 'unit_type_name', 'region_name', 'parent_name', 'can_receive_tickets', 'is_active'];
 
-    public $unitTypes, $provinces, $counties, $parentUnits;
+    public $unitTypes;
+
+    public $provinces;
+
+    public $counties;
+
+    public $parentUnits;
+
     public $userUnitLevel;
+
     public $userRegionId;
+
     public $fixedRegionId;
+
     public $userUnitTypeId;
+
     public $userUnitId;
 
     public function mount(): void
@@ -48,9 +79,10 @@ return new class extends Component {
         $person = $user->person;
         $unit = $person?->unit;
 
-        if (!$unit) {
+        if (! $unit) {
             $this->userUnitLevel = null;
             $this->userUnitId = null;
+
             return;
         }
 
@@ -90,7 +122,7 @@ return new class extends Component {
         }
 
         if (! empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%');
+            $query->where('name', 'LIKE', '%'.$this->search.'%');
         }
 
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
@@ -123,7 +155,7 @@ return new class extends Component {
     public function loadDropdowns(): void
     {
         $this->unitTypes = $this->getAllowedUnitTypes();
-        
+
         if ($this->userUnitLevel === 'ministry') {
             $this->provinces = Region::where('type', 'province')->get();
             $this->counties = $this->province_id
@@ -136,7 +168,7 @@ return new class extends Component {
             $this->provinces = collect();
             $this->counties = collect();
         }
-        
+
         $this->parentUnits = $this->getAllowedParentUnitsProperty();
     }
 
@@ -234,17 +266,17 @@ return new class extends Component {
 
     public function getAllowedParentUnitsProperty()
     {
-        if (!$this->unit_type_id) {
+        if (! $this->unit_type_id) {
             return collect();
         }
-        
+
         if ($this->unit_type_id == 1) {
             return collect();
         }
-        
+
         $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
             ->pluck('allowed_parent_unit_type_id');
-        
+
         $parentUnits = Unit::whereIn('unit_type_id', $allowedParentTypeIds)
             ->when($this->userUnitLevel === 'county', function ($query) {
                 return $query->where('region_id', $this->userRegionId);
@@ -253,11 +285,11 @@ return new class extends Component {
                 return $query->whereIn('region_id', Region::where('parent_id', $this->userRegionId)->pluck('id')->push($this->userRegionId));
             })
             ->get();
-        
+
         if ($parentUnits->isEmpty() && $this->userUnitLevel === 'ministry') {
             $parentUnits = Unit::where('unit_type_id', 1)->get();
         }
-        
+
         return $parentUnits;
     }
 
@@ -270,11 +302,11 @@ return new class extends Component {
             'parent_id' => $this->unit_type_id == 1 ? 'nullable' : 'required|exists:units,id',
             'can_receive_tickets' => 'boolean',
         ];
-        
+
         if ($this->userUnitLevel === 'ministry') {
             $rules['province_id'] = 'required|exists:regions,id';
         }
-        
+
         $this->validate($rules);
 
         // #817: scope-check the unit being edited AND the new parent — the
@@ -291,8 +323,9 @@ return new class extends Component {
             $parentUnit = Unit::find($this->parent_id);
             $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
                 ->pluck('allowed_parent_unit_type_id')->toArray();
-            if (!in_array($parentUnit->unit_type_id, $allowedParentTypeIds)) {
+            if (! in_array($parentUnit->unit_type_id, $allowedParentTypeIds)) {
                 $this->error('واحد بالادستی انتخاب‌شده مجاز نیست.');
+
                 return;
             }
 
@@ -303,11 +336,12 @@ return new class extends Component {
                 $forbiddenIds = Unit::descendantIds($this->editingId)->push($this->editingId)->all();
                 if (in_array((int) $this->parent_id, array_map('intval', $forbiddenIds), true)) {
                     $this->error('نمی‌توان واحد را زیرمجموعه خودش یا یکی از زیرمجموعه‌هایش قرار داد.');
+
                     return;
                 }
             }
         }
-        
+
         $data = [
             'name' => $this->name,
             'description' => $this->description,
@@ -318,7 +352,7 @@ return new class extends Component {
                 ? $this->can_receive_tickets
                 : false,
         ];
-        
+
         try {
             if ($this->editingId) {
                 Unit::findOrFail($this->editingId)->update($data);
@@ -328,11 +362,11 @@ return new class extends Component {
                 $this->success("واحد '{$this->name}' ایجاد شد");
             }
         } catch (\Exception $e) {
-            $this->error("خطا ", position: 'toast-bottom');
+            $this->error('خطا ', position: 'toast-bottom');
         }
 
         app(\App\Services\AccessService::class)->clearAllCaches();
-        
+
         $this->resetForm();
         $this->modal = false;
     }
@@ -346,6 +380,7 @@ return new class extends Component {
         } elseif ($this->userUnitLevel === 'ministry') {
             return $this->region_id ?: $this->province_id;
         }
+
         return null;
     }
 
@@ -364,7 +399,7 @@ return new class extends Component {
         $this->region_id = $unit->region_id;
         $this->parent_id = $unit->parent_id;
         $this->can_receive_tickets = (bool) $unit->can_receive_tickets;
-        
+
         if ($this->userUnitLevel === 'ministry' && $unit->region) {
             if ($unit->region->type === 'county') {
                 $this->province_id = $unit->region->parent_id;
@@ -372,7 +407,7 @@ return new class extends Component {
                 $this->province_id = $unit->region_id;
             }
         }
-        
+
         $this->loadDropdowns();
         $this->modal = true;
     }
@@ -388,6 +423,22 @@ return new class extends Component {
         // instead of relying on the swallowed FK exception below.
         if ($unit->children()->exists()) {
             $this->error('امکان حذف واحدی که زیرمجموعه دارد وجود ندارد.', position: 'toast-bottom');
+
+            return;
+        }
+
+        // #949 steps 2–4: refuse, and say what is actually in the way.
+        // Six of the eight inbound FKs on `units` are not RESTRICT, so a delete
+        // here used to silently NULL `persons.u_id`, NULL `todos.unit_id` and
+        // CASCADE away `user_units` rows — orphaning 155 of 318 accounts from
+        // the org tree while reporting a green toast. The counts, not this
+        // component, decide what blocks: `UnitDeletionService` is shared with
+        // `UnitController::destroy()` so the two surfaces cannot disagree.
+        $impact = app(UnitDeletionService::class)->impact($unit);
+
+        if (! $impact->isClear()) {
+            $this->error($this->describeImpact($impact), position: 'toast-bottom');
+
             return;
         }
 
@@ -395,10 +446,113 @@ return new class extends Component {
             $unit->delete();
             $this->warning("$unit->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+            // Honest scope of this catch: it covers the two RESTRICT FKs only —
+            // `units_parent_fk` and `tickets_unit_fk` — in the window between
+            // the count above and this delete. The four non-RESTRICT tables do
+            // NOT raise here: a `persons` / `todos` / `user_units` row landing
+            // in that same window still produces a successful delete with the
+            // green toast above. READ COMMITTED does not close that race, and
+            // this issue does not claim it does. Closing it needs a decision
+            // about serialising unit deletes; until then the counts narrow the
+            // window, they do not remove it.
+            $this->error('حذف واحد انجام نشد؛ هم‌زمان تغییری در اطلاعات آن رخ داد. دوباره تلاش کنید.', position: 'toast-bottom');
         }
 
         app(\App\Services\AccessService::class)->clearAllCaches();
+    }
+
+    /**
+     * #949 step 4 — the refusal names each blocking table and its count, in the
+     * Persian the rest of this page is written in. The old text
+     * («…زیرا در جدول دیگری استفاده شده است») described only the two RESTRICT
+     * rows and implied the six cascade tables were protected — which is exactly
+     * the belief that made the delete destructive.
+     */
+    private function describeImpact(UnitDeletionImpact $impact): string
+    {
+        $labels = [
+            'children' => 'زیرمجموعه',
+            'tickets' => 'تیکت',
+            'persons' => 'پرسنل',
+            'hardware' => 'سخت‌افزار',
+            'todos' => 'وظیفه',
+            'accounts' => 'حساب کاربری',
+        ];
+
+        $blocking = [];
+
+        foreach ($impact->blockers() as $key => $count) {
+            // `?? $key` because the keys live on `UnitDeletionImpact` and the
+            // labels here; nothing links the two at compile time, and an
+            // undefined index would render «» 12 «» instead of a table name.
+            $blocking[] = $count.' '.($labels[$key] ?? $key);
+        }
+
+        return 'امکان حذف این واحد وجود ندارد؛ این واحد هنوز دارد: '
+            .implode('، ', $blocking)
+            .'. ابتدا آن‌ها را به واحد دیگری منتقل کنید یا واحد را غیرفعال کنید.';
+    }
+
+    /**
+     * #949 step 1 — deactivation is the primary way to retire a unit.
+     *
+     * `units.is_active` already existed, already gated ticket routing
+     * (`App\Rules\TicketTargetUnit`) and already had a `غیرفعال` label in the
+     * export, but nothing in `app/` or `resources/` ever wrote `false`. The
+     * only writer was `ZabbixDevice`. So the destructive option was the only
+     * option on offer, and deleting a unit is a six-table cascade.
+     *
+     * This is the missing half of that feature: retire a unit and **no row is
+     * touched**. `persons.u_id` stays set (a delete sets it to NULL),
+     * `user_units` stays (a delete cascades it), and the unit itself stays
+     * queryable. That is the half of #949's harm a delete causes and
+     * deactivation does not.
+     *
+     * What deactivation DOES change — stated plainly, because it is easy to
+     * mistake for the above — is the caller's *ancestors'* view.
+     * `Unit::recursiveDescendantQuery()` filters the recursive step with
+     * `WHERE u.is_active = true`, so a retired unit leaves the subtree of
+     * every operator above it, and so do the still-active descendants below
+     * it: retiring C in P→C→D→E moves a P-level operator's scope from
+     * {P,C,D,E} to {P}. Nothing is destroyed, but from above the unit is
+     * invisible — including in this list, which is how the operator would
+     * otherwise have re-activated it.
+     *
+     * That asymmetry is deliberate and pre-existing: that filter is pinned by
+     * `UnitModelTest::test_descendant_ids_still_terminates_on_an_inactive_node_in_a_cycle`
+     * ("the inactive unit is EXCLUDED from the result, not included"), and
+     * `TicketTargetUnit`, the users unit picker and the ticket pickers all
+     * agree with it. Before this method existed nothing ever wrote `false`, so
+     * the filter was inert. Whether retiring a unit should also hide it from
+     * its ancestors is a product decision, not an implementation detail — see
+     * the `wire:confirm` text for the decision this implementation makes
+     * visible to the operator, and issue #949 for the open question.
+     */
+    public function setInactive(Unit $unit, bool $active): void
+    {
+        // #817 parity with `deleteUnit`: a public Livewire method hydrates its
+        // model from a client-supplied id, so the scope check is not optional.
+        if (! $this->assertUnitInScope($unit->id)) {
+            return;
+        }
+
+        $unit->is_active = $active;
+        $unit->saveQuietly();
+
+        $status = $active ? 'فعال' : 'غیرفعال';
+        $this->success("واحد «{$unit->name}» {$status} شد.", position: 'toast-bottom');
+
+        // `is_active` is a predicate of `recursiveDescendantQuery()`, so a
+        // retired unit leaves its parent's subtree — a stale `unit_hierarchy`
+        // would keep serving the old tree to every caller.
+        //
+        // `saveQuietly()` skips the `Unit::updated` hook that invalidates
+        // `report_units` and `hr_stats` as well. That is safe today because
+        // every one of those keys hashes `accessibleUnitIds()` into its own
+        // key, so a scope change self-invalidates; it matches
+        // `toggleTicketCapability()` below. Do not "fix" this by dropping
+        // `saveQuietly()` without re-checking those keys.
+        app(AccessService::class)->clearAllCaches();
     }
 
     public function resetForm(): void
@@ -423,6 +577,7 @@ return new class extends Component {
             ['key' => 'region_name', 'label' => 'منطقه', 'class' => 'w-8 hidden sm:table-cell'],
             ['key' => 'parent_name', 'label' => 'واحد بالادستی', 'class' => 'w-20 hidden xl:table-cell'],
             ['key' => 'can_receive_tickets', 'label' => 'پذیرش تیکت', 'class' => 'w-5 hidden lg:table-cell'],
+            ['key' => 'is_active', 'label' => 'وضعیت', 'class' => 'w-5 hidden lg:table-cell'],
         ];
     }
 
@@ -430,12 +585,14 @@ return new class extends Component {
     {
         if (! auth()->user()->can('manage_unit_tickets')) {
             $this->error('شما مجوز مدیریت تیکت‌ها را ندارید.', position: 'toast-bottom');
+
             return;
         }
 
         $unit = Unit::find($unitId);
         if (! $unit) {
             $this->error('واحد یافت نشد.', position: 'toast-bottom');
+
             return;
         }
 
@@ -517,7 +674,7 @@ return new class extends Component {
                               @click="$wire.modal = true" />
                     <x-ui.icon-button name="حذف واحد" icon="o-trash"
                               wire:click="deleteUnit({{ $unit->id }})"
-                              wire:confirm="آیا مطمئن هستید"
+                              wire:confirm="حذف واحد تنها وقتی انجام می‌شود که هیچ پرسنل، سخت‌افزار، وظیفه، تیکت یا حساب کاربری‌ای به آن وابسته نباشد؛ در غیر این صورت حذف رد می‌شود و دلیل آن اعلام می‌گردد. اگر قصد بازنشستگی واحد را دارید، به‌جای حذف آن را غیرفعال کنید. مطمئن هستید؟"
                               spinner
                               class="btn-ghost btn-sm text-error" />
                 </div>
@@ -531,6 +688,24 @@ return new class extends Component {
                     @else
                         <x-icon name="o-x-circle" class="w-6 h-6 text-base-content/40" />
                         <span class="text-xs text-base-content/40 hidden lg:inline">غیرفعال</span>
+                    @endif
+                </button>
+            @endscope
+
+            {{-- #949 step 1: the non-destructive way to retire a unit. --}}
+            @scope('cell_is_active', $unit)
+                <button wire:click="setInactive({{ $unit->id }}, {{ $unit->is_active ? 'false' : 'true' }})"
+                        wire:confirm="{{ $unit->is_active
+                            ? 'این واحد و تمام زیرمجموعه‌های فعال آن از دید مدیران بالادستی حذف می‌شود. اطلاعات آن حفظ می‌شود و هر زمان می‌توانید دوباره آن را فعال کنید. مطمئن هستید؟'
+                            : 'این واحد دوباره در دسترس مدیران بالادستی و در مسیرهای تیکت قرار می‌گیرد. مطمئن هستید؟' }}"
+                        class="btn btn-ghost btn-sm"
+                        title="{{ $unit->is_active ? 'غیرفعال کردن واحد' : 'فعال کردن واحد' }}">
+                    @if($unit->is_active)
+                        <x-icon name="o-check-circle" class="w-6 h-6 text-success" />
+                        <span class="text-xs text-success hidden lg:inline">فعال</span>
+                    @else
+                        <x-icon name="o-x-circle" class="w-6 h-6 text-warning" />
+                        <span class="text-xs text-warning hidden lg:inline">غیرفعال</span>
                     @endif
                 </button>
             @endscope

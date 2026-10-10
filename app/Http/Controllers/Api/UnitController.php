@@ -7,6 +7,7 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
 use App\Rules\PerPage;
 use App\Services\AccessService;
+use App\Services\UnitDeletionService;
 use Illuminate\Http\JsonResponse;
 
 class UnitController extends Controller
@@ -146,10 +147,38 @@ class UnitController extends Controller
             return response()->json(['message' => 'Cannot delete unit with children.'], 422);
         }
 
+        // #949 step 5 — parity with `units.index::deleteUnit`. This endpoint
+        // used to check children only, so it was strictly weaker than the UI on
+        // two counts: the six non-RESTRICT inbound FKs were invisible to it
+        // (a mobile client could strip staff the web UI would have refused),
+        // and the one blocker the database could see — `tickets_unit_fk` —
+        // escaped as an uncaught 500 instead of a 422.
+        //
+        // `UnitDeletionService` is shared with the Livewire list, so "what makes
+        // a unit safe to delete" has exactly one definition. The counts travel
+        // with the refusal: a client that can only read a sentence cannot show
+        // the user what the delete is about to cost.
+        $impact = app(UnitDeletionService::class)->impact($unit);
+
+        if (! $impact->isClear()) {
+            return response()->json([
+                'message' => 'Cannot delete unit.',
+                'blockers' => $impact->blockers(),
+            ], 422);
+        }
+
         // Invalidate AccessService cache as hierarchy is changing
         app(AccessService::class)->clearAllCaches();
 
-        $unit->delete();
+        try {
+            $unit->delete();
+        } catch (\Throwable $e) {
+            // The RESTRICT FKs can still fire in the window between the count
+            // above and this delete. Step 5 exists so a blocked delete is a
+            // 422 with a reason rather than an uncaught 500, and an unhandled
+            // exception here would reintroduce exactly that.
+            return response()->json(['message' => 'Cannot delete unit.'], 422);
+        }
 
         return response()->json(['success' => true]);
     }
