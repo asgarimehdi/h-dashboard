@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -610,5 +611,88 @@ class UnitsIndexLivewireTest extends TestCase
 
         Livewire::test('units.index')->call('toggleTicketCapability', $target->id);
         $this->assertDatabaseHas('units', ['id' => $target->id, 'can_receive_tickets' => false]);
+    }
+
+    // ==================== #949 step 1: deactivation is the primary path ====================
+
+    /**
+     * The counter-test to `test_delete_unit_strips_personnel_when_unguarded`
+     * documents what deactivation does NOT do: it does not touch a single
+     * staff row. `persons.u_id` stays set, so `applyOrgScope()` keeps matching
+     * and the assets behind those people stay reachable.
+     */
+    public function test_deactivating_unit_keeps_its_person_and_hardware(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $person = Person::factory()->create(['u_id' => $unit->id]);
+        $hardware = $this->createHardware(['n_code' => $person->n_code]);
+
+        Livewire::test('units.index')->call('setInactive', $unit->id, false);
+
+        $this->assertDatabaseHas('units', ['id' => $unit->id, 'is_active' => false]);
+
+        // The whole point: retiring a unit is not a delete. Nothing is nulled,
+        // nothing cascades, the assets are still attached to their owner.
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $unit->id]);
+        $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'n_code' => $person->n_code]);
+    }
+
+    /**
+     * "…and in scope". An account assigned to the retired unit keeps that unit
+     * in `accessibleUnitIds()`: `Unit::descendantIds()` seeds the CTE from the
+     * caller's own base ids with no `is_active` filter, so only the *descendants*
+     * of a retired unit drop out — the unit's own staff do not lose their
+     * dashboard. This is the exact failure #949 measured after a delete
+     * (155 of 318 accounts silently seeing an empty dashboard).
+     */
+    public function test_deactivating_unit_keeps_the_account_in_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $hardware = $this->createHardware(['n_code' => $user->person->n_code]);
+
+        Livewire::test('units.index')->call('setInactive', $unit->id, false);
+
+        $accessible = app(AccessService::class)->accessibleUnitIds();
+        $this->assertContains($unit->id, $accessible);
+
+        // And the org scope still resolves the unit's hardware — the query
+        // shape `hardware/index.blade.php::applyOrgScope()` uses.
+        $visible = Hardware::query()
+            ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessible))
+            ->pluck('id')
+            ->all();
+        $this->assertContains($hardware->id, $visible);
+    }
+
+    public function test_activating_a_retired_unit_restores_it(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+        $unit->update(['is_active' => false]);
+
+        Livewire::test('units.index')->call('setInactive', $unit->id, true);
+
+        $this->assertDatabaseHas('units', ['id' => $unit->id, 'is_active' => true]);
+    }
+
+    /**
+     * #817 parity: the permission gate (`organization`) is not a scope check.
+     * `setInactive` is a public Livewire method, so an out-of-scope id must be
+     * refused the same way `editUnit` / `deleteUnit` are.
+     */
+    public function test_set_inactive_denied_out_of_scope(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $outsider = Unit::create(['name' => 'واحد خارجی', 'unit_type_id' => 5, 'region_id' => 2]);
+
+        Livewire::test('units.index')->call('setInactive', $outsider->id, false);
+
+        $this->assertDatabaseHas('units', ['id' => $outsider->id, 'is_active' => true]);
     }
 }
