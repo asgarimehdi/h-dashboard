@@ -47,10 +47,12 @@ test.describe('HR API endpoints', () => {
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
     expect(Array.isArray(body.data)).toBeTruthy();
-    if (body.data.length > 0) {
-      expect(body.data[0]).toHaveProperty('month');
-      expect(body.data[0]).toHaveProperty('count');
-    }
+    // Issue #952: the default window is exactly 12 buckets, oldest first —
+    // empty months read as zero, never as missing rows. Unconditional: a
+    // `months=0`-style empty array must fail loudly below, not slip through.
+    expect(body.data).toHaveLength(12);
+    expect(body.data[0]).toHaveProperty('month');
+    expect(body.data[0]).toHaveProperty('count');
   });
 
   test('GET /api/hr/analytics/vacancy-trend returns monthly data', async ({ request }) => {
@@ -61,10 +63,9 @@ test.describe('HR API endpoints', () => {
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
     expect(Array.isArray(body.data)).toBeTruthy();
-    if (body.data.length > 0) {
-      expect(body.data[0]).toHaveProperty('month');
-      expect(body.data[0]).toHaveProperty('count');
-    }
+    expect(body.data).toHaveLength(12);
+    expect(body.data[0]).toHaveProperty('month');
+    expect(body.data[0]).toHaveProperty('count');
   });
 
   test('GET /api/hr/analytics/staffing-ratio returns aggregations', async ({ request }) => {
@@ -88,6 +89,17 @@ test.describe('HR API endpoints', () => {
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
     expect(Array.isArray(body.data)).toBeTruthy();
+    expect(body.data).toHaveLength(6);
+  });
+
+  test('GET /api/hr/analytics/headcount-trend rejects months=0 with 422', async ({ request }) => {
+    // Issue #952: 0 and negatives follow the ReportDays contract (422), so a
+    // collapsed window can never pass as valid data again.
+    const response = await request.get('/api/hr/analytics/headcount-trend?months=0', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.status()).toBe(422);
   });
 
   test('unauthenticated request returns 401', async ({ request }) => {
