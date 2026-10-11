@@ -41,9 +41,21 @@ return new class extends Component
 
     public function delete(Semat $semat): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         try {
             $semat->delete();
             $this->warning("$semat->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892/#975: defence in depth. The `authorize()` above sits
+            // OUTSIDE this try, so the 403 never actually reaches here today —
+            // this clause exists so that a later edit which moves the check
+            // inside the try cannot turn a revoked holder's delete back into a
+            // friendly "still used in another table" toast, and so the
+            // #892/#975 static scan keeps a handle on the ordering.
+            throw $e;
         } catch (\Exception $e) {
             $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
@@ -51,6 +63,10 @@ return new class extends Component
 
     public function createSemat(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         $this->validate([
             'name' => 'required|string|max:255|unique:semats,name',
         ]);
@@ -63,6 +79,10 @@ return new class extends Component
 
     public function editSemat($id): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         $this->resetValidation();
         $semat = Semat::findOrFail($id);
         $this->editingId = (int) $id;
@@ -72,6 +92,10 @@ return new class extends Component
 
     public function updateSemat(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         $this->validate([
             'name' => 'required|string|max:255|unique:semats,name,'.$this->editingId,
         ]);

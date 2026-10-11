@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 covers(HasOrganizationalScope::class);
@@ -64,6 +65,18 @@ function makeUserInUnit(Unit $unit): User
         'u_id' => $unit->id,
     ]);
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+
+    // Issue #975: every mutator on `hardware.index` now re-checks
+    // `manage_hardware` itself, because the route gate does not re-run on
+    // `/livewire/update`. This file exercises those mutators, so its actor has
+    // to be someone who LEGITIMATELY holds the permission — otherwise these
+    // tests 403 before reaching the scope assertion they exist to make.
+    // `findOrCreate` keeps this file independent of PermissionSeeder.
+    //
+    // Granting the permission does not weaken anything below: scope comes from
+    // `accessibleUnitIds()`, which never consults the permission.
+    $user->givePermissionTo(Permission::findOrCreate('manage_hardware'));
+
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $unit->id);
 

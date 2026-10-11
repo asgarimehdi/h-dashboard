@@ -295,14 +295,29 @@ test('cleanNotifications is refused after manage_users is revoked', function () 
 // The authorization check is the same one mount() applies
 // ======================================================================
 
-test('the mutator permission matches the page mount permission', function () {
+test('the mutator permission matches the page gate permission', function () {
     // Guards the #812-style mistake of gating a page with a permission other
-    // than the one its mount() checks: roles/permissions are `manage_roles`,
-    // tools is `manage_users`.
+    // than the one its route checks: roles/permissions are `manage_roles`,
+    // tools is `manage_users`, hardware is `manage_hardware`, units is
+    // `organization` and the four lookup tables are `kargozini`.
+    //
+    // Not every entry has a `mount()` — hardware/index and the lookup
+    // components rely on the route gate alone — so the invariant under test is
+    // "every mutator authorizes exactly the permission its route gate
+    // requires", which is what a `$this->authorize(...)` call has to name.
+    // Spatie answers `false` for an unknown permission name instead of
+    // throwing, so a typo here (`manage_hardwares`) would fail CLOSED and turn
+    // a green suite into a locked-out app. This scan is what catches it.
     $source = [
         'resources/views/livewire/roles/index.blade.php' => 'manage_roles',
         'resources/views/livewire/permissions/index.blade.php' => 'manage_roles',
         'resources/views/livewire/tools/tools.blade.php' => 'manage_users',
+        'resources/views/livewire/hardware/index.blade.php' => 'manage_hardware',
+        'resources/views/livewire/units/index.blade.php' => 'organization',
+        'resources/views/livewire/kargozini/estekhdam.blade.php' => 'kargozini',
+        'resources/views/livewire/kargozini/tahsil.blade.php' => 'kargozini',
+        'resources/views/livewire/kargozini/semat.blade.php' => 'kargozini',
+        'resources/views/livewire/kargozini/radif.blade.php' => 'kargozini',
     ];
 
     foreach ($source as $file => $permission) {
@@ -326,6 +341,11 @@ test('AuthorizationException is not swallowed by the delete handlers', function 
     foreach ([
         'resources/views/livewire/roles/index.blade.php',
         'resources/views/livewire/permissions/index.blade.php',
+        'resources/views/livewire/hardware/index.blade.php',
+        'resources/views/livewire/kargozini/estekhdam.blade.php',
+        'resources/views/livewire/kargozini/tahsil.blade.php',
+        'resources/views/livewire/kargozini/semat.blade.php',
+        'resources/views/livewire/kargozini/radif.blade.php',
     ] as $file) {
         $contents = file_get_contents(base_path($file));
         $this->assertIsString($contents);
@@ -355,6 +375,30 @@ test('AuthorizationException is not swallowed by the delete handlers', function 
             'throw $e;',
             $clauses[3][0],
             "{$file} does not re-throw AuthorizationException in delete()"
+        );
+
+        // ORDER is load-bearing and the checks above cannot see it.
+        // `AuthorizationException extends Exception`, so if the generic catch
+        // comes first PHP binds it first and the 403 IS swallowed into the
+        // friendly toast — while `catch (AuthorizationException $e)` still
+        // exists, still contains `throw $e;`, and every assertion above still
+        // passes. That is the exact regression this test is named for, so the
+        // ordering has to be asserted on its own.
+        $authCatch = strpos($contents, 'AuthorizationException $e');
+        $genericCatch = strpos($contents, 'catch (\\Exception $e');
+
+        if ($genericCatch === false) {
+            // `hardware/index.blade.php` imports neither; its generic catch is
+            // `catch (Exception $e)`.
+            $genericCatch = strpos($contents, 'catch (Exception $e');
+        }
+
+        $this->assertIsInt($authCatch, "{$file} does not catch AuthorizationException");
+        $this->assertIsInt($genericCatch, "{$file} has no generic catch to order against");
+        $this->assertLessThan(
+            $genericCatch,
+            $authCatch,
+            "{$file} catches \\Exception before AuthorizationException, so a 403 is swallowed into the toast"
         );
     }
 });
