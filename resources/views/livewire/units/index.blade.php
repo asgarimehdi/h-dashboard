@@ -69,6 +69,12 @@ return new class extends Component
 
     public function mount(): void
     {
+        // Issue #975: deliberately NOT gated (the plan marks it optional). The
+        // route gate already covers the initial page load, and everything
+        // reachable from here without a write — `units()`, `loadDropdowns()`,
+        // `getAllowedParentUnitsProperty()` — is filtered through
+        // `accessibleUnitIds()`. What this component must never do is WRITE
+        // without `organization`, and all four mutators now check it themselves.
         $this->determineUserLevel();
         $this->loadDropdowns();
     }
@@ -295,6 +301,11 @@ return new class extends Component
 
     public function saveUnit(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:organization`)
+        // does not run on `/livewire/update`. Permission first, scope second —
+        // they answer different questions and neither substitutes for the other.
+        $this->authorize('organization');
+
         $rules = [
             'name' => 'required|string|max:255',
             'unit_type_id' => 'required|exists:unit_types,id',
@@ -386,6 +397,11 @@ return new class extends Component
 
     public function editUnit($id): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:organization`)
+        // does not run on `/livewire/update`. Permission first, scope second —
+        // they answer different questions and neither substitutes for the other.
+        $this->authorize('organization');
+
         // #817: no scope check here used to leak any unit's data into the form.
         if (! $this->assertUnitInScope((int) $id)) {
             return;
@@ -414,6 +430,11 @@ return new class extends Component
 
     public function deleteUnit(Unit $unit): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:organization`)
+        // does not run on `/livewire/update`. Permission first, scope second —
+        // they answer different questions and neither substitutes for the other.
+        $this->authorize('organization');
+
         // #817: Livewire model hydration applies no scope — check it here.
         if (! $this->assertUnitInScope($unit->id)) {
             return;
@@ -530,6 +551,11 @@ return new class extends Component
      */
     public function setInactive(Unit $unit, bool $active): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:organization`)
+        // does not run on `/livewire/update`. Permission first, scope second —
+        // they answer different questions and neither substitutes for the other.
+        $this->authorize('organization');
+
         // #817 parity with `deleteUnit`: a public Livewire method hydrates its
         // model from a client-supplied id, so the scope check is not optional.
         if (! $this->assertUnitInScope($unit->id)) {

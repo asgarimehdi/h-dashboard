@@ -297,6 +297,12 @@ return new class extends Component
 
     public function createHardware(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $this->validate([
             'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $this->accessibleUnitIds()))],
             'pc_name' => 'required|string|max:255',
@@ -323,6 +329,12 @@ return new class extends Component
 
     public function editHardware($id): void
     {
+        // Issue #975: deliberately NOT gated, unlike `edit*` on the kargozini
+        // lookups. It writes no row and copies nothing sensitive into the
+        // response beyond what `hardwares()` already renders to this actor; the
+        // write is `updateHardware()` above, which is gated AND re-derives
+        // `accessibleUnitIds()` itself. A client that skips this method and
+        // sets `editingId` directly (it is not #[Locked]) still cannot write.
         $this->resetValidation();
         $hw = Hardware::with('person')->findOrFail($id);
 
@@ -343,6 +355,12 @@ return new class extends Component
 
     public function updateHardware(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $accessibleIds = $this->accessibleUnitIds();
 
         // Issue #842: the destination person must be inside the caller's scope before
@@ -385,6 +403,12 @@ return new class extends Component
 
     public function delete(Hardware $hardware): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $hardware->load('person');
 
         $accessibleIds = $this->accessibleUnitIds();
@@ -397,6 +421,14 @@ return new class extends Component
         try {
             $hardware->delete();
             $this->warning("سخت افزار {$hardware->pc_name} حذف شد", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892/#975: defence in depth. The `authorize()` above sits
+            // OUTSIDE this try, so the 403 never actually reaches here today —
+            // this clause exists so that a later edit which moves the check
+            // inside the try cannot turn a revoked holder's delete back into a
+            // friendly "امکان حذف وجود ندارد" toast, and so the #892/#975
+            // static scan keeps a handle on the ordering.
+            throw $e;
         } catch (Exception $e) {
             $this->error('امکان حذف وجود ندارد.', position: 'toast-bottom');
         }
@@ -404,6 +436,12 @@ return new class extends Component
 
     public function bulkMark(bool $value): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         if (empty($this->selected)) {
             $this->error('هیچ ردیفی انتخاب نشده است.', position: 'toast-bottom');
 
@@ -439,6 +477,12 @@ return new class extends Component
 
     public function exportExcel(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $columns = array_keys(array_filter($this->visibleCols));
         // Always include core columns
         $columns = array_unique(array_merge(['n_code', 'pc_name'], $columns));
@@ -467,6 +511,12 @@ return new class extends Component
 
     public function bulkDelete(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         if (empty($this->selected)) {
             return;
         }
