@@ -1,6 +1,6 @@
 APP_NAME=h-dashboard
 APP_ENV=local
-APP_KEY=base64:aelQP/iruUmruqDr1iZ9XEFB/EgFm3crvwHN1lqnix8=
+APP_KEY=
 APP_DEBUG=false
 APP_URL=http://127.0.0.1:8000
 

@@ -41,6 +41,15 @@ jobs:
           composer validate --strict --check-lock
           git diff --exit-code -- composer.lock
 
+      # Issue #953. A tracked env file committed with a real APP_KEY leaks the
+      # master secret: it encrypts session payloads and signs the cookie MAC,
+      # so anyone holding it can mint a cookie for any account. Blanking the
+      # four files that carried one prevents recurrence; this is what stops it
+      # coming back — and it runs here because `lint` is the cheapest blocking
+      # job, so a leak fails a PR in seconds rather than after the suite.
+      - name: Assert no tracked env file commits an APP_KEY
+        run: php scripts/check-app-key-leak.php
+
       - name: Check code style
         run: vendor/bin/pint --test
 

@@ -70,7 +70,7 @@
         ],
         "test": [
             "Composer\\Config::disableProcessTimeout",
-            "php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artisan test"
+            "php scripts/ensure-test-app-key.php && php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artisan test"
         ],
         "verify": [
             "Composer\\Config::disableProcessTimeout",
