@@ -47,7 +47,13 @@ return new class extends Component
 
     public int $perPage = 20;
 
-    /** @var array{column: string, direction: string} */
+    /**
+     * #914: the shape is client-settable, so the keys may be absent or
+     * unknown at runtime — `array{column, direction}` would only describe
+     * the default, and every read below has to stay `??`-guarded.
+     *
+     * @var array<string, string>
+     */
     public array $sortBy = ['column' => 'sort_order', 'direction' => 'asc'];
 
     /**
@@ -379,10 +385,10 @@ return new class extends Component
             $query->whereRaw(PersianNormalizer::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
         }
 
-        $column = in_array($this->sortBy['column'], self::SORTABLE_COLUMNS, true)
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
             ? $this->sortBy['column']
             : 'sort_order';
-        $direction = $this->sortBy['direction'] === 'desc' ? 'desc' : 'asc';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
 
         // Stable tie-break, same as scopeOrdered() — skip it on `id` itself,
@@ -414,7 +420,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" label="دستگاه جدید" icon="o-plus" responsive />
+            <x-ui.icon-button name="دستگاه جدید" label="دستگاه جدید" class="btn-success" wire:click="startCreate" icon="o-plus" responsive />
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -542,7 +548,7 @@ return new class extends Component
                             {{ $result['ok'] ? 'اتصال برقرار' : 'خطا' }}
                         </span>
                     @endif
-                    <x-button
+                    <x-ui.icon-button name="تست اتصال"
                         icon="o-signal"
                         wire:click="testConnection({{ $device->id }})"
                         class="btn-ghost btn-circle btn-sm"
@@ -550,19 +556,19 @@ return new class extends Component
                         spinner
                     />
                     @if($this->editingId !== $device->id)
-                        <x-button
+                        <x-ui.icon-button name="ویرایش دستگاه"
                             icon="o-pencil"
                             wire:click="editDevice({{ $device->id }})"
                             class="btn-ghost btn-circle btn-sm text-primary"
                             title="ویرایش"
                         />
-                        <x-button
+                        <x-ui.icon-button name="فعال یا غیرفعال کردن دستگاه"
                             icon="{{ $device->is_active ? 'o-eye-slash' : 'o-eye' }}"
                             wire:click="toggle({{ $device->id }})"
                             class="btn-ghost btn-circle btn-sm"
                             title="{{ $device->is_active ? 'غیرفعال کردن' : 'فعال کردن' }}"
                         />
-                        <x-button
+                        <x-ui.icon-button name="حذف دستگاه"
                             icon="o-trash"
                             wire:click="delete({{ $device->id }})"
                             wire:confirm="آیا مطمئن هستید؟"

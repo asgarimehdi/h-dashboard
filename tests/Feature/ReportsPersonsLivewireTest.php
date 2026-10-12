@@ -216,4 +216,66 @@ class ReportsPersonsLivewireTest extends TestCase
             ->assertSee('الف')
             ->assertDontSeeHtml('>ب<');
     }
+
+    // ==================== Issue #858: N+1 guard ====================
+
+    // Separate methods: assertNoNPlusOne registers a global DB listener that
+    // is never removed, so two measurements in one test would accumulate.
+    //
+    // Measured fixed cost is 17 queries (3 mount lookups + scope CTE + count
+    // + 4 aggregates + roster fetch + 4 eager loads + 2 layout notification
+    // queries + accessible-units); budget 20 leaves headroom while any
+    // per-person scaling (4 lazy queries x persons) still blows the budget.
+    public function test_roster_small_query_budget(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $this->actingWithUnit($user);
+
+        for ($i = 0; $i < 4; $i++) {
+            $this->createPersonInUnit($unit);
+        }
+
+        $this->assertNoNPlusOne(fn () => Livewire::test('reports.persons'), 20);
+    }
+
+    public function test_roster_large_same_query_budget(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $this->actingWithUnit($user);
+
+        for ($i = 0; $i < 19; $i++) {
+            $this->createPersonInUnit($unit);
+        }
+
+        $this->assertNoNPlusOne(fn () => Livewire::test('reports.persons'), 20);
+    }
+
+    public function test_chart_data_matches_server_aggregates(): void
+    {
+        // Issue #858 step 2: charts read the server-rendered data-chart div
+        // (morphed on every render) instead of a second method request, so
+        // the div must carry exactly the inline-@php aggregates — and not
+        // the roster (charts never read it; ~53KB saved per update).
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $this->actingWithUnit($user);
+
+        for ($i = 0; $i < 9; $i++) {
+            $this->createPersonInUnit($unit);
+        }
+
+        $component = Livewire::test('reports.persons')->assertStatus(200);
+        $payload = $component->instance()->chartPayload();
+        $html = $component->html();
+
+        $this->assertStringContainsString('id="personsChartData"', $html);
+        $this->assertStringNotContainsString('chartPayload', $html);
+
+        preg_match('/data-chart=\'([^\']*)\'/', $html, $m);
+        $this->assertNotEmpty($m, 'data-chart attribute missing');
+        $decoded = json_decode(html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'), true);
+        $this->assertSame($payload['byTahsil'], $decoded['byTahsil']);
+        $this->assertSame($payload['bySemat'], $decoded['bySemat']);
+        $this->assertSame($payload['byEstekhdam'], $decoded['byEstekhdam']);
+        $this->assertArrayNotHasKey('persons', $decoded);
+    }
 }

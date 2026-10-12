@@ -19,6 +19,9 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    // #914: `sortBy` is client-settable, so only real columns are sortable.
+    private const SORTABLE_COLUMNS = ['id', 'label', 'name'];
+
     public function mount(): void
     {
         $this->authorize('manage_roles');
@@ -32,9 +35,15 @@ return new class extends Component
 
     public function delete(Permission $permission): void
     {
+        $this->authorize('manage_roles');
+
         try {
             $permission->delete();
             $this->warning("$permission->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892: re-throw so a 403 is not reported to the user as the
+            // generic "still used in another table" foreign-key toast.
+            throw $e;
         } catch (\Exception $e) {
             $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
         }
@@ -42,6 +51,8 @@ return new class extends Component
 
     public function createPermission(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => [
                 'required',
@@ -68,6 +79,8 @@ return new class extends Component
 
     public function editPermission($id): void
     {
+        $this->authorize('manage_roles');
+
         $permission = Permission::findOrFail($id);
         $this->editingId = $id;
         $this->name = $permission->name;
@@ -76,6 +89,8 @@ return new class extends Component
 
     public function updatePermission(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => [
                 'required',
@@ -123,7 +138,10 @@ return new class extends Component
                   ->orWhere('label', 'LIKE', '%' . $this->search . '%');
         }
         
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
         return $query->paginate($this->perPage);
     }
 
@@ -150,7 +168,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <x-ui.icon-button name="مجوز جدید" label="مجوز جدید" class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -168,12 +186,12 @@ return new class extends Component
                 <tr wire:key="{{ $permission->id }}">
                     @scope('actions', $permission)
                     <div class="flex w-1/4">
-                        <x-button icon="o-pencil"
+                        <x-ui.icon-button name="ویرایش مجوز" icon="o-pencil"
                                   wire:click="editPermission({{ $permission->id }})"
                                   class="btn-ghost btn-sm text-primary"
                                   @click="$wire.modal = true" />
 
-                        <x-button icon="o-trash"
+                        <x-ui.icon-button name="حذف مجوز" icon="o-trash"
                                   wire:click="delete({{ $permission->id }})"
                                   wire:confirm="Are you sure?"
                                   spinner

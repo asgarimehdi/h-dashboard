@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Ticket;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -147,5 +148,33 @@ class MapDashboardLivewireTest extends TestCase
         // (method returns array; we verify it completes without error)
         $component->call('loadUnitDetails', $remoteUnit->id)
             ->assertOk();
+    }
+
+    // ==================== Priority filter vocabulary (#954) ====================
+
+    /**
+     * Issue #954: the priority filter offered all five DB values, so a user
+     * could filter to «بالا»/«متوسط» and select a bucket no report reads —
+     * every aggregation is three-valued. The filter must offer exactly
+     * `Ticket::PRIORITIES` (plus the "all" option), so it can never select
+     * a bucket that reports nothing.
+     */
+    public function test_priority_filter_offers_exactly_the_reported_buckets(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $html = Livewire::test('map.map-dashboard')->html();
+
+        $matched = preg_match(
+            '/<select[^>]*x-model="filters\.ticket_priority"[^>]*>.*?<\/select>/s',
+            $html,
+            $block
+        );
+        $this->assertSame(1, $matched, 'ticket_priority filter select not found in rendered HTML');
+
+        preg_match_all('/<option value="([^"]*)"/', $block[0], $matches);
+
+        $this->assertSame(['', ...Ticket::PRIORITIES], $matches[1]);
     }
 }

@@ -603,7 +603,7 @@ return new class extends Component
                 <x-icon name="{{ $icon[0] }}" class="w-5 h-5 {{ $icon[1] }}" />
                 <div class="flex-1 min-w-0">
                     <p class="text-sm truncate">{{ $activity->description }}</p>
-                    <p class="text-[10px] text-base-content/50">{{ $activity->user->name ?? 'سیستم' }}</p>
+                    <p class="text-[10px] text-base-content/50">{{ $activity->user?->name ?? 'سیستم' }}</p>
                 </div>
                 <span class="text-[10px] text-base-content/40 whitespace-nowrap">{{ \Carbon\Carbon::parse($activity->created_at)->diffForHumans() }}</span>
             </div>

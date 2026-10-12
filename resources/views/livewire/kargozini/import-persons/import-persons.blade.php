@@ -133,7 +133,15 @@ return new class extends Component
             $results = $import->getImportResults();
 
             $this->success(
-                "ایمپورت با موفقیت انجام شد. جدید: {$results['created']}, بروزرسانی: {$results['updated']}, خطا: {$results['errors']}",
+                // ایشو #872: `errors` یک آرایه است (رکوردهای خطای هر ردیف را
+                // حمل می‌کند و بلوک آمار با `json_encode` نمایشش می‌دهد)، نه
+                // یک شمارش. درجِ مستقیمش `Array to string conversion` می‌داد،
+                // که `HandleExceptions` به `ErrorException` تبدیل می‌کند و
+                // `catch (\Exception)` پایین‌تر آن را می‌بلعد — پس `resetForm()`
+                // و `dispatch()` هرگز اجرا نمی‌شدند و رویداد refresh والد مرده
+                // ماند. همان idiom خطِ `importStats['errors']` بالاتر در همین
+                // فایل: شمارش، نه درج.
+                'ایمپورت با موفقیت انجام شد. جدید: '.$results['created'].', بروزرسانی: '.$results['updated'].', خطا: '.count($results['errors'] ?? []),
                 'موفقیت'
             );
 

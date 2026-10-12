@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\TicketCommentController;
+use App\Models\Notification;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -44,6 +45,12 @@ class TicketCommentApiComprehensiveTest extends TestCase
 
     protected $authToken;
 
+    /**
+     * Lookup-table ids, kept so a test can build extra persons without
+     * re-inserting (and without colliding on) the seeded rows.
+     */
+    protected array $lookupIds = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -62,6 +69,8 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
         $sId = DB::table('semats')->insertGetId(['name' => 'S']);
         $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+
+        $this->lookupIds = compact('tId', 'eId', 'sId', 'rId');
 
         $this->unit = Unit::create(['name' => 'Unit A']);
         $this->otherUnit = Unit::create(['name' => 'Unit B']);
@@ -113,6 +122,36 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'body' => 'بدنه کامنت',
             'body_html' => '<p>بدنه کامنت</p>',
         ], $attrs));
+    }
+
+    /**
+     * Create a user whose person lives in `$unitId`, with the permissions the
+     * comment routes need. Issue #863 tests need a controllable number of
+     * in-scope recipients, so this is factored out instead of hand-inserting
+     * persons 30 times.
+     */
+    protected function makeScopedUser(int $unitId): User
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+
+        Person::create([
+            'n_code' => $nCode,
+            'f_name' => 'کاربر',
+            'l_name' => 'آزمایشی',
+            't_id' => $this->lookupIds['tId'],
+            'e_id' => $this->lookupIds['eId'],
+            's_id' => $this->lookupIds['sId'],
+            'r_id' => $this->lookupIds['rId'],
+            'u_id' => $unitId,
+        ]);
+
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->assignRole('admin');
+        $user->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        $user->units()->attach($unitId, ['role' => 'staff', 'is_primary' => true]);
+
+        return $user;
     }
 
     // ─── Index ───────────────────────────────────────────────────────────
@@ -417,14 +456,116 @@ class TicketCommentApiComprehensiveTest extends TestCase
     {
         $this->authAsUserA();
 
-        // Mention user B by n_code
+        // Issue #863: a mention target must live inside the AUTHOR's
+        // accessible units. This test used to mention `$this->otherUser` — a
+        // user of unit B, out of the author's scope — and asserted a
+        // notification, which pinned the exact defect the issue reports.
+        // It now mentions a second user of the SAME unit.
+        $inScopeUser = $this->makeScopedUser($this->unit->id);
+
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
+            'body' => 'سلام @'.$inScopeUser->n_code.' لطفا ببین',
+        ], $this->authToken)->assertStatus(201);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $inScopeUser->id,
+        ]);
+    }
+
+    // ─── Mention cap and unit filter (issue #863) ─────────────────────────
+
+    /**
+     * A body packed with distinct, real, IN-SCOPE handles must not notify
+     * more than `MAX_MENTIONS` recipients.
+     *
+     * Before the fix there was no cap at all: `array_unique` keeps every
+     * distinct handle, so the `whereIn('n_code', …)` carried all of them and
+     * `notifyMentions()` dispatched one job per match. The handle count is
+     * deliberately far above the ceiling of a max-length body (a max:10000
+     * body fits ~909 `@nnnnnnnnnn` handles) so the test also pins that the
+     * bound holds for any number of handles, not just a realistic one.
+     */
+    public function test_mention_flood_does_not_exceed_the_cap(): void
+    {
+        $this->authAsUserA();
+
+        $recipients = collect(range(1, 30))
+            ->map(fn (): User => $this->makeScopedUser($this->unit->id));
+
+        $body = 'لطفا بررسی کنید: '.implode(' ', $recipients->map(fn (User $u): string => '@'.$u->n_code)->all());
+
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
+            'body' => $body,
+        ], $this->authToken)->assertStatus(201);
+
+        $this->assertSame(
+            TicketCommentController::MAX_MENTIONS,
+            Notification::query()->where('type', 'mention')->count(),
+            'A mention flood must be capped, not one notification per handle.',
+        );
+    }
+
+    /**
+     * A handle belonging to a user OUTSIDE the author's accessible units must
+     * not produce a notification — even though the same n_code resolves to a
+     * real account and even though that account holds `create_ticket`.
+     */
+    public function test_mention_of_out_of_scope_user_creates_no_notification(): void
+    {
+        $this->authAsUserA();
+
+        // `$this->otherUser` is a real account in unit B with the full
+        // ticket permission set, and the ticket is in unit A.
         $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
             'body' => 'سلام @'.$this->otherUser->n_code.' لطفا ببین',
         ], $this->authToken)->assertStatus(201);
 
-        $this->assertDatabaseHas('notifications', [
-            'user_id' => $this->otherUser->id,
+        $this->assertSame(
+            0,
+            Notification::query()->where('type', 'mention')->count(),
+            'An out-of-unit mention must not notify anyone.',
+        );
+    }
+
+    /**
+     * A mention whose handle resolves to a real account whose person has NO
+     * unit (`persons.u_id IS NULL`) must not notify either.
+     *
+     * This is the fail-closed half of the unit filter: `whereIn('u_id', …)`
+     * does not match a NULL unit, so a unit-less person is "in scope of
+     * nothing" rather than "in scope of everything". Before the fix this row
+     * matched `User::whereIn('n_code', …)` and was notified.
+     *
+     * Note the actor's scope is NOT empty here (it holds unit A), so this
+     * test is not satisfied by the pre-existing ticket-scope 403 — it
+     * exercises the mention predicate itself.
+     */
+    public function test_mention_of_unit_less_user_creates_no_notification(): void
+    {
+        $this->authAsUserA();
+
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode,
+            'f_name' => 'بدون',
+            'l_name' => 'واحد',
+            't_id' => $this->lookupIds['tId'],
+            'e_id' => $this->lookupIds['eId'],
+            's_id' => $this->lookupIds['sId'],
+            'r_id' => $this->lookupIds['rId'],
+            'u_id' => null,
         ]);
+        $unitLessUser = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+
+        $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
+            'body' => 'سلام @'.$unitLessUser->n_code,
+        ], $this->authToken)->assertStatus(201);
+
+        $this->assertSame(
+            0,
+            Notification::query()->where('type', 'mention')->count(),
+            'A unit-less mention target must not be notified.',
+        );
     }
 
     public function test_reaction_notifies_comment_author(): void

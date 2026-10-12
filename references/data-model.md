@@ -52,6 +52,7 @@
 
 **Ticket** (`tickets` table)
 - `id`, `title`, `description`, `status`, `priority`, `assignee_id`, `unit_id`
+- `archived_at` (nullable, indexed) — archiving stamps this and keeps `status = 'completed'`; never a sixth status value (#929)
 - Relationships: `unit`, `task` (→ `todos`, `task_id`), `user`, `assignee` (`current_assignee_id`), `attachments`, `activities` (`task_activities`)
 - Composite index on `(task_id, status)` (performance fix)
 - Helpers: `canBeCompleted()`, `waitingDuration`, `statusName`

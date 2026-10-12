@@ -1315,6 +1315,76 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertGreaterThan(0, Attachment::where('ticket_id', $ticket->id)->count());
     }
 
+    // =====================================================================
+    // #906 — creator column is null-safe
+    //
+    // `maintenance:generate-due` writes a ticket with `user_id = null`, and a
+    // soft-deleted creator resolves `$ticket->user` to null too. Both reached
+    // `$ticket->user->person?->f_name`, and Laravel promotes that warning to an
+    // exception, so one such row 500s the whole list.
+    //
+    // The poison ticket must live in the VIEWER'S OWN unit: parked in
+    // `Unit::first()` while the viewer sits elsewhere, the row is out of scope
+    // and the test passes without proving anything.
+    //
+    // Labels are asserted against the exact span the cell renders, with
+    // `escape: false`. A bare `assertSee('سیستم')` is vacuous — the help modal on
+    // every page already contains that word 18 times, and `کاربر غیرفعال` once.
+    // =====================================================================
+
+    /**
+     * A ticket exactly as `maintenance:generate-due` writes it: no `user_id`
+     * at all. The shared `createTicket()` helper cannot express this — it falls
+     * back to `User::first()` whenever the `user` override is null.
+     */
+    protected function makeOwnerlessTicket(Unit $unit, string $code, string $subject): Ticket
+    {
+        return Ticket::create([
+            'ticket_code' => $code,
+            'user_id' => null,
+            'unit_id' => $unit->id,
+            'subject' => $subject,
+            'content' => 'محتوای تست',
+            'priority' => 'normal',
+            'status' => 'created',
+        ]);
+    }
+
+    public function test_ownerless_ticket_renders_the_system_label(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $this->makeOwnerlessTicket($unit, 'T906-NULL', 'تیکت بدون سازنده');
+
+        Livewire::test('tickets.inbox')
+            ->assertStatus(200)
+            ->assertSee('#T906-NULL')
+            ->assertSee('<span class="font-bold text-sm">سیستم</span>', escape: false);
+    }
+
+    public function test_ticket_of_a_soft_deleted_creator_renders_the_inactive_user_label(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $creator = Person::factory()->create(['u_id' => $unit->id]);
+        $creatorUser = User::factory()->create(['n_code' => $creator->n_code]);
+        $creatorUser->delete();
+
+        $this->createTicket([
+            'unit' => $unit,
+            'user' => $creatorUser,
+            'ticket_code' => 'T906-SOFT',
+            'subject' => 'تیکت با سازنده غیرفعال',
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->assertStatus(200)
+            ->assertSee('#T906-SOFT')
+            ->assertSee('<span class="font-bold text-sm">کاربر غیرفعال</span>', escape: false);
+    }
+
     public function test_remove_file(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);

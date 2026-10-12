@@ -91,7 +91,7 @@ class TicketModelTest extends TestCase
     {
         ['ticket' => $ticket] = $this->createTicketWithRelations(['status' => 'created']);
 
-        $this->assertEquals('جدید ', $ticket->status_name);
+        $this->assertEquals('جدید', $ticket->status_name);
     }
 
     public function test_status_name_returns_persian_for_forwarded(): void

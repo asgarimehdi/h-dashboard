@@ -1,5 +1,6 @@
 <?php
 use App\Models\Estekhdam;
+use App\Models\Hardware;
 use App\Models\Person as PersonModel;
 use App\Models\Radif;
 use App\Models\Semat;
@@ -72,6 +73,10 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    // #914: `sortBy` is client-settable, so only real columns are sortable.
+    // The `*_name` entries are the `withAggregate` aliases loaded above.
+    private const SORTABLE_COLUMNS = ['id', 'n_code', 'f_name', 'l_name', 'tahsil_name', 'estekhdam_name', 'semat_name', 'radif_name', 'unit_name'];
+
     public function clearFilters(): void
     {
         $this->reset(['filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id', 'filterUnitModal']);
@@ -117,17 +122,52 @@ return new class extends Component
         $this->formOpen = true;
     }
 
-    public function delete(PersonModel $person): void
+    /**
+     * Delete a person by PRIMARY KEY.
+     *
+* #936: this used to be `delete(PersonModel $person)`, a typed parameter.
+     * Livewire resolves a typed model parameter through
+     * `resolveRouteBinding()`, i.e. by `getRouteKeyName()` — and `Person`
+     * overrides it to `n_code`. The Blade call site in this file's `@scope`
+     * block sends `$person->id`, so `resolveRouteBinding(3)` ran
+     * `WHERE n_code = '3'`, matched nothing, and threw `ModelNotFoundException`
+     * before this method body ever executed: the delete was 100%
+     * non-functional in the browser and the `#805` checks below were
+     * unreachable code.
+     *
+     * The parameter is therefore an `int` resolved against the primary key,
+     * matching the sibling `editPerson($id)` in this same file. Do NOT
+     * "fix" this by typing the parameter as `Person` and passing
+     * `$person->n_code` from Blade: `wire:click="delete({{ $person->n_code }})"`
+     * interpolates UNQUOTED, so the browser parses `0023548258` as a JS
+     * numeric literal and strips the leading zeros — a real convention in
+     * Iranian national codes. The id is the only value that survives the
+     * round trip untransformed.
+     */
+    public function delete(int $personId): void
     {
         // #805: the route gate is the READ union `kargozini|manage_personnel`,
         // but a delete is a write — the API refuses it without
         // `manage_personnel` (routes/api.php), so the UI must too.
+        // Authorized BEFORE the lookup so a bad id cannot be used as an
+        // existence probe.
         $this->authorize('manage_personnel');
+
+        $person = PersonModel::findOrFail($personId);
 
         // Check organizational scope
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         if (! in_array($person->u_id, $accessibleIds)) {
             $this->error('شما مجاز به حذف این پرسنل نیستید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        // #959: hardwares.n_code has no FK, so deleting the person would
+        // silently orphan every hardware row it owns (invisible to every
+        // unit, uneditable by anyone). Refuse while any hardware exists.
+        if (Hardware::where('n_code', $person->n_code)->exists()) {
+            $this->error('امکان حذف وجود ندارد زیرا برای این پرسنل سخت‌افزار ثبت شده است.', position: 'toast-bottom');
 
             return;
         }
@@ -169,6 +209,16 @@ return new class extends Component
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             if (! in_array($person->u_id, $accessibleIds)) {
                 $this->error('شما مجاز به ویرایش این پرسنل نیستید.', position: 'toast-bottom');
+
+                return;
+            }
+
+            // #959: n_code is immutable on the update path — hardwares.n_code
+            // has no FK, so a rename silently orphans every hardware row of
+            // that person. The input is disabled, but a crafted Livewire call
+            // could still set it; refuse here.
+            if ((string) $this->n_code !== (string) $person->n_code) {
+                $this->addError('n_code', 'کد ملی قابل تغییر نیست.');
 
                 return;
             }
@@ -327,7 +377,10 @@ return new class extends Component
             $query->where('r_id', $this->filter_r_id);
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
 
         return $query->paginate($this->perPage);
     }
@@ -347,15 +400,18 @@ return new class extends Component
             ])
             ->all();
 
-        $selectedUnitName = null;
-        if ($this->u_id) {
-            $selectedUnitName = collect($units)->firstWhere('id', (int) $this->u_id)['name'] ?? Unit::find($this->u_id)?->name;
-        }
+        // #919: `$units` is already scoped by the unconditional `whereIn`
+        // above, so `firstWhere()` only ever resolves an in-scope unit. The
+        // former `?? Unit::find(...)` fallback therefore ran exactly when the
+        // unit was OUT of scope. Out-of-scope now falls to `null`, like a
+        // nonexistent id. In-repo pattern: `select-context.blade.php:37-43`.
+        $selectedUnitName = $this->u_id
+            ? (collect($units)->firstWhere('id', (int) $this->u_id)['name'] ?? null)
+            : null;
 
-        $filterUnitName = null;
-        if ($this->filter_u_id) {
-            $filterUnitName = collect($units)->firstWhere('id', (int) $this->filter_u_id)['name'] ?? Unit::find($this->filter_u_id)?->name;
-        }
+        $filterUnitName = $this->filter_u_id
+            ? (collect($units)->firstWhere('id', (int) $this->filter_u_id)['name'] ?? null)
+            : null;
 
         return [
             'persons' => $this->persons(),
@@ -389,7 +445,7 @@ return new class extends Component
                  so the create button is wrapped in the write permission — a
                  read-only user must not be shown a control that only 403s. --}}
             @can('manage_personnel')
-                <x-button class="btn-success" wire:click="startCreate" icon="o-plus"/>
+                <x-ui.icon-button name="کارمند جدید" class="btn-success" wire:click="startCreate" icon="o-plus"/>
             @endcan
             <a href="{{ $exportUrl }}"
                class="btn btn-outline btn-sm"
@@ -406,7 +462,7 @@ return new class extends Component
                     class="w-full"
                 />
             </div>
-            <x-button icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
+            <x-ui.icon-button name="نمایش فیلترها" icon="o-funnel" class="btn-outline btn-sm" wire:click="$toggle('showFilters')"
                       :class="$showFilters ? 'btn-primary' : ''" />
         </div>
 
@@ -453,11 +509,11 @@ return new class extends Component
                     <h3 class="font-bold text-sm">
                         {{ $editingId ? 'ویرایش پرسنل' : 'ثبت پرسنل جدید' }}
                     </h3>
-                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
+                    <x-ui.icon-button name="پاک کردن فرم" icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
                 </div>
 
                 <x-form wire:submit.prevent="savePerson" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required/>
+                    <x-input wire:model="n_code" label="کد ملی" placeholder="کد ملی" required :disabled="(bool) $editingId"/>
                     <x-input wire:model="f_name" label="نام" placeholder="نام" required/>
                     <x-input wire:model="l_name" label="نام خانوادگی" placeholder="نام خانوادگی" required/>
                     <x-select wire:model="t_id" label="تحصیلات" :options="$tahsils" required placeholder="انتخاب سطح تحصیلات"/>
@@ -500,10 +556,16 @@ return new class extends Component
                      reader instead of rendering buttons that 403 on click. --}}
                 @can('manage_personnel')
                     <div class="flex w-1/12">
-                        <x-button icon="o-pencil"
+{{-- #936: sends the PRIMARY KEY. `delete()` takes an `int` and
+                             resolves it with `findOrFail`, because `Person`'s
+                             `getRouteKeyName()` is `n_code` and a typed model
+                             parameter would bind by that instead. Keep this as
+                             `->id` — never interpolate `->n_code` unquoted, the
+                             browser strips its leading zeros. --}}
+                        <x-ui.icon-button name="ویرایش کارمند" icon="o-pencil"
                                   wire:click="editPerson({{ $person->id }})"
                                   class="btn-ghost btn-sm text-primary" />
-                        <x-button icon="o-trash"
+                        <x-ui.icon-button name="حذف کارمند" icon="o-trash"
                                   wire:click="delete({{ $person->id }})"
                                   wire:confirm="آیا مطمئن هستید"
                                   spinner

@@ -60,25 +60,28 @@ class PersonsExportController extends Controller
             return;
         }
 
-        // normalizeForQuery normalizes Persian/Arabic chars + escapes LIKE wildcards.
-        $normalized = self::normalizeForQuery($search);
-
-        $terms = array_values(array_filter(explode(' ', $normalized), fn (string $term) => $term !== ''));
-        // Persons/n_code columns are PersianNormalizer-hooked on save; the unit
-        // name column is not, so its filter must fold the column (#815). Build
-        // the unit term from the RAW term — re-escaping an already-escaped term
-        // would double-escape LIKE wildcards.
-        $rawTerms = array_values(array_filter(explode(' ', trim($search)), fn (string $t) => $t !== ''));
-        $foldedTerms = array_map(static fn (string $term): string => self::foldedTerm($term), $rawTerms);
+        // One list, one source string. normalizeForSearch() folds the Persian
+        // char variants AND turns ZWNJ/ZWJ into a space, so a ZWNJ compound
+        // yields MORE terms than the raw string has words (#940) — building a
+        // second list from the raw string and indexing it by this one's
+        // positions walked off the end and 500'd the export on «خانه‌بهداشت».
+        // The list must be normalized FIRST and folded per term afterwards:
+        // folding an already-escaped normalizeForQuery() term would escape LIKE
+        // wildcards twice and match nothing. Same shape as the sibling list in
+        // livewire/kargozini/person.blade.php.
+        $terms = array_values(array_filter(
+            explode(' ', self::normalizeForSearch($search)),
+            fn (string $term) => $term !== ''
+        ));
 
         if ($terms === []) {
             return;
         }
 
-        $query->where(function (Builder $outer) use ($terms, $foldedTerms): void {
-            foreach ($terms as $i => $term) {
-                $foldedTerm = $foldedTerms[$i];
-                $outer->where(function (Builder $termQuery) use ($term, $foldedTerm): void {
+        $query->where(function (Builder $outer) use ($terms): void {
+            foreach ($terms as $term) {
+                $foldedTerm = self::foldedTerm($term);
+                $outer->where(function (Builder $termQuery) use ($foldedTerm): void {
                     // whereHas first: it is declared on the Eloquent builder and
                     // returns $this, so the OR group below keeps its type. The
                     // orWhereRaw() calls are forwarded to the query builder and
@@ -87,9 +90,13 @@ class PersonsExportController extends Controller
                         $unitQuery->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$foldedTerm}%"]);
                     });
 
-                    $termQuery->orWhere('n_code', 'LIKE', "%{$term}%")
-                        ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$term}%"])
-                        ->orWhereRaw("CONCAT(l_name, ' ', f_name) LIKE ?", ["%{$term}%"]);
+                    // n_code is numeric only — a plain LIKE is enough. The name
+                    // columns are folded the same way the unit column is, so a
+                    // row written by any path that skipped the model's saving
+                    // hook still matches (#815).
+                    $termQuery->orWhere('n_code', 'LIKE', "%{$foldedTerm}%")
+                        ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$foldedTerm}%"])
+                        ->orWhereRaw(self::foldSeparatorsSql("CONCAT(l_name, ' ', f_name)").' LIKE ?', ["%{$foldedTerm}%"]);
                 });
             }
         });

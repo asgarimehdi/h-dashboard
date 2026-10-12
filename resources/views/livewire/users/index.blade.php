@@ -428,7 +428,12 @@ return new class extends Component
             $query->withTrashed();
         }
 
-        return $query->orderBy('n_code', $this->sortBy['direction'])
+        // #914: the column is pinned, but `direction` is client-settable and
+        // was never validated — an unknown value raised InvalidArgumentException
+        // and a missing key raised ErrorException under error_reporting(-1).
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        return $query->orderBy('n_code', $direction)
             ->paginate($this->perPage);
     }
 
@@ -502,7 +507,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4 flex-wrap">
-            <x-button class="btn-success" wire:click="openFormForCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="کاربر جدید" label="کاربر جدید" class="btn-success" wire:click="openFormForCreate" responsive icon="o-plus"/>
             <div class="flex-1 min-w-[12rem]">
                 <x-input
                     placeholder="جستجو..."
@@ -527,7 +532,7 @@ return new class extends Component
                     <h3 class="font-bold text-sm">
                         {{ $editing_user_id ? 'ویرایش کاربر' : 'ثبت کاربر جدید' }}
                     </h3>
-                    <x-button icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
+                    <x-ui.icon-button name="پاک کردن فرم" icon="o-x-mark" class="btn-ghost btn-sm" wire:click="resetForm" />
                 </div>
 
                 <x-form wire:submit.prevent="{{ $editing_user_id ? 'updateUser' : 'createUser' }}"
@@ -630,17 +635,17 @@ return new class extends Component
 
             @scope('actions', $user)
                 <div class="flex w-1/12">
-                    <x-button icon="o-pencil"
+                    <x-ui.icon-button name="ویرایش کاربر" icon="o-pencil"
                               wire:click="edit({{ $user->id }})"
                               class="btn-ghost btn-sm text-primary" />
                     @if($user->trashed())
-                        <x-button icon="o-arrow-path"
+                        <x-ui.icon-button name="فعال‌سازی کاربر" icon="o-arrow-path"
                                   wire:click="restore({{ $user->id }})"
                                   wire:confirm="آیا مطمئن هستید که می‌خواهید این کاربر را فعال کنید؟"
                                   spinner
                                   class="btn-ghost btn-sm text-success" />
                     @else
-                        <x-button icon="o-trash"
+                        <x-ui.icon-button name="غیرفعال کردن کاربر" icon="o-trash"
                                   wire:click="delete({{ $user->id }})"
                                   wire:confirm="آیا مطمئن هستید که می‌خواهید این کاربر را غیرفعال کنید؟"
                                   spinner

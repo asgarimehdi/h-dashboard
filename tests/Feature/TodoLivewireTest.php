@@ -523,3 +523,69 @@ test('calendar still shows a ticket task title inside the viewer scope', functio
     expect($event)->not->toBeNull();
     expect($event['extendedProps']['task_title'])->toBe('وظیفه مجاز تقویم');
 });
+
+// ==================== Issue #891 — stored XSS in the calendar sink ====================
+
+/**
+ * Issue #891: `eventContent` returned `{ html: ... }`, which FullCalendar
+ * assigns through `dangerouslySetInnerHTML`. Todo titles — and `Ticket::subject`
+ * via `saveTicket()` on the ticket-create page — were concatenated straight
+ * into that HTML string, so any calendar viewer executed markup a
+ * `create_ticket` holder could plant. `create_ticket` alone was enough to
+ * store it, because that page copies the subject into a new `Todo::title`.
+ *
+ * This asserts the ABSENCE of the raw-HTML path in the view. It cannot observe
+ * what a browser does with a string; the behavioural assertion that no injected
+ * node appears is in tests/e2e/todo/todo.spec.ts, where a real browser runs.
+ * Escaping in the validation layer is deliberately NOT a control here — the
+ * sink is client-side, so hardening the rule would not close it.
+ */
+test('calendar eventContent does not return the raw html injection path', function () {
+    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+
+    expect($view)->not->toContain('html:');
+});
+
+test('calendar eventContent builds nodes with textContent instead of html', function () {
+    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+
+    // domNodes + textContent is the shape that cannot resurrect the bug: there
+    // is no string left to escape correctly, so the class of defect cannot recur.
+    expect($view)->toContain('domNodes:');
+    expect($view)->toContain('textContent');
+    expect($view)->toContain('document.createElement');
+});
+
+test('calendar completion toggle does not rely on an inline onclick handler', function () {
+    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+
+    // The icon markup is static and carries no user data, but the inline
+    // handler is exactly what the report-only CSP's 'unsafe-inline' allows.
+    // Replacing it with addEventListener costs nothing while the lines are open.
+    expect($view)->not->toContain('onclick=');
+    expect($view)->toContain('addEventListener');
+});
+
+/**
+ * A todo title is stored verbatim and must reach the calendar as DATA. Nothing
+ * in the component may escape or strip it — that would be the wrong layer, and
+ * it would also make this test's expectation of verbatim text a lie.
+ */
+test('a todo title containing markup is stored verbatim and reaches the events payload', function () {
+    $this->actingAs($this->user);
+
+    $title = '<img src=x onerror=alert(1)>';
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => $title,
+        'is_completed' => false,
+    ]);
+
+    expect($todo->fresh()->title)->toBe($title);
+
+    $events = Livewire::test('todo.todo')->instance()->getEvents();
+    $event = collect($events)->firstWhere('id', 'todo-'.$todo->id);
+
+    expect($event)->not->toBeNull();
+    expect($event['title'])->toBe($title);
+});

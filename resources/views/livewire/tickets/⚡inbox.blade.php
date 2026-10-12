@@ -116,7 +116,12 @@ new class extends Component
     {
         $user = auth()->user();
 
-        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name']);
+        // #906: `deleted_at` is selected on purpose — `ActorLabel` tells a
+        // soft-deleted creator («کاربر غیرفعال») from a genuinely ownerless
+        // ticket («سیستم»), and `trashed()` reads that column. Without the
+        // soft-deleted rows in the result both cases resolve to `null` and are
+        // indistinguishable.
+        $query = Ticket::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q), 'unit:id,name']);
 
         if ($this->viewMode === 'received') {
             $query->accessible();
@@ -397,7 +402,16 @@ new class extends Component
 
         /** @var Ticket|null $ticket */
         $ticket = Ticket::query()
-            ->with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
+            // #906: soft-deleted users are kept in the result so their creator
+            // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
+            // truly ownerless ticket gets.
+            ->with([
+                'attachments',
+                'activities.attachments',
+                'activities.user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+                'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+                'unit',
+            ])
             ->whereIn('unit_id', $accessibleIds)
             ->find($id);
 
@@ -852,15 +866,17 @@ new class extends Component
         ]" :rows="$this->tickets" with-pagination>
 
             @scope('cell_checkbox', $ticket)
+            {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. --}}
             <input type="checkbox"
                 class="checkbox checkbox-sm checkbox-primary"
                 wire:click="toggleTicketSelection({{ $ticket->id }})"
+                aria-label="انتخاب تیکت {{ $ticket->ticket_code }}"
                 @if(in_array($ticket->id, $this->selectedTickets)) checked @endif />
             @endscope
 
             @scope('cell_user.person.f_name', $ticket)
             <div class="flex flex-col">
-                <span class="font-bold text-sm">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
+                <span class="font-bold text-sm">{{ \App\Support\ActorLabel::for($ticket->user) }}</span>
                 <span class="text-xs opacity-50 font-mono">#{{ $ticket->ticket_code }}</span>
             </div>
             @endscope
@@ -892,24 +908,24 @@ new class extends Component
             @scope('actions', $ticket)
             <div class="flex gap-1">
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
+                <x-ui.icon-button name="پذیرش تیکت" icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
                 @endif
                 {{-- Issue #818: reject پشت manage_unit_tickets است، پس دکمه‌اش هم همان‌جا نمایش داده می‌شود --}}
                 @can('manage_unit_tickets')
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
+                <x-ui.icon-button name="رد تیکت" icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
                     wire:confirm="آیا مطمئن هستید؟" class="btn-ghost btn-sm text-error" spinner />
                 @endif
                 @endcan
 
-                <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
+                <x-ui.icon-button name="مشاهده تیکت" icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
 
-                <x-button icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
+                <x-ui.icon-button name="کامنت‌های تیکت" icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
 
                 {{-- Issue #818: مودال تکمیل/ارجاع پشت manage_unit_tickets است --}}
                 @can('manage_unit_tickets')
                 @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
+                <x-ui.icon-button name="تکمیل تیکت" icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
                 @endif
                 @endcan
             </div>
@@ -969,14 +985,14 @@ new class extends Component
                         </div>
                         <div class="bg-base-200/50 p-3 rounded-lg w-full">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-xs">{{ $activity->user->person?->f_name }} {{ $activity->user->person?->l_name }}</span>
+                                <span class="font-bold text-xs">{{ \App\Support\ActorLabel::for($activity->user) }}</span>
                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($activity->created_at)->format('H:i - Y/m/d') }}</span>
                             </div>
                             <p class="text-xs opacity-70">{{ $activity->description }}</p>
                             @if($activity->attachments->count() > 0)
                             <div class="flex gap-1 mt-2">
                                 @foreach($activity->attachments as $actFile)
-                                <x-button icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
+                                <x-ui.icon-button name="دانلود پیوست" icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
                                     class="btn-xs btn-ghost text-primary" external target="_blank" />
                                 @endforeach
                             </div>
@@ -1017,7 +1033,7 @@ new class extends Component
                 <div class="mt-2 flex items-center gap-2 text-info text-sm">
                     <x-icon name="o-check-circle" />
                     <span class="font-bold">مقصد: {{ $this->targetUnitName }}</span>
-                    <x-button icon="o-x-mark" wire:click="$set('targetUnitId', null)" class="btn-ghost btn-xs" />
+                    <x-ui.icon-button name="پاک کردن واحد هدف" icon="o-x-mark" wire:click="$set('targetUnitId', null)" class="btn-ghost btn-xs" />
                 </div>
                 @endif
             </div>

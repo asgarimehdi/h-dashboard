@@ -23,6 +23,9 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    // #914: `sortBy` is client-settable, so only real columns are sortable.
+    private const SORTABLE_COLUMNS = ['id', 'name'];
+
     public function cancelEdit(): void
     {
         $this->resetValidation();
@@ -38,9 +41,21 @@ return new class extends Component
 
     public function delete(Estekhdam $estekhdam): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         try {
             $estekhdam->delete();
             $this->warning("$estekhdam->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892/#975: defence in depth. The `authorize()` above sits
+            // OUTSIDE this try, so the 403 never actually reaches here today —
+            // this clause exists so that a later edit which moves the check
+            // inside the try cannot turn a revoked holder's delete back into a
+            // friendly "still used in another table" toast, and so the
+            // #892/#975 static scan keeps a handle on the ordering.
+            throw $e;
         } catch (\Exception $e) {
             $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
@@ -48,6 +63,10 @@ return new class extends Component
 
     public function createEstekhdam(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         $this->validate([
             'name' => 'required|string|max:255|unique:estekhdams,name',
         ]);
@@ -60,6 +79,10 @@ return new class extends Component
 
     public function editEstekhdam($id): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         $this->resetValidation();
         $estekhdam = Estekhdam::findOrFail($id);
         $this->editingId = (int) $id;
@@ -69,6 +92,10 @@ return new class extends Component
 
     public function updateEstekhdam(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:kargozini`) does
+        // not run on `/livewire/update`, so this mutator re-checks it here.
+        $this->authorize('kargozini');
+
         $this->validate([
             'name' => 'required|string|max:255|unique:estekhdams,name,'.$this->editingId,
         ]);
@@ -105,7 +132,10 @@ return new class extends Component
             $query->where('name', 'LIKE', '%'.$this->search.'%');
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
 
         return $query->paginate($this->perPage);
     }
@@ -128,7 +158,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="نوع استخدام جدید" label="نوع استخدام جدید" class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -171,8 +201,8 @@ return new class extends Component
                             class="input input-bordered input-sm flex-1"
                             autofocus
                         />
-                        <x-button icon="o-check" wire:click="updateEstekhdam" class="btn-ghost btn-sm text-success" spinner />
-                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
+                        <x-ui.icon-button name="ذخیره نوع استخدام" icon="o-check" wire:click="updateEstekhdam" class="btn-ghost btn-sm text-success" spinner />
+                        <x-ui.icon-button name="انصراف از ویرایش" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
                     @if($this->nameError()) <span class="text-error text-xs">{{ $this->nameError() }}</span> @endif
                 @else
@@ -183,12 +213,12 @@ return new class extends Component
             @scope('actions', $estekhdam)
                 <div class="flex gap-1">
                     @if($this->editingId !== $estekhdam->id)
-                        <x-button
+                        <x-ui.icon-button name="ویرایش نوع استخدام"
                             icon="o-pencil"
                             wire:click="editEstekhdam({{ $estekhdam->id }})"
                             class="btn-ghost btn-sm text-primary"
                         />
-                        <x-button
+                        <x-ui.icon-button name="حذف نوع استخدام"
                             icon="o-trash"
                             wire:click="delete({{ $estekhdam->id }})"
                             wire:confirm="آیا مطمئن هستید؟"

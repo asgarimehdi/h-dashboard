@@ -7,6 +7,9 @@ use App\Models\Unit;
 use App\Services\AccessService;
 use App\Services\DailySeries;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -122,9 +125,107 @@ return new class extends Component
         $this->unitId = null;
     }
 
+    /**
+     * Issue #915 — the status option list and the predicate whitelist are
+     * the same data, keyed by `reportType`. Tickets read their labels from
+     * `Ticket::getStatusNameAttribute()`, todos reuse the
+     * `reports/todos.blade.php` values, and persons read theirs from
+     * `PersonsExport::resolveStatus()` (`active|inactive|retired`).
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const STATUS_OPTIONS = [
+        'tickets' => [
+            'created' => 'جدید',
+            'forwarded' => 'ارجاع شده',
+            'accepted' => 'در حال پیگیری',
+            'completed' => 'پایان یافته',
+            'rejected' => 'رد شده',
+        ],
+        'todos' => [
+            'completed' => 'تکمیل شده',
+            'pending' => 'در انتظار',
+            'overdue' => 'سررسید گذشته',
+        ],
+        'persons' => [
+            'active' => 'فعال',
+            'inactive' => 'غیرفعال',
+            'retired' => 'بازنشسته',
+        ],
+    ];
+
+    /**
+     * The status options for the current report type. Consumed by both the
+     * Blade `@foreach` and the `statusFilter` whitelist, so the rendered
+     * select and the applied predicate cannot drift apart.
+     *
+     * @return array<string, string>
+     */
+    public function statusOptions(): array
+    {
+        return self::STATUS_OPTIONS[$this->reportType] ?? [];
+    }
+
+    /**
+     * Issue #915 — `statusFilter` is public Livewire state with no
+     * validation. An unknown value falls back to `'all'` instead of reaching
+     * a column reference. Called at the top of `reportData()` so the
+     * assignment persists for the render that follows.
+     */
+    private function normalizeStatusFilter(): void
+    {
+        if (! array_key_exists($this->statusFilter, $this->statusOptions())) {
+            $this->statusFilter = 'all';
+        }
+    }
+
+    /**
+     * Issue #915 — a value picked under one report type (e.g. a ticket
+     * status) must not survive the switch to another type whose predicates
+     * mean something else (or nothing at all).
+     */
+    public function updatedReportType(): void
+    {
+        $this->statusFilter = 'all';
+    }
+
+    /**
+     * Issue #915 — apply the status clause for the current report type.
+     * Tickets and persons filter their real `status` column; todos map
+     * `completed|pending|overdue` onto the `is_completed`/`end_at`
+     * predicates from `reports/todos.blade.php:121-123`.
+     *
+     * @param  EloquentBuilder<covariant Model>|QueryBuilder  $query
+     */
+    private function applyStatusFilter(EloquentBuilder|QueryBuilder $query): void
+    {
+        if ($this->statusFilter === 'all') {
+            return;
+        }
+
+        if ($this->reportType === 'todos') {
+            $now = now();
+
+            match ($this->statusFilter) {
+                'completed' => $query->where('is_completed', true),
+                'pending' => $query->where('is_completed', false)
+                    ->where(fn ($q) => $q->whereNull('end_at')->orWhere('end_at', '>=', $now)),
+                'overdue' => $query->where('is_completed', false)
+                    ->whereNotNull('end_at')->where('end_at', '<', $now),
+                default => null,
+            };
+
+            return;
+        }
+
+        $query->where('status', $this->statusFilter);
+    }
+
     #[Livewire\Attributes\Computed]
     public function reportData(): array
     {
+        $this->normalizeStatusFilter();
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $query = match ($this->reportType) {
@@ -151,10 +252,10 @@ return new class extends Component
             $query->whereIn($unitColumn, $descendantIds);
         }
 
-        // فیلتر وضعیت
-        if ($this->statusFilter !== 'all' && $this->reportType !== 'persons') {
-            $query->where('status', $this->statusFilter);
-        }
+        // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
+        // STATUS_OPTIONS کنار هم زندگی می‌کنند؛ todos ستون status ندارد و
+        // روی is_completed/end_at نگاشت می‌شود.
+        $this->applyStatusFilter($query);
 
         $total = $query->count();
 
@@ -292,9 +393,9 @@ return new class extends Component
                 <label class="font-bold text-xs">وضعیت</label>
                 <select class="select select-bordered select-sm w-full" wire:model.live="statusFilter">
                     <option value="all">همه</option>
-                    <option value="created">ایجاد شده</option>
-                    <option value="forwarded">ارجاع شده</option>
-                    <option value="completed">تکمیل شده</option>
+                    @foreach($this->statusOptions() as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
                 </select>
             </div>
         </div>

@@ -133,8 +133,13 @@ class SettingsProfileTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit();
         $unit = Unit::first();
 
-        Todo::factory()->completed()->create(['unit_id' => $unit->id]);
-        Todo::factory()->pending()->create(['unit_id' => $unit->id]);
+        // Issue #893: the profile todo stats are owner-scoped, exactly like the
+        // ticket stats above, so the fixture has to attribute both rows to the
+        // viewer — a `todos` row with no owner is nobody's "my todo" and is
+        // correctly excluded. (Before the fix these rows counted because the
+        // query was `Todo::accessible()` with no owner predicate at all.)
+        Todo::factory()->completed()->create(['unit_id' => $unit->id, 'user_id' => $user->id]);
+        Todo::factory()->pending()->create(['unit_id' => $unit->id, 'user_id' => $user->id]);
 
         $this->actingAs($user);
 

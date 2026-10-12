@@ -28,8 +28,11 @@ return new class extends Component {
 
         $this->stats = Cache::remember($cacheKey, 60, function () use ($accessibleIds, $userIds) {
             return [
+                // Issue #929: archived tickets stay `completed`, so they are
+                // excluded here by `whereNull('archived_at')`, not by status.
                 'old_tickets' => Ticket::whereIn('unit_id', $accessibleIds)
                     ->where('status', 'completed')
+                    ->whereNull('archived_at')
                     ->where('completed_at', '<', now()->subDays(30))
                     ->count(),
                 'old_activities' => ActivityLog::whereIn('user_id', $userIds)
@@ -47,13 +50,25 @@ return new class extends Component {
 
     public function archiveTickets(): void
     {
+        // Issue #892: the route gate (`role_or_permission:manage_users`) does
+        // not run on `/livewire/update`, so this mutator re-checks the same
+        // permission mount() uses. It must come FIRST — the org-wide update
+        // below is not scoped by anything a later check could undo.
+        $this->authorize('manage_users');
+
         $this->validate([
             'archiveDays' => 'required|integer|min:7|max:365',
         ]);
+        // Issue #929: archiving stamps `archived_at` and keeps
+        // `status = 'completed'` — it never writes a new status value, so
+        // every status reader (label, API filter, open-ticket counts, inbox
+        // guards) keeps its meaning. One-way by design (no restore UI) and
+        // idempotent via `whereNull('archived_at')`.
         $count = Ticket::whereIn('unit_id', app(AccessService::class)->accessibleUnitIds())
             ->where('status', 'completed')
+            ->whereNull('archived_at')
             ->where('completed_at', '<', now()->subDays($this->archiveDays))
-            ->update(['status' => 'archived']);
+            ->update(['archived_at' => now()]);
         $this->success("{$count} تیکت قدیمی آرشیو شد.");
         $this->invalidateStatsCache();
         $this->mount();
@@ -61,10 +76,28 @@ return new class extends Component {
 
     public function cleanActivities(): void
     {
+        // Issue #892 — see archiveTickets(). A revoked holder must not be able
+        // to dispatch the activity-log purge.
+        $this->authorize('manage_users');
+
         $this->validate([
             'activityDays' => 'required|integer|min:30|max:365',
         ]);
-        ArchiveActivityLogsJob::dispatch($this->activityDays);
+
+        // Issue #950 — purge exactly what the counters above counted. The job
+        // reads an empty array as "org-wide" (`$unitIds ?: allUnitIds()`, #836),
+        // so an empty scope must NOT be dispatched — that is this repo's
+        // fail-open trap in a new spelling: `[]` here would delete every unit's
+        // logs instead of none.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if ($accessibleIds === []) {
+            $this->error('هیچ واحدی در دامنهٔ دسترسی شما نیست؛ پاک‌سازی انجام نشد.');
+
+            return;
+        }
+
+        ArchiveActivityLogsJob::dispatch($this->activityDays, $accessibleIds);
         $this->success('پاک‌سازی لاگ‌ها در صف اجرا شد.');
         $this->invalidateStatsCache();
         $this->mount();
@@ -72,10 +105,24 @@ return new class extends Component {
 
     public function cleanNotifications(): void
     {
+        // Issue #892 — see archiveTickets(). A revoked holder must not be able
+        // to dispatch the notification purge.
+        $this->authorize('manage_users');
+
         $this->validate([
             'notificationDays' => 'required|integer|min:1|max:90',
         ]);
-        CleanNotificationsJob::dispatch($this->notificationDays);
+
+        // Issue #950 — see cleanActivities(). Same scope, same refusal on empty.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if ($accessibleIds === []) {
+            $this->error('هیچ واحدی در دامنهٔ دسترسی شما نیست؛ پاک‌سازی انجام نشد.');
+
+            return;
+        }
+
+        CleanNotificationsJob::dispatch($this->notificationDays, $accessibleIds);
         $this->success('پاک‌سازی اعلان‌ها در صف اجرا شد.');
         $this->invalidateStatsCache();
         $this->mount();
@@ -114,7 +161,7 @@ return new class extends Component {
         <x-card shadow>
             <div class="card-body">
                 <h2 class="card-title text-sm">📦 آرشیو تیکت‌ها</h2>
-                <p class="text-xs text-base-content/60">تیکت‌های تکمیل شده قدیمی رو آرشیو کن</p>
+                <p class="text-xs text-base-content/60">تیکت‌های تکمیل شده قدیمی رو آرشیو کن (یک‌طرفه — بازگردانی ندارد؛ تیکت آرشیوشده «پایان یافته» می‌ماند)</p>
                 <x-form wire:submit.prevent="archiveTickets" class="space-y-2">
                     <x-input type="number" wire:model="archiveDays" min="7" max="365" placeholder="تعداد روز" />
                     <x-button type="submit" label="آرشیو کن" class="btn-warning btn-sm w-full" spinner />

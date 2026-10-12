@@ -59,10 +59,22 @@ new class extends Component
         // form is also what keeps the empty scope failing closed (`0 = 1`)
         // instead of dropping the predicate. See `AccessibleTodo` for the same
         // reasoning on the write side.
+        // Issue #917: null-unit contract — a unit-less todo belongs to its
+        // creator, so the picker offers the creator's own null-unit rows too
+        // (the same grouped predicate `AccessibleTodo` enforces, written out
+        // for the same PHPStan reason as above). The owner constraint lives
+        // INSIDE the group, so foreign null-unit rows stay hidden.
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $creatorId = auth()->id();
 
         $this->todos = Todo::query()
-            ->whereIn('unit_id', $accessibleIds)
+            ->where(function ($q) use ($accessibleIds, $creatorId): void {
+                $q->whereIn('unit_id', $accessibleIds);
+
+                if ($creatorId !== null) {
+                    $q->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $creatorId));
+                }
+            })
             ->where('is_completed', false)
             ->take(50)
             ->get()
@@ -128,11 +140,27 @@ new class extends Component
             // values (`medium`, `high`) the CHECK constraint allows but the
             // picker and the API both refuse — and anything outside the set
             // raised SQLSTATE[23514]. Same three values as `TicketController`.
-            'priority' => 'required|in:low,normal,urgent',
+            'priority' => 'required|in:'.implode(',', Ticket::PRIORITIES),
             // #847: the last unvalidated input on this form. Existence and
             // scope are both the rule's job, so a foreign todo and a missing
             // id are validation errors rather than a FK violation.
             'task_id' => ['nullable', new AccessibleTodo],
+            // Issue #873: the allowlist and the size cap existed only in
+            // `updatedFiles()`, which runs on the upload hook. That error is a
+            // per-request artefact — `saveTicket()` is a separate POST with a
+            // fresh error bag — so it never guarded the write loop below, and
+            // any holder of `create_ticket` (the lowest role) could store a
+            // file of any type, up to Livewire's 12MB temporary-upload
+            // ceiling, into `public/storage/attachments`. Validate in the
+            // method that writes, same shape as `⚡inbox.blade.php:676-677`
+            // (`submitAction()`). The allowlist and the 5120KB cap are the
+            // ones this component already documents in `updatedFiles()` —
+            // deliberately NOT widened to docx/xlsx (out of scope for #873),
+            // and deliberately NOT pushed into `config/livewire.php`, where a
+            // global allowlist would break the two import components that
+            // legitimately take `mimes:xlsx,xls,csv`.
+            'files' => 'nullable|array|max:5',
+            'files.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar|max:5120',
         ]);
 
         $ticketCode = 'TK-' . strtoupper(Str::random(8));
@@ -235,7 +263,8 @@ new class extends Component
         <x-help:modal wireModel="showHelpModal" />
 
     <x-card shadow>
-        <x-errors :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
+        {{-- #957: role="alert" تا خطای اعتبارسنجی تیکت واقعاً اعلام شود، نه فقط دیده. --}}
+        <x-errors role="alert" :only="['unit_id', 'subject', 'content', 'files', 'task_id', 'priority']" title="خطا در ثبت تیکت" />
         <x-form wire:submit="saveTicket" class="grid grid-cols-2 gap-4">
             <div class="relative">
                 <x-input
@@ -311,7 +340,7 @@ new class extends Component
                             <x-icon name="o-paper-clip" class="w-4 h-4 text-gray-400" />
                             <span class="text-xs truncate">{{ $file->getClientOriginalName() }}</span>
                         </div>
-                        <x-button icon="o-x-mark" wire:click="removeFile({{ $index }})" class="btn-ghost btn-xs text-error" />
+                        <x-ui.icon-button name="حذف پیوست" icon="o-x-mark" wire:click="removeFile({{ $index }})" class="btn-ghost btn-xs text-error" />
                     </div>
                     @endforeach
                 </div>

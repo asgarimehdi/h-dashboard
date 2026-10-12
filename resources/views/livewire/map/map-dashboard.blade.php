@@ -1,4 +1,5 @@
 <?php
+use App\Models\Ticket;
 use App\Models\User;
 use Livewire\Component;
 use Livewire\Attributes\Locked;
@@ -115,6 +116,34 @@ return new class extends Component
         session([$sessionKey => $this->mapToken]);
 
         return $this->mapToken;
+    }
+
+    /**
+     * Options for the ticket-priority filter (#954).
+     *
+     * Built from `Ticket::PRIORITIES` — the canonical app vocabulary — so the
+     * filter can never offer a value (e.g. the DB-only `medium`/`high`) that
+     * no report bucket reads. The "all" option (empty value) must stay first.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function priorityOptions(): array
+    {
+        // Partial by design: a value added to Ticket::PRIORITIES without a
+        // Persian label falls back to the raw identifier below.
+        /** @var array<string, string> $labels */
+        $labels = ['low' => 'پایین', 'normal' => 'عادی', 'urgent' => 'فوری'];
+
+        return [
+            ['value' => '', 'label' => 'همه اولویت‌ها'],
+            ...array_map(
+                fn (string $priority): array => [
+                    'value' => $priority,
+                    'label' => $labels[$priority] ?? $priority,
+                ],
+                Ticket::PRIORITIES,
+            ),
+        ];
     }
 
     /**
@@ -245,12 +274,9 @@ return new class extends Component
 
             <select x-model="filters.ticket_priority" @change="setFilter('ticket_priority', $event.target.value)"
                     class="select select-sm w-28" x-show="activeLayers.includes('tickets')">
-                <option value="">همه اولویت‌ها</option>
-                <option value="urgent">فوری</option>
-                <option value="high">بالا</option>
-                <option value="normal">عادی</option>
-                <option value="medium">متوسط</option>
-                <option value="low">پایین</option>
+                @foreach ($this->priorityOptions() as $option)
+                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                @endforeach
             </select>
 
             <select x-model="filters.ticket_status" @change="setFilter('ticket_status', $event.target.value)"

@@ -146,8 +146,54 @@ class ReportsDailyWindowTest extends TestCase
         $byDay = $component->instance()->chartPayload()['byDay'];
 
         $this->assertCount(8, $byDay, 'from..to inclusive is 8 days and all 8 are present');
+
+        // Issue #866: length was never the contract — the *labels* are. A
+        // `window()` that rebuilds "8 days ending today" also returns 8 rows, so
+        // an assertCount-only test certifies the wrong axis.
+        $this->assertSame(
+            Jalalian::fromCarbon($from)->format('Y/m/d'),
+            $byDay[0]['day'],
+            'the first axis label is the picked from-day',
+        );
+        $this->assertSame(
+            Jalalian::fromCarbon($to)->format('Y/m/d'),
+            $byDay[7]['day'],
+            'the last axis label is the picked to-day, even when it is in the future',
+        );
         $this->assertSame(1, array_sum(array_column($byDay, 'count')));
         $this->assertSame(7, count(array_filter(array_column($byDay, 'count'), fn ($c) => $c === 0)));
+    }
+
+    /**
+     * Issue #866 — the page's own default is "30 days back .. 30 days forward",
+     * a window that ends *after* today. The rebuilt axis ended today, so the
+     * default page shipped the wrong range on first paint, with no user action.
+     */
+    public function test_reports_todos_by_day_axis_follows_a_past_range(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $from = now()->subDays(40);
+        $to = now()->subDays(35);
+
+        $component = Livewire::test('reports.todos')
+            ->set('dateFrom', Jalalian::fromCarbon($from)->format('Y/m/d'))
+            ->set('dateTo', Jalalian::fromCarbon($to)->format('Y/m/d'));
+
+        $byDay = $component->instance()->chartPayload()['byDay'];
+        $days = array_column($byDay, 'day');
+
+        $this->assertSame(
+            Jalalian::fromCarbon($from)->format('Y/m/d'),
+            $days[0],
+            'a past window starts on the day the user picked',
+        );
+        $this->assertSame(
+            Jalalian::fromCarbon($to)->format('Y/m/d'),
+            end($days),
+            'and ends on the picked to-day, not today',
+        );
     }
 
     public function test_reports_advanced_by_day_fills_empty_days_over_the_chosen_range(): void
@@ -155,6 +201,10 @@ class ReportsDailyWindowTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
+        // One ticket *outside* the picked range. The old test put its only ticket
+        // at `now()` and asserted four zeros for a `now()-4d..now()-1d` window,
+        // which passed only because the buggy axis (`now()-3d..now()`) excluded
+        // `now()` — the assertion certified the bug instead of catching it.
         $this->createTicketAt($user, 'ADV-1', now()->startOfDay());
 
         $from = now()->subDays(4);
@@ -165,8 +215,64 @@ class ReportsDailyWindowTest extends TestCase
             ->set('dateTo', Jalalian::fromCarbon($to)->format('Y/m/d'));
 
         $byDay = $component->instance()->chartPayload()['byDay'];
+        $days = array_column($byDay, 'day');
 
-        $this->assertCount(4, $byDay, 'the 4-day range is fully materialised');
-        $this->assertSame([0, 0, 0, 0], array_column($byDay, 'count'), 'no tickets in the range at all');
+        $this->assertSame(
+            Jalalian::fromCarbon($from)->format('Y/m/d'),
+            $days[0],
+            'the first axis label is the picked from-day',
+        );
+        $this->assertSame(
+            Jalalian::fromCarbon($to)->format('Y/m/d'),
+            end($days),
+            'the last axis label is the picked to-day',
+        );
+        $this->assertSame([0, 0, 0, 0], array_column($byDay, 'count'), 'the range really is empty of tickets');
+    }
+
+    /**
+     * Issue #866 — the same page, a range whose ticket is genuinely inside it.
+     * With the axis rebuilt to end at today, a ticket in a past window fell off
+     * the axis and the «مجموع» card and the daily chart disagreed silently.
+     */
+    public function test_reports_advanced_by_day_counts_a_ticket_inside_a_past_range(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $inRange = now()->subDays(37)->startOfDay();
+        $this->createTicketAt($user, 'ADV-IN', $inRange);
+        $this->createTicketAt($user, 'ADV-OUT', now()->startOfDay());
+
+        $from = now()->subDays(40);
+        $to = now()->subDays(35);
+
+        $component = Livewire::test('reports.advanced')
+            ->set('dateFrom', Jalalian::fromCarbon($from)->format('Y/m/d'))
+            ->set('dateTo', Jalalian::fromCarbon($to)->format('Y/m/d'));
+
+        $payload = $component->instance()->chartPayload();
+        $byDay = $payload['byDay'];
+
+        $this->assertSame(
+            Jalalian::fromCarbon($from)->format('Y/m/d'),
+            $byDay[0]['day'],
+            'the first axis label is the picked from-day',
+        );
+        $this->assertSame(
+            Jalalian::fromCarbon($to)->format('Y/m/d'),
+            end($byDay)['day'],
+            'the last axis label is the picked to-day',
+        );
+        $this->assertSame(
+            1,
+            array_sum(array_column($byDay, 'count')),
+            'the ticket inside the picked range is on the chart',
+        );
+        $this->assertSame(
+            $payload['total'],
+            array_sum(array_column($byDay, 'count')),
+            'the «مجموع» card and the daily chart must not disagree',
+        );
     }
 }

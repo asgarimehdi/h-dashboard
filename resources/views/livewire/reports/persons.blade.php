@@ -51,8 +51,13 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
+        // Issue #858, like reports/todos (#819): the scope predicate goes
+        // inside a closure so the chain stays an Eloquent builder — a
+        // top-level whereIn() degrades it to Query\Builder, on which `with()`
+        // below is undefined. Still unconditional, still fail-closed (`[]`
+        // compiles to `0 = 1`).
         $baseQuery = Person::query()
-            ->whereIn('u_id', $accessibleIds)
+            ->where(fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->when($this->selectedUnitId, fn($q) => $q->where('u_id', $this->selectedUnitId))
             ->when($this->selectedTahsilId, fn($q) => $q->where('t_id', $this->selectedTahsilId))
             ->when($this->selectedSematId, fn($q) => $q->where('s_id', $this->selectedSematId))
@@ -100,7 +105,10 @@ return new class extends Component
             ->pluck('count', 'unit_name')
             ->toArray();
 
+        // Eager loads first, exactly like reports/units (#819): `with()` must
+        // precede any degrading call in the chain.
         $persons = (clone $baseQuery)
+            ->with(['unit:id,name', 'tahsil:id,name', 'semat:id,name', 'estekhdam:id,name'])
             ->orderBy('n_code')
             ->get()
             ->map(fn($p) => [
@@ -227,6 +235,10 @@ return new class extends Component
     {{-- جدول --}}
     <x-card shadow>
         <h3 class="font-bold mb-4">لیست پرسنل</h3>
+        {{-- Issue #858: server-rendered chart aggregates. The @script below
+            reads this (morphed on every render) instead of firing a second
+            method request per filter change. --}}
+        <div id="personsChartData" class="hidden" data-chart='@json(['byTahsil' => $chart['byTahsil'], 'bySemat' => $chart['bySemat'], 'byEstekhdam' => $chart['byEstekhdam']])'></div>
         <div class="overflow-x-auto">
             <table class="table table-sm">
                 <thead>
@@ -299,9 +311,13 @@ return new class extends Component
         }
     }
 
-    async function render() {
-        waitForHighcharts(async () => {
-            const data = await $wire.chartPayload();
+    function render() {
+        waitForHighcharts(() => {
+            // Issue #858: read the server-rendered aggregates above — the
+            // inline @php already ran the payload for this render, so a
+            // second method request would just re-run it.
+            const el = document.getElementById('personsChartData');
+            const data = el ? JSON.parse(el.dataset.chart) : {};
             renderPie('tahsilChart', data.byTahsil);
             renderPie('sematChart', data.bySemat);
             renderPie('estekhdamChart', data.byEstekhdam);
@@ -309,9 +325,14 @@ return new class extends Component
     }
 
     render();
+    // $watch fires when the reactive store patches (before Livewire morphs
+    // the fresh data-chart into the DOM), so re-render again after morph.
     $wire.$watch('selectedUnitId', () => render());
     $wire.$watch('selectedTahsilId', () => render());
     $wire.$watch('selectedSematId', () => render());
     $wire.$watch('selectedEstekhdamId', () => render());
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) render();
+    });
 </script>
 @endscript

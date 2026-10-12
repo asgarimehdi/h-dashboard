@@ -383,10 +383,13 @@ test('create accepts an accessible unit (issue #835)', function () {
     $this->assertDatabaseHas('maintenance_schedules', ['title' => 'ویژه واحد تست', 'unit_id' => $this->unit->id]);
 });
 
-test('only an admin may write an org-wide schedule (issue #835)', function () {
-    // unit_id = null is an org-wide record, and org-wide records are admin-only
-    // (the null-unit rule from Plan 46 step 4). A scoped holder choosing the
-    // "— همه —" placeholder must not be able to create or promote one.
+test('org-wide schedules are rejected for every holder including admin (issues #835, #955)', function () {
+    // Issue #955, decision الف: an org-wide maintenance schedule is not a
+    // product requirement (tickets.unit_id is NOT NULL, so such a schedule
+    // can never produce a ticket). The form requires a unit for everyone —
+    // the #835 admin exception for writing null-unit rows is gone. Legacy
+    // null-unit rows remain listed (and command-guarded), they just cannot
+    // be created or re-saved as null through this form.
     $this->actingAs($this->user);
 
     Livewire::test('maintenance.index')
@@ -394,7 +397,8 @@ test('only an admin may write an org-wide schedule (issue #835)', function () {
         ->set('frequency', 'monthly')
         ->set('recurrenceInterval', 1)
         ->set('unitId', null)
-        ->call('createSchedule');
+        ->call('createSchedule')
+        ->assertHasErrors(['unitId']);
 
     $this->assertDatabaseMissing('maintenance_schedules', ['title' => 'ویژه کل سازمان']);
 
@@ -406,7 +410,32 @@ test('only an admin may write an org-wide schedule (issue #835)', function () {
         ->set('recurrenceInterval', 1)
         ->set('unitId', null)
         ->call('createSchedule')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['unitId']);
 
-    $this->assertDatabaseHas('maintenance_schedules', ['title' => 'ویژه کل سازمان', 'unit_id' => null]);
+    $this->assertDatabaseMissing('maintenance_schedules', ['title' => 'ویژه کل سازمان']);
+});
+
+test('update that clears the unit is rejected and the row keeps its unit (issue #955)', function () {
+    $this->actingAs($this->user);
+
+    $schedule = makeSchedule('دارای واحد', $this->unit->id);
+
+    Livewire::test('maintenance.index')
+        ->set('editingId', $schedule->id)
+        ->set('title', 'دارای واحد')
+        ->set('frequency', 'monthly')
+        ->set('recurrenceInterval', 1)
+        ->set('unitId', null)
+        ->call('updateSchedule')
+        ->assertHasErrors(['unitId']);
+
+    $this->assertDatabaseHas('maintenance_schedules', ['id' => $schedule->id, 'unit_id' => $this->unit->id]);
+});
+
+test('unit picker offers no org-wide null option (issue #955)', function () {
+    $this->actingAs($this->user);
+
+    $html = Livewire::test('maintenance.index')->call('startCreate')->html();
+
+    expect($html)->not->toContain('— همه —');
 });

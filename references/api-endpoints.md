@@ -175,6 +175,8 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | DELETE | `/api/todos/{todo}` | Delete |
 | POST | `/api/todos/{todo}/toggle-complete` | Toggle completion |
 
+Null-unit contract (#838, #917): a todo with `unit_id = null` belongs to its creator — the list, profile, search, and ticket picker show it only to the creator, and it serializes with `"unit": null` (key present, value null).
+
 ### Reports (`/api/reports`)
 
 | Method | URL | Description |
@@ -202,7 +204,9 @@ than "zero that day", so the line collapsed whenever the data was sparse.
 Implementation: `App\Services\DailySeries` materialises the window with `generate_series` and
 left-joins the caller's own aggregate, so it fills gaps in an existing (already filtered) query
 instead of re-deriving its filters. The API takes the window from `?days=`; the UI report pages
-pass their own date-from/date-to picker bounds, and the dashboard trend uses
+pass their own date-from/date-to picker bounds — `DailySeries::between()` **keeps that range**
+(capped at `MAX_DAYS = 365`) rather than only its day count, so a past window charts the days the
+user picked instead of "N days ending today" (#866) — and the dashboard trend uses
 `Dashboard::TICKET_CHART_DAYS`.
 
 > Deliberately **not** read from `daily_reports`: that table is written by
@@ -380,7 +384,7 @@ Blade:
 - Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
 - pg_trgm GIN indexes back leading-wildcard `LIKE` search on `persons` (fullname forms), `hardwares` (pc_name/comments/type/ip_valid/ip_local/mac), and `units.name` (added 2026-08-26)
-- HR analytics endpoints (`stats`, `headcountTrend`, `vacancyTrend`, `staffingRatio`, `loadSubtree`) aggregate in a single pgsql pass and cache the result; `headcountTrend`/`staffingRatio` use a SQLite fallback (strftime / two-query) for tests. `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
+- HR analytics endpoints (`stats`, `headcountTrend`, `vacancyTrend`, `staffingRatio`, `loadSubtree`) aggregate in a single pgsql pass and cache the result. `headcountTrend`/`vacancyTrend` are cumulative monthly stocks over a `generate_series` window (DailySeries pattern, #736/#952): `months=12` yields exactly 12 buckets oldest-first, empty months read as zero, the stock basis is `created_at` (`hire_date` is unpopulated), and `?months=` follows the `ReportDays` contract (0/negative/above-24 are 422). `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
 - **Monitoring note (no code change needed):** `TicketComments::loadTicket()` eager-loads only two levels (`comments.user.person` + `children.user.person`); with max comment depth = 3 this is sufficient and not an N+1. Revisit only if depth grows or tickets accumulate very large comment trees
 
 ---
@@ -479,7 +483,7 @@ psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
 Since 2026-08-24 `phpunit.xml` forces `CACHE_STORE=array` + `SESSION_DRIVER=array` + `QUEUE_CONNECTION=sync` (`force="true"`), so the suite never connects to Redis — the docker Redis password is irrelevant. ⚠️ Laravel 13's `config/cache.php` reads **`CACHE_STORE`**, not the legacy `CACHE_DRIVER` — setting only `CACHE_DRIVER=array` leaves cache on redis and causes `NOAUTH`/`WRONGPASS` failures.
 
 #### 4. Clear cached config/routes BEFORE running (critical!)
-`.env.testing` ships `DB_CONNECTION=mysql` and a **different `APP_KEY`** than `.env`. If `bootstrap/cache/config.php` or the route cache (`bootstrap/cache/routes-v7.php`) exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists). Observed 2026-08-26: a stale `routes-v7.php` built from `.env`'s APP_KEY caused **exactly 75 failures** across every Livewire-mutation test — `config:clear` alone does NOT remove `routes-v7.php`, you must also run `route:clear`.
+`.env.testing` ships `DB_CONNECTION=mysql` and an `APP_KEY` that is **blank in git** (#953) — a local `composer test` fills it in via `scripts/ensure-test-app-key.php` the first time, so it differs from `.env`'s. If `bootstrap/cache/config.php` or the route cache (`bootstrap/cache/routes-v7.php`) exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists). Observed 2026-08-26: a stale `routes-v7.php` built from `.env`'s APP_KEY caused **exactly 75 failures** across every Livewire-mutation test — `config:clear` alone does NOT remove `routes-v7.php`, you must also run `route:clear`.
 ```bash
 php artisan config:clear      # must be clear so phpunit.xml can override DB_* 
 php artisan route:clear       # removes routes-v7.php — fixes the Livewire endpoint-hash mismatch

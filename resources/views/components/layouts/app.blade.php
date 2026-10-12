@@ -43,6 +43,12 @@
 </head>
 
 <body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
+    {{-- #957: لینک پرش. `focus:absolute` لازم است چون `not-sr-only` حالتِ
+         static می‌گذارد و بدون آن با هر بار فوکوس، کل صفحه یک خط پایین می‌رود. --}}
+    <a href="#main-content"
+       class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[1000] focus:rounded-lg focus:bg-base-100 focus:px-4 focus:py-2 focus:shadow-lg">
+        رفتن به محتوای اصلی
+    </a>
     <!-- Stitch-style animated background JavaScript -->
     <script>
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
@@ -134,11 +140,11 @@
             <x-app-brand />
         </x-slot:brand>
         <x-slot:actions>
-            <a href="/search" wire:navigate class="btn btn-ghost btn-sm">
+            <a href="/search" wire:navigate aria-label="جستجو" class="btn btn-ghost btn-sm">
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">جستجو</span>
             </a>
-            <a href="/profile" wire:navigate class="btn btn-ghost btn-sm gap-2">
+            <a href="/profile" wire:navigate aria-label="پروفایل {{ Auth::user()->person?->f_name ?? 'کاربر' }}" class="btn btn-ghost btn-sm gap-2">
                 <x-icon name="o-user-circle" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">{{ Auth::user()->person?->f_name ?? 'کاربر' }}</span>
             </a>
@@ -163,7 +169,10 @@
             {{-- BRAND --}}
             <x-app-brand class="px-5 pt-4" />
 
-            <x-menu activate-by-route>
+            {{-- #957: برچسب‌دار کردن نشانهٔ ناوبری. بدون `aria-label` چند
+                 ناوبری روی صفحه برای صفحه‌خوان یکسان و بی‌نام می‌شوند. --}}
+            <nav aria-label="منوی اصلی">
+                <x-menu activate-by-route>
                 @if($user = auth()->user())
                 <x-menu-separator />
                 <x-list-item :item="auth()->user()" value="name" no-separator no-hover
@@ -171,7 +180,7 @@
                     <x-slot:actions>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <x-button type="submit" icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate />
+                            <x-ui.icon-button name="خروج از حساب" type="submit" icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate />
                         </form>
                     </x-slot:actions>
                 </x-list-item>
@@ -185,7 +194,7 @@
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-sm font-bold truncate">{{ session('current_unit_name') }}</span>
                         @if(auth()->user()->units()->count() > 1)
-                            <x-button icon="o-arrows-right-left" class="btn-ghost btn-xs"
+                            <x-ui.icon-button name="تغییر حوزه" icon="o-arrows-right-left" class="btn-ghost btn-xs"
                                 tooltip-right="تغییر حوزه" no-wire-navigate link="/select-context" />
                         @endif
                     </div>
@@ -338,14 +347,23 @@
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
-            </x-menu>
+                </x-menu>
+            </nav>
         </x-slot:sidebar>
-        <x-slot:content>
+        {{-- #957: هدف لینک پرش. Mary's Main روی `<main>` هیچ کیسهٔ صفتی نمی‌دهد،
+             اما صفت‌های این اسلات را روی div محتوا merge می‌کند؛ `tabindex="-1"`
+             بدون آن لازم است چون مرورگر فقط با فوکوس برنامه‌نویسی‌شده کار می‌کند. --}}
+        <x-slot:content id="main-content" tabindex="-1">
             {{ $slot }}
         </x-slot:content>
     </x-main>
 
-    <x-toast />
+    {{-- #957: توست تا حالا فقط بصری بود؛ `x-show` آن را در DOM نگه می‌دارد
+         ولی بدون ناحیهٔ زنده هیچ صفحه‌خوانی متوجه باز شدنش نمی‌شود. زنده‌بودن
+         باید روی ظرفی باشد که همیشه در DOM است، نه روی خودِ توست. --}}
+    <div aria-live="polite" aria-atomic="true">
+        <x-toast />
+    </div>
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
     // Register service worker for browser notifications

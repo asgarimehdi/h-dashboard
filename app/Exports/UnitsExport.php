@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\Region;
 use App\Models\Unit;
+use App\Support\ExcelCell;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -83,8 +84,9 @@ class UnitsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHea
     {
         $meta = $this->hierarchy[$unit->id] ?? ['path' => $unit->name, 'depth' => 0, 'parent_name' => ''];
 
+        // #886 (CWE-1236): name / path / parent_name are user-originated.
         return array_map(
-            fn (string $key) => $this->resolveValue($unit, $key, $meta),
+            fn (string $key) => ExcelCell::escape($this->resolveValue($unit, $key, $meta)),
             $this->columns
         );
     }

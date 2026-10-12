@@ -49,6 +49,15 @@ class SidebarPermissionsTest extends TestCase
         '/units' => ['organization'],
         '/todo' => ['calendar'],
         '/roles' => ['manage_roles'],
+        // Issue #897: /search stays visible to EVERY authenticated account
+        // (no @can on the menu item, no role_or_permission on the route —
+        // units/todos branches serve every in-scope user; only the
+        // tickets/users sections are permission-gated inside the component).
+        // A universal link cannot name "no permission" in this map, so it
+        // lists every known permission: each holder sees it, and the
+        // unrelated-permission loop below stays vacuous. When adding a new
+        // permission to this map, append it here too.
+        '/search' => ['map', 'bw', 'manage_zabbix', 'manage_users', 'manage_hardware', 'manage_personnel', 'view_hr_dashboard', 'manage_org_chart', 'kargozini', 'organization', 'calendar', 'manage_roles'],
     ];
 
     protected function setUp(): void

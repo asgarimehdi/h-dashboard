@@ -261,7 +261,7 @@ return new class extends Component
             @endscope
 
             @scope('actions', $log)
-            <x-button icon="o-eye" wire:click="showDetail({{ $log->id }})" class="btn-ghost btn-sm text-info" spinner />
+            <x-ui.icon-button name="مشاهده جزئیات فعالیت" icon="o-eye" wire:click="showDetail({{ $log->id }})" class="btn-ghost btn-sm text-info" spinner />
             @endscope
         </x-table>
     </x-card>
@@ -273,7 +273,7 @@ return new class extends Component
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <span class="text-xs text-base-content/50">کاربر:</span>
-                    <p class="text-sm font-bold">{{ $this->selectedLog->user->full_name ?? $this->selectedLog->user->name ?? 'نامشخص' }}</p>
+                    <p class="text-sm font-bold">{{ $this->selectedLog->user?->full_name ?? $this->selectedLog->user?->name ?? 'نامشخص' }}</p>
                 </div>
                 <div>
                     <span class="text-xs text-base-content/50">نوع:</span>

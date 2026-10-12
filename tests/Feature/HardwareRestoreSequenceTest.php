@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\HardwareAuditController;
 use App\Models\Hardware;
+use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -74,10 +75,15 @@ it('restore advances sequence so next auto-insert succeeds', function () {
 
     $response->assertStatus(200)->assertJsonPath('success', true);
 
-    // The restored hardware exists (id is not in $fillable so it gets a new auto-increment id)
+    // The restored hardware reuses the audit's original primary key.
+    // #888: Hardware::create() dropped `id` (not in $fillable), so the restore
+    // inserted under a fresh auto-increment id, the `exists` guard could never
+    // see it and a second restore of the same audit succeeded again. The
+    // controller must forceFill the key, mirroring HardwareIndexHelpers.
     $restored = Hardware::where('pc_name', 'SEQ_RESTORED')->first();
     expect($restored)->not->toBeNull();
     expect($restored->pc_name)->toBe('SEQ_RESTORED');
+    expect($restored->id)->toBe($targetId);
 
     // Sequence is now advanced — next auto-insert should NOT collide
     $next = Hardware::create([
@@ -91,6 +97,90 @@ it('restore advances sequence so next auto-insert succeeds', function () {
     $seqVal = DB::selectOne('SELECT last_value FROM hardwares_id_seq');
     $maxId = DB::selectOne('SELECT MAX(id) as m FROM hardwares');
     expect((int) $seqVal->last_value)->toBeGreaterThanOrEqual((int) $maxId->m);
+});
+
+it('next auto-insert cannot collide with a restored id', function () {
+    if (DB::connection()->getDriverName() !== 'pgsql') {
+        $this->markTestSkipped('Sequence reset only applies to PostgreSQL.');
+    }
+
+    [$user, $nCode, , $token] = makeSequenceTestUser();
+
+    // A high id well above the current sequence: restoring it must not let the
+    // NEXT auto-increment land on it (duplicate key on hardwares_pkey).
+    $seqRow = DB::selectOne('SELECT last_value FROM hardwares_id_seq');
+    $targetId = (int) $seqRow->last_value + 5000;
+
+    $auditId = DB::table('hardware_audits')->insertGetId([
+        'hardware_id' => $targetId,
+        'user_id' => $user->id,
+        'action' => 'created',
+        'changes' => json_encode([
+            ['field' => 'n_code', 'old' => null, 'new' => $nCode],
+            ['field' => 'pc_name', 'old' => null, 'new' => 'COLLISION_RESTORED'],
+            ['field' => 'type', 'old' => null, 'new' => 'pc'],
+            ['field' => 'mac', 'old' => null, 'new' => 'collision-mac'],
+            ['field' => 'shutdown', 'old' => null, 'new' => 'خیر'],
+            ['field' => 'mark', 'old' => null, 'new' => 'خیر'],
+        ]),
+        'source' => 'web',
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'test',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->withHeaders(['Authorization' => "Bearer $token"])
+        ->postJson("/api/hardware/audits/{$auditId}/restore-record")
+        ->assertStatus(200)->assertJsonPath('success', true);
+
+    $restored = Hardware::where('pc_name', 'COLLISION_RESTORED')->first();
+    expect($restored)->not->toBeNull();
+    expect($restored->id)->toBe($targetId);
+
+    // The setval block is load-bearing here, not redundant: MAX(id) now
+    // includes the restored id, so the sequence must have been advanced past it.
+    $seqVal = DB::selectOne('SELECT last_value FROM hardwares_id_seq');
+    expect((int) $seqVal->last_value)->toBeGreaterThanOrEqual($targetId);
+
+    // The real proof: an ordinary auto-increment insert gets a fresh id.
+    $next = Hardware::create([
+        'n_code' => $nCode, 'pc_name' => 'AFTER_RESTORED_ID', 'type' => 'laptop',
+        'mac' => 'after-restored-id-mac', 'shutdown' => false, 'mark' => false,
+    ]);
+
+    expect($next->id)->not->toBe($targetId);
+    expect($next->id)->toBeGreaterThan($targetId);
+});
+
+it('restoring the same audit twice is refused with 422', function () {
+    [$user, $nCode, , $token] = makeSequenceTestUser();
+
+    $hw = Hardware::create([
+        'n_code' => $nCode, 'pc_name' => 'DOUBLE_RESTORE', 'type' => 'pc',
+        'mac' => 'double-restore-mac', 'shutdown' => false, 'mark' => false,
+    ]);
+    $hardwareId = $hw->id;
+    $hw->delete();
+
+    $audit = HardwareAudit::where('hardware_id', $hardwareId)
+        ->where('action', 'created')->firstOrFail();
+
+    $this->withHeaders(['Authorization' => "Bearer $token"])
+        ->postJson("/api/hardware/audits/{$audit->id}/restore-record")
+        ->assertStatus(200)->assertJsonPath('success', true);
+
+    // Exactly one row carries the restored id...
+    $restored = Hardware::where('pc_name', 'DOUBLE_RESTORE')->first();
+    expect($restored)->not->toBeNull();
+    expect($restored->id)->toBe($hardwareId);
+    expect(Hardware::where('pc_name', 'DOUBLE_RESTORE')->count())->toBe(1);
+
+    // ...so the `exists` guard can finally see it and refuses the replay.
+    $this->withHeaders(['Authorization' => "Bearer $token"])
+        ->postJson("/api/hardware/audits/{$audit->id}/restore-record")
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'This hardware record still exists — use rollback instead.');
 });
 
 it('restore-record source code contains pgsql sequence guard', function () {

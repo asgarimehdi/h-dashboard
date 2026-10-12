@@ -3,9 +3,11 @@
 #
 # 1. preflight  — fails fast (exit 2) if this machine cannot run the suite the
 #                 way CI does, BEFORE anything destructive runs
-# 2. caches     — `composer test` already clears config+routes; view:clear is
+# 1b. APP_KEY   — fails if a tracked env file commits a real APP_KEY (#953)
+# 2. caches     — `composer test` already clears config/routes; view:clear is
 #                 the one CI does that composer test does not, so add it here
 # 3. pint       — `pint --test`, the exact command CI's lint job runs
+# 3b. dead files— no test file may run zero tests (issue #935)
 # 4. phpstan    — level 6 with the committed baseline, the exact CI command
 # 5. pest       — the full suite, or the paths given as arguments
 #
@@ -51,6 +53,18 @@ if [ "$preflight_status" -ne 0 ]; then
     exit "$preflight_status"
 fi
 
+# 1b. Committed APP_KEY guard (issue #953). Runs before every expensive gate
+#     below, because a leaked master secret is the one finding that must not
+#     wait five minutes for Pint and PHPStan to finish first. Cheap, and it
+#     needs no database — but it reads the git index, so it is a repository
+#     check, not an environment one.
+step "Committed APP_KEY"
+if ! php scripts/check-app-key-leak.php; then
+    echo ""
+    echo "✗ Committed APP_KEY. See the list above."
+    exit 1
+fi
+
 # 2. Caches. `composer test` clears config and routes on its own; a stale
 #    bootstrap/cache/routes-v7.php makes every Livewire ->set()/->call() silently
 #    no-op, which reads as ~75 unrelated failures.
@@ -62,6 +76,17 @@ step "Pint (code style)"
 if ! vendor/bin/pint --test; then
     echo ""
     echo "✗ Code style. Fix with: composer pint"
+    exit 1
+fi
+
+# 3b. Dead test files (issue #935). `TicketWorkflowTest.php` ran ZERO tests for
+# a year — its methods lacked the `test` prefix, PHPUnit collected none of them,
+# and every gate stayed green. Cheap to check, so it runs here rather than only
+# in CI.
+step "Dead test files"
+if ! php scripts/find-dead-test-files.php; then
+    echo ""
+    echo "✗ Dead test files. See the list above."
     exit 1
 fi
 

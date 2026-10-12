@@ -64,10 +64,11 @@ return new class extends Component
 }; ?>
 
 <div class="relative" wire:click.away="$set('showDropdown', false)">
-    <button wire:click="toggleDropdown" class="btn btn-ghost btn-sm relative">
+    <button wire:click="toggleDropdown" class="btn btn-ghost btn-sm relative"
+            aria-label="{{ $unreadCount > 0 ? 'اعلان‌ها، '.$unreadCount.' خوانده‌نشده' : 'اعلان‌ها' }}">
         <x-icon name="o-bell" class="w-5 h-5" />
         @if($unreadCount > 0)
-        <span class="absolute -top-1 -right-1 bg-error text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+        <span aria-hidden="true" class="absolute -top-1 -right-1 bg-error text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
         @endif
     </button>
 

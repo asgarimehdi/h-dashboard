@@ -67,7 +67,7 @@ return new class extends Component
             'title' => 'required|string|max:255',
             'frequency' => 'required|in:daily,weekly,monthly',
             'recurrenceInterval' => 'required|integer|min:1',
-            'unitId' => 'nullable|exists:units,id',
+            'unitId' => 'required|exists:units,id',
         ]);
 
         // Creating inside a unit the actor cannot reach would plant a schedule
@@ -117,7 +117,7 @@ return new class extends Component
             'title' => 'required|string|max:255',
             'frequency' => 'required|in:daily,weekly,monthly',
             'recurrenceInterval' => 'required|integer|min:1',
-            'unitId' => 'nullable|exists:units,id',
+            'unitId' => 'required|exists:units,id',
         ]);
 
         $schedule = MaintenanceSchedule::findOrFail($this->editingId);
@@ -250,12 +250,10 @@ return new class extends Component
      * واحد مشخص باید در دامنه باشد وگرنه فرم رکورد را به واحدی منتقل می‌کند
      * که کاربر به آن دسترسی ندارد — و همان‌جا cron تیکت تولید می‌کند.
      *
-     * `null` («همه واحدها») یعنی نوشتن یک رکورد **سراسری**. چون رکورد
-     * null-unit فقط در اختیار مدیر سیستم است (قاعده‌ی بالا)، اجازه‌ی ساختن یا
-     * جابه‌جا کردن آن هم باید در همان دامنه بماند؛ وگرنه یک کاربر دامنه‌دار
-     * رکوردی می‌سازد/ارتقا می‌دهد که دیگر خودش هم حق ویرایشش را ندارد و در
-     * عین حال برای کل سازمان قابل مشاهده است. گزینه‌ی «همه» در انتخابگر
-     * می‌ماند چون رکوردهای سراسری موجود باید قابل نمایش باشند.
+     * ایشو #955 (تصمیم الف): برنامه‌ی سراسری بدون واحد نیاز محصول نیست، پس
+     * اعتبارسنجی فرم `unitId` را required می‌خواهد و `null` هیچ‌وقت از آن
+     * عبور نمی‌کند. این متد برای `null` همچنان خطا می‌دهد (دفاع در عمق) و
+     * رکوردهای سراسری قدیمی فقط قابل نمایش‌اند، نه قابل ساخت.
      */
     private function assertSubmittedUnitInScope(): bool
     {
@@ -353,7 +351,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
-            <x-button class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
+            <x-ui.icon-button name="برنامه نگهداری جدید" label="برنامه نگهداری جدید" class="btn-success" wire:click="startCreate" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -397,7 +395,7 @@ return new class extends Component
                             :options="$unitOptions"
                             option-value="value"
                             option-label="label"
-                            placeholder="— همه —"
+                            placeholder="انتخاب واحد"
                         />
                     </div>
                 </div>
@@ -442,8 +440,8 @@ return new class extends Component
                             class="input input-bordered input-sm flex-1"
                             autofocus
                         />
-                        <x-button icon="o-check" wire:click="updateSchedule" class="btn-ghost btn-sm text-success" spinner />
-                        <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
+                        <x-ui.icon-button name="ذخیره برنامه نگهداری" icon="o-check" wire:click="updateSchedule" class="btn-ghost btn-sm text-success" spinner />
+                        <x-ui.icon-button name="انصراف از ویرایش" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-sm" />
                     </div>
                     @if($this->titleError()) <span class="text-error text-xs">{{ $this->titleError() }}</span> @endif
                 @else
@@ -454,12 +452,12 @@ return new class extends Component
             @scope('actions', $schedule)
                 <div class="flex gap-1">
                     @if($this->editingId !== $schedule->id)
-                        <x-button
+                        <x-ui.icon-button name="ویرایش برنامه نگهداری"
                             icon="o-pencil"
                             wire:click="editSchedule({{ $schedule->id }})"
                             class="btn-ghost btn-sm text-primary"
                         />
-                        <x-button
+                        <x-ui.icon-button name="حذف برنامه نگهداری"
                             icon="o-trash"
                             wire:click="delete({{ $schedule->id }})"
                             wire:confirm="آیا مطمئن هستید؟"

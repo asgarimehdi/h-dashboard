@@ -62,6 +62,15 @@ return new class extends Component
 
     public array $sortBy = ['column' => 'id', 'direction' => 'desc'];
 
+    // #914: `$sortBy` is client-settable public Livewire state and MaryUI
+    // writes the clicked header's key into it, so it can never be trusted
+    // as a column name. Only real `hardwares` columns are accepted here.
+    private const SORTABLE_COLUMNS = [
+        'id', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
+        'net_type', 'switch', 'port', 'vlan', 'motherboard', 'cpu', 'ram',
+        'hdd', 'shutdown', 'mark', 'comments', 'clean_at', 'n_code',
+    ];
+
     // Filter fields
     public ?string $filterType = null;
 
@@ -288,6 +297,12 @@ return new class extends Component
 
     public function createHardware(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $this->validate([
             'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $this->accessibleUnitIds()))],
             'pc_name' => 'required|string|max:255',
@@ -314,6 +329,12 @@ return new class extends Component
 
     public function editHardware($id): void
     {
+        // Issue #975: deliberately NOT gated, unlike `edit*` on the kargozini
+        // lookups. It writes no row and copies nothing sensitive into the
+        // response beyond what `hardwares()` already renders to this actor; the
+        // write is `updateHardware()` above, which is gated AND re-derives
+        // `accessibleUnitIds()` itself. A client that skips this method and
+        // sets `editingId` directly (it is not #[Locked]) still cannot write.
         $this->resetValidation();
         $hw = Hardware::with('person')->findOrFail($id);
 
@@ -334,6 +355,12 @@ return new class extends Component
 
     public function updateHardware(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $accessibleIds = $this->accessibleUnitIds();
 
         // Issue #842: the destination person must be inside the caller's scope before
@@ -376,6 +403,12 @@ return new class extends Component
 
     public function delete(Hardware $hardware): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $hardware->load('person');
 
         $accessibleIds = $this->accessibleUnitIds();
@@ -388,6 +421,14 @@ return new class extends Component
         try {
             $hardware->delete();
             $this->warning("سخت افزار {$hardware->pc_name} حذف شد", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892/#975: defence in depth. The `authorize()` above sits
+            // OUTSIDE this try, so the 403 never actually reaches here today —
+            // this clause exists so that a later edit which moves the check
+            // inside the try cannot turn a revoked holder's delete back into a
+            // friendly "امکان حذف وجود ندارد" toast, and so the #892/#975
+            // static scan keeps a handle on the ordering.
+            throw $e;
         } catch (Exception $e) {
             $this->error('امکان حذف وجود ندارد.', position: 'toast-bottom');
         }
@@ -395,6 +436,12 @@ return new class extends Component
 
     public function bulkMark(bool $value): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         if (empty($this->selected)) {
             $this->error('هیچ ردیفی انتخاب نشده است.', position: 'toast-bottom');
 
@@ -430,6 +477,12 @@ return new class extends Component
 
     public function exportExcel(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         $columns = array_keys(array_filter($this->visibleCols));
         // Always include core columns
         $columns = array_unique(array_merge(['n_code', 'pc_name'], $columns));
@@ -458,6 +511,12 @@ return new class extends Component
 
     public function bulkDelete(): void
     {
+        // Issue #892/#975: the route gate (`role_or_permission:manage_hardware`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('manage_hardware');
+
         if (empty($this->selected)) {
             return;
         }
@@ -482,12 +541,16 @@ return new class extends Component
 
     public function headers(): array
     {
+        // #914: the 8 keys marked `sortable => false` below are PHP-only
+        // aliases fabricated in `with()` (or no column at all), so sorting by
+        // them is impossible. Key names stay unchanged — `status` and
+        // `person_name` are read by `hardware/table.blade.php`.
         return [
-            ['key' => 'checkbox', 'label' => '', 'class' => 'w-10'],
+            ['key' => 'checkbox', 'label' => '', 'class' => 'w-10', 'sortable' => false],
             ['key' => 'id', 'label' => '#', 'class' => 'w-1 hidden sm:table-cell'],
             ['key' => 'pc_name', 'label' => 'نام دستگاه', 'class' => ''],
-            ['key' => 'person_name', 'label' => 'صاحب', 'class' => ''],
-            ['key' => 'unit_name', 'label' => 'واحد', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['unit_name']],
+            ['key' => 'person_name', 'label' => 'صاحب', 'class' => '', 'sortable' => false],
+            ['key' => 'unit_name', 'label' => 'واحد', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['unit_name'], 'sortable' => false],
             ['key' => 'type', 'label' => 'نوع', 'class' => 'hidden md:table-cell', 'hidden' => ! $this->visibleCols['type']],
             ['key' => 'os', 'label' => 'OS', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['os']],
             ['key' => 'ip_valid', 'label' => 'IP عمومی', 'class' => 'hidden lg:table-cell', 'hidden' => ! $this->visibleCols['ip_valid']],
@@ -501,11 +564,11 @@ return new class extends Component
             ['key' => 'cpu', 'label' => 'CPU', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['cpu']],
             ['key' => 'ram', 'label' => 'RAM', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['ram']],
             ['key' => 'hdd', 'label' => 'HDD', 'class' => 'hidden xl:table-cell', 'hidden' => ! $this->visibleCols['hdd']],
-            ['key' => 'shutdown_display', 'label' => 'خاموشی', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['shutdown']],
-            ['key' => 'mark_display', 'label' => 'علامت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['mark']],
-            ['key' => 'comments_display', 'label' => 'توضیحات', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['comments']],
-            ['key' => 'clean_at_display', 'label' => 'تاریخ نظافت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['clean_at']],
-            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24', 'hidden' => ! $this->visibleCols['status']],
+            ['key' => 'shutdown_display', 'label' => 'خاموشی', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['shutdown'], 'sortable' => false],
+            ['key' => 'mark_display', 'label' => 'علامت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['mark'], 'sortable' => false],
+            ['key' => 'comments_display', 'label' => 'توضیحات', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['comments'], 'sortable' => false],
+            ['key' => 'clean_at_display', 'label' => 'تاریخ نظافت', 'class' => 'hidden 2xl:table-cell', 'hidden' => ! $this->visibleCols['clean_at'], 'sortable' => false],
+            ['key' => 'status', 'label' => 'وضعیت', 'class' => 'w-24', 'hidden' => ! $this->visibleCols['status'], 'sortable' => false],
         ];
     }
 
@@ -600,7 +663,10 @@ return new class extends Component
             });
         }
 
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($column, $direction);
 
         return $this->hardwaresCache = $query->paginate($this->perPage);
     }

@@ -209,7 +209,7 @@ return new class extends Component
                 {{-- New comment form --}}
                 <div class="flex gap-2 items-start">
                     <x-input wire:model="body" placeholder="نظر خود را بنویسید..." class="flex-1" />
-                    <x-button icon="o-paper-airplane" wire:click="addComment" class="btn-primary btn-sm" spinner />
+                    <x-ui.icon-button name="ارسال کامنت" icon="o-paper-airplane" wire:click="addComment" class="btn-primary btn-sm" spinner />
                 </div>
                 @error('body') <p class="text-error text-xs">{{ $message }}</p> @enderror
 
@@ -233,9 +233,9 @@ return new class extends Component
                                     <span class="text-[10px] opacity-50 font-mono">{{ jdate($comment->created_at)->format('H:i - Y/m/d') }}</span>
                                     @if ($comment->user_id === auth()->id())
                                         @if (!$this->editing || $this->editCommentId !== $comment->id)
-                                            <x-button icon="o-pencil" wire:click="startEdit({{ $comment->id }})" class="btn-ghost btn-xs" />
+                                            <x-ui.icon-button name="ویرایش کامنت" icon="o-pencil" wire:click="startEdit({{ $comment->id }})" class="btn-ghost btn-xs" />
                                         @endif
-                                        <x-button icon="o-trash" wire:click="deleteComment({{ $comment->id }})" wire:confirm="کامنت حذف شود؟" class="btn-ghost btn-xs text-error" />
+                                        <x-ui.icon-button name="حذف کامنت" icon="o-trash" wire:click="deleteComment({{ $comment->id }})" wire:confirm="کامنت حذف شود؟" class="btn-ghost btn-xs text-error" />
                                     @endif
                                 </div>
                             </div>
@@ -243,8 +243,8 @@ return new class extends Component
                             @if ($this->editing && $this->editCommentId === $comment->id)
                                 <div class="flex gap-2 items-start mt-2">
                                     <x-input wire:model="editBody" class="flex-1" />
-                                    <x-button icon="o-check" wire:click="saveEdit" class="btn-success btn-xs" spinner />
-                                    <x-button icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-xs" />
+                                    <x-ui.icon-button name="ذخیره کامنت" icon="o-check" wire:click="saveEdit" class="btn-success btn-xs" spinner />
+                                    <x-ui.icon-button name="انصراف از ویرایش کامنت" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-xs" />
                                 </div>
                             @else
                                 <p class="text-sm leading-6 whitespace-pre-wrap">{!! $comment->body_html !!}</p>
@@ -259,8 +259,8 @@ return new class extends Component
                             @if ($replyToId === $comment->id)
                                 <div class="flex gap-2 items-start mt-2 border-t border-base-200 pt-2">
                                     <x-input wire:model="replyBody" placeholder="پاسخ شما..." class="flex-1" />
-                                    <x-button icon="o-paper-airplane" wire:click="addReply({{ $comment->id }})" class="btn-primary btn-xs" spinner />
-                                    <x-button icon="o-x-mark" wire:click="cancelReply" class="btn-ghost btn-xs" />
+                                    <x-ui.icon-button name="ارسال پاسخ" icon="o-paper-airplane" wire:click="addReply({{ $comment->id }})" class="btn-primary btn-xs" spinner />
+                                    <x-ui.icon-button name="انصراف از ارسال پاسخ" icon="o-x-mark" wire:click="cancelReply" class="btn-ghost btn-xs" />
                                 </div>
                             @endif
 
@@ -286,8 +286,8 @@ return new class extends Component
                                             <p class="text-sm leading-6 mt-2 whitespace-pre-wrap">{!! $child->body_html !!}</p>
                                             @if ($child->user_id === auth()->id())
                                                 <div class="flex gap-1 mt-2">
-                                                    <x-button icon="o-pencil" wire:click="startEdit({{ $child->id }})" class="btn-ghost btn-xs" />
-                                                    <x-button icon="o-trash" wire:click="deleteComment({{ $child->id }})" wire:confirm="کامنت حذف شود؟" class="btn-ghost btn-xs text-error" />
+                                                    <x-ui.icon-button name="ویرایش پاسخ" icon="o-pencil" wire:click="startEdit({{ $child->id }})" class="btn-ghost btn-xs" />
+                                                    <x-ui.icon-button name="حذف پاسخ" icon="o-trash" wire:click="deleteComment({{ $child->id }})" wire:confirm="کامنت حذف شود؟" class="btn-ghost btn-xs text-error" />
                                                 </div>
                                             @endif
                                         </div>

@@ -4,6 +4,7 @@
          bootstrap="vendor/autoload.php"
          cacheDirectory=".phpunit.cache"
          colors="true"
+         failOnEmptyTestSuite="true"
          executionOrder="random">
     <testsuites>
         <testsuite name="Unit">
