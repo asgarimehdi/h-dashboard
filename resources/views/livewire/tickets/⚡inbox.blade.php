@@ -72,6 +72,7 @@ new class extends Component
     public function loadData(): void
     {
         $user = auth()->user();
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $units = [];
 
         if (mb_strlen($this->unitSearch) > 1) {
@@ -81,6 +82,7 @@ new class extends Component
                 ->where('can_receive_tickets', true)
                 ->where('is_active', true)
                 ->where('id', '!=', auth()->user()->person?->u_id)
+                ->whereIn('id', $accessibleIds)
                 ->limit(5)
                 ->get()
                 ->toArray();

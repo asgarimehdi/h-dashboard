@@ -34,6 +34,7 @@ new class extends Component
 
     public function loadData(): void
     {
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $units = [];
 
         if (mb_strlen($this->search) >= 2) {
@@ -45,7 +46,10 @@ new class extends Component
                 $query->where('id', '!=', $userUnitId);
             }
 
-            $units = $query->where('name', 'like', '%' . $this->search . '%')->take(5)->get()->toArray();
+            $units = $query->where('name', 'like', '%' . $this->search . '%')
+                ->whereIn('id', $accessibleIds)
+                ->take(5)
+                ->get()->toArray();
         }
 
         // وظایف باز در اسکوپ سازنده — نه فقط واحد جاری (تصمیم #847، گزینهٔ ج).
