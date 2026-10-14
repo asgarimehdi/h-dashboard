@@ -1,30 +1,41 @@
 <?php
 
-use App\Models\{Unit, Todo};
 use App\Models\Ticket;
-use App\Rules\{AccessibleTodo, TicketTargetUnit};
+use App\Models\Todo;
+use App\Models\Unit;
+use App\Rules\AccessibleTodo;
+use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
-use Livewire\Attributes\Layout;
 use Mary\Traits\Toast;
 
 new class extends Component
 {
-    use WithFileUploads;
     use Toast;
+    use WithFileUploads;
 
     public bool $showHelpModal = false;
 
     public string $search = '';
+
     public ?int $unit_id = null;
+
     public bool $showDropdown = false;
+
     public string $subject = '';
+
     public string $content = '';
+
     public string $priority = 'normal';
+
     public array $files = [];
+
     public ?int $task_id = null;
+
     public $todos = [];
+
     public array $units = [];
 
     public function mount(): void
@@ -46,7 +57,7 @@ new class extends Component
                 $query->where('id', '!=', $userUnitId);
             }
 
-            $units = $query->where('name', 'like', '%' . $this->search . '%')
+            $units = $query->where('name', 'like', '%'.$this->search.'%')
                 ->whereIn('id', $accessibleIds)
                 ->take(5)
                 ->get()->toArray();
@@ -107,6 +118,7 @@ new class extends Component
         if (count($this->files) > 5) {
             $this->addError('files', 'حداکثر ۵ فایل مجاز است.');
             $this->files = [];
+
             return;
         }
         $this->validate(['files.*' => 'mimes:jpg,jpeg,png,pdf,zip,rar|max:5120']);
@@ -167,7 +179,7 @@ new class extends Component
             'files.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar|max:5120',
         ]);
 
-        $ticketCode = 'TK-' . strtoupper(Str::random(8));
+        $ticketCode = 'TK-'.strtoupper(Str::random(8));
 
         $ticket = Ticket::create([
             'ticket_code' => $ticketCode,
@@ -207,7 +219,7 @@ new class extends Component
         // ثبت فعالیت
         \App\Services\ActivityLogService::created(
             $ticket,
-            "ایجاد تیکت {$ticketCode} به واحد " . $ticket->unit->name
+            "ایجاد تیکت {$ticketCode} به واحد ".$ticket->unit->name
         );
 
         // ارسال اعلان به کاربران واحد مقصد
@@ -222,7 +234,7 @@ new class extends Component
         $initialActivity = $ticket->activities()->create([
             'user_id' => auth()->id(),
             'action' => 'created',
-            'description' => 'تیکت ایجاد شد و به واحد ' . $ticket->unit->name . ' اختصاص یافت.',
+            'description' => 'تیکت ایجاد شد و به واحد '.$ticket->unit->name.' اختصاص یافت.',
             'to_unit_id' => $this->unit_id,
             'is_internal' => false,
         ]);
@@ -252,7 +264,6 @@ new class extends Component
         $this->reset(['subject', 'content', 'priority', 'files', 'unit_id', 'search', 'task_id']);
         $this->showDropdown = false;
     }
-
 };
 ?>
 

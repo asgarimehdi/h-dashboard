@@ -1,62 +1,80 @@
 <?php
 
+use App\Models\TaskActivity;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
-use App\Models\TaskActivity;
 use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
-use Livewire\Component;
-use Livewire\WithPagination;
-use Livewire\WithFileUploads;
-use Livewire\Attributes\Layout;
-use Livewire\Attributes\Url;
-use Livewire\Attributes\Computed;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
 use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
+use Livewire\Component;
+use Livewire\WithFileUploads;
+use Livewire\WithPagination;
 
 new class extends Component
 {
-    use WithPagination;
     use WithFileUploads;
+    use WithPagination;
 
     #[Url]
     public string $search = '';
+
     #[Url]
     public string $unitSearch = '';
+
     // Issue #818: the routing target is deliberately NOT a #[Url] property — it
     // was settable from the query string, so a crafted link pre-selected a unit
     // the user never picked. It is only ever set through selectTargetUnit(),
     // which resolves the name itself.
     public ?int $targetUnitId = null;
+
     public string $targetUnitName = '';
+
     #[Url]
     public string $forwardNote = '';
+
     #[Url]
     public string $dateFrom = '';
+
     #[Url]
     public string $dateTo = '';
+
     #[Url]
     public string $currentTab = 'pending';
+
     #[Url]
     public string $viewMode = 'received';
+
     #[Url]
     public string $statusFilter = 'pending';
 
     public bool $isCompletionModalOpen = false;
+
     public string $completionNote = '';
+
     public array $completionFiles = [];
+
     public ?Ticket $showingTicket = null;
+
     public ?int $showingTicketId = null;
+
     public bool $showModal = false;
 
     // Bulk Actions
     public array $selectedTickets = [];
+
     public bool $selectAll = false;
+
     public bool $showBulkModal = false;
+
     public string $bulkAction = '';
+
     public string $bulkNote = '';
 
     // Data properties
@@ -78,7 +96,7 @@ new class extends Component
         if (mb_strlen($this->unitSearch) > 1) {
             // Issue #818: same eligibility as App\Rules\TicketTargetUnit —
             // a hidden filter here was never re-checked server-side.
-            $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
+            $units = Unit::where('name', 'like', '%'.$this->unitSearch.'%')
                 ->where('can_receive_tickets', true)
                 ->where('is_active', true)
                 ->where('id', '!=', auth()->user()->person?->u_id)
@@ -157,11 +175,11 @@ new class extends Component
                 // Invalid Jalali date string — ignore filter
             }
         }
-        if (!empty($this->search)) {
+        if (! empty($this->search)) {
             $query->where(function ($q) {
-                $q->where('subject', 'like', '%' . $this->search . '%')
-                    ->orWhere('ticket_code', 'like', '%' . $this->search . '%')
-                    ->orWhere('content', 'like', '%' . $this->search . '%');
+                $q->where('subject', 'like', '%'.$this->search.'%')
+                    ->orWhere('ticket_code', 'like', '%'.$this->search.'%')
+                    ->orWhere('content', 'like', '%'.$this->search.'%');
             });
         }
 
@@ -255,6 +273,7 @@ new class extends Component
     {
         if (empty($this->selectedTickets)) {
             $this->dispatch('swal', ['title' => 'هیچ تیکتی انتخاب نشده', 'icon' => 'warning']);
+
             return;
         }
         $this->bulkAction = $action;
@@ -263,7 +282,9 @@ new class extends Component
 
     public function executeBulkAction(): void
     {
-        if (empty($this->selectedTickets)) return;
+        if (empty($this->selectedTickets)) {
+            return;
+        }
 
         // Issue #818: the bulk `complete` branch closes tickets in bulk, which is
         // the same state change the single-ticket path needed
@@ -291,10 +312,11 @@ new class extends Component
         if ($ticketIds->isEmpty()) {
             $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
             $this->closeAllModals();
+
             return;
         }
 
-        DB::transaction(function () use ($ticketIds, $count, $now, $userId, $bulkNote) {
+        DB::transaction(function () use ($ticketIds, $now, $userId, $bulkNote) {
             // Issue #531: capture old statuses BEFORE the bulk update
             $oldStatuses = Ticket::whereIn('id', $ticketIds)
                 ->pluck('status', 'id');
@@ -313,11 +335,11 @@ new class extends Component
                 $cache->increment('dashboard');
 
                 // ۳. یک batch INSERT برای فعالیت‌ها
-                $activityRows = $ticketIds->map(fn($id) => [
+                $activityRows = $ticketIds->map(fn ($id) => [
                     'ticket_id' => $id,
                     'user_id' => $userId,
                     'action' => 'completed',
-                    'description' => 'تکمیل دسته‌ای تیکت' . ($bulkNote ? ": {$bulkNote}" : ''),
+                    'description' => 'تکمیل دسته‌ای تیکت'.($bulkNote ? ": {$bulkNote}" : ''),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])->toArray();
@@ -355,11 +377,11 @@ new class extends Component
                 $cache->increment('calendar');
                 $cache->increment('dashboard');
 
-                $activityRows = $ticketIds->map(fn($id) => [
+                $activityRows = $ticketIds->map(fn ($id) => [
                     'ticket_id' => $id,
                     'user_id' => $userId,
                     'action' => 'forwarded',
-                    'description' => 'ارجاع دسته‌ای تیکت' . ($bulkNote ? ": {$bulkNote}" : ''),
+                    'description' => 'ارجاع دسته‌ای تیکت'.($bulkNote ? ": {$bulkNote}" : ''),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])->toArray();
@@ -488,13 +510,14 @@ new class extends Component
         $this->authorize('manage_unit_tickets');
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         // Verify showingTicket is accessible
-        if (!$this->showingTicket || !in_array($this->showingTicket->unit_id, $accessibleIds)) {
+        if (! $this->showingTicket || ! in_array($this->showingTicket->unit_id, $accessibleIds)) {
             $this->dispatch('swal', ['title' => 'شما مجاز به ارجاع این تیکت نیستید.', 'icon' => 'error']);
+
             return;
         }
-        
+
         $this->validate([
             'targetUnitId' => $this->targetUnitRule(required: true),
             'forwardNote' => 'nullable|string|max:500',
@@ -509,13 +532,13 @@ new class extends Component
                 $this->showingTicket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
-                    'current_assignee_id' => null
+                    'current_assignee_id' => null,
                 ]);
 
                 $this->showingTicket->activities()->create([
                     'user_id' => auth()->id(),
                     'action' => 'forwarded',
-                    'description' => "ارجاع تیکت به واحد: " . $targetUnitName . " - توضیحات: " . $this->forwardNote,
+                    'description' => 'ارجاع تیکت به واحد: '.$targetUnitName.' - توضیحات: '.$this->forwardNote,
                     // Issue #818: the destination was only in the description;
                     // nothing recorded it structurally on this path.
                     'to_unit_id' => $this->targetUnitId,
@@ -575,6 +598,7 @@ new class extends Component
                 'title' => 'تیکت قبلاً پذیرفته شده است',
                 'icon' => 'warning',
             ]);
+
             return;
         }
 
@@ -587,6 +611,7 @@ new class extends Component
                     'title' => 'تیکت قبلاً پذیرفته شده است',
                     'icon' => 'warning',
                 ]);
+
                 return;
             }
 
@@ -651,14 +676,15 @@ new class extends Component
     public function openCompletionModal($id): void
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($id);
-        
-        if (!$ticket) {
+
+        if (! $ticket) {
             $this->dispatch('swal', ['title' => 'شما مجاز به مشاهده این تیکت نیستید.', 'icon' => 'error']);
+
             return;
         }
-        
+
         $this->showingTicketId = $id;
         $this->showingTicket = $ticket;
         $this->isCompletionModalOpen = true;
@@ -671,13 +697,14 @@ new class extends Component
         $this->authorize('manage_unit_tickets');
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $finalId = $id ?? $this->showingTicketId;
-        
+
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($finalId);
 
-        if ($ticket->status !== 'accepted' && !$this->targetUnitId) {
+        if ($ticket->status !== 'accepted' && ! $this->targetUnitId) {
             $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
+
             return;
         }
 
@@ -726,7 +753,7 @@ new class extends Component
                     'completed_at' => now(),
                 ]);
                 $description = "تیکت مختومه شد. گزارش نهایی: {$this->completionNote}";
-                $message = "تیکت با موفقیت مختومه و بسته شد.";
+                $message = 'تیکت با موفقیت مختومه و بسته شد.';
 
                 // اگر وظیفه مرتبطی دارد و تمام تیکت‌های آن وظیفه بسته شده‌اند، وظیفه را تکمیل کن
                 if ($ticket->task_id) {
@@ -736,7 +763,7 @@ new class extends Component
                         ->count();
                     if ($relatedTicket === 0) {
                         $ticket->task->update(['is_completed' => true]);
-                        $message .= " وظیفه مرتبط نیز تکمیل شد.";
+                        $message .= ' وظیفه مرتبط نیز تکمیل شد.';
                     }
                 }
             }
@@ -768,11 +795,11 @@ new class extends Component
             $this->dispatch('swal', [
                 'title' => 'عملیات موفق',
                 'text' => $message,
-                'icon' => 'success'
+                'icon' => 'success',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: ' . $e->getMessage());
+            $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: '.$e->getMessage());
         }
     }
 
