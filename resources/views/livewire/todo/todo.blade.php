@@ -629,9 +629,7 @@ return new class extends Component {
             },
             events: @json($events),
             datesSet: function(info) {
-                if (window.calendarInstance.hasPubliclyVisibleDates) {
-                    @this.fetchEvents(info.startStr, info.endStr);
-                }
+                @this.fetchEvents(info.startStr, info.endStr);
             },
             select: function(info) {
                 @this.openCreateModal(info.startStr, info.endStr);
