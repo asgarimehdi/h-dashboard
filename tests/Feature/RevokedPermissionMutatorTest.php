@@ -6,6 +6,7 @@ use App\Models\Person;
 use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -159,6 +160,28 @@ function revokedKargoziniTab(string $component, ?Closure $seed = null): array
     app(PermissionRegistrar::class)->forgetCachedPermissions();
 
     return [$user, $unit, $instance];
+}
+
+/**
+ * Same shape for `todo.todo` (gated by `calendar`, Issue #978).
+ *
+ * @param  (callable(User, Unit, mixed): void)|null  $seed
+ */
+function revokedTodoTab(?Closure $seed = null): array
+{
+    ['user' => $user, 'unit' => $unit] = test()->createUserWithUnit(['calendar']);
+    test()->actingAs($user);
+
+    $component = Livewire::test('todo.todo')->assertStatus(200);
+
+    if ($seed) {
+        $seed($user, $unit, $component);
+    }
+
+    $user->revokePermissionTo('calendar');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    return [$user, $unit, $component];
 }
 
 /**
@@ -388,6 +411,122 @@ test('edit on the lookup page is refused after kargozini is revoked', function (
 })->with('kargoziniLookups');
 
 // ======================================================================
+// todo.todo — mutators and calendar actions, `calendar` (Issue #978)
+// ======================================================================
+
+test('save create todo is refused after calendar is revoked', function () {
+    [, $unit, $component] = revokedTodoTab();
+
+    $component
+        ->set('title', 'تسک جدید ۹۷۸')
+        ->set('unit_id', $unit->id)
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertForbidden();
+
+    $this->assertDatabaseMissing('todos', ['title' => 'تسک جدید ۹۷۸']);
+});
+
+test('save update todo is refused after calendar is revoked', function () {
+    [, $unit, $component] = revokedTodoTab(function ($user, $unit, $comp) {
+        $this->todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'user_id' => $user->id,
+            'title' => 'عنوان اصلی ۹۷۸',
+        ]);
+        $comp->call('editEvent', $this->todo->id);
+    });
+
+    $component
+        ->set('title', 'عنوان تغییریافته ۹۷۸')
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $this->todo->id,
+        'title' => 'عنوان اصلی ۹۷۸',
+    ]);
+});
+
+test('editEvent on todo is refused after calendar is revoked', function () {
+    [, $unit, $component] = revokedTodoTab(function ($user, $unit) {
+        $this->todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'user_id' => $user->id,
+            'title' => 'عنوان اصلی ۹۷۸',
+        ]);
+    });
+
+    $component->call('editEvent', $this->todo->id)->assertForbidden();
+
+    $this->assertNull($component->get('editingId'));
+});
+
+test('delete todo is refused with 403 after calendar is revoked', function () {
+    [, $unit, $component] = revokedTodoTab(function ($user, $unit, $comp) {
+        $this->todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'user_id' => $user->id,
+            'title' => 'قابل حذف ۹۷۸',
+        ]);
+        $comp->call('editEvent', $this->todo->id);
+    });
+
+    $component->call('delete')->assertForbidden();
+
+    $this->assertDatabaseHas('todos', ['id' => $this->todo->id]);
+});
+
+test('toggleComplete on todo is refused after calendar is revoked', function () {
+    [, $unit, $component] = revokedTodoTab(function ($user, $unit) {
+        $this->todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'user_id' => $user->id,
+            'is_completed' => false,
+        ]);
+    });
+
+    $component->call('toggleComplete', $this->todo->id)->assertForbidden();
+
+    $this->assertFalse((bool) $this->todo->fresh()->is_completed);
+});
+
+test('updateTodoDates is refused after calendar is revoked', function () {
+    [, $unit, $component] = revokedTodoTab(function ($user, $unit) {
+        $this->todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'user_id' => $user->id,
+            'start_at' => '2026-10-01 10:00:00',
+            'end_at' => '2026-10-01 12:00:00',
+        ]);
+    });
+
+    $component->call('updateTodoDates', (string) $this->todo->id, '2026-10-10 10:00:00', '2026-10-10 12:00:00')
+        ->assertForbidden();
+
+    $this->assertNotEquals('2026-10-10 10:00:00', $this->todo->fresh()->start_at?->format('Y-m-d H:i:s'));
+});
+
+test('fetchEvents is refused after calendar is revoked', function () {
+    [, , $component] = revokedTodoTab();
+
+    $component->call('fetchEvents', '2026-10-01', '2026-10-31')->assertForbidden();
+});
+
+test('openModal is refused after calendar is revoked', function () {
+    [, , $component] = revokedTodoTab();
+
+    $component->call('openModal')->assertForbidden();
+});
+
+test('openCreateModal is refused after calendar is revoked', function () {
+    [, , $component] = revokedTodoTab();
+
+    $component->call('openCreateModal', '2026-10-01', '2026-10-05')->assertForbidden();
+});
+
+// ======================================================================
 // Controls — the route gate still works, and a real holder is not locked out
 // ======================================================================
 
@@ -416,6 +555,17 @@ test('a fresh load still 403s on kargozini while revoked', function () {
     app(PermissionRegistrar::class)->forgetCachedPermissions();
 
     $this->get('/kargozini/estekhdams')->assertStatus(403);
+});
+
+test('a fresh load still 403s on todo while revoked', function () {
+    ['user' => $user] = $this->createUserWithUnit(['calendar']);
+    $this->actingAs($user);
+    $this->get('/todo')->assertStatus(200);
+
+    $user->revokePermissionTo('calendar');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $this->get('/todo')->assertStatus(403);
 });
 
 test('a holder who keeps manage_hardware can still create hardware', function () {
@@ -456,3 +606,17 @@ test('a holder who keeps kargozini can still create a lookup row', function (arr
 
     $this->assertDatabaseHas($lookup['table'], ['name' => 'نام-مجاز-'.$lookup['table'].'-۹۷۵']);
 })->with('kargoziniLookups');
+
+test('a holder who keeps calendar can still create a todo', function () {
+    ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+    $this->actingAs($user);
+
+    Livewire::test('todo.todo')
+        ->set('title', 'وظیفه-مجاز-۹۷۸')
+        ->set('unit_id', $unit->id)
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertStatus(200);
+
+    $this->assertDatabaseHas('todos', ['title' => 'وظیفه-مجاز-۹۷۸']);
+});
