@@ -114,7 +114,7 @@ class MapDashboardLivewireTest extends TestCase
 
         Livewire::test('map.map-dashboard')
             ->assertOk()
-            ->call('onFilterChanged', ['filterHardware' => 'laptop'])
+            ->call('onFilterChanged', ['hardware_type' => 'laptop'])
             ->assertSet('filterHardware', 'laptop');
     }
 
