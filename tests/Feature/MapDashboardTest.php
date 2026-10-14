@@ -270,9 +270,9 @@ class MapDashboardTest extends TestCase
             ->test('map.map-dashboard');
 
         $component->dispatch('filterChanged', [
-            'filterHardware' => 'laptop',
-            'filterPriority' => 'urgent',
-            'filterStatus' => 'created',
+            'hardware_type' => 'laptop',
+            'ticket_priority' => 'urgent',
+            'ticket_status' => 'created',
         ]);
 
         $component->assertSet('filterHardware', 'laptop')
@@ -290,7 +290,7 @@ class MapDashboardTest extends TestCase
 
         // Should not throw and should not set unknown properties
         $component->dispatch('filterChanged', [
-            'filterHardware' => 'desktop',
+            'hardware_type' => 'desktop',
             'malicious_key' => 'hack',
         ]);
 
