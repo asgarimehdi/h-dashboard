@@ -318,6 +318,7 @@ test('the mutator permission matches the page gate permission', function () {
         'resources/views/livewire/kargozini/tahsil.blade.php' => 'kargozini',
         'resources/views/livewire/kargozini/semat.blade.php' => 'kargozini',
         'resources/views/livewire/kargozini/radif.blade.php' => 'kargozini',
+        'resources/views/livewire/todo/todo.blade.php' => 'calendar',
     ];
 
     foreach ($source as $file => $permission) {
@@ -346,6 +347,7 @@ test('AuthorizationException is not swallowed by the delete handlers', function 
         'resources/views/livewire/kargozini/tahsil.blade.php',
         'resources/views/livewire/kargozini/semat.blade.php',
         'resources/views/livewire/kargozini/radif.blade.php',
+        'resources/views/livewire/todo/todo.blade.php',
     ] as $file) {
         $contents = file_get_contents(base_path($file));
         $this->assertIsString($contents);

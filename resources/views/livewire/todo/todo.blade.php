@@ -1,33 +1,45 @@
 <?php
 
-use App\Models\{Todo, Ticket};
+use App\Models\Ticket;
+use App\Models\Todo;
 use App\Services\AccessService;
-use Livewire\Attributes\Locked;
-use Livewire\Component;
-use Mary\Traits\Toast;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Locked;
+use Livewire\Component;
+use Mary\Traits\Toast;
 use Morilog\Jalali\Jalalian;
 
-return new class extends Component {
+return new class extends Component
+{
     use Toast;
 
     public bool $modal = false;
+
     public string $title = '';
+
     public $start_at;
+
     public $end_at;
+
     #[Locked]
     public ?int $editingId = null;
+
     public bool $is_completed = false;
+
     public ?int $unit_id = null;
 
     public $start_date_picker;
+
     public $start_time_picker;
+
     public $end_date_picker;
+
     public $end_time_picker;
 
     private ?string $calendarStart = null;
+
     private ?string $calendarEnd = null;
 
     public function mount(): void
@@ -37,6 +49,12 @@ return new class extends Component {
 
     public function fetchEvents(string $start, string $end): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->calendarStart = $start;
         $this->calendarEnd = $end;
         $this->dispatch('calendar-updated', events: $this->getEvents());
@@ -50,7 +68,7 @@ return new class extends Component {
 
         // Build cache key from accessible IDs + date range + user context + version (Issue #389)
         $calendarVersion = Cache::get('calendar_version', 0);
-        $cacheKey = 'calendar:events:' . $user->id . ':' . $calendarVersion . ':' . md5(implode(',', $accessibleIds)) . ':' . ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all');
+        $cacheKey = 'calendar:events:'.$user->id.':'.$calendarVersion.':'.md5(implode(',', $accessibleIds)).':'.($this->calendarStart ?? 'all').':'.($this->calendarEnd ?? 'all');
 
         return Cache::remember($cacheKey, 120, function () use ($accessibleIds) {
             // Base query with date range filtering for performance.
@@ -60,7 +78,7 @@ return new class extends Component {
             $todoQuery = Todo::query()
                 ->where(function ($q) use ($accessibleIds, $userId) {
                     $q->whereIn('unit_id', $accessibleIds)
-                      ->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
+                        ->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
                 });
 
             // تیکت‌ها.
@@ -93,7 +111,7 @@ return new class extends Component {
                 ->get()
                 ->map(function ($todo) {
                     return [
-                        'id' => 'todo-' . $todo->id,
+                        'id' => 'todo-'.$todo->id,
                         'title' => $todo->title,
                         'start' => $todo->start_at,
                         'end' => $todo->end_at,
@@ -114,8 +132,8 @@ return new class extends Component {
                     $priorityLabels = ['urgent' => 'فوری', 'normal' => 'عادی', 'low' => 'کم‌اهمیت'];
 
                     return [
-                        'id' => 'ticket-' . $ticket->id,
-                        'title' => '🎫 ' . $ticket->subject,
+                        'id' => 'ticket-'.$ticket->id,
+                        'title' => '🎫 '.$ticket->subject,
                         'start' => $ticket->created_at,
                         'color' => $priorityColors[$ticket->priority] ?? '#f59e0b',
                         'allDay' => false,
@@ -136,6 +154,12 @@ return new class extends Component {
 
     public function openModal()
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->modal = true;
@@ -143,6 +167,12 @@ return new class extends Component {
 
     public function openCreateModal($start, $end)
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->start_at = $start;
@@ -164,6 +194,12 @@ return new class extends Component {
 
     public function updateTodoDates(string $todoId, string $startDate, ?string $endDate = null): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $todo = Todo::find($todoId);
 
         if (! $todo || ! $this->isTodoAccessible($todo)) {
@@ -183,10 +219,17 @@ return new class extends Component {
 
     public function editEvent($id): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $todo = Todo::find($id);
 
         if (! $this->isTodoAccessible($todo)) {
             $this->error('شما دسترسی به این تسک را ندارید');
+
             return;
         }
 
@@ -213,6 +256,12 @@ return new class extends Component {
 
     public function save(): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->validate([
             'title' => 'required|min:3',
             'start_date_picker' => 'required',
@@ -222,6 +271,7 @@ return new class extends Component {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
         if ($this->unit_id !== null && ! in_array($this->unit_id, $accessibleIds, true)) {
             $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
+
             return;
         }
 
@@ -233,6 +283,7 @@ return new class extends Component {
 
             if (! $this->isTodoAccessible($stored)) {
                 $this->error('شما دسترسی به این تسک را ندارید');
+
                 return;
             }
 
@@ -240,16 +291,17 @@ return new class extends Component {
             // the ownerless null-unit bucket.
             if ($this->unit_id === null && $stored->unit_id !== null) {
                 $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
+
                 return;
             }
         }
 
-        $startDateTime = $this->start_date_picker . ' ' . ($this->start_time_picker ?: '00:00');
+        $startDateTime = $this->start_date_picker.' '.($this->start_time_picker ?: '00:00');
         $startMildadi = $this->convertToMiladi($startDateTime);
 
         $endMildadi = null;
         if ($this->end_date_picker) {
-            $endDateTime = $this->end_date_picker . ' ' . ($this->end_time_picker ?: '00:00');
+            $endDateTime = $this->end_date_picker.' '.($this->end_time_picker ?: '00:00');
             $endMildadi = $this->convertToMiladi($endDateTime);
         }
 
@@ -284,11 +336,11 @@ return new class extends Component {
         $timeParts = isset($parts[1]) ? explode(':', $parts[1]) : [0, 0];
 
         $jalalian = new Jalalian(
-            (int)$dateParts[0],
-            (int)$dateParts[1],
-            (int)$dateParts[2],
-            (int)$timeParts[0] ?? 0,
-            (int)$timeParts[1] ?? 0,
+            (int) $dateParts[0],
+            (int) $dateParts[1],
+            (int) $dateParts[2],
+            (int) $timeParts[0] ?? 0,
+            (int) $timeParts[1] ?? 0,
             0
         );
 
@@ -306,22 +358,41 @@ return new class extends Component {
 
     public function delete(): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         if ($this->editingId) {
             $todo = Todo::find($this->editingId);
 
             if (! $this->isTodoAccessible($todo)) {
                 $this->error('شما دسترسی به این تسک را ندارید');
+
                 return;
             }
 
-            $todo->delete();
-            $this->success('تسک حذف شد');
-            $this->modal = false;
+            try {
+                $todo->delete();
+                $this->success('تسک حذف شد');
+                $this->modal = false;
 
-            $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+                $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
 
-            $this->invalidateEventCache();
-            $this->dispatch('calendar-updated', events: $this->getEvents());
+                $this->invalidateEventCache();
+                $this->dispatch('calendar-updated', events: $this->getEvents());
+            } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+                // Issue #892/#975/#978: defence in depth. The `authorize()` above sits
+                // OUTSIDE this try, so the 403 never actually reaches here today —
+                // this clause exists so that a later edit which moves the check
+                // inside the try cannot turn a revoked holder's delete back into a
+                // friendly toast, and so the #892/#975 static scan keeps a handle on
+                // the ordering.
+                throw $e;
+            } catch (\Exception $e) {
+                $this->error('امکان حذف وجود ندارد', position: 'toast-bottom');
+            }
         }
     }
 
@@ -333,14 +404,21 @@ return new class extends Component {
 
     public function toggleComplete(int $id): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $todo = Todo::find($id);
 
         if (! $this->isTodoAccessible($todo)) {
             $this->error('شما دسترسی به این تسک را ندارید');
+
             return;
         }
 
-        $todo->update(['is_completed' => !$todo->is_completed]);
+        $todo->update(['is_completed' => ! $todo->is_completed]);
         $this->invalidateEventCache();
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
@@ -362,6 +440,7 @@ return new class extends Component {
             return $todo->user_id === Auth::id();
         }
         $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
+
         return in_array($todo->unit_id, $accessibleIds);
     }
 }; ?>
