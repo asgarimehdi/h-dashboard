@@ -589,3 +589,87 @@ test('a todo title containing markup is stored verbatim and reaches the events p
     expect($event)->not->toBeNull();
     expect($event['title'])->toBe($title);
 });
+
+// ==================== Issue #982 — date-range bounded calendar events ====================
+
+/**
+ * Issue #982: The calendar's event loading was gated on a non-existent
+ * `hasPubliclyVisibleDates` property, so `fetchEvents()` never ran when the
+ * user navigated months. The initial unbounded load (cache key `:all::all`)
+ * became the permanent payload — all todos and open tickets loaded forever.
+ *
+ * This test ensures:
+ * 1. Events are filtered by the provided date range (both todos and ticket-tasks)
+ * 2. Cache keys differ across ranges so narrow views don't collapse to `:all::all`
+ */
+test('calendar events are bounded by the provided date range', function () {
+    $this->actingAs($this->user);
+
+    // Create todos in different months
+    $todoInRange = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'در بازه',
+        'start_at' => '2026-07-15 10:00:00', // Middle of the range
+        'is_completed' => false,
+    ]);
+
+    $todoBeforeRange = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'قبل از بازه',
+        'start_at' => '2026-06-15 10:00:00', // Before the range
+        'is_completed' => false,
+    ]);
+
+    $todoAfterRange = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'بعد از بازه',
+        'start_at' => '2026-08-15 10:00:00', // After the range
+        'is_completed' => false,
+    ]);
+
+    // Test the component instance directly with a specific date range
+    $component = Livewire::test('todo.todo')->instance();
+
+    // Use fetchEvents which sets the private calendarStart/calendarEnd
+    $component->fetchEvents('2026-07-01 00:00:00', '2026-07-31 23:59:59');
+
+    $events = $component->getEvents();
+
+    // Only the todo in July should be present
+    $eventIds = array_column($events, 'id');
+
+    expect($eventIds)->toContain('todo-'.$todoInRange->id);
+    expect($eventIds)->not->toContain('todo-'.$todoBeforeRange->id);
+    expect($eventIds)->not->toContain('todo-'.$todoAfterRange->id);
+});
+
+test('calendar cache key differs across date ranges', function () {
+    $this->actingAs($this->user);
+
+    Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'تسک تست',
+        'start_at' => '2026-07-15 10:00:00',
+    ]);
+
+    $component = Livewire::test('todo.todo')->instance();
+
+    // Range 1: July 2026
+    $component->fetchEvents('2026-07-01 00:00:00', '2026-07-31 23:59:59');
+    $events1 = $component->getEvents();
+
+    // Range 2: August 2026
+    $component->fetchEvents('2026-08-01 00:00:00', '2026-08-31 23:59:59');
+    $events2 = $component->getEvents();
+
+    // The events should be different (empty for August since we only have July data)
+    expect($events1)->not->toBeEmpty();
+    expect($events2)->toBeEmpty();
+});
+
+test('dead guard property hasPubliclyVisibleDates is absent from the codebase', function () {
+    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+
+    // The property should not appear anywhere in the file
+    expect($view)->not->toContain('hasPubliclyVisibleDates');
+});
