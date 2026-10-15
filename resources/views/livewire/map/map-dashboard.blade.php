@@ -190,11 +190,19 @@ return new class extends Component
         $this->layers = implode(',', $layers);
     }
 
+    /** @var array<string, string> $filterPropertyMap Explicit allowlist of client keys → component properties. */
+    private const FILTER_PROPERTY_MAP = [
+        'hardware_type' => 'filterHardware',
+        'ticket_priority' => 'filterPriority',
+        'ticket_status' => 'filterStatus',
+    ];
+
     public function onFilterChanged($filters)
     {
         foreach ($filters as $key => $value) {
-            if (property_exists($this, $key)) {
-                $this->$key = $value;
+            $property = self::FILTER_PROPERTY_MAP[$key] ?? null;
+            if ($property !== null) {
+                $this->$property = $value;
             }
         }
     }

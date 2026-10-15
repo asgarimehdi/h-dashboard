@@ -253,13 +253,30 @@ return new class extends Component
         ]);
     }
 
+    /** @var array<string, string> $toggleFilterAllowlist Explicit allowlist of client-supplied property names. */
+    private const TOGGLE_FILTER_ALLOWLIST = [
+        'filterType',
+        'filterOs',
+        'filterCpu',
+        'filterRam',
+        'filterHdd',
+        'filterShutdown',
+        'filterNetType',
+        'filterMark',
+        'filterPerson',
+        'filterUnit',
+        'filterSemat',
+    ];
+
     /**
      * Toggle a quick-preset filter on/off. Clicking an already-active preset
      * clears it (so users can remove a filter by clicking it again).
      */
     public function toggleFilter(string $property, string $value): void
     {
-        $this->$property = ($value === $this->$property) ? null : $value;
+        if (in_array($property, self::TOGGLE_FILTER_ALLOWLIST, true)) {
+            $this->$property = ($value === $this->$property) ? null : $value;
+        }
     }
 
     public function toggleColPanel(): void
