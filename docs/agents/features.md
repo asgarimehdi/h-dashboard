@@ -144,7 +144,7 @@ The first three jobs accept a `$unitIds` array; **empty resolves `AccessService:
 
 ## Scheduler & Console Commands
 
-**Five commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`:
+**Five commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`, except `cache:prune-stale` — since #981 it is an audit-only report and takes no options:
 
 | Scheduled item | Schedule |
 |---|---|

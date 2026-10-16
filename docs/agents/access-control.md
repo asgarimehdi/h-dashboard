@@ -24,9 +24,20 @@ Uses **Spatie Permission** package:
   ```bash
   grep -rnE '(when\(\s*\$[a-zA-Z]*[Ii]ds|! *empty\(\$[a-zA-Z]*[Ii]ds\))' app/ resources/views/
   ```
-  A hit is only a leak if it **guards a scope predicate** — `empty($rootIds) return collect()` and
-  `empty($deletedHardwareIds)` are early-returns, not scope bypasses. Still read each one: the two-`when`
-  export form and `map-no-boundary`'s `:28` early-return are load-bearing.
+  The blind sweep above cannot see the third leak shape: a scoping
+  precondition that is simply **absent** — no `when`, no empty guard, no
+  predicate at all, just an unscoped query. The ticket selectors in
+  `tickets/⚡inbox.blade.php` and `tickets/⚡create.blade.php` shipped
+  exactly this shape (#980's correction) and their fix was a plain
+  scoping `whereIn` added where nothing guarded the picker before.
+  Grep for suspicious models too, not only for fail-open spellings:
+  ```bash
+  grep -rnE 'Unit::query\(\)|Person::query\(\)|Ticket::query\(\)' resources/views/ app/
+  ```
+  and read each hit: a unit/person picker that goes to the DB with no
+  `whereIn(... unitIds())` at all is the same leak this section is about,
+  just silent — no fail-open spelling to catch. Read **every** hit; the
+  two sweeps together catch the `when`/`empty` shapes **and** absence.
 - Users see only their own unit's data (plus sub-units via recursive CTE)
 - **`users.index` is unit-scoped (issue #849) — `manage_users` is NOT a global grant.** The whole file avoids every fail-open spelling: no `when($ids, …)`, no `! empty($ids)` — each predicate is an unconditional `whereIn` / `in_array`, so an empty scope is `0 = 1`, never "no filter".
   - `users()` filters with the **disjunction** `person.u_id ∈ scope` **OR** a `user_units` row ∈ scope. Do not copy `activity-log`'s `whereHas('person', …)` verbatim here: alone it hides accounts with no linked person (admin accounts).

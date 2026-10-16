@@ -45,7 +45,9 @@ which is worse than no hook. CI stays the only authority.
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Verified 2026-10-01:** **`composer test`** is the one-command way (**1687 passed, 2 risky, 4268 assertions**, ~289s serial). It bakes in the three environment gotchas.
+> **✅ Verified 2026-10-16:** **`composer test`** is the one-command way (**2303 passed, 2 risky, 6644 assertions**, ~517s serial). It bakes in the three environment gotchas.
+>
+> Re-derive these numbers with the command this line names — run `composer test` and copy its `Tests:    2 risky, 2303 passed (6644 assertions)` summary verbatim; never re-stamp a figure you did not just produce. The stamp before this one read `1687 passed, 4268 assertions, ~289s serial` (2026-10-01) and had drifted by **+616 tests / +2376 assertions** before anyone noticed (#983).
 >
 > **`.env.testing` no longer ships a key (#953).** It is git-tracked, so the `APP_KEY` was blanked there like in every other template — and it is the file `APP_ENV=testing` loads, so a clone that has never run the suite has no key. `composer test` now generates one **only when there is none** (`scripts/ensure-test-app-key.php`) and leaves an existing key byte-identical. Nothing to do by hand; the script never prints the key and never rotates one.
 >
@@ -119,7 +121,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | Cache keys collide across tests | Postgres sequences are non-transactional, so `RefreshDatabase` restarts ids at 1 every test. `AccessService` keys on `accessible_units:v{version}:{user_id}:{session_unit_id}:{md5(baseIds)}` — byte-identical across tests, so a stale answer leaks from one test into the next. Put the flush in the base `TestCase::setUp()`, not in a test class — the seeder bump happens in the child's `setUp()`, which runs after `parent::setUp()`, so one flush there covers every class and needs no ordering rule. Never flush inside a test method |
 | Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
 | Testing a cache fix | Assert through the component or the service, never by poisoning a key and expecting it to be ignored — that tests your own poison, not the flush. A test that only passes in isolation is asserting `setUp`, not the fix; assert the behaviour a user sees |
-| Factories | **15 factories** exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` has no `HasFactory` trait**, so `Ticket::factory()` throws `BadMethodCallException` and `TicketFactory` is dead code — build tickets with `Ticket::create([...])` like `TicketsInboxLivewireTest` does. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
+| Factories | **15 factories** exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` DOES use `HasFactory`** (`/** @use HasFactory<TicketFactory> */ use HasFactory, HasOrganizationalScope;`), so `Ticket::factory()` works and `TicketFactory` is live — **18** `Ticket::factory()` calls across `tests/Feature/TicketWorkflowTest.php` (14) and `tests/Feature/TicketStatusTransitionTest.php` (4). The row that used to claim otherwise was wrong and told agents to delete a working factory (#983). `Ticket::create([...])` (as in `TicketsInboxLivewireTest`) is still fine where a test wants explicit columns, not because the factory is dead. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
 | An exported `DB_DATABASE` beats `phpunit.xml` | The `DB_*` `<env>` entries in `phpunit.xml` have no `force="true"`, so PHPUnit skips them when the variable already exists (`PhpHandler.php:140`). `DB_URL` is not in `phpunit.xml` at all and outranks everything. `php artisan verify:preflight` resolves the real value — read `.env` or `phpunit.xml` directly and you will check the wrong database |
 | `expectsOutputToContain` matches ONE line per expectation | `PendingCommand`'s buffered mock consumes a written line with the first substring that matches it, so two substrings on the same line can never both be asserted. Put each claim on its own output line |
 | `assertStringNotContainsString` returns void | Chaining `->and()` after it dies with "Call to a member function and() on null". Same for `assertMatchesRegularExpression` — use separate statements |
@@ -129,3 +131,27 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | `Query\Builder::toBase()` does not exist | Only `Eloquent\Builder::toBase()` does. The `@mixin Query\Builder` on `Eloquent\Builder` is one-way, so PHPStan resolves `Ticket::query()` as `Query\Builder` — accept both and branch on `instanceof` rather than adding a `@method` (that re-types the chain repo-wide) |
 | `DailySeries` needs explicit generics | `Eloquent\Builder` in a signature without a `TModel` produces `missingType.generics` at level 6. Annotate `@param EloquentBuilder<covariant Model>|QueryBuilder` — otherwise the fix gets buried in `phpstan-baseline.neon` |
 | A test must not assert a fixed cell address across a `latest('created_at')` export | `hardware_audits.created_at` is `timestamp(0)` on Postgres, so rows written in the same second tie and their order under `latest('created_at')` is undefined — Postgres decides by physical page layout, so the same test passes on an author machine and fails on CI (issue #886's escape test was red in #920/#923/#924, green in #921/#922, with no commit to blame). In an export test, resolve the column from `headings()` and find the row by its own content; never `getCell('F2')` to mean "the row this test created". Note `paginate()` has the same shape: with a count of 0 it never runs the ORDER BY, so a sort test that seeds nothing passes vacuously |
+
+## CI jobs (`.github/workflows/test.yml` — seven jobs, three blocking)
+
+| Job key | Name | Gate |
+|---|---|---|
+| `lint` | Code Style (Pint) — `vendor/bin/pint --test` | **blocking** |
+| `test` | Tests & Coverage — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov | **blocking** |
+| `phpstan` | PHPStan Static Analysis — `vendor/bin/phpstan analyse --no-progress` | **blocking** |
+| `coverage-report` | Coverage Report (Blade-aware) | `continue-on-error` |
+| `e2e` | E2E Tests (Playwright) | `continue-on-error` |
+| `mutation` | Mutation Testing (`--covered-only`) | `continue-on-error` |
+| `test-php86` | PHP 8.6 Preview | `continue-on-error` |
+
+> Derivation, re-run after any workflow change — no hand count:
+> ```bash
+> yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml              # lint, test, coverage-report, e2e, mutation, phpstan, test-php86
+> yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml   # lint, test, phpstan
+> ```
+
+## Derivable invariants (stamp hygiene, #983)
+
+- `InteractsWithTestSetup` usage is counted by `grep -rlE 'use[^;]*InteractsWithTestSetup[^;]*;' tests/ | wc -l` (110 at the #983 stamp) — a bare `grep -rl 'InteractsWithTestSetup'` also matches the trait file itself and reads 111. Re-derive, never hand-count.
+- Every Feature test consumes the shared trait (see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` — `PermissionSeeder` + `seedLookupTables()`).
+- All **26** Eloquent models under `app/Models/` carry `@property` PHPDoc annotations (#671) — update the annotation when a column/cast changes; PHPStan level 6 + baseline depends on them.
