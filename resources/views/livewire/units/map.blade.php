@@ -193,6 +193,15 @@ return new class extends Component {
 </style>
 @endassets
 
+@push('scripts')
+    {{-- Issue #984: `units/map` is the only page that draws boundaries, so the
+         draw plugin ships here instead of in the global layout. It lands in
+         `@stack('scripts')`, which runs before Livewire's deferred `start()`
+         evaluates the `@script` block below — `L.Control.Draw` is therefore
+         defined when `initUnitMap()` runs. --}}
+    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
+@endpush
+
 @script
 <script>
     var mapTileTemplate = @js(config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'));

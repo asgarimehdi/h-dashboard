@@ -15,11 +15,17 @@
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 
 
+    {{-- Issue #984: leaflet.draw, leaflet-routing-machine and FullCalendar are
+         page-specific. Loading them here cost ~914 KB of render-blocking JS on
+         every page (~85% of the global JS payload) for three pages that use
+         them. Each page now pushes the library it needs into `@stack('scripts')`:
+           maps/route + maps/route2 -> leaflet-routing-machine
+           units/map                -> leaflet.draw
+           todo/todo                -> full-calendar
+         Leaflet itself and jalalidatepicker stay global — they are used by most
+         pages. Do not move a library back here without re-measuring. --}}
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
-    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
-    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
-    <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
 <style>
     @font-face {
         font-family: 'Vazirmatn';
