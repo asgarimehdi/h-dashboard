@@ -73,6 +73,14 @@ return new class extends Component {
     </x-card>
 </div>
 
+@push('scripts')
+    {{-- Issue #984: routing is this page's only consumer, so it ships here
+         instead of in the global layout. `@stack('scripts')` runs before
+         Livewire's deferred `start()` evaluates the `@script` block below, so
+         `L.Routing` exists by the time `onReady()` calls `initRouting()`. --}}
+    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
+@endpush
+
 @script
 <script>
     var routingControl;

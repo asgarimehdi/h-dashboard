@@ -547,6 +547,13 @@ return new class extends Component
         </x-form>
     </x-modal>
 
+@push('scripts')
+    {{-- Issue #984: FullCalendar is used by this calendar page alone (~275 KB),
+         so it ships here instead of in the global layout. `@stack('scripts')`
+         runs before Livewire's deferred `start()` evaluates the `@script` block
+         below, so `FullCalendar` is defined when `initTodoCalendar()` runs. --}}
+    <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
+@endpush
 
 @script
 <script>
