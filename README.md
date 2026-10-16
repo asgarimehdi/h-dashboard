@@ -40,19 +40,19 @@ Health Dashboard is a Laravel application for managing hospital/healthcare cente
 git clone https://github.com/asgarimehdi/h-dashboard.git
 cd h-dashboard
 
-# 2. Start database
-docker compose -f docker-compose-pgsql-.yml up -d
-
-# 3. Install dependencies
-composer install
-npm install
-
-# 4. Configure environment
+# 2. Configure environment
 cp .env.example .env
 php artisan key:generate
 
-# 5. Run migrations
-php artisan migrate
+# 3. Start database (reads DB_* from the .env created in step 2)
+docker compose -f docker-compose-pgsql-.yml up -d
+
+# 4. Install dependencies
+composer install
+npm install
+
+# 5. Run migrations (with seed data for roles/users)
+php artisan migrate --seed
 
 # 6. Build frontend
 npm run build
@@ -106,19 +106,19 @@ composer test
 git clone https://github.com/asgarimehdi/h-dashboard.git
 cd h-dashboard
 
-# ۲. راه‌اندازی پایگاه داده
-docker compose -f docker-compose-pgsql-.yml up -d
-
-# ۳. نصب وابستگی‌ها
-composer install
-npm install
-
-# ۴. تنظیم فایل محیطی
+# ۲. تنظیم فایل محیطی
 cp .env.example .env
 php artisan key:generate
 
-# ۵. اجرای مایگریشن‌ها
-php artisan migrate
+# ۳. راه‌اندازی پایگاه داده (متغیرهای DB_* را از .env مرحلهٔ ۲ می‌خواند)
+docker compose -f docker-compose-pgsql-.yml up -d
+
+# ۴. نصب وابستگی‌ها
+composer install
+npm install
+
+# ۵. اجرای مایگریشن‌ها (همراه seed برای نقش‌ها/کاربران)
+php artisan migrate --seed
 
 # ۶. بیلد فرانت‌اند
 npm run build

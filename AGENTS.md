@@ -45,13 +45,14 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 Uses **Spatie Permission** package:
 
 - `HasOrganizationalScope` trait on models for **opt-in** unit-based filtering via `->accessible($column)`. It is a single local scope — **there is no global scope**, so a query is unscoped until it calls it. Its `whereIn` is unconditional, so an empty scope compiles to `0 = 1` (fail-closed).
-- **Never special-case an empty scope as "no restriction."** There are **three spellings**, and a sweep that only greps one of them will miss the other two (issue #839):
+- **Never special-case an empty scope as "no restriction."** There are **four leak shapes**, and a sweep that only greps the conditional spellings will miss the others (issue #839 / #980):
 
   | Spelling | Why it fails open |
   |---|---|
   | `->when($accessibleIds, fn ($q) => …)` | `Conditionable::when()` runs the callback only for a **truthy** value, so `[]` drops the predicate — the #819 leak in five `/reports/*` components |
   | `if (! empty($accessibleIds)) { $q->whereIn(…); }` | the predicate is simply never added — #839, all **8** sites in `PersonImport` / `HardwareImport` |
   | `if (! empty($accessibleIds) && ! in_array($id, $accessibleIds)) { reject }` | the **first conjunct is false**, so `&&` short-circuits and the row is **ACCEPTED** — the same bug with extra steps, and the most dangerous spelling because it *looks* like a scope check |
+  | *(no predicate at all)* — a query, controller, Livewire action, export, or report that reads scoped data but never calls `->accessible()` / `->whereIn($column, $accessibleIds)` | the scoping precondition is simply **absent**: a row-level leak no conditional spelling exposes, and the grep sweep cannot find it. Audit by reading each query path and cover it with an invariance test; do **not** treat the greppable spellings as exhaustive (ticket-selector correction, #980) |
 
   `AccessibleUnitIds()` is legitimately `[]` for an account with no `user_units` row and no `person.u_id`, and such a user is deliberately allowed through `ValidateUnitContext`. **`[]` means "in scope of nothing", never "unrestricted".** Use a plain `->whereIn($column, $accessibleIds)` (or `->accessible($column)`) instead — an empty array compiles to `0 = 1`. The two-`when` form in `UnitsExportController` / `PersonsExportController` (`when($accessibleIds === [], whereRaw('1 = 0'))`) is also correct — but the unconditional one is one condition instead of two that must both stay right.
 - **The sweep to run after any scope change** (covers all three spellings at once):
@@ -489,7 +490,7 @@ The first three jobs accept a `$unitIds` array; **empty resolves `AccessService:
 - **Components:** Livewire components are **single-file** — class is an inline anonymous class at the top of the Blade view (`return new class extends Component { ... };`). There are **no** `app/Livewire/*.php` class files. Reference components by dot-name string (`'hr.dashboard'`, `'kargozini.person'`, `'auth.login'`, `'tickets.ticket-comments'`) in routes and tests.
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Shared test trait:** new Feature tests `use InteractsWithTestSetup;` (`tests/Support/Concerns/InteractsWithTestSetup.php`, **84 files** already do) — provides `seedLookupTables()`, `resyncSequence()`, `createUserWithUnit($permissions, $role)`, `createHardware()`, `assertCacheInvalidated()`, `assertQueryCount()`, `assertNoNPlusOne()`. Do not re-implement user/unit/lookup seeding by hand; see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` (`PermissionSeeder` + `seedLookupTables()`).
+- **Shared test trait:** new Feature tests `use InteractsWithTestSetup;` (`tests/Support/Concerns/InteractsWithTestSetup.php`, **111 files** already do — count via `grep -rl InteractsWithTestSetup tests | wc -l`) — provides `seedLookupTables()`, `resyncSequence()`, `createUserWithUnit($permissions, $role)`, `createHardware()`, `assertCacheInvalidated()`, `assertQueryCount()`, `assertNoNPlusOne()`. Do not re-implement user/unit/lookup seeding by hand; see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` (`PermissionSeeder` + `seedLookupTables()`).
 - **Models:** all **26** Eloquent models under `app/Models/` carry `@property` PHPDoc annotations (#671). When you add an attribute/cast, update the annotation too — PHPStan level 6 + baseline depends on them.
 - **Factories:** **15 factories** exist (`UserFactory`, `UnitFactory`, `PersonFactory`, `HardwareFactory`, `TicketFactory`, `TodoFactory`, `SematFactory`, `TahsilFactory`, `EstekhdamFactory`, `RadifFactory`, `UnitTypeFactory`, `NotificationFactory`, `AttachmentFactory`, `TaskActivityFactory`, `ZabbixDeviceFactory`). When seeding rows with **explicit IDs** in tests, resync the Postgres sequence afterwards (`SELECT setval(...)`) or later inserts hit duplicate keys — or call `$this->seedLookupTables()` / `$this->resyncSequence($table)` from the shared trait.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
@@ -576,7 +577,7 @@ Use `tool_search` to discover available tools, `tool_describe` to load schemas, 
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Verified 2026-10-01:** **`composer test`** is the one-command way (**1687 passed, 2 risky, 4268 assertions**, ~289s serial). It bakes in the three environment gotchas.
+> **✅ Verified 2026-10-16:** **`composer test`** is the one-command way (**2303 passed, 2 risky, 6644 assertions**, ~538s serial; derived by running `composer test` on `beta` @ `30cfd33`, output ending `Tests: 2 risky, 2303 passed (6644 assertions)`). It bakes in the three environment gotchas.
 >
 > **`.env.testing` no longer ships a key (#953).** It is git-tracked, so the `APP_KEY` was blanked there like in every other template — and it is the file `APP_ENV=testing` loads, so a clone that has never run the suite has no key. `composer test` now generates one **only when there is none** (`scripts/ensure-test-app-key.php`) and leaves an existing key byte-identical. Nothing to do by hand; the script never prints the key and never rotates one.
 >
@@ -738,11 +739,14 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with seven jobs (verified by counting the top-level keys under `jobs:` in that file — `awk '/^jobs:/{f=1;next}/^[^ ]/{if(f)exit} f&&/^  [A-Za-z0-9_-]+:/'`):
 - **Code Style (Pint)** — `vendor/bin/pint --test` (blocking)
 - **Tests & Coverage (blocking)** — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov
+- **Coverage Report (Blade-aware, informational)** — additional coverage report, never gates
+- **E2E Tests (Playwright)** — `npx playwright test`
 - **Mutation Testing (non-blocking)** — `--covered-only`, treat failures as informational
 - **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
+- **PHP 8.6 Preview (non-blocking)** — test run on a pre-release PHP
 
 > Full CI workflow details: `references/api-endpoints.md` (CI/CD section).
 
@@ -788,7 +792,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Postgres sequence | After seeding with explicit IDs in tests, `SELECT setval(...)` to avoid dup keys |
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
 | Leaflet.Draw featureGroup | `L.Control.Draw({ edit: { featureGroup } })` only enables edit/remove when `featureGroup.getLayers().length > 0` — `_checkDisabled` in `public/js/leaflet/leaflet.draw.js` adds `.leaflet-disabled` otherwise. A layer added straight to the map is invisible to the toolbar: put it in the FeatureGroup with `eachLayer(l => drawnItems.addLayer(l))` (individual layers, never the `L.GeoJSON` group — `updateGeojson()` only serialises `L.Polygon`) |
-| `units.boundary_id` is ON DELETE CASCADE | Deleting the `boundaries` row cascades the **unit** away with it. Always `$unit->update(['boundary_id' => null])` FIRST, then delete the boundary row. Reversed order silently deletes the unit and its subtree (issue #702) |
+| `units.boundary_id` is ON DELETE CASCADE, but the unit is RESTRICT-protected by its children | Deleting the `boundaries` row cascades to the **unit** that owns it. Because `units_parent_fk` is `ON DELETE RESTRICT`, a unit with child units cannot be deleted this way — the delete is blocked at the DB. The real harm is the **leaf** case: a leaf unit (no child units) is deleted, `persons.u_id` becomes NULL (`persons_u_id_foreign_units` is `ON DELETE SET NULL`), so those people — and their hardware via `HardwareAuditScope` — silently drop out of scope while the people remain. Always `$unit->update(['boundary_id' => null])` FIRST, then delete the boundary row. Reversed order kills a leaf unit (and its people's hardware leaves the audit scope) — issue #702 / #983 |
 | `Boundary::geojson` is a BARE geometry | `getGeojsonAttribute()` returns `ST_AsGeoJSON(...)` = `{"type":"MultiPolygon","coordinates":[…]}` — there is NO `geometry` key, so it is not a GeoJSON Feature. Hand `L.geoJSON` a Feature you build yourself and unwrap `MultiPolygon` → `Polygon` first, or `fitBounds` throws `Bounds are not valid` inside the `try`/`catch`, the layer never loads, and the draw toolbar stays disabled (issue #702) |
 | `getLatLngs()` nesting depth | A plain `L.Polygon` is `[ring]`; one built from a `MultiPolygon` is `[[ring]]` — three levels. `L.Edit.Poly` only reads two, so `editing.enabled()` returns `true` with **no error** while `.leaflet-editing-icon` count is `0` and the ring serialises as `[undefined, undefined, …]`. Normalise with `while (Array.isArray(ring[0])) ring = ring[0]` before mapping coords |
 | Leaflet is minified in E2E | `layer.constructor.name` is `"e"`, never `"Polygon"`. In Playwright assert `layer instanceof window.L.Polygon` — never match a constructor-name string. Keep the real names in the returned payload so a failure prints what it got |
@@ -830,7 +834,7 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agent
 | Cache keys collide across tests | Postgres sequences are non-transactional, so `RefreshDatabase` restarts ids at 1 every test. `AccessService` keys on `accessible_units:v{version}:{user_id}:{session_unit_id}:{md5(baseIds)}` — byte-identical across tests, so a stale answer leaks from one test into the next. Put the flush in the base `TestCase::setUp()`, not in a test class — the seeder bump happens in the child's `setUp()`, which runs after `parent::setUp()`, so one flush there covers every class and needs no ordering rule. Never flush inside a test method |
 | Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
 | Testing a cache fix | Assert through the component or the service, never by poisoning a key and expecting it to be ignored — that tests your own poison, not the flush. A test that only passes in isolation is asserting `setUp`, not the fix; assert the behaviour a user sees |
-| Factories | **15 factories** exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` has no `HasFactory` trait**, so `Ticket::factory()` throws `BadMethodCallException` and `TicketFactory` is dead code — build tickets with `Ticket::create([...])` like `TicketsInboxLivewireTest` does. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
+| Factories | **15 factories** exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. `Ticket::factory()` is **live** (`Ticket` uses `HasFactory`; verified: 18 call sites — 14 in `tests/Feature/TicketWorkflowTest.php`, 4 in `tests/Feature/TicketStatusTransitionTest.php`), so do **not** delete `TicketFactory`. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` (or `->saveQuietly()`) |
 | `persons.phone` has no format rule | Free text, `max:20`, **no regex** (#738) — `0912…`, `+98…`, `0912 345 6789` are all valid. A "stricter" validation silently rejects real rows |
 | An exported `DB_DATABASE` beats `phpunit.xml` | The `DB_*` `<env>` entries in `phpunit.xml` have no `force="true"`, so PHPUnit skips them when the variable already exists (`PhpHandler.php:140`). `DB_URL` is not in `phpunit.xml` at all and outranks everything. `php artisan verify:preflight` resolves the real value — read `.env` or `phpunit.xml` directly and you will check the wrong database |
 | `expectsOutputToContain` matches ONE line per expectation | `PendingCommand`'s buffered mock consumes a written line with the first substring that matches it, so two substrings on the same line can never both be asserted. Put each claim on its own output line |

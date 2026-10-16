@@ -6,7 +6,7 @@
 
 ## Scheduler & Console Commands
 
-Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule()`). Commands live in `app/Console/Commands/`:
+Scheduled tasks are registered in `bootstrap/app.php` (Laravel 13 `withSchedule()`). Commands live in `app/Console/Commands/`:
 
 | Command | Schedule | Class | Purpose |
 |---|---|---|---|
