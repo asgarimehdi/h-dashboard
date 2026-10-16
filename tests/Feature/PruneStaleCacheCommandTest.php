@@ -19,10 +19,13 @@ class PruneStaleCacheCommandTest extends TestCase
             ->assertExitCode(0);
     }
 
-    public function test_cache_prune_stale_dry_run_completes(): void
+    public function test_cache_prune_stale_reports_an_honest_audit(): void
     {
-        $this->artisan('cache:prune-stale', ['--dry-run' => true])
-            ->expectsOutputToContain('Dry run complete')
+        // Issue #981: the command is an audit, not a prune — its output must
+        // say so, so the hourly run can never again read as a deletion.
+        $this->artisan('cache:prune-stale')
+            ->expectsOutputToContain('Cache version audit')
+            ->expectsOutputToContain('nothing was deleted')
             ->assertExitCode(0);
     }
 

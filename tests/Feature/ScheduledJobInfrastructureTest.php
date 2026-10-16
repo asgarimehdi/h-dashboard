@@ -108,7 +108,7 @@ class ScheduledJobInfrastructureTest extends TestCase
 
     public function test_prune_stale_cache_command_runs(): void
     {
-        $exitCode = Artisan::call('cache:prune-stale', ['--dry-run' => true]);
+        $exitCode = Artisan::call('cache:prune-stale');
         $this->assertEquals(0, $exitCode);
     }
 
