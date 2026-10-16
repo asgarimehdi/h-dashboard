@@ -86,7 +86,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Factories:** 15 factories exist under `database/factories/`; `Ticket` has **no** `HasFactory` (build tickets via `Ticket::create([...])`), and `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
+- **Factories:** 15 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (the old "no `HasFactory`" gotcha was wrong, #983 — see [testing](docs/agents/testing.md)); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
@@ -128,7 +128,7 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs with four jobs: **Code Style (Pint)** (blocking), **Tests & Coverage** (`--parallel --coverage --min=80`, blocking), **Mutation Testing** (non-blocking), **PHPStan** (blocking). Coverage is CI-only.
+`.github/workflows/test.yml` runs on PRs with **seven** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and four `continue-on-error` (`coverage-report`, `e2e`, `mutation`, `test-php86`). The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
 
 ---
 
@@ -152,7 +152,7 @@ When code fails or tests break, follow this order:
 | Zabbix integration (`ZabbixClient`/`ZabbixResult`, sync logs, connection test, polling) | `docs/agents/zabbix.md` |
 | Leaflet maps & GIS (map-store lifecycle, boundaries, draw toolbar) | `docs/agents/maps.md` |
 | Feature contracts (exports, queued jobs, scheduler, unit tree, daily windows, settings) | `docs/agents/features.md` |
-| Testing & verification detail (Pest per-file counts, PHPStan baseline, git hooks) | `docs/agents/testing.md` |
+| Testing & verification detail (Pest counts, PHPStan baseline, git hooks, CI job table) | `docs/agents/testing.md` |
 | E2E (Playwright setup, `.env.e2e`, helpers, failure table) | `docs/agents/e2e.md` |
 | Persian search & normalization (folding, ZWNJ, `LIKE`) | `docs/agents/search.md` |
 | Data model detail | `references/data-model.md` |
