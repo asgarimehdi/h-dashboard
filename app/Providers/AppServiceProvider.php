@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Observers\HardwareAuditObserver;
+use App\Services\AccessService;
 use App\Services\CacheInvalidationService;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\Zabbix\ServiceZabbixClient;
@@ -29,6 +30,14 @@ class AppServiceProvider extends ServiceProvider
             CacheInvalidationServiceInterface::class,
             CacheInvalidationService::class
         );
+
+        // AccessService is stateless, so binding it is NOT the #984 fix — the fix
+        // is the request-level memo inside it, and that memo is only useful if
+        // the container hands out ONE instance per request. `scoped()` gives
+        // exactly that lifecycle: shared for the request/job, reset between them
+        // (so a long-running worker or Octane never carries a stale access array
+        // into the next request).
+        $this->app->scoped(AccessService::class);
 
         // Zabbix transport behind a typed interface (#741). Resolved per call
         // so tests that bind a `ZabbixService` instance still get their mock
