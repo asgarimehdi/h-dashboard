@@ -6,7 +6,7 @@
 
 ## Scheduler & Console Commands
 
-Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule()`). Commands live in `app/Console/Commands/`:
+Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864). Do **not** recreate `app/Console/Kernel.php`: nothing ever bound it, so a schedule put there silently never runs. Commands live in `app/Console/Commands/`:
 
 | Command | Schedule | Class | Purpose |
 |---|---|---|---|
@@ -555,11 +555,23 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
-- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)
-- **Tests & Coverage (blocking, timeout 10 min)** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov
-- **Mutation Testing (non-blocking, `continue-on-error: true`)** — `--covered-only`, treat failures as informational
-- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with **seven jobs**, three of them blocking:
+
+| Job key | Name | Gate | Timeout |
+|---|---|---|---|
+| `lint` | Code Style (Pint) | **blocking** | 5 min |
+| `test` | Tests & Coverage | **blocking** | 10 min |
+| `phpstan` | PHPStan Static Analysis | **blocking** | 10 min |
+| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error: true` | 10 min |
+| `e2e` | E2E Tests (Playwright) | `continue-on-error: true` | 30 min |
+| `mutation` | Mutation Testing | `continue-on-error: true` | 30 min |
+| `test-php86` | PHP 8.6 Preview | `continue-on-error: true` | 10 min |
+
+- **`lint`** — `vendor/bin/pint --test` plus the tracked-`APP_KEY` guard (`php scripts/check-app-key-leak.php`).
+- **`test`** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
+- **`mutation`** — `--covered-only`, treat failures as informational.
+
+> Derivation, re-run instead of hand-counting — `yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml` → `lint, test, coverage-report, e2e, mutation, phpstan, test-php86`, and the blocking set is `yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml` → `lint, test, phpstan`.
 
 ### Storage Permissions (gotcha)
 
