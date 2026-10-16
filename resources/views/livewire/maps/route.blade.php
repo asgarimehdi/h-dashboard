@@ -45,6 +45,15 @@ return new class extends Component {
 
 
 
+@push('scripts')
+    {{-- Issue #984: routing is needed by this page alone, so it ships here
+         instead of in the global layout. `@stack('scripts')` sits at the end of
+         <body>, but that is still before Livewire's `start()` (deferred to
+         DOMContentLoaded) evaluates the `@script` block below, so `L.Routing` is
+         defined by the time `onReady()` runs. --}}
+    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
+@endpush
+
 @script
 <script>
     // Issue #028 — bind to the live map the store owns. onReady() replaces the old
