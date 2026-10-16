@@ -305,6 +305,38 @@ class AccessibilityInfrastructureTest extends TestCase
         );
     }
 
+    /**
+     * #996 — همان ادعای تست‌های بالا، روی صفحاتی که واقعاً HTML می‌دهند: نه فقط
+     * `/users`. صفحهٔ `/dashboard` قبلاً صفر لینک فعال داشت و
+     * `/users/changepassword` دو تا (`/users` هم خودش را ادعا می‌کرد).
+     * `/units/chart` عمداً اینجاست: فرزندی که آیتم مستقل ندارد باید والدش
+     * هایلایت بماند.
+     */
+    public function test_only_one_sidebar_link_claims_the_current_page(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit([
+            'map', 'bw', 'manage_zabbix', 'manage_users', 'manage_hardware',
+            'manage_personnel', 'view_hr_dashboard', 'manage_org_chart',
+            'kargozini', 'organization', 'calendar', 'manage_roles',
+        ]);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $user->units()->first()->id);
+
+        foreach ([
+            '/dashboard' => '/dashboard',
+            '/users' => '/users',
+            '/users/changepassword' => '/users/changepassword',
+            // فرزندی که آیتم مستقل ندارد، والدش را فعال نگه می‌دارد (بخش ۳-۵).
+            '/units/chart' => '/units',
+        ] as $path => $href) {
+            $xpath = $this->xpath($this->get($path)->assertOk()->getContent());
+            $current = $xpath->query('//nav//a[@aria-current="page"]');
+
+            $this->assertSame(1, $current->length, "{$path}: باید دقیقاً یک لینک active باشد.");
+            $this->assertSame($href, $current->item(0)->getAttribute('href'), "{$path}: لینک اشتباه active شده.");
+        }
+    }
+
     // ---------------------------------------------------------------------
     // قدم ۳ — لینک پرش و نشانه‌های ناوبری
     // ---------------------------------------------------------------------
