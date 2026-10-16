@@ -208,7 +208,9 @@
                 <x-menu-separator />
                 @endif
                 <x-menu-item title="جستجوی کلی" icon="o-magnifying-glass" link="/search" wire:navigate />
-                <x-menu-item title="صفحه اول" icon="o-home" link="/" wire:navigate />
+                {{-- #996: روت `/` یک `Route::redirect('/', '/dashboard')` است؛
+                     با `link="/"` این آیتم هیچوقت active نمی‌شد. --}}
+                <x-menu-item title="صفحه اول" icon="o-home" link="/dashboard" wire:navigate />
 
                 {{-- منابع انسانی --}}
                 @can('kargozini')
@@ -331,7 +333,9 @@
                 @canany(['manage_users', 'manage_roles'])
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     @can('manage_users')
-                    <x-menu-item title="کاربران" icon="o-users" link="/users" wire:navigate />
+                    {{-- #996: `/users/changepassword` آیتم مستقل دارد؛ بدون `:exact`
+                         آیتم `/users` آن صفحه را هم ادعا می‌کرد. --}}
+                    <x-menu-item title="کاربران" icon="o-users" link="/users" :exact="true" wire:navigate />
                     @endcan
                     @can('manage_roles')
                     <x-menu-item title="مدیریت نقش‌ها" icon="o-shield-check" link="/roles" wire:navigate />

@@ -4,6 +4,7 @@ namespace App\View\Components;
 
 use Closure;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Mary\View\Components\MenuItem;
 
 /**
@@ -32,6 +33,68 @@ use Mary\View\Components\MenuItem;
  */
 class AccessibleMenuItem extends MenuItem
 {
+    /**
+     * #996 — match on PATH SEGMENTS, not on raw strings.
+     *
+     * maryUI's own implementation is
+     * `! $this->exact && $this->link != '/' && Str::startsWith($route, $link)`
+     * (vendor/robsontenorio/mary .../MenuItem.php:73). A string prefix is not a
+     * path prefix: `/map` "starts" `/maps/point`, and `/maps/route` "starts"
+     * `/maps/route2`, so two or three items were highlighted at once.
+     *
+     * Two more rules the vendor version cannot express:
+     *
+     * 1. A link that carries a query string (`/tickets/new?category=bug`) is an
+     *    action shortcut, not the menu entry that identifies a page — the page it
+     *    opens is `/tickets/new`. `request()->url()` strips the query, so such a
+     *    link could never match anyway; saying so explicitly keeps one page =
+     *    one highlighted link instead of relying on that accident.
+     * 2. The query string of the CURRENT request is ignored. Livewire keeps page
+     *    state in the URL (`#[Url]` on ⚡inbox / ⚡monitoring / map-dashboard), so
+     *    matching the full URL would blank the highlight on `/users?page=2`.
+     *
+     * `exact` therefore means, in this component: match this path only, never a
+     * child path. `/users/:changepassword` has its own menu entry, so `/users`
+     * sets it; `/units` does not (its children — `/units/chart`,
+     * `/units/{id}/map` — have no entry and must keep the parent highlighted).
+     */
+    public function routeMatches(): bool
+    {
+        $href = $this->getHref();
+
+        if ($href === null) {
+            return false;
+        }
+
+        if ($this->route) {
+            return request()->routeIs($this->route);
+        }
+
+        $link = url($this->link ?? '');
+        $route = url(request()->url());
+
+        if ($link == $route) {
+            return true;
+        }
+
+        $linkQuery = parse_url($link, PHP_URL_QUERY);
+
+        if (is_string($linkQuery) && $linkQuery !== '') {
+            return false;
+        }
+
+        $linkPath = (string) (parse_url($link, PHP_URL_PATH) ?: '/');
+        $routePath = (string) (parse_url($route, PHP_URL_PATH) ?: '/');
+
+        if ($linkPath === $routePath) {
+            return true;
+        }
+
+        return ! $this->exact
+            && $linkPath !== '/'
+            && Str::startsWith($routePath, rtrim($linkPath, '/').'/');
+    }
+
     public function render(): View|Closure|string
     {
         if ($this->hidden === true) {
