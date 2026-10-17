@@ -89,6 +89,15 @@ test('authenticated user can load /maps/county', function () {
     Livewire::test('maps.county')->assertStatus(200);
 });
 
+test('the root redirects guests to login and authenticated users to the dashboard', function () {
+    // Moved here from the deleted tests/Feature/ExampleTest.php (issue #1048):
+    // the same 302 is asserted, plus where it actually lands.
+    $this->get('/')->assertRedirect('/login');
+
+    $this->actingAs($this->user);
+    $this->get('/')->assertRedirect('/dashboard');
+});
+
 test('select-context redirects to dashboard when single unit is assigned', function () {
     $this->actingAs($this->user);
     $this->get('/select-context')->assertRedirect('/dashboard');

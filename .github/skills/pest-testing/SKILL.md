@@ -45,7 +45,7 @@ it('is true', function () {
 
 - Run minimal tests with filter before finalizing: `php artisan test --compact --filter=testName`.
 - Run all tests: `php artisan test --compact`.
-- Run file: `php artisan test --compact tests/Feature/ExampleTest.php`.
+- Run file: `php artisan test --compact tests/Feature/PagesRenderTest.php`.
 
 ## Assertions
 
