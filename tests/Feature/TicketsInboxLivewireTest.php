@@ -995,6 +995,64 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertSame('completed', $t->status);
     }
 
+    public function test_bulk_complete_toast_reports_processed_not_selected_count(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $created = $this->createTicket(['status' => 'created']);
+        $forwarded = $this->createTicket(['status' => 'forwarded']);
+        $alreadyDone = $this->createTicket(['status' => 'completed']);
+        $outOfScope = $this->createTicket(['status' => 'created', 'unit' => Unit::factory()->create()]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$created->id, $forwarded->id, $alreadyDone->id, $outOfScope->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return str_contains($title, '2 تیکت') && ! str_contains($title, '4 تیکت');
+            });
+
+        // Only the two in-scope, not-already-completed tickets were processed.
+        $this->assertSame('completed', $created->fresh()->status);
+        $this->assertSame('completed', $forwarded->fresh()->status);
+        $this->assertSame('completed', $alreadyDone->fresh()->status);
+        $this->assertSame('created', $outOfScope->fresh()->status);
+
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $created->id, 'action' => 'completed']);
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $forwarded->id, 'action' => 'completed']);
+        // Skipped selections must not be counted as processed.
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $alreadyDone->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outOfScope->id, 'action' => 'completed']);
+    }
+
+    public function test_bulk_forward_toast_reports_processed_not_selected_count(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $forwardable = $this->createTicket(['status' => 'created']);
+        $outOfScope = $this->createTicket(['status' => 'created', 'unit' => Unit::factory()->create()]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$forwardable->id, $outOfScope->id])
+            ->set('bulkAction', 'forward')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return str_contains($title, '1 تیکت') && ! str_contains($title, '2 تیکت');
+            });
+
+        $this->assertSame('forwarded', $forwardable->fresh()->status);
+        $this->assertSame('created', $outOfScope->fresh()->status);
+
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $forwardable->id, 'action' => 'forwarded']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outOfScope->id, 'action' => 'forwarded']);
+    }
+
     // =====================================================================
     // S12 — submitAction
     // =====================================================================

@@ -4327,12 +4327,6 @@ parameters:
 			path: resources/views/livewire/tickets/⚡create.blade.php
 
 		-
-			message: '#^Anonymous function has an unused use \$count\.$#'
-			identifier: closure.unusedUse
-			count: 1
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
 			count: 8
