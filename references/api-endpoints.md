@@ -36,7 +36,7 @@ Other commands: `NormalizePersianText` (one-off Persian normalization), plus the
 
 ## API Reference
 
-All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
+All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled). Session route: `POST /api/logout` returns `204`, requires `auth:sanctum` but **no ability** (like `/api/user` — a self-scoped action, #1071), and revokes **only the caller's current token** — other devices stay signed in, and reusing the revoked token is `401`.
 
 **Abilities:** read groups use `ability:*` (Sanctum: ANY of the listed abilities), write groups use `abilities:*` (ALL) — `units:read|write`, `traffic:read`, `hardware:read|write`, `tickets:read|write`, `reports:read`, `persons:read|write`, `todos:read|todos:write`, `hr:read`, `notifications:read`, `gis:read`. Several write groups *also* require a Spatie `role_or_permission` (`organization`, `manage_hardware`, `manage_personnel`, `calendar`, `view_hr_dashboard`, `map`) — both must pass. The full per-route table lives in **AGENTS.md → "API Token Abilities"**; tokens are scoped and revoked on password change (#678), and API tests mint real Bearer tokens (`tests/Feature/ApiAbilityTest.php`).
 
