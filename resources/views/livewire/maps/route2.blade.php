@@ -2,11 +2,16 @@
 
 use Livewire\Component;
 
-return new class extends Component {
+return new class extends Component
+{
     public string $map_tile_template;
+
     public string $routing_url;
+
     public string $geocoding_url;
+
     public string $start_point = '';
+
     public string $end_point = '';
 
     public function mount(): void
@@ -94,16 +99,57 @@ return new class extends Component {
         return null;
     }
 
+    /**
+     * Build the Nominatim search URL with the query encoded by URLSearchParams.
+     *
+     * Hand-written `'?q=' + query` is how a library swap breaks silently: an
+     * address containing `&` or `#` would truncate the query, axios used to
+     * encode it for us.
+     */
+    function geocodeSearchUrl(base, query) {
+        var url = new URL(base + '/search');
+        url.searchParams.set('q', query);
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('limit', '1');
+        return url.toString();
+    }
+
+    /**
+     * Nominatim answers with an array of `{lat, lon}`. An error body (object or
+     * string) is not an array, and `[].length > 0` on a non-array is
+     * `undefined > 0` — false, but only by accident. Be explicit.
+     */
+    function parseGeocodeResponse(data) {
+        if (!Array.isArray(data) || data.length === 0) {
+            return null;
+        }
+
+        var result = data[0];
+        if (result === null || typeof result !== 'object') {
+            return null;
+        }
+
+        var lat = Number(result.lat);
+        var lon = Number(result.lon);
+        if (!isFinite(lat) || !isFinite(lon)) {
+            return null;
+        }
+
+        return L.latLng(lat, lon);
+    }
+
     async function geocode(query) {
         if (!query) return null;
         try {
-            var response = await axios.get('{{ $geocoding_url }}/search', {
-                params: { q: query, format: 'json', limit: 1 }
+            var response = await fetch(geocodeSearchUrl('{{ $geocoding_url }}', query), {
+                headers: { 'Accept': 'application/json' }
             });
-            if (response.data.length > 0) {
-                var result = response.data[0];
-                return L.latLng(result.lat, result.lon);
+            // fetch, unlike axios, resolves on 4xx/5xx — check it ourselves.
+            if (!response.ok) {
+                console.error('Geocoding error:', response.status, response.statusText);
+                return null;
             }
+            return parseGeocodeResponse(await response.json());
         } catch (error) {
             console.error('Geocoding error:', error);
         }
