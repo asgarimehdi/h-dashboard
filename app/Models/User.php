@@ -134,7 +134,9 @@ class User extends Authenticatable
      */
     public function getApiTokenAbilities(): array
     {
-        $abilities = ['notifications:read'];
+        // Issue #1002: mutations require their own write ability; every user
+        // with notification access gets both (unconditional, like before).
+        $abilities = ['notifications:read', 'notifications:write'];
 
         if ($this->hasPermissionTo('organization')) {
             $abilities[] = 'units:read';

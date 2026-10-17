@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
+use App\Models\Notification;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -596,6 +597,70 @@ class ApiAbilityTest extends TestCase
     {
         $token = $this->createTokenWithAbilities(['notifications:read']);
         $this->apiGet('/api/notifications', $token)->assertOk();
+    }
+
+    /**
+     * Issue #1002: mutations are gated behind their own `notifications:write`
+     * ability, so a read-only token keeps its 200s on the two GETs and gets
+     * a 403 on both POSTs — the endpoint group stays bifurcated like tickets
+     * and persons already are.
+     */
+    public function test_notifications_read_only_token_denied_on_writes(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $notification = Notification::create([
+            'user_id' => $user->id,
+            'type' => 'test',
+            'title' => 'Test',
+            'body' => 'Body',
+            'is_read' => false,
+        ]);
+
+        $token = $user->createToken('test-token', ['notifications:read'])->plainTextToken;
+
+        $this->apiGet('/api/notifications', $token)->assertOk();
+        $this->apiGet('/api/notifications/unread-count', $token)->assertOk();
+        $this->apiPost("/api/notifications/{$notification->id}/read", [], $token)->assertForbidden();
+        $this->apiPost('/api/notifications/read-all', [], $token)->assertForbidden();
+
+        // The security claim is data-shaped: a read-only token must not be able
+        // to flip unread-state, so the row stays unread in the database.
+        $notification->refresh();
+        $this->assertFalse($notification->is_read);
+        $this->assertDatabaseHas('notifications', ['id' => $notification->id, 'is_read' => false]);
+    }
+
+    public function test_notifications_write_ability_grants_full_access(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $notification = Notification::create([
+            'user_id' => $user->id,
+            'type' => 'test',
+            'title' => 'Test',
+            'body' => 'Body',
+            'is_read' => false,
+        ]);
+
+        $token = $user->createToken('test-token', ['notifications:read', 'notifications:write'])->plainTextToken;
+
+        $this->apiGet('/api/notifications', $token)->assertOk();
+        $this->apiGet('/api/notifications/unread-count', $token)->assertOk();
+        $this->apiPost("/api/notifications/{$notification->id}/read", [], $token)->assertOk();
+        $this->apiPost('/api/notifications/read-all', [], $token)->assertOk();
+    }
+
+    /**
+     * Issue #1002: the mint path must carry both notification abilities for
+     * every user so the new POST gate cannot silently 403 standard clients.
+     */
+    public function test_login_token_mints_notifications_read_and_write(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $this->assertContains('notifications:read', $abilities);
+        $this->assertContains('notifications:write', $abilities);
     }
 
     // ──────────────────────────────────────────────
