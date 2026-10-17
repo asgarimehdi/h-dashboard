@@ -357,18 +357,34 @@ return new class extends Component
 
             $data = ['n_code' => $this->n_code];
 
+            $passwordChanged = (bool) $this->password;
+
             if ($this->password) {
                 $data['password'] = bcrypt($this->password);
             }
 
             $user->update($data);
+
+            // Issue #1030: an admin password reset must revoke the target's
+            // Sanctum tokens, exactly like the self-service path
+            // (`auth/changepassword`) already does. Guarded on an
+            // actually-changed password: a plain profile/role edit must not log
+            // the user's devices out. Every token dies (including
+            // `map-dashboard`) so both password-change paths stay in lockstep —
+            // see `docs/agents/api-auth.md`.
+            if ($passwordChanged) {
+                $user->tokens()->delete();
+            }
+
             $user->roles()->sync($this->role_ids ?? []);
             $user->syncPermissions($this->user_permissions ?? []);
             $user->units()->sync($this->unit_ids ?? []);
             app(AccessService::class)->clearCache($user);
 
             $this->resetForm();
-            $this->success('کاربر با موفقیت ویرایش شد.');
+            $this->success($passwordChanged
+                ? 'کاربر با موفقیت ویرایش شد. با تغییر رمز، نشست‌های فعال کاربر بسته شد.'
+                : 'کاربر با موفقیت ویرایش شد.');
         } catch (ValidationException $e) {
             foreach ($e->validator->errors()->all() as $error) {
                 $this->error($error, position: 'toast-bottom');
