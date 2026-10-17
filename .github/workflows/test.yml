@@ -433,7 +433,29 @@ jobs:
         # migrate:fresh --seed on this database every run.
         run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
 
+      - name: Cache Playwright chromium (issue #1067)
+        # The browser binary is the only part of `playwright install` that is
+        # worth caching — a ~1-2 min download every run. Keyed on the LOCK
+        # file, not package.json: `@playwright/test` is pinned with a caret
+        # while the downloaded browser revision comes from the exact
+        # `playwright` version in package-lock.json, so package.json would
+        # miss real bumps. restore-keys covers the delta when the lock moves
+        # (an older browser revision stays until it is pruned).
+        # Limits, recorded so nobody re-derives them: `--with-deps` (apt
+        # packages) is NOT cacheable and still runs every time; and a PR from
+        # a fork can read caches but never write one, so it will not hit until
+        # a same-repo run has saved this entry.
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright chromium
+        # Kept exactly as it was (issue #1067): on a cache hit the browser
+        # download is a no-op, but `--with-deps` must still install the system
+        # libraries — do not make this step conditional on cache-hit.
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E suite (list reporter proves execution)
