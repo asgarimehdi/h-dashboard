@@ -394,7 +394,12 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         if ($value instanceof \DateTimeInterface) {
             return $value->format('Y-m-d');
         }
-        if ($value === null || $value === '' || $value === '\\\\\\\\\\N') {
+        // #1034: the CSV null token is a single backslash + N (source `'\\N'`),
+        // matching clean() and parseBoolean() below. The previous source literal
+        // spelled ten backslashes (five at runtime, since single quotes halve
+        // them) so it could never match the real token; a raw `\N` fell through
+        // to trim() as the two characters `\` and `N`.
+        if ($value === null || $value === '' || $value === '\\N') {
             return '0'; // Treat null/empty as false for boolean comparison
         }
         if (is_bool($value)) {
