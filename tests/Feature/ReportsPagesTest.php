@@ -96,3 +96,18 @@ test('reports pages render Persian labels', function () {
         ->test('reports.advanced')
         ->assertSee('گزارش تیکت‌ها');
 });
+
+test('advanced reports page ships the Highcharts core and accessibility modules', function () {
+    $response = $this->actingAs($this->user)->get('/reports/tickets');
+
+    $response->assertSee('js/chart/highcharts.js');
+    $response->assertSee('js/chart/accessibility.js');
+});
+
+test('advanced reports page does not ship the unused treemap, treegraph and exporting modules', function () {
+    $response = $this->actingAs($this->user)->get('/reports/tickets');
+
+    $response->assertDontSee('js/chart/treemap.js');
+    $response->assertDontSee('js/chart/treegraph.js');
+    $response->assertDontSee('js/chart/exporting.js');
+});
