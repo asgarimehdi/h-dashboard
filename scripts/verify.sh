@@ -8,6 +8,7 @@
 #                 the one CI does that composer test does not, so add it here
 # 3. pint       — `pint --test`, the exact command CI's lint job runs
 # 3b. dead files— no test file may run zero tests (issue #935)
+# 3c. lookup seed— no test file may hand-roll lookup seeding (issue #1044)
 # 4. phpstan    — level 6 with the committed baseline, the exact CI command
 # 5. pest       — the full suite, or the paths given as arguments
 #
@@ -87,6 +88,18 @@ step "Dead test files"
 if ! php scripts/find-dead-test-files.php; then
     echo ""
     echo "✗ Dead test files. See the list above."
+    exit 1
+fi
+
+# 3c. Hand-rolled lookup seeding (issue #1044). 52 Feature tests used to seed
+# the tahsils/estekhdams/semats/radifs lookup tables by hand, skipping the
+# Postgres sequence resync — the first factory insert then collided with id=1.
+# They now call InteractsWithTestSetup::seedLookupTables(); this ratchet keeps
+# the migration at zero. Cheap, and it needs no database.
+step "Hand-rolled lookup seeding"
+if ! php scripts/find-hand-rolled-lookup-seeding.php; then
+    echo ""
+    echo "✗ Hand-rolled lookup seeding. Use InteractsWithTestSetup::seedLookupTables()."
     exit 1
 fi
 

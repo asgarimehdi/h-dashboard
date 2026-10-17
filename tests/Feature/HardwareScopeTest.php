@@ -11,27 +11,29 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HasOrganizationalScope::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 /**
  * Issue #201: hardware Livewire component person search/validation
  * must enforce organizational scope — no cross-unit person data leakage.
  */
 beforeEach(function () {
+    $this->seedLookupTables();
     Session::flush();
 });
 
 function makeUnitAndPerson(string $unitName, string $nCode, string $fName, string $lName): array
 {
     $unit = Unit::create(['name' => $unitName]);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     Person::create([
         'n_code' => $nCode,
         'f_name' => $fName,
@@ -50,10 +52,10 @@ function makeUserInUnit(Unit $unit): User
 {
     // User must correspond to an existing person (users.n_code FK)
     $nCode = (string) fake()->unique()->numerify('##########');
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     Person::create([
         'n_code' => $nCode,
         'f_name' => 'Test',
@@ -179,10 +181,10 @@ it('general search matches the full person name (f_name + l_name)', function () 
 
 it('filterType escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Unit A']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
@@ -206,10 +208,10 @@ it('filterType escapes LIKE wildcards — percent does not match all', function 
 
 it('filterType escapes LIKE wildcards — underscore does not match single char', function () {
     $unit = Unit::create(['name' => 'Unit A']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
@@ -230,10 +232,10 @@ it('filterType escapes LIKE wildcards — underscore does not match single char'
 
 it('filterOs escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Unit A']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
@@ -310,10 +312,10 @@ it('updateHardware allows reassigning hardware to a person within the accessible
 
 it('filterUnit escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Test Unit']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',

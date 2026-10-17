@@ -14,12 +14,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(TicketCommentController::class);
 
 class TicketCommentsEdgeCasesTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -31,12 +33,13 @@ class TicketCommentsEdgeCasesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'Test Unit']);
         $nCode = (string) fake()->unique()->numerify('##########');
@@ -64,10 +67,10 @@ class TicketCommentsEdgeCasesTest extends TestCase
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'دیگر', 'l_name' => 'کاربر',
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T2']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E2']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S2']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R2']),
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $this->unit->id,
         ]);
 

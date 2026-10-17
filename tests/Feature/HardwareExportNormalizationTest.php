@@ -14,12 +14,14 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareExportController::class);
 
 class HardwareExportNormalizationTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected Unit $unit;
@@ -29,13 +31,14 @@ class HardwareExportNormalizationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         $this->seed(PermissionSeeder::class);
         Session::flush();
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'واحد تست']);
         $nCode = (string) fake()->unique()->numerify('##########');

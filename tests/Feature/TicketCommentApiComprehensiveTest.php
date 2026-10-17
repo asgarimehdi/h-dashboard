@@ -18,6 +18,7 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\Concerns\InteractsWithApiTokens;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ covers(TicketCommentController::class);
 class TicketCommentApiComprehensiveTest extends TestCase
 {
     use InteractsWithApiTokens;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -54,6 +56,7 @@ class TicketCommentApiComprehensiveTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
         // Ensure permissions and roles exist for testing (Issue #323)
@@ -65,10 +68,10 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
         $adminRole->syncPermissions(Permission::all());
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->lookupIds = compact('tId', 'eId', 'sId', 'rId');
 
@@ -428,10 +431,10 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $nCodeC = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCodeC, 'f_name' => 'سارا', 'l_name' => 'کریمی',
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T3']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E3']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S3']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R3']),
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $this->unit->id,
         ]);
         $userC = User::create(['n_code' => $nCodeC, 'password' => Hash::make('password')]);
@@ -577,10 +580,10 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $nCodeC = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCodeC, 'f_name' => 'سارا', 'l_name' => 'کریمی',
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T3']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E3']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S3']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R3']),
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $this->unit->id,
         ]);
         $userC = User::create(['n_code' => $nCodeC, 'password' => Hash::make('password')]);
