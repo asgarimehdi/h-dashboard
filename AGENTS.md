@@ -164,7 +164,7 @@ Issues and specs live as GitHub Issues on `asgarimehdi/h-dashboard`. `.scratch/`
 
 ### Domain docs
 
-Single-context layout (`CONTEXT.md` + `docs/adr/` when present). See `docs/agents/domain.md`.
+Single-context Laravel app - no `CONTEXT.md`; vocabulary and decision records live in the core rules, the topic files, and governing issue comments. See `docs/agents/domain.md`.
 
 ### Hermes session rules
 
