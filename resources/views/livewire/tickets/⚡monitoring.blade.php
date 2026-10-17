@@ -17,6 +17,11 @@ new class extends Component
 {
     use WithPagination;
     use Toast;
+    // Fully qualified: a top-of-file import would shift the anonymous class's
+    // identity line and break every line-keyed PHPStan-baseline entry for it.
+    // The top `JalaliDateRange` import is now unused (this trait owns the date
+    // parse) but stays in place so the identity line keeps its beta position.
+    use \App\Traits\TicketsQueryScopes;
 
     public bool $showHelpModal = false;
 
@@ -111,26 +116,10 @@ new class extends Component
             $query->where('unit_id', $this->selectedUnitId);
         }
 
-        if ($this->statusFilter === 'pending') {
-            $query->whereIn('status', ['created', 'forwarded']);
-        } elseif ($this->statusFilter !== 'all') {
-            $query->where('status', $this->statusFilter);
-        }
-
-        if (!empty($this->search)) {
-            $query->where(function ($q) {
-                $q->where('subject', 'like', '%' . $this->search . '%')
-                    ->orWhere('ticket_code', 'like', '%' . $this->search . '%');
-            });
-        }
-
-        if ($from = JalaliDateRange::parse($this->dateFrom)) {
-            $query->where('created_at', '>=', $from);
-        }
-
-        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
-            $query->where('created_at', '<=', $to);
-        }
+        $this->applyTicketStatusFilter($query, $this->statusFilter);
+        // Monitoring does not search `content`; the inbox does.
+        $this->applyTicketSearch($query, $this->search, ['subject', 'ticket_code']);
+        $this->applyTicketDateRange($query, $this->dateFrom, $this->dateTo);
 
         return $query->latest()->paginate(20);
     }
