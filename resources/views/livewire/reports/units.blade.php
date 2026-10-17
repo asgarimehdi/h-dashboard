@@ -1,6 +1,7 @@
 <?php
 
 use Livewire\Component;
+use Livewire\WithPagination;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Services\AccessService;
@@ -8,6 +9,11 @@ use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
+    use WithPagination;
+
+    /** Issue #1024 — the inventory is paginated instead of hydrated whole. */
+    public int $perPage = 25;
+
     public bool $showHelpModal = false;
 
     /** Issue #819 — see the dashboard's `emptyScope` banner for the rationale. */
@@ -28,6 +34,17 @@ return new class extends Component
     public function loadUnitTypes(): void
     {
         // UnitType list is static for this report
+    }
+
+    /**
+     * Issue #1024: a filter change starts a new result set, so the inventory
+     * goes back to page 1.
+     */
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['selectedUnitTypeId', 'showOnlyNoBoundary'], true)) {
+            $this->resetPage();
+        }
     }
 
     public function getUnitTypesProperty()
@@ -79,14 +96,18 @@ return new class extends Component
 
         // Eager loads first: a top-level whereIn() degrades the chain to
         // Query\Builder, on which `with()` is undefined (issue #819).
-        $units = Unit::query()
+        // Issue #1024: only the inventory list is paginated — every aggregate
+        // above keeps describing the whole filtered set.
+        $unitsPage = Unit::query()
             ->with('unitType:id,name', 'region:id,name')
             ->whereIn('id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
             ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
             ->orderBy('name')
-            ->get()
+            ->paginate($this->perPage);
+
+        $units = $unitsPage->getCollection()
             ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -94,14 +115,17 @@ return new class extends Component
                 'region' => $u->region?->name ?? '—',
                 'has_boundary' => !is_null($u->boundary_id),
             ])
-            ->toArray();
+            ->all();
 
         return [
             'total' => $total,
             'byType' => $byType,
             'no_boundary' => $noBoundary,
             'with_boundary' => $withBoundary,
+            // `units` stays a plain array (the fail-closed security test treats
+            // it as one); the paginator rides alongside for the links.
             'units' => $units,
+            'unitsPaginator' => $unitsPage,
         ];
     }
 }; ?>
@@ -210,6 +234,17 @@ return new class extends Component
                 </tbody>
             </table>
         </div>
+
+        {{-- Issue #1024: the hand-rolled table has no `with-pagination`, so the
+            paginator rides alongside the payload. --}}
+        @if ($chart['unitsPaginator']->hasPages())
+            {{-- `mary-table-pagination` is the app's own pagination style hook
+                (`resources/css/app.css`); the hand-rolled table cannot pass it
+                through `x-table`, so it is applied by hand. --}}
+            <div class="mt-4 mary-table-pagination">
+                {{ $chart['unitsPaginator']->links() }}
+            </div>
+        @endif
     </x-card>
 </div>
 

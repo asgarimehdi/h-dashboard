@@ -6,10 +6,16 @@ use App\Services\DailySeries;
 use App\Support\JalaliDateRange;
 use Carbon\Carbon;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use WithPagination;
+
+    /** Issue #1024 — the list is paginated instead of hydrated whole. */
+    public int $perPage = 25;
+
     public string $dateFrom = '';
 
     public string $dateTo = '';
@@ -29,6 +35,18 @@ return new class extends Component
         $this->dateTo = Jalalian::fromCarbon(now()->addDays(30))->format('Y/m/d');
 
         $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
+    }
+
+    /**
+     * Issue #1024: a filter change starts a new result set, so the list goes
+     * back to page 1. The Jalali datepicker writes `dateFrom`/`dateTo` through
+     * `$wire.set`, which lands here too.
+     */
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['selectedUnitId', 'statusFilter', 'dateFrom', 'dateTo'], true)) {
+            $this->resetPage();
+        }
     }
 
     /**
@@ -97,13 +115,18 @@ return new class extends Component
             'سررسید گذشته' => $overdue,
         ];
 
-        $items = (clone $query)
+        // Issue #1024: only the row list is paginated — `completed`/`pending`/
+        // `overdue`/`byUnit`/`byDay` are computed from their own unpaginated
+        // clones, so they still describe the whole filtered set.
+        $itemsPage = (clone $query)
             ->when($this->statusFilter === 'completed', fn ($q) => $q->where('is_completed', true))
             ->when($this->statusFilter === 'pending', fn ($q) => $q->where('is_completed', false)->where(fn ($q) => $q->whereNull('end_at')->orWhere('end_at', '>=', $now)))
             ->when($this->statusFilter === 'overdue', fn ($q) => $q->where('is_completed', false)->whereNotNull('end_at')->where('end_at', '<', $now))
             ->with('unit:id,name')
             ->orderBy('start_at', 'desc')
-            ->get()
+            ->paginate($this->perPage);
+
+        $items = $itemsPage->getCollection()
             ->map(fn ($t) => [
                 'id' => $t->id,
                 'title' => $t->title,
@@ -113,7 +136,7 @@ return new class extends Component
                 'completed' => $t->is_completed,
                 'is_overdue' => ! $t->is_completed && $t->end_at && $t->end_at < $now,
             ])
-            ->toArray();
+            ->all();
 
         return [
             'completed' => $completed,
@@ -122,7 +145,11 @@ return new class extends Component
             'byUnit' => $byUnit,
             'byDay' => $byDay,
             'byStatus' => $byStatus,
+            // `items` stays a plain array (the fail-closed security test and the
+            // `empty()` check in the view both treat it as one); the paginator
+            // rides alongside for `->hasPages()`/`->links()`.
             'items' => $items,
+            'itemsPaginator' => $itemsPage,
         ];
     }
 
@@ -130,7 +157,8 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        return \App\Models\Unit::whereIn('id', $accessibleIds)->get();
+        // Issue #1024: a `<select>` needs nothing but id/name.
+        return \App\Models\Unit::whereIn('id', $accessibleIds)->get(['id', 'name']);
     }
 }; ?>
 
@@ -267,6 +295,17 @@ return new class extends Component
                 </tbody>
             </table>
         </div>
+
+        {{-- Issue #1024: the hand-rolled table has no `with-pagination`, so the
+            paginator rides alongside the payload. --}}
+        @if ($chart['itemsPaginator']->hasPages())
+            {{-- `mary-table-pagination` is the app's own pagination style hook
+                (`resources/css/app.css`); the hand-rolled table cannot pass it
+                through `x-table`, so it is applied by hand. --}}
+            <div class="mt-4 mary-table-pagination">
+                {{ $chart['itemsPaginator']->links() }}
+            </div>
+        @endif
     </x-card>
 </div>
 
