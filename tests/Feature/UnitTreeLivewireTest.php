@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Unit;
+use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -247,6 +248,140 @@ class UnitTreeLivewireTest extends TestCase
         $this->assertContains($leaf->id, $expanded);
         $this->assertContains($child->id, $expanded);
         $this->assertContains($unit->id, $expanded);
+    }
+
+    // ==================== Issue #1013: expand-all batches per level ====================
+
+    public function test_expand_all_queries_are_bound_by_depth_not_by_unit_count(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // The #722 shape again: 1 → 6 → 36 (43 units, depth 3). `expandAll()`
+        // used to issue one `childrenOf()` per node — ~43 queries for this one
+        // click; the level-wise walk costs one query per level.
+        for ($i = 0; $i < 6; $i++) {
+            $mid = Unit::create(['name' => "سطح دوم {$i}", 'parent_id' => $unit->id]);
+
+            for ($j = 0; $j < 6; $j++) {
+                Unit::create(['name' => "سطح سوم {$i}-{$j}", 'parent_id' => $mid->id]);
+            }
+        }
+
+        $component = Livewire::test('unit.tree');
+
+        // Count the CLICK only — the mount's own paint is covered by
+        // test_initial_paint_batches_one_query_per_level.
+        $this->assertNoNPlusOne(function () use ($component): void {
+            $component->call('expandAll');
+        }, 12);
+
+        // Emit-once, and every level opened: 1 + 6 + 36.
+        $this->assertCount(43, $component->get('expanded'));
+    }
+
+    public function test_expand_all_membership_and_lazy_children_are_exact(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        $childA = Unit::create(['name' => 'شعبه الف', 'parent_id' => $unit->id]);
+        $childB = Unit::create(['name' => 'شعبه ب', 'parent_id' => $unit->id]);
+        $grand = Unit::create(['name' => 'زیرشعبه', 'parent_id' => $childA->id]);
+
+        $component = Livewire::test('unit.tree')->call('expandAll');
+
+        $expanded = array_map('intval', $component->get('expanded'));
+        $expected = [$unit->id, $childA->id, $childB->id, $grand->id];
+        sort($expanded);
+        sort($expected);
+
+        $this->assertSame($expected, $expanded);
+
+        // #933: every in-scope unit appears exactly ONCE. A `$node->children`
+        // read anywhere in the walk multiplies the subtree instead.
+        $this->assertSame(count($expected), count(array_unique($expanded)));
+
+        // Childless units are cached as EMPTY collections: `childrenOfMany()`
+        // gives parents with no children NO key, so the walk must read with
+        // `->get($id, collect())` (a bare `[$id]` access would throw).
+        $lazy = $component->get('lazyChildren');
+
+        $rootChildren = $lazy[$unit->id]->pluck('id')->map(static fn ($id) => (int) $id)->all();
+        sort($rootChildren);
+        $this->assertSame([$childA->id, $childB->id], $rootChildren);
+
+        $this->assertTrue($lazy[$childA->id]->contains('id', $grand->id));
+        $this->assertCount(0, $lazy[$childB->id]);
+        $this->assertCount(0, $lazy[$grand->id]);
+    }
+
+    public function test_collect_all_ids_terminates_on_a_parent_id_cycle(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // A ↔ B. Neither is reachable from roots() (each has an in-scope
+        // parent), so the walk is seeded with the cycle head directly — the
+        // shape the `$visited` guard exists for. It must terminate, not hang.
+        $a = $unit;
+        $b = Unit::create(['name' => 'چرخه ب', 'parent_id' => $a->id]);
+        $a->update(['parent_id' => $b->id]);
+
+        $component = Livewire::test('unit.tree');
+        $instance = $component->instance();
+
+        // Livewire's `call()` re-hydrates public props from the snapshot, so a
+        // seeded `rootUnits` would be discarded; invoke the walk itself.
+        $walk = new \ReflectionMethod($instance, 'collectAllIds');
+        $walk->setAccessible(true);
+
+        $ids = $walk->invoke($instance, collect([$a->fresh()]), $instance->accessibleIds(), []);
+
+        $this->assertCount(2, $ids);
+        $this->assertSame(count($ids), count(array_unique($ids)));
+    }
+
+    public function test_expand_all_is_idempotent(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        Unit::create(['name' => 'شعبه', 'parent_id' => $unit->id]);
+
+        $component = Livewire::test('unit.tree');
+
+        $component->call('expandAll');
+        $first = $component->get('expanded');
+
+        $component->call('expandAll');
+        $second = $component->get('expanded');
+
+        // `expandAll()` runs `array_values(array_unique(...))` — preserve it.
+        $this->assertSame($first, $second);
+    }
+
+    public function test_expand_all_with_an_empty_scope_stays_fail_closed(): void
+    {
+        // No session unit, no user unit, no person unit → scope is `[]`, which
+        // means "in scope of nothing", never "unrestricted".
+        Session::forget('current_unit_id');
+
+        $person = Person::factory()->create(['u_id' => null]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->givePermissionTo('view_hr_dashboard');
+        $this->actingAs($user);
+
+        $component = Livewire::test('unit.tree');
+
+        // `childrenOfMany()` short-circuits on an empty intersection without
+        // touching the database, and there are no roots to walk: zero queries.
+        $this->assertNoNPlusOne(function () use ($component): void {
+            $component->call('expandAll');
+        }, 0);
+
+        $this->assertSame([], $component->get('expanded'));
+        $this->assertSame([], $component->get('lazyChildren'));
     }
 
     public function test_search_finds_a_name_containing_a_zwnj(): void
