@@ -627,4 +627,71 @@ class TicketsMonitoringLivewireTest extends TestCase
             ->assertSee('توضیح فعالیت')
             ->assertSee('<span class="font-bold text-xs">کاربر غیرفعال</span>', escape: false);
     }
+
+    // =====================================================================
+    // #1056 — monitoring search must fold Persian characters like every other
+    // list. Raw `LIKE` matched the stored spelling byte-for-byte, so an
+    // ARABIC kaf/yeh (U+0643/U+064A) input never found a ticket stored with
+    // the PERSIAN kaf/yeh (U+06A9/U+06CC).
+    //
+    // Gate correction: monitoring searches `subject` and `ticket_code` ONLY —
+    // `content` is not a search column here, and folding must not widen that
+    // surface.
+    // =====================================================================
+
+    public function test_search_folds_arabic_variants_in_subject(): void
+    {
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $unit = $result['unit'];
+        $this->actingAs($result['user']);
+
+        // «کد یکتا» with PERSIAN letters — the shape the app stores.
+        $persian = "\u{06A9}\u{062F} \u{06CC}\u{06A9}\u{062A}\u{0627}";
+        // The same phrase typed with ARABIC letters.
+        $arabic = "\u{0643}\u{062F} \u{064A}\u{0643}\u{062A}\u{0627}";
+
+        $this->makeTicket($unit, ['subject' => $persian, 'ticket_code' => 'T-MON-01']);
+        $this->makeTicket($unit, ['subject' => 'تیکت کنترل', 'ticket_code' => 'T-MON-02']);
+
+        Livewire::test('tickets.monitoring')
+            ->set('search', $arabic)
+            ->assertSee('T-MON-01')
+            ->assertDontSee('T-MON-02');
+    }
+
+    public function test_search_folds_persian_digits_in_ticket_code(): void
+    {
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $unit = $result['unit'];
+        $this->actingAs($result['user']);
+
+        $this->makeTicket($unit, ['subject' => 'کد لاتین', 'ticket_code' => 'T-4500']);
+        $this->makeTicket($unit, ['subject' => 'کد دیگر', 'ticket_code' => 'T-9999']);
+
+        // Persian digits ۴۵۰۰ fold to Latin 4500 on both sides.
+        Livewire::test('tickets.monitoring')
+            ->set('search', "T-\u{06F4}\u{06F5}\u{06F0}\u{06F0}")
+            ->assertSee('T-4500')
+            ->assertDontSee('T-9999');
+    }
+
+    public function test_search_does_not_match_content_in_monitoring(): void
+    {
+        // The `content` column is deliberately NOT a monitoring search column.
+        // Folding subject/ticket_code must not silently widen the surface to it.
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $unit = $result['unit'];
+        $this->actingAs($result['user']);
+
+        $persian = "\u{06A9}\u{062F} \u{06CC}\u{06A9}\u{062A}\u{0627}";
+        $arabic = "\u{0643}\u{062F} \u{064A}\u{0643}\u{062A}\u{0627}";
+
+        $this->makeTicket($unit, ['subject' => 'موضوع الف', 'ticket_code' => 'T-MON-10', 'content' => $persian]);
+        $this->makeTicket($unit, ['subject' => 'موضوع ب', 'ticket_code' => 'T-MON-11']);
+
+        Livewire::test('tickets.monitoring')
+            ->set('search', $arabic)
+            ->assertDontSee('T-MON-10')
+            ->assertDontSee('T-MON-11');
+    }
 }
