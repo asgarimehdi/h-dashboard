@@ -167,6 +167,13 @@ class TicketController extends Controller
             return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
         }
 
+        // Issue #1000: accepting only makes sense from an open status. Keep this
+        // guard in step with the web path (⚡inbox.blade.php, which allows the
+        // same two statuses).
+        if (! in_array($ticket->status, ['created', 'forwarded'], true)) {
+            return response()->json(['message' => 'Only created or forwarded tickets can be accepted.'], 422);
+        }
+
         $ticket->update([
             'status' => 'accepted',
             'accepted_at' => now(),
