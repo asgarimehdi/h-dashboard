@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 
 // Login route — stricter rate limit
 Route::post('/login', function (Request $request) {
@@ -53,6 +54,26 @@ Route::post('/login', function (Request $request) {
 Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
+    });
+
+    // API logout — revoke ONLY the caller's current token (Issue #1071).
+    //
+    // No ability, exactly like `/api/user` above: this is a self-scoped
+    // action (#837), not a resource mutation. The revoke is conditional
+    // because `statefulApi()` is on, so a session-cookie request reaches the
+    // Sanctum guard as a `TransientToken`, which has no `delete()` method —
+    // an unconditional call is a 500. Deliberately scoped to the current
+    // token, never `tokens()->delete()`: web logout (#840) and admin reset
+    // (#1030) are separate decisions. A second call with the same token is
+    // 401 because the row is gone.
+    Route::post('/logout', function (Request $request) {
+        $token = $request->user()->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
+
+        return response()->noContent();
     });
 
     // Unit API routes — ability:units:read (Issue #690)
