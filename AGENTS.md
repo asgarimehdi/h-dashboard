@@ -160,7 +160,7 @@ When code fails or tests break, follow this order:
 
 ### Issue tracker
 
-Specs and issues live as local markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub Issues on `asgarimehdi/h-dashboard`. `.scratch/` is a local scratch directory, not a tracker. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 

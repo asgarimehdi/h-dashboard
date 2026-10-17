@@ -1,15 +1,46 @@
-# Triage Labels
+# Triage labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+Agent skills speak in terms of canonical triage roles. This file maps each role
+to the label this repo actually uses.
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
-| -------------------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
-| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+**The label set is the source of truth, not this table:**
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+```bash
+gh label list --repo asgarimehdi/h-dashboard
+```
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+## Roles → labels
+
+Apply the label from the right-hand column — a role name is *not* a label string.
+
+| Skill role | Label used here | Meaning |
+| --- | --- | --- |
+| needs triage | *(no dedicated label)* | Triage *is* applying `P1`/`P2`/`P3` plus the category labels; an issue with no priority is untriaged |
+| needs info | `question` | «Further information is requested» |
+| ready for an AFK agent | `ready` | «آماده اجرا» — specified enough that an agent can start |
+| needs a human | *(no dedicated label)* | `ready` means work may start; if only a human can do it, say so in a comment |
+| a human is on it | `busy` | «some one working on it» — do not start |
+| reviewed | `reviewed` | «یک ناظر بررسی کرده» |
+| will not be actioned | `wontfix` | «This will not be worked on»; use `invalid` («This doesn't seem right») for a wrong report |
+
+Creating or renaming labels needs triage permission, so this file follows the
+label set instead of defining it; a role with no label is handled by a comment.
+
+## The rest of the vocabulary
+
+- **Priority:** `P1` (High), `P2` (Medium), `P3` (Low)
+- **Kind of work:** `perf`, `improve`, `security`, `tests`, `docs`,
+  `documentation`, `dx`, `bug`, `dependencies`, `direction`
+- **Area:** `api`, `hardware`, `hr`, `personnel`, `kargozini`,
+  `vendor-management`, `purchase-order`, `flutter`, `theme`, `ui/ux`, `ux`
+- **State:** `ready`, `busy`, `reviewed`, `question`
+- **Test gaps:** `missing-test` (no coverage), `need-test` (feature/area lacks
+  Pest coverage), `test-failure`
+- **Process:** `beta` (targeted at the beta branch), `github_actions`,
+  `enhancement`, `feature`, `good first issue`, `help wanted`, `invalid`,
+  `wontfix`
+
+Two label descriptions are misleading and are kept only because renaming needs
+triage permission: `feature` reads «This issue or pull request already exists»
+(that text belongs to GitHub's built-in duplicate label), and `improve` has no
+description.
