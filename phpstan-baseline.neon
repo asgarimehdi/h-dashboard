@@ -1303,12 +1303,6 @@ parameters:
 			path: app/Models/Boundary.php
 
 		-
-			message: '#^Property App\\Models\\Boundary\:\:\$casts type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Models/Boundary.php
-
-		-
 			message: '#^Class App\\Models\\DailyReport has PHPDoc tag @property for property \$payload with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1

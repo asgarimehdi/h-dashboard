@@ -99,8 +99,24 @@ class UnitsMapLivewireTest extends TestCase
             ->assertSee('unitMap');
     }
 
-    // ==================== S4: Mount unknown id ====================
+    // ==================== #1023: payload shape ====================
 
+    public function test_unit_payload_exposes_expected_keys(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $payload = Livewire::test('units.map', ['id' => $unit->id])->get('unit');
+
+        // #1023: the single-join load still returns the unit itself (the LEFT
+        // join keeps boundary-less units) with its name reachable for the header.
+        $this->assertIsArray($payload);
+        $this->assertArrayHasKey('id', $payload);
+        $this->assertArrayHasKey('name', $payload);
+        $this->assertSame($unit->name, $payload['name']);
+    }
+
+    // ==================== S4: Mount unknown id ====================
     public function test_mount_unknown(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);

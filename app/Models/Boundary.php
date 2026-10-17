@@ -22,10 +22,6 @@ class Boundary extends Model
 
     protected $fillable = ['boundary'];
 
-    protected $casts = [
-        'multipolygon' => 'multipolygon',
-    ];
-
     /**
      * ارتباط با جدول unit
      */

@@ -52,16 +52,29 @@ return new class extends Component {
             return;
         }
 
-        $unit = Unit::with('boundary')->find($this->unitId);
+        // #1023: project ST_AsGeoJSON in the query. A LEFT join (not inner):
+        // a unit with no boundary must still load — that is the draw path, and
+        // an inner join would make it disappear. Reading the relation's appended
+        // attribute used to fire the accessor twice for this one unit.
+        /** @var (Unit&object{geojson: string|null})|null $unit */
+        $unit = Unit::query()
+            ->leftJoin('boundaries', 'units.boundary_id', '=', 'boundaries.id')
+            ->select([
+                'units.*',
+                DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+            ])
+            ->find($this->unitId);
 
         if (! $unit) {
             $this->error('واحد یافت نشد.');
             return;
         }
 
+        // Note: `$unit->toArray()` no longer carries a `boundary` key (the
+        // relation is not loaded); the bare geometry now arrives as `geojson`.
         $this->unit = $unit->toArray();
         $this->hasBoundary = $unit->boundary_id !== null;
-        $this->geojson = $unit->boundary?->geojson;
+        $this->geojson = $unit->geojson;
     }
 
     public function saveBoundary($geojsonData): void
