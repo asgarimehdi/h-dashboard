@@ -263,7 +263,6 @@ new class extends Component
             $this->authorize('manage_unit_tickets');
         }
 
-        $count = count($this->selectedTickets);
         $now = now();
         $userId = auth()->id();
         $bulkNote = $this->bulkNote;
@@ -283,7 +282,7 @@ new class extends Component
             return;
         }
 
-        DB::transaction(function () use ($ticketIds, $count, $now, $userId, $bulkNote) {
+        DB::transaction(function () use ($ticketIds, $now, $userId, $bulkNote) {
             // Issue #531: capture old statuses BEFORE the bulk update
             $oldStatuses = Ticket::whereIn('id', $ticketIds)
                 ->pluck('status', 'id');
@@ -363,7 +362,9 @@ new class extends Component
             }
         });
 
-        $this->dispatch('swal', ['title' => "{$count} تیکت با موفقیت پردازش شد", 'icon' => 'success']);
+        // #1001: report the tickets actually processed after scope/status
+        // filtering — not how many the operator selected.
+        $this->dispatch('swal', ['title' => "{$ticketIds->count()} تیکت با موفقیت پردازش شد", 'icon' => 'success']);
         $this->closeAllModals();
         $this->resetPage();
     }
