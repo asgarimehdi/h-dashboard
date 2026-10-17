@@ -1,9 +1,4 @@
-import axios from 'axios';
 import { registerMapStore } from './map-store';
-
-window.axios = axios;
-
-window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
 // The Leaflet lifecycle store (issue #028) is registered on `alpine:init`, not
 // at module evaluation time: window.Alpine does not exist yet when this module
