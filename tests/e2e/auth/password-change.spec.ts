@@ -1,9 +1,10 @@
 import { test, expect, login, TEST_USER, pwdNCode } from '../shared/fixtures';
+import type { Page } from '@playwright/test';
 import * as crypto from 'crypto';
 
 const NEW_PASSWORD = crypto.randomBytes(12).toString('base64url').slice(0, 16);
 
-async function gotoChangePassword(page) {
+async function gotoChangePassword(page: Page) {
   await page.goto('/users/changepassword');
   await expect(page.locator('input[wire\\:model="currentPassword"]')).toBeVisible();
 }

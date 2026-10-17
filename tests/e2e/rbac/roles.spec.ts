@@ -1,4 +1,5 @@
 import { test, expect, TEST_USER, ROLE_ACCOUNTS } from '../shared/fixtures';
+import type { Page } from '@playwright/test';
 
 /**
  * Plan 003 — RBAC & Authorization E2E
@@ -33,17 +34,17 @@ const EXPECTED_SECTIONS: Record<string, string[]> = {
 const EVERYONE_ITEMS = ['/profile', '/settings', '/users/changepassword', '/search'];
 const ADMIN_ONLY_ITEMS = ['/users', '/roles', '/permissions', '/hardware', '/tools', '/it/zabbix-devices'];
 
-async function loginAs(page, nCode: string) {
+async function loginAs(page: Page, nCode: string) {
   await page.goto('/login');
   await page.fill('#n_code', nCode);
   await page.fill('#password', TEST_USER.password);
   await page.click('button[type="submit"]');
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
+  await page.waitForURL((url: URL) => !url.pathname.includes('/login'), { timeout: 15000 });
 }
 
-async function drawerHrefs(page) {
-  return page.locator('.drawer-side a[href]').evaluateAll((as) =>
-    as.map((a) => a.getAttribute('href') || ''),
+async function drawerHrefs(page: Page) {
+  return page.locator('.drawer-side a[href]').evaluateAll((as: Element[]) =>
+    as.map((a: Element) => a.getAttribute('href') || ''),
   );
 }
 

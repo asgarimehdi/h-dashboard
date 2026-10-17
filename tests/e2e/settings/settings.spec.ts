@@ -27,7 +27,7 @@ test.describe('settings', () => {
 
   test('dashboard refresh select offers 4 options', async ({ page }) => {
     await expect(page.locator('body')).toContainText('بروزرسانی خودکار');
-    const options = await page.locator('select.select-bordered').evaluate((s) =>
+    const options = await page.locator('select.select-bordered').evaluate((s: HTMLSelectElement) =>
       [...s.options].map((o) => o.textContent!.trim()),
     );
     expect(options).toEqual(expect.arrayContaining(['غیرفعال', 'هر ۱۵ ثانیه', 'هر ۳۰ ثانیه', 'هر ۱ دقیقه']));

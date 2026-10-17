@@ -60,6 +60,12 @@ npx playwright test --reporter=list    # only if .env is already swapped and the
 > ```
 > (never `pkill -f 'artisan serve'` — it kills the shared dev server too)
 
+### Typecheck (issue #1069)
+```bash
+npm run typecheck    # tsc --noEmit over tests/e2e/** + playwright.config.ts
+```
+Playwright only transpiles the specs — it never type-checks them — so a type error used to surface at runtime, and with `retries: 2` in CI it could hide as a flake. `tsconfig.json` scopes the check to exactly the TypeScript that exists in this repo (`tests/e2e/**/*` + `playwright.config.ts`, `strict`, `noEmit`). **No ratchet/ceiling is in place** — the surface is clean; if it ever needs one, raise a documented max here instead of dropping `@ts-nocheck` into a spec. Wired **non-blocking** on purpose: the CI `typecheck` job is `continue-on-error: true` (same shape as `coverage-report` and `e2e`), so it never gates and never touches the blocking `lint`/`test`/`phpstan` jobs. `npm ci` in that job doubles as the lock-file consistency check.
+
 ### Common failure → cause
 | Symptom | Cause | Fix |
 |---|---|---|

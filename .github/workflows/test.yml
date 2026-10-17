@@ -297,6 +297,38 @@ jobs:
         # first — still informational, still never gates.
         run: bash scripts/coverage-report.sh --clover=coverage.xml
 
+  typecheck:
+    name: Typecheck (Playwright specs, informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Non-blocking signal (issue #1069): the e2e surface is TypeScript, but
+    # Playwright only transpiles it — a type error used to surface at runtime
+    # and, with `retries: 2`, could hide as a flake. Same shape as
+    # `coverage-report` and `e2e`: this job REPORTS, it never gates, and it
+    # never touches the blocking lint/test/phpstan jobs.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # `npm ci` also proves package-lock.json and package.json agree — the
+        # lock step of the #1069 plan (typescript + @types/node are new).
+        run: npm ci
+
+      - name: Typecheck tests/e2e + playwright.config.ts (never gates)
+        # Deliberately NOT wrapped in `|| true`: a type error should render
+        # this job red so it is visible in the checks list. `continue-on-error`
+        # above is what keeps the workflow run green (issue #865/#867 pattern).
+        run: npm run typecheck
+
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
