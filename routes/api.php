@@ -211,10 +211,22 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/analytics/staffing-ratio', [HrAnalyticsController::class, 'staffingRatio']);
     });
 
-    // Notification API routes — ability:notifications:read (Issue #690)
+    // Notification API routes — Issue #690, split read/write per Issue #1002.
+    //
+    // Reads stay under `ability:notifications:read`; the two mutations (mark
+    // read / mark-all-read) moved to their own `abilities:notifications:write`
+    // group so a read-only token can no longer destroy unread-state signal.
+    // Both abilities are minted unconditionally in `getApiTokenAbilities()`.
+    // New notification endpoints must pick read vs write at creation. Tokens
+    // issued before this split hold only `notifications:read` and get 403 on
+    // the POST routes until they re-login / re-mint — no migration code, by
+    // design.
     Route::middleware('ability:notifications:read')->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    });
+
+    Route::middleware('abilities:notifications:write')->group(function () {
         Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     });

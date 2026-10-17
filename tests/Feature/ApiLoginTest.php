@@ -125,7 +125,7 @@ class ApiLoginTest extends TestCase
         $token = $user->tokens()->latest()->first();
 
         $this->assertNotNull($token);
-        $this->assertEquals(['notifications:read'], $token->abilities);
+        $this->assertEquals(['notifications:read', 'notifications:write'], $token->abilities);
     }
 
     public function test_admin_token_has_full_abilities(): void
@@ -148,7 +148,7 @@ class ApiLoginTest extends TestCase
 
         // Order matches User::getApiTokenAbilities()
         $expectedAbilities = [
-            'notifications:read',
+            'notifications:read', 'notifications:write',
             'units:read', 'units:write',
             'hardware:read', 'hardware:write',
             'tickets:read', 'tickets:write',
