@@ -629,86 +629,22 @@ return new class extends Component
 
         $query = $this->applyOrgScope(Hardware::with('person.unit'));
 
-        // General search
-        if (! empty($this->search)) {
-            $s = self::foldedTerm($this->search);
-            $query->where(function ($q) use ($s) {
-                $q->where('pc_name', 'LIKE', "%{$s}%")
-                    ->orWhere('n_code', 'LIKE', "%{$s}%")
-                    ->orWhere('ip_valid', 'LIKE', "%{$s}%")
-                    ->orWhere('ip_local', 'LIKE', "%{$s}%")
-                    ->orWhere('mac', 'LIKE', "%{$s}%")
-                    ->orWhere('comments', 'LIKE', "%{$s}%")
-                    ->orWhereHas('person', function ($pq) use ($s) {
-                        $pq->whereRaw(self::foldSeparatorsSql('f_name').' LIKE ?', ["%{$s}%"])
-                            ->orWhereRaw(self::foldSeparatorsSql('l_name').' LIKE ?', ["%{$s}%"])
-                            ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$s}%"]);
-                    });
-            });
-        }
-
-        // Separate filters (AND logic)
-        if ($this->filterType) {
-            $type = $this->filterType;
-            // Map common aliases to actual database values
-            $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
-            $type = $typeAliases[$type] ?? $type;
-            $type = self::normalizeForQuery($type);
-            $query->where('type', 'LIKE', "%{$type}%");
-        }
-        if ($this->filterOs) {
-            $os = self::normalizeForQuery($this->filterOs);
-            $query->where('os', 'LIKE', "%{$os}%");
-        }
-        if ($this->filterCpu) {
-            $cpu = self::normalizeForQuery($this->filterCpu);
-            $query->where('cpu', 'LIKE', "%{$cpu}%");
-        }
-        if ($this->filterRam) {
-            $ram = self::normalizeForQuery($this->filterRam);
-            $query->where('ram', 'LIKE', "%{$ram}%");
-        }
-        if ($this->filterHdd) {
-            $hdd = self::normalizeForQuery($this->filterHdd);
-            $query->where('hdd', 'LIKE', "%{$hdd}%");
-        }
-        if ($this->filterShutdown !== null && $this->filterShutdown !== '') {
-            $query->where('shutdown', $this->filterShutdown === '1');
-        }
-        if ($this->filterNetType) {
-            $netType = self::normalizeForQuery($this->filterNetType);
-            $query->where('net_type', 'LIKE', "%{$netType}%");
-        }
-        if ($this->filterMark !== null && $this->filterMark !== '') {
-            $query->where('mark', $this->filterMark === '1');
-        }
-
-        // Related filters (AND logic)
-        if ($this->filterPerson) {
-            // #705: fold the column so a ZWNJ in the term still matches a stored
-            // ZWNJ (or a plain space). normalizeForQuery alone cannot.
-            $term = self::foldedTerm($this->filterPerson);
-            $query->whereHas('person', function ($q) use ($term) {
-                $f = self::foldSeparatorsSql('f_name');
-                $l = self::foldSeparatorsSql('l_name');
-                $q->whereRaw($f.' LIKE ?', ["%{$term}%"])
-                    ->orWhereRaw($l.' LIKE ?', ["%{$term}%"])
-                    ->orWhere('n_code', 'LIKE', "%{$term}%")
-                    ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$term}%"]);
-            });
-        }
-        if ($this->filterUnit) {
-            $term = self::foldedTerm($this->filterUnit);
-            $query->whereHas('person.unit', function ($q) use ($term) {
-                $q->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
-            });
-        }
-        if ($this->filterSemat) {
-            $term = self::foldedTerm($this->filterSemat);
-            $query->whereHas('person.semat', function ($q) use ($term) {
-                $q->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
-            });
-        }
+        // Issue #1050: one shared filter implementation for the model scopes,
+        // the export controller and here.
+        \App\Support\HardwareFilters::apply($query, [
+            'search' => $this->search,
+            'type' => $this->filterType,
+            'os' => $this->filterOs,
+            'cpu' => $this->filterCpu,
+            'ram' => $this->filterRam,
+            'hdd' => $this->filterHdd,
+            'shutdown' => $this->filterShutdown,
+            'net_type' => $this->filterNetType,
+            'mark' => $this->filterMark,
+            'person' => $this->filterPerson,
+            'unit' => $this->filterUnit,
+            'semat' => $this->filterSemat,
+        ]);
 
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
             ? $this->sortBy['column'] : 'id';

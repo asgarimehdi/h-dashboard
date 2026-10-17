@@ -152,13 +152,25 @@ class HardwareExportNormalizationTest extends TestCase
     }
 
     #[Test]
-    public function export_controller_uses_persian_normalizer_trait(): void
+    public function export_controller_delegates_filtering_to_hardware_filters(): void
     {
         $src = file_get_contents(base_path('app/Http/Controllers/Api/HardwareExportController.php'));
 
+        // Issue #1050: the export no longer re-implements the filters (and their
+        // Persian normalization); it only hands the raw request values to the
+        // shared implementation.
+        expect($src)->toContain('HardwareFilters::apply');
+        expect($src)->not->toContain('PersianNormalizer');
+    }
+
+    #[Test]
+    public function hardware_filters_keep_persian_normalization(): void
+    {
+        $src = file_get_contents(base_path('app/Support/HardwareFilters.php'));
+
         expect($src)->toContain('use App\Traits\PersianNormalizer;');
         expect($src)->toContain('use PersianNormalizer;');
-        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(8);
+        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(2);
         // #815: the hook-less lookup columns (unit/semat) fold the column instead.
         expect($src)->toContain('foldSeparatorsSql');
         expect($src)->toContain('foldedTerm');
