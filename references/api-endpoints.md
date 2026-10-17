@@ -84,16 +84,6 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 
 **Livewire Component:** "History / تغییرات" modal on `/hardware` page — shows date (Jalali), user, action badge, **source badge**, changed fields (old ← new badges), IP, and a **↺ بازگردانی (rollback)** button per field with confirmation. Rollback restores the field and logs a new `rollback` audit entry.
 
-### Hardware Import (`/hardware/import`)
-
-| Method | URL | Description |
-|---|---|---|
-| GET | `/api/persons` | List with filters: `search`, `unit_id`, `semat_id`. Supports `sort_by`, `sort_dir`, `per_page` |
-| POST | `/api/persons` | Create (requires `n_code`, `f_name`, `l_name`) |
-| GET | `/api/persons/{n_code}` | Show details with relationships (unit, semat, tahsil, estekhdam, radif) |
-| PUT | `/api/persons/{n_code}` | Update |
-| DELETE | `/api/persons/{n_code}` | Delete |
-
 ### Unit CRUD (`/api/units`)
 
 | Method | URL | Description |
@@ -119,6 +109,19 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 - **Columns (8):** `شناسه`, `نام واحد`, `نوع واحد`, **`شهرستان`**, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. `شهرستان` was added so the sheet filters by county as a plain Excel filter instead of matching a path substring. A county unit writes **its own county name**; a province-level or region-less unit writes `-` — never the province name, or one filter value would swallow every unit beneath it.
 - `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, gated by `role_or_permission:organization`.
 - ⚠️ `buildHierarchy()` guards against a `parent_id` cycle, and so does `Unit::descendantIds()` — the recursive CTE uses **`UNION`, not `UNION ALL`** (`e5a756d`, 2026-09-26). The set operator dedupes, so a cycle terminates in ~2ms instead of running until `statement_timeout`. Do not "optimize" it back to `UNION ALL`.
+
+### Person CRUD (`/api/persons`)
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/persons` | List with filters: `search`, `unit_id`, `semat_id`. Supports `sort_by`, `sort_dir`, `per_page` |
+| POST | `/api/persons` | Create (requires `n_code`, `f_name`, `l_name`) |
+| GET | `/api/persons/{n_code}` | Show details with relationships (unit, semat, tahsil, estekhdam, radif) |
+| PUT | `/api/persons/{n_code}` | Update |
+| DELETE | `/api/persons/{n_code}` | Delete |
+
+- **Abilities/permissions** (`routes/api.php`): reads need `persons:read` (ANY) **and** `role_or_permission:kargozini|manage_personnel`; writes need `abilities:persons:write` (ALL) **and** `role_or_permission:manage_personnel`. Organizational scope filters the rows.
+- The Xlsx import counterpart for persons is the web page `/kargozini/persons/import` (permission `manage_personnel`) — see the UI Import section below and `app/Imports/PersonImport.php`.
 
 ### Personnel Export (`/kargozini/persons/export`, issue #729, columns #755)
 
@@ -280,6 +283,10 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - Excel/CSV import with validation
 - Persian normalization for search fields
 - Bulk create with duplicate handling
+- **Route & permission:** Livewire page `hardware.import-hardware.import-hardware` (`routes/web.php`), inside the `auth` + `role_or_permission:manage_hardware` group.
+- **File cap:** `xlsx`/`xls`/`csv`, `max:10240` (10 MB).
+- **Behavior:** two-step flow — `import()` builds a preview via `App\Imports\HardwareImport` (ToCollection + WithHeadingRow, scope-filtered), `confirmImport()` applies it. Both are fail-closed: without an import scope (`hasImportScope()`, `AccessService::accessibleUnitIds()`) nothing is imported. `duplicate handling` on the existing hardware records becomes a create/update preview per row (create rows highlighted, update rows show the changed fields).
+- Persons are matched/linked by `n_code` during the import; the persons Excel import itself is a separate page, `/kargozini/persons/import` (`manage_personnel`), which runs `App\Imports\PersonImport`.
 
 ### Maps (`/maps`)
 
