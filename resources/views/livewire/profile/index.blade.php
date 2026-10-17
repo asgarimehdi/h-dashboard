@@ -126,7 +126,7 @@ return new class extends Component
 
             {{-- Quick Actions --}}
             <div class="flex gap-2 flex-shrink-0">
-                <x-button icon="o-key" label="تغییر رمز عبور" class="btn-outline btn-sm" wire:navigate />
+                <x-button icon="o-key" label="تغییر رمز عبور" class="btn-outline btn-sm" link="/users/changepassword" />
             </div>
         </div>
     </x-card>
