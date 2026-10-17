@@ -82,3 +82,20 @@ test('dashboard renders expected sections', function () {
         ->assertSee('روند تیکت‌ها')
         ->assertSee('وضعیت وظایف');
 });
+
+test('dashboard ships the Highcharts core and accessibility modules', function () {
+    $response = $this->actingAs($this->user)->get('/dashboard');
+
+    // accessibility.js is load-bearing: Highcharts v12 ships a11y separately
+    // and its core warns at runtime when the module is absent (#957).
+    $response->assertSee('js/chart/highcharts.js');
+    $response->assertSee('js/chart/accessibility.js');
+});
+
+test('dashboard does not ship the unused treemap, treegraph and exporting modules', function () {
+    $response = $this->actingAs($this->user)->get('/dashboard');
+
+    $response->assertDontSee('js/chart/treemap.js');
+    $response->assertDontSee('js/chart/treegraph.js');
+    $response->assertDontSee('js/chart/exporting.js');
+});
