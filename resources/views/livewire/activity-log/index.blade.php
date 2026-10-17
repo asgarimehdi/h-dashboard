@@ -2,12 +2,11 @@
 
 use App\Models\ActivityLog;
 use App\Services\AccessService;
-use Carbon\Carbon;
+use App\Support\JalaliDateRange;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Computed;
-use Morilog\Jalali\Jalalian;
 use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
@@ -61,21 +60,6 @@ return new class extends Component
         });
     }
 
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
-    {
-        if (empty($date)) {
-            return null;
-        }
-
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     #[Computed]
     public function logs()
     {
@@ -99,11 +83,11 @@ return new class extends Component
             $query->where("user_id", $this->userId);
         }
 
-        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
             $query->where("created_at", ">=", $from);
         }
 
-        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
             $query->where("created_at", "<=", $to);
         }
 

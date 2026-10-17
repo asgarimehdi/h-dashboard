@@ -1122,11 +1122,14 @@ class TicketsInboxLivewireTest extends TestCase
 
         $this->createTicket(['subject' => 'تیکت معمولی']);
 
-        // Invalid date string => component should not fatal and just render
+        // Issue #1054: invalid date strings are silently ignored — the
+        // deliberate contract — so the component renders and no date bound is
+        // applied (the ticket stays visible).
         Livewire::test('tickets.inbox')
             ->set('dateFrom', 'not-a-date')
             ->set('dateTo', 'also-not-a-date')
-            ->assertStatus(200);
+            ->assertStatus(200)
+            ->assertSee('تیکت معمولی');
     }
 
     // =====================================================================

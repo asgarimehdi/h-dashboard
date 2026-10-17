@@ -3,6 +3,7 @@
 use App\Models\Todo;
 use App\Services\AccessService;
 use App\Services\DailySeries;
+use App\Support\JalaliDateRange;
 use Carbon\Carbon;
 use Livewire\Component;
 use Morilog\Jalali\Jalalian;
@@ -30,20 +31,6 @@ return new class extends Component
         $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
     }
 
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
-    {
-        if (empty($date)) {
-            return null;
-        }
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     /**
      * The chosen from..to range as Carbon bounds, or null when either end is
      * missing/invalid — in which case the daily series has no window to fill.
@@ -52,14 +39,7 @@ return new class extends Component
      */
     private function dateRange(): ?array
     {
-        $from = $this->parseJalaliDate($this->dateFrom);
-        $to = $this->parseJalaliDate($this->dateTo, endOfDay: true);
-
-        if (! $from || ! $to || $from->gt($to)) {
-            return null;
-        }
-
-        return [$from, $to];
+        return JalaliDateRange::range($this->dateFrom, $this->dateTo);
     }
 
     public function chartPayload(): array
@@ -76,10 +56,10 @@ return new class extends Component
             })
             ->when($this->selectedUnitId, fn ($q) => $q->where('unit_id', $this->selectedUnitId));
 
-        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
             $query->where('start_at', '>=', $from);
         }
-        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
             $query->where('end_at', '<=', $to);
         }
 
