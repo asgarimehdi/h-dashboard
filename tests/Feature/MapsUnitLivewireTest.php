@@ -6,6 +6,7 @@ use App\Models\Region;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -172,5 +173,127 @@ class MapsUnitLivewireTest extends TestCase
             ->assertSet('showHelpModal', false)
             ->call('$refresh')
             ->assertStatus(200);
+    }
+
+    // ==================== #1023: boundary GeoJSON is a single-pass select ====================
+
+    public function test_county_boundary_queries_do_not_grow_with_region_count(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $regionIds = [];
+        for ($i = 1; $i <= 21; $i++) {
+            $regionIds[] = Region::create([
+                'name' => sprintf('شهرستان %02d', $i),
+                'type' => 'county',
+                'boundary_id' => $this->createBoundary(),
+            ])->id;
+        }
+
+        Cache::flush();
+
+        // Non-vacuity: the county query really returns all 21 regions.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', $regionIds)
+            ->assertDispatched('county-boundaries-loaded', function (string $name, array $params): bool {
+                return count($params['counties']) === 21;
+            });
+
+        Cache::flush();
+
+        // The old code fired one boundary query per region (the accessor); the
+        // single-pass select stays flat regardless of region count.
+        $this->assertNoNPlusOne(function () use ($regionIds): void {
+            Livewire::test('maps/unit')->set('selectedRegions', $regionIds);
+        }, 12);
+    }
+
+    public function test_unit_queries_do_not_grow_with_unit_count(): void
+    {
+        ['user' => $user, 'unit' => $baseUnit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $boundaryId = $this->createBoundary();
+
+        for ($i = 1; $i <= 21; $i++) {
+            Unit::create([
+                'name' => sprintf('واحد %02d', $i),
+                'parent_id' => $baseUnit->id,
+                'region_id' => $region->id,
+                'unit_type_id' => 5,
+                'boundary_id' => $boundaryId,
+            ]);
+        }
+
+        Cache::flush();
+
+        // Non-vacuity: all 21 units come back with their bare geometry.
+        $units = collect(
+            Livewire::test('maps/unit')
+                ->set('selectedRegions', [$region->id])
+                ->set('selectedCenterTypes', [5])
+                ->get('units')
+        );
+        $this->assertCount(21, $units);
+
+        Cache::flush();
+
+        // The old code fired one boundary query per unit; the join stays flat.
+        $this->assertNoNPlusOne(function () use ($region): void {
+            Livewire::test('maps/unit')
+                ->set('selectedRegions', [$region->id])
+                ->set('selectedCenterTypes', [5]);
+        }, 12);
+    }
+
+    public function test_unit_payload_geojson_is_a_bare_multipolygon(): void
+    {
+        ['user' => $user, 'unit' => $baseUnit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $boundaryId = $this->createBoundary();
+
+        Unit::create([
+            'name' => 'واحد مرزدار',
+            'parent_id' => $baseUnit->id,
+            'region_id' => $region->id,
+            'unit_type_id' => 5,
+            'boundary_id' => $boundaryId,
+        ]);
+
+        // Boundary-less unit of the same region/type: omitted from the payload.
+        Unit::create([
+            'name' => 'واحد بدون مرز',
+            'parent_id' => $baseUnit->id,
+            'region_id' => $region->id,
+            'unit_type_id' => 5,
+        ]);
+
+        // Boundary-bearing unit outside the caller's scope: fail-closed.
+        Unit::create([
+            'name' => 'واحد خارج از دسترس',
+            'region_id' => $region->id,
+            'unit_type_id' => 5,
+            'boundary_id' => $boundaryId,
+        ]);
+
+        $units = collect(
+            Livewire::test('maps/unit')
+                ->set('selectedRegions', [$region->id])
+                ->set('selectedCenterTypes', [5])
+                ->get('units')
+        );
+
+        $this->assertCount(1, $units);
+        $row = $units->first();
+        $this->assertSame(['id', 'name', 'type_id', 'geojson'], array_keys($row));
+
+        // #702: the map expects a BARE geometry, not a GeoJSON Feature.
+        $decoded = json_decode($row['geojson'], true);
+        $this->assertSame('MultiPolygon', $decoded['type']);
+        $this->assertArrayNotHasKey('geometry', $decoded);
     }
 }

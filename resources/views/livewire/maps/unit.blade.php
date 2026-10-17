@@ -68,14 +68,25 @@ return new class extends Component
         $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0) . '_' . md5(implode(',', $this->selectedRegions));
 
         $counties = Cache::remember($cacheKey, 300, function () {
-            return Region::whereIn('id', $this->selectedRegions)
-                ->whereNotNull('boundary_id')
-                ->with('boundary')
+            // #1023: project ST_AsGeoJSON in the query (the pattern county.blade.php
+            // already uses) instead of reading Boundary::$appends['geojson'] per
+            // row, which fired one query per region and round-tripped the geometry.
+            // DB is referenced fully-qualified on purpose: a `use` line here would
+            // push `return new class` off line 10 and break the line-keyed PHPStan
+            // baseline anchors for this anonymous component.
+            return Region::whereIn('regions.id', $this->selectedRegions)
+                ->whereNotNull('regions.boundary_id')
+                ->join('boundaries', 'regions.boundary_id', '=', 'boundaries.id')
+                ->select([
+                    'regions.id',
+                    'regions.name',
+                    \Illuminate\Support\Facades\DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
                 ->get()
                 ->map(fn($r) => [
                     'id' => $r->id,
                     'name' => $r->name,
-                    'geojson' => $r->boundary?->geojson,
+                    'geojson' => $r->geojson,
                 ])
                 ->filter(fn($r) => $r['geojson'])
                 ->values()
@@ -112,12 +123,18 @@ return new class extends Component
         // Centers (types 5, 6, 7) — filtered by selected center types
         $parentIds = collect();
         if (!empty($this->selectedCenterTypes)) {
-            $centers = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
-                ->whereNotNull('boundary_id')
-                ->whereIn('region_id', $this->selectedRegions)
-                ->whereIn('unit_type_id', $this->selectedCenterTypes)
-                ->select('id', 'name', 'unit_type_id', 'boundary_id')
-                ->with('boundary:id,boundary')
+            $centers = Unit::whereIn('units.id', $accessibleIds)  // Organizational Scope
+                ->whereNotNull('units.boundary_id')
+                ->whereIn('units.region_id', $this->selectedRegions)
+                ->whereIn('units.unit_type_id', $this->selectedCenterTypes)
+                ->join('boundaries', 'units.boundary_id', '=', 'boundaries.id')
+                ->select([
+                    'units.id',
+                    'units.name',
+                    'units.unit_type_id',
+                    'units.boundary_id',
+                    \Illuminate\Support\Facades\DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
                 ->get();
             $unitLists[] = $centers;
 
@@ -129,13 +146,19 @@ return new class extends Component
         if (!empty($this->selectedSubTypes) && !empty($this->selectedCenterTypes)) {
             $subTypeIds = $this->resolveSubTypeIds();
 
-            $unitLists[] = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
-                ->whereNotNull('boundary_id')
-                ->whereIn('region_id', $this->selectedRegions)
-                ->whereIn('unit_type_id', $subTypeIds)
-                ->whereIn('parent_id', $parentIds)
-                ->select('id', 'name', 'unit_type_id', 'boundary_id')
-                ->with('boundary:id,boundary')
+            $unitLists[] = Unit::whereIn('units.id', $accessibleIds)  // Organizational Scope
+                ->whereNotNull('units.boundary_id')
+                ->whereIn('units.region_id', $this->selectedRegions)
+                ->whereIn('units.unit_type_id', $subTypeIds)
+                ->whereIn('units.parent_id', $parentIds)
+                ->join('boundaries', 'units.boundary_id', '=', 'boundaries.id')
+                ->select([
+                    'units.id',
+                    'units.name',
+                    'units.unit_type_id',
+                    'units.boundary_id',
+                    \Illuminate\Support\Facades\DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
                 ->get();
         }
 
@@ -145,7 +168,7 @@ return new class extends Component
             'id' => $u->id,
             'name' => $u->name,
             'type_id' => $u->unit_type_id,
-            'geojson' => $u->boundary?->geojson,
+            'geojson' => $u->geojson,
         ])->toArray();
 
         $this->dispatch('units-updated', units: $this->units);

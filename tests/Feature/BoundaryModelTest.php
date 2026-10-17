@@ -90,6 +90,27 @@ test('geojson returns null when boundary attribute key is present but empty', fu
     expect($empty2->geojson)->toBeNull();
 });
 
+// #1023: the map/UI contract is a BARE geometry (no Feature wrapper). A
+// regression here throws in L.geoJSON/fitBounds and silently disables the draw
+// toolbar (#702), so it is pinned at the model level where PostGIS is live.
+test('geojson accessor returns a bare geometry, never a GeoJSON Feature', function () {
+    $b = makeBoundary();
+    $fresh = Boundary::query()->findOrFail($b->id);
+
+    $decoded = json_decode($fresh->geojson, true);
+
+    expect($decoded)->toBeArray()
+        ->and($decoded['type'])->toBe('MultiPolygon')
+        ->and($decoded)->toHaveKey('coordinates')
+        ->and($decoded)->not->toHaveKey('geometry');
+});
+
+// #1023: a `multipolygon => multipolygon` cast pointed at a column that does
+// not exist (the column is `boundary`), so it could never run.
+test('Boundary has no cast for the nonexistent multipolygon column', function () {
+    expect(array_keys((new Boundary)->getCasts()))->not->toContain('multipolygon');
+});
+
 test('boundary belongs to region through boundary_id', function () {
     $b = makeBoundary();
     $region = Region::create([
