@@ -2167,6 +2167,12 @@ parameters:
 			path: app/Traits/HasOrganizationalScope.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Traits/TicketsInboxFlow.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -4171,12 +4177,6 @@ parameters:
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
 		-
-			message: '#^Call to static method transaction\(\) on an unknown class DB\.$#'
-			identifier: class.notFound
-			count: 2
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
 			message: '#^Expression "new class extends \\Livewire\\Component…" on a separate line does not do anything\.$#'
 			identifier: expr.resultUnused
 			count: 1
@@ -4299,12 +4299,6 @@ parameters:
 		-
 			message: '#^Static method App\\Models\\Unit\:\:where\(\) invoked with 3 parameters, 2 required\.$#'
 			identifier: arguments.count
-			count: 1
-			path: resources/views/livewire/tickets/⚡inbox.blade.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: resources/views/livewire/tickets/⚡inbox.blade.php
 
