@@ -47,7 +47,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('data:archive')->weeklyOn(1, '04:00');
 
         // Report generation — daily at 06:00 Tehran time
-        $schedule->command('reports:generate-daily')->dailyAt('06:00');
+        // Issue #1021: withoutOverlapping() so a slow run cannot stack on the
+        // next one, matching the Zabbix entry below. This stays a command rather
+        // than `->job(new GenerateDailyReportsJob)`: the job's 600s $timeout is
+        // above the default redis connection's 90s retry_after, so dispatching it
+        // needs its queue connection pinned first (#1010).
+        $schedule->command('reports:generate-daily')
+            ->dailyAt('06:00')
+            ->withoutOverlapping();
 
         // Zabbix sync — every 5 minutes (dispatched as queued job)
         $schedule->job(new SyncZabbixJob)
