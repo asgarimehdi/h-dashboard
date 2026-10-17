@@ -16,7 +16,7 @@ Newest suites since the 2026-09-25 review: `reports/daily-window`, `dashboard/ti
 
 ### Setup (one-time, per machine)
 ```bash
-npm install                     # includes @playwright/test + dotenv
+npm install                     # includes @playwright/test
 npx playwright install chromium # one-time browser install (Chromium + headless shell)
 bash scripts/build-env-e2e.sh   # builds .env.e2e from .env.e2e.example, copying secret VALUES without printing them
 ```
@@ -44,7 +44,7 @@ psql -h 127.0.0.1 -U h_dashboard -d postgres \
 > Playwright's `locale: 'fa-IR'` is browser-level only (affects `Intl`, not Laravel translations) — it does **not** replace this.
 
 ### Credentials
-Test credentials live in `.env.e2e` (gitignored), read by `playwright.config.ts` via `dotenv` and sourced by the shell script for the app itself. **No fallbacks** — `tests/e2e/shared/fixtures.ts` throws if any is missing: `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
+Test credentials live in `.env.e2e` (gitignored), read by `playwright.config.ts` via `process.loadEnvFile()` and sourced by the shell script for the app itself. **No fallbacks** — `tests/e2e/shared/fixtures.ts` throws if any is missing: `TEST_PASSWORD`, `TEST_N_CODE`, `TEST_UNIT_MANAGER_N_CODE`, `TEST_EXPERT_N_CODE`, `TEST_REGULAR_USER_N_CODE`.
 
 ### Run
 ```bash
