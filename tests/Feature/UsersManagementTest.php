@@ -343,6 +343,26 @@ function users849Fixtures(array $attackerPermissions = ['manage_users']): array
     return ['unitA' => $unitA, 'unitB' => $unitB, 'attacker' => $attacker, 'victim' => $victim];
 }
 
+/**
+ * Issue #1030: a target account in the acting admin's unit scope, ready to be
+ * edited through users.index. Mirrors the #849 fixtures' person+user+unit shape.
+ */
+function users1030Target(Unit $unit, string $nCode): User
+{
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'هدف',
+        'l_name' => 'تست',
+        'u_id' => $unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    $user = User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+    $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+    return $user;
+}
+
 test('#849: user table, unit picker and person search are unit-scoped', function () {
     $f = users849Fixtures();
 
@@ -554,4 +574,94 @@ test('#849: in-scope users can still be edited, assigned and deleted', function 
 
     $component->call('delete', $colleague->id);
     expect($colleague->fresh()->trashed())->toBeTrue();
+});
+
+// ──────────────────────────────────────────────
+// Issue #1030 — admin password reset revokes the target's tokens
+// ──────────────────────────────────────────────
+
+test('#1030: admin password reset revokes the target user\'s tokens', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $target = users1030Target($this->unit, '9070000001');
+    $tokenId = $target->createToken('flutter-app')->accessToken->id;
+
+    expect($target->tokens()->count())->toBe(1);
+
+    Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$role->id])
+        ->set('password', 'new-secret-123')
+        ->call('updateUser')
+        ->assertHasNoErrors();
+
+    expect(Hash::check('new-secret-123', $target->fresh()->password))->toBeTrue();
+    $this->assertDatabaseMissing('personal_access_tokens', ['id' => $tokenId]);
+    expect($target->tokens()->count())->toBe(0);
+});
+
+test('#1030: editing a user without a password keeps their tokens alive', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $target = users1030Target($this->unit, '9070000002');
+    $tokenId = $target->createToken('flutter-app')->accessToken->id;
+
+    Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$role->id])
+        ->call('updateUser')
+        ->assertHasNoErrors();
+
+    // A plain profile/role edit must NOT log the user's devices out — the
+    // revocation is guarded on an actually-changed password, not the method.
+    $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
+    expect($target->tokens()->count())->toBe(1);
+});
+
+test('#1030: admin password reset revokes every token, including map-dashboard', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $target = users1030Target($this->unit, '9070000003');
+    $flutterId = $target->createToken('flutter-app')->accessToken->id;
+    $mapId = $target->createToken('map-dashboard')->accessToken->id;
+
+    Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$role->id])
+        ->set('password', 'new-secret-123')
+        ->call('updateUser')
+        ->assertHasNoErrors();
+
+    // Option الف-۱ from the expert comment: revoke ALL tokens, exactly like the
+    // self-service path — so `map-dashboard` dies too. This test pins that as a
+    // deliberate decision, not an accident.
+    $this->assertDatabaseMissing('personal_access_tokens', ['id' => $flutterId]);
+    $this->assertDatabaseMissing('personal_access_tokens', ['id' => $mapId]);
+    expect($target->tokens()->count())->toBe(0);
+});
+
+test('#1030: both password-change paths revoke all of an account\'s tokens', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    // Path A — admin reset through users.index/updateUser().
+    $targetA = users1030Target($this->unit, '9070000004');
+    $targetA->createToken('flutter-app');
+
+    Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $targetA->id)
+        ->set('role_ids', [$role->id])
+        ->set('password', 'new-secret-123')
+        ->call('updateUser')
+        ->assertHasNoErrors();
+
+    expect($targetA->tokens()->count())->toBe(0);
+
+    // Path B — the user's own change-password form. Same contract: zero tokens.
+    $targetB = users1030Target($this->unit, '9070000005');
+    $targetB->createToken('flutter-app');
+
+    Livewire::actingAs($targetB)->test('auth.changepassword')
+        ->set('currentPassword', 'password')
+        ->set('newPassword', 'new-secret-123')
+        ->set('newPasswordConfirmation', 'new-secret-123')
+        ->call('changePassword');
+
+    expect($targetB->tokens()->count())->toBe(0);
 });
