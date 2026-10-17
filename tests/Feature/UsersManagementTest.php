@@ -771,6 +771,34 @@ test('#1028: an empty scope refuses even an in-scope person n_code', function ()
     expect(User::where('n_code', '9044444444')->exists())->toBeFalse();
 });
 
+test('#1028: createUser refuses a person with no unit (u_id null)', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    // `persons.u_id` is nullable on beta (migration 2026_09_03_002219, FK
+    // `onDelete('set null')`), and a NULL `u_id` matches no `IN` list in SQL
+    // — the rule is expected to fail closed on it. This test pins that.
+    Person::create([
+        'n_code' => '9055555555',
+        'f_name' => 'بدون',
+        'l_name' => 'واحد',
+        'u_id' => null,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '9055555555')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [])
+        ->call('createUser')
+        ->assertHasErrors(['n_code']);
+
+    expect(User::where('n_code', '9055555555')->exists())->toBeFalse();
+});
+
 test('#1028: the n_code exists rule itself constrains u_id to the accessible units', function () {
     $f = users849Fixtures();
 

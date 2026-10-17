@@ -136,8 +136,11 @@ return new class extends Component
      * `user_units` rows, so binding to a foreign-unit person handed that
      * whole subtree over — #849 closed the `unit_ids` path, this closes the
      * `n_code` path. The `whereIn('u_id', …)` also fails closed when the
-     * scope is `[]` (compiles to `0 = 1` — in scope of nothing, AGENTS.md),
-     * and `persons.u_id` is NOT NULL, so there is no null-unit escape hatch.
+     * scope is `[]` (compiles to `0 = 1` — in scope of nothing, AGENTS.md).
+     * `persons.u_id` is nullable since migration `2026_09_03_002219`, but
+     * that is no escape hatch either: a NULL `u_id` matches no `IN` list in
+     * SQL, so a person with no unit is refused too (fail-closed by `IN`
+     * semantics, not by NOT NULL).
      *
      * Pattern reference: `hardware/index.blade.php` (HardwareImport-bound
      * form) applies the same exists+scope shape on persons.
