@@ -136,6 +136,10 @@ return new class extends Component
 
 <div class="p-6" dir="rtl">
     @php $chart = $this->chartPayload(); @endphp
+    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+        this (morphed on every render) instead of firing a second method request
+        per filter change. --}}
+    <div id="todosChartData" class="hidden" data-chart='@json(['byStatus' => $chart['byStatus'], 'byUnit' => $chart['byUnit']])'></div>
     <x-header title="گزارش وظایف" separator progress-indicator>
         <x-slot:actions>
             <x-help:button section="reports" wireModel="showHelpModal" />
@@ -286,9 +290,13 @@ return new class extends Component
         container.innerHTML = '';
     }
 
-    async function render() {
-        waitForHighcharts(async () => {
-            const data = await $wire.chartPayload();
+    function render() {
+        waitForHighcharts(() => {
+            // Issue #1042: read the server-rendered aggregates above — the
+            // inline @php already ran the payload for this render, so a second
+            // method request would just re-run it.
+            const el = document.getElementById('todosChartData');
+            const data = el ? JSON.parse(el.dataset.chart) : {};
 
             // Status pie
             destroyChart('statusChart');
@@ -323,10 +331,15 @@ return new class extends Component
     }
 
     render();
-    $wire.$watch('selectedUnitId', () => render());
-    $wire.$watch('statusFilter', () => render());
+    // Issue #1042: the unit/status selects re-render through the DOM payload
+    // (morphed on each server render) instead of a second `chartPayload()`
+    // request. The date watchers stay because the Jalali datepicker writes the
+    // properties via `$wire.set`.
     $wire.$watch('dateFrom', () => render());
     $wire.$watch('dateTo', () => render());
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) render();
+    });
 
     const initJdp = () => {
         if (typeof jalaliDatepicker === 'undefined') return;

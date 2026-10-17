@@ -108,6 +108,10 @@ return new class extends Component
 
 <div class="p-6" dir="rtl">
     @php $chart = $this->chartPayload(); @endphp
+    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+        this (morphed on every render) instead of firing a second method request
+        per filter change. --}}
+    <div id="unitsChartData" class="hidden" data-chart='@json(['byType' => $chart['byType']])'></div>
     <x-header title="گزارش واحدها و مراکز" separator progress-indicator>
         <x-slot:actions>
             <x-help:button section="reports" wireModel="showHelpModal" />
@@ -235,9 +239,13 @@ return new class extends Component
         container.innerHTML = '';
     }
 
-    async function render() {
-        waitForHighcharts(async () => {
-            const data = await $wire.chartPayload();
+    function render() {
+        waitForHighcharts(() => {
+            // Issue #1042: read the server-rendered aggregates above — the
+            // inline @php already ran the payload for this render, so a second
+            // method request would just re-run it.
+            const el = document.getElementById('unitsChartData');
+            const data = el ? JSON.parse(el.dataset.chart) : {};
             destroyChart('typeChart');
             const labels = Object.keys(data.byType || {});
             const values = Object.values(data.byType || {});
@@ -260,7 +268,11 @@ return new class extends Component
     }
 
     render();
-    $wire.$watch('selectedUnitTypeId', () => render());
-    $wire.$watch('showOnlyNoBoundary', () => render());
+    // Issue #1042: a filter change now re-renders through the DOM payload
+    // (morphed on every server render) instead of a second `chartPayload()`
+    // request, so re-render after morph rather than on each $watch.
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) render();
+    });
 </script>
 @endscript
