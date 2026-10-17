@@ -132,11 +132,13 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 |---|---|---|---|
 | `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
-| `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command |
+| `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command — **not dispatched by anything** (see the gotcha below); the 06:00 schedule runs the command inline (#1021) |
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
 | `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
-The first three jobs accept a `$unitIds` array; **empty resolves `AccessService::allUnitIds()` (org-wide), NOT `accessibleUnitIds()`** (#836). `accessibleUnitIds()` reads `auth()`/`session()` and is therefore always `[]` in a scheduler or queue worker — every caller used to read that as "nothing to do" and exit successfully. `accessibleUnitIds()` is request-scoped UI code only. All four of those have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+The two retention jobs accept a `$unitIds` array; **empty resolves `AccessService::allUnitIds()` (org-wide), NOT `accessibleUnitIds()`** (#836). `accessibleUnitIds()` reads `auth()`/`session()` and is therefore always `[]` in a scheduler or queue worker — every caller used to read that as "nothing to do" and exit successfully. `accessibleUnitIds()` is request-scoped UI code only. `GenerateDailyReportsJob` takes no scope of its own: it shells out to `reports:generate-daily`, which resolves the unit set itself. Those jobs have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+
+> Gotcha: `GenerateDailyReportsJob` has **no dispatch site on purpose**. Its `$timeout` is 600s while the default `redis` connection's `retry_after` is 90s, so a dispatched run can be re-reserved and executed twice — it writes rows. `config/queue.php` already defines `redis-reports` (`retry_after` 600) for it, but the documented worker (`install-guid.md`) only serves the default `redis` connection, so dispatching it there would silently stop generating daily reports. Pin the connection + worker (issue #1010) before wiring this job into `bootstrap/app.php` (#1021).
 
 > Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
 
@@ -152,7 +154,7 @@ The first three jobs accept a `$unitIds` array; **empty resolves `AccessService:
 | `todos:generate-recurring` | daily 02:00 |
 | `maintenance:generate-due` | daily 03:00 |
 | `data:archive` | weekly (Mon 04:00) |
-| `reports:generate-daily` | daily 06:00 |
+| `reports:generate-daily` | daily 06:00, `->withoutOverlapping()` |
 | `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | `everyFiveMinutes()`, `->withoutOverlapping()` |
 
 `zabbix:sync` (plan 018) is **no longer scheduled** — the schedule dispatches `SyncZabbixJob` instead, so a slow Zabbix API can never block the scheduler. Run `php artisan zabbix:sync` manually when you need the command.
