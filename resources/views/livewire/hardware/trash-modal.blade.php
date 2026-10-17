@@ -11,23 +11,23 @@
                     <div class="border rounded-lg p-3 bg-base-200/50">
                         <div class="flex items-center justify-between mb-2">
                             @php
-                                $pcNameField = collect($audit->changes)->firstWhere('field', 'pc_name');
-                                $deletedAt = $audit->deleted_at ?? null;
+                                $pcNameField = collect($audit['changes'])->firstWhere('field', 'pc_name');
+                                $deletedAt = $audit['deleted_at'] ?? null;
                             @endphp
                             <div>
-                                <div class="font-bold">{{ $pcNameField['new'] ?? ('سخت‌افزار #' . $audit->hardware_id) }}</div>
+                                <div class="font-bold">{{ $pcNameField['new'] ?? ('سخت‌افزار #' . $audit['hardware_id']) }}</div>
                                 <div class="text-xs opacity-60">
                                     حذف شده در {{ $deletedAt ? \Morilog\Jalali\Jalalian::fromDateTime($deletedAt)->format('Y/m/d H:i') : 'نامشخص' }}
-                                    توسط {{ $audit->user['n_code'] ?? 'سیستم' }}
+                                    توسط {{ $audit['user_n_code'] ?? 'سیستم' }}
                                 </div>
                             </div>
                             @php
-                                $canRestore = collect($audit->changes)->contains('field', 'n_code');
+                                $canRestore = collect($audit['changes'])->contains('field', 'n_code');
                             @endphp
                             @if($canRestore)
                                 <x-ui.icon-button name="بازگردانی سخت‌افزار" icon="o-arrow-uturn-left"
                                     class="btn-ghost btn-xs text-warning"
-                                    wire:click="restoreRecord({{ $audit->id }})"
+                                    wire:click="restoreRecord({{ $audit['id'] }})"
                                     spinner
                                     title="بازگردانی این سخت‌افزار" />
                             @else
@@ -37,7 +37,7 @@
                             @endif
                         </div>
                         <div class="flex flex-wrap gap-1 mt-1">
-                            @foreach($audit->changes as $change)
+                            @foreach($audit['changes'] as $change)
                                 @if(isset($change['field']) && $change['field'] !== 'pc_name' && $change['field'] !== 'n_code')
                                     <span class="badge badge-outline badge-sm" title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
                                         {{ $change['field'] }}: {{ $change['new'] ?? '—' }}

@@ -421,8 +421,10 @@ class HardwareTrashModalLivewireTest extends TestCase
         // The created audit should have changes array (not null) with field data
         $audit = collect($dh)->firstWhere('hardware_id', $hw->id);
         $this->assertNotNull($audit);
-        $this->assertIsArray($audit->changes);
-        $this->assertNotEmpty($audit->changes);
+        // #1041: the state rows are plain arrays now, so the change list is
+        // read with array access (the key itself is the contract that stays).
+        $this->assertIsArray($audit['changes']);
+        $this->assertNotEmpty($audit['changes']);
     }
 
     // ==================== E2: Null User Relationship ====================
@@ -605,5 +607,134 @@ class HardwareTrashModalLivewireTest extends TestCase
             ->assertSet('deletedHardware', function (array $dh) use ($originalId): bool {
                 return ! in_array($originalId, collect($dh)->pluck('hardware_id')->all(), true);
             });
+    }
+
+    // ==================== S9: Trash state shape (issue #1041) ====================
+
+    /**
+     * #1041: `deletedHardware` is a public Livewire property, so every row is
+     * serialized into the component payload on every round-trip — even while
+     * the operator is just ticking checkboxes elsewhere on the page. Rows must
+     * therefore be the handful of scalars the modal reads, never whole Eloquent
+     * models (whose `changes` JSON and eager-loaded `user` would ride along).
+     */
+    public function test_trash_state_rows_are_small_arrays_not_models(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-StateShape',
+        ]);
+        $hw->delete();
+
+        $component = Livewire::test('hardware.index')->call('loadDeletedHardware');
+        $dh = $component->get('deletedHardware');
+
+        $this->assertNotEmpty($dh);
+        /** @var mixed $row */
+        $row = $dh[0];
+
+        // The fix: a plain array, not an Eloquent model.
+        $this->assertIsArray($row);
+
+        // Exactly these keys. A future `->toArray()` dump on the model would
+        // add `source`, `ip_address`, `user_agent`, … and fail right here.
+        $this->assertEqualsCanonicalizing(
+            ['id', 'hardware_id', 'changes', 'created_at', 'deleted_at', 'user_n_code'],
+            array_keys($row)
+        );
+
+        // Heavy model columns must not leak into the payload.
+        $this->assertArrayNotHasKey('source', $row);
+        $this->assertArrayNotHasKey('ip_address', $row);
+        $this->assertArrayNotHasKey('user_agent', $row);
+
+        $this->assertSame($hw->id, $row['hardware_id']);
+        $this->assertIsArray($row['changes']);
+        $this->assertNotEmpty($row['changes']);
+    }
+
+    /**
+     * #1041: the STOP condition — the modal renders (and `restoreRecord()`
+     * rebuilds from) the audit's `changes`, so the small-row shape must keep
+     * the whole change list, including the `pc_name` and `n_code` rows the
+     * header and the restore guard read.
+     */
+    public function test_trash_state_keeps_the_full_change_list(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-KeepChanges',
+            'type' => 'Laptop',
+            'cpu' => 'AMD Ryzen',
+        ]);
+        $hw->delete();
+
+        $dh = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->get('deletedHardware');
+
+        $row = collect($dh)->firstWhere('hardware_id', $hw->id);
+        $this->assertNotNull($row);
+
+        $fields = collect($row['changes'])->pluck('field')->all();
+        $this->assertContains('pc_name', $fields);
+        $this->assertContains('n_code', $fields);
+        $this->assertContains('type', $fields);
+        $this->assertContains('cpu', $fields);
+    }
+
+    /**
+     * #1041: the PHP scope filter must survive at a volume where a lazy
+     * "optimisation" would be tempting — 100 own rows listed, 100 foreign rows
+     * denied. `snapshotNCode()` reads `changes` in PHP, so this path cannot be
+     * pushed wholesale into SQL; this test is the guard for that.
+     */
+    public function test_trash_list_scopes_one_hundred_own_against_one_hundred_foreign(): void
+    {
+        $caller = $this->createUserWithUnit(['manage_hardware']);
+        $foreign = $this->createUserWithUnit(['manage_hardware']);
+
+        Session::put('current_unit_id', $caller['unit']->id);
+        $this->actingAs($caller['user']);
+
+        $ownIds = [];
+        for ($i = 0; $i < 100; $i++) {
+            $hw = $this->createHardwareForUser($caller['user'], $caller['unit'], [
+                'pc_name' => "PC-Own-{$i}",
+            ]);
+            $ownIds[] = $hw->id;
+            $hw->delete();
+        }
+
+        $foreignIds = [];
+        for ($i = 0; $i < 100; $i++) {
+            $hw = Hardware::create([
+                'n_code' => $foreign['user']->n_code,
+                'pc_name' => "PC-Foreign-{$i}",
+                'type' => 'PC',
+            ]);
+            $foreignIds[] = $hw->id;
+            $hw->delete();
+        }
+
+        $listed = collect(
+            Livewire::test('hardware.index')->call('loadDeletedHardware')->get('deletedHardware')
+        )->pluck('hardware_id')->all();
+
+        $this->assertCount(100, $listed);
+
+        foreach ($foreignIds as $foreignId) {
+            $this->assertNotContains($foreignId, $listed);
+        }
+
+        sort($ownIds);
+        sort($listed);
+        $this->assertSame($ownIds, $listed);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Traits;
 
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
+use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\HardwareAuditScope;
 use Illuminate\Support\Carbon;
@@ -321,8 +322,14 @@ trait HardwareIndexHelpers
             return;
         }
 
+        // #1041: select only what the trash list turns into a row below. `*`
+        // would pull the whole audit, and the rows live in a public Livewire
+        // property that is serialized into the component payload on every
+        // round-trip. `user_id` is needed for the eager-loaded `user` to match;
+        // `changes` is needed for the badges and the restore guard.
         $createdAudits = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
             ->where('action', 'created')
+            ->select(['id', 'hardware_id', 'user_id', 'changes', 'created_at'])
             ->with('user:id,n_code')
             ->get();
 
@@ -351,9 +358,25 @@ trait HardwareIndexHelpers
                 return $unitId !== null && in_array($unitId, $accessibleIds, true);
             })
             ->map(function (HardwareAudit $audit) use ($deleteTimestamps) {
-                $audit->deleted_at = $deleteTimestamps->get($audit->hardware_id);
+                // #1041: hand the modal plain scalars, not the model. The
+                // public property is re-serialized on every Livewire
+                // round-trip, so an Eloquent row — with its `changes` JSON and
+                // eager-loaded `user` — is the real cost here, not the query.
+                //
+                // The eager-loaded relation is read directly (not
+                // `$audit->user?->n_code`): the model's PHPDoc declares `user`
+                // non-nullable, so the nullsafe spelling is reported as
+                // unnecessary even though a `user_id = null` row is real.
+                $user = $audit->getRelation('user');
 
-                return $audit;
+                return [
+                    'id' => (int) $audit->id,
+                    'hardware_id' => (int) $audit->hardware_id,
+                    'changes' => $audit->changes,
+                    'created_at' => $audit->created_at,
+                    'deleted_at' => $deleteTimestamps->get($audit->hardware_id),
+                    'user_n_code' => $user instanceof User ? $user->n_code : null,
+                ];
             })
             ->values()
             ->all();

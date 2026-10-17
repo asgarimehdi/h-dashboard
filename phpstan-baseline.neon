@@ -2815,12 +2815,6 @@ parameters:
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\HardwareAudit\:\:\$deleted_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: resources/views/livewire/hardware/index.blade.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
 			count: 2
