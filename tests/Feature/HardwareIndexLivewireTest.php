@@ -470,9 +470,23 @@ class HardwareIndexLivewireTest extends TestCase
         // Person in scope
         $person = Person::where('n_code', $data['user']->n_code)->first();
 
+        // Person in a different, inaccessible unit. Same f_name as the in-scope
+        // person so the search term matches BOTH — the request each would
+        // otherwise surface; scope is the only thing that may hide this one.
+        $foreignUnit = Unit::factory()->create(['name' => 'واحد بیگانه جستجو']);
+        Person::factory()->create([
+            'u_id' => $foreignUnit->id,
+            'f_name' => $person->f_name,
+            'l_name' => 'ZzzForeign',
+        ]);
+
+        // Issue #1047: witness the scoped lookup on the RENDERED dropdown, not
+        // on the in-memory `personResults` property.
         Livewire::test('hardware.index')
+            ->call('startCreate')
             ->set('personSearch', mb_substr($person->f_name, 0, 3))
-            ->assertSet('personResults.0.n_code', $data['user']->n_code);
+            ->assertSee($person->f_name.' '.$person->l_name)
+            ->assertDontSee('ZzzForeign');
     }
 
     public function test_person_search_short_term_clears(): void
