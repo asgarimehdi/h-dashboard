@@ -141,10 +141,33 @@ class OrgChartController extends Controller
                     return [];
                 }
 
-                $children = $units->filter(fn (Unit $u) => $u->parent_id == $unitId);
+                // #1022: collect children in a single pass keyed by parent id —
+                // the same pattern orgChart() uses above. The previous code
+                // re-filtered the ENTIRE subtree collection once per visited node
+                // (O(n^2) for n nodes); `$byId` was a map, but it was only ever
+                // traversed as a list. Children are never written onto the models:
+                // `units` has no `children` column, so `$unit->children` is the real
+                // `hasMany` relation; reading it duplicates every subtree
+                // multiplicatively (#933).
+                //
+                // `each()` rather than `foreach`, and plain arrays rather than
+                // `collect()->map()`: `$units` is untyped here, so a bare `foreach`
+                // leaves `$unit` mixed and `collect()` on that mixed-valued array is
+                // what produced the unresolvable-type PHPStan errors this refactor
+                // removes. `children` is JSON-identical either way — a Collection and
+                // a 0-indexed array both encode as a JSON array.
+                $childrenByParent = [];
+                $units->each(function (Unit $unit) use (&$childrenByParent, $byId): void {
+                    if ($unit->parent_id && $byId->has($unit->parent_id)) {
+                        $childrenByParent[$unit->parent_id][] = $unit;
+                    }
+                });
 
-                $format = function (Unit $unit) use (&$format, $byId) {
-                    $childUnits = $byId->filter(fn (Unit $u) => $u->parent_id == $unit->id);
+                $format = function (Unit $unit) use (&$format, $childrenByParent): array {
+                    $children = [];
+                    foreach ($childrenByParent[$unit->id] ?? [] as $child) {
+                        $children[] = $format($child);
+                    }
 
                     return [
                         'id' => $unit->id,
@@ -152,12 +175,17 @@ class OrgChartController extends Controller
                         'parent_id' => $unit->parent_id,
                         'unit_type' => $unit->unitType?->name,
                         'personnel_count' => $unit->personnel_count,
-                        'has_children' => $childUnits->isNotEmpty(),
-                        'children' => $childUnits->map(fn (Unit $c) => $format($c))->values(),
+                        'has_children' => $children !== [],
+                        'children' => $children,
                     ];
                 };
 
-                return collect($children)->map(fn (Unit $c) => $format($c))->values();
+                $result = [];
+                foreach ($childrenByParent[$unitId] ?? [] as $child) {
+                    $result[] = $format($child);
+                }
+
+                return $result;
             }, 10, ['subtree' => $unitId]);
 
         return response()->json(['data' => $result]);

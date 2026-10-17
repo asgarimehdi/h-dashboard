@@ -571,36 +571,6 @@ parameters:
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\(int\|string\),array\<string, mixed\>\>\:\:values\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Return type of call to method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Unable to resolve the template type TKey in call to function collect$#'
-			identifier: argument.templateType
-			count: 1
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Unable to resolve the template type TValue in call to function collect$#'
-			identifier: argument.templateType
-			count: 1
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
 			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$search\.$#'
 			identifier: property.notFound
 			count: 1

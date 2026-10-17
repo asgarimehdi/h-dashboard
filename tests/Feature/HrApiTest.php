@@ -234,6 +234,133 @@ class HrApiTest extends TestCase
         $response->assertStatus(403);
     }
 
+    // === Issue #1022: loadSubtree() builds children in a single pass ===
+
+    public function test_org_chart_subtree_emits_each_unit_once_with_exact_children(): void
+    {
+        // #1022: `loadSubtree()` re-filtered the whole collection once per visited
+        // node (O(n^2)); it now accumulates a `childrenByParent` map in one pass,
+        // like `orgChart()` 80 lines above. Emit-once is the invariant that breaks
+        // *silently* if a rewrite ever writes to `$unit->children` — that is the
+        // real hasMany relation, and #933 duplicated every subtree multiplicatively.
+        $child = Unit::firstWhere('parent_id', $this->unit->id);
+        Unit::create(['name' => 'خانه بهداشت ۲', 'parent_id' => $this->unit->id]);
+        Unit::create(['name' => 'خانه بهداشت ۳', 'parent_id' => $this->unit->id]);
+        Unit::create(['name' => 'پایگاه', 'parent_id' => $child->id]);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$this->unit->id}", $token);
+
+        $response->assertStatus(200);
+        $nodes = $response->json('data');
+
+        // Exactly three direct children; the nested one carries one grandchild.
+        $this->assertCount(3, $nodes);
+        $this->assertCount(3, collect($nodes)->pluck('id')->all());
+        $nested = collect($nodes)->firstWhere('id', $child->id);
+        $this->assertCount(1, $nested['children']);
+
+        $flatten = function (array $nodes) use (&$flatten): array {
+            $ids = [];
+            foreach ($nodes as $node) {
+                $ids[] = $node['id'];
+                $ids = array_merge($ids, $flatten($node['children']));
+            }
+
+            return $ids;
+        };
+
+        $ids = $flatten($nodes);
+
+        // The payload is the root's descendants (the root itself is excluded),
+        // each emitted exactly once.
+        $this->assertSame(Unit::count() - 1, count($ids));
+        $this->assertSame(count($ids), count(array_unique($ids)));
+    }
+
+    public function test_org_chart_subtree_response_shape_is_preserved(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$this->unit->id}", $token);
+
+        $response->assertStatus(200);
+
+        // A key dropped by this refactor breaks the HR UI silently.
+        $this->assertSame(
+            ['id', 'name', 'parent_id', 'unit_type', 'personnel_count', 'has_children', 'children'],
+            array_keys($response->json('data.0'))
+        );
+    }
+
+    public function test_org_chart_subtree_marks_leaf_children(): void
+    {
+        $leaf = Unit::create(['name' => 'خانه بهداشت برگ', 'parent_id' => $this->unit->id]);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$this->unit->id}", $token);
+
+        $response->assertStatus(200);
+
+        $leafNode = collect($response->json('data'))->firstWhere('id', $leaf->id);
+
+        $this->assertNotNull($leafNode);
+        $this->assertFalse($leafNode['has_children']);
+        $this->assertSame([], $leafNode['children']);
+    }
+
+    public function test_org_chart_subtree_child_of_out_of_scope_parent_is_not_a_key(): void
+    {
+        // #1022: the `$byId->has($unit->parent_id)` guard keeps a subtree root
+        // whose parent sits OUTSIDE `accessibleIds` from becoming a key — while
+        // its own subtree still comes back. The session unit IS the subtree root
+        // here, so its out-of-scope parent is exactly what the guard rejects.
+        $outOfScopeParent = Unit::create(['name' => 'والد خارج از دامنه']);
+        $root = Unit::create(['name' => 'ریشهٔ در دسترس', 'parent_id' => $outOfScopeParent->id]);
+        $child = Unit::create(['name' => 'فرزند ریشه', 'parent_id' => $root->id]);
+
+        Session::put('current_unit_id', $root->id);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$root->id}", $token);
+
+        $response->assertStatus(200);
+
+        $ids = collect($response->json('data'))->pluck('id')->all();
+
+        // The root's own subtree survives (it is not dropped) ...
+        $this->assertSame([$child->id], $ids);
+        // ... but the root is not emitted as a child of its out-of-scope parent.
+        $this->assertNotContains($root->id, $ids);
+    }
+
+    public function test_org_chart_subtree_fails_closed_without_units(): void
+    {
+        // #1022: an empty accessible set must never fall through to the whole
+        // tree. `loadSubtree()` rejects the request before the cache closure runs.
+        Session::forget('current_unit_id');
+
+        // `users.n_code` has an FK to `persons`; the person carries no unit, so
+        // the account resolves to an empty scope (no session unit, no user unit).
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::factory()->create([
+            'n_code' => $nCode,
+            'u_id' => null,
+            'status' => 'active',
+        ]);
+
+        $outsider = User::create([
+            'n_code' => $nCode,
+            'password' => Hash::make('password'),
+        ]);
+        $outsider->givePermissionTo('view_hr_dashboard');
+
+        $token = $this->createApiToken($outsider, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$this->unit->id}", $token);
+
+        $response->assertStatus(403)
+            ->assertJsonPath('message', 'Unit not accessible.');
+    }
+
     // === Issue #444: HR Analytics ===
 
     public function test_headcount_trend_returns_monthly_data(): void
