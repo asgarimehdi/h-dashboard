@@ -338,6 +338,10 @@ return new class extends Component
     }
 }; ?>
 <div>
+    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+        this (morphed on every render) instead of firing a second method request
+        per filter change. --}}
+    <div id="advancedChartData" class="hidden" data-chart='@json(['byDay' => $this->reportData['byDay'], 'byUnit' => $this->reportData['byUnit'], 'details' => $this->reportData['details']])'></div>
     <x-header title="گزارش تیکت‌ها" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector/>
@@ -517,9 +521,13 @@ return new class extends Component
         container.innerHTML = '';
     }
 
-    async function renderCharts() {
-        waitForHighcharts(async () => {
-            const reportData = await $wire.chartPayload();
+    function renderCharts() {
+        waitForHighcharts(() => {
+            // Issue #1042: read the server-rendered aggregates above — the view
+            // already ran reportData for this render, so a second method request
+            // would just re-run it.
+            const el = document.getElementById('advancedChartData');
+            const reportData = el ? JSON.parse(el.dataset.chart) : {};
 
             destroyChartById('trendChart');
             destroyChartById('unitChart');
@@ -583,13 +591,15 @@ return new class extends Component
     renderCharts();
 
     // Re-render after filter updates
-    $wire.$watch('reportType', () => renderCharts());
-    $wire.$watch('rootUnitId', () => renderCharts());
-    $wire.$watch('parentUnitId', () => renderCharts());
-    $wire.$watch('unitId', () => renderCharts());
-    $wire.$watch('statusFilter', () => renderCharts());
+    // Issue #1042: the report-type and unit selects re-render through the DOM
+    // payload (morphed on each server render) instead of a second
+    // `chartPayload()` request. The date watchers stay because the Jalali
+    // datepicker writes the properties via `$wire.set`.
     $wire.$watch('dateFrom', () => renderCharts());
     $wire.$watch('dateTo', () => renderCharts());
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) renderCharts();
+    });
 
     const initAdvancedReportJdp = () => {
         if (typeof jalaliDatepicker === 'undefined') {
