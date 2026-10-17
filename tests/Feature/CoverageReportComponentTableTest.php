@@ -180,7 +180,9 @@ class CoverageReportComponentTableTest extends TestCase
     /**
      * The issue's own smoke check: the reporting job keeps reporting and
      * never gates — `continue-on-error`, the script invocation, and the
-     * `|| true` that keeps a broken suite from reddening a report-only job.
+     * Clover handoff #1011 introduced: the job no longer re-runs the suite
+     * (the `|| true` guard belonged to that removed second run), it downloads
+     * the `coverage-xml` artifact the `test` job already uploaded.
      */
     public function test_the_coverage_report_job_stays_non_blocking_and_still_runs_the_script(): void
     {
@@ -198,10 +200,16 @@ class CoverageReportComponentTableTest extends TestCase
             'the job no longer runs the reporting entrypoint, so the component table never prints'
         );
 
-        $this->assertStringContainsString(
-            '|| true',
+        $this->assertStringNotContainsString(
+            'vendor/bin/pest',
             $job,
-            'the job\'s own pest run must stay report-only: a red suite must not redden a report'
+            'the job re-runs the suite: #1011 moved the pest run to the `test` job and hands the Clover over as an artifact'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/uses: actions\/download-artifact@\S+\s*\n\s*with:\s*\n\s*name: coverage-xml/',
+            $job,
+            'the job must download the `coverage-xml` artifact the `test` job uploads: a drift here silently reports "no data" (the #865 trap)'
         );
     }
 
