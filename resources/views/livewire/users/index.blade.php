@@ -393,9 +393,21 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $query = User::query()
-            ->with('roles')
-            ->withAggregate('person', 'f_name')
-            ->withAggregate('person', 'l_name')
+            // Issue #1014: eager-load every relation the table/SLOT reads.
+            // MaryUI renders the expansion slot for EVERY row (CSS-hidden),
+            // and its getAllPermissions() + the unit_name accessor each paid
+            // 2 lazy queries per row (~80 queries at perPage=20). The FULL
+            // chain matters — `person:id,n_code` would make the accessors
+            // lazy-load again. Direct `permissions` is loaded too: Spatie's
+            // getAllPermissions() reads it before falling back to roles.
+            // The two withAggregate('person', …) calls were redundant: the
+            // aliases had zero consumers (grep: person_f_name/person_l_name).
+            // Issue #849 scope below is UNTOUCHED.
+            ->with([
+                'roles.permissions',
+                'permissions',
+                'person.unit',
+            ])
             // Issue #849: scope the directory. A DISJUNCTION, not the
             // activity-log predicate verbatim — `whereHas('person', …)` alone
             // would hide accounts with no linked person or a null u_id (admin
