@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\LastUserActivity;
+use App\Http\Middleware\RequestId;
 use App\Http\Middleware\SafeRoleOrPermission;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ValidateUnitContext;
@@ -78,6 +79,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             SecurityHeaders::class,
             LastUserActivity::class,
+            RequestId::class,
+        ]);
+
+        // Issue #1068: the api stack is a separate group, so it needs its own
+        // append. `/api/*` routes write the same application logs (and the
+        // 401/403 envelopes should be quotable too), so the correlation id
+        // belongs here as well.
+        $middleware->api(append: [
+            RequestId::class,
         ]);
 
         // Trust proxies for HTTPS detection behind Cloudflare/load balancer.
