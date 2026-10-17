@@ -89,17 +89,27 @@ it('person search only returns persons within the user\'s organizational scope',
 
     $user = makeUserInUnit($ownUnit);
 
+    // Issue #1047: assert on what is RENDERED, not on the in-memory
+    // `personResults` property — a lazy refactor that keeps the property but
+    // still leaks into the view must fail this test.
+    //
+    // Out-of-scope search: the other unit's person must not appear in the
+    // person-search dropdown that the open create form renders.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', '2222') // other unit's n_code prefix
-        ->assertSet('personResults', []); // must NOT see Unit B person
+        ->assertDontSee('Sara Ahmadi')
+        ->assertDontSee('2222222222');
 
+    // In-scope search renders the person as a selectable option — this proves
+    // the dropdown path above is genuinely exercised rather than vacuously empty.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', 'Ali')
-        ->assertSet('personResults', [
-            ['n_code' => '1111111111', 'name' => 'Ali Rezaei'],
-        ]);
+        ->assertSee('Ali Rezaei')
+        ->assertSee('1111111111');
 });
 
 it('person search by n_code respects scope', function () {
@@ -110,15 +120,17 @@ it('person search by n_code respects scope', function () {
 
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', '4444444444')
-        ->assertSet('personResults', []);
+        ->assertDontSee('Neda Karimi')
+        ->assertDontSee('4444444444');
 
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', '3333333333')
-        ->assertSet('personResults', [
-            ['n_code' => '3333333333', 'name' => 'Mohammad Hosseini'],
-        ]);
+        ->assertSee('Mohammad Hosseini')
+        ->assertSee('3333333333');
 });
 
 it('n_code validation does not leak other units\' person info', function () {
@@ -127,21 +139,20 @@ it('n_code validation does not leak other units\' person info', function () {
 
     $user = makeUserInUnit($ownUnit);
 
-    // Typing an out-of-scope n_code must NOT reveal name/unit
+    // Typing an out-of-scope n_code must NOT render that person's name/unit.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('n_code', '6666666666')
-        ->assertSet('n_code_status', 'invalid')
-        ->assertSet('n_code_name', null)
-        ->assertSet('n_code_unit', null);
+        ->assertSee('کد ملی یافت نشد') // rendered "invalid" hint
+        ->assertDontSee('Maryam Sadeghi');
 
-    // In-scope n_code still validates and shows name/unit
+    // In-scope n_code still validates and renders the person's name.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('n_code', '5555555555')
-        ->assertSet('n_code_status', 'valid')
-        ->assertSet('n_code_name', 'Hassan Moradi')
-        ->assertSet('n_code_unit', 'Unit A');
+        ->assertSee('Hassan Moradi');
 });
 
 it('createHardware rejects out-of-scope person', function () {
@@ -156,6 +167,10 @@ it('createHardware rejects out-of-scope person', function () {
         ->set('pc_name', 'PC-OUT-OF-SCOPE')
         ->call('createHardware')
         ->assertHasErrors('n_code'); // exists:persons rule fails for out-of-scope n_code
+
+    // Issue #1047: the database is the source of truth — no row may be written
+    // for the out-of-scope person.
+    $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-OUT-OF-SCOPE']);
 });
 
 it('general search matches the full person name (f_name + l_name)', function () {
