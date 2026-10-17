@@ -4,6 +4,7 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Support\JalaliDateRange;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
@@ -123,22 +124,12 @@ new class extends Component
             });
         }
 
-        if ($this->dateFrom) {
-            try {
-                $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-                $query->where('created_at', '>=', $miladiFrom);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
+            $query->where('created_at', '>=', $from);
         }
 
-        if ($this->dateTo) {
-            try {
-                $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-                $query->where('created_at', '<=', $miladiTo);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
+            $query->where('created_at', '<=', $to);
         }
 
         return $query->latest()->paginate(20);

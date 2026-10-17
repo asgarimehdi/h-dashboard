@@ -6,6 +6,7 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
 use App\Services\DailySeries;
+use App\Support\JalaliDateRange;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
@@ -60,21 +61,6 @@ return new class extends Component
         }
     }
 
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
-    {
-        if (empty($date)) {
-            return null;
-        }
-
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     /**
      * The chosen from..to range as Carbon bounds, or null when either end is
      * missing/invalid or the range is inverted — in which case the daily series
@@ -84,14 +70,7 @@ return new class extends Component
      */
     private function dateRange(): ?array
     {
-        $from = $this->parseJalaliDate($this->dateFrom);
-        $to = $this->parseJalaliDate($this->dateTo, endOfDay: true);
-
-        if (! $from || ! $to || $from->gt($to)) {
-            return null;
-        }
-
-        return [$from, $to];
+        return JalaliDateRange::range($this->dateFrom, $this->dateTo);
     }
 
     #[Livewire\Attributes\Computed]
@@ -236,10 +215,10 @@ return new class extends Component
         };
 
         // فیلتر تاریخ (ورودی شمسی)
-        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
             $query->where('created_at', '>=', $from);
         }
-        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
             $query->where('created_at', '<=', $to);
         }
 

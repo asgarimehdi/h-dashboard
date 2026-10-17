@@ -10,6 +10,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Morilog\Jalali\Jalalian;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -144,26 +145,25 @@ class ActivityLogPageLivewireTest extends TestCase
         ActivityLog::create([
             'user_id' => $user->id,
             'type' => 'login',
-            'description' => 'قدیمی',
-            'created_at' => now()->subDays(30),
-        ]);
+            'description' => 'لاگ قدیمی',
+        ])->forceFill(['created_at' => now()->subDays(30)])->saveQuietly();
         ActivityLog::create([
             'user_id' => $user->id,
             'type' => 'login',
-            'description' => 'جدید',
-            'created_at' => now(),
+            'description' => 'لاگ جدید',
         ]);
 
-        // Date filter expects Jalali format
-        $from = now()->subDays(15)->format('Y/m/d');
-        $to = now()->format('Y/m/d');
+        // Issue #1054: this test used Gregorian `Y/m/d` strings and asserted only
+        // the status, so a broken Jalali parse stayed green. The filter is
+        // Jalali; a 15-day window must keep the recent row and drop the old one.
+        $from = Jalalian::fromCarbon(now()->subDays(15))->format('Y/m/d');
+        $to = Jalalian::fromCarbon(now())->format('Y/m/d');
 
-        $component = Livewire::test('activity-log.index')
+        Livewire::test('activity-log.index')
             ->set('dateFrom', $from)
-            ->set('dateTo', $to);
-
-        // Verify component renders with filters
-        $component->assertStatus(200);
+            ->set('dateTo', $to)
+            ->assertSee('لاگ جدید')
+            ->assertDontSee('لاگ قدیمی');
     }
 
     // ==================== Detail modal ====================

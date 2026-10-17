@@ -399,6 +399,23 @@ class TicketsMonitoringLivewireTest extends TestCase
             ->assertSee('#TKT-VL01');
     }
 
+    public function test_invalid_jalali_string_is_silently_ignored(): void
+    {
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($result['user']);
+
+        $this->makeTicket($result['unit'], ['subject' => 'تیکت سالم', 'ticket_code' => 'TKT-INV1']);
+
+        // Issue #1054: an unparseable string yields no date bound (the deliberate
+        // contract), so the ticket stays visible instead of crashing the render
+        // or hiding every row.
+        Livewire::test('tickets.monitoring')
+            ->set('dateFrom', 'not-a-date')
+            ->set('dateTo', 'also-not-a-date')
+            ->assertStatus(200)
+            ->assertSee('#TKT-INV1');
+    }
+
     // ==================== Edge: selectedUnitId deleted -> currentUnit null ====================
 
     public function test_selected_unit_deleted_falls_back_to_null(): void

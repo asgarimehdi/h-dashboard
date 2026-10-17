@@ -6,6 +6,7 @@ use App\Models\Unit;
 use App\Models\TaskActivity;
 use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
+use App\Support\JalaliDateRange;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
@@ -139,21 +140,11 @@ new class extends Component
             $query->where('status', $this->statusFilter);
         }
 
-        if ($this->dateFrom) {
-            try {
-                $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-                $query->where('created_at', '>=', $miladiFrom);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
+            $query->where('created_at', '>=', $from);
         }
-        if ($this->dateTo) {
-            try {
-                $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-                $query->where('created_at', '<=', $miladiTo);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
+            $query->where('created_at', '<=', $to);
         }
         if (!empty($this->search)) {
             $query->where(function ($q) {
