@@ -6,10 +6,10 @@ use App\Events\HardwareUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
-use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Services\HardwareBulkAuditWriter;
 use App\Support\HardwareAuditChange;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -311,7 +311,7 @@ class HardwareController extends Controller
         }
 
         // Batch insert audit entries
-        $this->batchInsertAudits($hardwares, 'bulk_mark', [
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits($hardwares, 'bulk_mark', [
             ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
         ]);
 
@@ -346,7 +346,7 @@ class HardwareController extends Controller
         // #927: `changes` is a field-level diff list, `[{field, old, new}]` —
         // this used to write $hw->getAttributes(), a column => value map, which
         // no reader could render (the export threw a TypeError on it).
-        $this->batchInsertAudits(
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
             $hardwares,
             'bulk_delete',
             null,
@@ -369,42 +369,5 @@ class HardwareController extends Controller
         });
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
-    }
-
-    /**
-     * Batch insert audit entries in a single query instead of N+1 loop.
-     *
-     * #927: `HardwareAudit::insert()` bypasses casts, so the column-shape
-     * contract is enforced here — the only place a guard can actually bite. A
-     * payload that is not the documented diff list is coerced rather than
-     * rejected: a malformed audit row must never be the reason a bulk delete
-     * fails.
-     */
-    protected function batchInsertAudits($hardwares, string $action, ?array $staticChanges, ?\Closure $changesPerItem = null): void
-    {
-        $user = \Auth::user();
-        $request = request(); // actual request, not Request::capture()
-
-        $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
-            $changes = HardwareAuditChange::toDiffList(
-                $changesPerItem ? $changesPerItem($hardware) : $staticChanges
-            );
-
-            return [
-                'hardware_id' => $hardware->id,
-                'user_id' => $user?->id,
-                'action' => $action,
-                'changes' => $changes ? json_encode($changes, JSON_UNESCAPED_UNICODE) : null,
-                'source' => 'bulk',
-                'ip_address' => $request?->ip(),
-                'user_agent' => $request?->userAgent(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        })->toArray();
-
-        if (! empty($rows)) {
-            HardwareAudit::insert($rows);
-        }
     }
 }

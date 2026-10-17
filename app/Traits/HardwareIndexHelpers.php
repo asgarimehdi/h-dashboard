@@ -307,8 +307,10 @@ trait HardwareIndexHelpers
     public function loadDeletedHardware(): void
     {
         // Single efficient query: find created audits for deleted hardware,
-        // plus their delete timestamp via subquery.
-        $deletedHardwareIds = HardwareAudit::where('action', 'deleted')
+        // plus their delete timestamp via subquery. #1026: "deleted" is every
+        // action that means the device is gone — the observer's `deleted` and
+        // the bulk path's `bulk_delete` — from one shared list.
+        $deletedHardwareIds = HardwareAudit::whereIn('action', HardwareAudit::DELETING_ACTIONS)
             ->pluck('hardware_id')
             ->unique()
             ->values()
@@ -326,9 +328,11 @@ trait HardwareIndexHelpers
             ->with('user:id,n_code')
             ->get();
 
-        // Batch-load all delete timestamps in one query to avoid N+1
+        // Batch-load all delete timestamps in one query to avoid N+1. #1026:
+        // the same action list as the id query above, so a `bulk_delete` row
+        // still yields a «حذف شده در» timestamp.
         $deleteTimestamps = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
-            ->where('action', 'deleted')
+            ->whereIn('action', HardwareAudit::DELETING_ACTIONS)
             ->select('hardware_id', 'created_at')
             ->get()
             ->mapWithKeys(fn ($d) => [$d->hardware_id => $d->created_at]);
