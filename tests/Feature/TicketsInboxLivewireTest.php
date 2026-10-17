@@ -804,6 +804,36 @@ class TicketsInboxLivewireTest extends TestCase
             ->assertSet('targetUnitName', 'واحد معتبر مقصد');
     }
 
+    /**
+     * #818 (correction 4) / #1055 step 2: the destination unit is display state
+     * the picker writes through `selectTargetUnit()`, never URL state. A crafted
+     * `?targetUnitId=` link once pre-selected a unit the caller never picked, and
+     * `targetUnitName` travelled into the audit trail verbatim. Those properties
+     * now live in `TicketsInboxFlow`, so this pins that they did not carry a
+     * `#[Url]` binding with them.
+     */
+    public function test_target_unit_is_not_settable_from_the_query_string(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+
+        Livewire::withQueryParams([
+            'targetUnitId' => $target->id,
+            'targetUnitName' => 'واحد جعلی',
+        ])->test('tickets.inbox')
+            ->assertSet('targetUnitId', null)
+            ->assertSet('targetUnitName', '');
+
+        // Control: the `#[Url]` filter state *does* read the query string, so the
+        // assertions above are about the flow properties, not about
+        // withQueryParams() being a no-op.
+        Livewire::withQueryParams(['statusFilter' => 'completed'])
+            ->test('tickets.inbox')
+            ->assertSet('statusFilter', 'completed');
+    }
+
     public function test_submit_action_target_unit_id_is_validated(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
