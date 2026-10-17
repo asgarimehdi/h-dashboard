@@ -31,8 +31,21 @@ return new class extends Component
     public function mount(): void
     {
         $v = Cache::get('maps_version', 0);
-        $this->regions = Cache::remember('unit_map:regions:v' . $v, 300, function () {
-            return Region::where('type', 'county')
+
+        // #1032: the county toggles are scoped to the caller's accessible units,
+        // the same rule maps/county applies. Fail-closed — an empty scope makes
+        // the IN-filter compile to `0 = 1`, so a unit-less caller sees no county.
+        // `Unit::query()` (not `Unit::whereIn`) keeps the chain on Eloquent's
+        // Builder, which PHPStan understands without larastan.
+        $accessibleRegionIds = Unit::query()
+            ->whereIn('id', app(AccessService::class)->accessibleUnitIds())
+            ->whereNotNull('region_id')
+            ->pluck('region_id');
+
+        $this->regions = Cache::remember('unit_map:regions:v' . $v . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
+            return Region::query()
+                ->where('type', 'county')
+                ->whereIn('id', $accessibleRegionIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
@@ -65,9 +78,21 @@ return new class extends Component
             return;
         }
 
-        $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0) . '_' . md5(implode(',', $this->selectedRegions));
+        // #1032: boundaries are scoped exactly like maps/county — a caller only
+        // receives geometry for regions an accessible unit sits in. The scope is
+        // part of the cache key too: with a shared key, a boundary cached by a
+        // broad-scope user was served to a narrower one on the next hit, which
+        // bypassed the query filter entirely. Do not drop either half.
+        $accessibleRegionIds = Unit::query()
+            ->whereIn('id', app(AccessService::class)->accessibleUnitIds())
+            ->whereNotNull('region_id')
+            ->pluck('region_id');
 
-        $counties = Cache::remember($cacheKey, 300, function () {
+        $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0)
+            . '_' . md5(implode(',', $this->selectedRegions))
+            . '_' . md5(implode(',', $accessibleRegionIds->all()));
+
+        $counties = Cache::remember($cacheKey, 300, function () use ($accessibleRegionIds) {
             // #1023: project ST_AsGeoJSON in the query (the pattern county.blade.php
             // already uses) instead of reading Boundary::$appends['geojson'] per
             // row, which fired one query per region and round-tripped the geometry.
@@ -75,6 +100,7 @@ return new class extends Component
             // push `return new class` off line 10 and break the line-keyed PHPStan
             // baseline anchors for this anonymous component.
             return Region::whereIn('regions.id', $this->selectedRegions)
+                ->whereIn('regions.id', $accessibleRegionIds)
                 ->whereNotNull('regions.boundary_id')
                 ->join('boundaries', 'regions.boundary_id', '=', 'boundaries.id')
                 ->select([

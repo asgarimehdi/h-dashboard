@@ -49,6 +49,20 @@ class MapsUnitLivewireTest extends TestCase
         return (int) DB::getPdo()->lastInsertId();
     }
 
+    /**
+     * An accessible unit sitting in $region. The caller's scope is the session
+     * unit's subtree, so a region only becomes reachable once a unit there is
+     * reachable — the fixture the #1032 scope tests are built on. unit_type_id
+     * is left null: the scope queries key on region_id only.
+     */
+    protected function createUnitInRegion(Region $region): Unit
+    {
+        return Unit::create([
+            'name' => 'واحد '.$region->name,
+            'region_id' => $region->id,
+        ]);
+    }
+
     // ==================== Auth / permissions ====================
 
     public function test_guest_302(): void
@@ -82,6 +96,10 @@ class MapsUnitLivewireTest extends TestCase
         $this->actingAs($user);
 
         $region = $this->seedRegionAndTypes();
+
+        // The region toggle is scoped (#1032): it only renders when a unit in
+        // the region is reachable, so put one in scope before asserting.
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
 
         // Initially: region toggles are visible; center types only after selection
         Livewire::test('maps/unit')
@@ -179,16 +197,26 @@ class MapsUnitLivewireTest extends TestCase
 
     public function test_county_boundary_queries_do_not_grow_with_region_count(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['map']);
+        ['user' => $user, 'unit' => $baseUnit] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         $regionIds = [];
         for ($i = 1; $i <= 21; $i++) {
-            $regionIds[] = Region::create([
+            $region = Region::create([
                 'name' => sprintf('شهرستان %02d', $i),
                 'type' => 'county',
                 'boundary_id' => $this->createBoundary(),
-            ])->id;
+            ]);
+            $regionIds[] = $region->id;
+
+            // #1032 scoped the county list to the caller's accessible units:
+            // without an in-scope unit every region is out of scope, the payload
+            // is empty, and the count assertion below would be vacuous.
+            Unit::create([
+                'name' => sprintf('واحد شهرستان %02d', $i),
+                'parent_id' => $baseUnit->id,
+                'region_id' => $region->id,
+            ]);
         }
 
         Cache::flush();
@@ -295,5 +323,139 @@ class MapsUnitLivewireTest extends TestCase
         $decoded = json_decode($row['geojson'], true);
         $this->assertSame('MultiPolygon', $decoded['type']);
         $this->assertArrayNotHasKey('geometry', $decoded);
+    }
+
+    // ==================== #1032: region boundary scope ====================
+
+    public function test_selected_region_outside_scope_returns_no_geometry(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $accessibleRegion = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($accessibleRegion)->id]);
+
+        $foreignRegion = Region::create([
+            'name' => 'شهرستان بیگانه',
+            'type' => 'county',
+            'boundary_id' => $this->createBoundary(),
+        ]);
+
+        // The foreign region HAS a boundary, so the only reason its geometry is
+        // missing from the payload is the scope filter.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$foreignRegion->id])
+            ->assertDispatched('county-boundaries-loaded', counties: []);
+    }
+
+    public function test_region_list_only_shows_regions_inside_scope(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $accessibleRegion = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($accessibleRegion)->id]);
+
+        Region::create(['name' => 'شهرستان بیگانه', 'type' => 'county']);
+
+        Livewire::test('maps/unit')
+            ->assertSee('شهرستان تست')          // in scope: a unit sits there
+            ->assertDontSee('شهرستان بیگانه');   // out of scope: no unit there
+    }
+
+    public function test_county_boundaries_cache_does_not_leak_between_scopes(): void
+    {
+        $accessibleRegion = $this->seedRegionAndTypes();
+        $foreignRegion = Region::create([
+            'name' => 'شهرستان بیگانه',
+            'type' => 'county',
+            'boundary_id' => $this->createBoundary(),
+        ]);
+
+        $inScopeUnit = $this->createUnitInRegion($accessibleRegion);
+        $foreignUnit = $this->createUnitInRegion($foreignRegion);
+
+        $broadUser = $this->createUserWithUnit(['map'])['user'];
+        $narrowUser = $this->createUserWithUnit(['map'])['user'];
+
+        Cache::flush();
+
+        // Broad scope: an accessible unit in the foreign region, so its boundary
+        // is returned — and written to the cache.
+        $this->actingAs($broadUser);
+        session(['current_unit_id' => $foreignUnit->id]);
+
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$foreignRegion->id])
+            ->assertDispatched('county-boundaries-loaded', function (string $name, array $params): bool {
+                return count($params['counties']) === 1;
+            });
+
+        // Narrow scope: same region id, same selection. If the cache key ignores
+        // the scope, the boundary written above is served here and the query
+        // filter never runs — the leak this test exists to prevent.
+        $this->actingAs($narrowUser);
+        session(['current_unit_id' => $inScopeUnit->id]);
+
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$foreignRegion->id])
+            ->assertDispatched('county-boundaries-loaded', counties: []);
+    }
+
+    public function test_out_of_scope_region_shows_no_boundary_and_no_units(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $accessibleRegion = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($accessibleRegion)->id]);
+
+        $foreignRegion = Region::create([
+            'name' => 'شهرستان بیگانه',
+            'type' => 'county',
+            'boundary_id' => $this->createBoundary(),
+        ]);
+
+        // A boundary-bearing unit in the foreign region, but outside the scope.
+        Unit::create([
+            'name' => 'واحد بیگانه',
+            'region_id' => $foreignRegion->id,
+            'unit_type_id' => 5,
+            'boundary_id' => $this->createBoundary(),
+        ]);
+
+        // Both update paths agree: an out-of-scope selection yields neither a
+        // boundary nor a unit, so the empty state shows instead of a boundary
+        // with nothing inside it. assertDispatched reads the state right after
+        // set('selectedRegions') — a later set() replaces the last state.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$foreignRegion->id])
+            ->assertDispatched('county-boundaries-loaded', counties: [])
+            ->set('selectedCenterTypes', [5])
+            ->assertSee('واحدی یافت نشد');
+    }
+
+    public function test_region_cache_keys_are_gated_on_the_access_scope(): void
+    {
+        $view = file_get_contents(resource_path('views/livewire/maps/unit.blade.php'));
+
+        // #1032: BOTH region caches — the mount() county list and the
+        // showSelectedCounties() geometry — must key on the caller's
+        // accessible-region set. A scope-free key lets a payload written by a
+        // broad-scope user be served to a narrower one on the next hit,
+        // bypassing the query-time scope check.
+        $scopeKey = "md5(implode(',', \$accessibleRegionIds->all()))";
+        $this->assertSame(
+            2,
+            substr_count($view, $scopeKey),
+            'Both region cache keys must be gated on the accessible-region scope.'
+        );
+
+        // The pre-#1032 scope-free spellings must not survive a refactor back.
+        $this->assertStringNotContainsString("'unit_map:regions:v' . \$v, 300", $view);
+        $this->assertStringNotContainsString(
+            "'county_boundaries_v' . Cache::get('maps_version', 0) . '_' . md5(implode(',', \$this->selectedRegions))",
+            $view
+        );
     }
 }
