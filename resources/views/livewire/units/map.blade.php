@@ -206,6 +206,13 @@ return new class extends Component {
 </style>
 @endassets
 
+@push('styles')
+    {{-- Issue #984 (CSS half, #1018): `units/map` is the only page that draws
+         boundaries, so the draw control's stylesheet ships here rather than in
+         the global layout — pushed into `<head>` via `@stack('styles')`. --}}
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
+@endpush
+
 @push('scripts')
     {{-- Issue #984: `units/map` is the only page that draws boundaries, so the
          draw plugin ships here instead of in the global layout. It lands in

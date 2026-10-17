@@ -73,6 +73,13 @@ return new class extends Component {
     </x-card>
 </div>
 
+@push('styles')
+    {{-- Issue #984 (CSS half, #1018): the routing stylesheet ships on this page
+         alone — pushed into `<head>` via `@stack('styles')`, not the global
+         layout. --}}
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
+@endpush
+
 @push('scripts')
     {{-- Issue #984: routing is this page's only consumer, so it ships here
          instead of in the global layout. `@stack('scripts')` runs before
