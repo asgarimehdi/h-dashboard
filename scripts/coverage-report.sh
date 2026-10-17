@@ -20,6 +20,11 @@
 #      storage/framework/views/test_N/ paths, so `--coverage-filter` on the
 #      compiled dir reports 0.0% per file and inflates the denominator with
 #      dead copies. See issue #865's expert review.)
+#   4. The per-component table for resources/views/livewire (issue #1045):
+#      public methods and test references per Blade file, worst first, with
+#      the zero-reference list — the visibility the app/ denominator cannot
+#      give. A component nobody tests moves no number today; this makes it a
+#      line in the log instead.
 #
 # The hard `--min=80` gate is deliberately untouched: changing it before a
 # real total exists is out of scope (locked decision in #865's git review).
@@ -91,6 +96,70 @@ echo "  compiled dir yields 0.0% per file (verified 2026-10-08)."
 echo "  Component behaviour IS executed by Livewire::test(...) suites;"
 echo "  only the measurement is blind."
 echo ""
+# 4. Per-component visibility (issue #1045): every Blade file the app/
+#    denominator cannot see, with the public methods it declares and the
+#    number of tests that name it. Informational like everything above — it
+#    cannot fail the job (the script still ends in `exit 0`).
+echo "=== Livewire component visibility (issue #1045 — informational) ==="
+echo ""
+
+ROWS=""
+FILE_COUNT=0
+METHOD_TOTAL=0
+REF_TOTAL=0
+
+for f in $(find resources/views/livewire -name '*.blade.php' | sort); do
+    REL="${f#resources/views/livewire/}"
+    REL="${REL%.blade.php}"
+    # Livewire's Finder strips the ⚡ prefix (and its variation selectors)
+    # from SFC names, and the suites spell a component with EITHER
+    # separator — `tickets.inbox` and `tickets/inbox` name the same file.
+    SLASH=$(printf '%s' "$REL" | sed $'s/\xe2\x9a\xa1[\xef\xb8\x8e\xef\xb8\x9f]\{0,1\}//g')
+    DOT=$(printf '%s' "$SLASH" | tr '/' '.')
+
+    METHODS=$(grep -o "public function" "$f" | wc -l)
+    REFS=$(grep -rhoF -e "test('$DOT'" tests/ | wc -l)
+    if [ "$SLASH" != "$DOT" ]; then
+        # Only for nested files: for a root-level file the two patterns are
+        # identical, and `grep -F -e p -e p` prints every match TWICE.
+        REFS=$((REFS + $(grep -rhoF -e "test('$SLASH'" tests/ | wc -l)))
+    fi
+
+    # A Blade file with no anonymous component class is a partial view: it
+    # runs inside its parent's tests, so it is never named by Livewire::test().
+    if grep -q "new class extends" "$f"; then
+        KIND="component-class"
+    else
+        KIND="partial-view"
+    fi
+
+    FILE_COUNT=$((FILE_COUNT + 1))
+    METHOD_TOTAL=$((METHOD_TOTAL + METHODS))
+    REF_TOTAL=$((REF_TOTAL + REFS))
+    ROWS="${ROWS}${REFS} ${METHODS} ${KIND} ${DOT}"$'\n'
+done
+
+echo "Worst first (fewest test references, then most public methods):"
+echo ""
+printf '%-42s %8s %11s\n' "COMPONENT" "METHODS" "TEST-REFS"
+printf '%s' "$ROWS" | sort -k1,1n -k2,2nr -k4,4 | while read -r refs methods kind name; do
+    printf '%-42s %8s %11s\n' "$name" "$methods" "$refs"
+done
+echo ""
+
+ZERO_COUNT=$(printf '%s' "$ROWS" | grep -c '^0 ')
+echo "Zero test references: ${ZERO_COUNT} of ${FILE_COUNT} files"
+printf '%s' "$ROWS" | sort -k1,1n -k2,2nr -k4,4 | awk '$1 == 0 { printf "  - %s (%s public methods; %s)\n", $4, $2, $3 }'
+echo ""
+echo "Totals: ${FILE_COUNT} files, ${METHOD_TOTAL} public methods, ${REF_TOTAL} test references."
+echo "METHODS = \`public function\` occurrences in the file. TEST-REFS ="
+echo "\`test('<name>'\` occurrences under tests/ where <name> is this file's"
+echo "own name in dot OR slash form (Livewire accepts both, ⚡ stripped the"
+echo "way its Finder derives SFC names). Dynamic Livewire::test(\$component)"
+echo "calls name no file, so they cannot be attributed and are not counted."
+echo ""
+
+# Gate status (issue #865 — locked decision, untouched by #1045).
 echo "Gate status: --min=80 on app/ unchanged (hard gate out of scope until a real total exists)."
 echo "=== end coverage report ==="
 exit 0

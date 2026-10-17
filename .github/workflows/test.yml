@@ -292,6 +292,9 @@ jobs:
         # file CI just produced and prints covered/valid statement counts —
         # a run with no coverage data says so explicitly instead of going
         # green silently (the #865 trap).
+        # It also prints the per-component table for resources/views/livewire
+        # (#1045): public methods + test references per Blade file, worst
+        # first — still informational, still never gates.
         run: bash scripts/coverage-report.sh --clover=coverage.xml
 
   e2e:
