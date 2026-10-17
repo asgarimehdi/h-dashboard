@@ -1,6 +1,7 @@
 <?php
 
 use Livewire\Component;
+use Livewire\WithPagination;
 use App\Models\Person;
 use App\Services\AccessService;
 use Carbon\Carbon;
@@ -8,6 +9,11 @@ use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use WithPagination;
+
+    /** Issue #1024 — the roster is paginated instead of hydrated whole. */
+    public int $perPage = 25;
+
     public string $dateFrom = '';
     public string $dateTo = '';
     public ?int $selectedUnitId = null;
@@ -34,6 +40,18 @@ return new class extends Component
         $this->estekhdams = \App\Models\Estekhdam::all();
 
         $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
+    }
+
+    /**
+     * Issue #1024: a filter change starts a new result set, so the roster goes
+     * back to page 1 — otherwise the user can be stranded on a page that no
+     * longer exists in the filtered set.
+     */
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['selectedUnitId', 'selectedTahsilId', 'selectedSematId', 'selectedEstekhdamId'], true)) {
+            $this->resetPage();
+        }
     }
 
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
@@ -107,10 +125,15 @@ return new class extends Component
 
         // Eager loads first, exactly like reports/units (#819): `with()` must
         // precede any degrading call in the chain.
-        $persons = (clone $baseQuery)
+        // Issue #1024: only the row list is paginated — every aggregate above
+        // is computed from its own unpaginated query, so it still describes the
+        // whole filtered set rather than the current page.
+        $personsPage = (clone $baseQuery)
             ->with(['unit:id,name', 'tahsil:id,name', 'semat:id,name', 'estekhdam:id,name'])
             ->orderBy('n_code')
-            ->get()
+            ->paginate($this->perPage);
+
+        $persons = $personsPage->getCollection()
             ->map(fn($p) => [
                 'id' => $p->id,
                 'n_code' => $p->n_code,
@@ -120,7 +143,7 @@ return new class extends Component
                 'semat' => $p->semat?->name ?? '—',
                 'estekhdam' => $p->estekhdam?->name ?? '—',
             ])
-            ->toArray();
+            ->all();
 
         return [
             'total' => $total,
@@ -128,14 +151,19 @@ return new class extends Component
             'bySemat' => $bySemat,
             'byEstekhdam' => $byEstekhdam,
             'byUnit' => $byUnit,
+            // `persons` stays a plain array (the fail-closed security tests and
+            // the `empty()` check in the view both treat it as one); the
+            // paginator rides alongside for `->hasPages()`/`->links()`.
             'persons' => $persons,
+            'personsPaginator' => $personsPage,
         ];
     }
 
     public function getAccessibleUnitsProperty()
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return \App\Models\Unit::whereIn('id', $accessibleIds)->get();
+        // Issue #1024: a `<select>` needs nothing but id/name.
+        return \App\Models\Unit::whereIn('id', $accessibleIds)->get(['id', 'name']);
     }
 }; ?>
 
@@ -272,6 +300,18 @@ return new class extends Component
                 </tbody>
             </table>
         </div>
+
+        {{-- Issue #1024: the hand-rolled table has no `with-pagination`, so the
+            paginator rides alongside the payload. `->links()` renders Livewire's
+            Tailwind view, which `lang/fa.json` already translates. --}}
+        @if ($chart['personsPaginator']->hasPages())
+            {{-- `mary-table-pagination` is the app's own pagination style hook
+                (`resources/css/app.css`); the hand-rolled table cannot pass it
+                through `x-table`, so it is applied by hand. --}}
+            <div class="mt-4 mary-table-pagination">
+                {{ $chart['personsPaginator']->links() }}
+            </div>
+        @endif
     </x-card>
 </div>
 
