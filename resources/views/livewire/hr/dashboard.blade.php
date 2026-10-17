@@ -73,13 +73,18 @@ return new class extends Component
         $this->byEstekhdam = $data['by_estekhdam'];
         $this->byRadif = $data['by_radif'];
 
-        // Vacancies: units with zero personnel
+        // Vacancies: units with zero personnel. Filter and cap in SQL so the
+        // database returns at most ten narrow rows instead of hydrating every
+        // unit — geometry columns included — and discarding all but ten in PHP
+        // (#1043). `whereDoesntHave('person')` is the same NOT EXISTS predicate
+        // HrStatsController::vacancies() already uses. Ordering by name is new
+        // and deliberate: the previous order was Postgres' physical order.
         $this->vacancies = Unit::whereIn('id', $accessibleIds)
-            ->withCount('person as personnel_count')
+            ->whereDoesntHave('person')
+            ->select(['id', 'name'])
+            ->orderBy('name')
+            ->limit(10)
             ->get()
-            ->filter(fn ($u) => $u->personnel_count === 0)
-            ->take(10)
-            ->values()
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
             ->toArray();
     }

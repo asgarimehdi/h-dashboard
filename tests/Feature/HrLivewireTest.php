@@ -9,16 +9,19 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(OrgChartController::class, HrStatsController::class, HrAnalyticsController::class);
 
 class HrLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -211,5 +214,114 @@ class HrLivewireTest extends TestCase
             ->assertOk()
             ->assertSee('0 نفر')
             ->assertSee('خالی');
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_lists_only_units_without_personnel(): void
+    {
+        // $this->unit holds the single person; 'خانه بهداشت' is empty.
+        $vacancies = collect(Livewire::test('hr.dashboard')->get('vacancies'))->pluck('name');
+
+        $this->assertContains('خانه بهداشت', $vacancies);
+        $this->assertNotContains('مرکز بهداشت', $vacancies);
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_caps_at_ten_units(): void
+    {
+        for ($i = 1; $i <= 15; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        // Sixteen empty units are in scope, but the widget shows at most ten.
+        $this->assertCount(10, Livewire::test('hr.dashboard')->get('vacancies'));
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_respect_scope_fail_closed(): void
+    {
+        // A top-level unit outside the user's scope must never surface.
+        Unit::create(['name' => 'Out Of Scope']);
+
+        $vacancies = collect(Livewire::test('hr.dashboard')->get('vacancies'))->pluck('name');
+
+        $this->assertNotContains('Out Of Scope', $vacancies);
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_payload_shape_is_id_and_name_only(): void
+    {
+        $vacancies = Livewire::test('hr.dashboard')->get('vacancies');
+
+        $this->assertNotEmpty($vacancies);
+        foreach ($vacancies as $row) {
+            $this->assertSame(['id', 'name'], array_keys($row));
+        }
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_are_ordered_by_name(): void
+    {
+        // ASCII names sort identically in every collation, so the assertion is
+        // stable regardless of where the Persian-named units fall.
+        foreach (['CCC', 'AAA', 'BBB'] as $name) {
+            Unit::create(['name' => $name, 'parent_id' => $this->unit->id]);
+        }
+
+        $names = collect(Livewire::test('hr.dashboard')->get('vacancies'))->pluck('name');
+        $ascii = $names->filter(fn ($n) => in_array($n, ['AAA', 'BBB', 'CCC'], true))->values()->all();
+
+        $this->assertSame(['AAA', 'BBB', 'CCC'], $ascii);
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_query_is_bounded_and_not_counting(): void
+    {
+        // Force a cache miss so the query actually runs, and seed more units
+        // than the cap so an unbounded query would return them all.
+        Cache::flush();
+        for ($i = 1; $i <= 25; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        $sql = [];
+        DB::listen(function ($query) use (&$sql) {
+            $sql[] = $query->sql;
+        });
+        Livewire::test('hr.dashboard');
+
+        $vacancySql = collect($sql)->first(
+            fn ($q) => str_contains($q, 'from "units"')
+                && str_contains($q, 'not exists')
+        );
+
+        $this->assertNotNull($vacancySql, 'Vacancies should be filtered in SQL with a NOT EXISTS predicate.');
+        $this->assertStringContainsString('limit 10', $vacancySql, 'Vacancies should be capped in SQL.');
+        $this->assertStringNotContainsString('personnel_count', $vacancySql, 'The withCount subquery should be gone.');
+    }
+
+    /** @test */
+    public function test_dashboard_queries_do_not_grow_with_unit_count(): void
+    {
+        $countUnitQueries = function (): int {
+            Cache::flush();
+            $count = 0;
+            DB::listen(function ($query) use (&$count) {
+                if (str_contains($query->sql, 'from "units"')) {
+                    $count++;
+                }
+            });
+            Livewire::test('hr.dashboard');
+
+            return $count;
+        };
+
+        $baseline = $countUnitQueries();
+
+        for ($i = 1; $i <= 30; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        $this->assertSame($baseline, $countUnitQueries(), 'Unit queries must not scale with the number of units.');
     }
 }
