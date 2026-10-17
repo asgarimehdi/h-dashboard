@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use ReflectionMethod;
 use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -661,4 +662,166 @@ test('#1030: both password-change paths revoke all of an account\'s tokens', fun
         ->call('changePassword');
 
     expect($targetB->tokens()->count())->toBe(0);
+});
+
+// Issue #1028: the account-to-person binding itself is a scope boundary.
+// AccessService reads scope from the bound person's unit when the user has
+// no context and no `user_units` rows, so an out-of-scope `n_code` on
+// createUser() would mint an account whose inherited scope is a foreign
+// unit — horizontal privilege escalation through a "validating" field.
+test('#1028: createUser refuses a foreign unit person with no account yet', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    // A person in unit B WITHOUT any account: this is exactly the row an
+    // attacker has to point a fresh account at.
+    Person::create([
+        'n_code' => '9077777777',
+        'f_name' => 'بیرونی',
+        'l_name' => 'واحد ب',
+        'u_id' => $f['unitB']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    // unit_ids = [] passes assertUnitIdsInScope() — the person rule is the
+    // guard that has to fail here.
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '9077777777')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [])
+        ->call('createUser')
+        ->assertHasErrors(['n_code']);
+
+    // No account was minted from the foreign person.
+    expect(User::where('n_code', '9077777777')->exists())->toBeFalse();
+});
+
+test('#1028: updateUser cannot re-bind an in-scope user to an out-of-scope person', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    // The colleague's person stays in the attacker's own unit.
+    Person::create([
+        'n_code' => '9066666666',
+        'f_name' => 'همکار',
+        'l_name' => 'واحد الف',
+        'u_id' => $f['unitA']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $colleague = User::create(['n_code' => '9066666666', 'password' => bcrypt('secret-1234')]);
+    $colleague->units()->attach($f['unitA']->id, ['role' => 'staff', 'is_primary' => true]);
+
+    // A foreign person WITHOUT an account: re-binding the colleague onto it
+    // must be refused — unique passes, so only the scope rule can refuse.
+    Person::create([
+        'n_code' => '9077777777',
+        'f_name' => 'بیرونی',
+        'l_name' => 'واحد ب',
+        'u_id' => $f['unitB']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->set('editing_user_id', $colleague->id)
+        ->set('n_code', '9077777777')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [])
+        ->call('updateUser')
+        ->assertHasErrors(['n_code']);
+
+    // The re-bind did not happen: n_code and its person's unit are untouched.
+    expect($colleague->fresh()->n_code)->toBe('9066666666');
+    expect($colleague->fresh()->person->u_id)->toBe($f['unitA']->id);
+});
+
+test('#1028: an empty scope refuses even an in-scope person n_code', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    // A person sitting in the actor's OWN unit — only the scope notion can
+    // discard it once the mock returns [].
+    Person::create([
+        'n_code' => '9044444444',
+        'f_name' => 'همکار',
+        'l_name' => 'واحد الف',
+        'u_id' => $f['unitA']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    // `[]` means "in scope of nothing", never "unrestricted" (AGENTS.md) —
+    // even an in-scope-named person must be refused when the scope is [].
+    $this->mock(AccessService::class, function ($mock) {
+        $mock->shouldReceive('accessibleUnitIds')->andReturn([]);
+    });
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '9044444444')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [])
+        ->call('createUser')
+        ->assertHasErrors(['n_code']);
+
+    expect(User::where('n_code', '9044444444')->exists())->toBeFalse();
+});
+
+test('#1028: createUser refuses a person with no unit (u_id null)', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    // `persons.u_id` is nullable on beta (migration 2026_09_03_002219, FK
+    // `onDelete('set null')`), and a NULL `u_id` matches no `IN` list in SQL
+    // — the rule is expected to fail closed on it. This test pins that.
+    Person::create([
+        'n_code' => '9055555555',
+        'f_name' => 'بدون',
+        'l_name' => 'واحد',
+        'u_id' => null,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '9055555555')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [])
+        ->call('createUser')
+        ->assertHasErrors(['n_code']);
+
+    expect(User::where('n_code', '9055555555')->exists())->toBeFalse();
+});
+
+test('#1028: the n_code exists rule itself constrains u_id to the accessible units', function () {
+    $f = users849Fixtures();
+
+    Person::create([
+        'n_code' => '9044444444',
+        'f_name' => 'همکار',
+        'l_name' => 'واحد الف',
+        'u_id' => $f['unitA']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    $component = Livewire::actingAs($f['attacker'])->test('users.index');
+    $instance = $component->instance();
+
+    // Pull the rule object the component itself builds — the guard against
+    // someone swapping it back down to a bare `exists:persons,n_code`.
+    $method = new ReflectionMethod(get_class($instance), 'personNCodeExistsRule');
+    $rule = $method->invoke($instance);
+
+    $v = validator(['n_code' => '9044444444'], ['n_code' => [$rule]]);
+    expect($v->passes())->toBeTrue();
+
+    $v = validator(['n_code' => $f['victim']->n_code], ['n_code' => [$rule]]);
+    expect($v->passes())->toBeFalse();
+    expect($v->errors()->has('n_code'))->toBeTrue();
 });

@@ -130,6 +130,29 @@ return new class extends Component
     }
 
     /**
+     * Issue #1028: the person an account binds to is part of the account's
+     * inherited scope. `AccessService::accessibleUnitIds()` falls back to
+     * `$user->person?->u_id` for an account with no `current_unit_id` and no
+     * `user_units` rows, so binding to a foreign-unit person handed that
+     * whole subtree over — #849 closed the `unit_ids` path, this closes the
+     * `n_code` path. The `whereIn('u_id', …)` also fails closed when the
+     * scope is `[]` (compiles to `0 = 1` — in scope of nothing, AGENTS.md).
+     * `persons.u_id` is nullable since migration `2026_09_03_002219`, but
+     * that is no escape hatch either: a NULL `u_id` matches no `IN` list in
+     * SQL, so a person with no unit is refused too (fail-closed by `IN`
+     * semantics, not by NOT NULL).
+     *
+     * Pattern reference: `hardware/index.blade.php` (HardwareImport-bound
+     * form) applies the same exists+scope shape on persons.
+     */
+    private function personNCodeExistsRule(): \Illuminate\Validation\Rules\Exists
+    {
+        return \Illuminate\Validation\Rule::exists('persons', 'n_code')->where(
+            fn ($q) => $q->whereIn('u_id', app(AccessService::class)->accessibleUnitIds())
+        );
+    }
+
+    /**
      * Issue #849: a target user is reachable only when its linked person's
      * unit OR one of its `user_units` rows falls inside the actor's scope.
      * The disjunction matters — `whereHas('person', …)` alone would hide
@@ -269,7 +292,7 @@ return new class extends Component
         }
 
         $this->validate([
-            'n_code' => 'required|exists:persons,n_code|unique:users,n_code',
+            'n_code' => ['required', $this->personNCodeExistsRule(), 'unique:users,n_code'],
             'password' => 'required|string|min:6',
             // Issue #849: aligned with updateUser() — `nullable|array` let a
             // manage_users-only holder plant a role-less account in any unit;
@@ -281,7 +304,7 @@ return new class extends Component
         ], [
             'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
             'n_code.required' => 'کد ملی الزامی است.',
-            'n_code.exists' => 'این کد ملی در سیستم موجود نیست.',
+            'n_code.exists' => 'این کد ملی در سیستم وجود ندارد یا خارج از محدودهٔ واحدهای مجاز شماست.',
             'password.required' => 'رمز عبور الزامی است.',
             'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
             'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
@@ -334,7 +357,7 @@ return new class extends Component
         }
 
         $this->validate([
-            'n_code' => 'required|exists:persons,n_code|unique:users,n_code,'.$this->editing_user_id,
+            'n_code' => ['required', $this->personNCodeExistsRule(), 'unique:users,n_code,'.$this->editing_user_id],
             'password' => 'nullable|string|min:6',
             'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'exists:roles,id',
@@ -343,7 +366,7 @@ return new class extends Component
         ], [
             'n_code.unique' => 'این کد ملی قبلاً ثبت شده است.',
             'n_code.required' => 'کد ملی الزامی است.',
-            'n_code.exists' => 'این کد ملی در سیستم موجود نیست.',
+            'n_code.exists' => 'این کد ملی در سیستم وجود ندارد یا خارج از محدودهٔ واحدهای مجاز شماست.',
             'password.min' => 'رمز عبور باید حداقل ۶ کاراکتر باشد.',
             'role_ids.required' => 'حداقل یک نقش باید انتخاب شود.',
         ]);
