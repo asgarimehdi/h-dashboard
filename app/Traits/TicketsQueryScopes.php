@@ -59,6 +59,12 @@ trait TicketsQueryScopes
      * while monitoring does not — a deliberate difference this extraction
      * must not erase.
      *
+     * #1056: fold Persian character variants on BOTH sides — the term via
+     * foldedTerm() and each stored column via foldSeparatorsSql() — so an
+     * Arabic kaf/yeh or Persian-digit entry matches a ticket stored with the
+     * Persian spelling, exactly like the hardware/users/kargozini lists. A raw
+     * LIKE compared the two spellings byte-for-byte and silently found nothing.
+     *
      * @param  Builder<Ticket>  $query
      * @param  array<int, string>  $columns
      */
@@ -68,9 +74,11 @@ trait TicketsQueryScopes
             return;
         }
 
-        $query->where(function (Builder $group) use ($term, $columns): void {
+        $folded = PersianNormalizer::foldedTerm($term);
+
+        $query->where(function (Builder $group) use ($folded, $columns): void {
             foreach ($columns as $column) {
-                $group->orWhere($column, 'like', '%'.$term.'%');
+                $group->orWhereRaw(PersianNormalizer::foldSeparatorsSql($column).' LIKE ?', ['%'.$folded.'%']);
             }
         });
     }

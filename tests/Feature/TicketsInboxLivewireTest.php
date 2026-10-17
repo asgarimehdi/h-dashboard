@@ -1460,4 +1460,69 @@ class TicketsInboxLivewireTest extends TestCase
             ->call('removeFile', 0)
             ->assertCount('completionFiles', 1);
     }
+
+    // =====================================================================
+    // #1056 — inbox search must fold Persian characters like every other
+    // list (hardware/users/kargozini). The raw `LIKE` compared the stored
+    // spelling byte-for-byte against the typed one, so a user whose keyboard
+    // emits the ARABIC kaf/yeh (U+0643/U+064A) could not find a ticket stored
+    // with the PERSIAN kaf/yeh (U+06A9/U+06CC) — the same input worked in the
+    // hardware list, which folds both the term and the column.
+    // =====================================================================
+
+    public function test_search_folds_arabic_variants_in_subject(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        // «کد یکتا» with PERSIAN letters — the shape the app stores.
+        $persian = "\u{06A9}\u{062F} \u{06CC}\u{06A9}\u{062A}\u{0627}";
+        // The same phrase typed with ARABIC letters — the shape a foreign
+        // keyboard produces and the shape folding must reconcile.
+        $arabic = "\u{0643}\u{062F} \u{064A}\u{0643}\u{062A}\u{0627}";
+
+        $this->createTicket(['subject' => $persian]);
+        $this->createTicket(['subject' => 'تیکت کنترل']);
+
+        Livewire::test('tickets.inbox')
+            ->set('search', $arabic)
+            ->assertSee($persian)
+            ->assertDontSee('تیکت کنترل');
+    }
+
+    public function test_search_folds_arabic_variants_in_content(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $persian = "\u{06A9}\u{062F} \u{06CC}\u{06A9}\u{062A}\u{0627}";
+        $arabic = "\u{0643}\u{062F} \u{064A}\u{0643}\u{062A}\u{0627}";
+
+        // The match lives only in `content`, so the row is found iff the
+        // content column is folded too — the subject here is unrelated.
+        $this->createTicket(['ticket_code' => 'T-FLD-01', 'subject' => 'موضوع بی‌ربط', 'content' => $persian]);
+        $this->createTicket(['ticket_code' => 'T-FLD-02', 'subject' => 'موضوع دیگر', 'content' => 'محتوای دیگر']);
+
+        Livewire::test('tickets.inbox')
+            ->set('search', $arabic)
+            ->assertSee('T-FLD-01')
+            ->assertDontSee('T-FLD-02');
+    }
+
+    public function test_search_folds_persian_digits_in_ticket_code(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['ticket_code' => 'T-4500', 'subject' => 'کد لاتین']);
+        $this->createTicket(['ticket_code' => 'T-9999', 'subject' => 'کد دیگر']);
+
+        // Persian digits ۴۵۰۰ fold to Latin 4500 on the term side and on the
+        // folded `ticket_code` column, so a Persian-keyboard entry matches a
+        // Latin code.
+        Livewire::test('tickets.inbox')
+            ->set('search', "T-\u{06F4}\u{06F5}\u{06F0}\u{06F0}")
+            ->assertSee('T-4500')
+            ->assertDontSee('T-9999');
+    }
 }
