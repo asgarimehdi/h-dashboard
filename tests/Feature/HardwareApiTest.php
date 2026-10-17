@@ -7,6 +7,7 @@ use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -380,5 +381,109 @@ class HardwareApiTest extends TestCase
         foreach ($expectedFields as $field) {
             $this->assertArrayHasKey($field, $rules, "Missing rule for field: {$field}");
         }
+    }
+
+    /**
+     * Issue #1015: `index()` joins `persons` on `n_code`, and `persons.n_code`
+     * is UNIQUE, so each hardware row matches at most one person. Several
+     * hardware sharing one person (the shape that repeats `hardwares.n_code`)
+     * therefore cannot duplicate a page row — `distinct()` was never needed.
+     * This pins the behaviour it was masking.
+     */
+    public function test_index_returns_unique_ids_when_many_hardware_share_a_person(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $person = Person::first();
+
+        foreach (['PC-001', 'PC-002', 'PC-003'] as $pcName) {
+            Hardware::create(['n_code' => $person->n_code, 'pc_name' => $pcName, 'type' => 'desktop']);
+        }
+
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet('/api/hardware', $token);
+
+        $response->assertStatus(200);
+        $ids = array_column($response->json('data'), 'id');
+        $this->assertCount(3, $ids);
+        $this->assertSame(
+            count($ids),
+            count(array_unique($ids)),
+            'the hardware page returned duplicate ids — the persons join is no longer one-to-one',
+        );
+    }
+
+    /**
+     * Issue #1015: dropping `distinct()` must not move the paginator's total,
+     * which is computed by `count(*)` (unaffected by `distinct` on `*`).
+     */
+    public function test_index_meta_total_is_consistent_with_the_paged_rows(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $person = Person::first();
+
+        for ($i = 1; $i <= 25; $i++) {
+            Hardware::create(['n_code' => $person->n_code, 'pc_name' => sprintf('PC-%03d', $i), 'type' => 'desktop']);
+        }
+
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet('/api/hardware?per_page=10', $token);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.total', 25)
+            ->assertJsonPath('meta.per_page', 10);
+        $this->assertCount(10, $response->json('data'));
+    }
+
+    /**
+     * Issue #1015: this query is an authorization boundary. An empty scope
+     * (`[]`) means "in scope of nothing", never "unrestricted" (AGENTS.md), so
+     * the response must be empty even though a matching row exists.
+     */
+    public function test_index_is_fail_closed_when_the_scope_is_empty(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $person = Person::first();
+        Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-FAIL-OPEN-WOULD-LEAK', 'type' => 'desktop']);
+
+        // Same actor, same row — ONLY the resolved scope differs.
+        $this->swap(AccessService::class, new class extends AccessService
+        {
+            public function accessibleUnitIds(?User $user = null): array
+            {
+                return [];
+            }
+        });
+
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet('/api/hardware', $token);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.total', 0)
+            ->assertJsonCount(0, 'data');
+    }
+
+    /**
+     * Issue #1015: a hardware row whose owner lives in a unit outside the
+     * caller's scope must not appear.
+     */
+    public function test_index_hides_hardware_from_an_out_of_scope_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $personInScope = Person::first();
+        Hardware::create(['n_code' => $personInScope->n_code, 'pc_name' => 'PC-IN-SCOPE', 'type' => 'desktop']);
+
+        $otherUnit = Unit::factory()->create();
+        $personOutOfScope = Person::factory()->create(['u_id' => $otherUnit->id]);
+        Hardware::create(['n_code' => $personOutOfScope->n_code, 'pc_name' => 'PC-OUT-OF-SCOPE', 'type' => 'desktop']);
+
+        $token = $this->createApiToken($user, ['hardware:read']);
+        $response = $this->apiGet('/api/hardware', $token);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.total', 1);
+
+        $names = array_column($response->json('data'), 'pc_name');
+        $this->assertContains('PC-IN-SCOPE', $names);
+        $this->assertNotContains('PC-OUT-OF-SCOPE', $names);
     }
 }

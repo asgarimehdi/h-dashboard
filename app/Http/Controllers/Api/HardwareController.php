@@ -115,10 +115,15 @@ class HardwareController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
+        // Issue #1015: no SELECT DISTINCT here. The join key `persons.n_code` is
+        // UNIQUE, so each `hardwares` row matches at most one person and no
+        // result row can repeat; a DISTINCT only added a sort over all 22
+        // `hardwares` columns before `LIMIT` could apply. Note this is an INNER
+        // join: a hardware row whose `n_code` matches no person is dropped
+        // (pre-existing behaviour, not introduced here).
         $query = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
             ->whereIn('persons.u_id', $accessibleIds)
-            ->select('hardwares.*')
-            ->distinct();
+            ->select('hardwares.*');
 
         // Apply query scopes for filters
         $query->filterSearch($request->input('search'))
