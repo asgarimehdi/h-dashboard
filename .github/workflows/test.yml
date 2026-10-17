@@ -192,10 +192,37 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+      # Issue #1011: publish the Clover THIS job already produces so the
+      # informational `coverage-report` job can parse it without re-running
+      # the whole suite (it used to repeat checkout → composer → npm ci →
+      # migrate → pest just to print a ~96-line report). `if: always()` so the
+      # report still receives data on a red suite (the contract before #1011);
+      # `if-no-files-found: warn` so a missing file warns instead of failing
+      # (this must never gate the build).
+      - name: Upload coverage.xml for the coverage-report job
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 1
+          if-no-files-found: warn
+
   coverage-report:
     name: Coverage Report (Blade-aware, informational)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Issue #1011: this job used to re-run the ENTIRE suite (checkout →
+    # composer install → npm ci + build → migrate → pest) just to print a
+    # ~96-line report. It now only parses the Clover XML the `test` job
+    # already produced, downloaded as an artifact — no services, no frontend
+    # build, no migrations, no second pest run.
+    timeout-minutes: 5
+    # `needs: test` + `if: always()`: the report must STILL be produced on a
+    # RED suite — that is the exact contract before #1011. Without
+    # `if: always()`, GitHub Actions would SKIP this job whenever `test`
+    # fails, losing the report entirely (expert correction #2).
+    needs: test
+    if: always()
     # Non-blocking signal (issue #865): this job REPORTS the real coverage
     # picture — the app/ number plus the Blade component logic that sits
     # outside the --min=80 denominator — and must never fail the build.
@@ -203,95 +230,37 @@ jobs:
     # changing min= is out of scope for #865 (locked decision).
     continue-on-error: true
 
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: h_dashboard_test
-        options: >
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:latest
-        options: >
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
+      # Checkout is REQUIRED (issue #1011 expert correction #1): the script
+      # lives in the repo, `cd`s to the repo root, and greps Blade sources —
+      # without this step the job could never run the report.
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # `coverage: none`: this job only runs `php -r` to parse XML; it must
+      # not pay for a coverage driver it never uses.
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
           extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
-          coverage: pcov
+          coverage: none
           tools: composer:latest
 
-      - name: Cache Composer download cache
-        uses: actions/cache@v5
+      # Pull the Clover the `test` job uploaded (same workflow run, guaranteed
+      # by `needs: test`). The name `coverage-xml` must match on both sides —
+      # if it drifts, this step fails rather than silently reporting "no data"
+      # (the #865 trap), and the job stays non-blocking via continue-on-error.
+      - name: Download coverage.xml from the test job
+        uses: actions/download-artifact@v4
         with:
-          path: ~/.cache/composer/files
-          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
-          restore-keys: |
-            composer-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Build frontend assets
-        run: |
-          npm ci
-          npm run build
-
-      - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
-
-      - name: Generate application key
-        run: php artisan key:generate --env=testing
-
-      - name: Run migrations
-        run: php artisan migrate --env=testing --force
-
-      - name: Clear cached config/routes before tests
-        run: |
-          php artisan config:clear --env=testing
-          php artisan route:clear --env=testing
-          php artisan view:clear
-
-      - name: Run tests with coverage (report only, never gates)
-        # `|| true`: this job REPORTS — a test failure must not fail the job
-        # (continue-on-error already ensures non-blocking, but an exit-1 step
-        # still renders the job red). The clover is written even on failure;
-        # coverage-report.sh parses whatever exists and says so explicitly.
-        run: ./vendor/bin/pest --parallel --coverage --coverage-clover=coverage.xml || true
+          name: coverage-xml
 
       - name: Report the real coverage picture (app/ + Blade)
         # Proves coverage was really computed: the script parses the clover
-        # file CI just produced and prints covered/valid statement counts —
-        # a run with no coverage data says so explicitly instead of going
-        # green silently (the #865 trap).
+        # file the `test` job produced and prints covered/valid statement
+        # counts — a run with no coverage data says so explicitly instead of
+        # going green silently (the #865 trap).
         # It also prints the per-component table for resources/views/livewire
         # (#1045): public methods + test references per Blade file, worst
         # first — still informational, still never gates.
