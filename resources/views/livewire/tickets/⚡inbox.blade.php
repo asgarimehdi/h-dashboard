@@ -250,7 +250,7 @@ new class extends Component
         // because it does not move the ticket out of its unit (its own latent
         // issue — see #818 "Out of scope").
         if ($this->bulkAction === 'complete') {
-            $this->authorize('manage_unit_tickets');
+            $this->authorizeMutation();
         }
 
         $now = now();
@@ -366,6 +366,26 @@ new class extends Component
         return app(AccessService::class)->accessibleUnitIds();
     }
 
+    /**
+     * The permission a ticket mutation needs (#1055, step 3).
+     *
+     * Four call sites wrote `$this->authorize('manage_unit_tickets')` inline,
+     * so the gate could be forgotten by the next method that mutates a ticket
+     * — exactly what happened to `acceptTicket()`. One named helper makes the
+     * shared gate explicit and greppable.
+     *
+     * `acceptTicket()` is deliberately NOT routed through it: #818's review
+     * (correction 1) kept accepting a ticket open to the route gate, because
+     * the `expert` role (create_ticket + view_assigned_tickets) is meant to
+     * accept tickets in its own unit, and `TicketWorkflow` pins that
+     * (`test_accept_ticket_still_allowed_for_expert_without_manage_unit_tickets`).
+     * Whether it should carry its own gate is issue #1029, not this refactor.
+     */
+    private function authorizeMutation(): void
+    {
+        $this->authorize('manage_unit_tickets');
+    }
+
     public function switchView($mode): void
     {
         $this->viewMode = $mode;
@@ -465,7 +485,7 @@ new class extends Component
         // (which `expert` holds), so without this the web path could move a
         // ticket to any unit while the API required manage_unit_tickets for
         // the same operation. Match the API (routes/api.php:110-119).
-        $this->authorize('manage_unit_tickets');
+        $this->authorizeMutation();
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         
@@ -600,7 +620,7 @@ new class extends Component
         // Issue #818: no API counterpart exists, so manage_unit_tickets is the
         // right proxy — rejecting is the same class of state change as
         // completing, and the route gate alone never checked it.
-        $this->authorize('manage_unit_tickets');
+        $this->authorizeMutation();
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
@@ -648,7 +668,7 @@ new class extends Component
     {
         // Issue #818: same gate as forward() — this path could complete a ticket
         // or move it to any unit in the system under view_assigned_tickets alone.
-        $this->authorize('manage_unit_tickets');
+        $this->authorizeMutation();
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         
