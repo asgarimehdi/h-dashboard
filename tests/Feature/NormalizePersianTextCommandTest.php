@@ -5,18 +5,23 @@ use App\Models\Hardware;
 use App\Models\Person;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(NormalizePersianText::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
+
+beforeEach(function () {
+    $this->seedLookupTables();
+});
 
 test('normalize:persian-text command normalizes Arabic characters in database', function () {
-    // Seed lookup tables required by Person FK constraints
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    // lookup ids (id=1) are seeded by InteractsWithTestSetup in beforeEach
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $unitId = DB::table('units')->insertGetId(['name' => 'Test Unit']);
 
     // Seed a Person with Arabic Yeh in f_name

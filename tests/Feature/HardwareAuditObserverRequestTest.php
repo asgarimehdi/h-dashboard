@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
 use Tests\Support\Concerns\InteractsWithApiTokens;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAuditObserver::class);
@@ -21,6 +22,7 @@ covers(HardwareAuditObserver::class);
 class HardwareAuditObserverRequestTest extends TestCase
 {
     use InteractsWithApiTokens;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $tId;
@@ -42,12 +44,13 @@ class HardwareAuditObserverRequestTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        $this->tId = DB::table('tahsils')->first()->id;
+        $this->eId = DB::table('estekhdams')->first()->id;
+        $this->sId = DB::table('semats')->first()->id;
+        $this->rId = DB::table('radifs')->first()->id;
 
         $this->nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Req Unit']);

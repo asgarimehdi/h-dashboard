@@ -12,12 +12,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAudit::class);
 
 class HardwareAuditObserverTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $tId;
@@ -37,12 +39,13 @@ class HardwareAuditObserverTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $this->tId = DB::table('tahsils')->first()->id;
+        $this->eId = DB::table('estekhdams')->first()->id;
+        $this->sId = DB::table('semats')->first()->id;
+        $this->rId = DB::table('radifs')->first()->id;
 
         $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Obs Unit']);

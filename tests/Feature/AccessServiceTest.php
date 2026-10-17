@@ -12,17 +12,20 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(AccessService::class);
 
 class AccessServiceTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
         // Ensure cache driver is array for predictable assertions.
         config(['cache.default' => 'array']);
@@ -30,10 +33,10 @@ class AccessServiceTest extends TestCase
 
     private function makeUserInUnit(Unit $unit): User
     {
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'A', 'l_name' => 'B',

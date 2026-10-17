@@ -11,12 +11,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Unit::class);
 
 class UnitModelTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -49,10 +51,7 @@ class UnitModelTest extends TestCase
     {
         $unit = Unit::create(['name' => 'واحد تست']);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
 
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
@@ -67,10 +66,7 @@ class UnitModelTest extends TestCase
     {
         $unit = Unit::create(['name' => 'واحد تست']);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
 
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 /**
@@ -46,6 +47,7 @@ covers(Person::class);
 
 class PersonLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected Unit $unit;
@@ -65,12 +67,13 @@ class PersonLivewireTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'کارشناسی']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'رسمی']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'کارشناس']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => '۱']);
+        $this->tId = DB::table('tahsils')->first()->id;
+        $this->eId = DB::table('estekhdams')->first()->id;
+        $this->sId = DB::table('semats')->first()->id;
+        $this->rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'واحد مرکزی']);
         // A sibling unit (not a descendant of $this->unit) -> out of scope.

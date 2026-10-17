@@ -9,11 +9,12 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Boundary::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 // Coverage gap (#494): Boundary::geojson has two execution paths — the
 // pre-loaded-attribute fast path and the fallback query — plus its relations.
@@ -22,10 +23,7 @@ uses(TestCase::class, RefreshDatabase::class);
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
 
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $this->seedLookupTables();
 });
 
 function makeBoundary(): Boundary
