@@ -68,6 +68,17 @@ test('profile page shows no tickets empty state initially', function () {
         ->assertSee('هنوز تیکتی ثبت نشده');
 });
 
+test('profile change-password CTA renders as a link to /users/changepassword with wire:navigate', function () {
+    $this->actingAs($this->user);
+
+    $html = Livewire::test('profile.index')->html();
+
+    // The CTA must be a real anchor with a href (regression guard for #1031,
+    // where the button rendered as a destination-less <button wire:navigate>).
+    expect($html)->toContain('href="/users/changepassword"')
+        ->and($html)->toContain('wire:navigate');
+});
+
 // Issue #893: the "My todos" tab listed every todo in the unit, not the viewer's
 // own. The tickets tab two methods above already filters by `user_id`, so the
 // todo side is the only unfiltered read on a page that has no permission gate.
