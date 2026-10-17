@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\HardwareController;
 use App\Models\Hardware;
+use App\Models\HardwareAudit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -32,12 +34,69 @@ class HardwareBulkAuditSuppressionTest extends TestCase
         return ['user' => $user, 'unit' => $unit, 'n_code' => $nCode, 'hardware' => [$hardware1, $hardware2]];
     }
 
-    public function test_bulk_methods_use_try_finally_for_suppress_audit(): void
+    /**
+     * #1026: behavioural replacement for the old source-text counter test
+     * (`substr_count($controller, "remove('suppress_audit')") === 2`). That
+     * test punished any healthy refactor — including this issue's move of
+     * `batchInsertAudits()` out of the controller — without actually exercising
+     * the flag. This version runs a bulk delete through BOTH paths (API and the
+     * Livewire index, which was uncovered before #1026) and asserts the flag is
+     * restored to false and each device carries exactly one audit row.
+     */
+    public function test_bulk_methods_restore_suppress_audit_and_write_no_duplicate_audit(): void
     {
-        $src = file_get_contents(base_path('app/Http/Controllers/Api/HardwareController.php'));
-        expect($src)->toContain("request()->attributes->set('suppress_audit', true);");
-        expect($src)->toContain('} finally {');
-        expect(substr_count($src, "request()->attributes->remove('suppress_audit');"))->toBe(2);
+        $this->assertFalse(Hardware::$suppressAudit);
+
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        // --- API path -------------------------------------------------------
+        $this->postJson('/api/hardware/bulk-mark', [
+            'ids' => [$data['hardware'][0]->id],
+            'mark' => true,
+        ])->assertOk();
+
+        $this->assertFalse(Hardware::$suppressAudit, 'bulk-mark must restore the suppress flag');
+        $this->assertSame(
+            1,
+            HardwareAudit::where('hardware_id', $data['hardware'][0]->id)
+                ->where('action', 'bulk_mark')
+                ->count(),
+            'bulk-mark must write exactly one bulk_mark row'
+        );
+
+        $this->postJson('/api/hardware/bulk-delete', [
+            'ids' => [$data['hardware'][1]->id],
+        ])->assertOk();
+
+        $this->assertFalse(Hardware::$suppressAudit, 'bulk-delete must restore the suppress flag');
+        $this->assertSame(
+            1,
+            HardwareAudit::where('hardware_id', $data['hardware'][1]->id)
+                ->whereIn('action', HardwareAudit::DELETING_ACTIONS)
+                ->count(),
+            'bulk-delete must write exactly one deleting row'
+        );
+
+        // --- Web path (Livewire component) ----------------------------------
+        $web = Hardware::create([
+            'n_code' => $data['n_code'],
+            'pc_name' => 'PC-WEB-SUPPRESS',
+            'type' => 'pc',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->set('selected', [$web->id])
+            ->call('bulkDelete');
+
+        $this->assertFalse(Hardware::$suppressAudit, 'web bulk delete must restore the suppress flag');
+        $this->assertSame(
+            1,
+            HardwareAudit::where('hardware_id', $web->id)
+                ->whereIn('action', HardwareAudit::DELETING_ACTIONS)
+                ->count(),
+            'web bulk delete must write exactly one deleting row'
+        );
     }
 
     public function test_suppress_audit_is_false_after_bulk_mark(): void

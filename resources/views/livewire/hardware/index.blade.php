@@ -1,11 +1,15 @@
 <?php
 
+use App\Events\HardwareUpdated;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
-use App\Traits\HardwareIndexHelpers;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
+use App\Services\HardwareBulkAuditWriter;
+use App\Support\HardwareAuditChange;
+use App\Traits\HardwareIndexHelpers;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
@@ -539,19 +543,45 @@ return new class extends Component
         }
 
         $accessibleIds = $this->accessibleUnitIds();
-        $scopedIds = Hardware::whereIn('id', $this->selected)
+        $hardwares = Hardware::whereIn('id', $this->selected)
             ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
-            ->pluck('id')
-            ->toArray();
+            ->get();
 
-        if (empty($scopedIds)) {
+        if ($hardwares->isEmpty()) {
             $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
 
             return;
         }
 
-        Hardware::whereIn('id', $scopedIds)->delete();
-        Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
+        // #1026: write the audit BEFORE the mass delete. A mass delete fires no
+        // model `deleting` event, so without this the devices vanish with no
+        // trail and never reach the trash. Same writer and shape as the API.
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+            $hardwares,
+            'bulk_delete',
+            null,
+            fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
+        );
+
+        $scopedIds = $hardwares->pluck('id')->all();
+
+        // Suppress the per-model observer during the mass delete so each device
+        // gets one `bulk_delete` row, not a duplicate `deleted` one. try/finally
+        // mirrors HardwareController::bulkDelete().
+        request()->attributes->set('suppress_audit', true);
+        try {
+            Hardware::whereIn('id', $scopedIds)->delete();
+        } finally {
+            request()->attributes->remove('suppress_audit');
+        }
+
+        // #1026: parity with the API path — listeners on HardwareUpdated and the
+        // stats cache must see a web bulk delete too.
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
+            event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
+            Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
+        });
+
         $this->selected = [];
         $this->warning('دستگاه‌های انتخاب شده حذف شدند.', position: 'toast-bottom');
     }

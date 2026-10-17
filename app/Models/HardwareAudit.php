@@ -38,6 +38,15 @@ class HardwareAudit extends Model
         'changes' => 'array',
     ];
 
+    /**
+     * Every audit action that means "this device is deleted". The trash reads
+     * this one list in both of its delete queries (#1026), so the web path's
+     * `bulk_delete` and the observer's `deleted` can never drift apart again.
+     *
+     * @var list<string>
+     */
+    public const DELETING_ACTIONS = ['deleted', 'bulk_delete'];
+
     public function hardware(): BelongsTo
     {
         return $this->belongsTo(Hardware::class);
