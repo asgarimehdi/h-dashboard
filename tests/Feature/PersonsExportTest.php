@@ -6,13 +6,17 @@ use App\Exports\PersonsExport;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Models\Person;
 use App\Models\Unit;
+use Database\Factories\SematFactory;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use ReflectionProperty;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -60,7 +64,7 @@ class PersonsExportTest extends TestCase
      */
     protected function column(array $rows, string $heading): array
     {
-        $column = array_search($heading, (new PersonsExport(collect()))->headings(), true);
+        $column = array_search($heading, (new PersonsExport(Person::query()))->headings(), true);
 
         $this->assertNotFalse($column, "Unknown heading [{$heading}].");
         $letter = Coordinate::stringFromColumnIndex($column + 1);
@@ -190,12 +194,12 @@ class PersonsExportTest extends TestCase
             'وضعیت',
             'تاریخ تولد',
             'تاریخ استخدام',
-        ], (new PersonsExport(collect()))->headings());
+        ], (new PersonsExport(Person::query()))->headings());
     }
 
     public function test_export_title_is_persian(): void
     {
-        $this->assertSame('پرسنل', (new PersonsExport(collect()))->title());
+        $this->assertSame('پرسنل', (new PersonsExport(Person::query()))->title());
     }
 
     // -----------------------------------------------------------
@@ -643,7 +647,7 @@ class PersonsExportTest extends TestCase
         // through the ORM — the fallback is proved on an in-memory person whose
         // lookup rows simply do not exist.
         $person = $this->orphanPerson();
-        $export = new PersonsExport(collect([$person]));
+        $export = new PersonsExport(Person::query());
 
         $row = $export->map($person);
 
@@ -677,7 +681,7 @@ class PersonsExportTest extends TestCase
      */
     protected function forCode(array $rows, string $heading, string $nCode): array
     {
-        $codeIndex = array_search('کد ملی', (new PersonsExport(collect()))->headings(), true);
+        $codeIndex = array_search('کد ملی', (new PersonsExport(Person::query()))->headings(), true);
         $letter = Coordinate::stringFromColumnIndex($codeIndex + 1);
 
         $filtered = array_values(array_filter(
@@ -751,7 +755,7 @@ class PersonsExportTest extends TestCase
         $person->r_id = 1;
         $person->u_id = 1;
 
-        $export = new PersonsExport(collect([$person]));
+        $export = new PersonsExport(Person::query());
 
         $this->assertSame('-', $export->map($person)[3]);
     }
@@ -783,6 +787,114 @@ class PersonsExportTest extends TestCase
         $this->actingAs($user);
 
         $this->assertNoNPlusOne(fn () => $this->rowsFromRoute(), 10);
+    }
+
+    /**
+     * #1020: the export now chunked-reads the controller's builder, so the
+     * lookup labels must resolve from the eager loads *per chunk* — no chunk
+     * may fall back to lazy-loading. A distinct semat per person makes a
+     * missing eager load show wrong labels, not a shared one.
+     */
+    public function test_export_resolves_lookup_labels_in_every_chunk(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $semats = [
+            'a' => SematFactory::new()->create(['name' => 'سمت الف'])->id,
+            'b' => SematFactory::new()->create(['name' => 'سمت ب'])->id,
+        ];
+
+        $expectedSematByCode = [];
+        foreach (range(1, 6) as $i) {
+            $nCode = '00200000'.str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            $expectedSematByCode[$nCode] = $i % 2 === 0 ? 'سمت ب' : 'سمت الف';
+
+            $this->createPerson([
+                'n_code' => $nCode,
+                'u_id' => $unit->id,
+                's_id' => $i % 2 === 0 ? $semats['b'] : $semats['a'],
+            ]);
+        }
+
+        $export = new PersonsExport(
+            // The same builder the controller hands over: eager loads and id order.
+            Person::query()
+                ->with(['semat', 'tahsil', 'estekhdam', 'radif', 'unit'])
+                ->whereIn('u_id', [$unit->id])
+                ->orderBy('id')
+        );
+        $this->forceChunkSize($export, 2);
+
+        Excel::store($export, 'persons-export-per-chunk.xlsx', 'local');
+        $rows = $this->storedRows('persons-export-per-chunk.xlsx');
+
+        $codeKey = Coordinate::stringFromColumnIndex(array_search('کد ملی', $export->headings(), true) + 1);
+        $sematKey = Coordinate::stringFromColumnIndex(array_search('سمت', $export->headings(), true) + 1);
+
+        $sematByCode = [];
+        foreach ($rows as $row) {
+            $sematByCode[$row[$codeKey]] = $row[$sematKey];
+        }
+
+        foreach ($expectedSematByCode as $nCode => $semat) {
+            $this->assertSame($semat, $sematByCode[$nCode] ?? null, "سمت of {$nCode}");
+        }
+    }
+
+    /**
+     * #1020: more rows than one chunk. The chunked path must keep the
+     * per-chunk eager loads inexpensive — a per-row N+1 would multiply the
+     * lookup queries by the row count instead of the relation count.
+     */
+    public function test_a_chunked_export_does_not_query_per_row(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        foreach (range(1, 6) as $i) {
+            $this->createPerson([
+                'n_code' => '00300000'.str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                'u_id' => $unit->id,
+            ]);
+        }
+
+        $export = new PersonsExport(
+            Person::query()
+                ->with(['semat', 'tahsil', 'estekhdam', 'radif', 'unit'])
+                ->whereIn('u_id', [$unit->id])
+                ->orderBy('id')
+        );
+        $this->forceChunkSize($export, 2);
+
+        // 7 rows over chunkSize 2 = 4 chunks: 4 chain selects + 5 eager-load
+        // queries per chunk + one units index query. A per-row N+1 would be
+        // 7 rows × 5 relations more and blow far past this bound.
+        $this->assertNoNPlusOne(fn () => Excel::store($export, 'persons-export-n-plus-one.xlsx', 'local'), 30);
+    }
+
+    /**
+     * @param  object  $export
+     */
+    private function forceChunkSize($export, int $size): void
+    {
+        (new ReflectionProperty($export::class, 'chunkSize'))->setValue($export, $size);
+    }
+
+    /**
+     * Read a sheet written through `Excel::store` back into plain rows
+     * (headings excluded), each keyed by column letter.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function storedRows(string $filename): array
+    {
+        $path = Storage::disk('local')->path($filename);
+        $spreadsheet = IOFactory::load($path);
+        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+        array_shift($rows);
+        $spreadsheet->disconnectWorksheets();
+        @unlink($path);
+
+        return array_values($rows);
     }
 
     // -----------------------------------------------------------

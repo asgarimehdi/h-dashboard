@@ -8,7 +8,6 @@ use App\Models\Person;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -34,12 +33,15 @@ class PersonsExportController extends Controller
         $this->applySearch($query, $request);
         $this->applyFilters($query, $request);
 
-        /** @var Collection<int, Person> $persons */
-        $persons = $query->orderBy('id')->get();
-
         $filename = 'persons-'.now()->format('Ymd-His');
 
-        return Excel::download(new PersonsExport($persons), "{$filename}.xlsx");
+        /** @var Builder<Person> $ordered */
+        $ordered = $query->orderBy('id');
+
+        // The builder is handed to the export untouched: the export chunked-reads
+        // it (FromQuery), so hydrating the whole filtered set into RAM here would
+        // defeat the chunking. `id` keeps the pagination order stable.
+        return Excel::download(new PersonsExport($ordered), "{$filename}.xlsx");
     }
 
     /**

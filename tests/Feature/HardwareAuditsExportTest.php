@@ -9,7 +9,12 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use ReflectionProperty;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -64,6 +69,47 @@ class HardwareAuditsExportTest extends TestCase
         $mapped = $this->export()->map($this->storedAudit($action, $changes));
 
         return (string) $mapped[self::CHANGES_COLUMN];
+    }
+
+    /**
+     * One audit row stamped with an explicit `created_at`, so several rows can
+     * share the same second and tie under `latest('created_at')`.
+     */
+    private function storedAuditAt(string $created_at, string $action, mixed $changes): HardwareAudit
+    {
+        $id = HardwareAudit::insertGetId([
+            'hardware_id' => 1,
+            'action' => $action,
+            'changes' => $changes === null ? null : json_encode($changes, JSON_UNESCAPED_UNICODE),
+            'source' => 'bulk',
+            'created_at' => $created_at,
+            'updated_at' => $created_at,
+        ]);
+
+        return HardwareAudit::query()->findOrFail($id);
+    }
+
+    /**
+     * @param  object  $export
+     */
+    private function forceChunkSize($export, int $size): void
+    {
+        (new ReflectionProperty($export::class, 'chunkSize'))->setValue($export, $size);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function storedRows(string $filename): array
+    {
+        $path = Storage::disk('local')->path($filename);
+        $spreadsheet = IOFactory::load($path);
+        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+        array_shift($rows);
+        $spreadsheet->disconnectWorksheets();
+        @unlink($path);
+
+        return array_values($rows);
     }
 
     // ==================== One case per documented action ====================
@@ -220,6 +266,70 @@ class HardwareAuditsExportTest extends TestCase
         $this->assertFileExists($path);
 
         @unlink($path);
+    }
+
+    // ==================== Chunked reading (#1020) ====================
+
+    public function test_the_export_implements_the_export_side_chunking_contract(): void
+    {
+        $export = $this->export();
+
+        // #1020: chunking is an export-side contract (WithCustomChunkSize,
+        // consulted at Sheet::fromQuery). WithChunkReading is import-only —
+        // declaring it on an export was inert, so it must stay gone.
+        $this->assertInstanceOf(FromQuery::class, $export);
+        $this->assertInstanceOf(WithCustomChunkSize::class, $export);
+        $this->assertNotInstanceOf(WithChunkReading::class, $export);
+    }
+
+    public function test_same_second_ties_come_out_exactly_once_across_chunk_boundaries(): void
+    {
+        // The library walks the builder with LIMIT/OFFSET, and created_at has
+        // second precision: these six rows tie perfectly under
+        // latest('created_at'). Without the `id` tie-breaker same-second rows
+        // can repeat between chunks or vanish entirely, with no error raised.
+        $created_at = '2026-01-05 12:00:00';
+        $ids = [];
+
+        foreach (range(1, 6) as $i) {
+            $ids[] = $this->storedAuditAt(
+                $created_at,
+                'updated',
+                [['field' => 'pc_name', 'old' => '—', 'new' => "PC-{$i}"]]
+            )->id;
+        }
+
+        // Production order (HardwareAuditController::export) is
+        // latest('created_at') — NOT the orderBy('id') builder the helper at
+        // the top of this file uses, which would lead the ORDER BY with the
+        // tie-breaker and mask the whole risk.
+        $export = new HardwareAuditsExport(HardwareAudit::query()->latest('created_at'));
+        $this->forceChunkSize($export, 2);
+
+        Excel::store($export, 'hardware-audits-tie.xlsx', 'local');
+        $rows = $this->storedRows('hardware-audits-tie.xlsx');
+
+        // The sheet's first column (شناسه) is the audit id.
+        $exportedIds = array_map('intval', array_column($rows, 'A'));
+
+        $this->assertSame(
+            $ids,
+            $exportedIds,
+            'Every audit row must appear exactly once, tie-broken by id',
+        );
+    }
+
+    public function test_a_row_without_a_user_resolves_its_labels_without_throwing(): void
+    {
+        // Soft-deleted actors dissolve to null user even with user_id set; the
+        // mapper walks `$audit->user?->n_code` so a missing user renders empty,
+        // never an error out of the middle of the download.
+        $audit = $this->storedAudit('bulk_delete', ['pc_name' => 'PC-1']);
+
+        $mapped = $this->export()->map($audit);
+
+        $this->assertSame('', $mapped[8]); // کاربر (کد ملی)
+        $this->assertSame('', $mapped[9]); // کاربر (نام)
     }
 
     // ==================== Formula escaping (#886) ====================
