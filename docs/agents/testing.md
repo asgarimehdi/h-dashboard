@@ -45,9 +45,9 @@ which is worse than no hook. CI stays the only authority.
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Verified 2026-10-16:** **`composer test`** is the one-command way (**2303 passed, 2 risky, 6644 assertions**, ~517s serial). It bakes in the three environment gotchas.
+> **✅ Latest full-suite figure: 2478 passed, 2 risky** — from the `composer verify` run reported in PR #1115 (2026-10-17); this stamp is second-hand, so re-derive it before quoting it (rule below). **`composer test`** is the one-command way. It bakes in the three environment gotchas.
 >
-> Re-derive these numbers with the command this line names — run `composer test` and copy its `Tests:    2 risky, 2303 passed (6644 assertions)` summary verbatim; never re-stamp a figure you did not just produce. The stamp before this one read `1687 passed, 4268 assertions, ~289s serial` (2026-10-01) and had drifted by **+616 tests / +2376 assertions** before anyone noticed (#983).
+> Re-derive these numbers with the command this line names — run `composer test` and copy its `Tests:` summary verbatim; never re-stamp a figure you did not just produce. The 2026-10-16 stamp read `2303 passed, 2 risky, 6644 assertions` (~517s serial); the one before it read `1687 passed, 4268 assertions, ~289s serial` (2026-10-01) and had drifted by **+616 tests / +2376 assertions** before anyone noticed (#983).
 >
 > **`.env.testing` no longer ships a key (#953).** It is git-tracked, so the `APP_KEY` was blanked there like in every other template — and it is the file `APP_ENV=testing` loads, so a clone that has never run the suite has no key. `composer test` now generates one **only when there is none** (`scripts/ensure-test-app-key.php`) and leaves an existing key byte-identical. Nothing to do by hand; the script never prints the key and never rotates one.
 >
@@ -58,15 +58,15 @@ Counts come from `php artisan test <file> --list-tests` — the authoritative pe
 
 | File | Tests | Purpose |
 |---|---|---|
-| `tests/Feature/ApiAbilityTest.php` | 33 | Real Bearer tokens per ability (#690) |
-| `tests/Feature/TodoLivewireTest.php` | 18 | Todo Livewire component |
-| `tests/Feature/PersonsExportTest.php` | 30 | Personnel export (12 columns, filters, breadcrumb) |
+| `tests/Feature/ApiAbilityTest.php` | 66 | Real Bearer tokens per ability (#690) |
+| `tests/Feature/TodoLivewireTest.php` | 31 | Todo Livewire component |
+| `tests/Feature/PersonsExportTest.php` | 36 | Personnel export (12 columns, filters, breadcrumb) |
 | `tests/Feature/UnitsExportTest.php` | 22 | Units Excel export (8 columns incl. «شهرستان») |
 | `tests/Feature/SyncZabbixObservabilityTest.php` | 10 | `zabbix_sync_logs` rows, streak, admin alert (#740) |
 | `tests/Unit/PersianNormalizerTest.php` | 11 | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 | `tests/Feature/SecurityHeadersMiddlewareTest.php` | 10 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
-| `tests/Feature/Jobs/JobsTest.php` | 9 | Archive / clean / generate jobs |
-| `tests/Feature/MaintenanceLivewireTest.php` | 9 | Maintenance schedule CRUD |
+| `tests/Feature/Jobs/JobsTest.php` | 12 | Archive / clean / generate jobs |
+| `tests/Feature/MaintenanceLivewireTest.php` | 21 | Maintenance schedule CRUD |
 | `tests/Unit/ZabbixAdapterTest.php` | 7 | `ZabbixResult` failure classification with a stub client (#741) |
 | `tests/Feature/NotificationApiTest.php` | 6 | Notification API endpoints |
 
@@ -116,7 +116,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | Gotcha | Details |
 |---|---|
 | Rebuilding a lost `.env` | `.env` is gitignored. Rebuild from `.env-example-github` (the committed dev template) plus the secrets already resolved in `.env.e2e`, override `APP_URL=http://127.0.0.1:8000` and `DB_DATABASE=h_dashboard`, then drop any line whose value still contains `secrets.` (CI placeholders) or artisan dies with "environment file is invalid". **Then run `php artisan key:generate` — never copy a key.** `.env-example-github` ships `APP_KEY=` blank since #953: it is the master secret, it used to sit committed in that template (and three siblings) since 2026-02-07, and copying it is exactly how it reached developer machines. Confirm with `php artisan about --only=environment` (expect `local`, locale `fa`). `parse_ini_file('.env')` fails here — unquoted parens — so scan lines with a regex instead |
-| A tracked env file must never carry a real `APP_KEY` (#953) | `.env.example`, `.env.example.mysql`, `.env.example.pgsql`, `.env-example-github`, `.env.testing` and `.env.e2e.example` all ship `APP_KEY=` **blank**; `php artisan key:generate` produces the value per clone. `scripts/check-app-key-leak.php` fails the build on a non-empty one and runs from **both** `scripts/verify.sh` and the `lint` job in CI (the issue's step 3 said "fail the job" — `verify.sh` alone never runs in CI, whose jobs are `lint`/`test`/`coverage-report`/`mutation`/`phpstan`). Two rules make the guard usable: it reports **tracked files only** (your working `.env` is gitignored and MUST have a key), and it **never prints the value** (a CI log that echoes the secret republishes it). It reads the **git index**, not the working tree, so a per-clone key generated locally is not a finding. **`.env.testing` is tracked AND load-bearing**: `LoadEnvironmentVariables` swaps the env file to it when `APP_ENV=testing` and dotenv is immutable, so a blank key there beats a good `.env` key and kills >1000 tests with `MissingAppKeyException`. That is why `composer test` starts with `php scripts/ensure-test-app-key.php`, which generates one **only when there is none** — an unconditional `key:generate` would rewrite the tracked file on every run and put a fresh key one `git add` from a commit. Pinned by `AppKeyLeakGuardTest`, `AppKeyGuardWiringTest` and `TestAppKeyBootstrapTest` |
+| A tracked env file must never carry a real `APP_KEY` (#953) | `.env.example`, `.env.example.mysql`, `.env.example.pgsql`, `.env-example-github`, `.env.testing` and `.env.e2e.example` all ship `APP_KEY=` **blank**; `php artisan key:generate` produces the value per clone. `scripts/check-app-key-leak.php` fails the build on a non-empty one and runs from **both** `scripts/verify.sh` and the `lint` job in CI (the issue's step 3 said "fail the job" — `verify.sh` alone never runs in CI, whose jobs are `lint`/`test`/`coverage-report`/`typecheck`/`e2e`/`mutation`/`phpstan`/`test-php86`). Two rules make the guard usable: it reports **tracked files only** (your working `.env` is gitignored and MUST have a key), and it **never prints the value** (a CI log that echoes the secret republishes it). It reads the **git index**, not the working tree, so a per-clone key generated locally is not a finding. **`.env.testing` is tracked AND load-bearing**: `LoadEnvironmentVariables` swaps the env file to it when `APP_ENV=testing` and dotenv is immutable, so a blank key there beats a good `.env` key and kills >1000 tests with `MissingAppKeyException`. That is why `composer test` starts with `php scripts/ensure-test-app-key.php`, which generates one **only when there is none** — an unconditional `key:generate` would rewrite the tracked file on every run and put a fresh key one `git add` from a commit. Pinned by `AppKeyLeakGuardTest`, `AppKeyGuardWiringTest` and `TestAppKeyBootstrapTest` |
 | Faker names can collide with a `LIKE` filter | `PersonFactory` draws `fa_IR` `firstNameMale()`. "علی" itself (3/3000) and names containing it like "ابوعلی" (13/3000) come up in ~0.4% of draws, so a test filtering "علی" with `assertDontSee` on its own row flakes under `executionOrder="random"`. Pin both names explicitly in the test — do NOT fix it in `PersonFactory`, other tests assert on the raw faker value |
 | Cache keys collide across tests | Postgres sequences are non-transactional, so `RefreshDatabase` restarts ids at 1 every test. `AccessService` keys on `accessible_units:v{version}:{user_id}:{session_unit_id}:{md5(baseIds)}` — byte-identical across tests, so a stale answer leaks from one test into the next. Put the flush in the base `TestCase::setUp()`, not in a test class — the seeder bump happens in the child's `setUp()`, which runs after `parent::setUp()`, so one flush there covers every class and needs no ordering rule. Never flush inside a test method |
 | Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
@@ -132,21 +132,22 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | `DailySeries` needs explicit generics | `Eloquent\Builder` in a signature without a `TModel` produces `missingType.generics` at level 6. Annotate `@param EloquentBuilder<covariant Model>|QueryBuilder` — otherwise the fix gets buried in `phpstan-baseline.neon` |
 | A test must not assert a fixed cell address across a `latest('created_at')` export | `hardware_audits.created_at` is `timestamp(0)` on Postgres, so rows written in the same second tie and their order under `latest('created_at')` is undefined — Postgres decides by physical page layout, so the same test passes on an author machine and fails on CI (issue #886's escape test was red in #920/#923/#924, green in #921/#922, with no commit to blame). In an export test, resolve the column from `headings()` and find the row by its own content; never `getCell('F2')` to mean "the row this test created". Note `paginate()` has the same shape: with a count of 0 it never runs the ORDER BY, so a sort test that seeds nothing passes vacuously |
 
-## CI jobs (`.github/workflows/test.yml` — seven jobs, three blocking)
+## CI jobs (`.github/workflows/test.yml` — eight jobs, three blocking)
 
 | Job key | Name | Gate |
 |---|---|---|
 | `lint` | Code Style (Pint) — `vendor/bin/pint --test` | **blocking** |
 | `test` | Tests & Coverage — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov | **blocking** |
 | `phpstan` | PHPStan Static Analysis — `vendor/bin/phpstan analyse --no-progress` | **blocking** |
-| `coverage-report` | Coverage Report (Blade-aware) | `continue-on-error` |
+| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error` |
+| `typecheck` | Typecheck (Playwright specs, informational) | `continue-on-error` |
 | `e2e` | E2E Tests (Playwright) | `continue-on-error` |
 | `mutation` | Mutation Testing (`--covered-only`) | `continue-on-error` |
-| `test-php86` | PHP 8.6 Preview | `continue-on-error` |
+| `test-php86` | PHP 8.6 Preview (non-blocking) | `continue-on-error` |
 
 > Derivation, re-run after any workflow change — no hand count:
 > ```bash
-> yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml              # lint, test, coverage-report, e2e, mutation, phpstan, test-php86
+> yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml              # lint, test, coverage-report, typecheck, e2e, mutation, phpstan, test-php86
 > yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml   # lint, test, phpstan
 > ```
 

@@ -8,14 +8,24 @@
 
 ## Leaflet map lifecycle (issue #028)
 
-The Leaflet instance is owned by **`Alpine.store('map')`** (`resources/js/map-store.js`, registered
-in `resources/js/bootstrap.js`) — **not** on `window.map`.
+The Leaflet instance lives in a **module-scope variable in `resources/js/map-store.js`** (registered
+in `resources/js/bootstrap.js`) — **not** on `window.map`, and not inside the reactive Alpine store
+either. `Alpine.store('map')` holds the config, the callbacks, and the lifecycle API
+(`configure()` / `use()` / `release()` / `onReady()`).
 
-- **`resources/views/livewire/maps/map.blade.php` is the only place allowed to call `L.map()`.** Its
-  `x-data` calls `configure()` + `use()` in `init()` and `release()` in `destroy()`.
+- **The only `L.map()` call is inside `map-store.js`'s `use()`.** `map.blade.php` never calls it —
+  its `x-data` calls `configure()` + `use()` in `init()` and `release()` in `destroy()`.
 - Host pages (`maps/point`, `maps/county`, `maps/unit`, `maps/route`, `maps/route2`,
   `reports/map-no-boundary`) call `Alpine.store('map').onReady(cb)` and attach to **the instance the
   callback receives**. They must never wait on "does a map exist" and must never create one.
+- **County data on `maps/unit` is scope-filtered (#1032).** The county list (`mount()`) and the
+  county geometry (`showSelectedCounties()`) are both filtered by `$accessibleRegionIds`, derived
+  from `AccessService::accessibleUnitIds()` — the same pattern as `maps/county` — and the access
+  scope is part of **both** cache keys. Fail-closed: an out-of-scope selection resolves to empty.
+- **Plugin CSS is page-scoped (#1018).** The base Leaflet CSS stays global; `leaflet.draw.css`
+  loads only on `units/map` and `leaflet-routing-machine.css` only on `maps/route` and
+  `maps/route2`, each via `@push('styles')`, rendered by the layout's `@stack('styles')` after
+  `@vite`. Do not move plugin CSS back into the global head.
 
 Why it changed: the instance used to live on `window.map`, which is never cleared, so SPA navigation
 left the **previous page's detached instance** in place. Host pages waited for `window.map` to exist
@@ -54,7 +64,7 @@ why `invalidateSize()` and the `resize` listener are preserved.
 |---|---|
 | Map container | Do NOT wrap `maps.map` in Bootstrap `container` class — use `relative` |
 | Leaflet.Draw featureGroup | `L.Control.Draw({ edit: { featureGroup } })` only enables edit/remove when `featureGroup.getLayers().length > 0` — `_checkDisabled` in `public/js/leaflet/leaflet.draw.js` adds `.leaflet-disabled` otherwise. A layer added straight to the map is invisible to the toolbar: put it in the FeatureGroup with `eachLayer(l => drawnItems.addLayer(l))` (individual layers, never the `L.GeoJSON` group — `updateGeojson()` only serialises `L.Polygon`) |
-| `units.boundary_id` is ON DELETE CASCADE | The FK is `ON DELETE CASCADE`, but the delete is only reached **after the UnitDeletionService impact check is accepted** — a leaf unit with zero row counts can still have a boundary, and deleting that boundary first is the safe order. Always `$unit->update(['boundary_id' => null])` BEFORE deleting the boundary row; deleting the boundary row with the FK still attached cascades the unit row away with it. The misleading word in issue #702's original gotcha was "subtree": `units_parent_fk` is `ON DELETE RESTRICT`, so child units block the delete (with a 23503) — they are never deleted with it. The real damage is the LEAF case, where the delete does not even need a boundary involved: the unit row is deleted successfully, `persons.u_id` (itself `ON DELETE SET NULL` on `persons_u_id_foreign_units`) is nullified, and `user_units` rows are discarded — those people's hardware drops out of every `HardwareAuditScope` view while the people themselves stay (issue #702) |
+| `units.boundary_id` is ON DELETE CASCADE | The FK is `ON DELETE CASCADE`. Boundary deletion (`units/map::deleteBoundary()`) carries only a scope check — no `UnitDeletionService` is involved on that path (its impact check serves **unit** deletion and counts children/tickets/persons/hardware/todos/accounts, never boundaries). A leaf unit with zero row counts can still have a boundary, and deleting that boundary first is the safe order. Always `$unit->update(['boundary_id' => null])` BEFORE deleting the boundary row; deleting the boundary row with the FK still attached cascades the unit row away with it. The misleading word in issue #702's original gotcha was "subtree": `units_parent_fk` is `ON DELETE RESTRICT`, so child units block the delete (with a 23503) — they are never deleted with it. The real damage is the LEAF case, where the delete does not even need a boundary involved: the unit row is deleted successfully, `persons.u_id` (itself `ON DELETE SET NULL` on `persons_u_id_foreign_units`) is nullified, and `user_units` rows are discarded — those people's hardware drops out of every `HardwareAuditScope` view while the people themselves stay (issue #702) |
 | `Boundary::geojson` is a BARE geometry | `getGeojsonAttribute()` returns `ST_AsGeoJSON(...)` = `{"type":"MultiPolygon","coordinates":[…]}` — there is NO `geometry` key, so it is not a GeoJSON Feature. Hand `L.geoJSON` a Feature you build yourself and unwrap `MultiPolygon` → `Polygon` first, or `fitBounds` throws `Bounds are not valid` inside the `try`/`catch`, the layer never loads, and the draw toolbar stays disabled (issue #702) |
 | `getLatLngs()` nesting depth | A plain `L.Polygon` is `[ring]`; one built from a `MultiPolygon` is `[[ring]]` — three levels. `L.Edit.Poly` only reads two, so `editing.enabled()` returns `true` with **no error** while `.leaflet-editing-icon` count is `0` and the ring serialises as `[undefined, undefined, …]`. Normalise with `while (Array.isArray(ring[0])) ring = ring[0]` before mapping coords |
 | Leaflet is minified in E2E | `layer.constructor.name` is `"e"`, never `"Polygon"`. In Playwright assert `layer instanceof window.L.Polygon` — never match a constructor-name string. Keep the real names in the returned payload so a failure prints what it got |

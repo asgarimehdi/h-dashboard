@@ -33,14 +33,14 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 | `/api/reports/*` | `ability:reports:read` + `role_or_permission:manage_personnel` | — |
 | `/api/persons/*` | `ability:persons:read` + `role_or_permission:kargozini\|manage_personnel` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
 | `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | `abilities:todos:write` (nested inside the outer group, ALL) + `role_or_permission:calendar` (#837) |
-| `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | `role_or_permission:view_hr_dashboard` |
-| `/api/notifications*` | `ability:notifications:read` | — |
+| `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | — (no write routes; the group is GET-only) |
+| `/api/notifications*` | `ability:notifications:read` | `abilities:notifications:write` (POST `{id}/read` and `read-all`, in their own group since #1002) |
 | `/api/gis*` | `ability:gis:read` + `role_or_permission:map\|bw` | — |
 
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
 - **Read and write ticket groups are independent (#895).** The reads sit in `ability:tickets:read` + `role_or_permission:view_assigned_tickets|view_all_tickets`; the writes sit in their **own** `abilities:tickets:write` group plus a per-route `permission:*`, and **no write route requires `tickets:read`**. They used to be nested inside the read group, and because nested middleware is AND, a token that satisfied `tickets:write` but not `tickets:read` — which is exactly what `getApiTokenAbilities()` mints for the seeded `user` role, holding `create_ticket` alone — was rejected with `Invalid ability provided.` on every write. `abilities:tickets:write` + `permission:*` per route is load-bearing and must stay on every write.
-- **`/api/notifications*` has no `notifications:write` ability**, and needs none: `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` act only on the **caller's own** notifications, so they are read-side acknowledgements by design (#837). Do not mint a `notifications:write` ability to "fix" this — `getApiTokenAbilities()` bundles it with `read` anyway.
+- **Notification writes are split from reads (#1002, superseding the #837 arrangement).** `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` sit in their own group behind `abilities:notifications:write`, and `getApiTokenAbilities()` mints **both** `notifications:read` and `notifications:write`. Tokens minted before the split carry only `read` and get a 403 on the POSTs until they are re-minted — that is expected, not a bug to route around.
 - Tokens are **scoped and revoked on password change** (#678) on **both** password-change paths: the self-service form (`resources/views/livewire/auth/changepassword.blade.php`) and an admin reset through `users.index`'s `updateUser()` (#1030) each `delete()` **all** of the account's Sanctum tokens — including `map-dashboard`, not just `flutter-app`, so the two paths stay in lockstep. The admin path is guarded on an actually-changed password: a profile/role edit that leaves the password untouched keeps every token alive. API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
 
 

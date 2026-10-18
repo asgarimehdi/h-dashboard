@@ -46,17 +46,13 @@ Uses **Spatie Permission** package:
   - **Closed decision (#849):** `manage_users` may change a user's units *inside its own scope* — the real gap was *which* units, not *whether*, and scoping answers it. No new permission was added (a permission missing from a deployment's DB silently 403s every non-admin). **`createUser()` now requires `role_ids` (`required|array|min:1`, identical to `updateUser()`'s rule)** — role-less account creation is gone; do not relax it back to `nullable|array`.
   - Pinned by the `#849` block in `tests/Feature/UsersManagementTest.php`. That block grants the attacker `manage_roles` **on purpose**: otherwise the permission gate, not the unit scope, would be what answers with a 403 and the assertion would prove nothing.
 - Permission `manage_hardware` required for hardware CRUD
-- Roles: admin, operator, viewer
+- Roles: admin, unit_manager, expert, user
 
 **AccessService** provides `accessibleUnitIds()` → unit IDs the current user can access (unit + descendants via recursive CTE). Results are cached and version-invalidated. It also provides `allUnitIds()` → every unit id, with **no actor and no session**, deliberately uncached (#836) — use it in scheduler/worker paths, where `accessibleUnitIds()` is always `[]`.
 
 **Key permissions:** `manage_users`, `organization`, `kargozini`, `map`, `manage_zabbix`, `calendar`, `view_all_tickets`, `create_ticket`, `view_assigned_tickets`, `manage_roles`, `op-cache`, `manage_hardware`, `bw`, `view_hr_dashboard`, `manage_personnel`, `manage_unit_tickets`, `manage_org_chart`.
 
 ### Sidebar ↔ route permission contract
-
-Every session starts **in `h-dashboard`** (the Hermes `terminal.cwd` default) and uses **CodeGraph first** for any
-code question, plus the **superpowers** skills for process (`brainstorming`, `systematic-debugging`,
-`test-driven-development`, `verification-before-completion`).
 
 A sidebar item in `resources/views/components/layouts/app.blade.php` and the route it points at in
 `routes/web.php` **must carry the same permission(s)**. A link the user cannot open is a 403 they were
