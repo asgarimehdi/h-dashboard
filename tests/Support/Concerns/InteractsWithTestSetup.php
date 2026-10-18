@@ -98,11 +98,14 @@ trait InteractsWithTestSetup
 
     protected function assertQueryCount(int $expected, Closure $callback): void
     {
-        $queries = [];
-        DB::listen(fn ($query) => $queries[] = $query->sql);
+        $count = 0;
+        DB::listen(function ($query) use (&$count) {
+            if (! Str::startsWith($query->sql, ['BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT'])) {
+                $count++;
+            }
+        });
         $callback();
-        $this->assertLessThanOrEqual($expected, count($queries),
-            "Expected ≤ {$expected} queries, got ".count($queries));
+        $this->assertLessThanOrEqual($expected, $count, "Expected ≤ {$expected} queries, got {$count}");
     }
 
     protected function assertNoNPlusOne(Closure $callback, int $maxQueries = 5): void
