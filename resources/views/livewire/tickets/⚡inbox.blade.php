@@ -88,14 +88,31 @@ new class extends Component
     #[Computed]
     public function tickets()
     {
-        $user = auth()->user();
-
         // #906: `deleted_at` is selected on purpose — `ActorLabel` tells a
         // soft-deleted creator («کاربر غیرفعال») from a genuinely ownerless
         // ticket («سیستم»), and `trashed()` reads that column. Without the
         // soft-deleted rows in the result both cases resolve to `null` and are
         // indistinguishable.
         $query = Ticket::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q), 'unit:id,name']);
+
+        $this->applyInboxFilters($query);
+
+        return $query->latest()->paginate(20);
+    }
+
+    /**
+     * The filter predicate the inbox table itself runs — viewMode scope
+     * (received = `accessible()`, sent = owner/assignee/activity paths), tab
+     * status filter, Jalali date window and search — appended onto whichever
+     * base query the caller builds. Extracted unchanged from `tickets()` so
+     * #1040's select-all expansion and count see EXACTLY the rows the
+     * operator sees, instead of a copy that could drift.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\Ticket> $query
+     */
+    private function applyInboxFilters(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $user = auth()->user();
 
         if ($this->viewMode === 'received') {
             $query->accessible();
@@ -111,8 +128,6 @@ new class extends Component
         $this->applyTicketDateRange($query, $this->dateFrom, $this->dateTo);
         // The inbox searches `content` as well; monitoring does not.
         $this->applyTicketSearch($query, $this->search, ['subject', 'ticket_code', 'content']);
-
-        return $query->latest()->paginate(20);
     }
 
     public function updatedViewMode(): void
@@ -178,6 +193,11 @@ new class extends Component
     // ===== Bulk Actions =====
     public function toggleTicketSelection($ticketId): void
     {
+        // Under `$selectAll = false` this toggles a MANUAL pick (inclusion);
+        // under `$selectAll = true` the same call marks the row OUT of the
+        // all-selection (exclusion — the checked renderer and the count both
+        // read it that way). One action, two sides of the same ledger, both
+        // pinned by tests.
         if (in_array($ticketId, $this->selectedTickets)) {
             $this->selectedTickets = array_values(array_diff($this->selectedTickets, [$ticketId]));
         } else {
@@ -185,22 +205,54 @@ new class extends Component
         }
     }
 
+    /**
+     * #1040: `$selectAll` is the source of truth and nothing is materialized
+     * into `selectedTickets` here — the old code plucked EVERY open ticket
+     * in the accessible scope into the public array and shipped it across
+     * every roundtrip. Expansion happens at action time on the server
+     * (`executeBulkAction()`), against the page's active filter/search; the
+     * ledger stays empty the whole time.
+     */
     public function toggleSelectAll(): void
     {
-        if ($this->selectAll) {
-            $this->selectedTickets = [];
-            $this->selectAll = false;
-        } else {
-            $this->selectedTickets = Ticket::whereIn('unit_id', $this->getAccessibleUnitIds())
-                ->whereIn('status', ['created', 'forwarded', 'accepted'])
-                ->pluck('id')->toArray();
-            $this->selectAll = true;
+        $this->selectAll = ! $this->selectAll;
+        $this->selectedTickets = [];
+    }
+
+    /**
+     * #1040: how many rows the operator believes are selected. Without
+     * select-all that is the manual picks; with it, a server-side COUNT of
+     * the page's filtered set minus the manually UN-picked rows. The bulk
+     * bar and both its buttons key off this instead of the snapshot array's
+     * length.
+     */
+    #[Computed]
+    public function selectedTicketsCount(): int
+    {
+        if (! $this->selectAll) {
+            return count($this->selectedTickets);
         }
+
+        $query = Ticket::query();
+        $this->applyInboxFilters($query);
+
+        return $query->whereNotIn('id', $this->selectedTickets)->count();
+    }
+
+    /**
+     * #1040: today's client-only `$set('selectedTickets', [])` left the
+     * `selectAll=true` flag standing with an empty ledger — bulk actions
+     * silently found nothing while every row still rendered checked. Clear
+     * BOTH flags.
+     */
+    public function clearSelection(): void
+    {
+        $this->reset(['selectedTickets', 'selectAll']);
     }
 
     public function openBulkModal($action): void
     {
-        if (empty($this->selectedTickets)) {
+        if ($this->selectedTicketsCount() === 0) {
             $this->dispatch('swal', ['title' => 'هیچ تیکتی انتخاب نشده', 'icon' => 'warning']);
             return;
         }
@@ -210,7 +262,13 @@ new class extends Component
 
     public function executeBulkAction(): void
     {
-        if (empty($this->selectedTickets)) return;
+        // #1040: the effective selection (select-all seen through the page's
+        // filter, minus manual un-picks, or the manual picks alone) has to be
+        // resolved BEFORE any state reset — this method is also the only
+        // place that materializes it.
+        if ($this->selectedTicketsCount() === 0) {
+            return;
+        }
 
         // Issue #818: the bulk `complete` branch closes tickets in bulk, which is
         // the same state change the single-ticket path needed
@@ -229,10 +287,26 @@ new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده + محدوده سازمانی
-        $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
-            ->where('status', '!=', 'completed')
-            ->whereIn('unit_id', $accessibleIds)
-            ->pluck('id');
+        //
+        // #1040: «انتخاب همه» is NOT the whole accessible pool any more —
+        // the approved semantics expand it right here, against the page's
+        // ACTIVE filter/search/view-mode, minus the rows the operator
+        // un-picked. The manual path is unchanged (`selectedTickets` holds
+        // only hand-picked ids in that mode).
+        if ($this->selectAll) {
+            $scope = Ticket::query();
+            $this->applyInboxFilters($scope);
+            $ticketIds = $scope
+                ->whereNotIn('id', $this->selectedTickets)
+                ->where('status', '!=', 'completed')
+                ->whereIn('unit_id', $accessibleIds)
+                ->pluck('id');
+        } else {
+            $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
+                ->where('status', '!=', 'completed')
+                ->whereIn('unit_id', $accessibleIds)
+                ->pluck('id');
+        }
 
         if ($ticketIds->isEmpty()) {
             $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
@@ -328,11 +402,8 @@ new class extends Component
     }
 
     // متدهای bulkCompleteTicket و bulkForwardTicket حذف شدند - منطق در executeBulkAction ادغام شد
-
-    private function getAccessibleUnitIds(): array
-    {
-        return app(AccessService::class)->accessibleUnitIds();
-    }
+    // (#1040: getAccessibleUnitIds هم حذف شد — تنها فراخواننده‌اش مادی‌سازیِ
+    // «انتخاب همه» در toggleSelectAll بود.)
 
     public function switchView($mode): void
     {
@@ -409,15 +480,17 @@ new class extends Component
         </div>
 
         {{-- نوار Bulk Actions — Issue #818: تکمیل دسته‌ای نیاز به manage_unit_tickets دارد --}}
-        @if(count($this->selectedTickets) > 0)
+        {{-- #1040: شمارنده و شرط نمایش از count سمت سرور می‌آیند؛ زیر «انتخاب همه»،
+             selectedTickets فقط منهای دستی سطرها را حمل می‌کند و به‌تنهایی طول نداشته معنا ندارد. --}}
+        @if($this->selectedTicketsCount() > 0)
         <div class="flex items-center gap-3 p-3 mb-4 bg-primary/10 rounded-xl border border-primary/20">
-            <span class="text-sm font-bold text-primary">{{ count($this->selectedTickets) }} تیکت انتخاب شده</span>
+            <span class="text-sm font-bold text-primary">{{ $this->selectedTicketsCount() }} تیکت انتخاب شده</span>
             <div class="flex gap-2 mr-auto">
                 @can('manage_unit_tickets')
                 <x-button icon="o-check-circle" label="تکمیل دسته‌ای" wire:click="openBulkModal('complete')" class="btn-success btn-sm" spinner />
                 <x-button icon="o-arrow-right" label="ارجاع دسته‌ای" wire:click="openBulkModal('forward')" class="btn-warning btn-sm" spinner />
                 @endcan
-                <x-button icon="o-x-mark" label="لغو انتخاب" wire:click="$set('selectedTickets', [])" class="btn-ghost btn-sm" />
+                <x-button icon="o-x-mark" label="لغو انتخاب" wire:click="clearSelection" class="btn-ghost btn-sm" />
             </div>
         </div>
         @endif
@@ -434,11 +507,13 @@ new class extends Component
 
             @scope('cell_checkbox', $ticket)
             {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. --}}
+            {{-- #1040: وضعیت سطر $selectAll-aware است — زیر «انتخاب همه» هر سطری که
+                 به‌صورت دستی ازانتخاب نشده باشد checked است (منهای دستی = id در ledgers). --}}
             <input type="checkbox"
                 class="checkbox checkbox-sm checkbox-primary"
                 wire:click="toggleTicketSelection({{ $ticket->id }})"
                 aria-label="انتخاب تیکت {{ $ticket->ticket_code }}"
-                @if(in_array($ticket->id, $this->selectedTickets)) checked @endif />
+                @if($this->selectAll ? ! in_array($ticket->id, $this->selectedTickets) : in_array($ticket->id, $this->selectedTickets)) checked @endif />
             @endscope
 
             @scope('cell_user.person.f_name', $ticket)

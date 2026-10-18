@@ -55,8 +55,6 @@ return new class extends Component
 
     public $counties;
 
-    public $parentUnits;
-
     public $userUnitLevel;
 
     public $userRegionId;
@@ -72,7 +70,7 @@ return new class extends Component
         // Issue #975: deliberately NOT gated (the plan marks it optional). The
         // route gate already covers the initial page load, and everything
         // reachable from here without a write — `units()`, `loadDropdowns()`,
-        // `getAllowedParentUnitsProperty()` — is filtered through
+        // the `parentUnits` computed below — is filtered through
         // `accessibleUnitIds()`. What this component must never do is WRITE
         // without `organization`, and all four mutators now check it themselves.
         $this->determineUserLevel();
@@ -174,8 +172,6 @@ return new class extends Component
             $this->provinces = collect();
             $this->counties = collect();
         }
-
-        $this->parentUnits = $this->getAllowedParentUnitsProperty();
     }
 
     /**
@@ -270,7 +266,26 @@ return new class extends Component
         $this->loadDropdowns();
     }
 
-    public function getAllowedParentUnitsProperty()
+    /**
+     * #1040: «واحد بالادستی» is a render-time option list, not component
+     * state. Under the old `public $parentUnits` every roundtrip carried the
+     * whole parent list (as model keys in the snapshot — Livewire 4
+     * dehydrates models/collections to just their ids) and re-fetched it back
+     * to the client. As a computed property it lives per-request only: it is
+     * re-built from `unit_type_id` on the next request after
+     * `wire:model.live`, so the dropdown stays in sync without a snapshot.
+     *
+     * The query is deliberately NOT `accessible()`-scoped here (parity with
+     * the old `getAllowedParentUnitsProperty()`): allowed-parent TYPES are
+     * filtered below by the caller's provincial/county reach through the
+     * `userUnitLevel`-conditional whens. The series of whens must stay
+     * unconditional their-selves — an empty `region_id` list means "nothing
+     * in scope", never "no filter" (AGENTS.md fail-closed rule).
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Unit>
+     */
+    #[\Livewire\Attributes\Computed]
+    public function parentUnits(): \Illuminate\Support\Collection
     {
         if (! $this->unit_type_id) {
             return collect();
@@ -283,7 +298,7 @@ return new class extends Component
         $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
             ->pluck('allowed_parent_unit_type_id');
 
-        $parentUnits = Unit::whereIn('unit_type_id', $allowedParentTypeIds)
+        $parentUnits = Unit::query()->whereIn('unit_type_id', $allowedParentTypeIds)
             ->when($this->userUnitLevel === 'county', function ($query) {
                 return $query->where('region_id', $this->userRegionId);
             })
@@ -644,7 +659,6 @@ return new class extends Component
             'unitTypes' => $this->unitTypes,
             'provinces' => $this->provinces,
             'counties' => $this->counties,
-            'parentUnits' => $this->parentUnits,
             'userUnitLevel' => $this->userUnitLevel,
         ];
     }
@@ -757,7 +771,7 @@ return new class extends Component
                           option-label="name" placeholder="انتخاب کنید"/>
             @endif
 
-            <x-select wire:model.live="parent_id" label="واحد بالادستی" :options="$parentUnits" option-value="id"
+            <x-select wire:model.live="parent_id" label="واحد بالادستی" :options="$this->parentUnits" option-value="id"
                       option-label="name" :required="$unit_type_id != 1" placeholder="انتخاب کنید"/>
 
             <div class="col-span-2">
