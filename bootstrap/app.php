@@ -12,6 +12,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Session\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Sentry\Laravel\Integration;
@@ -77,6 +78,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'ability' => CheckForAnyAbility::class,
         ]);
         $middleware->web(append: [
+            // #1004: the mechanism behind Auth::logoutOtherDevices(). It keeps
+            // the account's password hash in the session and ends the session
+            // once that hash no longer matches — which is what makes other
+            // devices' cookies die after a password change. Without it the
+            // call in changePassword() is a no-op. Registered before
+            // LastUserActivity so a stale session is dropped before it can be
+            // recorded as activity.
+            AuthenticateSession::class,
             SecurityHeaders::class,
             LastUserActivity::class,
             RequestId::class,

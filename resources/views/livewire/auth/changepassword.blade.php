@@ -34,6 +34,12 @@ return new class extends Component {
             ]);
         }
 
+        // #1004: بستن نشست های وبِ دیگر روی دستگاه ها، پیش از تغییر رمز. این متد
+        // رمز فعلی را وریفای می کند، پس باید پیش از ذخیرهٔ رمز جدید اجرا شود.
+        // با FQCN صدا زده می شود تا افزودنِ یک import، شمارهٔ خطِ رکوردهای
+        // phpstan-baseline این فایل را جابجا نکند.
+        \Illuminate\Support\Facades\Auth::logoutOtherDevices($this->currentPassword);
+
         // تغییر رمز و ذخیره‌سازی
         $user->password = Hash::make($this->newPassword);
         $user->save();
