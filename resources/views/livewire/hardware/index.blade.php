@@ -193,7 +193,9 @@ return new class extends Component
                 $q->where('n_code', 'LIKE', "%{$normalized}%")
                     ->orWhere('f_name', 'LIKE', "%{$normalized}%")
                     ->orWhere('l_name', 'LIKE', "%{$normalized}%")
-                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$normalized}%"]);
+                    // Issue #1009: `||` (NOT `concat()`) so the
+                    // `persons_fullname_trgm_idx` expression index applies.
+                    ->orWhereRaw("(f_name || ' ' || l_name) LIKE ?", ["%{$normalized}%"]);
             })
             ->limit(10)
             ->get()
