@@ -884,6 +884,84 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertDatabaseHas('tickets', ['ticket_code' => 'T-949']);
     }
 
+    // ==================== #1040: parentUnits is computed, the snapshot stays light ====================
+
+    /**
+     * #1040: `parentUnits` used to be a public Collection property — every
+     * Fabrik-roundtrip carried one `meta` entry per parent unit through the
+     * snapshot and rehydrated it back afterwards. As a computed it is never
+     * serialized: with ~200 parent candidates in the dropdown the snapshot
+     * keysite must neither carry a `parentUnits` key (per-unit attribute
+     * leakage) nor exceed a size ceiling. The old payload shape measured ~8KB
+     * for this exact fixture (one id entry per row); the ceiling is pinned
+     * far below it so restoring the public property fails this test.
+     */
+    public function test_snapshot_stays_light_with_two_hundred_parent_candidates(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        // The factory unit carries no region/type, so determineUserLevel()
+        // leaves userUnitLevel null — the parent query narrows by nothing and
+        // every seeded type-4 unit becomes a dropdown row.
+        Unit::factory()->count(200)->create(['unit_type_id' => 4]);
+
+        $component = Livewire::test('units.index')
+            ->set('unit_type_id', 5)
+            ->assertOk();
+
+        $data = $component->snapshot['data'];
+        $snapshotJson = (string) json_encode($component->snapshot);
+
+        // No list property — computed methods are never present in the snapshot.
+        $this->assertArrayNotHasKey('parentUnits', $data);
+
+        // And nothing per-unit leaked: the two payload keys the old
+        // `public $parentUnits` used to saturate (an id list per parent type)
+        // have no place in the data.
+        $this->assertStringNotContainsString('"parentUnits"', $snapshotJson);
+
+        // The ceiling: the old property shipped ~200 model-key entries
+        // alongside this same base; measured under the computed dropdown the
+        // payload is ~1KB. 1500 gives room for env noise, not for a relapse.
+        $this->assertLessThan(1500, strlen($snapshotJson), 'the snapshot payload grew — a heavy property slipped back into public state');
+    }
+
+    /**
+     * #1040: a computed re-computes per request. `set('unit_type_id', …)`
+     * must rebuild the parent dropdown from the NEW type — stale caching of
+     * an old list is exactly the regression this test guards.
+     */
+    public function test_parent_unit_options_recompute_when_unit_type_changes(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        // Child type 5 allows parent type 4 (seeded in setUp); type 3 allows
+        // nothing — a type-3 row must never be offered as a parent for 5.
+        $allowedOne = Unit::create(['name' => 'والد مجاز الف', 'unit_type_id' => 4]);
+        $allowedTwo = Unit::create(['name' => 'والد مجاز ب', 'unit_type_id' => 4]);
+        $notAllowed = Unit::create(['name' => 'والد فرام مجاز', 'unit_type_id' => 3]);
+
+        $component = Livewire::test('units.index')
+            ->set('unit_type_id', 5)
+            ->assertOk();
+
+        // x-select renders one <option value="…"> per parent candidate. The
+        // needle includes the `value="id" >` fragment MaryUI emits (note the
+        // trailing space from the optional `disabled` attribute) so an id
+        // alone could not fake the match.
+        $component->assertSeeHtml('value="'.$allowedOne->id.'" >'.$allowedOne->name.'</option>')
+            ->assertSeeHtml('value="'.$allowedTwo->id.'" >'.$allowedTwo->name.'</option>')
+            ->assertDontSeeHtml('value="'.$notAllowed->id.'" >'.$notAllowed->name.'</option>');
+
+        // Selecting type 1 clears the parent list entirely — the computed
+        // re-evaluates on the second request, not in the first request's cache.
+        $component->set('unit_type_id', 1)
+            ->assertDontSeeHtml('value="'.$allowedOne->id.'" >'.$allowedOne->name.'</option>')
+            ->assertDontSeeHtml('value="'.$allowedTwo->id.'" >'.$allowedTwo->name.'</option>');
+    }
+
     /**
      * The toast text never reaches the HTML: `Mary\Traits\Toast` ships it as a
      * JS effect (`effects['xjs']` holding a `toast({...})` expression), so

@@ -50,10 +50,6 @@ return new class extends Component
 
     public array $user_permissions = [];
 
-    public array $allUnits = [];
-
-    public array $allUnitsTree = [];
-
     public array $unit_ids = [];
 
     public function mount(): void
@@ -63,19 +59,12 @@ return new class extends Component
         $this->allRoles = Role::all(['id', 'name', 'label'])->toArray();
         $this->allPermissions = Permission::all(['id', 'name', 'label'])->toArray();
 
-        // Issue #849: this picker is the WRITE target list, so it may only
-        // offer units inside the actor's reachable set. The whereIn is
-        // unconditional — an empty scope renders an empty picker (0 = 1),
-        // never the whole organization (AGENTS.md fail-closed rule).
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $units = Unit::with('unitType')->whereIn('id', $accessibleIds)->where('is_active', true)->orderBy('name')->get();
-        $this->allUnits = $units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->all();
-        $this->allUnitsTree = $units->map(fn ($u) => [
-            'id' => $u->id,
-            'name' => $u->name,
-            'parent_id' => $u->parent_id,
-            'unit_type_name' => $u->unitType?->name,
-        ])->all();
+        // Issue #849: the unit picker's WRITE-target rows moved to the
+        // `allUnits` / `allUnitsTree` computed properties below — they are
+        // render-time data, not snapshot state (#1040). Their scoping contract
+        // is unchanged: only units inside the actor's reachable set, and the
+        // whereIn is unconditional — an empty scope renders an empty picker
+        // (0 = 1), never the whole organization (AGENTS.md fail-closed rule).
     }
 
     public function clear(): void
@@ -83,6 +72,79 @@ return new class extends Component
         $this->reset(['search', 'filterStatus']);
         $this->filterStatus = 'active';
         $this->success('فیلترها پاک شدند.', position: 'toast-bottom');
+    }
+
+    /**
+     * The scoped unit list both picker computeds below build from — one
+     * query per RENDER (not one per picker): rendered shares today resolve
+     * through all-props for the chips AND all-units-tree for the modals
+     * within the same rebuild pass. Memoized into a PRIVATE property, so it
+     * behaves like a computed's per-request cache without ever touching the
+     * snapshot (Livewire 4 dehydrates public properties only — #1040 keeps
+     * the model list out of the payload). Re-evaluated fresh the moment the
+     * first picker build touches it each request, so it always reads this
+     * request's `accessibleUnitIds()`.
+     *
+     * @var \Illuminate\Database\Eloquent\Collection<int, Unit>|null
+     */
+    private ?\Illuminate\Database\Eloquent\Collection $scopedUnitsCache = null;
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Unit>
+     */
+    private function scopedAccessibleUnits(): \Illuminate\Database\Eloquent\Collection
+    {
+        if ($this->scopedUnitsCache === null) {
+            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+            $this->scopedUnitsCache = Unit::query()
+                ->with('unitType')
+                // #849: this picker is the WRITE target list, so it may only
+                // offer units inside the actor's reachable set. The whereIn is
+                // unconditional — an empty scope renders an empty picker (0 = 1),
+                // never the whole organization (AGENTS.md fail-closed rule).
+                ->whereIn('id', $accessibleIds)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get();
+        }
+
+        return $this->scopedUnitsCache;
+    }
+
+    /**
+     * #1040: the flat options the unit picker's chips read — compute key
+     * `['id', 'name']`, shape unchanged from the former public array.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    #[\Livewire\Attributes\Computed]
+    public function allUnits(): array
+    {
+        $units = $this->scopedAccessibleUnits();
+
+        return $units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->all();
+    }
+
+    /**
+     * #1040: the tree rows the unit-tree-picker modal reads — keys
+     * `['id', 'name', 'parent_id', 'unit_type_name']`, shape unchanged from
+     * the former public array. As a computed this never enters the
+     * snapshot, so the org tree stops travelling with every roundtrip.
+     *
+     * @return array<int, array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}>
+     */
+    #[\Livewire\Attributes\Computed]
+    public function allUnitsTree(): array
+    {
+        $units = $this->scopedAccessibleUnits();
+
+        return $units->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'parent_id' => $u->parent_id,
+            'unit_type_name' => $u->unitType?->name,
+        ])->all();
     }
 
     /**
@@ -531,7 +593,9 @@ return new class extends Component
 
     public function with(): array
     {
-        $selectedUnitNames = collect($this->allUnits)
+        // `$this->allUnits()` is the computed property, not public state — the
+        // chips read from the per-request list.
+        $selectedUnitNames = collect($this->allUnits())
             ->whereIn('id', $this->unit_ids ?? [])
             ->pluck('name')
             ->values()
@@ -730,7 +794,7 @@ return new class extends Component
 
     <x-modal wire:model="unitModal" title="انتخاب واحدها" persistent separator>
         @include('livewire.partials.unit-tree-picker', [
-            'units' => $allUnitsTree,
+            'units' => $this->allUnitsTree(),
             'model' => 'unit_ids',
             'multiple' => true,
             'alwaysOpen' => true,

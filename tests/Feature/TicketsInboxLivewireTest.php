@@ -1082,10 +1082,13 @@ class TicketsInboxLivewireTest extends TestCase
             'action' => 'completed',
         ]);
 
-        // toggleSelectAll
+        // toggleSelectAll (#1040: the flag is the whole state — the ledger
+        // `selectedTickets` must stay empty, the old code loaded EVERY open
+        // ticket id into the public array and shipped it each roundtrip).
         Livewire::test('tickets.inbox')
             ->call('toggleSelectAll')
             ->assertSet('selectAll', true)
+            ->assertSet('selectedTickets', [])
             ->call('toggleSelectAll')
             ->assertSet('selectAll', false)
             ->assertSet('selectedTickets', []);
@@ -1105,6 +1108,130 @@ class TicketsInboxLivewireTest extends TestCase
             'ticket_id' => $t4->id,
             'action' => 'forwarded',
         ]);
+    }
+
+    // =====================================================================
+    // #1040 — «انتخاب همه» is server-expanded against the page's ACTIVE
+    // filter/search, and the snapshot ledger stays empty the whole time
+    // =====================================================================
+
+    /**
+     * The core of the #1040 approved semantics: after `toggleSelectAll()` the
+     * ledger is empty, `executeBulkAction` expands «همه» ON THE SERVER against
+     * the active tab (pending = created|forwarded) and the active search, and
+     * the effect is asserted on the DATABASE (rows changed, task activity
+     * written) — not on component state (#936). A ticket hidden by the search
+     * and a ticket outside the active tab must both stay untouched; the
+     * pre-#1040 behaviour selected every reachable created/forwarded/accepted
+     * ticket regardless of what the operator had filtered.
+     */
+    public function test_select_all_expands_on_the_server_against_the_active_filter(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        // In the active search AND in the pending tab.
+        $inScope = $this->createTicket(['status' => 'created', 'subject' => 'دارای مارکر']);
+        // Pending but hidden by the active search — «انتخاب همه» must respect it.
+        $hiddenBySearch = $this->createTicket(['status' => 'created', 'subject' => 'بدون عبارت خاص']);
+        // Found by the search but outside the active tab (pending).
+        $outsideTab = $this->createTicket(['status' => 'accepted', 'subject' => 'دارای مارکر']);
+
+        Livewire::test('tickets.inbox')
+            ->set('search', 'دارای مارکر')
+            ->call('toggleSelectAll')
+            ->assertSet('selectAll', true)
+            ->assertSet('selectedTickets', [])
+            // The server-side count respects the SAME filter/search.
+            ->assertSee('1 تیکت انتخاب شده')
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction');
+
+        $this->assertSame('completed', $inScope->fresh()->status);
+        $this->assertSame('created', $hiddenBySearch->fresh()->status);
+        $this->assertSame('accepted', $outsideTab->fresh()->status);
+
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $inScope->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $hiddenBySearch->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outsideTab->id, 'action' => 'completed']);
+    }
+
+    /**
+     * The conflict order the expert plan pinned: a MANUAL pick → «انتخاب همه»
+     * → un-picking one row. Select-all clears the manual ledger (the manual
+     * picks are subsumed by «همه»), the subsequent un-pick becomes an
+     * EXCLUSION, and the bulk action completes everything except that
+     * excluded row — asserted on the database, not on component state (#936).
+     */
+    public function test_select_all_then_manually_unpicked_row_is_excluded(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $t1 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت یک']);
+        $t2 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت دو']);
+        $t3 = $this->createTicket(['status' => 'forwarded', 'subject' => 'تیکت سه']);
+
+        Livewire::test('tickets.inbox')
+            // ۱. a manual pick (ledger = inclusions)
+            ->call('toggleTicketSelection', $t1->id)
+            ->assertSet('selectedTickets', [$t1->id])
+            // ۲. «انتخاب همه»: ledger cleared, the flag carries the rest
+            ->call('toggleSelectAll')
+            ->assertSet('selectAll', true)
+            ->assertSet('selectedTickets', [])
+            // ۳. un-pick ONE row on the checked table: the property is again
+            // non-empty, but it now holds exceptions, not picks
+            ->call('toggleTicketSelection', $t2->id)
+            ->assertSet('selectedTickets', [$t2->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            // the response closes the flow on a reset selection
+            ->assertSet('selectedTickets', []);
+
+        $this->assertSame('completed', $t1->fresh()->status);
+        $this->assertSame('created', $t2->fresh()->status);
+        $this->assertSame('completed', $t3->fresh()->status);
+
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $t1->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $t2->id, 'action' => 'completed']);
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $t3->id, 'action' => 'completed']);
+    }
+
+    /**
+     * #1040: the «لغو انتخاب» button was a client-only `$set()` that left a
+     * `selectAll=true` flag standing behind an empty ledger. The method must
+     * reset BOTH, and the bulk bar (driven by the server-side count) must go
+     * away with it.
+     */
+    public function test_clear_selection_resets_both_the_ledger_and_select_all(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created', 'subject' => 'تیکت بماند']);
+        $this->createTicket(['status' => 'forwarded', 'subject' => 'تیکت بماند دوم']);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [99999])
+            ->call('toggleSelectAll')
+            ->assertSet('selectAll', true)
+            ->assertSet('selectedTickets', [])
+            ->assertSee('تیکت انتخاب شده')
+            ->call('clearSelection')
+            ->assertSet('selectAll', false)
+            ->assertSet('selectedTickets', [])
+            ->assertDontSee('تیکت انتخاب شده');
+
+        // After the reset a stray executeBulkAction() call must be a no-op on
+        // phantom «selection» — assert on the DATABASE, not on state (#936).
+        Livewire::test('tickets.inbox')
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction');
+
+        $this->assertSame('created', Ticket::where('subject', 'تیکت بماند')->firstOrFail()->status);
+        $this->assertSame('forwarded', Ticket::where('subject', 'تیکت بماند دوم')->firstOrFail()->status);
+        $this->assertDatabaseMissing('task_activities', ['action' => 'completed']);
     }
 
     public function test_execute_bulk_action_only_completed_warning(): void

@@ -379,9 +379,24 @@ test('#849: user table, unit picker and person search are unit-scoped', function
         ->test('users.index')
         ->assertOk();
 
-    // Unit picker (mount): only the actor's own unit is offered.
-    expect(collect($component->get('allUnits'))->pluck('id')->all())->toBe([$f['unitA']->id]);
-    expect(collect($component->get('allUnitsTree'))->pluck('id')->all())->toBe([$f['unitA']->id]);
+    // Unit picker (#1040: `allUnits`/`allUnitsTree` are `#[Computed]` now and
+    // no longer in the snapshot, so the SAME scope contract is locked through
+    // the rendered HTML instead of reading the property). The tree renders a
+    // node per accessible unit — exactly one node, the actor's own.
+    $component->assertSeeHtml('@click="toggle('.$f['unitA']->id.')"');
+    $component->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
+
+    // The selectedUnitNames chips resolve through the same computed
+    // `allUnits` (they only render with the form OPEN): an own-unit
+    // selection renders its name as a selected chip, a foreign one renders
+    // nothing — the picker's WRITE-target list is still scoped.
+    // `openFormForCreate()` resets the form, so selections are set after it.
+    $component->call('openFormForCreate')
+        ->set('unit_ids', [$f['unitA']->id])
+        ->assertSeeHtml('badge badge-primary">'.$f['unitA']->name.'</span>')
+        ->set('unit_ids', [$f['unitB']->id])
+        ->assertSee('واحدی انتخاب نشده')
+        ->assertDontSeeHtml('badge badge-primary">'.$f['unitB']->name.'</span>');
 
     // Table: the unit-B victim is absent, the unit-A colleague is present.
     $component->assertViewHas('users', function ($users) use ($f) {
@@ -415,12 +430,34 @@ test('#849: an empty scope renders nobody, not everybody', function () {
         ->assertOk()
         ->assertViewHas('users', fn ($users) => $users->count() === 0);
 
-    expect($component->get('allUnits'))->toBe([]);
-    expect($component->get('allUnitsTree'))->toBe([]);
+    // The picker renders not a single node — [] is "in scope of nothing",
+    // never "whole org" (fail-closed), verified through the rendered tree.
+    $component->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"')
+        ->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
 
     $component->call('openFormForCreate')
         ->set('person_search', 'مهاجم')
         ->assertViewHas('persons', fn ($persons) => $persons === []);
+});
+
+/**
+ * #1040: `allUnits` / `allUnitsTree` became `#[Computed]` properties — methods
+ * are not serialized into the snapshot, so the org-wide unit lists no longer
+ * travel with every roundtrip. This locks that: the two list keys must not be
+ * present in the hydratable data at all (the payload lock is the very point
+ * of this card; the scope assertions above prove nothing was lost).
+ */
+test('#1040: users.index snapshot carries no unit lists', function () {
+    $f = users849Fixtures();
+
+    $component = Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->assertOk();
+
+    $data = $component->snapshot['data'];
+
+    expect($data)->not->toHaveKey('allUnits');
+    expect($data)->not->toHaveKey('allUnitsTree');
 });
 
 test('#849: selectPerson refuses an out-of-scope person', function () {
