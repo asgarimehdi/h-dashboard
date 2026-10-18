@@ -132,7 +132,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | `DailySeries` needs explicit generics | `Eloquent\Builder` in a signature without a `TModel` produces `missingType.generics` at level 6. Annotate `@param EloquentBuilder<covariant Model>|QueryBuilder` — otherwise the fix gets buried in `phpstan-baseline.neon` |
 | A test must not assert a fixed cell address across a `latest('created_at')` export | `hardware_audits.created_at` is `timestamp(0)` on Postgres, so rows written in the same second tie and their order under `latest('created_at')` is undefined — Postgres decides by physical page layout, so the same test passes on an author machine and fails on CI (issue #886's escape test was red in #920/#923/#924, green in #921/#922, with no commit to blame). In an export test, resolve the column from `headings()` and find the row by its own content; never `getCell('F2')` to mean "the row this test created". Note `paginate()` has the same shape: with a count of 0 it never runs the ORDER BY, so a sort test that seeds nothing passes vacuously |
 
-## CI jobs (`.github/workflows/test.yml` — eight jobs, three blocking)
+## CI jobs (`.github/workflows/test.yml` — eight jobs, three blocking; `mutation` is manual-only)
 
 | Job key | Name | Gate |
 |---|---|---|
@@ -142,8 +142,10 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error` |
 | `typecheck` | Typecheck (Playwright specs, informational) | `continue-on-error` |
 | `e2e` | E2E Tests (Playwright) | `continue-on-error` |
-| `mutation` | Mutation Testing (`--covered-only`) | `continue-on-error` |
+| `mutation` | Mutation Testing (`--covered-only`) | `continue-on-error`; manual-only (`workflow_dispatch`, #1012) |
 | `test-php86` | PHP 8.6 Preview (non-blocking) | `continue-on-error` |
+
+`mutation` is gated to `workflow_dispatch` (#1012): the job is green, but each run is expensive (checkout, composer install, `npm ci`, a Vite build and migrations before the single `pest --mutate` line) and it used to spend ~23 minutes on every PR on a signal that `continue-on-error` never gates. Re-enable on PRs by dropping the job's `if:`. A manual run executes every job, so read that job's own result rather than the run's conclusion — and note that the `workflow_dispatch` button appears only once this trigger is on the default branch (`main`).
 
 > Derivation, re-run after any workflow change — no hand count:
 > ```bash
