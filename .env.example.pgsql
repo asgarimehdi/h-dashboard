@@ -54,10 +54,10 @@ DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_DATABASE=h_dashboard
 DB_USERNAME=h_dashboard
-DB_PASSWORD=example_6162e0f827d119b0
-DB_ROOT_PASSWORD=example_4be97a3608e27da3
+DB_PASSWORD=<same-as-dev>
+DB_ROOT_PASSWORD=<same-as-dev>
 DB_DEFAULT_EMAIL=admin@...
-DB_DEFAULT_PASSWORD=example_eb4bddfe0a613c1e
+DB_DEFAULT_PASSWORD=<same-as-dev>
 
 # Application timezone (display layer). PostgreSQL keeps UTC for storage;
 # convert to Tehran/Jalali in code via morilog/jalali & hekmatinasser/verta.
@@ -106,7 +106,7 @@ QUEUE_CONNECTION=redis
 
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
-REDIS_PASSWORD=example_e317eb5b0fd7e85c
+REDIS_PASSWORD=<same-as-dev>
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=
