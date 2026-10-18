@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\LastUserActivity;
 use App\Http\Middleware\RequestId;
 use App\Http\Middleware\SafeRoleOrPermission;
 use App\Http\Middleware\SecurityHeaders;
@@ -73,7 +72,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'safe_role_or_permission' => SafeRoleOrPermission::class,
             'unit_context' => ValidateUnitContext::class,
-            'last.activity' => LastUserActivity::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
         ]);
@@ -82,12 +80,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // the account's password hash in the session and ends the session
             // once that hash no longer matches — which is what makes other
             // devices' cookies die after a password change. Without it the
-            // call in changePassword() is a no-op. Registered before
-            // LastUserActivity so a stale session is dropped before it can be
-            // recorded as activity.
+            // call in changePassword() is a no-op.
             AuthenticateSession::class,
             SecurityHeaders::class,
-            LastUserActivity::class,
             RequestId::class,
         ]);
 
