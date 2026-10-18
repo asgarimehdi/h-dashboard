@@ -5,10 +5,14 @@ namespace Tests\Feature\Jobs;
 use App\Jobs\ArchiveActivityLogsJob;
 use App\Jobs\CleanNotificationsJob;
 use App\Jobs\GenerateDailyReportsJob;
+use App\Jobs\SendNotificationJob;
+use App\Jobs\SyncZabbixJob;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Bus\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Attributes\Connection;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -178,6 +182,125 @@ class JobsTest extends TestCase
         $this->assertGreaterThan(0, (new ArchiveActivityLogsJob)->tries);
         $this->assertGreaterThan(0, (new CleanNotificationsJob)->tries);
         $this->assertGreaterThan(0, (new GenerateDailyReportsJob)->tries);
+    }
+
+    // ── Queue connection pinning (#1010) ──────────────────────────────
+
+    /**
+     * The three jobs whose `$timeout` (300s/600s) is far above the 90 seconds
+     * the default `redis` connection reserves a job for, paired with the
+     * connection scoped to them in `config/queue.php`.
+     *
+     * @return array<class-string, array{0: ArchiveActivityLogsJob|CleanNotificationsJob|GenerateDailyReportsJob, 1: string}>
+     */
+    private function longRunningJobs(): array
+    {
+        return [
+            ArchiveActivityLogsJob::class => [new ArchiveActivityLogsJob(90), 'redis-maintenance'],
+            CleanNotificationsJob::class => [new CleanNotificationsJob(7), 'redis-maintenance'],
+            GenerateDailyReportsJob::class => [new GenerateDailyReportsJob, 'redis-reports'],
+        ];
+    }
+
+    public function test_long_running_jobs_pin_the_connection_scoped_to_them(): void
+    {
+        foreach ($this->longRunningJobs() as $class => [$job, $expectedConnection]) {
+            $this->assertSame(
+                $expectedConnection,
+                $this->declaredQueueConnection($job),
+                "{$class} must declare #[Connection('{$expectedConnection}')]."
+            );
+        }
+    }
+
+    /**
+     * `retry_after` is the reservation window, not a retry delay: when it closes
+     * while the first attempt is still running, a second worker reserves the
+     * same job and the work runs twice concurrently — the retention jobs delete
+     * rows and the reports job writes them. Strictly-greater is the invariant;
+     * equality is already too late, because the reservation starts before the
+     * work does (#1010).
+     */
+    public function test_scoped_connections_reserve_long_jobs_past_their_own_timeout(): void
+    {
+        foreach ($this->longRunningJobs() as $class => [$job, $expectedConnection]) {
+            $retryAfter = config("queue.connections.{$expectedConnection}.retry_after");
+
+            $this->assertIsInt($retryAfter);
+            $this->assertGreaterThan(
+                $job->timeout,
+                $retryAfter,
+                "queue.connections.{$expectedConnection}.retry_after ({$retryAfter}s) must be ".
+                "greater than {$class}::\$timeout ({$job->timeout}s)."
+            );
+        }
+    }
+
+    /**
+     * The pin has to hold on the path the framework really uses: the
+     * `#[Connection]` attribute is what `Dispatcher::dispatchToQueue()` reads to
+     * pick the queue resolver, and that name is what selects the Redis list.
+     */
+    public function test_dispatching_long_running_jobs_resolves_their_scoped_connection(): void
+    {
+        $resolvedConnections = [];
+
+        $dispatcher = new Dispatcher($this->app, function ($connection) use (&$resolvedConnections) {
+            $resolvedConnections[] = $connection;
+
+            return $this->app['queue']->connection('database');
+        });
+
+        foreach ($this->longRunningJobs() as [$job]) {
+            $dispatcher->dispatchToQueue($job);
+        }
+
+        $this->assertSame(
+            ['redis-maintenance', 'redis-maintenance', 'redis-reports'],
+            $resolvedConnections
+        );
+    }
+
+    /**
+     * `Queueable::onConnection()` is the setter the framework calls with a
+     * resolved name; a job that redefines it as a getter leaves the connection
+     * property null and the job silently lands back on the default connection
+     * (#1010).
+     */
+    public function test_pinning_does_not_break_the_queueable_connection_setter(): void
+    {
+        $job = new ArchiveActivityLogsJob(90);
+
+        $this->assertSame($job, $job->onConnection('redis'));
+        $this->assertSame('redis', $job->connection);
+    }
+
+    /**
+     * Guards the other direction: the two short jobs are correct on the default
+     * connection (30s < 90s), so a future edit pinning them has to be deliberate
+     * rather than a copy of the pattern above.
+     */
+    public function test_short_jobs_are_not_pinned_to_a_long_running_connection(): void
+    {
+        $jobs = [
+            new SyncZabbixJob,
+            new SendNotificationJob(1, 'test', 'Test notification'),
+        ];
+
+        foreach ($jobs as $job) {
+            $this->assertSame(
+                [],
+                (new \ReflectionClass($job))->getAttributes(Connection::class),
+                $job::class.' declares a 30s timeout and must stay on the default connection.'
+            );
+        }
+    }
+
+    private function declaredQueueConnection(object $job): \UnitEnum|string|null
+    {
+        $attribute = (new \ReflectionClass($job))->getAttributes(Connection::class)[0] ?? null;
+
+        return $attribute?->newInstance()->connection;
     }
 
     /**

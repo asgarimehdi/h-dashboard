@@ -5,11 +5,17 @@ namespace App\Jobs;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\Connection;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 
+// A report run can take 600s, so it goes on the connection whose `retry_after`
+// (660s) outlives this job's $timeout. The default `redis` connection reserves a
+// job for only 90s, which would let a second worker re-run the whole report —
+// it writes rows (#1010).
+#[Connection('redis-reports')]
 class GenerateDailyReportsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;

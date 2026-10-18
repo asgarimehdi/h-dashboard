@@ -297,7 +297,26 @@ Re-run after every deploy. After changing `.env`:
 
 ---
 
-## 11. Queue worker + scheduler
+## 11. Queue workers + scheduler
+
+The app pins its long-running jobs to their own queue connections
+(`#[Connection('redis-maintenance')]` and `#[Connection('redis-reports')]` in
+`app/Jobs/`), and each of those connections pushes onto its own Redis list
+(`queues:maintenance`, `queues:reports`) — the default worker never reads them.
+**All three connections need a worker**: without the second and third, retention
+and the daily reports are pushed and then never executed.
+
+`--timeout` is only the fallback for a job that does not declare its own
+`$timeout` (Laravel always prefers the job's property). Keep it **below** the
+connection's `retry_after`, because Redis reserves a job for `retry_after`
+seconds: if that window closes while the first attempt is still running, a
+second worker picks the same job up and the work runs twice.
+
+| Service | Connection | Serves | `retry_after` | `--timeout` |
+|---|---|---|---|---|
+| `h-dashboard-queue` | `redis` | Zabbix sync, notifications | 90s | 60s |
+| `h-dashboard-queue-maintenance` | `redis-maintenance` | activity-log + notification retention | 360s | 300s |
+| `h-dashboard-queue-reports` | `redis-reports` | daily reports | 660s | 600s |
 
 Create `/etc/systemd/system/h-dashboard-queue.service`:
 
@@ -311,7 +330,43 @@ User=dashboard
 Restart=always
 RestartSec=3
 WorkingDirectory=/home/dashboard/h-dashboard
-ExecStart=/usr/bin/php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 --timeout=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create `/etc/systemd/system/h-dashboard-queue-maintenance.service`:
+
+```ini
+[Unit]
+Description=h-dashboard retention queue worker
+After=network.target docker.service
+
+[Service]
+User=dashboard
+Restart=always
+RestartSec=3
+WorkingDirectory=/home/dashboard/h-dashboard
+ExecStart=/usr/bin/php artisan queue:work redis-maintenance --sleep=3 --tries=3 --max-time=3600 --timeout=300
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create `/etc/systemd/system/h-dashboard-queue-reports.service`:
+
+```ini
+[Unit]
+Description=h-dashboard reports queue worker
+After=network.target docker.service
+
+[Service]
+User=dashboard
+Restart=always
+RestartSec=3
+WorkingDirectory=/home/dashboard/h-dashboard
+ExecStart=/usr/bin/php artisan queue:work redis-reports --sleep=3 --tries=3 --max-time=3600 --timeout=600
 
 [Install]
 WantedBy=multi-user.target
@@ -319,7 +374,7 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now h-dashboard-queue
+sudo systemctl enable --now h-dashboard-queue h-dashboard-queue-maintenance h-dashboard-queue-reports
 ```
 
 Scheduler cron (`crontab -e` as the app user) — runs recurring todos, due
@@ -338,7 +393,7 @@ curl -I http://localhost/            # expect 302 -> /login (auth guard)
 curl -I http://localhost/login       # expect 200
 curl -I http://localhost/build/manifest.json   # expect 200
 tail -f storage/logs/laravel.log     # watch for errors while you log in via browser
-systemctl status nginx php8.5-fpm h-dashboard-queue
+systemctl status nginx php8.5-fpm h-dashboard-queue h-dashboard-queue-maintenance h-dashboard-queue-reports
 docker ps                            # postgis healthy, redis up
 ```
 
