@@ -193,6 +193,71 @@ class PersonSearchIndexTest extends TestCase
         $this->assertFullNameSearchUsesOperator($queries, 'hardware.index person autocomplete', "(f_name || ' ' || l_name) LIKE");
     }
 
+    // ==================== Issue #1126: the n_code arm ====================
+
+    /**
+     * The real personnel search is a FOUR-branch OR whose first arm is
+     * `n_code LIKE '%term%'`. PostgreSQL can only build a BitmapOr when every
+     * OR arm is index-covered; one unindexed arm demotes the whole OR to a
+     * filter over a full scan — even with all the name trigram indexes in
+     * place. Migration `2026_10_18_000001` gives the n_code arm a GIN trigram
+     * index so the real query stops sequential-scanning.
+     */
+
+    /** Deterministic middle substring (7 digits) of self::N_CODE. */
+    private const N_CODE_SUBSTRING = '9000000';
+
+    public function test_n_code_trigram_index_exists(): void
+    {
+        $row = DB::selectOne(
+            'select indexdef from pg_indexes where schemaname = ? and tablename = ? and indexname = ?',
+            ['public', 'persons', 'idx_persons_n_code_trgm']
+        );
+
+        $this->assertNotNull($row, 'migration 2026_10_18_000001 must create idx_persons_n_code_trgm: without it the n_code arm of the four-branch search OR is unindexed and no BitmapOr can form');
+        $this->assertStringContainsString('USING gin (n_code gin_trgm_ops)', $row->indexdef);
+    }
+
+    public function test_n_code_substring_search_matches_through_person_api(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $this->createAliRezaei($unit->id);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $response = $this->apiGet('/api/persons?search='.urlencode(self::N_CODE_SUBSTRING), $token);
+
+        $response->assertStatus(200);
+        $this->assertContains(self::N_CODE, array_column($response->json('data'), 'n_code'));
+    }
+
+    public function test_n_code_substring_search_matches_through_hr_personnel_api(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->createAliRezaei($unit->id);
+        $token = $this->createApiToken($user, ['hr:read']);
+
+        $response = $this->apiGet('/api/hr/personnel?search='.urlencode(self::N_CODE_SUBSTRING), $token);
+
+        $response->assertStatus(200);
+        $this->assertContains(self::N_CODE, array_column($response->json('data'), 'n_code'));
+    }
+
+    public function test_n_code_substring_search_matches_through_hardware_autocomplete(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+        $this->createAliRezaei($unit->id);
+
+        $component = Livewire::test('hardware.index')->set('personSearch', self::N_CODE_SUBSTRING);
+
+        $this->assertContains(
+            self::N_CODE,
+            array_column($component->instance()->personResults, 'n_code'),
+            'the n_code arm of the person autocomplete must keep matching substrings'
+        );
+    }
+
     // ==================== Schema guard ====================
 
     public function test_full_name_columns_are_not_nullable(): void
