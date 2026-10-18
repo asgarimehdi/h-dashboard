@@ -252,7 +252,7 @@ jobs:
       # if it drifts, this step fails rather than silently reporting "no data"
       # (the #865 trap), and the job stays non-blocking via continue-on-error.
       - name: Download coverage.xml from the test job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: coverage-xml
 
