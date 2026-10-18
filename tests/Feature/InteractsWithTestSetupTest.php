@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\AssertionFailedError;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -37,4 +38,53 @@ test('seedLookupTables is idempotent', function () {
     foreach (['tahsils', 'estekhdams', 'semats', 'radifs'] as $table) {
         expect(DB::table($table)->where('id', 1)->count())->toBe(1);
     }
+});
+
+/*
+ * Pin for InteractsWithTestSetup::assertQueryCount() (issue #1103).
+ *
+ * The helper used to listen with an arrow function, which captures by value,
+ * so the listener wrote into a copy and every call counted 0 queries — the
+ * guard could never fail. Three plain selects must exceed a ceiling of 0 and
+ * 2 (AssertionFailedError with the pinned message) and pass at 3.
+ */
+test('assertQueryCount fails when the callback runs more queries than expected', function () {
+    $runThreeQueries = function (): void {
+        DB::select('select 1');
+        DB::select('select 2');
+        DB::select('select 3');
+    };
+
+    foreach ([0, 2] as $expected) {
+        $failed = false;
+        try {
+            $this->assertQueryCount($expected, $runThreeQueries);
+        } catch (AssertionFailedError $e) {
+            $failed = true;
+            expect($e->getMessage())->toContain("Expected ≤ {$expected} queries, got 3");
+        }
+
+        expect($failed)->toBeTrue(
+            "assertQueryCount({$expected}) passed despite 3 queries — the guard is vacuous.",
+        );
+    }
+});
+
+test('assertQueryCount passes when the query count matches the ceiling', function () {
+    $this->assertQueryCount(3, function (): void {
+        DB::select('select 1');
+        DB::select('select 2');
+        DB::select('select 3');
+    });
+});
+
+test('assertQueryCount ignores transaction statements inside the callback', function () {
+    // RefreshDatabase already holds the outer transaction, so this nested
+    // DB::transaction issues SAVEPOINT/COMMIT statements around the select.
+    // Pinned so the call at UnitTreeServiceTest (expected=0) stays green.
+    $this->assertQueryCount(1, function (): void {
+        DB::transaction(function (): void {
+            DB::select('select 1');
+        });
+    });
 });
