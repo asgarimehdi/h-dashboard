@@ -33,6 +33,11 @@ class SeederGuardTest extends TestCase
      * The three demo accounts only get ids 1..3 (and therefore their `admin`
      * role) when the users sequence starts at 1. Postgres sequences are not
      * transactional, so RefreshDatabase's rollback does not restart them.
+     *
+     * Resets every public sequence, because which fixtures a randomly ordered
+     * suite has already advanced is unknowable. Both tests that call this run
+     * DatabaseSeeder to the end, whose resetPostgresSequences() puts every
+     * sequence back at MAX(id) + 1.
      */
     private function restartSequences(): void
     {
@@ -65,9 +70,13 @@ class SeederGuardTest extends TestCase
 
             $this->fail('UsersTableSeeder باید در محیط production اجرا را رد کند.');
         } catch (RuntimeException $e) {
-            // Both the DB failure and the guard surface as RuntimeException;
-            // assert the guard's own wording so this cannot pass on an FK/DB
-            // error instead of a real refusal.
+            // PHPUnit's own AssertionFailedError also extends RuntimeException,
+            // so pin the class first: otherwise the fail() above would be caught
+            // here too and reported as a confusing message mismatch.
+            $this->assertSame(RuntimeException::class, $e::class);
+
+            // A DB failure (e.g. the users.n_code FK) is a RuntimeException too;
+            // assert the guard's own wording so this cannot pass on one.
             $this->assertStringContainsString(
                 'UsersTableSeeder is disabled in production',
                 $e->getMessage(),
