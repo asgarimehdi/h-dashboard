@@ -8,9 +8,10 @@ use App\Models\Unit;
 use App\Services\UnitTreeService;
 use App\Support\ExcelCell;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -20,9 +21,11 @@ use Maatwebsite\Excel\Events\AfterSheet;
 /**
  * One row per person (flat table), mirroring the personnel list columns so the
  * sheet is readable on its own. Lookup labels (سمت، تحصیلات، …) are resolved
- * from relations the controller eager-loads, so mapping a row never queries.
+ * from relations the controller eager-loads on the builder handed in here, so
+ * mapping a row never queries. The library chunked-reads that same builder
+ * (WithCustomChunkSize), so every chunk inherits the eager loads it carries.
  */
-class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHeadings, WithMapping, WithTitle
+class PersonsExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, WithEvents, WithHeadings, WithMapping, WithTitle
 {
     use FormatsJalaliDates;
 
@@ -52,8 +55,10 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
         'estekhdam', 'radif', 'unit', 'status', 'birth_date', 'hire_date',
     ];
 
-    /** @var Collection<int, Person> */
-    protected Collection $persons;
+    /** @var Builder<Person> The controller's already-filtered builder, with the eager loads. */
+    protected Builder $persons;
+
+    protected int $chunkSize = 500;
 
     /**
      * Breadcrumb walker from the shared unit tree service (#756) — the same
@@ -69,19 +74,26 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
      */
     protected ?array $unitsById = null;
 
-    /** @param  Collection<int, Person>  $persons */
-    public function __construct(Collection $persons)
+    /** @param  Builder<Person>  $persons */
+    public function __construct(Builder $persons)
     {
         $this->persons = $persons;
         $this->unitTree = new UnitTreeService;
     }
 
     /**
-     * @return Collection<int, Person>
+     * The controller's builder (scope, search, filters, eager loads and
+     * `orderBy('id')`) is handed over untouched — what the user was looking
+     * at is what gets downloaded, chunk after chunk.
      */
-    public function collection(): Collection
+    public function query(): Builder
     {
         return $this->persons;
+    }
+
+    public function chunkSize(): int
+    {
+        return $this->chunkSize;
     }
 
     public function headings(): array

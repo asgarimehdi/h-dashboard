@@ -5,23 +5,20 @@ namespace App\Exports;
 use App\Exports\Concerns\FormatsJalaliDates;
 use App\Support\ExcelCell;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
-class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading, WithHeadings, WithMapping, WithTitle
+class HardwareExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, WithHeadings, WithMapping, WithTitle
 {
     use FormatsJalaliDates;
 
     protected Builder $query;
 
     protected array $columns;
-
-    protected int $lastId = 0;
 
     protected int $chunkSize = 500;
 
@@ -60,11 +57,14 @@ class HardwareExport implements FromCollection, ShouldAutoSize, WithChunkReading
     }
 
     /**
-     * Fallback for small datasets (used by FromCollection).
+     * The controller's builder is handed over untouched — its `person_name` /
+     * `unit_name` alias columns and `orderByDesc('id')` ordering come from
+     * there, and `map()` reads them. The library chunks this query via
+     * WithCustomChunkSize; the unique `id` ordering stays as passed.
      */
-    public function collection(): Collection
+    public function query(): Builder
     {
-        return $this->query->get();
+        return $this->query;
     }
 
     public function chunkSize(): int

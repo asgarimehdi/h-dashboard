@@ -66,8 +66,8 @@ class ExcelFormulaEscapeTest extends TestCase
             'u_id' => $unit->id,
         ]);
 
-        $export = new PersonsExport(collect([$person->fresh('semat', 'tahsil', 'estekhdam', 'radif', 'unit')]));
-        $row = $export->map($export->collection()->first());
+        $export = new PersonsExport(Person::query()->where('id', $person->id));
+        $row = $export->map($person->fresh(['semat', 'tahsil', 'estekhdam', 'radif', 'unit']));
 
         $this->assertContains("'".self::PAYLOAD, $row);
 
@@ -98,7 +98,7 @@ class ExcelFormulaEscapeTest extends TestCase
         ]);
 
         $export = new HardwareExport(Hardware::where('id', $hardware->id), ['pc_name', 'comments']);
-        $row = $export->map($export->collection()->first());
+        $row = $export->map(Hardware::findOrFail($hardware->id));
 
         $this->assertSame(["'".self::PAYLOAD, "'".self::PAYLOAD], array_values($row));
     }
@@ -138,7 +138,7 @@ class ExcelFormulaEscapeTest extends TestCase
         ]);
 
         $export = new HardwareAuditsExport(HardwareAudit::where('id', $audit->id));
-        $row = $export->map($export->collection()->first());
+        $row = $export->map(HardwareAudit::findOrFail($audit->id));
 
         $this->assertContains("'".self::PAYLOAD, $row);
         $this->assertNotContains(self::PAYLOAD, $row);

@@ -67,24 +67,6 @@ parameters:
 			path: app/Exports/HardwareAuditsExport.php
 
 		-
-			message: '#^Method App\\Exports\\HardwareAuditsExport\:\:chunkCollection\(\) return type with generic class Illuminate\\Support\\Collection does not specify its types\: TKey, TValue$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Exports/HardwareAuditsExport.php
-
-		-
-			message: '#^Method App\\Exports\\HardwareAuditsExport\:\:collection\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Exports/HardwareAuditsExport.php
-
-		-
-			message: '#^Method App\\Exports\\HardwareAuditsExport\:\:collection\(\) should return Illuminate\\Support\\Collection\<int, array\> but returns Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Exports/HardwareAuditsExport.php
-
-		-
 			message: '#^PHPDoc tag @var above a method has no effect\.$#'
 			identifier: varTag.misplaced
 			count: 1
@@ -116,12 +98,6 @@ parameters:
 
 		-
 			message: '#^Method App\\Exports\\HardwareExport\:\:__construct\(\) has parameter \$query with generic class Illuminate\\Database\\Eloquent\\Builder but does not specify its types\: TModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Exports/HardwareExport.php
-
-		-
-			message: '#^Method App\\Exports\\HardwareExport\:\:collection\(\) return type with generic class Illuminate\\Support\\Collection does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: app/Exports/HardwareExport.php
