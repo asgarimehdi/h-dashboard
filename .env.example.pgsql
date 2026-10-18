@@ -65,7 +65,10 @@ APP_TIMEZONE=Asia/Tehran
 
 SESSION_LIFETIME=120
 SESSION_ENCRYPT=false
-SESSION_SECURE_COOKIE=false
+# Secure by default (#1003). Production/CI: leave unset (the app falls back to
+# true) or set true. `false` is only for plaintext local dev (`php artisan serve`)
+# and the e2e run on :8001 (see .env.e2e.example).
+SESSION_SECURE_COOKIE=true
 SESSION_PATH=/
 SESSION_DOMAIN=null
 
