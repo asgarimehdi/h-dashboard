@@ -433,12 +433,6 @@ parameters:
 			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Http\\Request\:\:\$item_ids\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/MultiLatestValueController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$has_children\.$#'
 			identifier: property.notFound
 			count: 1
