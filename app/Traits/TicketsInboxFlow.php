@@ -63,20 +63,21 @@ trait TicketsInboxFlow
     public bool $showModal = false;
 
     /**
-     * The permission a ticket mutation needs (#1055, step 3).
+     * The permission the ticket mutations that move or close a ticket need
+     * (#1055, step 3).
      *
      * Four call sites wrote `$this->authorize('manage_unit_tickets')` inline,
-     * so the gate could be forgotten by the next method that mutates a ticket
-     * — exactly what happened to `acceptTicket()`. One named helper makes the
-     * shared gate explicit and greppable; the bulk `complete` branch in the
-     * component routes through it too.
+     * so the gate could be forgotten by the next method that mutates a ticket.
+     * One named helper makes the shared gate explicit and greppable; the bulk
+     * `complete` branch in the component routes through it too.
      *
-     * `acceptTicket()` is deliberately NOT routed through it: #818's review
-     * (correction 1) kept accepting a ticket open to the route gate, because
-     * the `expert` role (create_ticket + view_assigned_tickets) is meant to
-     * accept tickets in its own unit, and `TicketWorkflow` pins that
+     * `acceptTicket()` deliberately does NOT route through it (#1029): accepting
+     * does not move the ticket out of its unit — it only hands it to its current
+     * assignee — so it carries `create_ticket`, exactly like the API
+     * (`POST /tickets/{ticket}/accept`, routes/api.php:153-154). The `expert`
+     * role holds `create_ticket` but no `manage_unit_tickets`, and is meant to
+     * accept tickets referred to it
      * (`test_accept_ticket_still_allowed_for_expert_without_manage_unit_tickets`).
-     * Whether it should carry its own gate is issue #1029, not this refactor.
      */
     private function authorizeMutation(): void
     {
@@ -266,11 +267,31 @@ trait TicketsInboxFlow
 
     public function acceptTicket($ticketId): void
     {
+        // Issue #1029: accepting is a `create_ticket` mutation, mirroring the
+        // API (`POST /tickets/{ticket}/accept`, routes/api.php:153-154) — not
+        // `manage_unit_tickets`, which the `expert` role deliberately lacks.
+        // The /inbox route only requires `view_assigned_tickets`, so the
+        // component authorizes the write itself, before any query or change.
+        $this->authorize('create_ticket');
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
 
         if (! $ticket) {
+            return;
+        }
+
+        // Issue #1029 / #529: only the ticket's current assignee may accept it,
+        // exactly like Api\TicketController::accept(). Without this any member
+        // of the unit could accept — and thereby seize — a ticket referred to a
+        // teammate.
+        if ($ticket->current_assignee_id !== Auth::id()) {
+            $this->dispatch('swal', [
+                'title' => 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را بپذیرد.',
+                'icon' => 'error',
+            ]);
+
             return;
         }
 
