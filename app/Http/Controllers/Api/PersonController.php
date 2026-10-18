@@ -27,7 +27,9 @@ class PersonController extends Controller
                 $q->where('n_code', 'LIKE', "%{$s}%")
                     ->orWhere('f_name', 'LIKE', "%{$s}%")
                     ->orWhere('l_name', 'LIKE', "%{$s}%")
-                    ->orWhereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ["%{$s}%"]);
+                    // Issue #1009: the `||` operator (NOT `concat()`) so the
+                    // `persons_fullname_trgm_idx` expression index applies.
+                    ->orWhereRaw("(f_name || ' ' || l_name) LIKE ?", ["%{$s}%"]);
             });
         }
 
