@@ -12,7 +12,7 @@
 
 - `ZabbixResult::success($data)` / `::fail($failure, $message)`; read with `isOk()`, `failed()`, `data()`, `failure()`, `message()`.
 - Failure kinds: `timeout`, `connection`, `invalid_response`, `error`.
-- `TrafficController` and `MultiLatestValueController` now **branch on the result** and keep the **unchanged 503** contract. The `catch (\Throwable)` that used to wrap these calls is **no longer what guards them** — do not "restore" it, and do not remove the 503 mapping.
+- `TrafficController` and `MultiLatestValueController` now **branch on the result** and keep the **unchanged 503** contract. Transport failures become a `ZabbixResult` inside `ServiceZabbixClient`, so no `catch (\Throwable)` is needed there; the controllers still wrap their actions in `try/catch (\Throwable)` as a backstop and map that to 503 as well — do not remove either layer or the 503 mapping.
 - The point is testability: `tests/Unit/ZabbixAdapterTest.php` proves each classification (timeout, connection refused, HTTP error status, invalid JSON, unexpected) with a **stub client and no Zabbix server**.
 
 > **Do not call `ZabbixService` directly from a controller.** Depend on `ZabbixClient`; that is the boundary that keeps failures as values.
@@ -37,12 +37,12 @@
 
 ### Batched Zabbix polling (issue #722 sibling, `f002cfc`)
 
-One **batched** poll per `/it/networks` and `/it/wireless` page, not one request per gauge.
+One **batched** poll per `/it/wireless` page (a shared poll, in chunks of at most 90 items). `/it/networks` is different: one `network-traffic-chart` component per network, each fetching `/api/zabbix/traffic` on its own 60-second poll.
 
 ## Gotchas (transplanted from the former `## Gotchas Quick Reference`)
 
 | Gotcha | Details |
 |---|---|
-| `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` map a **failed `ZabbixResult`** to 503, never 500. Since #741 they do **not** wrap the call in `catch (\Throwable)` — that try/catch is gone, and the 503 mapping is what guards them |
+| `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` map a **failed `ZabbixResult`** to 503, never 500. Since #741 transport failures arrive as values from `ServiceZabbixClient`; the controllers' own `try/catch (\Throwable)` backstop also maps to 503 — keep both layers |
 | Controllers must depend on `ZabbixClient` | `App\Services\Zabbix\ZabbixClient` is the transport boundary (#741). Calling `ZabbixService` directly from a controller throws away the failure-as-value design and re-couples you to a live server |
 | `ZabbixSyncLog` streak is serial | The failure streak is computed by reading the previous row (`orderByDesc('id')->first()`), and `failed()` runs only after retries are exhausted — do not parallelise run recording or the streak inflates |

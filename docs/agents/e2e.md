@@ -8,7 +8,7 @@
 
 ## E2E Testing (Playwright)
 
-**202 tests** across **42 spec files** in `tests/e2e/` (`npx playwright test --list` count, verified 2026-10-08; static `test(` grep undercounts loop-generated suites). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
+**46 spec files** in `tests/e2e/` (file count, verified 2026-10-18; for the test count run `npx playwright test --list` — a static `test(` grep undercounts loop-generated suites). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
 
 > CI runs the suite in the e2e job of `.github/workflows/test.yml` (non-blocking ramp, `continue-on-error: true` until two consecutive green runs — see #867).
 
@@ -88,7 +88,7 @@ Playwright only transpiles the specs — it never type-checks them — so a type
 - `baseURL`: `process.env.BASE_URL || 'http://localhost:8000'`
 - `locale`: `fa-IR`, `timezoneId`: `Asia/Tehran`
 - Retries: 2 in CI, 0 locally
-- Trace/screenshot/video on failure
+- Screenshot `only-on-failure`, video `retain-on-failure`, trace `on-first-retry`
 
 ## Gotchas (transplanted from the former `## Gotchas Quick Reference`)
 

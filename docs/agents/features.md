@@ -63,7 +63,7 @@ Reuse contract (documented at the top of `tree.blade.php`):
 
 `hr/org-chart` is the reference consumer: it contributes only `livewire/hr/personnel-badge` (count + «خالی») and the personnel detail panel. `hr/org-node.blade.php` is **deleted** — do not recreate it; node markup lives in `unit/tree-node.blade.php`. The search box and expand/collapse buttons live INSIDE `unit.tree` because they drive the child's own state — a parent cannot call a child's methods without a ref. A second consumer (e.g. covered population per unit) needs zero tree code: a badge view + an event listener.
 
-`UnitTreeService::ancestorChain()` is the **shared breadcrumb walker** — the units export's «مسیر کامل», the personnel export's unit path, and the tree UI all resolve hierarchy through it. Do not re-implement an upward walk.
+`UnitTreeService::ancestorChain()` is the **shared breadcrumb walker** — the personnel export's unit path and the tree UI resolve hierarchy through it. The units export is the exception: `UnitsExportController` walks its own `hierarchyMap()` / `buildHierarchy()` (see the note above). Do not re-implement an upward walk anywhere else.
 
 ### Batched child loading (issue #722)
 
@@ -86,7 +86,8 @@ whole history) and a day without a ticket was a *missing column*, not a zero.
 |---|---|---|
 | `/api/reports/todos`, `/api/reports/tickets` | `?days=` query param | 30 (range 1–365) |
 | `/dashboard` ticket trend | `Dashboard::TICKET_CHART_DAYS` | 30 |
-| `/reports/todos`, `/reports/tickets` | the page's own date-from/date-to picker | 30 days back + 30 forward |
+| `/reports/todos` | the page's own date-from/date-to picker | 30 days back + 30 forward |
+| `/reports/tickets` | the page's own date-from/date-to picker (`reports.advanced`) | 30 days back to today |
 
 - `App\Services\DailySeries` owns the shape. It materialises the window with `generate_series`
   and **left-joins the caller's own aggregate query** — it fills gaps in an already-filtered query
@@ -166,9 +167,9 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 `CacheInvalidationService` uses driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter. Hot paths use `Cache::remember(...)` with the versioned key.
 
-**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, **`zabbix_devices`** (added with issue #698).
+**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, `global_search`, **`zabbix_devices`** (added with issue #698).
 
-`PruneStaleCache::NAMESPACES` is the **single source of truth** — that exact `const` array lists every versioned namespace. A new namespace must be added there, or `cache:prune-stale` leaves it alive forever and stale versioned keys never get bumped.
+`PruneStaleCache::NAMESPACES` is the **single source of truth** — that exact `const` array lists every versioned namespace, and a new namespace must be added there so the audit and the tests see it. Since #981, `cache:prune-stale` is an honest **version audit**: it reports versions and deletes nothing — stale versioned keys become unreachable after a bump and expire by TTL, and `CacheInvalidationService::increment()` does not depend on this `const`.
 
 > Performance patterns, caching strategies, and optimization details: `references/api-endpoints.md` (Performance section).
 

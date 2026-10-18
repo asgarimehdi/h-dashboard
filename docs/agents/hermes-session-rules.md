@@ -8,7 +8,6 @@ workflow. Read this file first, then `AGENTS.md` (authoritative project instruct
 Work in `/home/runner/h-dashboard`. The repo is a fork; do not clone it again and do
 not add or edit remotes.
 
-- Upstream (canonical): `https://github.com/asgarimehdi/h-dashboard`, base branch `beta`
 - This server's fork (origin) and current branch: read them, never hardcode —
   `git remote -v` and `git branch --show-current`
 - Upstream canonical: `https://github.com/asgarimehdi/h-dashboard.git`, base branch `beta`
@@ -59,7 +58,7 @@ not a retry in this one.
 
 - **`read-the-damn-docs`** — always. Read `AGENTS.md` first, then Boost
   `search_docs` / Context7 for anything framework- or version-dependent. This repo
-  pins unusual versions (Laravel 13.33, Livewire 4.4, spatie/permission 8.3).
+  pins unusual versions (Laravel 13.35, Livewire 4.4, spatie/permission 8.3).
 - **`improve`** (shadcn) — installed and available, **not run** in this session. Use
   it on request for a read-only codebase audit that writes plans under `plans/`.
   It must never edit source code itself.
