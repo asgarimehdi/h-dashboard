@@ -47,4 +47,5 @@ for key in APP_KEY DB_PASSWORD REDIS_PASSWORD; do
 done
 echo "DB_DATABASE: $(value_of DB_DATABASE "$E2E")"
 echo "APP_LOCALE:  $(value_of APP_LOCALE "$E2E")"
+echo "SESSION_SECURE_COOKIE: $(value_of SESSION_SECURE_COOKIE "$E2E")"
 echo "TEST_N_CODE: $(value_of TEST_N_CODE "$E2E")"

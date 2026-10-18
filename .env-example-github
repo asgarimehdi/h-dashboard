@@ -65,6 +65,8 @@ APP_TIMEZONE=Asia/Tehran
 
 SESSION_LIFETIME=120
 SESSION_ENCRYPT=false
+# Secure by default (#1003): unset env falls back to true. In production either
+# leave it unset or set true — false is only for plaintext local dev (`php artisan serve`).
 SESSION_SECURE_COOKIE=false
 SESSION_PATH=/
 SESSION_DOMAIN=null
