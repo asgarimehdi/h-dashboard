@@ -633,10 +633,12 @@ jobs:
           restore-keys: composer-
 
       - name: Install dependencies
-        # The lock predates PHP 8.6: nette/schema (via league/commonmark) caps
-        # php at 8.5, so a plain install cannot even resolve on 8.6. The preview
-        # installs the locked packages anyway — surfacing real 8.6 behaviour is
-        # the job's whole point. This flag exists ONLY in this job.
+        # The lock predates PHP 8.6: three packages cap php at 8.5 — nette/schema
+        # and nette/utils (both on the production path, via league/commonmark) plus
+        # brianium/paratest (dev) — so a plain install cannot even resolve on 8.6,
+        # with or without dev dependencies. The preview installs the locked packages
+        # anyway — surfacing real 8.6 behaviour is the job's whole point. This flag
+        # exists ONLY in this job; it carries production weight, not just tooling.
         run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php
 
       - name: Setup Node
