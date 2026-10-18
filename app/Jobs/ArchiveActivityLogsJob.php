@@ -8,10 +8,16 @@ use App\Services\AccessService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\Connection;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
+// A sweep can run for 300s, so it goes on the connection whose `retry_after`
+// (360s) outlives this job's $timeout. The default `redis` connection reserves a
+// job for only 90s and a second worker would re-reserve a sweep that is still
+// deleting rows (#1010).
+#[Connection('redis-maintenance')]
 class ArchiveActivityLogsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;

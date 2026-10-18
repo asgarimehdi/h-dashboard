@@ -39,5 +39,15 @@ abstract class TestCase extends BaseTestCase
                 }
             }
         );
+
+        // phpunit.xml pins QUEUE_CONNECTION=sync so the suite never talks to
+        // Redis, but the scoped connections behind #[Connection] (#1010) are
+        // driver `redis` in config/queue.php regardless of that default, so a
+        // dispatched retention/reports job would be pushed to Redis instead of
+        // running inline. Keep them on the same driver as the rest of the suite;
+        // the pin itself is asserted in JobsTest against the real resolver.
+        foreach (['redis-maintenance', 'redis-reports'] as $connection) {
+            config(["queue.connections.{$connection}.driver" => 'sync']);
+        }
     }
 }
