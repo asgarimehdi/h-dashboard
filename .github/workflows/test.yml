@@ -3,6 +3,10 @@ name: Tests
 on:
   pull_request:
     branches: [main, beta, test]
+  # Manual runs exist for the `mutation` job below, which is gated to this
+  # trigger (#1012): a manual run executes every job, so read the mutation
+  # job's own result, not the run's overall conclusion.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -451,12 +455,17 @@ jobs:
 
   mutation:
     name: Mutation Testing
+    # Manual-only (#1012): the job is green, but each run is expensive
+    # (checkout, composer install, npm ci, a Vite build and migrations before
+    # the single `pest --mutate` line below) and it used to spend ~23 minutes
+    # on every PR for a signal that gates nothing (`continue-on-error: true`).
+    # Re-enable on PRs by dropping this `if:`. The manual "Run workflow"
+    # button appears only once this trigger is on the default branch.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Non-blocking signal for now: the mutation job has never passed — the
-    # suite has no covers()/mutates() declarations and mutation mode trips
-    # over lookup-table id collisions. Treat failures as informational until
-    # the job is properly wired up.
+    # Non-blocking: the score is informational, so keeping this job off PRs
+    # removes no quality gate.
     continue-on-error: true
 
     services:
