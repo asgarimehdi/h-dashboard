@@ -86,12 +86,16 @@ class PersonSearchIndexTest extends TestCase
 
     /**
      * The person full-name search query is the one that matches `f_name` with a
-     * LIKE. Assert it is built with the `||` operator (index-eligible) and no
-     * longer with the `concat()` function (STABLE → index-blind).
+     * LIKE. Assert it is built with the exact `||` expression (index-eligible)
+     * and no longer with the `concat()` function (STABLE → index-blind).
+     *
+     * `$expectedExpression` is the exact, site-specific index expression — a
+     * bare `||` check would pass vacuously for any unrelated `||` later added
+     * to the query.
      *
      * @param  list<string>  $queries
      */
-    private function assertFullNameSearchUsesOperator(array $queries, string $label): void
+    private function assertFullNameSearchUsesOperator(array $queries, string $label, string $expectedExpression): void
     {
         $sql = null;
 
@@ -103,7 +107,11 @@ class PersonSearchIndexTest extends TestCase
         }
 
         $this->assertNotNull($sql, "{$label}: the full-name search query must run");
-        $this->assertStringContainsString('||', $sql, "{$label}: the full-name search must use the || operator so the trigram index applies");
+        $this->assertStringContainsString(
+            $expectedExpression,
+            $sql,
+            "{$label}: the full-name search must build {$expectedExpression} so the trigram index applies"
+        );
         $this->assertStringNotContainsString('concat(', strtolower($sql), "{$label}: concat() is STABLE and can never match the expression index");
     }
 
@@ -146,7 +154,7 @@ class PersonSearchIndexTest extends TestCase
 
     // ==================== Tripwires: the three unfolded sites ====================
 
-    public function test_person_api_search_uses_the_concat_operator(): void
+    public function test_person_api_search_uses_the_pipe_operator(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->createAliRezaei($unit->id);
@@ -156,10 +164,10 @@ class PersonSearchIndexTest extends TestCase
             $this->apiGet('/api/persons?search='.urlencode(self::F_NAME), $token)->assertStatus(200);
         });
 
-        $this->assertFullNameSearchUsesOperator($queries, 'PersonController::index()');
+        $this->assertFullNameSearchUsesOperator($queries, 'PersonController::index()', "(f_name || ' ' || l_name) LIKE");
     }
 
-    public function test_hr_personnel_search_uses_the_concat_operator(): void
+    public function test_hr_personnel_search_uses_the_pipe_operator(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->createAliRezaei($unit->id);
@@ -169,10 +177,10 @@ class PersonSearchIndexTest extends TestCase
             $this->apiGet('/api/hr/personnel?search='.urlencode(self::F_NAME), $token)->assertStatus(200);
         });
 
-        $this->assertFullNameSearchUsesOperator($queries, 'HrStatsController::personnel()');
+        $this->assertFullNameSearchUsesOperator($queries, 'HrStatsController::personnel()', "(persons.f_name || ' ' || persons.l_name) LIKE");
     }
 
-    public function test_hardware_person_autocomplete_uses_the_concat_operator(): void
+    public function test_hardware_person_autocomplete_uses_the_pipe_operator(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
@@ -182,7 +190,7 @@ class PersonSearchIndexTest extends TestCase
             Livewire::test('hardware.index')->set('personSearch', self::F_NAME);
         });
 
-        $this->assertFullNameSearchUsesOperator($queries, 'hardware.index person autocomplete');
+        $this->assertFullNameSearchUsesOperator($queries, 'hardware.index person autocomplete', "(f_name || ' ' || l_name) LIKE");
     }
 
     // ==================== Schema guard ====================
