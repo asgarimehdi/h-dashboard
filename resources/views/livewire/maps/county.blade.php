@@ -5,11 +5,23 @@ use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
 use Livewire\Component;
 
 return new class extends Component
 {
-    public $regions;
+    /**
+     * The county geometry is deliberately NOT a public property (#1173).
+     *
+     * This page has no Livewire interaction at all (no wire:model/wire:click),
+     * so a public `$regions` only duplicated the boundary geometry: once in
+     * the dehydrated snapshot of every request and once in the `@script` block
+     * that publishes it to the map. The geometry belongs to the map layer, so
+     * it is loaded into this non-public holder and published exactly once.
+     *
+     * @var array<int, array{id: int, name: string|null, geojson: string|null}>|null
+     */
+    private ?array $regionsData = null;
 
     public function mount(): void
     {
@@ -18,13 +30,34 @@ return new class extends Component
 
     public function loadData(): void
     {
+        $this->regionsData = $this->fetchRegions();
+    }
+
+    /**
+     * The scoped county list with its boundary geometry.
+     *
+     * @return array<int, array{id: int, name: string|null, geojson: string|null}>
+     */
+    #[Computed]
+    public function regions(): array
+    {
+        // The holder is not public state, so it is not dehydrated: a
+        // re-hydrated component (a later Livewire request) loads it again.
+        return $this->regionsData ??= $this->fetchRegions();
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string|null, geojson: string|null}>
+     */
+    private function fetchRegions(): array
+    {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
+
         $accessibleRegionIds = Unit::whereIn('id', $accessibleIds)
             ->whereNotNull('region_id')
             ->pluck('region_id');
 
-$this->regions = Cache::remember('county:regions_with_boundaries:v' . Cache::get('maps_version', 0) . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
+        return Cache::remember('county:regions_with_boundaries:v' . Cache::get('maps_version', 0) . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
                 ->whereIn('regions.id', $accessibleRegionIds)
@@ -58,7 +91,7 @@ $this->regions = Cache::remember('county:regions_with_boundaries:v' . Cache::get
             <livewire:maps.map/>
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
-                @foreach ($regions as $region)
+                @foreach ($this->regions as $region)
                     <x-toggle
                         label="{{ $region['name'] }}"
                         wire:key="region-{{ $region['id'] }}"
@@ -85,7 +118,7 @@ $this->regions = Cache::remember('county:regions_with_boundaries:v' . Cache::get
 @script
 <script>
     var geojsonLayers = {};
-    var allregions = {{ Js::from($regions) }};
+    var allregions = {{ Js::from($this->regions) }};
 
     // Issue #028 — attach to the live map the store owns. Calling onReady()
     // (instead of waiting for a `window.map` a previous page may still own)
