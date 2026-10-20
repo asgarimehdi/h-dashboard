@@ -68,6 +68,11 @@ return new class extends Component
         $settings = auth()->user()->settings ?? [];
         $this->refreshInterval = $settings['dashboard_refresh'] ?? 0;
 
+        $this->loadStats();
+    }
+
+    public function loadStats(): void
+    {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->emptyScope = $accessibleIds === [];
         $scopeKey = md5(implode(',', $accessibleIds));
@@ -232,6 +237,20 @@ return new class extends Component
         $this->avgResolutionDays = $details['avgResolutionDays'];
     }
 
+    /**
+     * Auto-refresh entry point (#1164). `mount()` is a protected
+     * Livewire lifecycle method and cannot be called from the client, so the
+     * dashboard's refresh interval targets this action instead.
+     *
+     * Values stay cache-backed: after invalidation (`dashboard_version`
+     * bump) or TTL expiry, the next call re-queries — this is not a
+     * cache bypass.
+     */
+    public function refreshStats(): void
+    {
+        $this->loadStats();
+    }
+
     // داده‌های نمودار تیکت‌ها — TTL 5 دقیقه
     public function getTicketChartDataProperty(): array
     {
@@ -337,7 +356,22 @@ return new class extends Component
         ];
     }
 }; ?>
-<div x-data="{ interval: {{ $refreshInterval * 1000 }} }" x-init="if(interval > 0) { setInterval(() => { $wire.mount() }, interval) }">
+<div
+    @if($refreshInterval > 0)
+        x-data="{
+            interval: {{ $refreshInterval * 1000 }},
+            timer: null,
+            init() {
+                if (this.interval > 0) {
+                    this.timer = setInterval(() => $wire.refreshStats(), this.interval);
+                }
+            },
+            destroy() {
+                if (this.timer) { clearInterval(this.timer); this.timer = null; }
+            },
+        }"
+    @endif
+>
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
         <x-slot:actions>
             <x-help:button section="dashboard" wireModel="showHelpModal" />

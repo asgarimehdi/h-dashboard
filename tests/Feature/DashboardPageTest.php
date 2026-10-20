@@ -3,6 +3,7 @@
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -95,4 +96,51 @@ test('dashboard does not ship the unused treemap, treegraph and exporting module
     $response->assertDontSee('js/chart/treemap.js');
     $response->assertDontSee('js/chart/treegraph.js');
     $response->assertDontSee('js/chart/exporting.js');
+});
+
+test('dashboard with an active interval does not call $wire.mount()', function () {
+    $this->user->settings = ['dashboard_refresh' => 60];
+    $this->user->save();
+    $this->actingAs($this->user);
+
+    // #1164: `mount` is a protected Livewire lifecycle method; the refresh
+    // timer must target refreshStats, never mount.
+    Livewire::test('dashboard')
+        ->assertStatus(200)
+        ->assertDontSee('$wire.mount()')
+        ->assertSee('refreshStats');
+});
+
+test('refreshStats re-runs the aggregation after invalidation', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('dashboard')->assertSet('totalPersons', 1);
+
+    // A new record in scope plus a version bump: the operation count is now
+    // stale in the cache, and refreshStats() must re-run the aggregation
+    // (a bare $refresh would re-render without re-querying).
+    Person::create([
+        'n_code' => '1122334455',
+        'f_name' => 'دوم',
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    app(CacheInvalidationServiceInterface::class)->increment('dashboard');
+
+    $component->call('refreshStats')->assertSet('totalPersons', 2);
+});
+
+test('dashboard_refresh = 0 renders no timer', function () {
+    $this->user->settings = ['dashboard_refresh' => 0];
+    $this->user->save();
+    $this->actingAs($this->user);
+
+    Livewire::test('dashboard')
+        ->assertStatus(200)
+        ->assertSet('refreshInterval', 0)
+        ->assertDontSee('setInterval');
 });
