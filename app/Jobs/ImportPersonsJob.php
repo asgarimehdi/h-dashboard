@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Imports\PersonImport;
+use App\Support\ImportStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -32,8 +33,16 @@ class ImportPersonsJob implements ShouldQueue
     public int $tries = 1;
 
     /**
+     * #1194: one import per user at a time — a double click would otherwise
+     * queue the same sheet twice, and both jobs would compare against the
+     * pre-import state. The dispatcher takes an atomic claim (see
+     * {@see ImportStatus::claim()}) before queueing, so the second click is
+     * rejected with a message instead of silently duplicating rows.
+     *
      * @param  array<string, string>  $selectedActions  `row_{n}` => create|update|skip
      * @param  array<int, int>  $accessibleUnitIds  Scope captured from the dispatcher.
+     * @param  string|null  $statusToken  Identifies this dispatch to the browser
+     *                                    (see {@see ImportStatus}).
      */
     public function __construct(
         public string $path,
@@ -44,6 +53,7 @@ class ImportPersonsJob implements ShouldQueue
         public ?string $source = 'import',
         public ?string $ip = null,
         public ?string $userAgent = null,
+        public ?string $statusToken = null,
     ) {}
 
     public function handle(): void
@@ -61,6 +71,15 @@ class ImportPersonsJob implements ShouldQueue
 
         $results = $import->getImportResults();
 
+        // #1194: publish the outcome so the browser learns the rows exist.
+        if ($this->userId !== null) {
+            if ($this->statusToken !== null) {
+                ImportStatus::publish($this->userId, $this->statusToken, $results);
+            }
+
+            ImportStatus::release($this->userId);
+        }
+
         Log::info('ImportPersonsJob: completed', [
             'path' => $this->path,
             'created' => $results['created'],
@@ -75,6 +94,16 @@ class ImportPersonsJob implements ShouldQueue
         // #1194: drop the stored upload on failure so a failed run does not
         // leave an orphaned file behind; the job never retries ($tries = 1).
         Storage::delete($this->path);
+
+        // The browser was told the import is running, so it has to learn that
+        // it failed.
+        if ($this->userId !== null) {
+            if ($this->statusToken !== null) {
+                ImportStatus::publishFailure($this->userId, $this->statusToken, $exception->getMessage());
+            }
+
+            ImportStatus::release($this->userId);
+        }
 
         Log::error('ImportPersonsJob failed', [
             'path' => $this->path,

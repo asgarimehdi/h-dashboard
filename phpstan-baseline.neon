@@ -2479,73 +2479,73 @@ parameters:
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:updatedCompareKey\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:updatedCompareKey\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$compareKey has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$compareKey has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$file has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$file has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$importConfirmed has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$importConfirmed has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$importResults has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$importResults has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$importStats has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$importStats has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$messages has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$messages has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$previewData has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$previewData has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$rules has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$rules has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$selectedAction has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$selectedAction has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:11\:\:\$showPreview has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:12\:\:\$showPreview has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
@@ -2857,73 +2857,73 @@ parameters:
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:updatedCompareKey\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:updatedCompareKey\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$compareKey has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$compareKey has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$file has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$file has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$importConfirmed has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$importConfirmed has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$importResults has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$importResults has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$importStats has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$importStats has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$messages has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$messages has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$previewData has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$previewData has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$rules has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$rules has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$selectedAction has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$selectedAction has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:11\:\:\$showPreview has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:12\:\:\$showPreview has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
