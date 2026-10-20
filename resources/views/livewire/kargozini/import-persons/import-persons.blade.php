@@ -1,7 +1,9 @@
 <?php
 use App\Imports\PersonImport;
+use App\Jobs\ImportPersonsJob;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Maatwebsite\Excel\Facades\Excel;
@@ -123,27 +125,32 @@ return new class extends Component
         }
 
         try {
-            $import = new PersonImport;
-            $import->setCompareKey($this->compareKey);
-            $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
-            $import->setSelectedActions($this->getSelectedActions());
+            // #1167: persist the temp upload first; the queued job needs a path
+            // that outlives this request and deletes it after a successful run.
+            $path = $this->file?->store('imports');
 
-            Excel::import($import, $this->file->getRealPath());
+            if (! $path) {
+                $this->error('ذخیره فایل ایمپورت ممکن نشد. لطفاً دوباره تلاش کنید.', 'خطا');
 
-            $results = $import->getImportResults();
+                return;
+            }
 
-            $this->success(
-                // ایشو #872: `errors` یک آرایه است (رکوردهای خطای هر ردیف را
-                // حمل می‌کند و بلوک آمار با `json_encode` نمایشش می‌دهد)، نه
-                // یک شمارش. درجِ مستقیمش `Array to string conversion` می‌داد،
-                // که `HandleExceptions` به `ErrorException` تبدیل می‌کند و
-                // `catch (\Exception)` پایین‌تر آن را می‌بلعد — پس `resetForm()`
-                // و `dispatch()` هرگز اجرا نمی‌شدند و رویداد refresh والد مرده
-                // ماند. همان idiom خطِ `importStats['errors']` بالاتر در همین
-                // فایل: شمارش، نه درج.
-                'ایمپورت با موفقیت انجام شد. جدید: '.$results['created'].', بروزرسانی: '.$results['updated'].', خطا: '.count($results['errors'] ?? []),
-                'موفقیت'
+            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+
+            ImportPersonsJob::dispatch(
+                path: $path,
+                compareKey: $this->compareKey,
+                selectedActions: $this->getSelectedActions(),
+                accessibleUnitIds: $accessibleUnitIds,
+                userId: Auth::id(),
+                source: 'import',
+                ip: request()->ip(),
+                userAgent: request()->userAgent(),
             );
+
+            // The queue is asynchronous: report the state honestly instead of
+            // claiming the rows were written before a worker has run.
+            $this->success('ایمپورت در حال انجام است. نتیجه پس از تکمیل پردازش اعمال می‌شود.', 'موفقیت');
 
             $this->resetForm();
             $this->dispatch('persons-imported'); // Notify parent component

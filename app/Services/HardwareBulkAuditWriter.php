@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\HardwareAudit;
+use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
 use Closure;
 
@@ -26,25 +27,46 @@ class HardwareBulkAuditWriter
      * payload that is not the documented diff list is coerced rather than
      * rejected: a malformed audit row must never be the reason a bulk delete
      * fails.
+     *
+     * #1167: a queued import has no request and no authenticated user, but its
+     * audit trail must still name the actor who dispatched it. Passing a
+     * non-null `$source` selects that explicit-context path: `$userId`,
+     * `$ip` and `$userAgent` are written as given (null is a legitimate
+     * value), and the request/Auth fallback is skipped entirely. Omitting
+     * `$source` keeps the original web/API behaviour — `source = 'bulk'`,
+     * `Auth::user()` and the current request — unchanged.
      */
-    public function batchInsertAudits($hardwares, string $action, ?array $staticChanges, ?Closure $changesPerItem = null): void
-    {
-        $user = \Auth::user();
-        $request = request(); // actual request, not Request::capture()
+    public function batchInsertAudits(
+        $hardwares,
+        string $action,
+        ?array $staticChanges,
+        ?Closure $changesPerItem = null,
+        ?int $userId = null,
+        ?string $source = null,
+        ?string $ip = null,
+        ?string $userAgent = null,
+    ): void {
+        $explicit = $source !== null;
+        $user = $explicit ? null : \Auth::user();
+        $request = $explicit ? null : request(); // actual request, not Request::capture()
+        $resolvedUserAgent = $explicit ? $userAgent : $request?->userAgent();
 
-        $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
+        $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request, $explicit, $userId, $source, $ip, $resolvedUserAgent) {
             $changes = HardwareAuditChange::toDiffList(
                 $changesPerItem ? $changesPerItem($hardware) : $staticChanges
             );
 
             return [
                 'hardware_id' => $hardware->id,
-                'user_id' => $user?->id,
+                'user_id' => $explicit ? $userId : $user?->id,
                 'action' => $action,
                 'changes' => $changes ? json_encode($changes, JSON_UNESCAPED_UNICODE) : null,
-                'source' => 'bulk',
-                'ip_address' => $request?->ip(),
-                'user_agent' => $request?->userAgent(),
+                'source' => $source ?? 'bulk',
+                'ip_address' => $explicit ? $ip : $request?->ip(),
+                // #886 (CWE-1236): user_agent is attacker-controlled. The
+                // observer escapes it; this writer is now another entry point
+                // for the import path, so it must escape it too.
+                'user_agent' => ExcelCell::escape($resolvedUserAgent),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

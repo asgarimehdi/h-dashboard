@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Imports\HardwareImport;
+use App\Jobs\ImportHardwareJob;
+use App\Jobs\ImportPersonsJob;
 use App\Models\Estekhdam;
 use App\Models\Hardware;
 use App\Models\Person;
@@ -14,6 +16,7 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Session;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -271,7 +274,11 @@ test('hardware import confirm refuses a user with no unit assignment', function 
 // فیکسچر **بدون خطا** است، چون همین حالت است که امروز می‌شکند؛ یک فیکسچرِ
 // خطادار همان catch را به دلیل موجهی اجرا می‌کرد.
 
-test('person import confirm reports success, clears the preview and notifies the parent', function () {
+// ایشو #1167: confirm دیگر هم‌زمان نیست — فایل ذخیره و job صف می‌شود. پیام
+// باید وضعیت واقعی («در حال انجام») را بگوید، نه موفقیتی که هنوز رخ نداده.
+// assertهای دیتابیس با `QUEUE_CONNECTION=sync` سبز می‌مانند (job همان‌جا اجرا
+// می‌شود)، ولی این پیام است که قرارداد async را قفل می‌کند.
+test('person import confirm queues the import, clears the preview and notifies the parent', function () {
     $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
     $csvContent .= "9876543210\tعلی\tرضایی\t{$this->tahsil->id}\t{$this->estekhdam->id}\t{$this->semat->id}\t{$this->radif->id}\t".$this->unit->id."\n";
     $file = UploadedFile::fake()->createWithContent('persons.csv', $csvContent);
@@ -283,23 +290,20 @@ test('person import confirm reports success, clears the preview and notifies the
         ->assertSet('showPreview', true);
 
     $component->call('confirmImport')
-        // 1. the SUCCESS path, not the catch
+        // 1. the queued path, not the catch
         ->assertSet('showPreview', false)
         // 2. resetForm() actually ran
         ->assertSet('importResults', null)
         // 3. the parent-table refresh contract fires
         ->assertDispatched('persons-imported');
 
-    // The SUCCESS toast, asserted as a value so the test is not "risky".
-    // The catch branch would read «خطا در انجام ایمپورت: …» instead.
-    expect(assertToastContains($component, 'ایمپورت با موفقیت انجام شد'))
-        ->toContain('خطا: 0')
+    expect(assertToastContains($component, 'ایمپورت در حال انجام است'))
         ->not->toContain('Array to string conversion');
 
     $this->assertDatabaseHas('persons', ['n_code' => '9876543210', 'u_id' => $this->unit->id]);
 });
 
-test('hardware import confirm reports success, clears the preview and notifies the parent', function () {
+test('hardware import confirm queues the import, clears the preview and notifies the parent', function () {
     $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
     $csvContent .= "1234567890\tPC-NEW\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t11:22:33:44:55:66\n";
     $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
@@ -315,26 +319,25 @@ test('hardware import confirm reports success, clears the preview and notifies t
         ->assertSet('importResults', null)
         ->assertDispatched('hardware-imported');
 
-    expect(assertToastContains($component, 'ایمپورت با موفقیت انجام شد'))
-        ->toContain('خطا: 0')
+    expect(assertToastContains($component, 'ایمپورت در حال انجام است'))
         ->not->toContain('Array to string conversion');
 
     $this->assertDatabaseHas('hardwares', ['pc_name' => 'PC-NEW']);
 });
 
 /**
- * The count must be a NUMBER in the message. `errors` stays an array in
- * `getImportResults()` (it carries the per-row records the stats block
- * renders via `json_encode`), so the components must count it — the same
- * idiom `importStats['errors']` already uses 39 lines above the old bug.
- *
- * A zero-error run prints «خطا: 0»; asserting that exact tail is what proves
- * an int was interpolated rather than an array that happened not to throw.
+ * #872 pinned that `errors` (an array) was never interpolated into a toast.
+ * #1167 removed the counts from the confirm toast entirely, so the regression
+ * now has a narrower shape: confirm must queue exactly one job and never fall
+ * into the catch branch. The payload's `selectedActions` is the observable
+ * contract that the preview state was read before `resetForm()` cleared it.
  */
-test('person import confirm counts errors instead of interpolating the array', function () {
+test('person import confirm reads the preview actions before resetting the form', function () {
     $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
     $csvContent .= "9876543210\tعلی\tرضایی\t{$this->tahsil->id}\t{$this->estekhdam->id}\t{$this->semat->id}\t{$this->radif->id}\t".$this->unit->id."\n";
     $file = UploadedFile::fake()->createWithContent('persons.csv', $csvContent);
+
+    Queue::fake();
 
     $component = Livewire::actingAs($this->user)
         ->test('kargozini.import-persons.import-persons')
@@ -343,17 +346,17 @@ test('person import confirm counts errors instead of interpolating the array', f
 
     $component->call('confirmImport');
 
-    // «خطا: 0» — an int was interpolated. An array would render as
-    // «Array», and before the fix it threw before any message was built.
-    expect(assertToastContains($component, 'خطا: 0'))->toBe(
-        'ایمپورت با موفقیت انجام شد. جدید: 1, بروزرسانی: 0, خطا: 0'
-    );
+    Queue::assertPushed(ImportPersonsJob::class, function (ImportPersonsJob $job) {
+        return $job->selectedActions === ['row_2' => 'create'];
+    });
 });
 
-test('hardware import confirm counts errors instead of interpolating the array', function () {
+test('hardware import confirm reads the preview actions before resetting the form', function () {
     $csvContent = "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n";
     $csvContent .= "1234567890\tPC-NEW\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t11:22:33:44:55:66\n";
     $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
+
+    Queue::fake();
 
     $component = Livewire::actingAs($this->user)
         ->test('hardware.import-hardware.import-hardware')
@@ -362,9 +365,9 @@ test('hardware import confirm counts errors instead of interpolating the array',
 
     $component->call('confirmImport');
 
-    expect(assertToastContains($component, 'خطا: 0'))->toBe(
-        'ایمپورت با موفقیت انجام شد. جدید: 1, بروزرسانی: 0, خطا: 0'
-    );
+    Queue::assertPushed(ImportHardwareJob::class, function (ImportHardwareJob $job) {
+        return $job->selectedActions === ['row_2' => 'create'];
+    });
 });
 
 // ایشو #814: همان لایه‌ی دوم برای import سخت‌افزار با مجوزِ گیتِ مسیرش.

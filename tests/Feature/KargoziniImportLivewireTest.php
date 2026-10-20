@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Person;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Testing\File;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -251,5 +253,85 @@ class KargoziniImportLivewireTest extends TestCase
             ->assertSet('showHelpModal', false)
             ->set('showHelpModal', true)
             ->assertSet('showHelpModal', true);
+    }
+
+    // ==================== #1167: bulk write contract ====================
+
+    public function test_bulk_person_import_writes_500_rows_in_chunks_and_bumps_cache_once(): void
+    {
+        $result = $this->createUserWithUnit(['manage_personnel']);
+        $user = $result['user'];
+        $unit = $result['unit'];
+        $this->actingAs($user);
+
+        $rows = [];
+        for ($i = 0; $i < 250; $i++) {
+            $nCode = '51'.str_pad((string) $i, 8, '0', STR_PAD_LEFT);
+            Person::create([
+                'n_code' => $nCode,
+                'f_name' => 'قبلی',
+                'l_name' => 'نام',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1,
+                'u_id' => $unit->id,
+            ]);
+            $rows[] = [
+                'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'رضایی',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            ];
+        }
+        for ($i = 0; $i < 250; $i++) {
+            $rows[] = [
+                'n_code' => '52'.str_pad((string) $i, 8, '0', STR_PAD_LEFT),
+                'f_name' => 'علی', 'l_name' => 'رضایی',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            ];
+        }
+
+        $file = $this->createUploadFile($this->buildTsv($rows));
+
+        // Reset versions after seeding the 250 existing persons — each model
+        // save bumps a namespace, so the baseline must be taken last.
+        Cache::flush();
+
+        $component = Livewire::test('kargozini.import-persons.import-persons')
+            ->set('file', $file)
+            ->call('importPreview')
+            ->assertSet('importStats.total', 500)
+            ->assertSet('importStats.new', 250)
+            ->assertSet('importStats.updated', 250);
+
+        // A per-row write path would need >500 statements here.
+        $this->assertQueryCount(60, function () use ($component) {
+            $component->call('confirmImport');
+        });
+
+        $this->assertSame(250, Person::where('n_code', 'like', '51%')->where('f_name', 'علی')->count());
+        $this->assertSame(250, Person::where('n_code', 'like', '52%')->count());
+
+        foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
+            $this->assertSame(1, Cache::get($namespace.'_version', 0), "{$namespace} must bump once.");
+        }
+    }
+
+    public function test_bulk_person_path_normalizes_names(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $this->actingAs($user);
+
+        // Arabic Yeh (U+064A) must fold to Persian Yeh (U+06CC).
+        $file = $this->createUploadFile($this->buildTsv([[
+            'n_code' => '9000000200', 'f_name' => "عل\u{064A}", 'l_name' => 'رضایی',
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        ]]));
+
+        Livewire::test('kargozini.import-persons.import-persons')
+            ->set('file', $file)
+            ->call('importPreview')
+            ->call('confirmImport');
+
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '9000000200',
+            'f_name' => "عل\u{06CC}",
+        ]);
     }
 }

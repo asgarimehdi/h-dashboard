@@ -6,7 +6,12 @@ use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
+use App\Services\HardwareBulkAuditWriter;
+use App\Support\HardwareAuditChange;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -14,6 +19,23 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
     use FormatsJalaliDates;
+
+    /**
+     * Writes are grouped per chunk. 500 keeps each statement well inside
+     * PostgreSQL's 65535 bind-parameter ceiling (19 columns × 500 = 9500)
+     * while collapsing a 5,000-row sheet from 5,000 commits to 10.
+     */
+    private const CHUNK_SIZE = 500;
+
+    /**
+     * Fields the model's `saving` hook folds (Hardware::boot()).
+     * Bulk writes bypass model events, so the import must apply the same
+     * normalization itself — otherwise Persian variants land un-folded.
+     */
+    private const NORMALIZED_FIELDS = [
+        'pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'net_type', 'switch',
+        'vlan', 'motherboard', 'comments',
+    ];
 
     private array $accessibleUnitIds = [];
 
@@ -24,6 +46,22 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     private string $compareKey = 'both'; // 'pc_name', 'mac', 'both'
 
     private array $selectedActions = [];
+
+    /** @var list<array{data: array<string, mixed>, changes: array<string, mixed>}> */
+    private array $pendingCreates = [];
+
+    /** @var list<array{id: int, data: array<string, mixed>, changes: array<string, mixed>}> */
+    private array $pendingUpdates = [];
+
+    private ?int $auditUserId = null;
+
+    private ?string $auditSource = null;
+
+    private ?string $auditIp = null;
+
+    private ?string $auditUserAgent = null;
+
+    private bool $auditContextExplicit = false;
 
     private array $importResults = [
         'created' => 0,
@@ -54,33 +92,92 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         $this->selectedActions = $actions;
     }
 
-    public function collection(Collection $rows): void
+    /**
+     * #1167: the queued import runs with no authenticated user and no import
+     * route, but every audit row must still name the actor and the source it
+     * came from. The dispatcher captures this context and the job replays it
+     * here. The explicit flag matters: `$userId = null` is a legitimate
+     * "no actor" answer and must not silently fall back to `Auth::id()`
+     * (which, inside a worker, is also null — but in a test process it is not).
+     */
+    public function setAuditContext(?int $userId, ?string $source, ?string $ip, ?string $userAgent): void
     {
-        // Pre-load existing hardware records by pc_name and mac for comparison
-        $this->loadExistingRecords();
-
-        // First pass: build preview data
-        foreach ($rows as $index => $row) {
-            $this->buildPreview($row->toArray(), $index + 2); // +2 for header row and 1-indexed
-        }
-
-        // Second pass: apply selected actions if provided
-        if (! empty($this->selectedActions)) {
-            // Reset counters since they were incremented during preview pass
-            // The actual import will increment them correctly
-            $this->importResults['created'] = 0;
-            $this->importResults['updated'] = 0;
-            $this->importResults['skipped'] = 0;
-            $this->importResults['changes'] = [];
-
-            foreach ($rows as $index => $row) {
-                $this->applySelectedAction($row->toArray(), $index + 2);
-            }
-        }
+        $this->auditUserId = $userId;
+        $this->auditSource = $source;
+        $this->auditIp = $ip;
+        $this->auditUserAgent = $userAgent;
+        $this->auditContextExplicit = true;
     }
 
-    private function loadExistingRecords(): void
+    public function collection(Collection $rows): void
     {
+        // Map once, then use the mapped rows for both the lookup-key window and
+        // both passes. `rowNumber` is the spreadsheet line (header + 1-indexed),
+        // which is also the `row_{n}` key the preview sends back.
+        $dataByRow = [];
+
+        foreach ($rows as $index => $row) {
+            $dataByRow[$index + 2] = $this->mapRowToData($row->toArray());
+        }
+
+        // #1167: the four hardware cache namespaces must bump at most once per
+        // import, not four times per row. The batch scope collects every
+        // increment and flushes one per namespace at the end.
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($dataByRow) {
+            $this->loadExistingRecords(array_values($dataByRow));
+
+            // First pass: build preview data
+            foreach ($dataByRow as $rowNumber => $data) {
+                $this->buildPreview($data, $rowNumber);
+            }
+
+            // Second pass: apply selected actions if provided
+            if (! empty($this->selectedActions)) {
+                // Reset counters since they were incremented during preview pass
+                // The actual import will increment them correctly
+                $this->importResults['created'] = 0;
+                $this->importResults['updated'] = 0;
+                $this->importResults['skipped'] = 0;
+                $this->importResults['changes'] = [];
+
+                foreach ($dataByRow as $rowNumber => $data) {
+                    $this->applySelectedAction($data, $rowNumber);
+                }
+
+                $this->flushPendingWrites();
+            }
+        });
+    }
+
+    /**
+     * #1167: load only the rows this sheet can possibly match.
+     *
+     * The old version hydrated every in-scope hardware row (20 columns) in both
+     * the preview and the confirm pass. Restricting the window to the compare
+     * keys in the file keeps the scope predicate intact — the `whereIn` below
+     * is unconditional and an empty scope compiles to `0 = 1` — while turning
+     * a full-table hydration into an index-range lookup.
+     *
+     * @param  array<int, array<string, mixed>>  $rowsData
+     */
+    private function loadExistingRecords(array $rowsData): void
+    {
+        $pcNames = [];
+        $macs = [];
+        $nCodes = [];
+
+        foreach ($rowsData as $data) {
+            if (! empty($data['pc_name'])) {
+                $pcNames[$data['pc_name']] = true;
+            }
+            if (! empty($data['mac'])) {
+                $macs[$data['mac']] = true;
+            }
+            if (! empty($data['n_code'])) {
+                $nCodes[$data['n_code']] = true;
+            }
+        }
+
         $query = Hardware::query();
 
         // Apply organizational scope — UNCONDITIONAL (issue #839 / Plan 50).
@@ -91,6 +188,19 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         $query->whereHas('person', function ($q) {
             $q->whereIn('u_id', $this->accessibleUnitIds);
         });
+
+        // Only the compare keys the caller asked for can produce a match; a
+        // `whereIn` on an unused key would widen the window for nothing.
+        if ($this->compareKey === 'pc_name') {
+            $query->whereIn('pc_name', array_keys($pcNames));
+        } elseif ($this->compareKey === 'mac') {
+            $query->whereIn('mac', array_keys($macs));
+        } else {
+            $query->where(function ($q) use ($pcNames, $macs) {
+                $q->whereIn('pc_name', array_keys($pcNames))
+                    ->orWhereIn('mac', array_keys($macs));
+            });
+        }
 
         $hardwares = $query->get(['id', 'pc_name', 'mac', 'n_code', 'type', 'os', 'ip_valid', 'ip_local', 'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at']);
 
@@ -105,16 +215,20 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         }
 
         // Pre-load all persons in accessible units to avoid N+1 queries
-        $this->loadExistingPersons();
+        $this->loadExistingPersons(array_keys($nCodes));
     }
 
-    private function loadExistingPersons(): void
+    /**
+     * @param  array<int, string>  $nCodes  National codes referenced by the sheet.
+     */
+    private function loadExistingPersons(array $nCodes): void
     {
         $query = Person::query();
 
         // Apply organizational scope — UNCONDITIONAL (issue #839). `[]` must not
         // fall through to "every person in the org".
-        $query->whereIn('u_id', $this->accessibleUnitIds);
+        $query->whereIn('u_id', $this->accessibleUnitIds)
+            ->whereIn('n_code', $nCodes);
 
         $persons = $query->get(['n_code', 'u_id', 'f_name', 'l_name']);
 
@@ -123,7 +237,10 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         }
     }
 
-    private function applySelectedAction($row, int $rowNumber): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function applySelectedAction(array $data, int $rowNumber): void
     {
         // Check if this row has a selected action
         $actionKey = "row_{$rowNumber}";
@@ -136,14 +253,14 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             return;
         }
 
-        $this->processRow($row, $rowNumber, $action, true);
+        $this->processRow($data, $rowNumber, $action, true);
     }
 
-    private function buildPreview($row, int $rowNumber): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function buildPreview(array $data, int $rowNumber): void
     {
-        // Map CSV columns to hardware fields
-        $data = $this->mapRowToData($row);
-
         // Validate required fields
         if (empty($data['n_code']) || empty($data['pc_name'])) {
             $this->importResults['preview'][] = [
@@ -276,10 +393,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         ];
     }
 
-    private function processRow(array $row, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function processRow(array $data, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
     {
-        $data = $this->mapRowToData($row);
-
         // Validate required fields
         if (empty($data['n_code']) || empty($data['pc_name'])) {
             $this->importResults['errors'][] = [
@@ -335,9 +453,23 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
                     'changes' => $changes,
                 ];
 
-                // Update the record
+                // Queue the write. The record is updated in memory too, so a
+                // second sheet row matching the same device sees the new values
+                // exactly as it did when the old code wrote row-by-row.
                 if ($action === 'update' || $action === 'auto') {
-                    $existing['record']->update($data);
+                    $writeData = $this->normalizeWriteData($data);
+                    $auditChanges = $this->updateAuditChanges($existing['record'], $writeData);
+
+                    $this->pendingUpdates[] = [
+                        'id' => $existing['record']->id,
+                        'data' => $writeData,
+                        'changes' => $auditChanges,
+                    ];
+
+                    // Mirror the per-row `update($data)` in memory without
+                    // touching the database or firing model events.
+                    $existing['record']->fill($writeData);
+
                     $this->importResults['updated']++;
                 }
             } else {
@@ -346,10 +478,289 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         } else {
             // Create new record
             if ($action === 'create' || $action === 'auto') {
-                Hardware::create($data);
+                $writeData = $this->normalizeWriteData($data);
+
+                $this->pendingCreates[] = [
+                    'data' => $writeData,
+                    'changes' => $this->createAuditChanges($writeData),
+                ];
+
                 $this->importResults['created']++;
             }
         }
+    }
+
+    /**
+     * Apply the model's `saving` normalization to every written value.
+     *
+     * A bulk INSERT/UPDATE never dispatches `saving`, so skipping this would
+     * persist Arabic Yeh/Kaf and Persian digits exactly as typed — a regression
+     * against every other write path in the app (#1167).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeWriteData(array $data): array
+    {
+        foreach (self::NORMALIZED_FIELDS as $field) {
+            if (isset($data[$field]) && is_string($data[$field]) && $data[$field] !== '') {
+                $data[$field] = Hardware::normalizeForSearch($data[$field]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * The `hardware_audits` row the observer would have written for a create.
+     *
+     * The observer reads casted attributes, so a fresh unsaved model applies the
+     * same `mark` / `shutdown` / `clean_at` casts before formatting.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<array{field: string, old: string, new: string}>
+     */
+    private function createAuditChanges(array $data): array
+    {
+        $model = new Hardware($data);
+        $changes = [];
+
+        foreach (HardwareAuditChange::AUDITED_FIELDS as $field) {
+            $value = $model->getAttribute($field);
+            if ($value !== null && $value !== '') {
+                $changes[] = [
+                    'field' => $field,
+                    'old' => HardwareAuditChange::NO_VALUE,
+                    'new' => HardwareAuditChange::formatValueForDisplay($value),
+                ];
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * The `updated` diff the observer would have built from `getDirty()`.
+     *
+     * The probe model is filled (casts applied) but never saved; comparing it
+     * to its loaded original reproduces Eloquent's dirty semantics — notably
+     * that a date equal to the stored value is not dirty even when the CSV
+     * spells it `Y-m-d` and the column holds a timestamp (#890).
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<array{field: string, old: string, new: string}>
+     */
+    private function updateAuditChanges(Hardware $existing, array $data): array
+    {
+        $probe = clone $existing;
+        $probe->fill($data);
+
+        $original = $probe->getOriginal();
+        $changes = [];
+
+        foreach ($probe->getDirty() as $field => $newValue) {
+            if (in_array($field, ['created_at', 'updated_at'], true)) {
+                continue;
+            }
+
+            $oldValue = array_key_exists($field, $original) ? $original[$field] : null;
+
+            if ($this->normalizeAuditValue($oldValue) === $this->normalizeAuditValue($newValue)) {
+                continue;
+            }
+
+            $changes[] = [
+                'field' => $field,
+                'old' => HardwareAuditChange::formatValueForDisplay($oldValue),
+                'new' => HardwareAuditChange::formatValueForDisplay($newValue),
+            ];
+        }
+
+        return $changes;
+    }
+
+    private function normalizeAuditValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * Write the queued rows, then their audit trail, in chunks.
+     *
+     * `insert()` and `upsert()` go through the query builder: no model events,
+     * no per-row audit INSERT and no per-row cache increment. The audit rows
+     * the observer would have produced are built per row above and inserted by
+     * the shared {@see HardwareBulkAuditWriter}; the four cache namespaces are
+     * bumped once by the surrounding `CacheInvalidationServiceInterface::batch()`.
+     */
+    private function flushPendingWrites(): void
+    {
+        $wrote = ! empty($this->pendingCreates) || ! empty($this->pendingUpdates);
+
+        foreach (array_chunk($this->pendingCreates, self::CHUNK_SIZE) as $chunk) {
+            $this->insertCreates($chunk);
+        }
+
+        foreach (array_chunk($this->pendingUpdates, self::CHUNK_SIZE) as $chunk) {
+            $this->updateRows($chunk);
+        }
+
+        $this->pendingCreates = [];
+        $this->pendingUpdates = [];
+
+        if ($wrote) {
+            // Bulk writes bypass `saved`, so the model's flush must be invoked
+            // explicitly — inside the batch scope it lands as one increment per
+            // namespace (#376 / #1167).
+            Hardware::flushStatsCache();
+        }
+    }
+
+    /**
+     * @param  list<array{data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
+     */
+    private function insertCreates(array $chunk): void
+    {
+        $now = now();
+        $ids = $this->reserveHardwareIds(count($chunk));
+        $rows = [];
+        $auditChanges = [];
+
+        foreach ($chunk as $index => $item) {
+            $id = $ids[$index];
+            $rows[] = array_merge($item['data'], [
+                'id' => $id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $auditChanges[$id] = $item['changes'];
+        }
+
+        Hardware::query()->insert($rows);
+
+        // Build the model stubs the writer expects (it only reads `->id`).
+        $items = array_map(fn (int $id) => (object) ['id' => $id], $ids);
+
+        [$userId, $source, $ip, $userAgent] = $this->auditContext();
+
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+            collect($items),
+            'created',
+            null,
+            fn ($hardware) => $auditChanges[$hardware->id] ?? [],
+            $userId,
+            $source,
+            $ip,
+            $userAgent,
+        );
+    }
+
+    /**
+     * @param  list<array{id: int, data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
+     */
+    private function updateRows(array $chunk): void
+    {
+        $now = now();
+        $rows = [];
+
+        foreach ($chunk as $item) {
+            $rows[] = array_merge($item['data'], [
+                'id' => $item['id'],
+                'updated_at' => $now,
+            ]);
+        }
+
+        // `id` is the primary key, so this is a legal ON CONFLICT target without
+        // a schema change. The compare key (`pc_name` / `mac`) is not unique in
+        // `hardwares`, so it could never be used as the conflict target.
+        Hardware::query()->upsert(
+            $rows,
+            ['id'],
+            array_merge($this->updateColumns(), ['updated_at'])
+        );
+
+        // An update whose values normalize to the stored ones produces no dirty
+        // fields, and the observer writes no audit row for it. Filter those out
+        // rather than inserting an empty audit entry.
+        $auditable = array_values(array_filter($chunk, fn (array $item) => $item['changes'] !== []));
+
+        if (empty($auditable)) {
+            return;
+        }
+
+        $auditChanges = [];
+        foreach ($auditable as $item) {
+            $auditChanges[$item['id']] = $item['changes'];
+        }
+
+        $items = array_map(fn (array $item) => (object) ['id' => $item['id']], $auditable);
+
+        [$userId, $source, $ip, $userAgent] = $this->auditContext();
+
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+            collect($items),
+            'updated',
+            null,
+            fn ($hardware) => $auditChanges[$hardware->id] ?? [],
+            $userId,
+            $source,
+            $ip,
+            $userAgent,
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function updateColumns(): array
+    {
+        return [
+            'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
+            'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard',
+            'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at',
+        ];
+    }
+
+    /**
+     * Reserve ids before the bulk INSERT so each created row's audit entry can
+     * name its `hardware_id` in the same batch. PostgreSQL's `nextval()` is
+     * atomic and returns unique values even under concurrent inserts; gaps are
+     * normal and harmless.
+     *
+     * @return list<int>
+     */
+    private function reserveHardwareIds(int $count): array
+    {
+        $rows = DB::select("SELECT nextval('hardwares_id_seq') AS id FROM generate_series(1, ?::int)", [$count]);
+
+        return array_map(fn ($row) => (int) $row->id, $rows);
+    }
+
+    /**
+     * @return array{0: ?int, 1: string, 2: ?string, 3: ?string}
+     */
+    private function auditContext(): array
+    {
+        if ($this->auditContextExplicit) {
+            return [$this->auditUserId, $this->auditSource ?? 'import', $this->auditIp, $this->auditUserAgent];
+        }
+
+        $userId = Auth::id();
+
+        return [
+            $userId === null ? null : (int) $userId,
+            'import',
+            request()->ip(),
+            request()->userAgent(),
+        ];
     }
 
     private function detectChanges(Hardware $existing, array $newData): array

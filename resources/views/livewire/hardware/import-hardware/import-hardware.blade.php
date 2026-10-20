@@ -1,7 +1,9 @@
 <?php
 use App\Imports\HardwareImport;
+use App\Jobs\ImportHardwareJob;
 use App\Services\AccessService;
 use App\Traits\PersianNormalizer;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Maatwebsite\Excel\Facades\Excel;
@@ -121,24 +123,33 @@ return new class extends Component
         }
 
         try {
-            $import = new HardwareImport;
-            $import->setCompareKey($this->compareKey);
-            $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
-            $import->setSelectedActions($this->getSelectedActions());
+            // #1167: the confirmed write is queued. Livewire's temp upload does
+            // not survive the request, so persist it first and hand the stable
+            // path to the job (the job deletes it after a successful run).
+            $path = $this->file?->store('imports');
 
-            Excel::import($import, $this->file->getRealPath());
+            if (! $path) {
+                $this->error('ذخیره فایل ایمپورت ممکن نشد. لطفاً دوباره تلاش کنید.', 'خطا');
 
-            $results = $import->getImportResults();
+                return;
+            }
 
-            $this->success(
-                // ایشو #872: `errors` یک آرایه است، نه یک شمارش — درجِ مستقیمش
-                // `Array to string conversion` می‌داد و `catch (\Exception)` پایین‌تر
-                // آن را می‌بلعید، پس `resetForm()` و `dispatch()` هرگز اجرا
-                // نمی‌شدند. همان idiom خطِ `importStats['errors']` بالاتر در همین
-                // فایل: شمارش، نه درج. جزئیات در PR #872.
-                'ایمپورت با موفقیت انجام شد. جدید: '.$results['created'].', بروزرسانی: '.$results['updated'].', خطا: '.count($results['errors'] ?? []),
-                'موفقیت'
+            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+
+            ImportHardwareJob::dispatch(
+                path: $path,
+                compareKey: $this->compareKey,
+                selectedActions: $this->getSelectedActions(),
+                accessibleUnitIds: $accessibleUnitIds,
+                userId: Auth::id(),
+                source: 'import',
+                ip: request()->ip(),
+                userAgent: request()->userAgent(),
             );
+
+            // The queue is asynchronous: report the state honestly instead of
+            // claiming the rows were written before a worker has run.
+            $this->success('ایمپورت در حال انجام است. نتیجه پس از تکمیل پردازش اعمال می‌شود.', 'موفقیت');
 
             $this->resetForm();
             $this->dispatch('hardware-imported'); // Notify parent component

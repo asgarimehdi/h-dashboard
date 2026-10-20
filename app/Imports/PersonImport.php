@@ -9,6 +9,7 @@ use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
@@ -16,6 +17,18 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
+    /**
+     * Same chunking contract as HardwareImport (#1167): each statement stays
+     * under PostgreSQL's bind-parameter ceiling and a 5,000-row sheet becomes
+     * ten writes instead of 5,000.
+     */
+    private const CHUNK_SIZE = 500;
+
+    /**
+     * Fields Person::boot() folds on save; bulk writes must reproduce it.
+     */
+    private const NORMALIZED_FIELDS = ['f_name', 'l_name'];
+
     private array $accessibleUnitIds = [];
 
     private array $existingRecords = [];
@@ -23,6 +36,15 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     private string $compareKey = 'n_code'; // always match by n_code for persons
 
     private array $selectedActions = [];
+
+    /** @var list<array{data: array<string, mixed>}> */
+    private array $pendingCreates = [];
+
+    /** @var list<array{id: int, data: array<string, mixed>}> */
+    private array $pendingUpdates = [];
+
+    /** Did any queued write create a person or move one between units? */
+    private bool $touchesMapScope = false;
 
     // Pre-loaded related models to avoid N+1 queries
     private array $units = [];
@@ -66,33 +88,58 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
     public function collection(Collection $rows): void
     {
-        // Pre-load existing person records by n_code for comparison
-        $this->loadExistingRecords();
+        // Map once: the mapped rows drive the lookup window and both passes.
+        $dataByRow = [];
 
-        // Pre-load all related reference data to avoid N+1 queries
-        $this->loadReferenceData();
-
-        // First pass: build preview data
         foreach ($rows as $index => $row) {
-            $this->buildPreview($row->toArray(), $index + 2); // +2 for header row and 1-indexed
+            $dataByRow[$index + 2] = $this->mapRowToData($row->toArray());
         }
 
-        // Second pass: apply selected actions if provided
-        if (! empty($this->selectedActions)) {
-            // Reset counters since they were incremented during preview pass
-            $this->importResults['created'] = 0;
-            $this->importResults['updated'] = 0;
-            $this->importResults['skipped'] = 0;
-            $this->importResults['changes'] = [];
+        // #1167: collect every cache bump into one flush per namespace.
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($dataByRow) {
+            // Pre-load existing person records by n_code for comparison
+            $this->loadExistingRecords($dataByRow);
 
-            foreach ($rows as $index => $row) {
-                $this->applySelectedAction($row->toArray(), $index + 2);
+            // Pre-load all related reference data to avoid N+1 queries
+            $this->loadReferenceData();
+
+            // First pass: build preview data
+            foreach ($dataByRow as $rowNumber => $data) {
+                $this->buildPreview($data, $rowNumber);
             }
-        }
+
+            // Second pass: apply selected actions if provided
+            if (! empty($this->selectedActions)) {
+                // Reset counters since they were incremented during preview pass
+                $this->importResults['created'] = 0;
+                $this->importResults['updated'] = 0;
+                $this->importResults['skipped'] = 0;
+                $this->importResults['changes'] = [];
+
+                foreach ($dataByRow as $rowNumber => $data) {
+                    $this->applySelectedAction($data, $rowNumber);
+                }
+
+                $this->flushPendingWrites();
+            }
+        });
     }
 
-    private function loadExistingRecords(): void
+    /**
+     * #1167: restrict the hydration to the national codes actually present in
+     * the sheet. The scope predicate stays unconditional (issue #839).
+     *
+     * @param  array<int, array<string, mixed>>  $rowsData
+     */
+    private function loadExistingRecords(array $rowsData): void
     {
+        $nCodes = [];
+        foreach ($rowsData as $data) {
+            if (! empty($data['n_code'])) {
+                $nCodes[$data['n_code']] = true;
+            }
+        }
+
         $query = Person::query();
 
         // Apply organizational scope — UNCONDITIONAL (issue #839 / Plan 50).
@@ -100,7 +147,8 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         // here would drop the predicate and put the whole org in scope.
         // An empty array compiles to `0 = 1`, which is fail-closed by
         // construction. Never re-add `if (! empty($this->accessibleUnitIds))`.
-        $query->whereIn('u_id', $this->accessibleUnitIds);
+        $query->whereIn('u_id', $this->accessibleUnitIds)
+            ->whereIn('n_code', array_keys($nCodes));
 
         // NOTE: 'id' MUST be selected — records are later updated via these
         // models; without the PK, update() issues WHERE id IS NULL and
@@ -150,7 +198,10 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         }
     }
 
-    private function applySelectedAction($row, int $rowNumber): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function applySelectedAction(array $data, int $rowNumber): void
     {
         // Check if this row has a selected action
         $actionKey = "row_{$rowNumber}";
@@ -163,14 +214,14 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             return;
         }
 
-        $this->processRow($row, $rowNumber, $action, true);
+        $this->processRow($data, $rowNumber, $action, true);
     }
 
-    private function buildPreview($row, int $rowNumber): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function buildPreview(array $data, int $rowNumber): void
     {
-        // Map CSV columns to person fields
-        $data = $this->mapRowToData($row);
-
         // Validate required fields
         if (empty($data['n_code']) || empty($data['f_name']) || empty($data['l_name'])) {
             $this->importResults['preview'][] = [
@@ -333,10 +384,11 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         return null;
     }
 
-    private function processRow(array $row, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function processRow(array $data, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
     {
-        $data = $this->mapRowToData($row);
-
         // Validate required fields
         if (empty($data['n_code']) || empty($data['f_name']) || empty($data['l_name'])) {
             $this->importResults['errors'][] = [
@@ -406,9 +458,23 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
                     'changes' => $changes,
                 ];
 
-                // Update the record
+                // Queue the write and mirror it in memory, so a second sheet
+                // row matching the same person sees the new values the way the
+                // old row-by-row `update()` did.
                 if ($action === 'update' || $action === 'auto') {
-                    $existing['record']->update($data);
+                    $writeData = $this->normalizeWriteData($data);
+
+                    if ((int) $existing['record']->u_id !== (int) $writeData['u_id']) {
+                        $this->touchesMapScope = true;
+                    }
+
+                    $this->pendingUpdates[] = [
+                        'id' => $existing['record']->id,
+                        'data' => $writeData,
+                    ];
+
+                    $existing['record']->fill($writeData);
+
                     $this->importResults['updated']++;
                 }
             } else {
@@ -417,10 +483,100 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         } else {
             // Create new record
             if ($action === 'create' || $action === 'auto') {
-                Person::create($data);
+                $writeData = $this->normalizeWriteData($data);
+
+                $this->pendingCreates[] = ['data' => $writeData];
+                $this->touchesMapScope = true;
+
                 $this->importResults['created']++;
             }
         }
+    }
+
+    /**
+     * Reproduce Person::boot()'s `saving` normalization on the bulk path.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeWriteData(array $data): array
+    {
+        foreach (self::NORMALIZED_FIELDS as $field) {
+            if (isset($data[$field]) && is_string($data[$field]) && $data[$field] !== '') {
+                $data[$field] = Person::normalizeForSearch($data[$field]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Write the queued rows in chunks, then bump the cache namespaces once.
+     *
+     * Bulk writes bypass `saved`, so the two unconditional bumps and the two
+     * u_id-dependent ones (maps/gis) are reproduced here; the surrounding
+     * `batch()` collapses repeats into one increment per namespace.
+     */
+    private function flushPendingWrites(): void
+    {
+        $wrote = ! empty($this->pendingCreates) || ! empty($this->pendingUpdates);
+
+        foreach (array_chunk($this->pendingCreates, self::CHUNK_SIZE) as $chunk) {
+            $now = now();
+            $rows = [];
+
+            foreach ($chunk as $item) {
+                $rows[] = array_merge($item['data'], [
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            Person::query()->insert($rows);
+        }
+
+        foreach (array_chunk($this->pendingUpdates, self::CHUNK_SIZE) as $chunk) {
+            $now = now();
+            $rows = [];
+
+            foreach ($chunk as $item) {
+                $rows[] = array_merge($item['data'], [
+                    'id' => $item['id'],
+                    'updated_at' => $now,
+                ]);
+            }
+
+            // `id` is the primary key — a legal ON CONFLICT target.
+            Person::query()->upsert(
+                $rows,
+                ['id'],
+                array_merge($this->updateColumns(), ['updated_at'])
+            );
+        }
+
+        $this->pendingCreates = [];
+        $this->pendingUpdates = [];
+
+        if (! $wrote) {
+            return;
+        }
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('hr_stats');
+        $cache->increment('dashboard');
+
+        if ($this->touchesMapScope) {
+            $cache->increment('maps');
+            $cache->increment('gis');
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function updateColumns(): array
+    {
+        return ['n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'phone'];
     }
 
     private function detectChanges(Person $existing, array $newData): array
