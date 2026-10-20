@@ -535,6 +535,15 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             Person::query()->insert($rows);
         }
 
+        // #1194: two sheet rows can resolve to the same person (n_code is the
+        // compare key, but a sheet may repeat it). PostgreSQL rejects an upsert
+        // whose VALUES list contains the same conflict target twice.
+        $dedupedUpdates = [];
+        foreach ($this->pendingUpdates as $item) {
+            $dedupedUpdates[$item['id']] = $item;
+        }
+        $this->pendingUpdates = array_values($dedupedUpdates);
+
         foreach (array_chunk($this->pendingUpdates, self::CHUNK_SIZE) as $chunk) {
             $now = now();
             $rows = [];

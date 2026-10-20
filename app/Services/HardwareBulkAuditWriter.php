@@ -56,6 +56,20 @@ class HardwareBulkAuditWriter
                 $changesPerItem ? $changesPerItem($hardware) : $staticChanges
             );
 
+            // #1194: mirror HardwareAuditObserver::sanitizeChanges so the bulk
+            // path does not persist raw formula payloads in audit rows (#886).
+            if (is_array($changes)) {
+                foreach ($changes as $key => $entry) {
+                    if (is_array($entry)) {
+                        foreach (['old', 'new'] as $field) {
+                            if (isset($entry[$field]) && is_string($entry[$field])) {
+                                $changes[$key][$field] = ExcelCell::escape($entry[$field]);
+                            }
+                        }
+                    }
+                }
+            }
+
             return [
                 'hardware_id' => $hardware->id,
                 'user_id' => $explicit ? $userId : $user?->id,

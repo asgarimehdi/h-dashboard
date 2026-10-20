@@ -6,6 +6,7 @@ use App\Imports\HardwareImport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\Connection;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
@@ -26,6 +27,7 @@ use Maatwebsite\Excel\Facades\Excel;
  * session, so `accessibleUnitIds()` would resolve to `[]`) and the actor
  * context for the audit trail.
  */
+#[Connection('redis-reports')]
 class ImportHardwareJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -85,6 +87,10 @@ class ImportHardwareJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
+        // #1194: drop the stored upload on failure so a failed run does not
+        // leave an orphaned file behind; the job never retries ($tries = 1).
+        Storage::delete($this->path);
+
         Log::error('ImportHardwareJob failed', [
             'path' => $this->path,
             'user_id' => $this->userId,

@@ -6,6 +6,7 @@ use App\Imports\PersonImport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\Connection;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +18,7 @@ use Maatwebsite\Excel\Facades\Excel;
  * {@see ImportHardwareJob}, without the audit half (persons have no audit
  * observer).
  */
+#[Connection('redis-reports')]
 class ImportPersonsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -70,6 +72,10 @@ class ImportPersonsJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
+        // #1194: drop the stored upload on failure so a failed run does not
+        // leave an orphaned file behind; the job never retries ($tries = 1).
+        Storage::delete($this->path);
+
         Log::error('ImportPersonsJob failed', [
             'path' => $this->path,
             'user_id' => $this->userId,
