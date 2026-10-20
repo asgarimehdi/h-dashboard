@@ -40,10 +40,23 @@ class PruneOrphanAttachments extends Command
         $orphans = [];
         $referenced = 0;
 
+        // Issue #1178 — load the referenced set ONCE instead of asking the
+        // database about each file separately. The old per-file `exists()`
+        // made the scan O(files) queries, and because `attachments.file_path`
+        // had no index each of them was a sequential scan of the table, so
+        // the whole command cost O(files x rows). One `pluck` plus an
+        // O(1) `isset()` per file makes it O(1) queries.
+        //
+        // `flip()` keys the set by path, so duplicate rows for one path
+        // collapse into a single entry — the same answer the old query gave.
+        $referencedPaths = Attachment::query()
+            ->pluck('file_path')
+            ->flip();
+
         foreach ($disk->allFiles(self::DIRECTORY) as $file) {
             $path = self::path($file);
 
-            if (Attachment::query()->where('file_path', $path)->exists()) {
+            if (isset($referencedPaths[$path])) {
                 $referenced++;
 
                 continue;
