@@ -46,6 +46,14 @@ return new class extends Component
 
     public $compareKey = 'pc_name'; // 'pc_name', 'mac', 'both'
 
+    public array $importStats = [
+        'total' => 0,
+        'new' => 0,
+        'updated' => 0,
+        'unchanged' => 0,
+        'errors' => 0,
+    ];
+
     public bool $showHelpModal = false;
 
     /**
