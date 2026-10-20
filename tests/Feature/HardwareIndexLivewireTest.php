@@ -538,6 +538,24 @@ class HardwareIndexLivewireTest extends TestCase
             ->assertSet('n_code_unit', null);
     }
 
+    /**
+     * The national-code field must be debounced (#1175).
+     *
+     * Undebounced, every character typed fired a round trip and a person
+     * lookup. 500 ms is the repo-wide person-search contract
+     * (users/index.blade.php, units/chart.blade.php).
+     */
+    public function test_n_code_input_is_debounced(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->assertSee('wire:model.live.debounce.500ms="n_code"', false);
+    }
+
     // ==================== S6: CRUD ====================
 
     public function test_start_create_opens_form(): void
@@ -711,6 +729,66 @@ class HardwareIndexLivewireTest extends TestCase
             ->call('bulkDelete');
 
         $this->assertDatabaseMissing('hardwares', ['id' => $hw->id]);
+    }
+
+    /**
+     * Every ticked row must reach the bulk action (#1175).
+     *
+     * The checkbox binding is deferred, so the selection travels with the
+     * action request instead of with a request per tick. This pins that the
+     * deferred value is still delivered whole — one request, all the rows.
+     */
+    public function test_bulk_mark_applies_to_every_selected_row(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw1 = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMulti-PC-1',
+        ]);
+        $hw2 = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMulti-PC-2',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->set('selected', [$hw1->id, $hw2->id])
+            ->call('bulkMark', true);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw1->id, 'mark' => true]);
+        $this->assertDatabaseHas('hardwares', ['id' => $hw2->id, 'mark' => true]);
+    }
+
+    /**
+     * A selection made on one page must survive the move to another page and
+     * still be visible to the bulk action (#1175).
+     *
+     * The count shown in the toolbar is client-side, so rows picked on a
+     * previous page have to be part of it — otherwise the chip would claim
+     * fewer rows than the action is about to change.
+     */
+    public function test_selection_survives_pagination_and_reaches_the_bulk_action(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw1 = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkPaged-PC-1',
+        ]);
+        $hw2 = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkPaged-PC-2',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->set('perPage', 1)
+            ->set('selected', [$hw1->id, $hw2->id])
+            ->call('gotoPage', 2)
+            ->assertSet('selected', [$hw1->id, $hw2->id])
+            ->call('bulkMark', true);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw1->id, 'mark' => true]);
+        $this->assertDatabaseHas('hardwares', ['id' => $hw2->id, 'mark' => true]);
     }
 
     public function test_bulk_delete_empty_does_nothing(): void
