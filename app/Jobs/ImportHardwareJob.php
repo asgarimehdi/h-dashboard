@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Imports\HardwareImport;
+use App\Support\ImportStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -46,8 +47,17 @@ class ImportHardwareJob implements ShouldQueue
     public int $tries = 1;
 
     /**
+     * #1194: one import per user at a time. A double click queued the same
+     * sheet twice, and both jobs compared against the pre-import state — so
+     * the second one created rows the first had already created. The
+     * dispatcher takes an atomic claim (see {@see ImportStatus::claim()})
+     * before queueing, so the second click is rejected with a message
+     * instead of silently duplicating rows.
+     *
      * @param  array<string, string>  $selectedActions  `row_{n}` => create|update|skip
      * @param  array<int, int>  $accessibleUnitIds  Scope captured from the dispatcher.
+     * @param  string|null  $statusToken  Identifies this dispatch to the browser
+     *                                    (see {@see ImportStatus}).
      */
     public function __construct(
         public string $path,
@@ -58,6 +68,7 @@ class ImportHardwareJob implements ShouldQueue
         public ?string $source = 'import',
         public ?string $ip = null,
         public ?string $userAgent = null,
+        public ?string $statusToken = null,
     ) {}
 
     public function handle(): void
@@ -76,6 +87,17 @@ class ImportHardwareJob implements ShouldQueue
 
         $results = $import->getImportResults();
 
+        // #1194: publish the outcome so the browser learns the rows exist.
+        // The dispatching request is gone by now, so this is the only way the
+        // parent table can be refreshed at the right moment.
+        if ($this->userId !== null) {
+            if ($this->statusToken !== null) {
+                ImportStatus::publish($this->userId, $this->statusToken, $results);
+            }
+
+            ImportStatus::release($this->userId);
+        }
+
         Log::info('ImportHardwareJob: completed', [
             'path' => $this->path,
             'created' => $results['created'],
@@ -90,6 +112,16 @@ class ImportHardwareJob implements ShouldQueue
         // #1194: drop the stored upload on failure so a failed run does not
         // leave an orphaned file behind; the job never retries ($tries = 1).
         Storage::delete($this->path);
+
+        // The browser was told the import is running, so it has to learn that
+        // it failed — otherwise the table silently keeps the old rows.
+        if ($this->userId !== null) {
+            if ($this->statusToken !== null) {
+                ImportStatus::publishFailure($this->userId, $this->statusToken, $exception->getMessage());
+            }
+
+            ImportStatus::release($this->userId);
+        }
 
         Log::error('ImportHardwareJob failed', [
             'path' => $this->path,

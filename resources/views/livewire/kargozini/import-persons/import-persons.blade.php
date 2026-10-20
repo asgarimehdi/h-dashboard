@@ -2,6 +2,7 @@
 use App\Imports\PersonImport;
 use App\Jobs\ImportPersonsJob;
 use App\Services\AccessService;
+use App\Support\ImportStatus;
 use App\Traits\PersianNormalizer;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -46,6 +47,19 @@ return new class extends Component
     public $compareKey = 'n_code'; // always n_code for persons
 
     public bool $showHelpModal = false;
+
+    /**
+     * #1194: the token that identifies the queued import to the browser. Set
+     * when the job is dispatched, cleared once the result has been read.
+     */
+    public ?string $statusToken = null;
+
+    /**
+     * #1194: an import is already running for this user — a second click
+     * would queue the same sheet twice and both jobs would compare against
+     * the pre-import state.
+     */
+    public bool $importRunning = false;
 
     protected $rules = [
         'file' => 'required|file|mimes:xlsx,xls,csv|max:10240', // max 10MB
@@ -132,6 +146,16 @@ return new class extends Component
             return;
         }
 
+        // #1194: one import per user at a time. A double click queued the
+        // same sheet twice, and both jobs compared against the pre-import
+        // state, so the second one created rows the first had already
+        // created.
+        if ($this->importRunning) {
+            $this->error('یک ایمپورت در حال انجام است. تا پایان آن، ایمپورت دیگری شروع نمی‌شود.', 'خطا');
+
+            return;
+        }
+
         // ایشو #839 (Plan 50): همان امتناعِ اسکوپ خالی در مسیر تایید —
         // وگرنه وضعیتِ پیش‌نمایشِ یک اسکوپِ قبلی به ایمپورتِ کامل سازمان تبدیل می‌شود.
         if (! $this->hasImportScope()) {
@@ -161,6 +185,20 @@ return new class extends Component
 
             $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
 
+            // #1194: the token links this dispatch to the browser, so the
+            // parent table is refreshed once the rows actually exist.
+            $token = ImportStatus::token((int) Auth::id());
+
+            // #1194: take the user's single import slot before queueing.
+            // `Cache::add` is atomic, so a double click cannot queue the
+            // sheet twice — the second click loses the claim and is told
+            // that an import is already running.
+            if (! ImportStatus::claim((int) Auth::id(), $token)) {
+                $this->error('یک ایمپورت در حال انجام است. تا پایان آن، ایمپورت دیگری شروع نمی‌شود.', 'خطا');
+
+                return;
+            }
+
             ImportPersonsJob::dispatch(
                 path: $path,
                 compareKey: $this->compareKey,
@@ -170,17 +208,88 @@ return new class extends Component
                 source: 'import',
                 ip: request()->ip(),
                 userAgent: request()->userAgent(),
+                statusToken: $token,
             );
+
+            $this->statusToken = $token;
+            $this->importRunning = true;
 
             // The queue is asynchronous: report the state honestly instead of
             // claiming the rows were written before a worker has run.
             $this->success('ایمپورت در حال انجام است. نتیجه پس از تکمیل پردازش اعمال می‌شود.', 'موفقیت');
 
             $this->resetForm();
-            $this->dispatch('persons-imported'); // Notify parent component
+            // #1194: `persons-imported` is NOT dispatched here. The worker has
+            // not run yet, so the parent table would refresh before a single
+            // row existed and the imported personnel stayed invisible until a
+            // manual reload. It is dispatched from `checkImportStatus()`, once
+            // the job has published its result.
         } catch (\Exception $e) {
+            // #1194: the job was never queued, so nothing will release the
+            // claim — free the slot here.
+            if (isset($token)) {
+                ImportStatus::release((int) Auth::id());
+            }
+
             $this->error('خطا در انجام ایمپورت: '.$e->getMessage(), 'خطا');
         }
+    }
+
+    /**
+     * #1194: poll the queued import for its result.
+     *
+     * There is no websocket in this app, so the job publishes its outcome to
+     * the cache and this method reads it. Once the result is there, the
+     * parent component is notified — at that point the rows really exist.
+     */
+    public function checkImportStatus(): void
+    {
+        if ($this->statusToken === null) {
+            return;
+        }
+
+        $result = ImportStatus::read((int) Auth::id(), $this->statusToken);
+
+        if ($result === null) {
+            // The worker has not finished yet — keep polling.
+            return;
+        }
+
+        ImportStatus::forget((int) Auth::id(), $this->statusToken);
+        $this->statusToken = null;
+        $this->importRunning = false;
+
+        if (($result['state'] ?? null) === 'failed') {
+            $this->error('ایمپورت ناموفق بود: '.($result['error'] ?? 'خطای نامشخص'), 'خطا');
+
+            return;
+        }
+
+        $this->importStats = [
+            'total' => (int) ($result['created'] ?? 0) + (int) ($result['updated'] ?? 0) + (int) ($result['skipped'] ?? 0),
+            'new' => (int) ($result['created'] ?? 0),
+            'updated' => (int) ($result['updated'] ?? 0),
+            'unchanged' => (int) ($result['skipped'] ?? 0),
+            'errors' => (int) ($result['errors'] ?? 0),
+        ];
+
+        $this->success(sprintf(
+            'ایمپورت تکمیل شد: %d ایجاد، %d به‌روزرسانی، %d بدون تغییر، %d خطا.',
+            $this->importStats['new'],
+            $this->importStats['updated'],
+            $this->importStats['unchanged'],
+            $this->importStats['errors'],
+        ), 'موفقیت');
+
+        // #1194: per-row errors were surfaced nowhere — the browser only ever
+        // saw the "in progress" toast. Show the first few of them.
+        $errorMessages = $result['error_messages'] ?? [];
+
+        if (is_array($errorMessages) && $errorMessages !== []) {
+            $this->error(implode(' | ', array_slice($errorMessages, 0, 3)), 'خطاهای ایمپورت');
+        }
+
+        $this->dispatch('persons-imported'); // Notify parent component
     }
 
     public function cancelImport(): void
@@ -415,6 +524,14 @@ return new class extends Component
 ?>
 
 <div class="card w-full bg-base-100 shadow-xl">
+    {{-- #1194: while an import is queued, poll for its result. The job runs
+         in a worker and publishes its outcome to the cache; the poll reads it
+         and refreshes the parent table only once the rows really exist. The
+         element is removed when the import ends, which stops the polling. --}}
+    @if ($importRunning)
+        <div wire:poll.3s="checkImportStatus" wire:key="import-status-poll" class="hidden"></div>
+    @endif
+
     <div class="card-body">
         <div class="flex items-center justify-between mb-6">
             <h2 class="card-title text-2xl flex items-center gap-3">
