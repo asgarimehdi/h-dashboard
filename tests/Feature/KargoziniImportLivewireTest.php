@@ -109,7 +109,8 @@ class KargoziniImportLivewireTest extends TestCase
             ->assertSet('showPreview', false)
             ->assertSet('importResults', null)
             ->assertSet('compareKey', 'n_code')
-            ->assertSet('importStats.total', 0);
+            ->assertSet('previewToken', null)
+            ->assertSet('rowActions', []);
     }
 
     // ==================== File validation ====================
@@ -156,14 +157,15 @@ class KargoziniImportLivewireTest extends TestCase
 
         $file = $this->createUploadFile($tsv);
 
-        Livewire::test('kargozini.import-persons.import-persons')
+        $component = Livewire::test('kargozini.import-persons.import-persons')
             ->set('file', $file)
             ->call('importPreview')
             ->assertSet('showPreview', true)
-            ->assertSet('importStats.total', 1)
-            ->assertSet('importStats.new', 1)
             ->assertSee('علی')
             ->assertSee('محمدی');
+
+        $this->assertSame(1, $component->instance()->previewStats['total']);
+        $this->assertSame(1, $component->instance()->previewStats['new']);
     }
 
     // ==================== Confirm without preview ====================
@@ -196,14 +198,15 @@ class KargoziniImportLivewireTest extends TestCase
 
         $file = $this->createUploadFile($tsv);
 
-        Livewire::test('kargozini.import-persons.import-persons')
+        $component = Livewire::test('kargozini.import-persons.import-persons')
             ->set('file', $file)
             ->call('importPreview')
             ->assertSet('showPreview', true)
             ->call('cancelImport')
             ->assertSet('showPreview', false)
-            ->assertSet('importResults', null)
-            ->assertSet('importStats.total', 0);
+            ->assertSet('importResults', null);
+
+        $this->assertSame(0, $component->instance()->previewStats['total']);
     }
 
     // ==================== Edge cases ====================
@@ -218,11 +221,12 @@ class KargoziniImportLivewireTest extends TestCase
 
         $file = $this->createUploadFile($tsv);
 
-        Livewire::test('kargozini.import-persons.import-persons')
+        $component = Livewire::test('kargozini.import-persons.import-persons')
             ->set('file', $file)
             ->call('importPreview')
-            ->assertSet('showPreview', true)
-            ->assertSet('importStats.total', 0);
+            ->assertSet('showPreview', true);
+
+        $this->assertSame(0, $component->instance()->previewStats['total']);
     }
 
     public function test_exception_during_preview_shows_error(): void

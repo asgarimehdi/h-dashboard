@@ -113,17 +113,20 @@ class HardwareImportLivewireTest extends TestCase
         $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
 
         // Run preview with default compare key (pc_name)
-        Livewire::test('hardware.import-hardware.import-hardware')
+        $component = Livewire::test('hardware.import-hardware.import-hardware')
             ->set('file', $file)
             ->call('importPreview')
             ->assertSet('showPreview', true)
-            ->assertSet('compareKey', 'pc_name')
-            ->assertSet('importStats.total', 1)
-            // Change compare key to 'mac' → re-fires importPreview
-            ->set('compareKey', 'mac')
+            ->assertSet('compareKey', 'pc_name');
+
+        $this->assertSame(1, $component->instance()->previewStats['total']);
+
+        // Change compare key to 'mac' → re-fires importPreview
+        $component->set('compareKey', 'mac')
             ->assertSet('compareKey', 'mac')
-            ->assertSet('showPreview', true)
-            ->assertSet('importStats.total', 1);
+            ->assertSet('showPreview', true);
+
+        $this->assertSame(1, $component->instance()->previewStats['total']);
     }
 
     public function test_confirm_empty_error(): void
@@ -148,17 +151,21 @@ class HardwareImportLivewireTest extends TestCase
         $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
 
         // Run preview to populate state, then cancel → all resets
-        Livewire::test('hardware.import-hardware.import-hardware')
+        $component = Livewire::test('hardware.import-hardware.import-hardware')
             ->set('file', $file)
             ->call('importPreview')
-            ->assertSet('showPreview', true)
-            ->assertSet('importStats.total', 1)
-            ->call('cancelImport')
+            ->assertSet('showPreview', true);
+
+        $this->assertSame(1, $component->instance()->previewStats['total']);
+
+        $component->call('cancelImport')
             ->assertSet('showPreview', false)
             ->assertSet('importResults', null)
-            ->assertSet('file', null)
-            ->assertSet('importStats.total', 0)
-            ->assertSet('importStats.new', 0);
+            ->assertSet('previewToken', null)
+            ->assertSet('file', null);
+
+        $this->assertSame(0, $component->instance()->previewStats['total']);
+        $this->assertSame(0, $component->instance()->previewStats['new']);
     }
 
     public function test_row_override_skip(): void
@@ -185,8 +192,8 @@ class HardwareImportLivewireTest extends TestCase
             ->set('file', $file)
             ->call('importPreview')
             // Row 0 (PC-EXISTING) → status 'update', Row 1 (PC-NEW) → status 'create'
-            // Override row 1 (PC-NEW) to skip
-            ->set('previewData.1.selected_action', 'skip')
+            // Override row 1 (PC-NEW → Excel row 3) to skip
+            ->call('setRowAction', 3, 'skip')
             ->call('confirmImport');
 
         // PC-EXISTING should have been updated (not skipped)

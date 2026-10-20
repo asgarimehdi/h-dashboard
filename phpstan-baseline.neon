@@ -2533,12 +2533,6 @@ parameters:
 			path: resources/views/livewire/dashboard.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:updatedCompareKey\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
@@ -2569,19 +2563,7 @@ parameters:
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:\$importStats has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:\$messages has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/import\-hardware/import\-hardware\.blade\.php\:9\:\:\$previewData has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
@@ -2911,12 +2893,6 @@ parameters:
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:9\:\:getSelectedActions\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:9\:\:updatedCompareKey\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
@@ -2947,19 +2923,7 @@ parameters:
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:9\:\:\$importStats has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:9\:\:\$messages has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/import\-persons/import\-persons\.blade\.php\:9\:\:\$previewData has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php

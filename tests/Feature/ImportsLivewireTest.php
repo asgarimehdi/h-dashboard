@@ -57,13 +57,15 @@ test('hardware import component shows preview and confirms import', function () 
     $csvContent .= "1234567890\tPC-NEW\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t11:22:33:44:55:66\n";
     $file = UploadedFile::fake()->createWithContent('hardware.csv', $csvContent);
 
-    Livewire::actingAs($this->user)
+    $component = Livewire::actingAs($this->user)
         ->test('hardware.import-hardware.import-hardware')
         ->set('file', $file)
         ->call('importPreview')
-        ->assertSet('showPreview', true)
-        ->assertSet('importStats.total', 1)
-        ->call('confirmImport');
+        ->assertSet('showPreview', true);
+
+    expect($component->instance()->previewStats['total'])->toBe(1);
+
+    $component->call('confirmImport');
 
     $this->assertDatabaseHas('hardwares', ['pc_name' => 'PC-NEW']);
 });
@@ -73,13 +75,15 @@ test('person import component shows preview and confirms import', function () {
     $csvContent .= "9876543210\tعلی\tرضایی\t{$this->tahsil->id}\t{$this->estekhdam->id}\t{$this->semat->id}\t{$this->radif->id}\t".$this->unit->id."\n";
     $file = UploadedFile::fake()->createWithContent('persons.csv', $csvContent);
 
-    Livewire::actingAs($this->user)
+    $component = Livewire::actingAs($this->user)
         ->test('kargozini.import-persons.import-persons')
         ->set('file', $file)
         ->call('importPreview')
-        ->assertSet('showPreview', true)
-        ->assertSet('importStats.total', 1)
-        ->call('confirmImport');
+        ->assertSet('showPreview', true);
+
+    expect($component->instance()->previewStats['total'])->toBe(1);
+
+    $component->call('confirmImport');
 
     $this->assertDatabaseHas('persons', ['n_code' => '9876543210', 'u_id' => $this->unit->id]);
 });
@@ -200,12 +204,12 @@ test('person import confirm refuses a user with no unit assignment', function ()
     $file = UploadedFile::fake()->createWithContent('persons.csv', $csvContent);
 
     // Force a non-null importResults so the *scope* check, not the
-    // "no data" check, is the one that rejects.
+    // "no data" check, is the one that rejects. The scope gate runs before
+    // the cached-preview lookup, so no real preview token is needed.
     $component = Livewire::actingAs($unitlessUser)
         ->test('kargozini.import-persons.import-persons')
         ->set('file', $file)
-        ->set('importResults', ['preview' => [], 'created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => [], 'changes' => []])
-        ->set('previewData', [['n_code' => '9876543210', 'status' => 'create']]);
+        ->set('importResults', ['created' => 0, 'updated' => 0, 'skipped' => 0]);
 
     $component->call('confirmImport');
 
@@ -244,8 +248,7 @@ test('hardware import confirm refuses a user with no unit assignment', function 
     $component = Livewire::actingAs($unitlessUser)
         ->test('hardware.import-hardware.import-hardware')
         ->set('file', $file)
-        ->set('importResults', ['preview' => [], 'created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => [], 'changes' => []])
-        ->set('previewData', [['pc_name' => 'PC-NEW', 'status' => 'create']]);
+        ->set('importResults', ['created' => 0, 'updated' => 0, 'skipped' => 0]);
 
     $component->call('confirmImport');
 
