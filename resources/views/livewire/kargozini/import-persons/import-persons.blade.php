@@ -46,6 +46,7 @@ return new class extends Component
 
     public $compareKey = 'n_code'; // always n_code for persons
 
+    /** @var array{total: int, new: int, updated: int, unchanged: int, errors: int} */
     public array $importStats = [
         'total' => 0,
         'new' => 0,
