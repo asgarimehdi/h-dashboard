@@ -77,7 +77,7 @@ test('dashboard renders expected sections', function () {
 
     Livewire::test('dashboard')
         ->assertSee('داشبورد مدیریت اطلاعات سلامت')
-        ->assertSee('روند تیکت‌ها')
+        ->assertSee('روند ایجاد تیکت‌ها')
         ->assertSee('وضعیت وظایف');
 });
 

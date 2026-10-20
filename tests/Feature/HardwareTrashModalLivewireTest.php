@@ -11,6 +11,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -171,9 +172,9 @@ class HardwareTrashModalLivewireTest extends TestCase
             'pc_name' => 'PC-NoUser',
         ]);
 
-        // Simulate a system delete by nullifying user_id on the deleted audit
+        // Simulate a system-created row by nullifying user_id on the created audit
         HardwareAudit::where('hardware_id', $hw->id)
-            ->where('action', 'deleted')
+            ->where('action', 'created')
             ->update(['user_id' => null]);
 
         $hw->delete();
@@ -337,9 +338,13 @@ class HardwareTrashModalLivewireTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        Livewire::test('hardware.index')
-            ->call('restoreRecord', $auditId)
-            ->assertSee('بازگردانی'); // error toast mentioning restore
+        $component = Livewire::test('hardware.index')
+            ->call('restoreRecord', $auditId);
+
+        // The rejection is a MaryUI toast (client-side), so assert its own message.
+        $toast = json_decode(Str::between($component->effects['xjs'][0]['expression'], 'toast(', ')'), true);
+
+        $this->assertSame('رکورد تاریخچه یافت نشد.', $toast['toast']['title']);
 
         // Hardware should NOT have been created
         $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-NoRestore']);

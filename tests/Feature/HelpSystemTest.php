@@ -75,6 +75,50 @@ it('hardware page help modal opens via button', function () {
         ->assertSet('showHelpModal', true);
 });
 
+it('does not ship the help modal body while the modal is closed', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->assertOk()
+        ->assertSet('showHelpModal', false)
+        ->assertDontSee('نقشه‌های تعاملی و تحلیل مکانی')
+        ->assertDontSee('راهنمای این بخش در دسترس نیست');
+});
+
+it('ships the help modal body on the same response that opens it', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->assertOk()
+        ->assertDontSee('نقشه‌های تعاملی و تحلیل مکانی')
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('نقشه‌های تعاملی و تحلیل مکانی');
+});
+
+it('ships a materially smaller response while the help modal is closed', function () {
+    $user = makeHelpUser();
+
+    $closed = strlen(Livewire::actingAs($user)->test('hardware.index')->html());
+
+    $open = strlen(
+        Livewire::actingAs($user)->test('hardware.index')
+            ->call('$set', 'showHelpModal', true)
+            ->html()
+    );
+
+    expect($open - $closed)->toBeGreaterThan(20 * 1024);
+});
+
+it('keeps the unknown-section fallback when the help modal is open', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->call('$set', 'showHelpModal', true)
+        ->assertSee('راهنمای این بخش در دسترس نیست')
+        ->assertSee('محتوای راهنما تعریف نشده است');
+});
+
 it('every help content section renders without errors', function (string $section) {
     $user = makeHelpUser();
     // Render each help content file standalone via the modal component path
@@ -84,5 +128,5 @@ it('every help content section renders without errors', function (string $sectio
     'dashboard', 'hardware', 'hardware-import', 'persons-import', 'personnel',
     'units', 'tickets', 'todos', 'reports', 'maps', 'settings', 'roles',
     'permissions', 'users', 'activity-log', 'networks', 'wireless', 'tools',
-    'search', 'profile',
+    'search', 'profile', 'hr-dashboard',
 ]);
