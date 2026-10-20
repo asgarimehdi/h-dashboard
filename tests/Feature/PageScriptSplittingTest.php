@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -39,6 +40,13 @@ class PageScriptSplittingTest extends TestCase
 
     /** Libraries consumed broadly enough to stay in the layout. */
     private const GLOBAL_LIBS = ['js/leaflet/leaflet.js', 'js/other/jalalidatepicker.min.js'];
+
+    /**
+     * Views we do not own: the OPcache GUI is vendored verbatim and pulls
+     * react/axios from cdnjs on its own route (`routes/web.php`). It is not
+     * part of the app's own script budget — see #1183.
+     */
+    private const THIRD_PARTY_VIEWS = ['views/op/index.php'];
 
     protected function setUp(): void
     {
@@ -142,5 +150,66 @@ class PageScriptSplittingTest extends TestCase
             $response->assertDontSee(self::DRAW);
             $response->assertDontSee(self::FULL_CALENDAR);
         }
+    }
+
+    // ==================== No CDN scripts in the views (#1183) ====================
+
+    /**
+     * Issue #1183 — the Zabbix traffic chart loaded Highcharts from
+     * `https://code.highcharts.com/highcharts.js` while the other six chart
+     * pages used the vendored copy in `public/js/chart/`. A CDN script tag
+     * needs the network at render time, is not covered by the app CSP, and
+     * silently changes the library version under the app.
+     *
+     * This locks the CDN out of every view so the dependency cannot creep
+     * back in — the one page that used it now loads the vendored build.
+     */
+    public function test_no_view_loads_a_script_from_an_external_origin(): void
+    {
+        $offenders = [];
+
+        foreach (File::allFiles(resource_path('views')) as $file) {
+            if (in_array($this->relativePath($file->getPathname()), self::THIRD_PARTY_VIEWS, true)) {
+                continue;
+            }
+
+            foreach ($this->externalScriptSources($file->getContents()) as $source) {
+                $offenders[] = $this->relativePath($file->getPathname()).' -> '.$source;
+            }
+        }
+
+        expect($offenders)->toBe([]);
+    }
+
+    /**
+     * Script sources that point at a foreign host: absolute (`https://…`) or
+     * protocol-relative (`//…`). Same-origin sources — a path, `asset()`,
+     * `route()`, `@vite` — are left alone.
+     *
+     * HTML comments are stripped first: a commented-out snippet is not a
+     * request the browser ever makes.
+     *
+     * @return array<int, string>
+     */
+    private function externalScriptSources(string $contents): array
+    {
+        $contents = preg_replace('/<!--.*?-->/s', '', $contents) ?? $contents;
+
+        preg_match_all('/<script\b[^>]*\bsrc\s*=\s*(["\'])(.*?)\1/i', $contents, $matches);
+
+        $sources = [];
+
+        foreach ($matches[2] ?? [] as $source) {
+            if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', trim($source))) {
+                $sources[] = $source;
+            }
+        }
+
+        return $sources;
+    }
+
+    private function relativePath(string $path): string
+    {
+        return str_replace(resource_path().DIRECTORY_SEPARATOR, '', $path);
     }
 }
