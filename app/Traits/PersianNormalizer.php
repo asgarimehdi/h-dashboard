@@ -114,9 +114,16 @@ trait PersianNormalizer
      * `%` and `_` as wildcards and has NO character-class syntax, so `[ ... ]`
      * is matched literally and a "either spelling" pattern cannot be expressed.
      * `regexp_replace` is the documented way to change the text being matched
-     * (PostgreSQL 9.7 "Pattern Matching"). Consequence: not index-friendly —
-     * though the term is always a leading `%`, so the LIKE was never
-     * index-seekable anyway.
+     * (PostgreSQL 9.7 "Pattern Matching"). Consequence: the predicate is an
+     * expression, so a plain column index cannot serve it.
+     *
+     * The expression is therefore mirrored in GIN trigram indexes by
+     * `2026_10_20_000001_add_folded_trgm_indexes_to_tickets_search.php` (and,
+     * for other tickets-era call sites, by their own migrations). Those indexes
+     * must be recreated whenever `charMap()`/`digitMap()` change: the index is
+     * keyed on this exact expression, so a changed map leaves it silently
+     * unused. `TicketsTodosTrgmIndexTest` compares the catalog definition back
+     * against this helper to catch that.
      */
     public static function foldSeparatorsSql(string $column): string
     {
