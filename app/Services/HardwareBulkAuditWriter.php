@@ -60,11 +60,15 @@ class HardwareBulkAuditWriter
             // path does not persist raw formula payloads in audit rows (#886).
             if (is_array($changes)) {
                 foreach ($changes as $key => $entry) {
-                    if (is_array($entry)) {
-                        foreach (['old', 'new'] as $field) {
-                            if (isset($entry[$field]) && is_string($entry[$field])) {
-                                $changes[$key][$field] = ExcelCell::escape($entry[$field]);
-                            }
+                    // `HardwareAuditChange::toDiffList()` returns
+                    // `list<array{field: string, old: mixed, new: mixed}>`, so
+                    // every entry is an array by contract. A nested
+                    // `is_array($entry)` guard is therefore always true, and
+                    // PHPStan level 6 rejects it as an already-narrowed type
+                    // (the guard was what broke the #1194 CI run).
+                    foreach (['old', 'new'] as $field) {
+                        if (isset($entry[$field]) && is_string($entry[$field])) {
+                            $changes[$key][$field] = ExcelCell::escape($entry[$field]);
                         }
                     }
                 }
