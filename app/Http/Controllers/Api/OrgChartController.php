@@ -7,6 +7,7 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
 use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\ScopeCacheKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
@@ -86,7 +87,7 @@ class OrgChartController extends Controller
         $request->validate(['initial_limit' => ['sometimes', new PerPage(100)]]);
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
         $version = Cache::get('hr_stats_version', 0);
         $cacheKey = "hr:expandable:v{$version}:{$scopeHash}:{$initialLimit}";
 
@@ -125,7 +126,7 @@ class OrgChartController extends Controller
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
         $result = app(CacheInvalidationServiceInterface::class)
             ->remember('unit_hierarchy', $scopeHash, function () use ($accessibleIds, $unitId) {
                 $units = Unit::whereIn('id', $accessibleIds)
@@ -194,7 +195,7 @@ class OrgChartController extends Controller
     private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
     {
         $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         return "hr:{$segment}:v{$version}:{$scopeHash}";
     }

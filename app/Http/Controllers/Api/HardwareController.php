@@ -11,6 +11,7 @@ use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\HardwareBulkAuditWriter;
 use App\Support\HardwareAuditChange;
+use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -259,7 +260,7 @@ class HardwareController extends Controller
         // invalidates all previously cached scopes without flushing the whole
         // cache. Stale entries expire naturally via the 10-minute TTL.
         $version = Cache::get('hardware_stats_version', 0);
-        $cacheKey = "hardware_stats:v{$version}:".md5(json_encode($accessibleIds));
+        $cacheKey = "hardware_stats:v{$version}:".ScopeCacheKey::hash($accessibleIds);
 
         $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
             $baseQuery = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')

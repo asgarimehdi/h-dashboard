@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Rules\ReportMonths;
+use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -200,7 +201,7 @@ class HrAnalyticsController extends Controller
     private function hrAnalyticsCacheKey(string $type, array $accessibleIds, int $months = 12): string
     {
         $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         return "hr:analytics:{$type}:v{$version}:m{$months}:{$scopeHash}";
     }

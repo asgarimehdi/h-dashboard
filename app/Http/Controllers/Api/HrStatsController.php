@@ -7,6 +7,7 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Rules\PerPage;
+use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -79,7 +80,7 @@ class HrStatsController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
         $version = Cache::get('hr_stats_version', 0);
         $cacheKey = "hr:vacancies:v{$version}:{$scopeHash}";
 
@@ -196,7 +197,7 @@ class HrStatsController extends Controller
     private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
     {
         $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         return "hr:{$segment}:v{$version}:{$scopeHash}";
     }
