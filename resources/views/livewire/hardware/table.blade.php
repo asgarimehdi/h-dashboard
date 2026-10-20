@@ -51,7 +51,12 @@
         @scope('cell_checkbox', $hw)
             {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. نام باید
                  ردیف را مشخص کند، وگرنه انتخاب گروهی عملاً غیرقابل‌انجام است. --}}
-            <input type="checkbox" wire:model.live="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm"
+            {{-- #1175: the binding is DEFERRED. A live binding cost one full Livewire
+                 round trip per tick, so selecting N rows cost N component updates.
+                 The whole selection now travels with the next request — the bulk
+                 toolbar reads it on the client, so nothing waits for the server. --}}
+            <input type="checkbox" wire:model="selected" value="{{ $hw['id'] }}" class="checkbox checkbox-sm"
+                x-on:change="$dispatch('selection-changed')"
                 aria-label="انتخاب سخت افزار {{ $hw['pc_name'] }}" />
         @endscope
         @scope('cell_status', $hw)

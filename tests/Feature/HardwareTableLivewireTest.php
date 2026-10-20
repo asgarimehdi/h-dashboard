@@ -170,6 +170,52 @@ class HardwareTableLivewireTest extends TestCase
             ->assertSet('selected', [$hw->id]);
     }
 
+    // ==================== S4b: Deferred selection binding (#1175) ====================
+
+    /**
+     * The row checkbox must NOT be a live binding.
+     *
+     * A live binding costs one full Livewire round trip per tick, so
+     * selecting N rows cost N component updates (#1175). The deferred
+     * binding ships the whole selection with the next request instead —
+     * which only works because the bulk toolbar reads the selection on the
+     * client, so the round trip is not needed to light the buttons up.
+     */
+    public function test_row_checkbox_uses_a_deferred_binding(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+
+        $this->createHardware([], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('wire:model="selected"', false)
+            ->assertDontSee('wire:model.live="selected"', false);
+    }
+
+    /**
+     * The bulk toolbar must count the selection on the client.
+     *
+     * With a deferred binding the server does not know about the ticked rows
+     * yet, so a server-rendered count would keep the bulk buttons disabled
+     * and the user could never send the first request (#1175, STOP #1).
+     */
+    public function test_bulk_toolbar_counts_the_selection_on_the_client(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+
+        $this->createHardware([], $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->assertSee('x-data="{ sel:', false)
+            ->assertSee('x-bind:disabled="sel === 0"', false)
+            ->assertSee('x-text="sel + \' انتخاب\'"', false)
+            // The count is client-side, so the accessible name is bound to it
+            // too — an icon-only button with no name is a #956 regression.
+            ->assertSee('x-bind:aria-label="sel + \' انتخاب\'"', false);
+    }
+
     // ==================== S5: perPage pagination ====================
 
     public function test_perpage_values(): void

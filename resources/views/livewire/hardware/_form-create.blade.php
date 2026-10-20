@@ -3,7 +3,10 @@
             <div class="mb-4 p-4 bg-base-200 rounded-lg">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative">
-                        <x-input wire:model.live="n_code" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
+                        {{-- #1175: 500ms is the repo-wide person-search debounce
+                             (users/index.blade.php, units/chart.blade.php). Without it
+                             every character typed fired a round trip and a lookup. --}}
+                        <x-input wire:model.live.debounce.500ms="n_code" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
                         @if($n_code_status === 'valid')
                             <div class="text-xs text-success mt-1">✓ {{ $n_code_name }} @if($n_code_unit)({{ $n_code_unit }})@endif</div>
                         @elseif($n_code_status === 'invalid')
