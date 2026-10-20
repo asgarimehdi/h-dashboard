@@ -148,7 +148,7 @@ class HardwareBulkDeleteAuditTest extends TestCase
         $id = $data['hardware'][0]->id;
         $this->webBulkDelete([$id]);
 
-        $dh = Livewire::test('hardware.index')->call('loadDeletedHardware')->get('deletedHardware');
+        $dh = Livewire::test('hardware.index')->call('loadDeletedHardware')->get('trashRows');
         $row = collect($dh)->firstWhere('hardware_id', $id);
 
         $this->assertNotNull($row, 'a web bulk-deleted device must be listed in the trash');
@@ -166,7 +166,7 @@ class HardwareBulkDeleteAuditTest extends TestCase
         $id = $data['hardware'][0]->id;
         $this->postJson('/api/hardware/bulk-delete', ['ids' => [$id]])->assertOk();
 
-        $dh = Livewire::test('hardware.index')->call('loadDeletedHardware')->get('deletedHardware');
+        $dh = Livewire::test('hardware.index')->call('loadDeletedHardware')->get('trashRows');
         $row = collect($dh)->firstWhere('hardware_id', $id);
 
         $this->assertNotNull($row, 'an API bulk-deleted device must be listed in the trash');

@@ -91,9 +91,44 @@ class HardwareTrashModalLivewireTest extends TestCase
         Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
             ->assertSet('showTrashModal', true)
-            ->assertSet('deletedHardware', [])
+            ->assertSet('trashRows', [])
             ->assertSee('هیچ سخت‌افزار حذف شده‌ای در دسترس شما نیست.');
     }
+
+    /**
+     * #1170: the public payload carries only the current page. 30 deleted
+     * rows render as one 20-row page, the total stays 30, and the old
+     * all-history `deletedHardware` property must not ride the snapshot.
+     */
+    public function test_trash_payload_is_bounded_to_per_page(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        for ($i = 0; $i < 30; $i++) {
+            $this->createHardwareForUser($data['user'], $data['unit'], [
+                'pc_name' => "PC-Page-Bulk-{$i}",
+            ])->delete();
+        }
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSet('showTrashModal', true)
+            ->assertSet('trashTotal', 30)
+            ->assertSet('trashRows', fn ($rows) => is_array($rows) && count($rows) === 20);
+
+        // #1040-style payload lock: the old all-history property is gone, and
+        // the 30 deleted rows reach the component snapshot only 20 at a time —
+        // each row's rendered `changes` carry its `pc_name`, so exactly 20
+        // occurrences proves one page travelled, not the whole history.
+        $snapshotJson = (string) json_encode($component->snapshot);
+
+        $this->assertStringNotContainsString('"deletedHardware"', $snapshotJson, 'the old unbounded payload must be gone from the snapshot');
+        $this->assertSame(20, substr_count($snapshotJson, 'PC-Page-Bulk-'), '30 deleted rows must render as exactly one 20-row page in the payload');
+    }
+
+    // ==================== S2: Deleted Item Shows ====================
 
     // ==================== S2: Deleted Item Shows ====================
 
@@ -111,7 +146,7 @@ class HardwareTrashModalLivewireTest extends TestCase
         Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
             ->assertSet('showTrashModal', true)
-            ->assertSet('deletedHardware', fn ($dh) => count($dh) >= 1)
+            ->assertSet('trashRows', fn ($dh) => count($dh) >= 1)
             ->assertSee('PC-DeleteMe');
     }
 
@@ -131,11 +166,11 @@ class HardwareTrashModalLivewireTest extends TestCase
         $component = Livewire::test('hardware.index')
             ->call('loadDeletedHardware');
 
-        $count1 = count($component->get('deletedHardware'));
+        $count1 = count($component->get('trashRows'));
 
         $component->call('loadDeletedHardware');
 
-        $count2 = count($component->get('deletedHardware'));
+        $count2 = count($component->get('trashRows'));
 
         $this->assertEquals($count1, $count2, 'Multiple calls should return same count');
     }
@@ -282,7 +317,7 @@ class HardwareTrashModalLivewireTest extends TestCase
         Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
             ->assertDontSee('PC-NoNcode')
-            ->assertSet('deletedHardware', [])
+            ->assertSet('trashRows', [])
             ->assertSee('هیچ سخت‌افزار حذف شده‌ای در دسترس شما نیست.');
 
         $this->assertNotNull($auditId);
@@ -415,12 +450,12 @@ class HardwareTrashModalLivewireTest extends TestCase
         ]);
         $hw->delete();
 
-        // Verify that loadDeletedHardware correctly populates deletedHardware array
+        // Verify that loadDeletedHardware correctly populates the trash rows array
         $component = Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
             ->assertSet('showTrashModal', true);
 
-        $dh = $component->get('deletedHardware');
+        $dh = $component->get('trashRows');
         $this->assertNotEmpty($dh);
 
         // The created audit should have changes array (not null) with field data
@@ -489,7 +524,8 @@ class HardwareTrashModalLivewireTest extends TestCase
         Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
             ->assertSet('showTrashModal', true)
-            ->assertSet('deletedHardware', fn ($dh) => count($dh) >= 30);
+            ->assertSet('trashTotal', 30)
+            ->assertSet('trashRows', fn ($dh) => count($dh) <= 20);
     }
 
     // ==================== E4: Concurrent Deletes Between Load and Restore ====================
@@ -550,7 +586,7 @@ class HardwareTrashModalLivewireTest extends TestCase
             ->call('loadDeletedHardware')
             ->assertSee('PC-OwnUnit')
             ->assertDontSee('PC-ForeignUnit')
-            ->assertSet('deletedHardware', function (array $dh) use ($ownId, $foreignId): bool {
+            ->assertSet('trashRows', function (array $dh) use ($ownId, $foreignId): bool {
                 $ids = collect($dh)->pluck('hardware_id')->all();
 
                 return in_array($ownId, $ids, true) && ! in_array($foreignId, $ids, true);
@@ -609,19 +645,20 @@ class HardwareTrashModalLivewireTest extends TestCase
 
         // …and the restored row has dropped out of the trash list
         $component->call('loadDeletedHardware')
-            ->assertSet('deletedHardware', function (array $dh) use ($originalId): bool {
+            ->assertSet('trashRows', function (array $dh) use ($originalId): bool {
                 return ! in_array($originalId, collect($dh)->pluck('hardware_id')->all(), true);
             });
     }
 
-    // ==================== S9: Trash state shape (issue #1041) ====================
+    // ==================== S9: Trash state shape (issue #1041 / #1170) ====================
 
     /**
-     * #1041: `deletedHardware` is a public Livewire property, so every row is
-     * serialized into the component payload on every round-trip — even while
-     * the operator is just ticking checkboxes elsewhere on the page. Rows must
-     * therefore be the handful of scalars the modal reads, never whole Eloquent
-     * models (whose `changes` JSON and eager-loaded `user` would ride along).
+     * #1041, #1170: the trash payload is a public Livewire property, so every
+     * row is serialized into the component payload on every round-trip — even
+     * while the operator is just ticking checkboxes elsewhere on the page.
+     * Rows must therefore be the handful of scalars the modal reads, never
+     * whole Eloquent models (whose `changes` JSON and eager-loaded `user`
+     * would ride along) — and only the current page travels (#1170).
      */
     public function test_trash_state_rows_are_small_arrays_not_models(): void
     {
@@ -635,7 +672,7 @@ class HardwareTrashModalLivewireTest extends TestCase
         $hw->delete();
 
         $component = Livewire::test('hardware.index')->call('loadDeletedHardware');
-        $dh = $component->get('deletedHardware');
+        $dh = $component->get('trashRows');
 
         $this->assertNotEmpty($dh);
         /** @var mixed $row */
@@ -662,10 +699,10 @@ class HardwareTrashModalLivewireTest extends TestCase
     }
 
     /**
-     * #1041: the STOP condition — the modal renders (and `restoreRecord()`
-     * rebuilds from) the audit's `changes`, so the small-row shape must keep
-     * the whole change list, including the `pc_name` and `n_code` rows the
-     * header and the restore guard read.
+     * #1041, #1170: the STOP condition — the modal renders (and
+     * `restoreRecord()` rebuilds from) the audit's `changes`, so the small-row
+     * shape must keep the whole change list, including the `pc_name` and
+     * `n_code` rows the header and the restore guard read.
      */
     public function test_trash_state_keeps_the_full_change_list(): void
     {
@@ -682,7 +719,7 @@ class HardwareTrashModalLivewireTest extends TestCase
 
         $dh = Livewire::test('hardware.index')
             ->call('loadDeletedHardware')
-            ->get('deletedHardware');
+            ->get('trashRows');
 
         $row = collect($dh)->firstWhere('hardware_id', $hw->id);
         $this->assertNotNull($row);
@@ -695,10 +732,13 @@ class HardwareTrashModalLivewireTest extends TestCase
     }
 
     /**
-     * #1041: the PHP scope filter must survive at a volume where a lazy
-     * "optimisation" would be tempting — 100 own rows listed, 100 foreign rows
-     * denied. `snapshotNCode()` reads `changes` in PHP, so this path cannot be
-     * pushed wholesale into SQL; this test is the guard for that.
+     * #1041, #1170: the PHP scope filter must survive at a volume where a lazy
+     * "optimisation" would be tempting — 100 own rows listed (across all
+     * pages), 100 foreign rows denied. `snapshotNCode()` reads `changes` in
+     * PHP, so this path cannot be pushed wholesale into SQL; this test is the
+     * guard for that. Pagination lives on the filtered set (#1170 owner
+     * decision: option B), so walking every page must yield the exact same
+     * visible set the pre-pagination component produced.
      */
     public function test_trash_list_scopes_one_hundred_own_against_one_hundred_foreign(): void
     {
@@ -728,9 +768,15 @@ class HardwareTrashModalLivewireTest extends TestCase
             $hw->delete();
         }
 
-        $listed = collect(
-            Livewire::test('hardware.index')->call('loadDeletedHardware')->get('deletedHardware')
-        )->pluck('hardware_id')->all();
+        $component = Livewire::test('hardware.index')->call('loadDeletedHardware');
+
+        $listed = collect();
+        $listed = $listed->merge(collect($component->get('trashRows'))->pluck('hardware_id'));
+        for ($page = 2; $page <= 5; $page++) {
+            $component->call('trashPage', $page);
+            $listed = $listed->merge(collect($component->get('trashRows'))->pluck('hardware_id'));
+        }
+        $listed = $listed->all();
 
         $this->assertCount(100, $listed);
 
@@ -741,5 +787,121 @@ class HardwareTrashModalLivewireTest extends TestCase
         sort($ownIds);
         sort($listed);
         $this->assertSame($ownIds, $listed);
+    }
+
+    /**
+     * #1170: `trashTotal` counts in-scope rows, not raw audits. The same
+     * 100-own / 100-foreign volume must report exactly 100 — a SQL-side
+     * paginate would report 200 here (option A, rejected).
+     */
+    public function test_trash_total_is_the_allowed_row_count(): void
+    {
+        $caller = $this->createUserWithUnit(['manage_hardware']);
+        $foreign = $this->createUserWithUnit(['manage_hardware']);
+
+        Session::put('current_unit_id', $caller['unit']->id);
+        $this->actingAs($caller['user']);
+
+        for ($i = 0; $i < 100; $i++) {
+            $this->createHardwareForUser($caller['user'], $caller['unit'], [
+                'pc_name' => "PC-Total-Own-{$i}",
+            ])->delete();
+        }
+        for ($i = 0; $i < 100; $i++) {
+            Hardware::create([
+                'n_code' => $foreign['user']->n_code,
+                'pc_name' => "PC-Total-Foreign-{$i}",
+                'type' => 'PC',
+            ])->delete();
+        }
+
+        Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 100);
+    }
+
+    /**
+     * #1170: restoring a row on page 2 keeps the operator on page 2, removes
+     * the restored row, and the total reflects it — assert on the database.
+     */
+    public function test_restore_from_second_page_updates_current_page(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        // 25 rows, each deleted at a distinct hour so the page order is
+        // deterministic: newest first — page 1 ranks 1..20, page 2 ranks 21..25.
+        $hw23 = null;
+        for ($i = 1; $i <= 25; $i++) {
+            $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+                'pc_name' => "PC-Page2-{$i}",
+            ]);
+            $hw->delete();
+
+            if ($i === 23) {
+                $hw23 = $hw;
+            }
+        }
+
+        // Distinct delete timestamps, newest (rank 1) = the last/first row.
+        DB::table('hardware_audits')
+            ->whereIn('action', HardwareAudit::DELETING_ACTIONS)
+            ->get()
+            ->each(function ($audit, $n) {
+                DB::table('hardware_audits')->where('id', $audit->id)->update([
+                    'created_at' => now()->subHours($n + 1),
+                ]);
+            });
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->call('trashPage', 2)
+            ->assertSet('trashCurrentPage', 2);
+
+        $restoredAuditId = HardwareAudit::where('hardware_id', $hw23->id)
+            ->where('action', 'created')
+            ->firstOrFail()->id;
+
+        $component->call('restoreRecord', $restoredAuditId);
+
+        // Assert on the database: the record is back.
+        $this->assertDatabaseHas('hardwares', ['id' => $hw23->id, 'pc_name' => 'PC-Page2-23']);
+
+        // Still on page 2, restored row gone, total decremented.
+        $component->assertSet('showTrashModal', true)
+            ->assertSet('trashCurrentPage', 2)
+            ->assertSet('trashTotal', 24)
+            ->assertSet('trashRows', function (array $rows) use ($hw23) {
+                return ! in_array($hw23->id, collect($rows)->pluck('hardware_id')->all(), true);
+            });
+    }
+
+    /**
+     * #1170: after a restore the restored row leaves the (current) page list.
+     */
+    public function test_restored_row_leaves_the_list(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-LeaveList',
+        ]);
+        $audit = $this->getCreatedAudit($hw);
+        $hw->delete();
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSee('PC-LeaveList');
+
+        $component->call('restoreRecord', $audit->id);
+
+        $component->assertSet('showTrashModal', true)
+            ->assertSet('trashTotal', 0)
+            ->assertSet('trashRows', []);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'pc_name' => 'PC-LeaveList']);
     }
 }
