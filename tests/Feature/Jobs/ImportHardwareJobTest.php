@@ -7,6 +7,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
+use App\Support\ImportStatus;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -187,6 +188,22 @@ class ImportHardwareJobTest extends TestCase
                 && ($context['path'] ?? null) === 'imports/x.csv');
     }
 
+    /**
+     * #1194: the job never retries (`$tries = 1`), so a failed run leaves the
+     * stored upload behind forever unless `failed()` deletes it. The UI has
+     * already told the user the import is running, so nothing else would ever
+     * clean it up.
+     */
+    public function test_failed_deletes_the_stored_upload(): void
+    {
+        Storage::disk('local')->put('imports/leftover.csv', $this->hardwareCsv('1234567890'));
+
+        $job = new ImportHardwareJob('imports/leftover.csv', 'pc_name', [], []);
+        $job->failed(new \RuntimeException('boom'));
+
+        Storage::disk('local')->assertMissing('imports/leftover.csv');
+    }
+
     public function test_job_imports_update_rows_as_well_as_creates(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
@@ -213,5 +230,70 @@ class ImportHardwareJobTest extends TestCase
 
         $this->assertDatabaseHas('hardwares', ['pc_name' => 'PC-EXISTING', 'os' => 'Windows 11']);
         $this->assertSame(1, HardwareAudit::where('source', 'import')->where('action', 'updated')->count());
+    }
+
+    /**
+     * #1194: the browser learns the import finished through the cache — the
+     * job publishes the counts and frees the user's import slot.
+     */
+    public function test_job_publishes_the_result_and_frees_the_import_slot(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+
+        $token = 'test-token';
+
+        // The dispatcher took the slot before queueing the job.
+        $this->assertTrue(ImportStatus::claim($user->id, $token));
+
+        Storage::disk('local')->put('imports/publish.csv', $this->hardwareCsv($user->n_code, 'PC-PUBLISH'));
+
+        (new ImportHardwareJob(
+            path: 'imports/publish.csv',
+            compareKey: 'pc_name',
+            selectedActions: ['row_2' => 'create'],
+            accessibleUnitIds: [$unit->id],
+            userId: $user->id,
+            statusToken: $token,
+        ))->handle();
+
+        $result = ImportStatus::read($user->id, $token);
+
+        $this->assertNotNull($result, 'Expected the job to publish its result.');
+        $this->assertSame('done', $result['state']);
+        $this->assertSame(1, $result['created']);
+
+        // The slot is free again, so the user can import once more.
+        $this->assertTrue(ImportStatus::claim($user->id, 'next-token'));
+    }
+
+    /**
+     * #1194: a failed import must also free the slot and tell the browser,
+     * otherwise the user is locked out of importing for the whole TTL.
+     */
+    public function test_failed_job_publishes_the_failure_and_frees_the_import_slot(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+
+        $token = 'failed-token';
+        $this->assertTrue(ImportStatus::claim($user->id, $token));
+
+        $job = new ImportHardwareJob(
+            path: 'imports/gone.csv',
+            compareKey: 'pc_name',
+            selectedActions: ['row_2' => 'create'],
+            accessibleUnitIds: [],
+            userId: $user->id,
+            statusToken: $token,
+        );
+
+        $job->failed(new \RuntimeException('boom'));
+
+        $result = ImportStatus::read($user->id, $token);
+
+        $this->assertNotNull($result, 'Expected the failed job to publish a failure.');
+        $this->assertSame('failed', $result['state']);
+        $this->assertSame('boom', $result['error']);
+
+        $this->assertTrue(ImportStatus::claim($user->id, 'next-token'));
     }
 }

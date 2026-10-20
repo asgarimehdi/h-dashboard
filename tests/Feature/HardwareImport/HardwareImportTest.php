@@ -469,4 +469,102 @@ class HardwareImportTest extends TestCase
 
         @unlink($file);
     }
+
+    /**
+     * #1194: `pc_name` / `mac` are not unique, so a sheet may repeat the
+     * compare key. Both rows resolve to the same device, and a chunked
+     * `upsert(['id'])` cannot touch the same row twice — PostgreSQL rejects
+     * the whole statement with "ON CONFLICT DO UPDATE command cannot affect
+     * row a second time". The pending updates are deduped by id (last write
+     * wins) so the sheet imports instead of aborting the chunk.
+     */
+    public function test_a_duplicate_compare_key_sheet_updates_the_device_once(): void
+    {
+        $data = $this->createTestData();
+
+        // The existing device, matched by pc_name.
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-001', 'pc', 'Windows 11', 'Intel i7'],
+                ['1234567890', 'PC-001', 'pc', 'Windows 11', 'Intel i9'],
+            ],
+            ['n_code', 'pc_name', 'type', 'os', 'cpu']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('pc_name');
+        $import->setSelectedActions(['row_2' => 'update', 'row_3' => 'update']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(2, $results['updated']);
+        $this->assertSame(0, $results['created']);
+
+        // One device, and the last sheet row's value won.
+        $this->assertSame(1, Hardware::where('pc_name', 'PC-001')->count());
+        $this->assertDatabaseHas('hardwares', ['pc_name' => 'PC-001', 'cpu' => 'Intel i9']);
+
+        @unlink($file);
+    }
+
+    /**
+     * #1194: the bulk import path writes its audit rows through
+     * `HardwareBulkAuditWriter`, which must escape a formula payload exactly
+     * like `HardwareAuditObserver::sanitizeChanges` does. Before the fix the
+     * raw payload was persisted by the import path while the observer escaped
+     * it, so the write-time invariant differed by path.
+     */
+    public function test_the_import_path_escapes_formula_payloads_in_audit_rows(): void
+    {
+        $data = $this->createTestData();
+
+        $payload = '=cmd|\' /c calc\'!A0';
+
+        $file = $this->csvPath(
+            [['1234567890', 'PC-001', 'pc', 'Windows 11', $payload]],
+            ['n_code', 'pc_name', 'type', 'os', 'cpu']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('pc_name');
+        $import->setSelectedActions(['row_2' => 'update']);
+
+        Excel::import($import, $file);
+
+        $audit = HardwareAudit::where('source', 'import')->latest('id')->first();
+
+        $this->assertNotNull($audit, 'The import wrote no audit row.');
+
+        $changes = $audit->changes;
+        $changes = is_array($changes) ? $changes : json_decode((string) $changes, true);
+
+        $this->assertIsArray($changes);
+
+        // Assert on the decoded values: `json_encode` escapes `/` as `\/`, so
+        // the raw payload text never appears verbatim in the encoded string.
+        $values = [];
+
+        foreach ($changes as $entry) {
+            foreach (['old', 'new'] as $field) {
+                if (isset($entry[$field]) && is_string($entry[$field])) {
+                    $values[] = $entry[$field];
+                }
+            }
+        }
+
+        $this->assertNotContains(
+            $payload,
+            $values,
+            'The import path persisted a raw formula payload in an audit row.'
+        );
+        $this->assertContains(
+            "'".$payload,
+            $values,
+            'The import path did not escape the formula payload.'
+        );
+
+        @unlink($file);
+    }
 }
