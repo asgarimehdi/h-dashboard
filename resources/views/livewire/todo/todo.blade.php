@@ -45,6 +45,41 @@ return new class extends Component
     public function mount(): void
     {
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
+
+        // Issue #1169: the first paint used to run `getEvents()` with a null
+        // range — an unbounded query cached under the `:all:` key — and
+        // FullCalendar's `datesSet` immediately discarded that payload for a
+        // date-filtered one. Seed the window the month grid actually shows so
+        // the first render costs the same as the second.
+        [$this->calendarStart, $this->calendarEnd] = $this->calendarWindowFor(now());
+    }
+
+    /**
+     * Issue #1169: the window FullCalendar's `dayGridMonth` really covers.
+     * With `firstDay: 6` the grid starts on the Saturday on/before the 1st and
+     * ends on the Saturday after the last day — `subWeek()` is not that
+     * boundary for every month, which is why a `subWeek()` window never
+     * matched `datesSet` and the redundant first refetch survived.
+     *
+     * Both bounds are ISO 8601 (`toIso8601String()`) so they compare exactly
+     * with the `info.startStr` / `info.endStr` FullCalendar sends.
+     *
+     * `\Carbon\CarbonInterface` is spelled out on purpose: an import above the
+     * anonymous class would shift it off line 14, and the PHPStan baseline is
+     * keyed to that line.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public function calendarWindowFor(\Carbon\CarbonInterface $date): array
+    {
+        $start = $date->copy()->startOfMonth()->startOfDay();
+        $start->subDays(((int) $start->format('w') + 1) % 7);
+
+        $end = $date->copy()->endOfMonth()->startOfDay();
+        $daysToSaturday = (6 - (int) $end->format('w')) % 7;
+        $end->addDays($daysToSaturday === 0 ? 7 : $daysToSaturday);
+
+        return [$start->toIso8601String(), $end->toIso8601String()];
     }
 
     public function fetchEvents(string $start, string $end): void
@@ -427,6 +462,13 @@ return new class extends Component
     {
         return [
             'events' => $this->getEvents(),
+            // Issue #1169: the window the client compares its first `datesSet`
+            // callback against. It resolves no todo/ticket data, so it needs no
+            // `calendar` gate of its own.
+            'calendarWindow' => [
+                'start' => $this->calendarStart,
+                'end' => $this->calendarEnd,
+            ],
         ];
     }
 
@@ -586,6 +628,16 @@ return new class extends Component
             window.calendarInstance = null;
         }
 
+        // Issue #1169: the server seeded the same window the month grid shows,
+        // so the `datesSet` callback that fires on load must not ask for it
+        // again. Timestamps are compared — the server sends ISO 8601 with a UTC
+        // offset — and only the first callback is skipped, so navigating back
+        // to the seeded month still refetches.
+        const seededWindow = @js($calendarWindow);
+        const seededStart = seededWindow?.start ? Date.parse(seededWindow.start) : null;
+        const seededEnd = seededWindow?.end ? Date.parse(seededWindow.end) : null;
+        let firstPaint = true;
+
         window.calendarInstance = new FullCalendar.Calendar(calendarEl, {
             initialView: 'dayGridMonth',
             locale: 'fa',
@@ -715,6 +767,20 @@ return new class extends Component
             },
             events: @json($events),
             datesSet: function(info) {
+                // Issue #1169: the initial callback repeats the window the
+                // server just rendered. Only that first callback is a no-op;
+                // month/week/day navigation always refetches.
+                const initial = firstPaint;
+                firstPaint = false;
+
+                if (initial
+                    && seededStart !== null
+                    && seededEnd !== null
+                    && Date.parse(info.startStr) === seededStart
+                    && Date.parse(info.endStr) === seededEnd) {
+                    return;
+                }
+
                 @this.fetchEvents(info.startStr, info.endStr);
             },
             select: function(info) {
