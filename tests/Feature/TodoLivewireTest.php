@@ -8,8 +8,11 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
+use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Cache\Events\KeyWritten;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -18,6 +21,23 @@ use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
+
+/**
+ * Issue #1169: the first paint is bounded to the visible month grid and
+ * `TodoFactory` back-dates up to a month, so a test that only cares about
+ * scoping/visibility must ask for a window wide enough to include every
+ * factory row instead of relying on an unbounded `getEvents()`.
+ */
+function calendarEventsForWideWindow(): array
+{
+    $component = Livewire::test('todo.todo')->instance();
+    $component->fetchEvents(
+        now()->subYears(2)->startOfDay()->toIso8601String(),
+        now()->addYears(2)->endOfDay()->toIso8601String(),
+    );
+
+    return $component->getEvents();
+}
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
@@ -424,6 +444,10 @@ test('creator can list, edit, toggle and delete their own null-unit todo', funct
         'unit_id' => null,
         'user_id' => $this->user->id,
         'title' => 'تسک شخصی',
+        // #1169: the initial payload is bounded to the visible month now, and
+        // the factory back-dates up to a month — pin the date inside the
+        // window so this visibility assertion is not date-dependent.
+        'start_at' => now()->toDateTimeString(),
     ]);
 
     // Listed in the creator's own calendar …
@@ -484,7 +508,7 @@ test('calendar hides a ticket task title from another unit', function () {
         'task_id' => $secretTodo->id,
     ]);
 
-    $events = Livewire::test('todo.todo')->instance()->getEvents();
+    $events = calendarEventsForWideWindow();
 
     $event = collect($events)->firstWhere('extendedProps.ticket_code', 'TKT-847-CAL');
 
@@ -513,7 +537,7 @@ test('calendar still shows a ticket task title inside the viewer scope', functio
         'task_id' => $myTodo->id,
     ]);
 
-    $events = Livewire::test('todo.todo')->instance()->getEvents();
+    $events = calendarEventsForWideWindow();
 
     $event = collect($events)->firstWhere('extendedProps.ticket_code', 'TKT-847-OK');
 
@@ -580,7 +604,7 @@ test('a todo title containing markup is stored verbatim and reaches the events p
 
     expect($todo->fresh()->title)->toBe($title);
 
-    $events = Livewire::test('todo.todo')->instance()->getEvents();
+    $events = calendarEventsForWideWindow();
     $event = collect($events)->firstWhere('id', 'todo-'.$todo->id);
 
     expect($event)->not->toBeNull();
@@ -662,6 +686,181 @@ test('calendar cache key differs across date ranges', function () {
     // The events should be different (empty for August since we only have July data)
     expect($events1)->not->toBeEmpty();
     expect($events2)->toBeEmpty();
+});
+
+// ==================== Issue #1169 — the todo calendar's first render is bounded ====================
+
+/**
+ * Issue #1169: `mount()` seeds the window the month grid actually shows, so
+ * the first paint no longer queries every todo and ticket ever created. Both
+ * rows below exist in the database — only the in-window one may reach the
+ * payload, which is what makes the first paint bounded rather than merely
+ * smaller.
+ */
+test('initial calendar payload only contains todos inside the seeded month window', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
+
+    $inWindow = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'وظیفه داخل پنجره',
+        'start_at' => '2026-10-10 10:00:00',
+    ]);
+
+    $outOfWindow = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'وظیفه خارج پنجره',
+        'start_at' => '2026-07-10 10:00:00',
+    ]);
+
+    $eventIds = array_column(Livewire::test('todo.todo')->instance()->getEvents(), 'id');
+
+    expect($eventIds)->toContain('todo-'.$inWindow->id);
+    expect($eventIds)->not->toContain('todo-'.$outOfWindow->id);
+
+    // Both rows exist: the absence above is the query window, not a missing row.
+    $this->assertDatabaseHas('todos', ['id' => $inWindow->id]);
+    $this->assertDatabaseHas('todos', ['id' => $outOfWindow->id]);
+});
+
+/**
+ * The `:all:` fallback key was the visible symptom of the unbounded first
+ * render: a null range made every request share one cache entry holding
+ * every row. `KeyWritten` is observed through the cache store itself, so the
+ * assertion covers the key the component really wrote.
+ */
+test('initial calendar cache key is range-scoped and never falls back to all', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
+
+    Event::fake([KeyWritten::class]);
+
+    Livewire::test('todo.todo');
+
+    Event::assertDispatched(KeyWritten::class, fn (KeyWritten $event) => str_starts_with($event->key, 'calendar:events:')
+        && ! str_contains($event->key, ':all:'));
+    Event::assertNotDispatched(KeyWritten::class, fn (KeyWritten $event) => str_contains($event->key, ':all:'));
+});
+
+/**
+ * The refetch guard lives in the Blade `datesSet` handler, so it is asserted
+ * structurally here and smoke-tested in a browser in the PR (no JS test
+ * harness exists in this suite). A bare unconditional call is exactly what
+ * #1169 removed.
+ */
+test('calendar datesSet guards the refetch with the seeded window', function () {
+    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+
+    preg_match('/datesSet:\s*function\s*\(info\)\s*\{(?<body>.*?)\n\s{12}\},/s', $view, $matches);
+
+    expect($matches)->not->toBeEmpty();
+
+    $handler = $matches['body'];
+
+    // Real navigation (month/week/day) still refetches …
+    expect($handler)->toContain('fetchEvents');
+    // … but only after comparing the incoming range with the seeded window,
+    // and only for the very first callback.
+    expect($handler)->toContain('firstPaint');
+    expect($handler)->toContain('Date.parse');
+    expect($handler)->toContain('return');
+});
+
+/**
+ * #1169 correction: the seeded window must sit on the same week boundaries as
+ * FullCalendar's grid (`firstDay: 6` = Saturday) — the Saturday on/before the
+ * 1st through the Saturday after the last day. A `subWeek()` window misses
+ * those boundaries and the redundant first refetch comes back.
+ */
+test('calendar window is aligned to the Saturday grid boundaries', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('todo.todo')->instance();
+
+    $cases = [
+        '2026-07-15' => ['2026-06-27', '2026-08-01'],
+        '2026-08-15' => ['2026-08-01', '2026-09-05'],
+        '2026-10-15' => ['2026-09-26', '2026-11-07'],
+        '2027-02-15' => ['2027-01-30', '2027-03-06'],
+    ];
+
+    foreach ($cases as $month => [$expectedStart, $expectedEnd]) {
+        [$start, $end] = $component->calendarWindowFor(Carbon::parse($month));
+
+        expect($start)->toBe(Carbon::parse($expectedStart)->toIso8601String());
+        expect($end)->toBe(Carbon::parse($expectedEnd)->toIso8601String());
+        expect(Carbon::parse($start)->dayOfWeek)->toBe(Carbon::SATURDAY);
+        expect(Carbon::parse($end)->dayOfWeek)->toBe(Carbon::SATURDAY);
+        expect(Carbon::parse($start)->lessThanOrEqualTo(Carbon::parse($month)->startOfMonth()))->toBeTrue();
+        expect(Carbon::parse($end)->greaterThan(Carbon::parse($month)->endOfMonth()))->toBeTrue();
+    }
+});
+
+/**
+ * Navigation is the supported refetch path and must keep working with the
+ * seeded range in place — including a cache entry per window and the original
+ * window's entry surviving the neighbour's fetch.
+ */
+test('navigating to the next month fetches that month with its own cache entry', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
+
+    $october = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'وظیفه مهر',
+        'start_at' => '2026-10-20 10:00:00',
+    ]);
+
+    $november = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'وظیفه آبان',
+        'start_at' => '2026-11-10 10:00:00',
+    ]);
+
+    $component = Livewire::test('todo.todo')->instance();
+
+    // The seeded window is October's grid: November is outside it.
+    expect(array_column($component->getEvents(), 'id'))
+        ->toContain('todo-'.$october->id)
+        ->not->toContain('todo-'.$november->id);
+
+    [$novStart, $novEnd] = $component->calendarWindowFor(Carbon::parse('2026-11-15'));
+    $component->fetchEvents($novStart, $novEnd);
+
+    expect(array_column($component->getEvents(), 'id'))
+        ->toContain('todo-'.$november->id)
+        ->not->toContain('todo-'.$october->id);
+
+    // A row inserted into October after the November fetch must still be
+    // missing when October is requested again: November did not clobber and
+    // then re-query October's cache entry.
+    $lateOctober = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'وظیفه دیررس مهر',
+        'start_at' => '2026-10-22 10:00:00',
+    ]);
+
+    [$octStart, $octEnd] = $component->calendarWindowFor(Carbon::parse('2026-10-15'));
+    $component->fetchEvents($octStart, $octEnd);
+
+    expect(array_column($component->getEvents(), 'id'))
+        ->toContain('todo-'.$october->id)
+        ->not->toContain('todo-'.$lateOctober->id);
+});
+
+test('rendered calendar receives the seeded window for its first datesSet', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
+
+    $component = Livewire::test('todo.todo');
+
+    [$start, $end] = $component->instance()->calendarWindowFor(Carbon::parse('2026-10-15'));
+
+    // Without these two values in the payload the client-side guard cannot
+    // recognise the first callback and #1169's redundant refetch returns.
+    expect($component->html())
+        ->toContain($start)
+        ->toContain($end);
 });
 
 test('dead guard property hasPubliclyVisibleDates is absent from the codebase', function () {
