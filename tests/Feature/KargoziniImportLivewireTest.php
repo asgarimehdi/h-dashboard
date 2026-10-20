@@ -309,13 +309,22 @@ class KargoziniImportLivewireTest extends TestCase
             $component->call('confirmImport');
         });
 
-        $this->assertSame(250, Person::where('n_code', 'like', '51%')->where('f_name', 'علی')->count());
+        // #1194: counting by an n_code prefix is not safe — the person
+        // `createUserWithUnit()` seeds has a RANDOM ten-digit n_code and a
+        // RANDOM f_name, so a draw that lands on a '51'-prefixed code named
+        // 'علی' adds a row the sheet never used and makes the count 251.
+        // Count the codes the sheet actually used instead.
+        $updatedNCodes = array_map(
+            fn (array $row): string => $row['n_code'],
+            array_slice($rows, 0, 250)
+        );
 
-        // #1194: counting by the '52%' prefix is not safe — the person
-        // `createUserWithUnit()` seeds has a RANDOM ten-digit n_code, and
-        // about one run in a hundred draws one that starts with '52'. That
-        // extra person made the count 251 and failed the test for no reason
-        // related to the import. Count the codes the sheet actually used.
+        $this->assertSame(
+            250,
+            Person::whereIn('n_code', $updatedNCodes)->where('f_name', 'علی')->count(),
+            'Every n_code of the first half of the sheet must exist once with the imported name.'
+        );
+
         $importedNCodes = array_map(
             fn (array $row): string => $row['n_code'],
             array_slice($rows, 250)
@@ -330,6 +339,62 @@ class KargoziniImportLivewireTest extends TestCase
         foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
             $this->assertSame(1, Cache::get($namespace.'_version', 0), "{$namespace} must bump once.");
         }
+    }
+
+    /**
+     * #1194: the bulk import assertions must not count persons by an n_code
+     * PREFIX. The person seeded by createUserWithUnit() carries a RANDOM
+     * ten-digit n_code and a RANDOM name, so a draw that lands on a
+     * '51'-prefixed code named 'علی' adds a row the sheet never used. The
+     * prefix count then reports 251 and the test fails for a reason that has
+     * nothing to do with the import. Counting the codes the sheet actually
+     * used keeps the assertion exact no matter what the seed draws.
+     */
+    public function test_bulk_person_count_ignores_rows_the_sheet_never_used(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $this->actingAs($user);
+
+        // Force the collision: the seeded person now looks exactly like a row
+        // of the first half of the sheet.
+        $seeded = Person::query()->where('n_code', $user->n_code)->first();
+        $this->assertNotNull($seeded);
+        $seeded->forceFill(['n_code' => '5199999999', 'f_name' => 'علی'])->save();
+
+        $rows = [];
+        foreach (['5100000001', '5100000002'] as $nCode) {
+            Person::create([
+                'n_code' => $nCode, 'f_name' => 'قبلی', 'l_name' => 'نام',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            ]);
+            $rows[] = [
+                'n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'رضایی',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            ];
+        }
+
+        $file = $this->createUploadFile($this->buildTsv($rows));
+
+        Livewire::test('kargozini.import-persons.import-persons')
+            ->set('file', $file)
+            ->call('importPreview')
+            ->call('confirmImport');
+
+        $sheetNCodes = array_map(fn (array $row): string => $row['n_code'], $rows);
+
+        $this->assertSame(
+            2,
+            Person::whereIn('n_code', $sheetNCodes)->where('f_name', 'علی')->count(),
+            'Only the rows the sheet used may be counted.'
+        );
+
+        // The prefix-based count sees the seeded person as well, which is
+        // exactly why it cannot be used for the assertion.
+        $this->assertSame(
+            3,
+            Person::where('n_code', 'like', '51%')->where('f_name', 'علی')->count(),
+            'The seeded person collides with the prefix the sheet uses.'
+        );
     }
 
     public function test_bulk_person_path_normalizes_names(): void
