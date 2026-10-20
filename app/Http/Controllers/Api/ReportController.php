@@ -10,6 +10,7 @@ use App\Models\Unit;
 use App\Rules\ReportDays;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\DailySeries;
+use App\Support\ScopeCacheKey;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +26,7 @@ class ReportController extends Controller
     public function units(UnitScopedRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
-        $scopeHash = md5(json_encode($accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         $data = $this->cache->remember('report_units', $scopeHash, function () use ($accessibleIds) {
             // Single query: total + with_boundary via conditional aggregation (was 2 count queries)
@@ -60,7 +61,7 @@ class ReportController extends Controller
     {
         $days = $this->days($request);
         $accessibleIds = $request->accessibleIds();
-        $scopeHash = md5(json_encode($accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         $data = $this->cache->remember('report_todos', $scopeHash, function () use ($accessibleIds, $days) {
             $now = now();
@@ -101,7 +102,7 @@ class ReportController extends Controller
     {
         $days = $this->days($request);
         $accessibleIds = $request->accessibleIds();
-        $scopeHash = md5(json_encode($accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         $data = $this->cache->remember('report_tickets', $scopeHash, function () use ($accessibleIds, $days) {
             $query = Ticket::whereIn('unit_id', $accessibleIds);

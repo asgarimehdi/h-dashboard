@@ -385,6 +385,7 @@ Blade:
 
 - Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
 - Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush)
+- Per-scope cache keys MUST hash the accessible-unit list through `App\Support\ScopeCacheKey::hash()` (#1179) — it normalizes the members to `int` and sorts them, so the key depends on the SET of units and not on the order the recursive CTE happened to return them. Hashing the raw list (`md5(implode(',', $ids))` / `md5(json_encode($ids))`) is a bug: the same scope can mint two keys and the shared cache entry is lost. `GisController::gisCacheKey()` is the one documented exception (it hashes with `strval` + `SORT_STRING`, and its keys must stay stable)
 - Eager-load relationships (`with('person.unit')`) in list queries
 - Limit API pagination to max 100 per page
 - Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
