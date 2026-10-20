@@ -7,7 +7,9 @@ use App\Models\HardwareAudit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\HardwareAuditScope;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
 
@@ -19,7 +21,25 @@ trait HardwareIndexHelpers
 
     public bool $showTrashModal = false;
 
-    public array $deletedHardware = [];
+    /**
+     * #1170: the trash modal's public payload is the CURRENT PAGE only —
+     * never the whole deletion history. The chunked scan, the scope filter
+     * and the paginator live in `fetchTrashPage()`; what reaches the
+     * snapshot is at most `TRASH_PER_PAGE` rows of tiny scalars (#1041).
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $trashRows = [];
+
+    public int $trashTotal = 0;
+
+    public int $trashCurrentPage = 1;
+
+    /**
+     * #1170: the page size is fixed, not client-settable — a tampering
+     * client could otherwise inflate the public payload it receives.
+     */
+    private const TRASH_PER_PAGE = 20;
 
     /**
      * Defence in depth (issue #816): the value is only ever written
@@ -304,63 +324,146 @@ trait HardwareIndexHelpers
      * into the caller's accessible units — scope that cannot be proven is
      * denied, and a row whose hardware is live again (already restored) is
      * dropped from the list.
+     *
+     * #1170 (option B): the candidate set is scanned in chunks of 500 with
+     * the scope resolved per chunk through `HardwareAuditScope::unitIdsForAudits()`
+     * (same deny-by-default predicate the PHP filter below always applied),
+     * and only allowed rows reach the `LengthAwarePaginator` the modal
+     * displays — same rows, same users, newest first, delivered one page at
+     * a time so the public payload never carries the whole history.
      */
     public function loadDeletedHardware(): void
     {
-        // Single efficient query: find created audits for deleted hardware,
-        // plus their delete timestamp via subquery. #1026: "deleted" is every
-        // action that means the device is gone — the observer's `deleted` and
-        // the bulk path's `bulk_delete` — from one shared list.
-        $deletedHardwareIds = HardwareAudit::whereIn('action', HardwareAudit::DELETING_ACTIONS)
-            ->pluck('hardware_id')
-            ->unique()
-            ->values()
-            ->all();
+        $this->trashCurrentPage = 1;
+        $this->fetchTrashPage();
+        $this->showTrashModal = true;
+    }
 
-        if (empty($deletedHardwareIds)) {
-            $this->deletedHardware = [];
-            $this->showTrashModal = true;
+    /**
+     * #1170: jump to a page of the filtered trash set. The bounds are
+     * clamped inside `fetchTrashPage()` because the last page depends on the
+     * caller's scope, which only the scan knows.
+     */
+    public function trashPage(int $page): void
+    {
+        $this->trashCurrentPage = max(1, $page);
+        $this->fetchTrashPage();
+    }
+
+    /**
+     * The trash scan + scope filter + pagination for the CURRENT page.
+     */
+    private function fetchTrashPage(): void
+    {
+        // Single efficient query: find created audits for deleted hardware
+        // whose live row is really gone — #1026: "deleted" is every action
+        // that means the device is gone — the observer's `deleted` and the
+        // bulk path's `bulk_delete` — from one shared list. #1170: both the
+        // has-deletion predicate and the not-live predicate are SQL now,
+        // so the scanned set is already the final candidate set.
+        //
+        // The scan ends in `pluck('id')`: it yields candidate IDS only, so
+        // the eager load and the column list below belong to the per-page
+        // model fetch, not here.
+        $scan = HardwareAudit::query()
+            ->where('action', 'created')
+            ->whereIn('hardware_id', function ($q) {
+                $q->select('hardware_id')
+                    ->from('hardware_audits')
+                    ->whereIn('action', HardwareAudit::DELETING_ACTIONS);
+            })
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('hardwares')
+                    ->whereColumn('hardwares.id', 'hardware_audits.hardware_id');
+            });
+
+        // #1170: the scope is resolved from the audit's `changes` JSON in
+        // PHP (HardwareAuditScope contract, shared with the API) — so it
+        // cannot move into SQL. Deny-by-default: the accessible set may be
+        // legitimately EMPTY (`[]` = in scope of nothing), and the filter
+        // below must never be guarded around it.
+        $accessibleIds = $this->accessibleUnitIds();
+
+        /** @var Collection<int, HardwareAudit> $allowed */
+        $allowed = collect();
+
+        // The scan itself is bounded to chunks of 500 audits (option B): the
+        // id page is resolved first, then the models for exactly that page
+        // are fetched with the eager-loaded `user`. `orderBy('id')` keeps
+        // the offset pagination deterministic.
+        $page = 0;
+
+        do {
+            $pageIds = (clone $scan)->orderBy('id')->forPage(++$page, 500)->pluck('id');
+
+            if ($pageIds->isEmpty()) {
+                break;
+            }
+
+            // #1041: select only what the trash list turns into a row below.
+            // `*` would pull the whole audit, and rows live in a public
+            // Livewire property re-serialized on every round-trip; `user_id`
+            // is needed for the eager-loaded `user` to match; `changes` for
+            // the badges and the restore guard.
+            $chunk = HardwareAudit::query()
+                ->with('user:id,n_code')
+                ->whereKey($pageIds->all())
+                ->get(['id', 'hardware_id', 'user_id', 'changes', 'created_at']);
+
+            $unitIds = app(HardwareAuditScope::class)->unitIdsForAudits($chunk);
+
+            $chunk
+                ->filter(function (HardwareAudit $audit) use ($unitIds, $accessibleIds) {
+                    $unitId = $unitIds[$audit->id] ?? null;
+
+                    return $unitId !== null && in_array($unitId, $accessibleIds, true);
+                })
+                ->each(function (HardwareAudit $audit) use ($allowed) {
+                    $allowed->push($audit);
+                });
+        } while ($pageIds->count() === 500);
+
+        if ($allowed->isEmpty()) {
+            $this->trashCurrentPage = 1;
+            $this->trashTotal = 0;
+            $this->trashRows = [];
 
             return;
         }
 
-        // #1041: select only what the trash list turns into a row below. `*`
-        // would pull the whole audit, and the rows live in a public Livewire
-        // property that is serialized into the component payload on every
-        // round-trip. `user_id` is needed for the eager-loaded `user` to match;
-        // `changes` is needed for the badges and the restore guard.
-        $createdAudits = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
-            ->where('action', 'created')
-            ->select(['id', 'hardware_id', 'user_id', 'changes', 'created_at'])
-            ->with('user:id,n_code')
-            ->get();
+        // Batch-load the delete timestamps for ALLOWED ids only, so no
+        // out-of-scope id ever grows a `whereIn`; the ids are chunked in the
+        // same groups of 500. #1026: the same action list keeps a
+        // `bulk_delete` row's «حذف شده در» timestamp; the latest delete wins
+        // when a hardware was deleted more than once.
+        /** @var Collection<int, Carbon> $deleteTimestamps */
+        $deleteTimestamps = collect();
+        $idChunks = array_chunk($allowed->pluck('hardware_id')->unique()->values()->all(), 500);
 
-        // Batch-load all delete timestamps in one query to avoid N+1. #1026:
-        // the same action list as the id query above, so a `bulk_delete` row
-        // still yields a «حذف شده در» timestamp.
-        $deleteTimestamps = HardwareAudit::whereIn('hardware_id', $deletedHardwareIds)
-            ->whereIn('action', HardwareAudit::DELETING_ACTIONS)
-            ->select('hardware_id', 'created_at')
-            ->get()
-            ->mapWithKeys(fn ($d) => [$d->hardware_id => $d->created_at]);
+        foreach ($idChunks as $ids) {
+            HardwareAudit::query()
+                ->whereIn('hardware_id', $ids)
+                ->whereIn('action', HardwareAudit::DELETING_ACTIONS)
+                ->groupBy('hardware_id')
+                ->select('hardware_id', DB::raw('max(created_at) as latest_deleted_at'))
+                ->pluck('latest_deleted_at', 'hardware_id')
+                ->each(function ($latestDeletedAt, $hardwareId) use ($deleteTimestamps) {
+                    $at = $latestDeletedAt === null ? null : Carbon::parse($latestDeletedAt);
 
-        // Hardware that is live again was already restored: it is no longer
-        // trash, so neither the row nor its restore button may survive.
-        $liveIds = Hardware::query()->whereIn('id', $deletedHardwareIds)->pluck('id')->all();
+                    if ($at === null) {
+                        return;
+                    }
 
-        $accessibleIds = $this->accessibleUnitIds();
-        $unitIds = app(HardwareAuditScope::class)->unitIdsForAudits($createdAudits);
+                    $previous = $deleteTimestamps->get((int) $hardwareId);
 
-        $this->deletedHardware = $createdAudits
-            ->filter(function (HardwareAudit $audit) use ($liveIds, $unitIds, $accessibleIds) {
-                if (in_array((int) $audit->hardware_id, $liveIds, true)) {
-                    return false;
-                }
+                    if ($previous === null || $at->gt($previous)) {
+                        $deleteTimestamps->put((int) $hardwareId, $at);
+                    }
+                });
+        }
 
-                $unitId = $unitIds[$audit->id] ?? null;
-
-                return $unitId !== null && in_array($unitId, $accessibleIds, true);
-            })
+        $rows = $allowed
             ->map(function (HardwareAudit $audit) use ($deleteTimestamps) {
                 // #1041: hand the modal plain scalars, not the model. The
                 // public property is re-serialized on every Livewire
@@ -382,10 +485,32 @@ trait HardwareIndexHelpers
                     'user_n_code' => $user instanceof User ? $user->n_code : null,
                 ];
             })
-            ->values()
-            ->all();
+            // #1170: newest first — the row the modal shows is keyed on the
+            // delete timestamp, with the created audit's own timestamps as
+            // deterministic tie-breakers.
+            ->sort(function (array $a, array $b): int {
+                return [$b['deleted_at'], $b['created_at'], $b['id']]
+                    <=> [$a['deleted_at'], $a['created_at'], $a['id']];
+            })
+            ->values();
 
-        $this->showTrashModal = true;
+        $this->trashTotal = $rows->count();
+
+        $lastPage = max(1, (int) ceil($this->trashTotal / self::TRASH_PER_PAGE));
+        $this->trashCurrentPage = min($this->trashCurrentPage, $lastPage);
+
+        $pageRows = $rows->forPage($this->trashCurrentPage, self::TRASH_PER_PAGE)->values()->all();
+
+        // The paginator is the single source of the page's shape and count —
+        // the modal's «تعداد کل» counter reads the total from here.
+        $paginator = new LengthAwarePaginator(
+            $pageRows,
+            $this->trashTotal,
+            self::TRASH_PER_PAGE,
+            $this->trashCurrentPage
+        );
+
+        $this->trashRows = $paginator->items();
     }
 
     /**
@@ -503,7 +628,11 @@ trait HardwareIndexHelpers
         );
 
         $this->success("سخت‌افزار {$pcName} با موفقیت بازگردانده شد.", position: 'toast-bottom');
-        $this->loadDeletedHardware();
+
+        // #1170: only the current page reloads after a restore — the restored
+        // row drops out, the total decrements, and the operator stays where
+        // they were (fetchTrashPage() clamps if the last page shrank).
+        $this->trashPage($this->trashCurrentPage);
     }
 
     /**

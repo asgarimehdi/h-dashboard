@@ -210,7 +210,7 @@ class HardwareFiltersLivewireTest extends TestCase
             ->assertSet('showTrashModal', false)
             ->call('loadDeletedHardware')
             ->assertSet('showTrashModal', true)
-            ->assertSet('deletedHardware', []);
+            ->assertSet('trashRows', []);
     }
 
     // ==================== S7: Combined filters narrow results ====================
