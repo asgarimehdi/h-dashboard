@@ -63,6 +63,19 @@ class MapsUnitLivewireTest extends TestCase
         ]);
     }
 
+    /**
+     * The `units-updated` payload of the last request. #1188 moved the
+     * geometry out of the public state and into this event, so the contract
+     * tests read the event instead of the component's public property.
+     */
+    private function dispatchedUnits($test): array
+    {
+        $dispatch = collect($test->effects['dispatches'] ?? [])
+            ->firstWhere('name', 'units-updated');
+
+        return $dispatch['params']['units'] ?? [];
+    }
+
     // ==================== Auth / permissions ====================
 
     public function test_guest_302(): void
@@ -308,21 +321,102 @@ class MapsUnitLivewireTest extends TestCase
             'boundary_id' => $boundaryId,
         ]);
 
-        $units = collect(
-            Livewire::test('maps/unit')
-                ->set('selectedRegions', [$region->id])
-                ->set('selectedCenterTypes', [5])
-                ->get('units')
-        );
+        $test = Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->set('selectedCenterTypes', [5]);
+
+        // #1188: the geometry no longer rides in the public state — it travels
+        // in the `units-updated` payload, so the contract this test locks is
+        // the EVENT's. The row shape is unchanged.
+        $units = $this->dispatchedUnits($test);
 
         $this->assertCount(1, $units);
-        $row = $units->first();
+        $row = $units[0];
         $this->assertSame(['id', 'name', 'type_id', 'geojson'], array_keys($row));
 
         // #702: the map expects a BARE geometry, not a GeoJSON Feature.
         $decoded = json_decode($row['geojson'], true);
         $this->assertSame('MultiPolygon', $decoded['type']);
         $this->assertArrayNotHasKey('geometry', $decoded);
+    }
+
+    // ==================== #1188: geometry leaves the component as an event ====================
+
+    public function test_unit_snapshot_carries_no_geometry(): void
+    {
+        ['user' => $user, 'unit' => $baseUnit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $boundaryId = $this->createBoundary();
+
+        Unit::create([
+            'name' => 'واحد مرزدار',
+            'parent_id' => $baseUnit->id,
+            'region_id' => $region->id,
+            'unit_type_id' => 5,
+            'boundary_id' => $boundaryId,
+        ]);
+
+        $test = Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->set('selectedCenterTypes', [5]);
+
+        // The public state keeps what the toggle table needs — id and name —
+        // and drops the geometry. The toggle table itself still renders.
+        $publicUnits = $test->get('units');
+        $this->assertCount(1, $publicUnits);
+        $this->assertSame(['id', 'name', 'type_id'], array_keys($publicUnits[0]));
+        $this->assertArrayNotHasKey('geojson', $publicUnits[0]);
+        $test->assertSee('واحد مرزدار');
+
+        // The snapshot of that round trip carries no geometry: it is the
+        // payload that used to re-send the whole county on every keystroke.
+        $this->assertStringNotContainsString('MultiPolygon', json_encode($test->snapshot));
+
+        // The event payload still carries the four keys it always had.
+        $units = $this->dispatchedUnits($test);
+        $this->assertCount(1, $units);
+        $this->assertSame(['id', 'name', 'type_id', 'geojson'], array_keys($units[0]));
+
+        // The search box fires a round trip per keystroke — its snapshot must
+        // be just as geometry-free.
+        $test->set('search', 'مرزدار');
+        $this->assertStringNotContainsString('MultiPolygon', json_encode($test->snapshot));
+    }
+
+    public function test_unit_geometry_is_published_once(): void
+    {
+        ['user' => $user, 'unit' => $baseUnit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $boundaryId = $this->createBoundary();
+
+        Unit::create([
+            'name' => 'واحد مرزدار',
+            'parent_id' => $baseUnit->id,
+            'region_id' => $region->id,
+            'unit_type_id' => 5,
+            'boundary_id' => $boundaryId,
+        ]);
+
+        $test = Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->set('selectedCenterTypes', [5]);
+
+        // One unit with a boundary => its geometry crosses the wire exactly
+        // once, in the `units-updated` payload. Zero would leave the map
+        // empty; two would mean the snapshot still carries the geometry —
+        // the duplication #1188 removes.
+        $published = substr_count(json_encode($test->snapshot), 'MultiPolygon')
+            + substr_count(json_encode($test->effects), 'MultiPolygon');
+
+        $this->assertSame(1, $published);
+
+        // The rendered markup carries none of it — the geometry is not
+        // published into the page a second time.
+        $this->assertSame(0, substr_count($test->html(), 'MultiPolygon'));
     }
 
     // ==================== #1032: region boundary scope ====================

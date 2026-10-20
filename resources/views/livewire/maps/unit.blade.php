@@ -11,6 +11,15 @@ return new class extends Component
 {
     public bool $showHelpModal = false;
 
+    /**
+     * #1188: the unit rows the toggle table renders — id/name/type_id only.
+     *
+     * The geometry is deliberately NOT here: this property is public, so it is
+     * dehydrated into the snapshot of EVERY round trip, and the search box
+     * fires one round trip per keystroke — the whole county geometry used to
+     * travel back and forth with it. The geometry leaves the component through
+     * the `units-updated` event payload alone (see unitsWithGeometry()).
+     */
     public $units = [];
 
     public $regions = [];
@@ -132,12 +141,24 @@ return new class extends Component
         $this->loadUnits();
     }
 
-    public function loadUnits(): void
+    /**
+     * #1188: the unit rows WITH their geometry — the non-public source the
+     * `units-updated` event is built from, read only when it is dispatched.
+     *
+     * A private method, not a Livewire `#[Computed]`: a computed is read as a
+     * magic property (`$this->unitsWithGeometry`), which PHPStan cannot
+     * resolve on this anonymous class — it would need a new baseline entry,
+     * and the baseline is not allowed to grow. This is the same trade #1040
+     * made in users/index.blade.php, where the equivalent cache lives in a
+     * private member: Livewire 4 dehydrates public properties only, so the
+     * geometry never enters the snapshot either way.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function unitsWithGeometry(): array
     {
         if (empty($this->selectedRegions)) {
-            $this->units = [];
-            $this->dispatch('units-updated', units: []);
-            return;
+            return [];
         }
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
@@ -190,14 +211,35 @@ return new class extends Component
 
         $units = collect($unitLists)->collapse();
 
-        $this->units = $units->map(fn($u) => [
+        // The event payload keeps the row shape it always had:
+        // id, name, type_id, geojson.
+        return $units->map(fn($u) => [
             'id' => $u->id,
             'name' => $u->name,
             'type_id' => $u->unit_type_id,
             'geojson' => $u->geojson,
-        ])->toArray();
+        ])->values()->toArray();
+    }
 
-        $this->dispatch('units-updated', units: $this->units);
+    public function loadUnits(): void
+    {
+        // #1188: the geometry leaves the component ONLY through the event
+        // payload. The public state keeps what the toggle table needs
+        // (id/name/type_id) and nothing more — it is dehydrated into the
+        // snapshot of every round trip, and the search box fires one round
+        // trip per keystroke.
+        $rows = $this->unitsWithGeometry();
+
+        $this->units = collect($rows)
+            ->map(fn($u) => [
+                'id' => $u['id'],
+                'name' => $u['name'],
+                'type_id' => $u['type_id'],
+            ])
+            ->values()
+            ->all();
+
+        $this->dispatch('units-updated', units: $rows);
     }
 
     private function resolveSubTypeIds(): array
@@ -323,7 +365,11 @@ return new class extends Component
 @script
 <script>
     var geojsonLayers = {};
-    var allUnits = {{ Js::from($units) }};
+    // #1188: the geometry is NOT published here. This script runs once, on the
+    // first render, when no filter is picked yet — so this was always an empty
+    // array. The unit rows (with their geometry) arrive with the
+    // `units-updated` event and are handed to `allUnits` by its listener below.
+    var allUnits = [];
     var countyLayers = {};
     var activeToggles = {};
 
