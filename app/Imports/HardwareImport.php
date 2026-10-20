@@ -609,6 +609,16 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             $this->insertCreates($chunk);
         }
 
+        // #1194: two sheet rows can resolve to the same existing hardware id
+        // (pc_name / mac are not unique). PostgreSQL rejects an upsert whose
+        // VALUES list contains the same conflict target twice, so collapse
+        // duplicate ids here — last write wins, matching row-by-row semantics.
+        $dedupedUpdates = [];
+        foreach ($this->pendingUpdates as $item) {
+            $dedupedUpdates[$item['id']] = $item;
+        }
+        $this->pendingUpdates = array_values($dedupedUpdates);
+
         foreach (array_chunk($this->pendingUpdates, self::CHUNK_SIZE) as $chunk) {
             $this->updateRows($chunk);
         }
