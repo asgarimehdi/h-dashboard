@@ -258,6 +258,46 @@ class TicketsInboxLivewireTest extends TestCase
             ->assertDontSee('مشکل شبکه');
     }
 
+    /**
+     * #1165 pins the folded-expression indexes; this pins that the extra index
+     * did not change what search finds. A subject stored with a ZWNJ must still
+     * be reachable by a hyphen/space-separated query.
+     */
+    public function test_search_folds_zwnj_in_subject(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $stored = "حرفه\u{200C}ای شبکه";
+
+        $this->createTicket(['subject' => $stored]);
+        $this->createTicket(['subject' => 'مشکل چاپگر']);
+
+        // The stored spelling carries a ZWNJ; the operator types a space.
+        Livewire::test('tickets.inbox')
+            ->set('search', 'حرفه ای')
+            ->assertSee($stored)
+            ->assertDontSee('مشکل چاپگر');
+    }
+
+    /**
+     * Persian digits stored in `content` must be found by Latin digits. The
+     * ticket code is digit-free so only the folded `content` column can match.
+     */
+    public function test_search_folds_persian_digits_in_content(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['ticket_code' => 'TKT-7777', 'subject' => 'موضوع الف', 'content' => 'کد پیگیری ۴۵ است']);
+        $this->createTicket(['ticket_code' => 'TKT-8888', 'subject' => 'موضوع ب', 'content' => 'محتوا بدون عدد']);
+
+        Livewire::test('tickets.inbox')
+            ->set('search', '45')
+            ->assertSee('TKT-7777')
+            ->assertDontSee('TKT-8888');
+    }
+
     // =====================================================================
     // S5 — Jalali date filter
     // =====================================================================

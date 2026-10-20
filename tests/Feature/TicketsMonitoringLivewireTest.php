@@ -212,6 +212,27 @@ class TicketsMonitoringLivewireTest extends TestCase
             ->assertDontSee('TKT-2002');
     }
 
+    /**
+     * #1165 pins the folded-expression indexes; this pins that they did not
+     * change what search finds. A subject stored with a ZWNJ must still be
+     * reachable by a space-separated query.
+     */
+    public function test_search_folds_zwnj_in_subject(): void
+    {
+        $result = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($result['user']);
+
+        $stored = "حرفه\u{200C}ای";
+
+        $this->makeTicket($result['unit'], ['subject' => $stored, 'ticket_code' => 'T-MON-Z1']);
+        $this->makeTicket($result['unit'], ['subject' => 'مشکل چاپگر', 'ticket_code' => 'T-MON-Z2']);
+
+        Livewire::test('tickets.monitoring')
+            ->set('search', 'حرفه ای')
+            ->assertSee('T-MON-Z1')
+            ->assertDontSee('T-MON-Z2');
+    }
+
     // ==================== Jalali date filter test ====================
 
     public function test_jalali_dates(): void
