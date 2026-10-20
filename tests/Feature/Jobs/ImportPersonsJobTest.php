@@ -49,13 +49,7 @@ class ImportPersonsJobTest extends TestCase
 
         Livewire::test('kargozini.import-persons.import-persons')
             ->set('file', $file)
-            ->set('importResults', [
-                'preview' => [], 'created' => 1, 'updated' => 0, 'skipped' => 0,
-                'errors' => [], 'changes' => [],
-            ])
-            ->set('previewData', [
-                ['n_code' => '9000000099', 'status' => 'create'],
-            ])
+            ->call('importPreview')
             ->call('confirmImport')
             ->assertSet('showPreview', false)
             ->assertSet('importResults', null);

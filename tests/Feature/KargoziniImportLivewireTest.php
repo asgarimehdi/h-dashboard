@@ -299,10 +299,13 @@ class KargoziniImportLivewireTest extends TestCase
 
         $component = Livewire::test('kargozini.import-persons.import-persons')
             ->set('file', $file)
-            ->call('importPreview')
-            ->assertSet('importStats.total', 500)
-            ->assertSet('importStats.new', 250)
-            ->assertSet('importStats.updated', 250);
+            ->call('importPreview');
+
+        // #1168: preview statistics are computed, not a stored property —
+        // the same 500/250/250 classification is asserted through them.
+        $this->assertSame(500, $component->instance()->previewStats['total']);
+        $this->assertSame(250, $component->instance()->previewStats['new']);
+        $this->assertSame(250, $component->instance()->previewStats['updated']);
 
         // A per-row write path would need >500 statements here.
         $this->assertQueryCount(60, function () use ($component) {

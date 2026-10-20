@@ -53,13 +53,7 @@ class ImportHardwareJobTest extends TestCase
         Livewire::test('hardware.import-hardware.import-hardware')
             ->set('file', $file)
             ->set('compareKey', 'pc_name')
-            ->set('importResults', [
-                'preview' => [], 'created' => 1, 'updated' => 0, 'skipped' => 0,
-                'errors' => [], 'changes' => [],
-            ])
-            ->set('previewData', [
-                ['pc_name' => 'PC-QUEUED', 'status' => 'create'],
-            ])
+            ->call('importPreview')
             ->call('confirmImport')
             ->assertSet('showPreview', false)
             ->assertSet('importResults', null);
