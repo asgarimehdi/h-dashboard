@@ -7,7 +7,14 @@ use Livewire\Component;
 
 return new class extends Component
 {
-    public array $stats = [];
+    // Only the three scalars the overview tiles need. The five groupings live
+    // in the by_* props below — keeping a copy of them in a $stats bag shipped
+    // every grouping twice in each Livewire snapshot (#1174).
+    public int $totalPersons = 0;
+
+    public int $activePersons = 0;
+
+    public int $retiredPersons = 0;
 
     public array $byUnit = [];
 
@@ -66,7 +73,9 @@ return new class extends Component
             ];
         });
 
-        $this->stats = $data;
+        $this->totalPersons = $data['total'];
+        $this->activePersons = $data['active'];
+        $this->retiredPersons = $data['retired'];
         $this->byUnit = $data['by_unit'];
         $this->bySemat = $data['by_semat'];
         $this->byTahsil = $data['by_tahsil'];
@@ -117,9 +126,9 @@ return new class extends Component
 
     {{-- Overview stats --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <x-stat title="کل پرسنل" value="{{ $stats['total'] }}" icon="o-users" color="text-primary" />
-        <x-stat title="فعال" value="{{ $stats['active'] }}" icon="o-user-circle" color="text-success" />
-        <x-stat title="بازنشسته" value="{{ $stats['retired'] }}" icon="o-user-minus" color="text-warning" />
+        <x-stat title="کل پرسنل" value="{{ $totalPersons }}" icon="o-users" color="text-primary" />
+        <x-stat title="فعال" value="{{ $activePersons }}" icon="o-user-circle" color="text-success" />
+        <x-stat title="بازنشسته" value="{{ $retiredPersons }}" icon="o-user-minus" color="text-warning" />
         <x-stat title="واحدهای بدون پرسنل" value="{{ count($vacancies) }}" icon="o-exclamation-triangle" color="text-error" />
     </div>
 

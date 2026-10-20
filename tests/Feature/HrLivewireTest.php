@@ -59,6 +59,104 @@ class HrLivewireTest extends TestCase
             ->assertSee('کل پرسنل');
     }
 
+    /**
+     * Add personnel to the unit the acting user can see.
+     *
+     * @param  int  $active  how many active persons to create
+     * @param  int  $retired  how many retired persons to create
+     */
+    private function addPersonnel(int $active, int $retired): void
+    {
+        $lookups = [
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+        ];
+
+        foreach ([[$active, 'active'], [$retired, 'retired']] as [$count, $status]) {
+            for ($i = 0; $i < $count; $i++) {
+                Person::create([
+                    'n_code' => (string) fake()->unique()->numerify('##########'),
+                    'f_name' => 'کارمند',
+                    'l_name' => $status === 'active' ? 'فعال' : 'بازنشسته',
+                    ...$lookups,
+                    'u_id' => $this->unit->id,
+                    'status' => $status,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Read the number MaryUI rendered next to a stat tile title.
+     *
+     * The tile is a title element followed by an element that holds nothing but
+     * the number, so the pair is read back without pinning the markup classes.
+     *
+     * @return string|null the rendered number, or null when the tile is absent
+     */
+    private function statValueFor(string $html, string $title): ?string
+    {
+        // Livewire keeps conditional Blade comments in the markup; drop them so
+        // the tile title sits right next to its value.
+        $html = preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+
+        $pattern = '/'.preg_quote($title, '/').'<\/div>.*?<div[^>]*>\s*(-?\d+)\s*<\/div>/s';
+
+        return preg_match($pattern, $html, $matches) === 1 ? $matches[1] : null;
+    }
+
+    /** @test */
+    public function test_dashboard_renders_headcount_scalars_from_dedicated_props(): void
+    {
+        // setUp() already seeded one active person in the accessible unit.
+        $this->addPersonnel(active: 2, retired: 2);
+
+        $component = Livewire::test('hr.dashboard')
+            ->assertOk()
+            ->assertSetStrict('totalPersons', 5)
+            ->assertSetStrict('activePersons', 3)
+            ->assertSetStrict('retiredPersons', 2);
+
+        $html = $component->html();
+
+        $this->assertSame('5', $this->statValueFor($html, 'کل پرسنل'), 'کل پرسنل must render the total headcount.');
+        $this->assertSame('3', $this->statValueFor($html, 'فعال'), 'فعال must render the active headcount.');
+        $this->assertSame('2', $this->statValueFor($html, 'بازنشسته'), 'بازنشسته must render the retired headcount.');
+
+        // The five groupings used to be serialised twice per render: once
+        // inside the $stats bag and once in the by_* props. The bag is gone,
+        // so the snapshot must not carry it any more (#1174).
+        $this->assertArrayNotHasKey('stats', $component->snapshot['data']);
+    }
+
+    /** @test */
+    public function test_dashboard_snapshot_carries_each_grouping_exactly_once(): void
+    {
+        $this->addPersonnel(active: 2, retired: 2);
+
+        $component = Livewire::test('hr.dashboard')->assertOk();
+
+        $snapshot = $component->snapshot;
+        $json = json_encode($snapshot, JSON_UNESCAPED_UNICODE);
+
+        foreach (['byUnit', 'bySemat', 'byTahsil', 'byEstekhdam', 'byRadif'] as $property) {
+            $payload = $snapshot['data'][$property];
+
+            $this->assertNotEmpty($payload, "{$property} must not be empty in this fixture.");
+
+            // The grouping payload must appear verbatim exactly once in the
+            // serialised snapshot — a second copy means it is still shipped
+            // twice per render (#1174).
+            $this->assertSame(
+                1,
+                substr_count($json, json_encode($payload, JSON_UNESCAPED_UNICODE)),
+                "{$property} must be serialised exactly once per render."
+            );
+        }
+    }
+
     public function test_org_chart_renders_tree(): void
     {
         Livewire::test('hr.org-chart')
