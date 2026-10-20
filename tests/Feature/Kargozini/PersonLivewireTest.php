@@ -849,7 +849,12 @@ class PersonLivewireTest extends TestCase
 
         $component = Livewire::test('kargozini.person')
             ->set('showFilters', true)
-            ->set('filter_u_id', $this->otherUnit->id);
+            ->set('filter_u_id', $this->otherUnit->id)
+            // #1171: the picker is render-on-open — with the modal closed the
+            // tree is not in the DOM at all, so the assertion below would be
+            // vacuously true. Open it: the tree that renders is the scoped
+            // one, and the out-of-scope unit must not be in it.
+            ->set('filterUnitModal', true);
 
         $this->assertStringNotContainsString($this->otherUnit->name, $component->html());
     }
@@ -914,9 +919,57 @@ class PersonLivewireTest extends TestCase
             ->set('showFilters', true)
             ->set('filter_u_id', $this->unit->id)
             ->set('formOpen', true)
-            ->set('u_id', $this->unit->id);
+            ->set('u_id', $this->unit->id)
+            // #1171: the trees only exist while their modal is open — open
+            // both, so the assertions below are about a rendered (empty)
+            // tree rather than about an absent one.
+            ->set('filterUnitModal', true)
+            ->set('unitModal', true);
 
         $this->assertStringNotContainsString($this->unit->name, $component->html());
         $this->assertStringNotContainsString($this->otherUnit->name, $component->html());
+    }
+
+    // -----------------------------------------------------------
+    //  رندر-on-open مودال (#1171)
+    // -----------------------------------------------------------
+
+    /**
+     * The picker builds the whole org tree in PHP (≈494 KB of HTML on the dev
+     * database) and serialises every unit into inline JSON. It is included
+     * inside `@if ($modalFlag)`, so a closed modal carries no tree at all.
+     *
+     * The page has TWO independent pickers — one for the list filter
+     * (`filter_u_id`), one for the create/edit form (`u_id`) — and they must
+     * stay independent: opening one modal must not render the other's tree.
+     * They are told apart by the model they bind to (`selected: $wire.<model>`
+     * in the picker's `x-data`), not by their node markup, which is identical.
+     */
+    public function test_the_two_unit_pickers_render_only_inside_their_own_modal(): void
+    {
+        $component = Livewire::test('kargozini.person')
+            ->assertOk();
+
+        // Both modals closed: neither tree is in the DOM. `flat:` is the
+        // picker's inline unit JSON and the only thing that emits it — a bare
+        // `toggle(` is NOT a safe probe, MaryUI's theme switcher renders
+        // `@click="toggle()"` too.
+        $this->assertSame(0, substr_count($component->html(), 'flat:'));
+
+        // Opening the FILTER modal brings the filter tree only.
+        $component->set('filterUnitModal', true);
+        $this->assertSame(1, substr_count($component->html(), 'flat:'));
+        $component->assertSeeHtml('selected: $wire.filter_u_id')
+            ->assertDontSeeHtml('selected: $wire.u_id');
+
+        // Opening the FORM modal as well brings the second tree.
+        $component->set('unitModal', true);
+        $this->assertSame(2, substr_count($component->html(), 'flat:'));
+        $component->assertSeeHtml('selected: $wire.u_id');
+
+        // Closing them again empties the DOM of both trees.
+        $component->set('filterUnitModal', false)
+            ->set('unitModal', false);
+        $this->assertSame(0, substr_count($component->html(), 'flat:'));
     }
 }

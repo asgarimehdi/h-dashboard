@@ -379,12 +379,23 @@ test('#849: user table, unit picker and person search are unit-scoped', function
         ->test('users.index')
         ->assertOk();
 
+    // #1171: the picker is render-on-open — while the modal is closed the tree
+    // is not in the DOM at all. A scope assertion against a closed modal would
+    // be vacuously true, so the modal is opened first and BOTH the positive and
+    // the negative assertion run against the tree that is really rendered.
+    // (`flat:` is the picker's inline unit JSON — the only thing that emits it.
+    // A bare `toggle(` is NOT a safe probe: MaryUI's theme switcher renders
+    // `@click="toggle()"` too.)
+    $component->assertDontSeeHtml('flat:')
+        ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
+
     // Unit picker (#1040: `allUnits`/`allUnitsTree` are `#[Computed]` now and
     // no longer in the snapshot, so the SAME scope contract is locked through
     // the rendered HTML instead of reading the property). The tree renders a
     // node per accessible unit — exactly one node, the actor's own.
-    $component->assertSeeHtml('@click="toggle('.$f['unitA']->id.')"');
-    $component->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
+    $component->set('unitModal', true)
+        ->assertSeeHtml('@click="toggle('.$f['unitA']->id.')"')
+        ->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
 
     // The selectedUnitNames chips resolve through the same computed
     // `allUnits` (they only render with the form OPEN): an own-unit
@@ -432,12 +443,90 @@ test('#849: an empty scope renders nobody, not everybody', function () {
 
     // The picker renders not a single node — [] is "in scope of nothing",
     // never "whole org" (fail-closed), verified through the rendered tree.
-    $component->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"')
+    // #1171: the tree only exists while its modal is open, so the modal is
+    // opened first — on a closed modal the assertion would be vacuously true.
+    $component->set('unitModal', true)
+        ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"')
         ->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
 
     $component->call('openFormForCreate')
         ->set('person_search', 'مهاجم')
         ->assertViewHas('persons', fn ($persons) => $persons === []);
+});
+
+/**
+ * #1171: the unit tree is built only while its modal is open.
+ *
+ * The picker assembles the whole org tree in PHP and serialises every unit
+ * into inline JSON — ≈494 KB of HTML for one render on the dev database. It
+ * is now included inside `@if ($unitModal)`, so a closed page carries no tree
+ * at all and the cost moves to the moment the modal opens.
+ *
+ * The scope contract is NOT what this test is about: it is pinned by the #849
+ * test above. This one pins the render contract — closed means no tree.
+ */
+test('#1171: the unit tree renders only while the modal is open', function () {
+    $f = users849Fixtures();
+
+    $component = Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->assertOk();
+
+    // Closed: no tree node and no inline unit JSON either.
+    $component->assertDontSeeHtml('flat:')
+        ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
+
+    // Open: the tree arrives, and it is scoped exactly as before.
+    $component->set('unitModal', true)
+        ->assertSeeHtml('flat:')
+        ->assertSeeHtml('@click="toggle('.$f['unitA']->id.')"')
+        ->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
+
+    // Closed again: the tree is dropped again.
+    $component->set('unitModal', false)
+        ->assertDontSeeHtml('flat:')
+        ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
+});
+
+/**
+ * #1171: the closed path must stay cheap even with a large org tree.
+ *
+ * A synthetic 200-unit hierarchy stands in for the dev database's 834 rows.
+ * The point of render-on-open is that the cost of the tree is paid when the
+ * modal opens — not on every render — so the closed page must not grow at all
+ * when the organization grows.
+ */
+test('#1171: a 200-unit tree does not reach the closed page', function () {
+    $root = Unit::create(['name' => 'ریشه سازمانی']);
+    Session::put('current_unit_id', $root->id);
+
+    // Baseline: the closed page with ONE unit in scope.
+    $before = strlen(Livewire::actingAs($this->admin)->test('users.index')->html());
+
+    // Root + 199 descendants: the whole synthetic hierarchy is in scope.
+    for ($i = 1; $i < 200; $i++) {
+        Unit::create(['name' => 'واحد '.$i, 'parent_id' => $root->id]);
+    }
+
+    $component = Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->assertOk();
+
+    $closed = strlen($component->html());
+    $open = strlen($component->set('unitModal', true)->html());
+
+    // The closed payload does NOT grow with the org tree — 199 more units
+    // must not add a single byte to the closed page. (A leaked tree would add
+    // tens of kilobytes here.)
+    expect($closed - $before)->toBeLessThan(1_000);
+
+    // ...while the OPEN path really does carry the tree: with 200 units it is
+    // worth tens of kilobytes of HTML plus the inline JSON.
+    expect($open - $closed)->toBeGreaterThan(20_000);
+
+    // Structurally: the closed page holds no tree and no inline unit JSON.
+    $component->set('unitModal', false)
+        ->assertDontSeeHtml('flat:');
 });
 
 /**

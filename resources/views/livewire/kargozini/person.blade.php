@@ -125,7 +125,7 @@ return new class extends Component
     /**
      * Delete a person by PRIMARY KEY.
      *
-* #936: this used to be `delete(PersonModel $person)`, a typed parameter.
+     * #936: this used to be `delete(PersonModel $person)`, a typed parameter.
      * Livewire resolves a typed model parameter through
      * `resolveRouteBinding()`, i.e. by `getRouteKeyName()` — and `Person`
      * overrides it to `n_code`. The Blade call site in this file's `@scope`
@@ -491,12 +491,16 @@ return new class extends Component
         @endif
 
         <x-modal wire:model="filterUnitModal" title="انتخاب واحد (فیلتر)" persistent separator>
-            @include('livewire.partials.unit-tree-picker', [
-                'model' => 'filter_u_id',
-                'multiple' => false,
-                'alwaysOpen' => true,
-                'label' => 'واحد سازمانی',
-            ])
+            {{-- #1171: render-on-open. See the note on the `unitModal` picker
+                 below — the tree is built only while its modal is open. --}}
+            @if ($filterUnitModal)
+                @include('livewire.partials.unit-tree-picker', [
+                    'model' => 'filter_u_id',
+                    'multiple' => false,
+                    'alwaysOpen' => true,
+                    'label' => 'واحد سازمانی',
+                ])
+            @endif
             <x-slot:actions>
                 <x-button label="تأیید" icon="o-check" class="btn-primary" wire:click="$set('filterUnitModal', false)" />
                 <x-button label="بستن" icon="o-x-mark" class="btn-ghost" wire:click="$set('filterUnitModal', false)" />
@@ -577,13 +581,23 @@ return new class extends Component
     </x-card>
 
     <x-modal wire:model="unitModal" title="انتخاب واحد" persistent separator>
-        @include('livewire.partials.unit-tree-picker', [
-            'units' => $units,
-            'model' => 'u_id',
-            'multiple' => false,
-            'alwaysOpen' => true,
-            'label' => 'واحد سازمانی',
-        ])
+        {{-- #1171: render-on-open. This picker renders the whole org tree in
+             PHP (≈494 KB of HTML on the dev database) and serialises every unit
+             into inline JSON, so rendering it while the modal is closed wastes
+             that cost on every keystroke and every page change. Opening the
+             modal is already a round trip (`$set('unitModal', true)`), so the
+             tree is built exactly when it becomes visible — no extra request.
+             The scope contract (#849/#1040) is untouched: `@if` changes WHEN the
+             tree renders, not WHICH units it contains. --}}
+        @if ($unitModal)
+            @include('livewire.partials.unit-tree-picker', [
+                'units' => $units,
+                'model' => 'u_id',
+                'multiple' => false,
+                'alwaysOpen' => true,
+                'label' => 'واحد سازمانی',
+            ])
+        @endif
         <x-slot:actions>
             <x-button label="تأیید" icon="o-check" class="btn-primary" wire:click="$set('unitModal', false)" />
             <x-button label="بستن" icon="o-x-mark" class="btn-ghost" wire:click="$set('unitModal', false)" />

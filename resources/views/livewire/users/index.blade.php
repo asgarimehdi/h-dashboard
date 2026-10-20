@@ -793,13 +793,23 @@ return new class extends Component
     </x-card>
 
     <x-modal wire:model="unitModal" title="انتخاب واحدها" persistent separator>
-        @include('livewire.partials.unit-tree-picker', [
-            'units' => $this->allUnitsTree(),
-            'model' => 'unit_ids',
-            'multiple' => true,
-            'alwaysOpen' => true,
-            'label' => 'واحدهای سازمانی',
-        ])
+        {{-- #1171: render-on-open. The picker builds the whole org tree in PHP
+             (≈494 KB of HTML on the dev database) and serialises every unit
+             into inline JSON, so rendering it while the modal is closed wastes
+             that cost on every keystroke and every page change. Opening the
+             modal is already a round trip (`$set('unitModal', true)`), so the
+             tree is built exactly when it becomes visible — no extra request.
+             The scope contract (#849/#1040) is untouched: `@if` changes WHEN the
+             tree renders, not WHICH units it contains. --}}
+        @if ($unitModal)
+            @include('livewire.partials.unit-tree-picker', [
+                'units' => $this->allUnitsTree(),
+                'model' => 'unit_ids',
+                'multiple' => true,
+                'alwaysOpen' => true,
+                'label' => 'واحدهای سازمانی',
+            ])
+        @endif
         <x-slot:actions>
             <x-button label="تأیید" icon="o-check" class="btn-primary" wire:click="$set('unitModal', false)" />
             <x-button label="بستن" icon="o-x-mark" class="btn-ghost" wire:click="$set('unitModal', false)" />
