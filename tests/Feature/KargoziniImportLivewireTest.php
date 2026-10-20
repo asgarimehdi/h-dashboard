@@ -306,7 +306,22 @@ class KargoziniImportLivewireTest extends TestCase
         });
 
         $this->assertSame(250, Person::where('n_code', 'like', '51%')->where('f_name', 'علی')->count());
-        $this->assertSame(250, Person::where('n_code', 'like', '52%')->count());
+
+        // #1194: counting by the '52%' prefix is not safe — the person
+        // `createUserWithUnit()` seeds has a RANDOM ten-digit n_code, and
+        // about one run in a hundred draws one that starts with '52'. That
+        // extra person made the count 251 and failed the test for no reason
+        // related to the import. Count the codes the sheet actually used.
+        $importedNCodes = array_map(
+            fn (array $row): string => $row['n_code'],
+            array_slice($rows, 250)
+        );
+
+        $this->assertSame(
+            250,
+            Person::whereIn('n_code', $importedNCodes)->count(),
+            'Every n_code of the second half of the sheet must exist exactly once.'
+        );
 
         foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
             $this->assertSame(1, Cache::get($namespace.'_version', 0), "{$namespace} must bump once.");
@@ -332,6 +347,45 @@ class KargoziniImportLivewireTest extends TestCase
         $this->assertDatabaseHas('persons', [
             'n_code' => '9000000200',
             'f_name' => "عل\u{06CC}",
+        ]);
+    }
+
+    /**
+     * #1194: `persons.n_code` is unique, but a sheet may repeat a national
+     * code. Two rows with the same NEW n_code were both queued as creates, so
+     * the bulk INSERT tripped `persons_n_code_unique` and aborted the whole
+     * chunk — nothing was written, and on the queued path only the worker
+     * ever saw the error. The creates are deduped by n_code (last write wins),
+     * so the sheet imports one person instead of failing.
+     */
+    public function test_a_sheet_repeating_a_new_n_code_imports_one_person(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $this->actingAs($user);
+
+        $file = $this->createUploadFile($this->buildTsv([
+            [
+                'n_code' => '9000000300', 'f_name' => 'علی', 'l_name' => 'رضایی',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            ],
+            [
+                'n_code' => '9000000300', 'f_name' => 'حسین', 'l_name' => 'کریمی',
+                't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+            ],
+        ]));
+
+        Livewire::test('kargozini.import-persons.import-persons')
+            ->set('file', $file)
+            ->call('importPreview')
+            ->call('confirmImport');
+
+        $this->assertSame(1, Person::where('n_code', '9000000300')->count());
+
+        // The last sheet row wins, like the update path.
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '9000000300',
+            'f_name' => 'حسین',
+            'l_name' => 'کریمی',
         ]);
     }
 }

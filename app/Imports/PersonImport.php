@@ -521,6 +521,36 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     {
         $wrote = ! empty($this->pendingCreates) || ! empty($this->pendingUpdates);
 
+        // #1194: two sheet rows can carry the same NEW n_code. `persons.n_code`
+        // is unique, so a plain INSERT of both rows trips
+        // `persons_n_code_unique` and aborts the whole chunk — the import then
+        // rolls back with nothing written and, on the queued path, only the
+        // worker sees the error. Dedupe by n_code (last write wins), exactly
+        // like the update path below.
+        $dedupedCreates = [];
+        foreach ($this->pendingCreates as $item) {
+            $nCode = $item['data']['n_code'] ?? null;
+
+            if (! is_string($nCode) || $nCode === '') {
+                // A row without a national code is not a create candidate
+                // anyway (processRow rejects it), so keep it verbatim rather
+                // than collapsing unrelated rows onto one key.
+                $dedupedCreates[] = $item;
+
+                continue;
+            }
+
+            $dedupedCreates['n_code:'.$nCode] = $item;
+        }
+
+        $droppedCreates = count($this->pendingCreates) - count($dedupedCreates);
+
+        if ($droppedCreates > 0) {
+            $this->importResults['created'] = max(0, $this->importResults['created'] - $droppedCreates);
+        }
+
+        $this->pendingCreates = array_values($dedupedCreates);
+
         foreach (array_chunk($this->pendingCreates, self::CHUNK_SIZE) as $chunk) {
             $now = now();
             $rows = [];
