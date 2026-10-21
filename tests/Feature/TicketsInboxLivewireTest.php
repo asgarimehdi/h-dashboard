@@ -12,8 +12,10 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
 use Spatie\Permission\PermissionRegistrar;
@@ -358,14 +360,16 @@ class TicketsInboxLivewireTest extends TestCase
 
         $ticket = $this->createTicket(['subject' => 'تیکت من']);
 
+        // #1176: the model itself left public hydrated state — the id is the
+        // only surviving prop, and the HTML is what proves the modal rendered.
         Livewire::test('tickets.inbox')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.id', $ticket->id)
+            ->assertSet('showingTicketId', $ticket->id)
             ->assertSee('تیکت من')
             ->call('closeDetail')
             ->assertSet('showModal', false)
-            ->assertSet('showingTicket', null);
+            ->assertSet('showingTicketId', null);
     }
 
     public function test_show_ticket_out_of_scope_404(): void
@@ -405,10 +409,12 @@ class TicketsInboxLivewireTest extends TestCase
 
         $ticket = $this->createTicket(['subject' => 'تیکت با وظیفه بیگانه', 'task_id' => $secretTodo->id]);
 
+        // #847 guard, #1176 shape: the block is pinned by what the MODAL
+        // renders, not by inspecting the (now computed) relation — the ticket
+        // is rendered, the foreign todo's title and block label are not.
         Livewire::test('tickets.inbox')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.task', null)
             ->assertSee('تیکت با وظیفه بیگانه')
             ->assertDontSee('عنوان محرمانه واحد دیگر')
             // The block's own label, not the bare phrase: «وظیفه مرتبط»
@@ -433,10 +439,10 @@ class TicketsInboxLivewireTest extends TestCase
 
         $ticket = $this->createTicket(['subject' => 'تیکت با وظیفه مجاز', 'task_id' => $todo->id]);
 
+        // #847 guard, #1176 shape: rendered output, not relation introspection.
         Livewire::test('tickets.inbox')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.task.id', $todo->id)
             ->assertSee('وظیفه خودم در دسترس')
             ->assertSee('وظیفه مرتبط:');
     }
@@ -491,7 +497,7 @@ class TicketsInboxLivewireTest extends TestCase
         Livewire::test('tickets.inbox')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.id', $ticket->id)
+            ->assertSet('showingTicketId', $ticket->id)
             ->assertSee('تیکت بین دو واحد')
             ->assertDontSee('وظیفه سازنده');
     }
@@ -1821,5 +1827,133 @@ class TicketsInboxLivewireTest extends TestCase
             ->set('search', "T-\u{06F4}\u{06F5}\u{06F0}\u{06F0}")
             ->assertSee('T-4500')
             ->assertDontSee('T-9999');
+    }
+
+    // =====================================================================
+    // #1176 — the activity history is bounded to the newest 50
+    //
+    // The eager load is capped with `latest('id')->limit(50)`, so a
+    // long-lived ticket pays for the newest slice only, and what escapes
+    // the cap is exactly what a user leaving the page open would have
+    // missed anyway was the old activity. Newest first stays the display
+    // order (`sortByDesc('created_at')` in the modal).
+    // =====================================================================
+
+    public function test_ticket_modal_caps_activities_at_the_newest_50(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['subject' => 'تیکت پررونق']);
+        $this->seedTicketActivities($ticket->id, $user->id, 120);
+
+        $html = Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->html();
+
+        // Each activity carries a unique「فعالیت تست شماره N」 description and
+        // the modal renders it inside its own <p>, so searching for the
+        // description WITH the closing tag counts exactly one row each
+        // (a bare needle would match "شماره 1" inside "شماره 12").
+        $needle = fn (int $i): string => 'فعالیت تست شماره '.$i.'</p>';
+
+        $rendered = collect(range(1, 120))
+            ->filter(fn (int $i): bool => str_contains($html, $needle($i)))
+            ->values();
+
+        // At most the cap, and exactly the newest 50 (ids 71..120 —
+        // oldest descriptions never reach the modal).
+        $this->assertCount(50, $rendered);
+        $this->assertSame(range(71, 120), $rendered->all());
+
+        // Newest first: the modal's top row is the newest activity and every
+        // strictly newer one has rendered before it.
+        $cursor = -1;
+        foreach (range(120, 71) as $i) {
+            $pos = mb_strpos($html, $needle($i));
+            $this->assertNotFalse($pos, "Activity #$i is inside the cap but did not render.");
+            $this->assertGreaterThan($cursor, $pos, "Activity #$i did not render after the newer activity below it in age order.");
+            $cursor = $pos;
+        }
+    }
+
+    // =====================================================================
+    // #1176 — no N+1 after a post-open update
+    //
+    // Public model props lose their relations on hydration, so the very
+    // next (any) wire call before this change lazy-loaded activities,
+    // their attachments and their actor per row. As a `#[Computed]`, the
+    // modal's data is re-derived per request with the full eager load, so
+    // the query count must stay flat as the activity count grows.
+    // =====================================================================
+
+    public function test_modal_query_count_does_not_grow_with_activity_count(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $small = $this->createTicket();
+        $this->seedTicketActivities($small->id, $user->id, 5);
+
+        $big = $this->createTicket();
+        $this->seedTicketActivities($big->id, $user->id, 30);
+
+        // The window is open modal → one unrelated update; the second wire
+        // call is where hydration used to strip the relations.
+        $smallRun = $this->modalFlowQueryCount($small->id);
+        $bigRun = $this->modalFlowQueryCount($big->id);
+
+        $this->assertLessThanOrEqual(
+            5,
+            $bigRun - $smallRun,
+            "Query count grew from {$smallRun} to {$bigRun} as activities grew from 5 to 30 — hydration N+1 is back."
+        );
+    }
+
+    /**
+     * Insert `$count` activities with strictly decreasing timestamps so the
+     * display order (`sortByDesc('created_at')`) is determined, not just the
+     * `latest('id')` fetch order — a row-level tie would make newest-first
+     * unfalsifiable.
+     */
+    protected function seedTicketActivities(int $ticketId, int $userId, int $count): void
+    {
+        $rows = collect(range(1, $count))
+            ->map(fn (int $i): array => [
+                'ticket_id' => $ticketId,
+                'user_id' => $userId,
+                'action' => 'created',
+                'description' => 'فعالیت تست شماره '.$i,
+                'is_internal' => false,
+                'created_at' => now()->subMinutes($count + 1 - $i),
+                'updated_at' => now()->subMinutes($count + 1 - $i),
+            ])
+            ->all();
+
+        DB::table('task_activities')->insert($rows);
+    }
+
+    /**
+     * Query count of one whole wire round-trip sequence: open the modal, then
+     * fire an update that re-renders it. Mirrors `assertQueryCount()`'s
+     * transaction filter but returns the number so two fixture sizes can be
+     * compared against each other.
+     */
+    protected function modalFlowQueryCount(int $ticketId): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticketId)
+            // An unrelated change re-renders the open modal — the exact shape
+            // that lazy-loaded relations row-by-row before #1176.
+            ->set('search', 'هیچ‌وقت مطابق نیست');
+
+        DB::disableQueryLog();
+
+        return collect(DB::getQueryLog())
+            ->reject(fn (array $query): bool => Str::startsWith($query['query'], ['BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT']))
+            ->count();
     }
 }
