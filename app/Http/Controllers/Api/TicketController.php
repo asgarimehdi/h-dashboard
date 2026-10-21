@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
+use App\Http\Resources\TicketDetailResource;
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\User;
@@ -51,7 +52,7 @@ class TicketController extends Controller
         }
 
         return response()->json([
-            'data' => new TicketResource($ticket->load([
+            'data' => new TicketDetailResource($ticket->load([
                 'unit:id,name',
                 'user:id,n_code',
                 'assignee:id,n_code',
@@ -85,7 +86,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->load(['unit:id,name'])),
+            'data' => new TicketDetailResource($ticket->load(['unit:id,name'])),
         ], 201);
     }
 
@@ -107,7 +108,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name'])),
         ]);
     }
 
@@ -151,7 +152,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 
@@ -181,7 +182,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 
@@ -208,7 +209,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 }

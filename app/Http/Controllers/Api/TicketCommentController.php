@@ -39,6 +39,11 @@ class TicketCommentController extends Controller
      * response. `deleted_at` is internal bookkeeping and never leaves the
      * server; `id` and `parent_id` are required by `paginate()` and by the
      * root/reply split. Field names in the payload are unchanged.
+     *
+     * Issue #1189: `body_html` is deliberately absent. It is an internal
+     * render for the Livewire web path and never part of the API contract —
+     * `body` is the single source of truth. Roots and threaded children both
+     * read this constant, so the two list modes stay in step.
      */
     private const COMMENT_LIST_COLUMNS = [
         'id',
@@ -46,7 +51,6 @@ class TicketCommentController extends Controller
         'parent_id',
         'user_id',
         'body',
-        'body_html',
         'is_system',
         'system_event',
         'created_at',
@@ -163,7 +167,7 @@ class TicketCommentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $comment->load(['user:id,n_code', 'reactions']),
+            'data' => $this->withoutBodyHtml($comment->load(['user:id,n_code', 'reactions'])),
         ], 201);
     }
 
@@ -181,12 +185,12 @@ class TicketCommentController extends Controller
         // `children()` no longer force-loads `user.person` (#1177); the detail
         // response keeps exposing it, so it is requested explicitly here.
         return response()->json([
-            'data' => $comment->load([
+            'data' => $this->withoutBodyHtml($comment->load([
                 'user:id,n_code',
                 'reactions',
                 'children.user:id,n_code',
                 'children.user.person',
-            ]),
+            ])),
         ]);
     }
 
@@ -216,7 +220,7 @@ class TicketCommentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $comment->fresh()->load(['user:id,n_code', 'reactions']),
+            'data' => $this->withoutBodyHtml($comment->fresh()->load(['user:id,n_code', 'reactions'])),
         ]);
     }
 
@@ -321,6 +325,23 @@ class TicketCommentController extends Controller
         return response()->json([
             'data' => $reactions,
         ]);
+    }
+
+    /**
+     * Issue #1189: the API contract exposes `body` only. `body_html` stays an
+     * internal render for the Livewire web path, so it is hidden at the API
+     * boundary instead of in the model or the database. When the detail
+     * response carries loaded replies, they are hidden too.
+     */
+    private function withoutBodyHtml(TicketComment $comment): TicketComment
+    {
+        $comment->makeHidden('body_html');
+
+        if ($comment->relationLoaded('children')) {
+            $comment->children->each->makeHidden('body_html');
+        }
+
+        return $comment;
     }
 
     /**
