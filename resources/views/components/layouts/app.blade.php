@@ -8,6 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
 
+    <link rel="preload" href="{{ asset('fonts/Vazirmatn-Regular.woff2') }}" as="font" type="font/woff2" crossorigin>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     {{-- Issue #984 (CSS half, #1018): page-specific stylesheets land in
          `@stack('styles')` right here — the draw and routing stylesheets used to
@@ -46,23 +47,6 @@
          `jalalidatepicker.min.css` stay linked here, and LeafletCssScopingTest
          pins them to this <head>.
          Do not move a library back here without re-measuring. --}}
-<style>
-    @font-face {
-        font-family: 'Vazirmatn';
-        src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
-        font-weight: normal;
-    }
-
-    body {
-        font-family: 'Vazirmatn', sans-serif !important;
-        direction: rtl;
-    }
-    
-    /* برای اینکه کلاس‌های پیش‌فرض تیلوند هم از این فونت استفاده کنند */
-    .font-sans {
-        font-family: 'Vazirmatn', sans-serif !important;
-    }
-</style>
 @php
     $compactMode = auth()->user()->settings['compact_mode'] ?? false;
 @endphp
