@@ -61,6 +61,7 @@ return new class extends Component
     public bool $showHelpModal = false;
 
     public int $refreshInterval = 0;
+
     public bool $emptyScope = false;
 
     public function mount(): void
@@ -92,15 +93,15 @@ return new class extends Component
         $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
-                    'totalPersons'     => 0,
-                    'totalUnits'       => 0,
-                    'totalTickets'     => 0,
-                    'openTickets'      => 0,
+                    'totalPersons' => 0,
+                    'totalUnits' => 0,
+                    'totalTickets' => 0,
+                    'openTickets' => 0,
                     'completedTickets' => 0,
-                    'totalTodos'       => 0,
-                    'pendingTodos'     => 0,
-                    'completedTodos'   => 0,
-                    'linkedTodos'      => 0,
+                    'totalTodos' => 0,
+                    'pendingTodos' => 0,
+                    'completedTodos' => 0,
+                    'linkedTodos' => 0,
                 ];
             }
 
@@ -156,14 +157,21 @@ return new class extends Component
         $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
-                    'todayTickets'    => 0,
-                    'todayTodos'      => 0,
+                    'todayTickets' => 0,
+                    'todayTodos' => 0,
                     'todayActivities' => 0,
                 ];
             }
 
             $today = now()->startOfDay()->toDateTimeString();
-            $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+            // #1057: this is an ACCESS list, not a display list. Soft-deleted
+            // users inside the unit scope keep their audit rows; widening only
+            // the deletion state (never the unit scope) is what keeps the
+            // report complete. Declared `withoutGlobalScope()` — the
+            // `withTrashed()` macro is invisible to PHPStan.
+            $userIds = User::query()
+                ->withoutGlobalScope(\Illuminate\Database\Eloquent\SoftDeletingScope::class)
+                ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
                 ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
             $userIdStr = $userIds ? implode(',', $userIds) : '0';
@@ -182,10 +190,10 @@ return new class extends Component
         $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
-                    'urgentTickets'     => 0,
-                    'normalTickets'     => 0,
-                    'lowTickets'        => 0,
-                    'overdueTickets'    => 0,
+                    'urgentTickets' => 0,
+                    'normalTickets' => 0,
+                    'lowTickets' => 0,
+                    'overdueTickets' => 0,
                     'avgResolutionDays' => 0.0,
                 ];
             }
@@ -302,11 +310,15 @@ return new class extends Component
 
         return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-            $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
+            // #1057: include soft-deleted users in scope so their activity
+            // stays in the audit trail; the unit predicate is unchanged.
+            $userIds = User::query()
+                ->withoutGlobalScope(\Illuminate\Database\Eloquent\SoftDeletingScope::class)
+                ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
                 ->orWhereHas('units', fn ($q) => $q->whereIn('units.id', $accessibleIds))
                 ->pluck('id')->toArray();
 
-            return ActivityLog::with('user')
+            return ActivityLog::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q)])
                 ->whereIn('user_id', $userIds)
                 ->latest()->take(10)->get();
         });
@@ -637,7 +649,7 @@ return new class extends Component
                 <x-icon name="{{ $icon[0] }}" class="w-5 h-5 {{ $icon[1] }}" />
                 <div class="flex-1 min-w-0">
                     <p class="text-sm truncate">{{ $activity->description }}</p>
-                    <p class="text-[10px] text-base-content/50">{{ $activity->user?->name ?? 'سیستم' }}</p>
+                    <p class="text-[10px] text-base-content/50">{{ \App\Support\ActorLabel::for($activity->user) }}</p>
                 </div>
                 <span class="text-[10px] text-base-content/40 whitespace-nowrap">{{ \Carbon\Carbon::parse($activity->created_at)->diffForHumans() }}</span>
             </div>

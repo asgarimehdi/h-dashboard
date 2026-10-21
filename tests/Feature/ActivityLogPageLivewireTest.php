@@ -214,6 +214,76 @@ class ActivityLogPageLivewireTest extends TestCase
             ->assertSet('selectedLog', null);
     }
 
+    // ==================== Soft-deleted actors (#1057) ====================
+
+    /**
+     * A soft-deleted account whose person still sits in the given unit.
+     */
+    private function trashedUserInUnit(Unit $unit): User
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode, 'f_name' => 'غیرفعال', 'l_name' => 'کاربر',
+            't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
+        ]);
+
+        $user = User::factory()->create(['n_code' => $nCode]);
+        $user->delete();
+
+        return $user;
+    }
+
+    public function test_activity_log_list_shows_a_trashed_user_in_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $user->givePermissionTo('manage_users');
+        session(['current_unit_id' => $unit->id]);
+        $this->actingAs($user);
+
+        $trashed = $this->trashedUserInUnit($unit);
+        $log = ActivityLog::create([
+            'user_id' => $trashed->id,
+            'type' => 'login',
+            'description' => 'ورود کاربر حذف‌شده درون‌محدوده',
+        ]);
+
+        // #1057: the access list is a permission list, so it must include
+        // soft-deleted users in scope; otherwise their audit trail disappears.
+        Livewire::test('activity-log.index')
+            ->assertSee('ورود کاربر حذف‌شده درون‌محدوده')
+            ->call('showDetail', $log->id)
+            ->assertSet('showModal', true)
+            ->assertSet('selectedLog.id', $log->id)
+            ->assertSee('کاربر غیرفعال');
+    }
+
+    public function test_activity_log_hides_a_trashed_user_out_of_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $user->givePermissionTo('manage_users');
+        session(['current_unit_id' => $unit->id]);
+        $this->actingAs($user);
+
+        $foreignUnit = Unit::factory()->create();
+        $trashed = $this->trashedUserInUnit($foreignUnit);
+        $log = ActivityLog::create([
+            'user_id' => $trashed->id,
+            'type' => 'login',
+            'description' => 'ورود کاربر حذف‌شده بیرون از محدوده',
+        ]);
+
+        $component = Livewire::test('activity-log.index');
+
+        $component->assertDontSee('ورود کاربر حذف‌شده بیرون از محدوده');
+
+        // Widening the deletion state must not widen the unit scope: the
+        // out-of-scope detail keeps its not-found contract (#1057).
+        $component->call('showDetail', $log->id)
+            ->assertSet('showModal', false)
+            ->assertSet('selectedLog', null)
+            ->assertDontSee('ورود کاربر حذف‌شده بیرون از محدوده');
+    }
+
     // ==================== Pagination ====================
 
     public function test_activity_log_pagination_works(): void
