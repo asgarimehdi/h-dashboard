@@ -2341,12 +2341,6 @@ parameters:
 			path: resources/views/livewire/activity-log/index.blade.php
 
 		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/activity-log/index.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/activity\-log/index\.blade\.php\:12\:\:getAccessibleUserIds\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -2440,12 +2434,6 @@ parameters:
 			message: '#^Call to an undefined static method App\\Models\\User\:\:count\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
-			path: resources/views/livewire/dashboard.blade.php
-
-		-
-			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
-			identifier: staticMethod.notFound
-			count: 2
 			path: resources/views/livewire/dashboard.blade.php
 
 		-

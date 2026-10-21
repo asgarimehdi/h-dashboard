@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -132,6 +133,66 @@ test('refreshStats re-runs the aggregation after invalidation', function () {
     app(CacheInvalidationServiceInterface::class)->increment('dashboard');
 
     $component->call('refreshStats')->assertSet('totalPersons', 2);
+});
+
+test('recent activities keep an in-scope trashed user and label them as inactive', function () {
+    $nCode = '2222222222';
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'غیرفعال',
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    $trashed = User::factory()->create(['n_code' => $nCode]);
+    $trashed->delete();
+
+    ActivityLog::create([
+        'user_id' => $trashed->id,
+        'type' => 'login',
+        'description' => 'ورود کاربر حذف‌شده درون‌محدوده',
+    ]);
+
+    $this->actingAs($this->user);
+
+    // #1057: the access list is a permission list, not a display list — a
+    // soft-deleted account in scope must not erase its own audit trail.
+    Livewire::test('dashboard')
+        ->assertSee('ورود کاربر حذف‌شده درون‌محدوده')
+        ->assertSee('کاربر غیرفعال');
+});
+
+test('recent activities hide a trashed user from an out-of-scope unit', function () {
+    $foreignUnit = Unit::create(['name' => 'واحد بیرونی']);
+    $nCode = '3333333333';
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'بیرونی',
+        'l_name' => 'کاربر',
+        'u_id' => $foreignUnit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    $trashed = User::factory()->create(['n_code' => $nCode]);
+    $trashed->delete();
+
+    ActivityLog::create([
+        'user_id' => $trashed->id,
+        'type' => 'login',
+        'description' => 'ورود کاربر حذف‌شده بیرون از محدوده',
+    ]);
+
+    $this->actingAs($this->user);
+
+    // The deletion-state widening must not widen the unit scope (#1057).
+    Livewire::test('dashboard')
+        ->assertDontSee('ورود کاربر حذف‌شده بیرون از محدوده')
+        ->assertDontSee('کاربر غیرفعال');
 });
 
 test('dashboard_refresh = 0 renders no timer', function () {
