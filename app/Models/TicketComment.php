@@ -73,10 +73,15 @@ class TicketComment extends Model
 
     /**
      * Get child comments (replies).
+     *
+     * #1177: eager loads are deliberately NOT declared here. A `with()` inside
+     * the relation definition forces every consumer — API lists, the Livewire
+     * thread, queries, tests — to pay for it. Callers that render author names
+     * opt in explicitly (`children.user.person`).
      */
     public function children(): HasMany
     {
-        return $this->hasMany(TicketComment::class, 'parent_id')->with('user.person');
+        return $this->hasMany(TicketComment::class, 'parent_id');
     }
 
     /**
