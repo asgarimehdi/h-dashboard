@@ -71,6 +71,39 @@ class TicketApiTest extends TestCase
             ->assertJsonStructure(['data', 'meta']);
     }
 
+    /**
+     * #1189: the list payload is the pre-decision shape MINUS `content`; every
+     * other field (and every `whenLoaded` block) stays exactly as it was.
+     */
+    public function test_index_does_not_expose_ticket_content(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        Ticket::create(['ticket_code' => 'T-LIST-1', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'First', 'content' => 'First body', 'priority' => 'normal', 'status' => 'created']);
+        Ticket::create(['ticket_code' => 'T-LIST-2', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Second', 'content' => 'Second body', 'priority' => 'urgent', 'status' => 'created']);
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet('/api/tickets', $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(2, $data);
+
+        foreach ($data as $item) {
+            $this->assertArrayNotHasKey('content', $item);
+            $this->assertArrayHasKey('subject', $item);
+        }
+
+        $keys = array_keys($data[0]);
+        sort($keys);
+        $expected = [
+            'accepted_at', 'assignee', 'completed_at', 'created_at', 'current_assignee_id',
+            'deadline', 'id', 'priority', 'status', 'status_name', 'subject', 'ticket_code',
+            'unit', 'unit_id', 'updated_at', 'user', 'user_id',
+        ];
+        sort($expected);
+        $this->assertSame($expected, $keys, 'The list shape must stay unchanged apart from dropping content.');
+    }
+
     public function test_user_can_show_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
@@ -79,8 +112,9 @@ class TicketApiTest extends TestCase
         $token = $this->createApiToken($user, ['tickets:read']);
         $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
 
+        // #1189: detail responses keep `content` with its real value.
         $response->assertStatus(200)
-            ->assertJson(['data' => ['subject' => 'Show Me']]);
+            ->assertJson(['data' => ['subject' => 'Show Me', 'content' => 'Body']]);
     }
 
     public function test_user_can_create_ticket(): void
@@ -95,8 +129,10 @@ class TicketApiTest extends TestCase
             'unit_id' => $unit->id,
         ], $token);
 
+        // #1189: the created ticket is a detail response, so `content` is present.
         $response->assertStatus(201)
-            ->assertJson(['success' => true]);
+            ->assertJson(['success' => true])
+            ->assertJsonPath('data.content', 'Description');
 
         $this->assertDatabaseHas('tickets', ['subject' => 'New Ticket']);
     }
@@ -129,8 +165,9 @@ class TicketApiTest extends TestCase
             'subject' => 'Updated',
         ], $token);
 
+        // #1189: update is a detail response, so `content` is present.
         $response->assertStatus(200)
-            ->assertJson(['data' => ['subject' => 'Updated']]);
+            ->assertJson(['data' => ['subject' => 'Updated', 'content' => 'Body']]);
     }
 
     public function test_user_can_delete_ticket(): void

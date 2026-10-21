@@ -219,21 +219,24 @@ class TicketCommentApiComprehensiveTest extends TestCase
      * #1177: index selects explicit columns, so the public shape of each item
      * is pinned. `deleted_at` is internal bookkeeping and must not leak; every
      * field the API exposed before must still be present.
+     *
+     * #1189: `body_html` is no longer part of the API contract — `body` is the
+     * single source of truth.
      */
     public function test_index_comment_items_expose_only_public_columns(): void
     {
         $this->authAsUserA();
-        $this->makeComment();
+        $this->makeComment(['body' => 'بدنه کامنت']);
 
         $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments", $this->authToken);
         $response->assertStatus(200);
 
-        $keys = array_keys($response->json('data.0'));
+        $item = $response->json('data.0');
+        $keys = array_keys($item);
         sort($keys);
 
         $expected = [
             'body',
-            'body_html',
             'created_at',
             'id',
             'is_system',
@@ -248,6 +251,8 @@ class TicketCommentApiComprehensiveTest extends TestCase
         sort($expected);
 
         $this->assertSame($expected, $keys);
+        $this->assertSame('بدنه کامنت', $item['body']);
+        $this->assertArrayNotHasKey('body_html', $item);
     }
 
     public function test_index_threaded_children_expose_only_public_columns(): void
@@ -265,7 +270,6 @@ class TicketCommentApiComprehensiveTest extends TestCase
 
         $expected = [
             'body',
-            'body_html',
             'created_at',
             'id',
             'is_system',
@@ -280,6 +284,9 @@ class TicketCommentApiComprehensiveTest extends TestCase
         sort($expected);
 
         $this->assertSame($expected, $keys);
+
+        // #1189: threaded children follow the same body-only contract.
+        $this->assertArrayNotHasKey('body_html', $child);
 
         // The relation no longer force-loads `user.person` (#1177); the list
         // still exposes it, so the controller must keep requesting it.
@@ -358,11 +365,19 @@ class TicketCommentApiComprehensiveTest extends TestCase
     public function test_store_processes_markdown(): void
     {
         $this->authAsUserA();
+        $body = '**bold** و `code` و [لینک](https://example.com)';
         $response = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
-            'body' => '**bold** و `code` و [لینک](https://example.com)',
+            'body' => $body,
         ], $this->authToken);
-        $response->assertStatus(201);
-        $html = $response->json('data.body_html');
+
+        // #1189: the API returns `body` only; `body_html` stays an internal
+        // render for the Livewire web path and must not be serialized.
+        $response->assertStatus(201)
+            ->assertJsonPath('data.body', $body)
+            ->assertJsonMissingPath('data.body_html');
+
+        // The rendered column is still written for the web UI.
+        $html = TicketComment::findOrFail($response->json('data.id'))->body_html;
         $this->assertStringContainsString('<strong>bold</strong>', $html);
         $this->assertStringContainsString('<code>code</code>', $html);
         $this->assertStringContainsString('<a href="https://example.com"', $html);
@@ -380,10 +395,18 @@ class TicketCommentApiComprehensiveTest extends TestCase
     public function test_show_returns_comment(): void
     {
         $this->authAsUserA();
-        $comment = $this->makeComment();
-        $this->apiGet("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", $this->authToken)
-            ->assertStatus(200)
-            ->assertJsonPath('data.id', $comment->id);
+        $comment = $this->makeComment(['body' => 'بدنه کامنت']);
+        $this->makeComment(['body' => 'پاسخ', 'parent_id' => $comment->id]);
+
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", $this->authToken);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.id', $comment->id)
+            ->assertJsonPath('data.body', 'بدنه کامنت')
+            ->assertJsonMissingPath('data.body_html')
+            // #1189: nested replies obey the same body-only contract.
+            ->assertJsonPath('data.children.0.body', 'پاسخ')
+            ->assertJsonMissingPath('data.children.0.body_html');
     }
 
     public function test_show_comment_from_other_ticket_403(): void
@@ -435,7 +458,8 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
             'body' => 'ویرایش درست',
         ], $this->authToken)->assertStatus(200)
-            ->assertJsonPath('data.body', 'ویرایش درست');
+            ->assertJsonPath('data.body', 'ویرایش درست')
+            ->assertJsonMissingPath('data.body_html');
     }
 
     // ─── Destroy ─────────────────────────────────────────────────────────
