@@ -6,9 +6,7 @@
 @source '../**/*.js';
 
 @theme {
-    --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif,
-        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-        "Noto Color Emoji";
+    --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 }
 
 /**
@@ -43,19 +41,18 @@
 
 /* ------------------ */
 @font-face {
-    font-family: "Vazir";
-    src: url("/public/fonts/Vazirmatn-Regular.woff2") format("truetype");
-    font-weight: normal;
+    font-family: "Vazirmatn";
+    src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
+    font-weight: 400;
     font-style: normal;
+    font-display: swap;
 }
 @font-face {
-    font-family: "Vazir";
-    src: url("/public/fonts/Vazirmatn-Bold.woff2") format("truetype");
-    font-weight: bold;
+    font-family: "Vazirmatn";
+    src: url("/fonts/Vazirmatn-Bold.woff2") format("woff2");
+    font-weight: 700;
     font-style: normal;
-}
-body {
-    font-family: "Vazir", sans-serif;
+    font-display: swap;
 }
 
 #map {
@@ -69,7 +66,7 @@ body {
 }
 .leaflet-routing-alt{
     background-color: whitesmoke;
-    font-family: Vazir;
+    font-family: "Vazirmatn", sans-serif;
 }
 .dark .leaflet-routing-alt,
 .dark .leaflet-layer,
