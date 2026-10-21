@@ -52,14 +52,18 @@ return new class extends Component {
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
 @endpush
 
-@push('scripts')
-    {{-- Issue #984: routing is needed by this page alone, so it ships here
-         instead of in the global layout. `@stack('scripts')` sits at the end of
-         <body>, but that is still before Livewire's `start()` (deferred to
-         DOMContentLoaded) evaluates the `@script` block below, so `L.Routing` is
-         defined by the time `onReady()` runs. --}}
+@assets
+    {{-- Issue #984 / #1182: Leaflet core and routing are this page's only
+         consumers, so they ship here instead of in the global layout. `@assets`
+         keeps them in <head>: a `@push('scripts')` tag at the end of the body is
+         evaluated after Alpine has initialised the map on `wire:navigate`
+         (`L is not defined`, blank map — #028), while Livewire evaluates new head
+         assets before the swap completes. `L` and `L.Routing` are therefore
+         defined when `onReady()` runs. Leaflet comes first: routing-machine
+         patches `L`. --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
-@endpush
+@endassets
 
 @script
 <script>

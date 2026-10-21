@@ -213,14 +213,16 @@ return new class extends Component {
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
 @endpush
 
-@push('scripts')
-    {{-- Issue #984: `units/map` is the only page that draws boundaries, so the
-         draw plugin ships here instead of in the global layout. It lands in
-         `@stack('scripts')`, which runs before Livewire's deferred `start()`
-         evaluates the `@script` block below — `L.Control.Draw` is therefore
-         defined when `initUnitMap()` runs. --}}
+@assets
+    {{-- Issue #984 / #1182: `units/map` is the only page that draws boundaries,
+         so the draw plugin ships here instead of in the global layout, with
+         Leaflet core ahead of it. Both go through `@assets`, i.e. into <head>, so
+         `L` and `L.Control.Draw` exist when `initUnitMap()` runs — a pushed tag
+         at the end of the body would arrive after Alpine on `wire:navigate`
+         (#028). --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
-@endpush
+@endassets
 
 @script
 <script>

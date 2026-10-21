@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Testing\TestResponse;
+use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -17,8 +19,19 @@ use Tests\TestCase;
  *   leaflet.draw              67,484 B  -> /units/{id}/map
  *   full-calendar            281,849 B  -> /todo
  * = 914,043 B of render-blocking JS (~85% of the layout's 1,081,303 B) that the
- * other 27 pages never executed. Each page now pushes its own library into
- * `@stack('scripts')`.
+ * other 27 pages never executed. Each page now loads its own library instead —
+ * `@assets` since #1182, which Livewire injects into <head> (a `@push('scripts')`
+ * tag lands at the end of <body>, too late for a component that needs the library
+ * in its Alpine `init()` on a `wire:navigate` visit).
+ *
+ * Issue #1182 — the last two global libraries left the layout the same way:
+ *   leaflet                ~142 KB -> 8 pages (7 `maps.map` hosts + units/map)
+ *   jalalidatepicker        ~25 KB -> 6 pages with Persian date fields
+ * Leaflet is the dangerous half: `maps/map.blade.php` builds the map when its
+ * Alpine `init()` runs, so a host page that forgets the asset renders an EMPTY
+ * map instead of failing loudly (the #028 failure mode). The host list comes
+ * from `grep -rln "livewire:maps.map" resources/views` — county, point and
+ * map-no-boundary never mention "leaflet" and were missing from the first plan.
  *
  * These assertions run against the rendered HTML of a real page load, so they
  * prove three things at once: the library left the layout, it did NOT leave the
@@ -32,14 +45,15 @@ class PageScriptSplittingTest extends TestCase
     use InteractsWithTestSetup;
     use RefreshDatabase;
 
+    private const LEAFLET = 'js/leaflet/leaflet.js';
+
+    private const JALALI_DATEPICKER = 'js/other/jalalidatepicker.min.js';
+
     private const ROUTING = 'js/leaflet/leaflet-routing-machine.min.js';
 
     private const DRAW = 'js/leaflet/leaflet.draw.js';
 
     private const FULL_CALENDAR = 'js/other/full-calendar.min.js';
-
-    /** Libraries consumed broadly enough to stay in the layout. */
-    private const GLOBAL_LIBS = ['js/leaflet/leaflet.js', 'js/other/jalalidatepicker.min.js'];
 
     /**
      * Views we do not own: the OPcache GUI is vendored verbatim and pulls
@@ -47,6 +61,23 @@ class PageScriptSplittingTest extends TestCase
      * part of the app's own script budget — see #1183.
      */
     private const THIRD_PARTY_VIEWS = ['views/op/index.php'];
+
+    /**
+     * The table-driven tests walk pages from several permission groups, so the
+     * actor needs all of them: maps (`map`), reports (`manage_personnel`),
+     * tickets, the calendar, the activity log and the unit detail map.
+     *
+     * @var array<int, string>
+     */
+    private const PAGE_PERMISSIONS = [
+        'map',
+        'organization',
+        'manage_personnel',
+        'manage_users',
+        'calendar',
+        'view_all_tickets',
+        'view_assigned_tickets',
+    ];
 
     protected function setUp(): void
     {
@@ -61,7 +92,7 @@ class PageScriptSplittingTest extends TestCase
         $result = $this->createUserWithUnit(['map', 'calendar', 'organization']);
         $this->actingAs($result['user']);
 
-        $response = $this->get('/dashboard');
+        $response = $this->visit('/dashboard');
 
         $response->assertStatus(200);
         $response->assertSee('داشبورد مدیریت اطلاعات سلامت');
@@ -70,9 +101,35 @@ class PageScriptSplittingTest extends TestCase
         $response->assertDontSee(self::DRAW);
         $response->assertDontSee(self::FULL_CALENDAR);
 
-        // The libraries that ARE used across pages must still be global.
-        foreach (self::GLOBAL_LIBS as $lib) {
-            $response->assertSee($lib);
+        // #1182: Leaflet and jalalidatepicker are no longer global either — the
+        // dashboard is neither a map nor a date page.
+        $response->assertDontSee(self::LEAFLET);
+        $response->assertDontSee(self::JALALI_DATEPICKER);
+    }
+
+    /**
+     * #1182 — every page that hosts a Leaflet map must push Leaflet core itself.
+     *
+     * The seven `maps.map` hosts plus `units/map` (which builds its own
+     * `#unitMap`) are the complete list; grep for `<livewire:maps.map` produced
+     * it, and a page missing here means a blank map in production.
+     */
+    public function test_every_leaflet_page_pushes_leaflet_core(): void
+    {
+        $result = $this->createUserWithUnit(self::PAGE_PERMISSIONS);
+        $this->actingAs($result['user']);
+
+        foreach ($this->leafletPages($result['unit']->id) as $url => $marker) {
+            $response = $this->visit($url);
+
+            $response->assertStatus(200);
+            $response->assertSee($marker, false);
+
+            $this->assertLoads($response, self::LEAFLET, $url);
+
+            // No map page has a Persian date boundary, so none may pull the
+            // datepicker back in.
+            $response->assertDontSee(self::JALALI_DATEPICKER);
         }
     }
 
@@ -81,13 +138,17 @@ class PageScriptSplittingTest extends TestCase
         $result = $this->createUserWithUnit(['map']);
         $this->actingAs($result['user']);
 
-        $response = $this->get('/maps/route');
+        $response = $this->visit('/maps/route');
 
         $response->assertStatus(200);
         $response->assertSee('محاسبه فاصله جاده‌ای');
         $response->assertSee(self::ROUTING);
         $response->assertDontSee(self::DRAW);
         $response->assertDontSee(self::FULL_CALENDAR);
+        $response->assertDontSee(self::JALALI_DATEPICKER);
+
+        // Leaflet core must land before routing-machine patches `L`.
+        $this->assertAppearsBefore($response, self::LEAFLET, self::ROUTING, '/maps/route');
     }
 
     public function test_maps_route2_pushes_routing_machine_only(): void
@@ -95,13 +156,16 @@ class PageScriptSplittingTest extends TestCase
         $result = $this->createUserWithUnit(['map']);
         $this->actingAs($result['user']);
 
-        $response = $this->get('/maps/route2');
+        $response = $this->visit('/maps/route2');
 
         $response->assertStatus(200);
         $response->assertSee('محاسبه فاصله جاده‌ای');
         $response->assertSee(self::ROUTING);
         $response->assertDontSee(self::DRAW);
         $response->assertDontSee(self::FULL_CALENDAR);
+        $response->assertDontSee(self::JALALI_DATEPICKER);
+
+        $this->assertAppearsBefore($response, self::LEAFLET, self::ROUTING, '/maps/route2');
     }
 
     public function test_unit_map_pushes_leaflet_draw_only(): void
@@ -109,13 +173,17 @@ class PageScriptSplittingTest extends TestCase
         $result = $this->createUserWithUnit(['organization']);
         $this->actingAs($result['user']);
 
-        $response = $this->get('/units/'.$result['unit']->id.'/map');
+        $response = $this->visit('/units/'.$result['unit']->id.'/map');
 
         $response->assertStatus(200);
         $response->assertSee('id="unitMap"', false);
         $response->assertSee(self::DRAW);
         $response->assertDontSee(self::ROUTING);
         $response->assertDontSee(self::FULL_CALENDAR);
+        $response->assertDontSee(self::JALALI_DATEPICKER);
+
+        // `L.Control.Draw` is registered at parse time, so core comes first.
+        $this->assertAppearsBefore($response, self::LEAFLET, self::DRAW, '/units/{id}/map');
     }
 
     public function test_todo_page_pushes_fullcalendar_only(): void
@@ -123,18 +191,28 @@ class PageScriptSplittingTest extends TestCase
         $result = $this->createUserWithUnit(['calendar']);
         $this->actingAs($result['user']);
 
-        $response = $this->get('/todo');
+        $response = $this->visit('/todo');
 
         $response->assertStatus(200);
         $response->assertSee('تقویم سازمانی');
         $response->assertSee(self::FULL_CALENDAR);
         $response->assertDontSee(self::ROUTING);
         $response->assertDontSee(self::DRAW);
+        $response->assertDontSee(self::LEAFLET);
+
+        // #1182: the calendar page filters by Persian date, so it keeps the
+        // datepicker — in the same asset block as FullCalendar.
+        $response->assertSee(self::JALALI_DATEPICKER);
     }
 
     /**
      * Every other maps page renders a Leaflet map too — it must NOT pull the
      * routing/draw libraries back in, or the split silently costs what it saved.
+     *
+     * This is also the #1182 STOP #4 guard: `/maps/county` and `/maps/point`
+     * never mention "leaflet" in their own markup and were missing from the
+     * first consumer list, so before #1182 they only had Leaflet because it was
+     * global. Now they must load it themselves.
      */
     public function test_plain_map_pages_stay_light(): void
     {
@@ -142,14 +220,89 @@ class PageScriptSplittingTest extends TestCase
         $this->actingAs($result['user']);
 
         foreach (['/maps/county', '/maps/point'] as $url) {
-            $response = $this->get($url);
+            $response = $this->visit($url);
 
             $response->assertStatus(200);
-            $response->assertSee(self::GLOBAL_LIBS[0]);
+            $this->assertLoads($response, self::LEAFLET, $url);
             $response->assertDontSee(self::ROUTING);
             $response->assertDontSee(self::DRAW);
             $response->assertDontSee(self::FULL_CALENDAR);
+            $response->assertDontSee(self::JALALI_DATEPICKER);
         }
+    }
+
+    /**
+     * #1182 — the six pages with Persian date fields are the complete
+     * jalaliDatepicker consumer list.
+     */
+    public function test_every_date_page_pushes_jalalidatepicker(): void
+    {
+        $result = $this->createUserWithUnit(self::PAGE_PERMISSIONS);
+        $this->actingAs($result['user']);
+
+        foreach ($this->datePages() as $url => [$marker]) {
+            $response = $this->visit($url);
+
+            $response->assertStatus(200);
+            $response->assertSee($marker);
+
+            $this->assertLoads($response, self::JALALI_DATEPICKER, $url);
+
+            // None of them is a map page.
+            $response->assertDontSee(self::LEAFLET);
+        }
+    }
+
+    /**
+     * #1182 — the order is the whole point: `jalaliDatepicker` is a plain global
+     * declared by the loaded file, and every date page calls `startWatch()` from
+     * its own init. If the asset ever lands after that init, the page throws
+     * `jalaliDatepicker is not defined` and every date field on it is inert.
+     *
+     * Asserted against the view source, not the rendered HTML: Livewire 4
+     * compiles a component's `@script` into a deferred effect and its plain
+     * `<script>` into a module (`storage/framework/views/livewire/scripts/*.js`),
+     * so both run AFTER the `@stack('scripts')` block and the rendered document
+     * order says nothing about them. What pins the runtime order is the asset
+     * sitting above the init in the same file — which is what this checks.
+     */
+    public function test_jalalidatepicker_is_loaded_before_the_init_that_uses_it(): void
+    {
+        foreach ($this->datePages() as $url => [, $view]) {
+            $contents = (string) file_get_contents(resource_path('views/'.$view));
+
+            $assetAt = strpos($contents, self::JALALI_DATEPICKER);
+            $initAt = strpos($contents, 'jalaliDatepicker.startWatch');
+
+            $this->assertNotFalse($assetAt, "{$url}: the view never loads ".self::JALALI_DATEPICKER.'.');
+            $this->assertNotFalse($initAt, "{$url}: the view never calls jalaliDatepicker.startWatch().");
+            $this->assertLessThan(
+                $initAt,
+                $assetAt,
+                "{$url}: the jalalidatepicker asset must sit above the init in the view.",
+            );
+        }
+    }
+
+    /**
+     * The control case for #1182: a page with neither a map nor a date field
+     * ships neither library.
+     */
+    public function test_an_unrelated_page_ships_neither_library(): void
+    {
+        $result = $this->createUserWithUnit(self::PAGE_PERMISSIONS);
+        $this->actingAs($result['user']);
+
+        $response = $this->visit('/settings');
+
+        $response->assertStatus(200);
+        $response->assertSee('تنظیمات');
+
+        $response->assertDontSee(self::LEAFLET);
+        $response->assertDontSee(self::JALALI_DATEPICKER);
+        $response->assertDontSee(self::ROUTING);
+        $response->assertDontSee(self::DRAW);
+        $response->assertDontSee(self::FULL_CALENDAR);
     }
 
     // ==================== No CDN scripts in the views (#1183) ====================
@@ -179,6 +332,86 @@ class PageScriptSplittingTest extends TestCase
         }
 
         expect($offenders)->toBe([]);
+    }
+
+    /**
+     * Render a page with Livewire's per-request asset state reset first.
+     *
+     * `@assets` (the mechanism these pages use since #1182) is collected in a
+     * static so one page's head assets are never injected twice. In a real
+     * request that static starts empty, but the test process renders several
+     * pages in one PHP process, so without the reset page N would inherit page
+     * N-1's assets and every `assertDontSee` below would pass or fail by test
+     * order. `flushState()` is Livewire's own reset (`flush-state`).
+     */
+    private function visit(string $url): TestResponse
+    {
+        Livewire::flushState();
+
+        return $this->get($url);
+    }
+
+    /**
+     * Every Leaflet consumer: the seven `maps.map` hosts plus `units/map`.
+     *
+     * @return array<string, string> url => marker that proves the page rendered
+     */
+    private function leafletPages(int $unitId): array
+    {
+        return [
+            '/map' => 'id="map"',
+            '/maps/route' => 'id="map"',
+            '/maps/route2' => 'id="map"',
+            '/maps/county' => 'id="map"',
+            '/maps/unit' => 'id="map"',
+            '/maps/point' => 'id="map"',
+            '/reports/map-no-boundary' => 'id="map"',
+            '/units/'.$unitId.'/map' => 'id="unitMap"',
+        ];
+    }
+
+    /**
+     * Every jalaliDatepicker consumer: url => [page marker, view file].
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    private function datePages(): array
+    {
+        return [
+            '/activity-log' => ['گزارش فعالیت سیستم', 'livewire/activity-log/index.blade.php'],
+            '/reports/tickets' => ['گزارش تیکت‌ها', 'livewire/reports/advanced.blade.php'],
+            '/reports/todos' => ['گزارش وظایف', 'livewire/reports/todos.blade.php'],
+            '/tickets/inbox' => ['صندوق تیکت‌های پشتیبانی', 'livewire/tickets/⚡inbox.blade.php'],
+            '/monitoring' => ['مانیتورینگ تیکت‌ها', 'livewire/tickets/⚡monitoring.blade.php'],
+            '/todo' => ['تقویم سازمانی', 'livewire/todo/todo.blade.php'],
+        ];
+    }
+
+    /** Assert the rendered page loads `$library`, with the URL in the message. */
+    private function assertLoads(TestResponse $response, string $library, string $url): void
+    {
+        $this->assertStringContainsString(
+            $library,
+            (string) $response->getContent(),
+            "{$url} must load {$library} itself — it is no longer in the global layout.",
+        );
+    }
+
+    /** Assert `$first` appears in the HTML before the first `$second`. */
+    private function assertAppearsBefore(TestResponse $response, string $first, string $second, string $url): void
+    {
+        $html = (string) $response->getContent();
+
+        $firstAt = strpos($html, $first);
+        $secondAt = strpos($html, $second);
+
+        $this->assertNotFalse($firstAt, "{$url}: '{$first}' never appears in the page HTML.");
+        $this->assertNotFalse($secondAt, "{$url}: '{$second}' never appears in the page HTML.");
+        $this->assertLessThan(
+            $secondAt,
+            $firstAt,
+            "{$url}: '{$first}' must come before '{$second}', or the init runs against an undefined global.",
+        );
     }
 
     /**
