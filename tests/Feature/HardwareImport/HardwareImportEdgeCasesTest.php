@@ -190,7 +190,8 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $results = $import->getImportResults();
 
-        $this->assertSame(1, $results['skipped']);
+        // #1209: the rejected row counts in the `errors` bucket.
+        $this->assertSame(1, count($results['errors']));
         $this->assertSame(0, $results['created']);
         $this->assertCount(1, $results['preview']);
         $this->assertSame('error', $results['preview'][0]['status']);
@@ -275,7 +276,7 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $this->assertCount(1, $results['errors']);
         $this->assertEquals(
-            'Missing required fields: n_code and pc_name are required',
+            'فیلدهای اجباری n_code و pc_name خالی هستند',
             $results['errors'][0]['error']
         );
         $this->assertEquals(2, $results['errors'][0]['row']);
@@ -299,7 +300,7 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         $this->assertCount(1, $results['errors']);
         $this->assertEquals(
-            'Person with n_code 9999999999 not found',
+            'پرسنل با کد ملی 9999999999 یافت نشد',
             $results['errors'][0]['error']
         );
         $this->assertDatabaseCount('hardwares', 0);
