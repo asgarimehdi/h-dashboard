@@ -434,6 +434,14 @@ new class extends Component
     </x-modal>
 </div>
 
+@assets
+    {{-- Issue #1182: jalaliDatepicker is page-specific and used to ship in the
+         global layout on every page. `@assets` keeps the tag in <head>, so the
+         library is defined before this page's first `startWatch()` call — on a
+         full load and before the swap on `wire:navigate`. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
+
 <script>
     const initMonitoringJdp = () => {
         if (typeof jalaliDatepicker !== 'undefined') {

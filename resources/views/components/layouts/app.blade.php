@@ -18,20 +18,34 @@
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 
 
-    {{-- Issue #984: leaflet.draw, leaflet-routing-machine and FullCalendar are
-         page-specific. Loading them here cost ~914 KB of render-blocking JS on
-         every page (~85% of the global JS payload) for three pages that use
-         them. Each page now pushes the library it needs into `@stack('scripts')`:
-           maps/route + maps/route2 -> leaflet-routing-machine
-           units/map                -> leaflet.draw
-           todo/todo                -> full-calendar
-         The CSS half is done too (#1018): the draw and routing stylesheets are
-         no longer linked above — their pages push them into `@stack('styles')`
-         in <head>, before first paint.
-         Leaflet itself and jalalidatepicker stay global — they are used by most
-         pages. Do not move a library back here without re-measuring. --}}
-    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
-    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+    {{-- Issues #984 / #1018 / #1182: Leaflet, jalalidatepicker, leaflet.draw,
+         leaflet-routing-machine and FullCalendar are page-specific. Loading them
+         here cost ~914 KB of render-blocking JS for the three plugin/calendar
+         libraries (~85% of the global JS payload) on top of ~167 KB for Leaflet
+         core + jalalidatepicker — on every page, including the ones that never
+         touch a map or a Persian date field. Each page now loads what it needs
+         with `@assets` (also from #1182 — see below):
+           maps/route, maps/route2  -> leaflet core + routing-machine
+           units/map                -> leaflet core + leaflet.draw
+           map/map-dashboard, maps/county, maps/unit, maps/point,
+           reports/map-no-boundary  -> leaflet core        (8 Leaflet pages total)
+           activity-log/index, reports/advanced, reports/todos,
+           tickets/inbox, tickets/monitoring, todo/todo
+                                    -> jalalidatepicker   (6 date pages total)
+         Two rules for whoever moves the next library:
+         1. It goes on the HOST page, never inside `maps/map.blade.php` — the
+            child's asset arrives with the child, after the page's Alpine
+            `init()` already asked the store for a map.
+         2. It goes through `@assets`, NOT `@push('scripts')`. Livewire injects
+            `@assets` into this <head> and evaluates new head assets before it
+            completes a `wire:navigate` swap. A pushed tag lands at the end of
+            <body>, and on navigate Livewire morphs the body and runs Alpine
+            BEFORE evaluating those scripts — measured as `L is not defined` and
+            a blank map on /dashboard -> /maps/county (#028, #1182).
+         The CSS half (#1018) is untouched by #1182: `leaflet.css` and
+         `jalalidatepicker.min.css` stay linked here, and LeafletCssScopingTest
+         pins them to this <head>.
+         Do not move a library back here without re-measuring. --}}
 <style>
     @font-face {
         font-family: 'Vazirmatn';
