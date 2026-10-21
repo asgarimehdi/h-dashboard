@@ -35,6 +35,33 @@ class TicketCommentController extends Controller
     public const MAX_MENTIONS = 20;
 
     /**
+     * Issue #1177: explicit column list for every comment row in the list
+     * response. `deleted_at` is internal bookkeeping and never leaves the
+     * server; `id` and `parent_id` are required by `paginate()` and by the
+     * root/reply split. Field names in the payload are unchanged.
+     */
+    private const COMMENT_LIST_COLUMNS = [
+        'id',
+        'ticket_id',
+        'parent_id',
+        'user_id',
+        'body',
+        'body_html',
+        'is_system',
+        'system_event',
+        'created_at',
+        'updated_at',
+    ];
+
+    /**
+     * Issue #1177: `children()` is a plain `hasMany`, so the thread is one
+     * level deep — the payload risk is the unbounded number of replies a
+     * single parent may carry, not recursion. Ten keeps a thread readable
+     * without shipping every reply on every list refresh.
+     */
+    private const MAX_THREADED_REPLIES = 10;
+
+    /**
      * List comments for a ticket.
      */
     public function index(UnitScopedRequest $request, Ticket $ticket): JsonResponse
@@ -52,13 +79,18 @@ class TicketCommentController extends Controller
         $perPage = min($request->integer('per_page', 20), 100);
 
         $query = $ticket->comments()
+            ->select(self::COMMENT_LIST_COLUMNS)
             ->with(['user:id,n_code', 'reactions'])
             ->whereNull('parent_id')
             ->latest();
 
         if ($threaded) {
-            $comments = $query->with('children.user', 'children.reactions')
-                ->paginate($perPage);
+            $comments = $query->with([
+                'children:'.implode(',', self::COMMENT_LIST_COLUMNS),
+                'children' => fn ($q) => $q->orderBy('id')->limit(self::MAX_THREADED_REPLIES),
+                'children.user.person',
+                'children.reactions',
+            ])->paginate($perPage);
         } else {
             $comments = $query->paginate($perPage);
         }
@@ -146,8 +178,15 @@ class TicketCommentController extends Controller
             return response()->json(['message' => 'Comment not accessible.'], 403);
         }
 
+        // `children()` no longer force-loads `user.person` (#1177); the detail
+        // response keeps exposing it, so it is requested explicitly here.
         return response()->json([
-            'data' => $comment->load(['user:id,n_code', 'reactions', 'children.user:id,n_code']),
+            'data' => $comment->load([
+                'user:id,n_code',
+                'reactions',
+                'children.user:id,n_code',
+                'children.user.person',
+            ]),
         ]);
     }
 

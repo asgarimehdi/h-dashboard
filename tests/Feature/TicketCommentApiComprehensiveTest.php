@@ -184,6 +184,124 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->assertCount(1, $data[0]['children']);
     }
 
+    /**
+     * #1177: the reply cap is per PARENT (the tree is only one level deep),
+     * and it must not touch the pagination meta — `meta.total` still counts
+     * root comments only.
+     */
+    public function test_index_threaded_caps_children_per_parent(): void
+    {
+        $this->authAsUserA();
+
+        $rootA = $this->makeComment(['body' => 'ریشه ۱']);
+        $rootB = $this->makeComment(['body' => 'ریشه ۲']);
+
+        foreach (range(1, 50) as $i) {
+            $this->makeComment(['body' => "پاسخ الف {$i}", 'parent_id' => $rootA->id]);
+        }
+
+        foreach (range(1, 12) as $i) {
+            $this->makeComment(['body' => "پاسخ ب {$i}", 'parent_id' => $rootB->id]);
+        }
+
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments?threaded=true", $this->authToken);
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+
+        $this->assertCount(2, $data);
+        $this->assertCount(10, $data[0]['children'], 'A parent with 50 replies must be capped at 10.');
+        $this->assertCount(10, $data[1]['children'], 'The cap applies per parent, not once per page.');
+        $this->assertSame(2, $response->json('meta.total'), 'The reply cap must not change the root-comment total.');
+    }
+
+    /**
+     * #1177: index selects explicit columns, so the public shape of each item
+     * is pinned. `deleted_at` is internal bookkeeping and must not leak; every
+     * field the API exposed before must still be present.
+     */
+    public function test_index_comment_items_expose_only_public_columns(): void
+    {
+        $this->authAsUserA();
+        $this->makeComment();
+
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments", $this->authToken);
+        $response->assertStatus(200);
+
+        $keys = array_keys($response->json('data.0'));
+        sort($keys);
+
+        $expected = [
+            'body',
+            'body_html',
+            'created_at',
+            'id',
+            'is_system',
+            'parent_id',
+            'reactions',
+            'system_event',
+            'ticket_id',
+            'updated_at',
+            'user',
+            'user_id',
+        ];
+        sort($expected);
+
+        $this->assertSame($expected, $keys);
+    }
+
+    public function test_index_threaded_children_expose_only_public_columns(): void
+    {
+        $this->authAsUserA();
+        $root = $this->makeComment(['body' => 'ریشه']);
+        $this->makeComment(['body' => 'پاسخ', 'parent_id' => $root->id]);
+
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments?threaded=true", $this->authToken);
+        $response->assertStatus(200);
+
+        $child = $response->json('data.0.children.0');
+        $keys = array_keys($child);
+        sort($keys);
+
+        $expected = [
+            'body',
+            'body_html',
+            'created_at',
+            'id',
+            'is_system',
+            'parent_id',
+            'reactions',
+            'system_event',
+            'ticket_id',
+            'updated_at',
+            'user',
+            'user_id',
+        ];
+        sort($expected);
+
+        $this->assertSame($expected, $keys);
+
+        // The relation no longer force-loads `user.person` (#1177); the list
+        // still exposes it, so the controller must keep requesting it.
+        $this->assertArrayHasKey('person', $child['user']);
+        $this->assertSame($this->user->n_code, $child['user']['person']['n_code']);
+    }
+
+    /**
+     * #1177: `threaded=0` keeps its exact previous shape — no `children` key.
+     */
+    public function test_index_not_threaded_has_no_children_key(): void
+    {
+        $this->authAsUserA();
+        $root = $this->makeComment(['body' => 'ریشه']);
+        $this->makeComment(['body' => 'پاسخ', 'parent_id' => $root->id]);
+
+        $response = $this->apiGet("/api/tickets/{$this->ticket->id}/comments", $this->authToken);
+        $response->assertStatus(200);
+
+        $this->assertArrayNotHasKey('children', $response->json('data.0'));
+    }
+
     public function test_index_out_of_scope_403(): void
     {
         $this->authAsUserB();

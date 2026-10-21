@@ -192,6 +192,32 @@ class TicketCommentTest extends TestCase
         ]);
     }
 
+    /**
+     * #1177: `children()` must not carry eager loads of its own — a `with()`
+     * inside the relation definition forces every consumer to pay for it.
+     * Callers that render author names opt in explicitly
+     * (`children.user.person` in the Livewire thread and in the API
+     * controller).
+     */
+    public function test_children_relation_does_not_force_eager_loads(): void
+    {
+        $root = TicketComment::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => $this->user->id,
+            'body' => 'والد',
+        ]);
+        TicketComment::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => $this->user->id,
+            'parent_id' => $root->id,
+            'body' => 'پاسخ',
+        ]);
+
+        $child = $root->children()->firstOrFail();
+
+        $this->assertFalse($child->relationLoaded('user'));
+    }
+
     public function test_can_soft_delete_comment(): void
     {
         $token = $this->createApiToken($this->user, ['tickets:read', 'tickets:write']);
