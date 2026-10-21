@@ -414,6 +414,22 @@ class HrApiTest extends TestCase
     }
 
     /**
+     * Seed an extra in-scope person whose hire sits two months in the past.
+     */
+    private function createHireTwoMonthsAgo(): Person
+    {
+        $person = Person::factory()->create([
+            'u_id' => $this->unit->id,
+            'status' => 'active',
+        ]);
+        $person->forceFill([
+            'created_at' => now()->startOfMonth()->subMonths(2),
+        ])->saveQuietly();
+
+        return $person;
+    }
+
+    /**
      * Expected `YYYY-MM` labels for a window of $months buckets ending with
      * the current month, oldest first.
      *
@@ -468,6 +484,78 @@ class HrApiTest extends TestCase
         $single->assertStatus(200);
         $this->assertCount(1, $single->json('data'));
         $this->assertSame($this->expectedMonthLabels(1), array_column($single->json('data'), 'month'));
+
+        // #1180: the hire sits two months back, i.e. outside the one-month
+        // window, so it can only be counted through the pre-window baseline.
+        // The old assertion stopped at the bucket count and could not see it.
+        $this->assertSame([1], array_column($single->json('data'), 'count'));
+    }
+
+    public function test_headcount_trend_includes_hires_older_than_the_window(): void
+    {
+        // Expert proof for #1180: one hire 24 months back and two 2 months
+        // back. A window-only cumulative sum starts at zero and drops the
+        // 24-months-ago hire from every bucket.
+        Person::firstOrFail()->forceFill([
+            'created_at' => now()->startOfMonth()->subMonths(24),
+        ])->saveQuietly();
+
+        $this->createHireTwoMonthsAgo();
+        $this->createHireTwoMonthsAgo();
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend', $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(12, $data);
+        $this->assertSame($this->expectedMonthLabels(12), array_column($data, 'month'));
+        $this->assertSame(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3],
+            array_column($data, 'count')
+        );
+
+        $single = $this->apiGet('/api/hr/analytics/headcount-trend?months=1', $token);
+        $single->assertStatus(200);
+        $this->assertSame([3], array_column($single->json('data'), 'count'));
+    }
+
+    public function test_headcount_trend_ignores_null_created_at(): void
+    {
+        // `created_at` is nullable; a person without it can never be placed in
+        // a bucket, so it must stay out of every count.
+        Person::firstOrFail()->forceFill(['created_at' => null])->saveQuietly();
+        $this->createHireTwoMonthsAgo();
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend', $token);
+
+        $response->assertStatus(200);
+        $this->assertSame(
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+            array_column($response->json('data'), 'count')
+        );
+    }
+
+    public function test_headcount_trend_counts_a_hire_in_the_current_month(): void
+    {
+        Person::firstOrFail()->forceFill([
+            'created_at' => now()->startOfMonth(),
+        ])->saveQuietly();
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/analytics/headcount-trend', $token);
+
+        $response->assertStatus(200);
+        // The current month is inclusive: first counted in its own bucket, not
+        // the one after it.
+        $this->assertSame(
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            array_column($response->json('data'), 'count')
+        );
+
+        $single = $this->apiGet('/api/hr/analytics/headcount-trend?months=1', $token);
+        $this->assertSame([1], array_column($single->json('data'), 'count'));
     }
 
     public function test_headcount_trend_rejects_out_of_range_months(): void
