@@ -3,6 +3,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Services\AccessService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -22,7 +23,6 @@ return new class extends Component
     public bool $editing = false;
     public ?int $editCommentId = null;
     public string $editBody = '';
-    public ?Ticket $ticket = null;
 
     protected $listeners = ['openComments' => 'openForTicket'];
 
@@ -44,17 +44,37 @@ return new class extends Component
         $this->ticketId = null;
     }
 
-    public function loadTicket(): void
+    /**
+     * #1176: the comment thread's ticket is no longer a public model prop —
+     * hydration re-fetched a public prop by key WITHOUT relations, so any
+     * update unrelated to comments dropped `user.person`/`children` and the
+     * template lazy-loaded them per comment. The id stays public; the model
+     * is the `#[Computed]` one request behind it.
+     */
+    #[Computed]
+    public function ticket(): ?Ticket
     {
         if (! $this->ticketId) {
-            $this->ticket = null;
-            return;
+            return null;
         }
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $this->ticket = Ticket::where('id', $this->ticketId)
+
+        return Ticket::query()
+            ->whereKey($this->ticketId)
             ->whereIn('unit_id', $accessibleIds)
             ->with(['comments' => fn ($q) => $q->with('user.person')->with('children.user.person')->orderByDesc('created_at')])
             ->first();
+    }
+
+    /**
+     * Invalidate the computed thread so the next read reloads it. Kept as its
+     * own public method (`->call('loadTicket')` in the tests plus the open
+     * path) — the query itself lives in the `#[Computed] ticket()` above.
+     */
+    public function loadTicket(): void
+    {
+        unset($this->ticket);
     }
 
     public function addComment(): void
@@ -83,7 +103,9 @@ return new class extends Component
     {
         // Reload the ticket so the comments list reflects the latest data
         // immediately (no need to close & reopen the modal).
-        $this->loadTicket();
+        // #1176: binding constraint — this method must NOT be deleted; as a
+        // computed the reload IS the unset: the next read re-runs the query.
+        unset($this->ticket);
     }
 
     public function addReply(int $commentId): void
@@ -195,15 +217,15 @@ return new class extends Component
 
 <div>
     <x-modal wire:model="showModal" title="کامنت‌ها و گفتگو" separator class="max-w-2xl">
-        @if ($ticket)
+        @if ($this->ticket)
             <div class="space-y-4 text-right" dir="rtl">
                 {{-- Ticket header --}}
                 <div class="p-3 bg-base-200/60 rounded-lg">
                     <div class="flex items-center justify-between">
-                        <span class="font-bold text-sm">{{ $ticket->ticket_code }}</span>
-                        <span class="badge badge-sm">{{ $ticket->status }}</span>
+                        <span class="font-bold text-sm">{{ $this->ticket->ticket_code }}</span>
+                        <span class="badge badge-sm">{{ $this->ticket->status }}</span>
                     </div>
-                    <p class="text-sm mt-1">{{ $ticket->subject }}</p>
+                    <p class="text-sm mt-1">{{ $this->ticket->subject }}</p>
                 </div>
 
                 {{-- New comment form --}}
@@ -215,7 +237,7 @@ return new class extends Component
 
                 {{-- Comments list --}}
                 <div class="space-y-3 max-h-96 overflow-y-auto pr-1">
-                    @forelse ($ticket->comments as $comment)
+                    @forelse ($this->ticket->comments as $comment)
                         <div class="border border-base-300 rounded-lg p-3">
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-2">

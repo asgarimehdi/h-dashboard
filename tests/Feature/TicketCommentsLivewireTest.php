@@ -82,6 +82,20 @@ class TicketCommentsLivewireTest extends TestCase
         ]);
     }
 
+    // #1176: `refreshComments()` MUST survive the conversion of `$ticket` to
+    // a computed — deleting it (as the plan's step 3 once said) pushes every
+    // freshly written comment behind the next request. The new body is
+    // `unset($this->ticket)`, and THIS is the rendered proof it still works:
+    // the brand new comment is in the modal's HTML in the same round-trip.
+    public function test_add_comment_shows_the_new_comment_in_the_html_immediately(): void
+    {
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('body', 'کامنت تازه بی‌درنگ')
+            ->call('addComment')
+            ->assertSee('کامنت تازه بی‌درنگ');
+    }
+
     public function test_can_reply_via_livewire(): void
     {
         $parent = TicketComment::create([
