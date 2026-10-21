@@ -686,7 +686,10 @@ return new class extends Component
 
                 @if($this->previewStats['errors'] > 0)
                     <div class="alert alert-error">
-                        <x-icon name="o-alert-triangle" class="w-5 h-5" />
+                        {{-- #1209: with a truthful error count this block renders for the
+                             first time; `o-alert-triangle` does not exist in the icon set
+                             and 500'd the preview page — the shipped name is o-exclamation-triangle. --}}
+                        <x-icon name="o-exclamation-triangle" class="w-5 h-5" />
                         <span>{{ $this->previewStats['errors'] }} ردیف با خطای اعتبارسنجی مواجه شده و نادیده گرفته می‌شوند.</span>
                         <details class="mt-2">
                             <summary class="cursor-pointer text-sm underline">مشاهده خطاها</summary>

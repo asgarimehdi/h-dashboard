@@ -188,9 +188,12 @@ class HardwareImportTest extends TestCase
 
         $results = $import->getImportResults();
 
-        // Should be skipped due to organizational scope
-        $this->assertEquals(1, $results['skipped']);
         $this->assertEquals(0, $results['created']);
+        $this->assertCount(1, $results['errors']);
+        // The scoped loader never indexed the out-of-scope person, so the row
+        // rejects as "person not found" — the not-in-scope backstop (#839) was
+        // reached only under the stale unscoped loader.
+        $this->assertEquals('پرسنل با کد ملی 9876543210 یافت نشد', $results['errors'][0]['error']);
 
         @unlink($file);
     }
@@ -261,10 +264,15 @@ class HardwareImportTest extends TestCase
 
         $results = $import->getImportResults();
 
-        $this->assertEquals(1, $results['skipped']);
+        // Rejected rows count in the `errors` bucket now (#1209).
+        $this->assertEquals(1, count($results['errors']));
         $this->assertEquals(0, $results['created']);
         $this->assertCount(1, $results['preview']);
         $this->assertEquals('error', $results['preview'][0]['status']);
+        $this->assertEquals(
+            'فیلدهای اجباری n_code و pc_name خالی هستند',
+            $results['errors'][0]['error']
+        );
 
         @unlink($file);
     }
@@ -564,6 +572,158 @@ class HardwareImportTest extends TestCase
             $values,
             'The import path did not escape the formula payload.'
         );
+
+        @unlink($file);
+    }
+
+    // ==================== #1209: confirm-pass row accounting ====================
+
+    /**
+     * The issue-body probe sheet: one row that changes an existing device and
+     * one row the preview rejects (unknown person). Preview buckets must sum
+     * to the sheet row count, with the rejected row in `errors`, not skipped.
+     */
+    public function test_preview_counts_a_rejected_row_in_errors_not_skipped(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-001', 'pc', 'Windows 11', 'Intel i7'],
+                ['9999999999', 'PC-002', 'pc', 'Windows 11', 'Intel i7'],
+            ],
+            ['n_code', 'pc_name', 'type', 'os', 'cpu']
+        );
+
+        $import = $this->scopedImport($data);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame(0, $results['skipped']);
+        $this->assertSame(1, count($results['errors']));
+        $this->assertSame(3, $results['errors'][0]['row']);
+        $this->assertSame('پرسنل با کد ملی 9999999999 یافت نشد', $results['errors'][0]['error']);
+
+        // The probe's preview statuses: [update, error].
+        $this->assertSame(['update', 'error'], array_column($results['preview'], 'status'));
+        // Contract #1: the buckets must sum to the sheet row count (2 rows).
+        $this->assertSame(2, $results['created'] + $results['updated'] + $results['skipped'] + count($results['errors']));
+
+        @unlink($file);
+    }
+
+    /**
+     * The issue's other confirm case: a realistic action map where the
+     * operator also picked an action for the rejected row. The rejected row
+     * must still be counted (skipped) and must surface in the final `errors`
+     * with the preview's own message.
+     */
+    public function test_confirm_pass_carries_preview_rejections_into_the_result(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-001', 'pc', 'Windows 11', 'Intel i7'],
+                ['9999999999', 'PC-002', 'pc', 'Windows 11', 'Intel i7'],
+            ],
+            ['n_code', 'pc_name', 'type', 'os', 'cpu']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setSelectedActions([
+            'row_2' => 'update',
+            'row_3' => 'update',
+        ]);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+        $this->assertSame(2, $results['created'] + $results['updated'] + $results['skipped']);
+        $this->assertSame(1, count($results['errors']));
+        $this->assertSame(3, $results['errors'][0]['row']);
+        $this->assertSame(
+            'پرسنل با کد ملی 9999999999 یافت نشد',
+            $results['errors'][0]['error'],
+            "The confirm pass must keep the preview's own per-row error message."
+        );
+        $this->assertDatabaseCount('hardwares', 1);
+
+        @unlink($file);
+    }
+
+    /**
+     * The issue's all-skipped confirm case: even when the operator skips
+     * every row, every sheet row must land in a bucket — nothing lost.
+     */
+    public function test_confirm_pass_counts_operator_skipped_rows(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-001', 'pc', 'Windows 11', 'Intel i7'],
+                ['9999999999', 'PC-002', 'pc', 'Windows 11', 'Intel i7'],
+            ],
+            ['n_code', 'pc_name', 'type', 'os', 'cpu']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setSelectedActions([
+            'row_2' => 'skip',
+            'row_3' => 'skip',
+        ]);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(2, $results['skipped']);
+        $this->assertSame(1, count($results['errors']));
+        $this->assertSame(
+            'پرسنل با کد ملی 9999999999 یافت نشد',
+            $results['errors'][0]['error']
+        );
+        $this->assertDatabaseCount('hardwares', 1);
+
+        @unlink($file);
+    }
+
+    /**
+     * The issue's browser case: an unchanged device must count the same in
+     * preview and confirm — «۱ بدون تغییر» in both, nothing dropped.
+     */
+    public function test_confirm_pass_of_an_unchanged_row_matches_the_preview_count(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [['1234567890', 'PC-001', 'pc', 'Windows 10', 'Intel i5', '8192', 'SSD 256GB', 'AA:BB:CC:DD:EE:FF', '1', '0']],
+            ['n_code', 'pc_name', 'type', 'os', 'cpu', 'ram', 'hdd', 'mac', 'shutdown', 'mark']
+        );
+
+        $preview = $this->scopedImport($data);
+        Excel::import($preview, $file);
+        $previewResults = $preview->getImportResults();
+
+        $confirm = $this->scopedImport($data);
+        $confirm->setSelectedActions(['row_2' => 'skip']);
+        Excel::import($confirm, $file);
+        $confirmResults = $confirm->getImportResults();
+
+        $this->assertSame($previewResults['skipped'], $confirmResults['skipped']);
+        $this->assertSame(1, $confirmResults['skipped']);
+        $this->assertSame(0, $confirmResults['created']);
+        $this->assertSame(0, $confirmResults['updated']);
+        $this->assertSame([], $confirmResults['errors']);
+        $this->assertSame(1, $confirmResults['created'] + $confirmResults['updated'] + $confirmResults['skipped']);
 
         @unlink($file);
     }

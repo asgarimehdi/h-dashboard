@@ -201,7 +201,7 @@ class PersonImportEdgeCasesTest extends TestCase
 
         $results = $import->getImportResults();
 
-        $this->assertSame(1, $results['skipped']);
+        $this->assertSame(1, count($results['errors']));
         $this->assertSame(0, $results['created']);
         $this->assertCount(1, $results['preview']);
         $this->assertSame('error', $results['preview'][0]['status']);
@@ -331,7 +331,7 @@ class PersonImportEdgeCasesTest extends TestCase
 
         $this->assertCount(1, $results['errors']);
         $this->assertEquals(
-            'Missing required fields: n_code, f_name, l_name are required',
+            'فیلدهای اجباری n_code، f_name و l_name خالی هستند',
             $results['errors'][0]['error']
         );
         $this->assertEquals(1, $results['skipped']);
@@ -352,7 +352,7 @@ class PersonImportEdgeCasesTest extends TestCase
 
         $this->assertCount(1, $results['errors']);
         $this->assertEquals(
-            'Unit with id 999999 not found',
+            'واحد با شناسه 999999 یافت نشد',
             $results['errors'][0]['error']
         );
         $this->assertDatabaseCount('persons', 0);
@@ -392,7 +392,8 @@ class PersonImportEdgeCasesTest extends TestCase
         $this->assertCount(1, $results['preview']);
         $this->assertEquals('error', $results['preview'][0]['status']);
         $this->assertEquals('شناسه واحد (u_id) خالی است', $results['preview'][0]['message']);
-        $this->assertEquals(1, $results['skipped']);
+        // #1209: the rejected row counts in the `errors` bucket.
+        $this->assertCount(1, $results['errors']);
 
         @unlink($file);
     }
@@ -414,7 +415,8 @@ class PersonImportEdgeCasesTest extends TestCase
 
         $results = $import->getImportResults();
 
-        $this->assertEquals(4, $results['skipped']);
+        // #1209: each rejected row counts in the `errors` bucket.
+        $this->assertEquals(4, count($results['errors']));
         $messages = array_column($results['preview'], 'message');
         $this->assertContains('تحصیلات با شناسه 999991 یافت نشد', $messages);
         $this->assertContains('نوع استخدام با شناسه 999992 یافت نشد', $messages);

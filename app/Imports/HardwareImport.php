@@ -47,6 +47,16 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
     private array $selectedActions = [];
 
+    /**
+     * #1209: sheet rows the preview rejected, keyed by spreadsheet row number
+     * with the preview's own error message. The confirm pass uses this to
+     * carry every rejected row — with the same message — into the published
+     * result instead of dropping it.
+     *
+     * @var array<int, string>
+     */
+    private array $previewErrorMessages = [];
+
     /** @var list<array{data: array<string, mixed>, changes: array<string, mixed>}> */
     private array $pendingCreates = [];
 
@@ -133,12 +143,15 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
             // Second pass: apply selected actions if provided
             if (! empty($this->selectedActions)) {
-                // Reset counters since they were incremented during preview pass
-                // The actual import will increment them correctly
+                // Reset counters since they were incremented during preview pass.
+                // #1209: `errors` is reset too — the confirm pass re-derives
+                // every preview-rejected row below (with the preview's own
+                // message), instead of letting the buckets double up.
                 $this->importResults['created'] = 0;
                 $this->importResults['updated'] = 0;
                 $this->importResults['skipped'] = 0;
                 $this->importResults['changes'] = [];
+                $this->importResults['errors'] = [];
 
                 foreach ($dataByRow as $rowNumber => $data) {
                     $this->applySelectedAction($data, $rowNumber);
@@ -242,18 +255,60 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      */
     private function applySelectedAction(array $data, int $rowNumber): void
     {
-        // Check if this row has a selected action
+        // #1209: a row the preview rejected is never written, and the
+        // operator's action map cannot resurrect it. Count it as skipped and
+        // carry the preview's own error message into the confirm result, so
+        // the published error list matches what the operator approved.
+        $previewMessage = $this->previewErrorMessages[$rowNumber] ?? null;
+        if (is_string($previewMessage)) {
+            $this->importResults['skipped']++;
+            $this->importResults['errors'][] = [
+                'row' => $rowNumber,
+                'error' => $previewMessage,
+                'data' => $data,
+            ];
+
+            return;
+        }
+
+        // Check if this row has a selected action. #1209: a row the operator
+        // skipped — or that never received an action — must still be counted,
+        // not dropped silently.
         $actionKey = "row_{$rowNumber}";
-        if (! isset($this->selectedActions[$actionKey])) {
+        if (! isset($this->selectedActions[$actionKey]) || $this->selectedActions[$actionKey] === 'skip') {
+            $this->importResults['skipped']++;
+
             return;
         }
 
-        $action = $this->selectedActions[$actionKey];
-        if ($action === 'skip') {
-            return;
-        }
+        $this->processRow($data, $rowNumber, $this->selectedActions[$actionKey], true);
+    }
 
-        $this->processRow($data, $rowNumber, $action, true);
+    /**
+     * #1209: record one sheet row the preview rejected.
+     *
+     * The row is written twice on purpose: the `preview` entry drives the
+     * operator-facing preview table, the `errors` entry publishes the same
+     * rejection in the result (both passes read the same counter buckets),
+     * and the message is remembered so the confirm pass can re-publish it
+     * verbatim.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function recordRejectedRow(int $rowNumber, string $message, array $data): void
+    {
+        $this->importResults['preview'][] = [
+            'row' => $rowNumber,
+            'status' => 'error',
+            'message' => $message,
+            'data' => $data,
+        ];
+        $this->importResults['errors'][] = [
+            'row' => $rowNumber,
+            'error' => $message,
+            'data' => $data,
+        ];
+        $this->previewErrorMessages[$rowNumber] = $message;
     }
 
     /**
@@ -263,13 +318,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     {
         // Validate required fields
         if (empty($data['n_code']) || empty($data['pc_name'])) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => 'فیلدهای اجباری n_code و pc_name خالی هستند',
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
+            $this->recordRejectedRow($rowNumber, 'فیلدهای اجباری n_code و pc_name خالی هستند', $data);
 
             return;
         }
@@ -277,13 +326,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         // Verify person exists and is in accessible units
         $person = $this->existingPersons[$data['n_code']] ?? null;
         if (! $person) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => "پرسنل با کد ملی {$data['n_code']} یافت نشد",
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
+            $this->recordRejectedRow($rowNumber, "پرسنل با کد ملی {$data['n_code']} یافت نشد", $data);
 
             return;
         }
@@ -293,13 +336,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         // empty scope `$this->existingPersons` is empty, so the "person not
         // found" check above already rejected it — defence in depth.
         if (! in_array($person->u_id, $this->accessibleUnitIds)) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => "پرسنل {$data['n_code']} در واحدهای قابل دسترس شما نیست",
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
+            $this->recordRejectedRow($rowNumber, "پرسنل {$data['n_code']} در واحدهای قابل دسترس شما نیست", $data);
 
             return;
         }
@@ -471,6 +508,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
                     $existing['record']->fill($writeData);
 
                     $this->importResults['updated']++;
+                } else {
+                    // #1209: 'create' cannot write onto an existing record —
+                    // such an action combo never writes anything, so the row
+                    // must still land in a bucket.
+                    $this->importResults['skipped']++;
                 }
             } else {
                 $this->importResults['skipped']++;
@@ -486,6 +528,10 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
                 ];
 
                 $this->importResults['created']++;
+            } else {
+                // #1209: 'update' cannot write onto a record that does not
+                // exist — the row must still land in a bucket.
+                $this->importResults['skipped']++;
             }
         }
     }
