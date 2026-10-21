@@ -42,23 +42,38 @@ class HrAnalyticsController extends Controller
             now()->addMinutes(5),
             function () use ($accessibleIds, $months) {
                 $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
+                // One grouped pass plus a cumulative window (issue #1180). The
+                // old form ran a correlated COUNT(*) per bucket. `baseline`
+                // keeps hires older than the window — without it the running
+                // total starts at the oldest bucket and silently drops them.
                 $results = DB::select(
-                    "WITH month_series AS (
+                    "WITH months AS (
                         SELECT generate_series(
                             date_trunc('month', CURRENT_DATE) - make_interval(months => ?),
                             date_trunc('month', CURRENT_DATE),
                             '1 month'::interval
                         ) AS month_start
+                    ),
+                    monthly AS (
+                        SELECT date_trunc('month', p.created_at) AS m, COUNT(*) AS c
+                        FROM persons p
+                        WHERE p.u_id = ANY(?)
+                        GROUP BY 1
+                    ),
+                    baseline AS (
+                        SELECT COUNT(*) AS c
+                        FROM persons p
+                        WHERE p.u_id = ANY(?)
+                          AND p.created_at < (SELECT min(month_start) FROM months)
                     )
                     SELECT
                         to_char(ms.month_start, 'YYYY-MM') AS month,
-                        (SELECT COUNT(*)
-                         FROM persons p
-                         WHERE p.u_id = ANY(?)
-                           AND p.created_at < ms.month_start + INTERVAL '1 month') AS count
-                    FROM month_series ms
+                        ((SELECT c FROM baseline)
+                         + COALESCE(SUM(m.c) FILTER (WHERE m.m IS NOT NULL) OVER (ORDER BY ms.month_start), 0))::int AS count
+                    FROM months ms
+                    LEFT JOIN monthly m ON m.m = ms.month_start
                     ORDER BY ms.month_start ASC",
-                    [(string) ($months - 1), $idArray]
+                    [(string) ($months - 1), $idArray, $idArray]
                 );
 
                 return collect($results)->map(fn ($row) => [
