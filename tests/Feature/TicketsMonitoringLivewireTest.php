@@ -330,14 +330,16 @@ class TicketsMonitoringLivewireTest extends TestCase
             'ticket_code' => 'TKT-AA01',
         ]);
 
-        // User A (in scope) can open the modal
+        // User A (in scope) can open the modal.
+        // #1176: the model is a computed now — the id prop is the surviving
+        // state and the rendered HTML is the proof the modal opened.
         $this->actingAs($userA);
         Session::put('current_unit_id', $unitA->id);
         Livewire::test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.id', $ticket->id)
-            ->assertSet('showingTicket.subject', 'تیکت در واحد A');
+            ->assertSet('showingTicketId', $ticket->id)
+            ->assertSee('شرح تیکت تست');
 
         // User B (out of scope) — the component calls $this->error() which is not defined
         // (missing Mary Toast trait). We verify the modal stays closed regardless.
@@ -353,6 +355,31 @@ class TicketsMonitoringLivewireTest extends TestCase
         // check that the in-scope user works correctly and document the out-of-scope
         // bug as pre-existing. The test passes if we don't crash the test runner.
         $this->assertTrue(true, 'out-of-scope shows error bug is pre-existing; in-scope works');
+    }
+
+    // ==================== #1176 — out-of-scope id stays closed ====================
+    //
+    // The toast catch above is a legacy shape; #1176 asks the BEHAVIOUR to be
+    // pinned: an out-of-scope id never opens the modal. The scope decision
+    // happens in showTicket() itself (findOrFail + in_array check), the
+    // computed below only loads tickets that decision already admitted —
+    // so both must fail shut, or this pin goes red.
+
+    public function test_show_ticket_out_of_scope_does_not_open_the_modal(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $foreignUnit = Unit::create(['name' => 'واحد بیرون از دامنه نظارت']);
+        $foreign = $this->makeTicket($foreignUnit, [
+            'subject' => 'تیکت بیرون از دامنه',
+            'ticket_code' => 'TKT-OOR7',
+        ]);
+
+        Livewire::test('tickets.monitoring')
+            ->call('showTicket', $foreign->id)
+            ->assertSet('showModal', false)
+            ->assertSet('showingTicketId', null);
     }
 
     // ==================== Close detail test ====================
@@ -372,10 +399,13 @@ class TicketsMonitoringLivewireTest extends TestCase
         Livewire::test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.id', $ticket->id)
+            ->assertSet('showingTicketId', $ticket->id)
+            // #1176: rendered proof — the monitoring modal shows the content,
+            // not the subject it used to assert on.
+            ->assertSee('شرح تیکت تست')
             ->call('closeDetail')
             ->assertSet('showModal', false)
-            ->assertSet('showingTicket', null);
+            ->assertSet('showingTicketId', null);
     }
 
     // ==================== Pagination reset test ====================
@@ -529,7 +559,8 @@ class TicketsMonitoringLivewireTest extends TestCase
         Livewire::test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.task', null)
+            // #1176: the relation is a computed now — the guard lives on what
+            // the modal renders: the ticket there, the foreign todo nowhere.
             ->assertSee('تیکت نظارت با وظیفه بیگانه')
             ->assertDontSee('عنوان محرمانه نظارت')
             ->assertDontSee('وظیفه مرتبط:');
@@ -557,7 +588,7 @@ class TicketsMonitoringLivewireTest extends TestCase
         Livewire::test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSet('showModal', true)
-            ->assertSet('showingTicket.task.id', $todo->id)
+            // #1176: rendered guard — an in-scope task still renders its block.
             ->assertSee('وظیفه مجاز نظارت')
             ->assertSee('وظیفه مرتبط:');
     }

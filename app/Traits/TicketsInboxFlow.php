@@ -13,6 +13,7 @@ use App\Support\ActorLabel;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
 
 /**
  * The `tickets.inbox` detail-modal + assignment/forward/completion flow
@@ -56,11 +57,89 @@ trait TicketsInboxFlow
 
     public array $completionFiles = [];
 
-    public ?Ticket $showingTicket = null;
-
+    /**
+     * #1176: the detail-modal ticket is no longer a public model prop. A
+     * public `?Ticket` dehydrates by key, and Livewire re-fetches it WITHOUT
+     * relations on the next update, so the modal's eager loads were gone
+     * after every wire round-trip (activities, their attachments and their
+     * actor lazy-loaded row by row). The id stays public; the model is the
+     * `#[Computed]` below and is re-derived per request.
+     */
     public ?int $showingTicketId = null;
 
     public bool $showModal = false;
+
+    /**
+     * #1176: how much of the activity history the detail modal pays for.
+     * Long-lived tickets rendered their entire `task_activities` history on
+     * every open, unbounded; the modal keeps the newest slice and the
+     * newest-first display order sorts it.
+     */
+    private const ACTIVITY_HISTORY_LIMIT = 50;
+
+    /**
+     * The detail-modal ticket, re-derived per request.
+     *
+     * Same access shape as the load it replaces (#1055): the scope predicate
+     * is an UNCONDITIONAL `whereIn('unit_id', $accessibleIds)` — an empty
+     * accessible set compiles to `0 = 1`, in scope of nothing, never
+     * unrestricted — plus the #847 gate on the `task` relation below. For the
+     * same request the result is cached by `#[Computed]`; after a mutation
+     * the request closes the modal anyway, and any explicit re-read invalidates
+     * with `unset($this->showingTicket)`.
+     */
+    #[Computed]
+    public function showingTicket(): ?Ticket
+    {
+        if (! $this->showingTicketId) {
+            return null;
+        }
+
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        // #906: soft-deleted users are kept in the result so their creator
+        // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
+        // truly ownerless ticket gets. Column list on `attachments` keeps the
+        // payload to what the modal renders (#1176). `with()` leads the chain
+        // and the IN-filter sits inside `where(Closure)` — a bare whereIn
+        // re-types the rest through `Query\Builder`'s `@mixin` (AGENTS.md).
+        /** @var Ticket|null $ticket */
+        $ticket = Ticket::query()
+            ->with([
+                'attachments:id,ticket_id,file_path,file_name,file_size,activity_id',
+                // #1176: the 50-activity cap constrains the activities query;
+                // its own eager loads ride nested dot-notation keys on the
+                // same relation query. Chaining `->with()` inside this
+                // closure trips phpstan — a Relation-typed param only has
+                // `Query\Builder`'s methods via `@mixin`.
+                'activities' => fn ($q) => $q->latest('id')->limit(self::ACTIVITY_HISTORY_LIMIT),
+                'activities.attachments',
+                'activities.user' => fn ($q) => ActorLabel::eagerLoadActor($q),
+                'user' => fn ($q) => ActorLabel::eagerLoadActor($q),
+                'unit',
+            ])
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->find($this->showingTicketId);
+
+        if (! $ticket) {
+            return null;
+        }
+
+        // #847: the ticket is scoped, but its `task` relation was not — so a
+        // ticket linked to an out-of-scope todo leaked that todo's title,
+        // dates and status here. Legacy rows predating validation still
+        // exist, so the read side is gated independently of the write side.
+        // A null-unit task is in scope for its own creator (#838 contract).
+        //
+        // `setRelation()`, not `$ticket->task = …`: a plain assignment would go
+        // through `setAttribute()` and park the Todo in `$attributes`, from
+        // where any later `save()` tries to write a non-existent `task`
+        // column. The `@var` above is what lets PHPStan see the model here —
+        // without it the chain resolves to `Query\Builder` via `@mixin`.
+        $ticket->setRelation('task', $this->taskIfInScope($ticket->task_id, $accessibleIds));
+
+        return $ticket;
+    }
 
     /**
      * The permission the ticket mutations that move or close a ticket need
@@ -108,41 +187,23 @@ trait TicketsInboxFlow
 
     public function showTicket($id): void
     {
+        // Same access gate as before #1176 — an out-of-scope id stays a
+        // silent no-op and the modal never opens. This lookup is the GATE;
+        // the capped, relation-bearing load itself happens in the
+        // `showingTicket` computed below, so no eager load happens here,
+        // only the scope decision.
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        /** @var Ticket|null $ticket */
-        $ticket = Ticket::query()
-            // #906: soft-deleted users are kept in the result so their creator
-            // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
-            // truly ownerless ticket gets.
-            ->with([
-                'attachments',
-                'activities.attachments',
-                'activities.user' => fn ($q) => ActorLabel::eagerLoadActor($q),
-                'user' => fn ($q) => ActorLabel::eagerLoadActor($q),
-                'unit',
-            ])
-            ->whereIn('unit_id', $accessibleIds)
-            ->find($id);
+        $inScope = Ticket::query()
+            ->whereKey($id)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->exists();
 
-        if (! $ticket) {
+        if (! $inScope) {
             return;
         }
 
-        // #847: the ticket is scoped, but its `task` relation was not — so a
-        // ticket linked to an out-of-scope todo leaked that todo's title,
-        // dates and status here. Legacy rows predating validation still
-        // exist, so the read side is gated independently of the write side.
-        // A null-unit task is in scope for its own creator (#838 contract).
-        //
-        // `setRelation()`, not `$ticket->task = …`: a plain assignment would go
-        // through `setAttribute()` and park the Todo in `$attributes`, from
-        // where any later `save()` tries to write a non-existent `task`
-        // column. The `@var` above is what lets PHPStan see the model here —
-        // without it the chain resolves to `Query\Builder` via `@mixin`.
-        $ticket->setRelation('task', $this->taskIfInScope($ticket->task_id, $accessibleIds));
-
-        $this->showingTicket = $ticket;
+        $this->showingTicketId = (int) $id;
         $this->showModal = true;
     }
 
@@ -170,8 +231,11 @@ trait TicketsInboxFlow
 
     public function closeDetail(): void
     {
-        $this->showingTicket = null;
-        $this->reset(['targetUnitId', 'showingTicket', 'targetUnitName', 'unitSearch', 'forwardNote']);
+        $this->showingTicketId = null;
+        // The computed cache holds the just-displayed row for the rest of this
+        // request; dropping it keeps the id and the re-render in lockstep.
+        unset($this->showingTicket);
+        $this->reset(['targetUnitId', 'targetUnitName', 'unitSearch', 'forwardNote']);
         $this->showModal = false;
     }
 
@@ -197,8 +261,15 @@ trait TicketsInboxFlow
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        // Verify showingTicket is accessible
-        if (! $this->showingTicket || ! in_array($this->showingTicket->unit_id, $accessibleIds)) {
+        // #1176: the actionable ticket is re-derived here from the id instead
+        // of reading the computed model — the computed serves the VIEW; a
+        // write path rules on its own scoped lookup (#1055: same
+        // UNCONDITIONAL `whereIn`, compiled fail-closed), on current data.
+        $ticket = Ticket::query()
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->find($this->showingTicketId);
+
+        if (! $ticket) {
             $this->dispatch('swal', ['title' => 'شما مجاز به ارجاع این تیکت نیستید.', 'icon' => 'error']);
 
             return;
@@ -214,14 +285,14 @@ trait TicketsInboxFlow
         $targetUnitName = $this->resolveTargetUnitName();
 
         try {
-            DB::transaction(function () use ($targetUnitName) {
-                $this->showingTicket->update([
+            DB::transaction(function () use ($ticket, $targetUnitName) {
+                $ticket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
                     'current_assignee_id' => null,
                 ]);
 
-                $this->showingTicket->activities()->create([
+                $ticket->activities()->create([
                     'user_id' => auth()->id(),
                     'action' => 'forwarded',
                     'description' => 'ارجاع تیکت به واحد: '.$targetUnitName.' - توضیحات: '.$this->forwardNote,
@@ -239,7 +310,7 @@ trait TicketsInboxFlow
                     $this->targetUnitId,
                     'ticket_forwarded',
                     'تیکت ارجاع شد',
-                    "تیکت #{$this->showingTicket->ticket_code} به واحد شما ارجاع شد - موضوع: {$this->showingTicket->subject}",
+                    "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
                     '/tickets/inbox'
                 );
             });
@@ -391,8 +462,10 @@ trait TicketsInboxFlow
             return;
         }
 
-        $this->showingTicketId = $id;
-        $this->showingTicket = $ticket;
+        // The scoped find above is still the gate (#1055); the completion
+        // modal reads its data from the scoped `showingTicket` computed, so
+        // only the id is remembered here (#1176).
+        $this->showingTicketId = (int) $id;
         $this->isCompletionModalOpen = true;
     }
 
@@ -496,7 +569,12 @@ trait TicketsInboxFlow
 
             DB::commit();
 
-            $this->reset(['isCompletionModalOpen', 'showingTicket', 'completionNote', 'completionFiles', 'targetUnitId', 'targetUnitName', 'unitSearch']);
+            // #1176: `showingTicket` became a computed — resetting it meant
+            // writing to a computed and blowing up. The id reset covers the
+            // state; the unset drops the stale per-request model cache so any
+            // read in the same request re-derives (and finds nothing).
+            $this->reset(['isCompletionModalOpen', 'showingTicketId', 'completionNote', 'completionFiles', 'targetUnitId', 'targetUnitName', 'unitSearch']);
+            unset($this->showingTicket);
 
             $this->dispatch('swal', [
                 'title' => 'عملیات موفق',

@@ -181,8 +181,10 @@ new class extends Component
     public function closeAllModals(): void
     {
         $this->isCompletionModalOpen = false;
-        $this->showingTicket = null;
+        // #1176: `showingTicket` is a computed now — only the id is state,
+        // and the unset drops the per-request model cache beside it.
         $this->showingTicketId = null;
+        unset($this->showingTicket);
         $this->reset([
             'completionNote', 'completionFiles', 'targetUnitId',
             'targetUnitName', 'unitSearch', 'selectedTickets',

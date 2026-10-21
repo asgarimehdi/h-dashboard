@@ -39,7 +39,15 @@ new class extends Component
     public string $dateTo = '';
 
     public bool $showModal = false;
-    public ?Ticket $showingTicket = null;
+
+    /**
+     * #1176: replication of the inbox conversion. `showingTicket` stopped
+     * being a public model prop — hydration re-fetched a public prop by key
+     * WITHOUT relations, so the modal's eager loads were gone after every
+     * update. The id stays public; the model is the `#[Computed]` behind it.
+     */
+    public ?int $showingTicketId = null;
+
     public bool $modalDetail = false;
 
     public array $filterUnits = [];
@@ -149,23 +157,60 @@ new class extends Component
 
     public function showTicket($id): void
     {
-        // Check organizational scope
+        // This lookup is the GATE, not the load (#1176 — same shape as the
+        // inbox): a nonexistent id still 404s (`findOrFail`), an
+        // out-of-scope one still toasts and never opens the modal. The
+        // capped, relation-bearing load itself happens in the computed.
+        $ticket = Ticket::query()->findOrFail($id);
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        if (! in_array($ticket->unit_id, $accessibleIds)) {
+            $this->error('شما مجاز به مشاهده این تیکت نیستید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        $this->showingTicketId = (int) $ticket->id;
+        $this->showModal = true;
+    }
+
+    /**
+     * The detail-modal ticket, re-derived per request (#1176).
+     *
+     * Same access shape as the load it replaces (#1055, #918): the scope
+     * predicate is an UNCONDITIONAL `whereIn('unit_id', $accessibleIds)` —
+     * an empty accessible set compiles to `0 = 1`, in scope of nothing,
+     * never unrestricted. The #847 task gate is reproduced HERE, inside the
+     * computed, exactly where the load used to end — moving the load without
+     * moving the gate would resurrect the leak the old code closed.
+     */
+    #[Computed]
+    public function showingTicket(): ?Ticket
+    {
+        if (! $this->showingTicketId) {
+            return null;
+        }
+
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         /** @var Ticket|null $ticket */
         $ticket = Ticket::with([
             // #906: soft-deleted users are kept in the result so their creator
             // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
-            // truly ownerless ticket gets.
+            // truly ownerless ticket gets. Column list on `attachments` keeps
+            // the payload to what the modal renders (#1176).
             'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
             'unit',
-            'attachments',
+            'attachments:id,ticket_id,file_path,file_name,file_size,activity_id',
+            'activities' => fn ($q) => $q->latest('id')->limit(50),
+            'activities.attachments',
             'activities.user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
-            'activities.attachments'
-        ])->findOrFail($id);
+        ])->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->find($this->showingTicketId);
 
-        if (! in_array($ticket->unit_id, $accessibleIds)) {
-            $this->error('شما مجاز به مشاهده این تیکت نیستید.', position: 'toast-bottom');
-            return;
+        if (! $ticket) {
+            return null;
         }
 
         // #847: same leak as the inbox — the ticket is scoped, the `task`
@@ -174,8 +219,7 @@ new class extends Component
         // rather than a plain assignment: see the inbox for why.
         $ticket->setRelation('task', $this->taskIfInScope($ticket->task_id, $accessibleIds));
 
-        $this->showingTicket = $ticket;
-        $this->showModal = true;
+        return $ticket;
     }
 
     /**
@@ -199,7 +243,10 @@ new class extends Component
     public function closeDetail(): void
     {
         $this->showModal = false;
-        $this->showingTicket = null;
+        // #1176: the id is state; the unset drops the per-request model
+        // cache so nothing from the just-opened modal survives the request.
+        $this->showingTicketId = null;
+        unset($this->showingTicket);
     }
 };
 ?>

@@ -22,7 +22,6 @@ return new class extends Component
     public bool $editing = false;
     public ?int $editCommentId = null;
     public string $editBody = '';
-    public ?Ticket $ticket = null;
 
     protected $listeners = ['openComments' => 'openForTicket'];
 
@@ -44,24 +43,46 @@ return new class extends Component
         $this->ticketId = null;
     }
 
-    public function loadTicket(): void
+    /**
+     * #1176: the comment thread's ticket is no longer a public model prop —
+     * hydration re-fetched a public prop by key WITHOUT relations, so any
+     * update unrelated to comments dropped `user.person`/`children` and the
+     * template lazy-loaded them per comment. The id stays public; the model
+     * is the computed one request behind it. Fully qualified attribute — a
+     * top-of-file import would shift this anonymous class's identity line
+     * and break its line-keyed PHPStan baseline entries.
+     */
+    #[\Livewire\Attributes\Computed]
+    public function ticket(): ?Ticket
     {
         if (! $this->ticketId) {
-            $this->ticket = null;
-            return;
+            return null;
         }
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $this->ticket = Ticket::where('id', $this->ticketId)
-            ->whereIn('unit_id', $accessibleIds)
+
+        return Ticket::query()
             ->with(['comments' => fn ($q) => $q->with('user.person')->with('children.user.person')->orderByDesc('created_at')])
+            ->whereKey($this->ticketId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
             ->first();
+    }
+
+    /**
+     * Invalidate the computed thread so the next read reloads it. Kept as its
+     * own public method (`->call('loadTicket')` in the tests plus the open
+     * path) — the query itself lives in the `#[Computed] ticket()` above.
+     */
+    public function loadTicket(): void
+    {
+        unset($this->ticket);
     }
 
     public function addComment(): void
     {
         $this->validate(['body' => 'required|string|min:1|max:5000']);
 
-        $ticket = $this->ticket;
+        $ticket = $this->accessibleThreadTicket();
         if (! $ticket) {
             return;
         }
@@ -83,14 +104,16 @@ return new class extends Component
     {
         // Reload the ticket so the comments list reflects the latest data
         // immediately (no need to close & reopen the modal).
-        $this->loadTicket();
+        // #1176: binding constraint — this method must NOT be deleted; as a
+        // computed the reload IS the unset: the next read re-runs the query.
+        unset($this->ticket);
     }
 
     public function addReply(int $commentId): void
     {
         $this->validate(['replyBody' => 'required|string|min:1|max:5000']);
 
-        $ticket = $this->ticket;
+        $ticket = $this->accessibleThreadTicket();
         if (! $ticket) {
             return;
         }
@@ -183,27 +206,46 @@ return new class extends Component
     private function findTicketComment(int $commentId): TicketComment
     {
         $comment = TicketComment::find($commentId);
+        $threadTicket = $this->accessibleThreadTicket();
 
-        if (! $comment || ! $this->ticket || $comment->ticket_id !== $this->ticket->id) {
+        if (! $comment || ! $threadTicket || $comment->ticket_id !== $threadTicket->id) {
             throw new AuthorizationException;
         }
 
         return $comment;
+    }
+
+    /**
+     * #1176: the open thread's ticket, re-derived from the public id with the
+     * same fail-closed scope shape as the load — null when nothing is open or
+     * the ticket has left the viewer's scope. The WRITE paths rule on this
+     * current-state lookup instead of introspecting the computed model.
+     */
+    private function accessibleThreadTicket(): ?Ticket
+    {
+        if (! $this->ticketId) {
+            return null;
+        }
+
+        return Ticket::query()
+            ->whereKey($this->ticketId)
+            ->where(fn ($q) => $q->whereIn('unit_id', app(AccessService::class)->accessibleUnitIds()))
+            ->first();
     }
 };
 ?>
 
 <div>
     <x-modal wire:model="showModal" title="کامنت‌ها و گفتگو" separator class="max-w-2xl">
-        @if ($ticket)
+        @if ($this->ticket)
             <div class="space-y-4 text-right" dir="rtl">
                 {{-- Ticket header --}}
                 <div class="p-3 bg-base-200/60 rounded-lg">
                     <div class="flex items-center justify-between">
-                        <span class="font-bold text-sm">{{ $ticket->ticket_code }}</span>
-                        <span class="badge badge-sm">{{ $ticket->status }}</span>
+                        <span class="font-bold text-sm">{{ $this->ticket->ticket_code }}</span>
+                        <span class="badge badge-sm">{{ $this->ticket->status }}</span>
                     </div>
-                    <p class="text-sm mt-1">{{ $ticket->subject }}</p>
+                    <p class="text-sm mt-1">{{ $this->ticket->subject }}</p>
                 </div>
 
                 {{-- New comment form --}}
@@ -215,7 +257,7 @@ return new class extends Component
 
                 {{-- Comments list --}}
                 <div class="space-y-3 max-h-96 overflow-y-auto pr-1">
-                    @forelse ($ticket->comments as $comment)
+                    @forelse ($this->ticket->comments as $comment)
                         <div class="border border-base-300 rounded-lg p-3">
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-2">
