@@ -97,23 +97,28 @@ trait TicketsInboxFlow
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
+        // #906: soft-deleted users are kept in the result so their creator
+        // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
+        // truly ownerless ticket gets. Column list on `attachments` keeps the
+        // payload to what the modal renders (#1176). `with()` leads the chain
+        // and the IN-filter sits inside `where(Closure)` — a bare whereIn
+        // re-types the rest through `Query\Builder`'s `@mixin` (AGENTS.md).
         /** @var Ticket|null $ticket */
         $ticket = Ticket::query()
-            // #906: soft-deleted users are kept in the result so their creator
-            // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
-            // truly ownerless ticket gets. Column list on `attachments` keeps
-            // the payload to what the modal renders (#1176).
             ->with([
                 'attachments:id,ticket_id,file_path,file_name,file_size,activity_id',
-                'activities' => fn ($q) => $q->latest('id')->limit(self::ACTIVITY_HISTORY_LIMIT)
-                    ->with([
-                        'attachments',
-                        'user' => fn ($q) => ActorLabel::eagerLoadActor($q),
-                    ]),
+                // #1176: the 50-activity cap constrains the activities query;
+                // its own eager loads ride nested dot-notation keys on the
+                // same relation query. Chaining `->with()` inside this
+                // closure trips phpstan — a Relation-typed param only has
+                // `Query\Builder`'s methods via `@mixin`.
+                'activities' => fn ($q) => $q->latest('id')->limit(self::ACTIVITY_HISTORY_LIMIT),
+                'activities.attachments',
+                'activities.user' => fn ($q) => ActorLabel::eagerLoadActor($q),
                 'user' => fn ($q) => ActorLabel::eagerLoadActor($q),
                 'unit',
             ])
-            ->whereIn('unit_id', $accessibleIds)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
             ->find($this->showingTicketId);
 
         if (! $ticket) {
@@ -190,8 +195,8 @@ trait TicketsInboxFlow
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $inScope = Ticket::query()
-            ->whereIn('unit_id', $accessibleIds)
             ->whereKey($id)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
             ->exists();
 
         if (! $inScope) {
@@ -256,8 +261,15 @@ trait TicketsInboxFlow
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        // Verify showingTicket is accessible
-        if (! $this->showingTicket || ! in_array($this->showingTicket->unit_id, $accessibleIds)) {
+        // #1176: the actionable ticket is re-derived here from the id instead
+        // of reading the computed model — the computed serves the VIEW; a
+        // write path rules on its own scoped lookup (#1055: same
+        // UNCONDITIONAL `whereIn`, compiled fail-closed), on current data.
+        $ticket = Ticket::query()
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->find($this->showingTicketId);
+
+        if (! $ticket) {
             $this->dispatch('swal', ['title' => 'شما مجاز به ارجاع این تیکت نیستید.', 'icon' => 'error']);
 
             return;
@@ -273,14 +285,14 @@ trait TicketsInboxFlow
         $targetUnitName = $this->resolveTargetUnitName();
 
         try {
-            DB::transaction(function () use ($targetUnitName) {
-                $this->showingTicket->update([
+            DB::transaction(function () use ($ticket, $targetUnitName) {
+                $ticket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
                     'current_assignee_id' => null,
                 ]);
 
-                $this->showingTicket->activities()->create([
+                $ticket->activities()->create([
                     'user_id' => auth()->id(),
                     'action' => 'forwarded',
                     'description' => 'ارجاع تیکت به واحد: '.$targetUnitName.' - توضیحات: '.$this->forwardNote,
@@ -298,7 +310,7 @@ trait TicketsInboxFlow
                     $this->targetUnitId,
                     'ticket_forwarded',
                     'تیکت ارجاع شد',
-                    "تیکت #{$this->showingTicket->ticket_code} به واحد شما ارجاع شد - موضوع: {$this->showingTicket->subject}",
+                    "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
                     '/tickets/inbox'
                 );
             });

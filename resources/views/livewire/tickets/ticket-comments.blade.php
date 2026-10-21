@@ -3,7 +3,6 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Services\AccessService;
 use Illuminate\Auth\Access\AuthorizationException;
-use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -49,9 +48,11 @@ return new class extends Component
      * hydration re-fetched a public prop by key WITHOUT relations, so any
      * update unrelated to comments dropped `user.person`/`children` and the
      * template lazy-loaded them per comment. The id stays public; the model
-     * is the `#[Computed]` one request behind it.
+     * is the computed one request behind it. Fully qualified attribute — a
+     * top-of-file import would shift this anonymous class's identity line
+     * and break its line-keyed PHPStan baseline entries.
      */
-    #[Computed]
+    #[\Livewire\Attributes\Computed]
     public function ticket(): ?Ticket
     {
         if (! $this->ticketId) {
@@ -61,9 +62,9 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         return Ticket::query()
-            ->whereKey($this->ticketId)
-            ->whereIn('unit_id', $accessibleIds)
             ->with(['comments' => fn ($q) => $q->with('user.person')->with('children.user.person')->orderByDesc('created_at')])
+            ->whereKey($this->ticketId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
             ->first();
     }
 
@@ -81,7 +82,7 @@ return new class extends Component
     {
         $this->validate(['body' => 'required|string|min:1|max:5000']);
 
-        $ticket = $this->ticket;
+        $ticket = $this->accessibleThreadTicket();
         if (! $ticket) {
             return;
         }
@@ -112,7 +113,7 @@ return new class extends Component
     {
         $this->validate(['replyBody' => 'required|string|min:1|max:5000']);
 
-        $ticket = $this->ticket;
+        $ticket = $this->accessibleThreadTicket();
         if (! $ticket) {
             return;
         }
@@ -205,12 +206,31 @@ return new class extends Component
     private function findTicketComment(int $commentId): TicketComment
     {
         $comment = TicketComment::find($commentId);
+        $threadTicket = $this->accessibleThreadTicket();
 
-        if (! $comment || ! $this->ticket || $comment->ticket_id !== $this->ticket->id) {
+        if (! $comment || ! $threadTicket || $comment->ticket_id !== $threadTicket->id) {
             throw new AuthorizationException;
         }
 
         return $comment;
+    }
+
+    /**
+     * #1176: the open thread's ticket, re-derived from the public id with the
+     * same fail-closed scope shape as the load — null when nothing is open or
+     * the ticket has left the viewer's scope. The WRITE paths rule on this
+     * current-state lookup instead of introspecting the computed model.
+     */
+    private function accessibleThreadTicket(): ?Ticket
+    {
+        if (! $this->ticketId) {
+            return null;
+        }
+
+        return Ticket::query()
+            ->whereKey($this->ticketId)
+            ->where(fn ($q) => $q->whereIn('unit_id', app(AccessService::class)->accessibleUnitIds()))
+            ->first();
     }
 };
 ?>

@@ -203,12 +203,10 @@ new class extends Component
             'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
             'unit',
             'attachments:id,ticket_id,file_path,file_name,file_size,activity_id',
-            'activities' => fn ($q) => $q->latest('id')->limit(50)
-                ->with([
-                    'attachments',
-                    'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
-                ]),
-        ])->whereIn('unit_id', $accessibleIds)
+            'activities' => fn ($q) => $q->latest('id')->limit(50),
+            'activities.attachments',
+            'activities.user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+        ])->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
             ->find($this->showingTicketId);
 
         if (! $ticket) {
