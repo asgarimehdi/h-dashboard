@@ -316,7 +316,7 @@ return new class extends Component
 
     <!-- Map Element: the shared maps.map component owns the Leaflet instance
          (Alpine.store('map')); this page only attaches its layers via onReady. -->
-    <livewire:maps.map />
+    <livewire:maps.map wire:key="map-dashboard-page-map" />
 
     <!-- Unit Details Modal -->
     <div x-data="{ unitId: null, unitDetails: null, loading: false }"

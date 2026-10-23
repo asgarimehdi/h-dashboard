@@ -316,7 +316,7 @@ return new class extends Component
     {{-- Map + right-side unit list --}}
     <x-card shadow class="p-0">
         <div class="relative">
-            <livewire:maps.map/>
+            <livewire:maps.map wire:key="unit-page-map" />
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
                 {{-- Search --}}

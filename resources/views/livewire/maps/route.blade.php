@@ -34,7 +34,7 @@ return new class extends Component {
         </div>
 
         <div class="relative">
-            <livewire:maps.map/>
+            <livewire:maps.map wire:key="route-page-map" />
             <div id="route-info" class="bg-base-200 p-4 rounded mt-4">
                 <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>
                 <strong>⌛ زمان تقریبی سفر:</strong> <span id="duration">---</span> دقیقه

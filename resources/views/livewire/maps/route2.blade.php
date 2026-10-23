@@ -69,7 +69,7 @@ return new class extends Component
                 <x-toggle x-on:click="window.toggleRoutingContainer()" label="نمایش متنی مسیر"/>
             </div>
 
-            <livewire:maps.map/>
+            <livewire:maps.map wire:key="route2-page-map" />
             <div id="route-info" class="bg-base-200 p-4 rounded mt-4">
                 <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>
                 <strong>⌛ زمان تقریبی سفر:</strong> <span id="duration">---</span> دقیقه
