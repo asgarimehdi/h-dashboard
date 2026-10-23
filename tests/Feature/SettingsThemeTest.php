@@ -111,8 +111,16 @@ class SettingsThemeTest extends TestCase
 
     public function test_theme_families_are_disjoint_and_cover_every_enabled_theme(): void
     {
-        $this->assertSame(['light', 'cupcake', 'fantasy'], ThemeFamilies::LIGHT);
-        $this->assertSame(['dark', 'synthwave', 'coffee', 'luxury'], ThemeFamilies::DARK);
+        $this->assertSame([
+            'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro',
+            'cyberpunk', 'valentine', 'garden', 'lofi', 'pastel', 'fantasy',
+            'wireframe', 'cmyk', 'autumn', 'acid', 'lemonade', 'winter', 'nord',
+            'caramellatte', 'silk',
+        ], ThemeFamilies::LIGHT);
+        $this->assertSame([
+            'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury',
+            'dracula', 'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+        ], ThemeFamilies::DARK);
         $this->assertSame([], array_intersect(ThemeFamilies::LIGHT, ThemeFamilies::DARK));
 
         foreach (ThemeFamilies::LIGHT as $theme) {
@@ -127,8 +135,38 @@ class SettingsThemeTest extends TestCase
             $this->assertFalse(ThemeFamilies::isValid($theme, 'light'));
         }
 
-        $this->assertNull(ThemeFamilies::familyOf('valentine'));
+        $this->assertNull(ThemeFamilies::familyOf('not-a-theme'));
         $this->assertFalse(ThemeFamilies::isValid(null, 'light'));
+    }
+
+    public function test_enabled_themes_in_app_css_match_theme_families(): void
+    {
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $this->assertIsString($css);
+
+        preg_match('/themes:\\s*([^;]+);/', $css, $matches);
+        $this->assertNotEmpty($matches[1] ?? null, 'themes: line not found in app.css');
+
+        $raw = $matches[1];
+        // Strip flags like --default / --prefersdark.
+        $names = [];
+        foreach (preg_split('/,/', $raw) as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            $tokens = preg_split('/\\s+/', $part);
+            $names[] = $tokens[0];
+        }
+
+        $expected = array_merge(ThemeFamilies::LIGHT, ThemeFamilies::DARK);
+        sort($names);
+        sort($expected);
+        $this->assertSame($expected, $names, 'app.css themes must equal LIGHT+DARK');
+
+        // Flags preserved.
+        $this->assertStringContainsString('fantasy --default', $raw);
+        $this->assertStringContainsString('luxury --prefersdark', $raw);
     }
 
     public function test_the_header_toggle_renders_the_saved_poles(): void

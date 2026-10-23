@@ -3,14 +3,13 @@
 namespace App\Support;
 
 /**
- * #1224 — the two theme poles a user may pick from the settings page.
+ * #1224 / #1227 — the two theme poles a user may pick from the settings page.
  *
  * The split is measured, not aesthetic: daisyUI declares `color-scheme` per
  * theme and the OKLCH lightness of `--color-base-100` lands in two disjoint
- * bands (issue comment 6364662792):
- *
- *   light: light 1.000, fantasy 1.000, cupcake 0.978
- *   dark:  dark 0.253, coffee 0.240, synthwave 0.150, luxury 0.141
+ * bands (issue comment 6364662792). #1227 enables all 35 daisyUI themes:
+ * 21 light + 14 dark, with a clear gap between L=0.370 (darkest dark) and
+ * L=0.916 (lightest light). Full table: issue #1227 comment 6370514534.
  *
  * `coffee` is dark on all three signals (declared `color-scheme: dark`, L inside
  * the dark band, and its own neutral-content/base-300 pair). Keep this class as
@@ -23,10 +22,18 @@ namespace App\Support;
 final class ThemeFamilies
 {
     /** @var list<string> */
-    public const LIGHT = ['light', 'cupcake', 'fantasy'];
+    public const LIGHT = [
+        'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro',
+        'cyberpunk', 'valentine', 'garden', 'lofi', 'pastel', 'fantasy',
+        'wireframe', 'cmyk', 'autumn', 'acid', 'lemonade', 'winter', 'nord',
+        'caramellatte', 'silk',
+    ];
 
     /** @var list<string> */
-    public const DARK = ['dark', 'synthwave', 'coffee', 'luxury'];
+    public const DARK = [
+        'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury',
+        'dracula', 'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+    ];
 
     /** The pre-#1224 hard-coded poles: a user without settings sees no change. */
     public const DEFAULT_LIGHT = 'fantasy';
@@ -37,11 +44,39 @@ final class ThemeFamilies
     public const LABELS = [
         'light' => 'روشن',
         'cupcake' => 'کاپ‌کیک',
+        'bumblebee' => 'زنبور عسل',
+        'emerald' => 'زمردی',
+        'corporate' => 'شرکتی',
+        'retro' => 'رترو',
+        'cyberpunk' => 'سایبرپانک',
+        'valentine' => 'ولنتاین',
+        'garden' => 'باغ',
+        'lofi' => 'لو فای',
+        'pastel' => 'پاستلی',
         'fantasy' => 'فانتزی',
+        'wireframe' => 'وایرفریم',
+        'cmyk' => 'سی‌ام‌وای‌کی',
+        'autumn' => 'پاییزی',
+        'acid' => 'اسید',
+        'lemonade' => 'لیموناد',
+        'winter' => 'زمستانی',
+        'nord' => 'نورد',
+        'caramellatte' => 'کارامل لاته',
+        'silk' => 'ابریشمی',
         'dark' => 'تیره',
         'synthwave' => 'سینت‌ویو',
-        'coffee' => 'قهوه‌ای',
+        'halloween' => 'هالووین',
+        'forest' => 'جنگلی',
+        'aqua' => 'آکوا',
+        'black' => 'مشکی',
         'luxury' => 'لوکس',
+        'dracula' => 'دراکولا',
+        'business' => 'تجاری',
+        'night' => 'شبانه',
+        'coffee' => 'قهوه‌ای',
+        'dim' => 'کم‌نور',
+        'sunset' => 'غروب',
+        'abyss' => 'اعماق',
     ];
 
     /**

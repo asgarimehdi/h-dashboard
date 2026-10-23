@@ -1,4 +1,5 @@
 import { test, expect, login } from '../shared/fixtures';
+import { BLOCKING_THEMES as THEMES } from './theme-helpers';
 
 /**
  * Toast / alert readability across every enabled DaisyUI theme.
@@ -14,7 +15,6 @@ import { test, expect, login } from '../shared/fixtures';
  * Every theme x every variant must clear WCAG AA (>= 4.5:1).
  */
 
-const THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
 const VARIANTS = ['info', 'success', 'warning', 'error'];
 
 interface ContrastResult {

@@ -1,6 +1,9 @@
 import { test, expect, login, waitForToast } from '../shared/fixtures';
 import { installThemeHelpers, THEMES, VIEWPORT } from './theme-helpers';
 
+const SAMPLE_LIGHT = ['emerald', 'nord', 'silk'];
+const SAMPLE_DARK = ['dracula', 'night', 'abyss'];
+
 /**
  * #1224 — the settings page lets a user pick one light and one dark pole, and
  * MaryUI's `<x-theme-toggle>` cycles between exactly those two.
@@ -182,6 +185,21 @@ test.describe('custom theme poles', () => {
           return getComputedStyle(document.documentElement).colorScheme;
         }, theme);
         expect(scheme, `${theme} is listed as a ${expected} pole`).toContain(expected);
+      }
+    }
+  });
+
+  test('toggle sampling covers new themes from each family', async ({ page }) => {
+    for (const light of SAMPLE_LIGHT) {
+      for (const dark of SAMPLE_DARK) {
+        await page.goto('/settings');
+        await page.waitForLoadState('networkidle');
+        await page.selectOption(LIGHT_SELECT, light);
+        await page.selectOption(DARK_SELECT, dark);
+        await save(page);
+        await expect.poll(() => themeOf(page)).toBe(dark);
+        const toggleHtml = await page.locator('.swap').first().evaluate((el) => el.outerHTML);
+        expect(toggleHtml).toContain(`? '${dark}' : '${light}'`);
       }
     }
   });

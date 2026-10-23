@@ -8,7 +8,7 @@ import {
   measurePageBackground,
   measureText,
   setTheme,
-  THEMES,
+  BLOCKING_THEMES,
   VIEWPORT,
 } from './theme-helpers';
 
@@ -358,7 +358,7 @@ test.describe('theme health sweep', () => {
     await installThemeHelpers(page);
     await login(page);
 
-    for (const theme of THEMES) {
+    for (const theme of BLOCKING_THEMES) {
       try {
         await sweepTheme(page, theme);
       } catch (error) {

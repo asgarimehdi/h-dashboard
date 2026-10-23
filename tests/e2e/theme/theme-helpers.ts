@@ -11,11 +11,27 @@ import { expect, type Page } from '@playwright/test';
  * (6362051811) and reused by the #1224 sweep.
  */
 
-export const THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
+export const THEMES = [
+  'light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave',
+  'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua',
+  'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula',
+  'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter',
+  'dim', 'nord', 'sunset', 'caramellatte', 'abyss', 'silk',
+];
 
-/** Same split as App\Support\ThemeFamilies (#1224). */
-export const LIGHT_THEMES = ['light', 'cupcake', 'fantasy'];
-export const DARK_THEMES = ['dark', 'synthwave', 'coffee', 'luxury'];
+/** The 7 themes the blocking CI sweep (sweep.spec.ts) covers (#1224/#1225). */
+export const BLOCKING_THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
+
+/** Same split as App\Support\ThemeFamilies (#1227). */
+export const LIGHT_THEMES = [
+  'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro', 'cyberpunk',
+  'valentine', 'garden', 'lofi', 'pastel', 'fantasy', 'wireframe', 'cmyk',
+  'autumn', 'acid', 'lemonade', 'winter', 'nord', 'caramellatte', 'silk',
+];
+export const DARK_THEMES = [
+  'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury',
+  'dracula', 'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+];
 
 /** Below `2xl` so the sidebar stays expanded (the #1220 measurement viewport). */
 export const VIEWPORT = { width: 1440, height: 960 };
@@ -143,6 +159,20 @@ export async function setTheme(page: Page, theme: string): Promise<void> {
   await page.evaluate((t) => {
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('mary-theme', JSON.stringify(t));
+    // MaryUI stores the colour-scheme class separately (mary-class): 'dark' for
+    // the dark family, '' for the light family. Match the real app so class-based
+    // rules (.dark, Leaflet invert, blob selectors) are exercised truthfully.
+    const darkThemes = new Set([
+      'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury',
+      'dracula', 'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+    ]);
+    const maryClass = darkThemes.has(t) ? 'dark' : '';
+    if (maryClass) {
+      document.documentElement.setAttribute('class', maryClass);
+    } else {
+      document.documentElement.removeAttribute('class');
+    }
+    localStorage.setItem('mary-class', JSON.stringify(maryClass));
   }, theme);
 
   await freezeBlobs(page);

@@ -113,9 +113,9 @@ Settings page (`/settings`), component `settings.index` — **5 persisted, user-
 - **Browser notifications** — `browser_notifications` (bool) toggle
 - **Auto-refresh** — `dashboard_refresh` (int, `0` = off) dashboard auto-refresh interval
 - **Compact mode** — `compact_mode` (bool) denser UI layout toggle
-- **Theme poles** (#1224) — `light_theme` / `dark_theme`, one daisyUI theme each, from
-  `App\Support\ThemeFamilies` (light: `light, cupcake, fantasy`; dark: `dark, synthwave, coffee,
-  luxury`; defaults `fantasy`/`dark`). The header `<x-theme-toggle>` cycles between exactly those
+- **Theme poles** (#1224/#1227) — `light_theme` / `dark_theme`, one daisyUI theme each, from
+  `App\Support\ThemeFamilies` (light: 21 themes, dark: 14 themes; all 35 daisyUI themes enabled in
+  #1227; defaults `fantasy`/`dark`). The header `<x-theme-toggle>` cycles between exactly those
   two. `save()` validates both against the family **before** writing and rewrites the whole array —
   a persisted key missing from that array is deleted on the next save.
 
@@ -125,12 +125,14 @@ Settings page (`/settings`), component `settings.index` — **5 persisted, user-
 truth for the first two):
 
 1. `ThemeFamilies::LIGHT`/`DARK` + `LABELS` — validation, the two selects, the toggle;
-2. `resources/css/app.css` — the `themes:` list, the `@custom-variant dark` selector list when it is a
-   dark pole, the `[data-theme=…] .stitch-bg-fixed` group, and the `:not([data-theme=…])` blob chain.
-   `coffee` was enabled but missing from the last two, so its glass surfaces sat on the light cream
-   backdrop (2.60:1) — the #1224 sweep caught it;
-3. `THEMES` in `tests/e2e/theme/theme-helpers.ts`;
-4. `tests/e2e/theme/sweep.spec.ts` fails on any sub-threshold surface, so the table stays honest.
+2. `resources/css/app.css` — the `themes:` list (explicit count of all 35, `fantasy --default`,
+   `luxury --prefersdark`), the `@custom-variant dark` selector list for all 14 dark poles, and the
+   `:not([data-theme=…])` blob chain (all 14 dark names);
+3. `THEMES`/`LIGHT_THEMES`/`DARK_THEMES`/`BLOCKING_THEMES` in `tests/e2e/theme/theme-helpers.ts`;
+4. `SettingsThemeTest::test_enabled_themes_in_app_css_match_theme_families` parses the `themes:` line
+   and asserts set equality with `LIGHT+DARK` plus the two flags; `custom-poles.spec` asserts the
+   selects and `color-scheme`. Sweep: `sweep.spec.ts` (blocking, 7 themes) + `sweep-35.spec.ts`
+   (report-only matrix, 35×25) in `theme-sweep-35.yml`.
 
 The split is measured, not aesthetic: daisyUI declares `color-scheme` per theme, and the e2e suite
 asserts each select's options agree with their theme's own `color-scheme`.

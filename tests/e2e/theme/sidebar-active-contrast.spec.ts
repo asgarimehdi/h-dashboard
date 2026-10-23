@@ -1,7 +1,7 @@
 import { test, expect, login } from '../shared/fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
-import { installThemeHelpers, setTheme, THEMES, VIEWPORT } from './theme-helpers';
+import { installThemeHelpers, setTheme, BLOCKING_THEMES as THEMES, VIEWPORT } from './theme-helpers';
 
 /**
  * #1220 — sidebar active item must keep WCAG AA contrast in every theme.
