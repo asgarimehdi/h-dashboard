@@ -23,7 +23,7 @@ return new class extends Component {
     pages bound their layers to it, then this component replaced it and wiped
     the layers).
 
-    Two placement rules that cost real debugging time, both verified in a browser:
+    Three placement rules that cost real debugging time, all verified in a browser:
 
     1. The x-data element must NOT be the component root. Livewire puts wire:id
        on the OUTERMOST element of a component's markup, so an x-data there is
@@ -32,6 +32,16 @@ return new class extends Component {
     2. $refs.map resolves fine ACROSS the wire:ignore boundary (verified), so
        the container can stay inside it and keep its id="map" + class, which the
        E2E map specs assert on.
+    3. Every HOST page must pass a stable wire:key to this component
+       (<livewire:maps.map wire:key="…-page-map" />). Without one, a structural
+       morph (e.g. the unit filter inserting/removing blocks around the map)
+       replaces this subtree with a fresh wire:id, so Alpine runs destroy/init
+       on the child, the store's identity check fails and the old instance is
+       remove()d — while the host's one-shot onReady closures stay bound to the
+       dead map. Every addTo then throws appendChild, then a flood of
+       "reading 'min'", and no geometry renders (#1221). The key must sit on the
+       host tag: a key on this component's own root was measured NOT to help.
+       MapHostWireKeyTest keeps every host honest.
 
     Alpine fires destroy() before init() on SPA navigation, so release() tears
     the old map down before use() builds the new one. The container id and class

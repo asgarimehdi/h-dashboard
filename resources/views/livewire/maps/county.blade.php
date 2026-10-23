@@ -88,7 +88,7 @@ return new class extends Component
 
     <x-card shadow class="p-0">
         <div class="relative">
-            <livewire:maps.map/>
+            <livewire:maps.map wire:key="county-page-map" />
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
                 @foreach ($this->regions as $region)

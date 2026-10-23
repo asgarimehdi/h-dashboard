@@ -89,7 +89,7 @@ return new class extends Component
     <x-card shadow class="p-0">
         <div class="relative">
             <div wire:ignore>
-                <livewire:maps.map/>
+                <livewire:maps.map wire:key="point-page-map" />
             </div>
 
             <div class="controls-panel space-y-4">
