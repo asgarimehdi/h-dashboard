@@ -9,7 +9,14 @@
 {{--    <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm  btn-ghost justify-start" aria-label="Dark" value="dark" />--}}
 {{--    <x-input type="radio" name="theme-dropdown" class="theme-controller w-full btn btn-sm  btn-ghost justify-start" aria-label="Light" value="light" />--}}
 {{--</x-dropdown>--}}
+@php
+    // #1224: the toggle cycles between the user's two saved poles. Guests and
+    // users without settings keep the pre-issue hard-coded fantasy/dark pair.
+    $settings = auth()->user()?->settings ?? [];
+    $lightTheme = \App\Support\ThemeFamilies::poleOrDefault($settings['light_theme'] ?? null, 'light');
+    $darkTheme = \App\Support\ThemeFamilies::poleOrDefault($settings['dark_theme'] ?? null, 'dark');
+@endphp
 <div class="flex items-center gap-1">
     <livewire:notifications.bell />
-    <x-theme-toggle darkTheme="dark" lightTheme="fantasy" />
+    <x-theme-toggle darkTheme="{{ $darkTheme }}" lightTheme="{{ $lightTheme }}" />
 </div>
