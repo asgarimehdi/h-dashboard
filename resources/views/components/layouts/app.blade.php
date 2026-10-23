@@ -182,7 +182,16 @@
             {{-- #957: برچسب‌دار کردن نشانهٔ ناوبری. بدون `aria-label` چند
                  ناوبری روی صفحه برای صفحه‌خوان یکسان و بی‌نام می‌شوند. --}}
             <nav aria-label="منوی اصلی">
-                <x-menu activate-by-route>
+                {{-- #1220: جفت‌رنگ آیتم فعال باید از یک خانوادهٔ توکن بیاید.
+                     daisyUI برای `[aria-current="page"]` متن را با
+                     `--menu-active-fg` (= `--color-neutral-content`) رنگ می‌کند،
+                     ولی MaryUI پس‌زمینه را از `bg-base-300` می‌گیرد؛ در تم‌های
+                     روشن این دو به هم می‌رسند (light 1.09، cupcake/fantasy 1.01).
+                     تصمیم مالک: جفت بومی daisyUI (`neutral` / `neutral-content`)
+                     در هر ۷ تم — پس هر دو نیمه از یک خانواده‌اند.
+                     `activeBgColor` هم به آیتم فعال و هم به `<summary>` زیرمنوی
+                     باز cascade می‌شود؛ اعداد در tests/e2e/theme پین شده‌اند. --}}
+                <x-menu activate-by-route active-bg-color="bg-neutral text-neutral-content">
                 @if($user = auth()->user())
                 <x-menu-separator />
                 <x-list-item :item="auth()->user()" value="name" no-separator no-hover
