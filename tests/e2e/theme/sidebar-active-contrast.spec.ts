@@ -1,6 +1,7 @@
 import { test, expect, login } from '../shared/fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
+import { installThemeHelpers, setTheme, THEMES, VIEWPORT } from './theme-helpers';
 
 /**
  * #1220 — sidebar active item must keep WCAG AA contrast in every theme.
@@ -19,10 +20,8 @@ import * as path from 'path';
  * silently swap the identity back to base-*) and the WCAG AA ratio.
  */
 
-const THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
-
 // Same viewport the bug was measured at: below `2xl` so the sidebar is expanded.
-test.use({ viewport: { width: 1440, height: 960 } });
+test.use({ viewport: VIEWPORT });
 
 const CAPTURE_DIR = process.env.E2E_CAPTURE_DIR;
 
@@ -44,58 +43,11 @@ interface PairMeasurement {
  */
 async function measure(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
-    const toRGB = (s: string): number[] => {
-      let L: number, a: number, b: number;
-      if (s.startsWith('oklch')) {
-        const m = s.match(/oklch\(([\d.]+)%?\s+([\d.-]+)\s+([\d.-]+)(?:\s*\/\s*([\d.]+))?\)/)!;
-        L = parseFloat(m[1]) > 1 ? parseFloat(m[1]) / 100 : parseFloat(m[1]);
-        const C = parseFloat(m[2]);
-        const H = (parseFloat(m[3]) * Math.PI) / 180;
-        a = C * Math.cos(H);
-        b = C * Math.sin(H);
-      } else if (s.startsWith('oklab')) {
-        const m = s.match(/oklab\(([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)/)!;
-        L = parseFloat(m[1]);
-        a = parseFloat(m[2]);
-        b = parseFloat(m[3]);
-      } else {
-        return s.match(/[\d.]+/g)!.slice(0, 3).map(Number);
-      }
-      const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
-      const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-      const s_ = L - 0.0894841775 * a - 1.291485548 * b;
-      const l = l_ ** 3;
-      const mm = m_ ** 3;
-      const ss = s_ ** 3;
-      const r = 4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * ss;
-      const g = -1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * ss;
-      const bb = -0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * ss;
-      const f = (x: number) => {
-        x = Math.max(0, Math.min(1, x));
-        return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
-      };
-      return [f(r), f(g), f(bb)].map((x) => x * 255);
-    };
-    const alphaOf = (s: string) => {
-      const m = s.match(/\/\s*([\d.]+)\)/);
-      if (m) return parseFloat(m[1]);
-      const g = s.match(/[\d.]+/g);
-      if (s.startsWith('rgb') && g && g.length > 3) return Number(g[3]);
-      return 1;
-    };
-    const lin = (c: number) => {
-      c /= 255;
-      return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-    };
-    const lum = ([r, g, b]: number[]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    const ratio = (x: number[], y: number[]) => {
-      let l1 = lum(x);
-      let l2 = lum(y);
-      if (l1 < l2) [l1, l2] = [l2, l1];
-      return (l1 + 0.05) / (l2 + 0.05);
-    };
-    const over = (fg: number[], bg: number[], a: number) =>
-      fg.map((v, i) => v * a + bg[i] * (1 - a));
+    const t = (window as unknown as { __theme: any }).__theme;
+    const toRGB = t.toRGB as (s: string) => number[];
+    const alphaOf = t.alphaOf as (s: string) => number;
+    const ratio = t.ratio as (x: number[], y: number[]) => number;
+    const over = t.over as (fg: number[], bg: number[], a: number) => number[];
 
     // Resolve the expected pair from the live tokens (current theme).
     const probe = document.createElement('div');
@@ -141,24 +93,12 @@ async function measure(page: import('@playwright/test').Page) {
   });
 }
 
-async function setTheme(page: import('@playwright/test').Page, theme: string) {
-  await page.addStyleTag({
-    content: '*, *::before, *::after { transition: none !important; animation: none !important; }',
-  });
-  await page.evaluate((t) => {
-    document.documentElement.setAttribute('data-theme', t);
-    localStorage.setItem('mary-theme', t);
-  }, theme);
-
-  // The theme switch animates `color` on menu elements with a delay; sampling
-  // during that delay reads the previous theme's value twice and looks
-  // "stable". Let the longest transition finish before taking samples.
-  await page.waitForTimeout(900);
-
-  // Wait until both the active item and the open header are stable across two
-  // samples. The first full run sampled a half-transitioned color: the active
-  // bg had settled while the header still carried the previous theme's color,
-  // so a fixed sleep (and a sample of only the active item) is not enough.
+/**
+ * Menu colours animate with a delay, and the first #1220 run sampled a
+ * half-transitioned colour (active bg settled while the header still carried
+ * the previous theme's colour). Sample until two consecutive readings agree.
+ */
+async function waitForMenuSettled(page: import('@playwright/test').Page) {
   const sample = () =>
     page.evaluate(() => {
       const active = document.querySelector('.drawer-side a.mary-active-menu') as HTMLElement | null;
@@ -176,11 +116,12 @@ async function setTheme(page: import('@playwright/test').Page, theme: string) {
     previous = current;
     await page.waitForTimeout(150);
   }
-  throw new Error(`theme ${theme} did not settle`);
+  throw new Error('sidebar colours did not settle');
 }
 
 test.describe('sidebar active item contrast', () => {
   test.beforeEach(async ({ page }) => {
+    await installThemeHelpers(page);
     await login(page);
     // A submenu child is active here: exercises both the active <a> and the
     // open <summary> header (the exact surface from the issue screenshot).
@@ -192,6 +133,7 @@ test.describe('sidebar active item contrast', () => {
   for (const theme of THEMES) {
     test(`${theme}: active item is the native neutral pair and clears WCAG AA`, async ({ page }) => {
       await setTheme(page, theme);
+      await waitForMenuSettled(page);
 
       const m = await measure(page);
 
