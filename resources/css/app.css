@@ -358,6 +358,38 @@
     backdrop-filter: blur(6px) !important;
 }
 
+/* ...but a *solid* badge must restore daisyUI's opaque --badge-color where the
+   glass re-tint breaks the fg/bg pair. The alpha has to be per theme: synthwave
+   needs ≥0.95 while dark needs ≤0.92, and painting the token pair globally
+   drops dark primary from 6.04 to 4.14 (its own primary/primary-content pair
+   is sub-AA). Matrix measured per variant × theme (#1226):
+     light     primary, secondary opaque
+     dark      info, success, warning, error opaque (primary stays glass, 6.04)
+     synthwave primary, secondary, info, success, warning, error opaque
+     fantasy   primary, secondary, neutral opaque
+     luxury    error opaque
+     coffee / cupcake unchanged — every cell is already ≥4.5
+   Outline/dash/soft/ghost keep their own backgrounds, and backdrop-filter
+   stays for the glass aesthetic (same pattern as the .btn fix above). */
+[data-theme="light"] .badge:is(.badge-primary, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="dark"] .badge:is(.badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="synthwave"] .badge:is(.badge-primary, .badge-secondary, .badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="fantasy"] .badge:is(.badge-primary, .badge-secondary, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="luxury"] .badge-error:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+
+/* Two foreground overrides are part of the same matrix: the default
+   --badge-fg pair stays under AA even on the opaque background. */
+[data-theme="light"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    /* was 2.21:1 on glass; 4.83:1 on the opaque secondary token */
+    color: var(--color-base-content) !important;
+}
+[data-theme="fantasy"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    /* was 2.24:1 glass / 3.71:1 opaque with the default fg; 4.86:1 here */
+    color: #fff !important;
+}
+
 /* =====================================================================
    Charts (Highcharts) — follow the theme instead of a white box
    Highcharts defaults to a hardcoded white background; force transparent
