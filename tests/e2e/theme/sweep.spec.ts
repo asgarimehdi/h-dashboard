@@ -50,17 +50,9 @@ const rows: Row[] = [];
  * the PR table so a follow-up issue can be filed against the real root cause.
  */
 const STRUCTURAL = new Map<string, string>([
-  // The glass rule re-tints a solid badge's --badge-color toward the page and
-  // keeps daisyUI's --badge-fg. Restoring the opaque token pair fixes light
-  // (6.76:1) and fantasy (7.42:1), but drops `dark` from 6.04 to 4.14 — that
-  // theme's own primary/primary-content pair is sub-AA and no text colour
-  // reaches 4.5 on it. The required glass alpha also differs per theme
-  // (synthwave needs ≥0.95, dark needs ≤0.92) and the content polarity flips
-  // between themes, so no single colour-only override works for all seven.
-  // A real fix needs per-theme badge pairs → follow-up issue.
-  ['light:badge solid', 'opaque token pair fixes this theme but drops dark to 4.14:1 — needs per-theme badge pairs'],
-  ['synthwave:badge solid', 'needs glass ≥0.95 while dark needs ≤0.92 — no single value works'],
-  ['fantasy:badge solid', 'opaque token pair fixes this theme but drops dark to 4.14:1 — needs per-theme badge pairs'],
+  // Empty since #1226 replaced the three badge-solid entries with the per-theme
+  // opaque/glass matrix in app.css. Kept so future structural findings have one
+  // documented home (and `add()` keeps its single suppression path).
 ]);
 
 function add(
@@ -131,6 +123,36 @@ async function fireToast(page: import('@playwright/test').Page, variant: string)
     });
   }, variant);
   await expect(page.locator(`.alert.alert-${variant}`)).toBeVisible();
+}
+
+/**
+ * #1226 — solid badge variants the sweep must pin. The page row below only
+ * ever saw the first `.badge:visible` on /users (= primary); several other
+ * variants were sub-AA in dark/synthwave/fantasy/light/luxury.
+ */
+const BADGE_VARIANTS = ['primary', 'secondary', 'neutral', 'info', 'success', 'warning', 'error', 'ghost'] as const;
+
+/**
+ * Inject one solid badge per variant into a fixed probe strip. Measured through
+ * the same `measureText` pixel path as real badges, so glass/backdrop-filter is
+ * part of the rendered result rather than computed from the CSS source.
+ */
+async function injectBadgeProbes(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate((variants) => {
+    document.getElementById('badge-probes')?.remove();
+    const strip = document.createElement('div');
+    strip.id = 'badge-probes';
+    strip.style.cssText =
+      'position:fixed;inset-inline-start:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;padding:8px;';
+    for (const variant of variants) {
+      const badge = document.createElement('span');
+      badge.id = `badge-probe-${variant}`;
+      badge.className = `badge badge-${variant}`;
+      badge.textContent = 'نمونه';
+      strip.appendChild(badge);
+    }
+    document.body.appendChild(strip);
+  }, [...BADGE_VARIANTS]);
 }
 
 async function capture(page: import('@playwright/test').Page, theme: string, name: string): Promise<void> {
@@ -240,6 +262,13 @@ async function sweepTheme(page: import('@playwright/test').Page, theme: string):
   } else {
     missing(theme, 'badge outline', 'no outline badge on /users');
   }
+
+  // Every solid variant must clear AA, not just the first badge on the page.
+  await injectBadgeProbes(page);
+  for (const variant of BADGE_VARIANTS) {
+    add(theme, `badge ${variant}`, await measureText(page, `badge ${variant}`, `#badge-probe-${variant}`));
+  }
+  await page.evaluate(() => document.getElementById('badge-probes')?.remove());
 
   // ---- 6. Leaflet controls ----------------------------------------------
   await page.goto('/maps/county');
