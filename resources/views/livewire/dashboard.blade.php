@@ -670,7 +670,42 @@ return new class extends Component
     @script
     <script>
         const statusLabels = { 'created': 'جدید', 'accepted': 'پذیرفته شده', 'completed': 'تکمیل شده', 'forwarded': 'ارجاع شده', 'rejected': 'رد شده' };
-        const statusColors = { 'created': '#3b82f6', 'accepted': '#f59e0b', 'completed': '#22c55e', 'forwarded': '#8b5cf6', 'rejected': '#ef4444' };
+
+        // #1224: series colours follow the active theme family. daisyUI's
+        // `color-scheme` is the same light/dark signal App\Support\ThemeFamilies
+        // uses, so a newly enabled theme needs no entry here. The old hard-coded
+        // sky-500 line measured 2.74:1 on the light poles (below the 3:1
+        // non-text minimum); the pairs below clear 4:1 on every enabled theme.
+        const CHART_COLORS = {
+            light: {
+                trend: '#0284c7',
+                created: '#2563eb',
+                accepted: '#b45309',
+                completed: '#15803d',
+                forwarded: '#6d28d9',
+                rejected: '#b91c1c',
+                text: '#3f3f46'
+            },
+            dark: {
+                trend: '#38bdf8',
+                created: '#60a5fa',
+                accepted: '#fbbf24',
+                completed: '#4ade80',
+                forwarded: '#a78bfa',
+                rejected: '#f87171',
+                text: '#d4d4d8'
+            }
+        };
+
+        function chartPalette() {
+            const style = getComputedStyle(document.documentElement);
+            const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
+
+            return {
+                ...CHART_COLORS[scheme],
+                text: style.getPropertyValue('--color-base-content').trim() || CHART_COLORS[scheme].text
+            };
+        }
 
         function waitForHighcharts(callback, attempts = 0) {
             if (typeof window.Highcharts !== 'undefined') {
@@ -699,6 +734,7 @@ return new class extends Component
             waitForHighcharts(() => {
                 const trendData = @json($this->ticketChartData);
                 const statusData = @json($this->ticketStatusData);
+                const palette = chartPalette();
 
                 const trendContainer = document.getElementById('ticketTrendChart');
                 const statusContainer = document.getElementById('ticketStatusChart');
@@ -723,18 +759,18 @@ return new class extends Component
                         areaspline: {
                             fillColor: {
                                 linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-                                stops: [[0, Highcharts.color('#0ea5e9').setOpacity(0.3).get('rgba')], [1, Highcharts.color('#0ea5e9').setOpacity(0.05).get('rgba')]]
+                                stops: [[0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')], [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')]]
                             },
-                            lineColor: '#0ea5e9',
+                            lineColor: palette.trend,
                             marker: { enabled: false }
                         }
                     },
-                    series: [{ name: 'تیکت‌ها', data: trendData.series.length ? trendData.series : [0], color: '#0ea5e9' }],
+                    series: [{ name: 'تیکت‌ها', data: trendData.series.length ? trendData.series : [0], color: palette.trend }],
                     legend: { enabled: false }
                 });
 
                 const pieData = Object.keys(statusData).length
-                    ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: statusColors[key] || '#6b7280' }))
+                    ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: palette[key] || '#6b7280' }))
                     : [{ name: 'بدون داده', y: 0, color: '#6b7280' }];
 
                 Highcharts.chart(statusContainer, {
@@ -744,7 +780,13 @@ return new class extends Component
                     plotOptions: {
                         pie: {
                             innerSize: '55%',
-                            dataLabels: { enabled: true, format: '<b>{point.name}</b>: {point.y}' }
+                            dataLabels: {
+                                enabled: true,
+                                format: '<b>{point.name}</b>: {point.y}',
+                                // Highcharts defaults to #333 with a white halo —
+                                // unreadable on the dark poles.
+                                style: { color: palette.text, textOutline: 'none' }
+                            }
                         }
                     },
                     series: [{ name: 'تیکت‌ها', data: pieData }]
@@ -754,6 +796,9 @@ return new class extends Component
 
         // Runs on full page load and Livewire wire:navigate
         renderTicketCharts();
+
+        // maryUI x-theme-toggle dispatches this bubbling CustomEvent on switch.
+        window.addEventListener('theme-changed', renderTicketCharts);
     </script>
     @endscript
 </div>

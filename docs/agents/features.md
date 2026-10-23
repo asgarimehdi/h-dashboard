@@ -108,13 +108,32 @@ whole history) and a day without a ticket was a *missing column*, not a zero.
 
 ## Settings Features
 
-Settings page (`/settings`), component `settings.index` — **3 persisted, user-configurable features**, stored in `user.settings` as a JSON column:
+Settings page (`/settings`), component `settings.index` — **5 persisted, user-configurable settings**, stored in `user.settings` as a JSON column:
 
 - **Browser notifications** — `browser_notifications` (bool) toggle
 - **Auto-refresh** — `dashboard_refresh` (int, `0` = off) dashboard auto-refresh interval
 - **Compact mode** — `compact_mode` (bool) denser UI layout toggle
+- **Theme poles** (#1224) — `light_theme` / `dark_theme`, one daisyUI theme each, from
+  `App\Support\ThemeFamilies` (light: `light, cupcake, fantasy`; dark: `dark, synthwave, coffee,
+  luxury`; defaults `fantasy`/`dark`). The header `<x-theme-toggle>` cycles between exactly those
+  two. `save()` validates both against the family **before** writing and rewrites the whole array —
+  a persisted key missing from that array is deleted on the next save.
 
 > **`EmailNotificationService` does not exist.** There is no email-notification setting and no such class — do not list one as a feature or wire a toggle to it. `showHelpModal` is a **transient component property** (help modal open/closed) and is deliberately **not** persisted by `save()`.
+
+**Enabling a daisyUI theme** touches four places that must agree (`ThemeFamilies` is the source of
+truth for the first two):
+
+1. `ThemeFamilies::LIGHT`/`DARK` + `LABELS` — validation, the two selects, the toggle;
+2. `resources/css/app.css` — the `themes:` list, the `@custom-variant dark` selector list when it is a
+   dark pole, the `[data-theme=…] .stitch-bg-fixed` group, and the `:not([data-theme=…])` blob chain.
+   `coffee` was enabled but missing from the last two, so its glass surfaces sat on the light cream
+   backdrop (2.60:1) — the #1224 sweep caught it;
+3. `THEMES` in `tests/e2e/theme/theme-helpers.ts`;
+4. `tests/e2e/theme/sweep.spec.ts` fails on any sub-threshold surface, so the table stays honest.
+
+The split is measured, not aesthetic: daisyUI declares `color-scheme` per theme, and the e2e suite
+asserts each select's options agree with their theme's own `color-scheme`.
 
 ## Maintenance Schedule
 

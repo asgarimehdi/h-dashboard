@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\ThemeFamilies;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Mary\Traits\Toast;
@@ -16,23 +17,74 @@ return new class extends Component
 
     public bool $showHelpModal = false;
 
+    /** #1224 — light pole; one of ThemeFamilies::LIGHT. */
+    public string $lightTheme = ThemeFamilies::DEFAULT_LIGHT;
+
+    /** #1224 — dark pole; one of ThemeFamilies::DARK. */
+    public string $darkTheme = ThemeFamilies::DEFAULT_DARK;
+
     public function mount(): void
     {
         $settings = auth()->user()->settings ?? [];
         $this->browserNotifications = $settings['browser_notifications'] ?? false;
         $this->dashboardRefresh = $settings['dashboard_refresh'] ?? 0;
         $this->compactMode = $settings['compact_mode'] ?? false;
+
+        // Stale or hand-edited values must never reach the toggle's Alpine
+        // strings (see ThemeFamilies), so validate and fall back here too.
+        $this->lightTheme = ThemeFamilies::poleOrDefault($settings['light_theme'] ?? null, 'light');
+        $this->darkTheme = ThemeFamilies::poleOrDefault($settings['dark_theme'] ?? null, 'dark');
+    }
+
+    /**
+     * @return list<array{value: string, label: string}>
+     */
+    public function lightOptions(): array
+    {
+        return ThemeFamilies::lightOptions();
+    }
+
+    /**
+     * @return list<array{value: string, label: string}>
+     */
+    public function darkOptions(): array
+    {
+        return ThemeFamilies::darkOptions();
     }
 
     public function save(): void
     {
+        // Whitelist BEFORE touching the database. These values are interpolated
+        // into single-quoted Alpine expressions on every page, so an unknown
+        // theme would silently fall back to the :root theme with no warning.
+        if (! ThemeFamilies::isValid($this->lightTheme, 'light')) {
+            $this->error('تم روشن انتخاب‌شده معتبر نیست.', position: 'toast-bottom');
+
+            return;
+        }
+
+        if (! ThemeFamilies::isValid($this->darkTheme, 'dark')) {
+            $this->error('تم تیره انتخاب‌شده معتبر نیست.', position: 'toast-bottom');
+
+            return;
+        }
+
         $user = auth()->user();
+        // Rewrite the whole array: `settings` is a single JSON column, so a
+        // partial array here would delete every key this save does not name.
         $user->settings = [
             'browser_notifications' => $this->browserNotifications,
             'dashboard_refresh' => $this->dashboardRefresh,
             'compact_mode' => $this->compactMode,
+            'light_theme' => $this->lightTheme,
+            'dark_theme' => $this->darkTheme,
         ];
         $user->save();
+
+        // Scenario 1 (issue comment 6364662792): the applied theme may not be
+        // one of the two new poles. The page's Alpine handler migrates it to
+        // the same-family pole and re-broadcasts `theme-changed`.
+        $this->dispatch('theme-poles-saved', lightTheme: $this->lightTheme, darkTheme: $this->darkTheme);
 
         $this->success('تنظیمات ذخیره شد!', position: 'toast-bottom');
     }
@@ -125,6 +177,25 @@ return new class extends Component
             </div>
         </x-card>
 
+        <x-card shadow class="mt-4">
+            <h2 class="font-bold mb-4">ظاهر (تم)</h2>
+            <div class="grid gap-4 md:grid-cols-2">
+                <div>
+                    <label class="font-bold text-sm">تم روشن</label>
+                    <x-select name="lightTheme" wire:model.live="lightTheme" :options="$this->lightOptions()"
+                              option-value="value" option-label="label" class="mt-1" />
+                </div>
+                <div>
+                    <label class="font-bold text-sm">تم تیره</label>
+                    <x-select name="darkTheme" wire:model.live="darkTheme" :options="$this->darkOptions()"
+                              option-value="value" option-label="label" class="mt-1" />
+                </div>
+            </div>
+            <p class="mt-3 text-xs opacity-60">
+                دکمهٔ تم در نوار بالا بین همین دو تم جابه‌جا می‌شود.
+            </p>
+        </x-card>
+
         <div class="mt-6 flex justify-end gap-2">
             <x-button label="تست اعلان" icon="o-bell" wire:click="sendTestNotification" class="btn-outline btn-sm" spinner />
             <x-button label="تست بروزرسانی" icon="o-arrow-path" wire:click="testDashboardRefresh" class="btn-outline btn-sm" spinner />
@@ -132,3 +203,36 @@ return new class extends Component
             <x-button label="ذخیره تنظیمات" icon="o-check" wire:click="save" class="btn-primary" spinner />
         </div>
     </div>
+
+@script
+<script>
+    // #1224 scenario 1: after saving new poles, an applied theme that is not
+    // one of them would make the toggle's icon and first click undefined
+    // (MaryUI only knows the two poles). Migrate it to the same-family pole.
+    $wire.on('theme-poles-saved', ({ lightTheme, darkTheme }) => {
+        const root = document.documentElement;
+        const current = root.getAttribute('data-theme')
+            || (localStorage.getItem('mary-theme') || '').replaceAll('"', '');
+
+        const lightThemes = @js(\App\Support\ThemeFamilies::LIGHT);
+        const darkThemes = @js(\App\Support\ThemeFamilies::DARK);
+        const poles = [lightTheme, darkTheme];
+
+        if (!current || poles.includes(current)) {
+            return;
+        }
+
+        const target = lightThemes.includes(current)
+            ? lightTheme
+            : (darkThemes.includes(current) ? darkTheme : lightTheme);
+
+        root.setAttribute('data-theme', target);
+        // MaryUI's $persist stores JSON, including the quotes — the head script
+        // and the storage listener both strip them with replaceAll('"').
+        localStorage.setItem('mary-theme', JSON.stringify(target));
+
+        // Keep the layout blobs and the HR charts in sync without a reload.
+        window.dispatchEvent(new CustomEvent('theme-changed', { detail: target, bubbles: true }));
+    });
+</script>
+@endscript
