@@ -170,23 +170,26 @@ return new class extends Component
 
 @script
 <script>
-    // Palettes keyed by data-theme (see x-theme-selector: fantasy light / dark).
-    // Bars, axis text and grid lines must follow the active DaisyUI theme.
-    const HR_CHART_PALETTES = {
-        fantasy: {
-            colors: ['#6366f1', '#10b981', '#0ea5e9', '#f59e0b'],
-            text: '#3f3f46',
-            grid: '#e4e4e7'
-        },
-        dark: {
-            colors: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24'],
-            text: '#d4d4d8',
-            grid: '#3f3f46'
-        }
+    // Bars need a per-family palette (daisyUI's own `color-scheme` is the same
+    // signal App\Support\ThemeFamilies uses: light/cupcake/fantasy = light,
+    // dark/synthwave/coffee/luxury = dark). Text and grid read the active
+    // theme's tokens, so a newly enabled theme needs no table entry here.
+    const HR_CHART_COLORS = {
+        light: ['#4f46e5', '#047857', '#0369a1', '#b45309'],
+        dark: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24']
     };
 
     function hrPalette() {
-        return HR_CHART_PALETTES[document.documentElement.dataset.theme] ?? HR_CHART_PALETTES.fantasy;
+        const root = document.documentElement;
+        const style = getComputedStyle(root);
+        const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
+        const token = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+
+        return {
+            colors: HR_CHART_COLORS[scheme],
+            text: token('--color-base-content', scheme === 'dark' ? '#d4d4d8' : '#3f3f46'),
+            grid: token('--color-base-300', scheme === 'dark' ? '#3f3f46' : '#e4e4e7')
+        };
     }
 
     function destroyHrChart(id) {
