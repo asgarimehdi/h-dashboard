@@ -1,0 +1,162 @@
+name: Theme Sweep (35 × 25)
+
+# #1227 — the full 35-theme × 25-surface contrast matrix.
+#
+# This is deliberately NOT part of `test.yml`: the blocking sweep measures seven
+# themes in ~3.1 min (26.6 s/theme, run 39977606322), and 35 themes ≈ 15.5 min
+# would break both the 900 s test timeout and the 30-min E2E job cap. Here the
+# cap is 45 min, the spec is report-only, and the published table (job summary +
+# artifact) is the deliverable. The per-PR gate stays `sweep.spec.ts`.
+#
+# Triggers: manual dispatch, a weekly run, or labelling a PR `theme-sweep`.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 03:00 UTC — weekly, off the PR critical path.
+    - cron: '0 3 * * 1'
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: theme-sweep-35-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sweep-35:
+    name: All 35 themes × 25 surfaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # `labeled` fires for every label; only the opt-in one pays for this run.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'theme-sweep')
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_e2e
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          coverage: none
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for the app (CI services)
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+          php artisan key:generate --force
+
+      - name: Build .env.e2e (secret-safe)
+        # Same contract as test.yml: build the file from .env without printing
+        # secrets, then drop any leftover `<...>` placeholder — `source` chokes
+        # on it before the first test is even collected.
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+
+      - name: Assert APP_LOCALE=fa in .env.e2e
+        run: grep -q '^APP_LOCALE=fa' .env.e2e
+
+      - name: Verify the isolated e2e database exists
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+
+      - name: Cache Playwright chromium
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the 35-theme sweep (report-only)
+        # Through scripts/e2e-test.sh only: it owns the .env swap, the seeded
+        # e2e database, the :8001 server and the restore-on-exit trap. The spec
+        # itself is report-only, so a ❌ still produces the table.
+        env:
+          SWEEP_REPORT_ONLY: '1'
+          SWEEP_REPORT_DIR: theme-sweep-35
+          # Lifts playwright.config.ts's testIgnore for this one spec; without
+          # it the per-PR E2E job would try to run the 15-minute matrix too.
+          SWEEP_35: '1'
+        run: bash scripts/e2e-test.sh tests/e2e/theme/sweep-35.spec.ts --reporter=list 2>&1 | tee sweep-35.log
+
+      - name: Assert the sweep really executed
+        # A green report-only run with zero tests is a failure, not a pass
+        # (issue #935's class of trap).
+        run: |
+          EXECUTED=$(grep -cE '✓|✔|passed \(' sweep-35.log || true)
+          echo "sweep executed-test lines: ${EXECUTED}"
+          grep -qE '[0-9]+ passed' sweep-35.log
+          test "${EXECUTED}" -gt 0
+
+      - name: Publish the sweep table (job summary)
+        if: always()
+        run: |
+          test -f theme-sweep-35/sweep-35.md || { echo "no sweep report produced"; exit 1; }
+          cat theme-sweep-35/sweep-35.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the sweep report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: theme-sweep-35
+          path: |
+            theme-sweep-35/sweep-35.md
+            theme-sweep-35/sweep-35.json
+            sweep-35.log
+          retention-days: 30
+          if-no-files-found: warn

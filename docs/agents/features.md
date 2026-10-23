@@ -113,27 +113,45 @@ Settings page (`/settings`), component `settings.index` — **5 persisted, user-
 - **Browser notifications** — `browser_notifications` (bool) toggle
 - **Auto-refresh** — `dashboard_refresh` (int, `0` = off) dashboard auto-refresh interval
 - **Compact mode** — `compact_mode` (bool) denser UI layout toggle
-- **Theme poles** (#1224) — `light_theme` / `dark_theme`, one daisyUI theme each, from
-  `App\Support\ThemeFamilies` (light: `light, cupcake, fantasy`; dark: `dark, synthwave, coffee,
-  luxury`; defaults `fantasy`/`dark`). The header `<x-theme-toggle>` cycles between exactly those
-  two. `save()` validates both against the family **before** writing and rewrites the whole array —
+- **Theme poles** (#1224, #1227) — `light_theme` / `dark_theme`, one daisyUI theme each, from
+  `App\Support\ThemeFamilies`. All **35** built-in themes are enabled: light **21**, dark **14**
+  (defaults `fantasy`/`dark`). The header `<x-theme-toggle>` cycles between exactly those two.
+  `save()` validates both against the family **before** writing and rewrites the whole array —
   a persisted key missing from that array is deleted on the next save.
 
 > **`EmailNotificationService` does not exist.** There is no email-notification setting and no such class — do not list one as a feature or wire a toggle to it. `showHelpModal` is a **transient component property** (help modal open/closed) and is deliberately **not** persisted by `save()`.
 
-**Enabling a daisyUI theme** touches four places that must agree (`ThemeFamilies` is the source of
-truth for the first two):
+**Enabling a daisyUI theme** touches five places that must agree (`ThemeFamilies` is the source of
+truth for the first three):
 
-1. `ThemeFamilies::LIGHT`/`DARK` + `LABELS` — validation, the two selects, the toggle;
-2. `resources/css/app.css` — the `themes:` list, the `@custom-variant dark` selector list when it is a
-   dark pole, the `[data-theme=…] .stitch-bg-fixed` group, and the `:not([data-theme=…])` blob chain.
-   `coffee` was enabled but missing from the last two, so its glass surfaces sat on the light cream
-   backdrop (2.60:1) — the #1224 sweep caught it;
-3. `THEMES` in `tests/e2e/theme/theme-helpers.ts`;
-4. `tests/e2e/theme/sweep.spec.ts` fails on any sub-threshold surface, so the table stays honest.
+1. `ThemeFamilies::LIGHT`/`DARK` + `LABELS` — validation, the two selects, the toggle. Keep
+   `themeOrder` order; the split is measured, not aesthetic (dark: `color-scheme: dark` and
+   `--color-base-100` lightness ≤ 0.370; light ≥ 0.916 — the two bands are disjoint);
+2. `resources/css/app.css` — the `themes:` list (**count every theme explicitly**; `themes: all`
+   drops `fantasy --default`/`luxury --prefersdark` and the hybrid form silently drops 32 themes),
+   the `@custom-variant dark` selector list for every dark theme, the `[data-theme=…]
+   .stitch-bg-fixed` group, and the `:not([data-theme=…])` blob chain. `coffee` was enabled but
+   missing from the last two, so its glass surfaces sat on the light cream backdrop (2.60:1) — the
+   #1224 sweep caught it. The blob chain's specificity beats `.dark`, so **every** dark theme must
+   be listed there or it paints light blobs on a dark page (#1227);
+3. `THEMES` / `LIGHT_THEMES` / `DARK_THEMES` in `tests/e2e/theme/theme-helpers.ts`;
+4. `SettingsThemeTest::test_enabled_themes_in_app_css_match_theme_families` — parses the `themes:`
+   line and asserts set equality with `LIGHT+DARK` **and** the two flags. It is the only guard
+   between the CSS and `ThemeFamilies`; before #1227 nothing connected them;
+5. `tests/e2e/theme/sweep.spec.ts` fails on any sub-threshold surface, so the table stays honest.
+
+**Sweep policy is two-layer.** The blocking job (`sweep.spec.ts`, seven themes plus
+`WATCH_THEMES`, 25 cells each) runs on every PR and must stay under the 30-minute E2E cap. The
+full **35 × 25 = 875** matrix runs in `sweep-35.spec.ts` from `.github/workflows/theme-sweep-35.yml`
+(dispatch, weekly schedule, or a PR labelled `theme-sweep`, 45-minute cap) — report-only by
+default, table in the job summary + artifact, published on issue #1227. Themes the full run flags
+❌/🧱 go into `WATCH_THEMES` so they get a permanent per-PR lock without paying the whole matrix.
 
 The split is measured, not aesthetic: daisyUI declares `color-scheme` per theme, and the e2e suite
-asserts each select's options agree with their theme's own `color-scheme`.
+asserts each select's options agree with their theme's own `color-scheme`. The sweep applies
+`mary-class` (`light`/`dark`) with the theme, exactly like `<x-theme-toggle>`, so `.dark`-keyed
+rules (Leaflet invert, stitch backdrop) are measured in the state a user actually sees.
+
 
 ## Maintenance Schedule
 

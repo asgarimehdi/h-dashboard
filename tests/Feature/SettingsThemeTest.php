@@ -95,7 +95,7 @@ class SettingsThemeTest extends TestCase
         $this->assertArrayNotHasKey('dark_theme', $settings);
     }
 
-    public function test_the_settings_page_offers_all_seven_themes(): void
+    public function test_the_settings_page_offers_all_35_themes(): void
     {
         ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
@@ -111,9 +111,18 @@ class SettingsThemeTest extends TestCase
 
     public function test_theme_families_are_disjoint_and_cover_every_enabled_theme(): void
     {
-        $this->assertSame(['light', 'cupcake', 'fantasy'], ThemeFamilies::LIGHT);
-        $this->assertSame(['dark', 'synthwave', 'coffee', 'luxury'], ThemeFamilies::DARK);
+        // #1227: every daisyUI theme, in the plugin's own `themeOrder`.
+        $this->assertSame([
+            'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro', 'cyberpunk',
+            'valentine', 'garden', 'lofi', 'pastel', 'fantasy', 'wireframe', 'cmyk', 'autumn',
+            'acid', 'lemonade', 'winter', 'nord', 'caramellatte', 'silk',
+        ], ThemeFamilies::LIGHT);
+        $this->assertSame([
+            'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury', 'dracula',
+            'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+        ], ThemeFamilies::DARK);
         $this->assertSame([], array_intersect(ThemeFamilies::LIGHT, ThemeFamilies::DARK));
+        $this->assertCount(35, [...ThemeFamilies::LIGHT, ...ThemeFamilies::DARK]);
 
         foreach (ThemeFamilies::LIGHT as $theme) {
             $this->assertSame('light', ThemeFamilies::familyOf($theme));
@@ -127,8 +136,58 @@ class SettingsThemeTest extends TestCase
             $this->assertFalse(ThemeFamilies::isValid($theme, 'light'));
         }
 
-        $this->assertNull(ThemeFamilies::familyOf('valentine'));
+        // Every enabled theme has a Persian label — a missing key would leak the
+        // English theme name into the select.
+        foreach ([...ThemeFamilies::LIGHT, ...ThemeFamilies::DARK] as $theme) {
+            $this->assertArrayHasKey($theme, ThemeFamilies::LABELS);
+            $this->assertNotSame('', ThemeFamilies::LABELS[$theme]);
+        }
+
+        $this->assertNull(ThemeFamilies::familyOf('not-a-theme'));
         $this->assertFalse(ThemeFamilies::isValid(null, 'light'));
+    }
+
+    /**
+     * #1227 — `ThemeFamilies` and the daisyUI `themes:` line are two lists that
+     * must be the same set. Until now nothing connected them: adding a theme to
+     * one and not the other either shipped an unselectable theme (CSS only) or
+     * a selectable theme with no token block (broken colours, caught only by the
+     * browser e2e). This guard parses the line and locks the set + the two flags.
+     */
+    public function test_enabled_themes_in_app_css_match_theme_families(): void
+    {
+        $css = file_get_contents(base_path('resources/css/app.css'));
+        $this->assertIsString($css);
+
+        $this->assertSame(1, preg_match('/@plugin\s+"daisyui"\s*\{(.*?)\}/s', $css, $block), 'daisyUI plugin block not found');
+        $this->assertSame(1, preg_match('/\bthemes:\s*(.*?);/s', $block[1], $match), 'no `themes:` line in the daisyUI block');
+
+        $entries = array_values(array_filter(array_map('trim', explode(',', $match[1])), fn (string $entry): bool => $entry !== ''));
+
+        $enabled = [];
+        $flags = [];
+        foreach ($entries as $entry) {
+            $parts = preg_split('/\s+/', $entry);
+            $theme = $parts[0];
+            $enabled[] = $theme;
+            if (isset($parts[1])) {
+                $flags[$theme] = $parts[1];
+            }
+        }
+
+        // A duplicated name is not an error for daisyUI, but it means the list
+        // was edited by hand and a theme may have been lost in the process.
+        $this->assertSame(array_values(array_unique($enabled)), $enabled, 'duplicate theme in the daisyUI `themes:` line');
+
+        $expected = [...ThemeFamilies::LIGHT, ...ThemeFamilies::DARK];
+        sort($expected);
+        sort($enabled);
+        $this->assertSame($expected, $enabled, 'app.css `themes:` and ThemeFamilies must be the same set');
+
+        // Pre-issue behaviour: a guest (no settings) must keep fantasy on :root
+        // and luxury for prefers-color-scheme: dark. `themes: all` drops both.
+        $this->assertSame(['fantasy' => '--default', 'luxury' => '--prefersdark'], $flags);
+        $this->assertNotContains('all', $enabled, '`themes: all` drops the fantasy/luxury flags');
     }
 
     public function test_the_header_toggle_renders_the_saved_poles(): void

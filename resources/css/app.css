@@ -15,23 +15,42 @@
 */
 
 /** daisyUI */
+/* #1227: every built-in theme, counted explicitly in daisyUI's `themeOrder`.
+   `themes: all` is NOT equivalent — the plugin's branch hard-codes light/dark
+   and drops both flags; the hybrid form makes the plugin treat `all` as an
+   unknown name and silently drops 32 themes. Only the explicit list keeps
+   fantasy on :root and luxury for prefers-color-scheme: dark. */
 @plugin "daisyui" {
-    themes: light, dark, synthwave, coffee, cupcake,fantasy --default,luxury --prefersdark;
+    themes: light, dark, cupcake, bumblebee, emerald, corporate, synthwave, retro,
+        cyberpunk, valentine, halloween, garden, forest, aqua, lofi, pastel,
+        fantasy --default, wireframe, black, luxury --prefersdark, dracula, cmyk,
+        autumn, business, acid, lemonade, night, coffee, winter, dim, nord,
+        sunset, caramellatte, abyss, silk;
 }
 
 /* maryUI */
 @source "../../vendor/robsontenorio/mary/src/View/Components/**/*.php";
 
 /* Theme toggle */
-/* #1224: every theme a user can pick as a dark pole must be covered here, or a
-   `dark:` utility silently keeps its light styling on synthwave/coffee/luxury.
-   The list is the dark family from App\Support\ThemeFamilies (daisyUI declares
-   `color-scheme: dark` for exactly these four). */
+/* #1224 / #1227: every theme a user can pick as a dark pole must be covered
+   here, or a `dark:` utility silently keeps its light styling on it.
+   The list is exactly the dark family from App\Support\ThemeFamilies (daisyUI
+   declares `color-scheme: dark` for these fourteen). */
 @custom-variant dark (
     &:where([data-theme=dark], [data-theme=dark] *),
     &:where([data-theme=synthwave], [data-theme=synthwave] *),
     &:where([data-theme=coffee], [data-theme=coffee] *),
-    &:where([data-theme=luxury], [data-theme=luxury] *)
+    &:where([data-theme=luxury], [data-theme=luxury] *),
+    &:where([data-theme=abyss], [data-theme=abyss] *),
+    &:where([data-theme=aqua], [data-theme=aqua] *),
+    &:where([data-theme=black], [data-theme=black] *),
+    &:where([data-theme=business], [data-theme=business] *),
+    &:where([data-theme=dim], [data-theme=dim] *),
+    &:where([data-theme=dracula], [data-theme=dracula] *),
+    &:where([data-theme=forest], [data-theme=forest] *),
+    &:where([data-theme=halloween], [data-theme=halloween] *),
+    &:where([data-theme=night], [data-theme=night] *),
+    &:where([data-theme=sunset], [data-theme=sunset] *)
 );
 
 
@@ -496,20 +515,24 @@
     animation: stitch-drift 20s ease-in-out infinite;
 }
 
-/* Blob color variants for light theme */
-[data-theme="light"] .stitch-blob.blob-1,
-[data-theme="fantasy"] .stitch-blob.blob-1,
-:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]) .stitch-blob.blob-1 {
+/* Blob color variants for light themes.
+   #1227: list every dark theme in the :not() chain explicitly. The chain's
+   specificity beats the `.dark` rule below, so a dark theme missing here paints
+   the warm light blobs on its dark page even with the maryUI `dark` class set.
+   The chain is anchored on `html` on purpose: an unanchored `:not(…)` also
+   matches `body` (which never carries `data-theme`), so it matched on every
+   dark theme and no list of names could ever turn it off. */
+html:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]):not([data-theme="abyss"]):not([data-theme="aqua"]):not([data-theme="black"]):not([data-theme="business"]):not([data-theme="dim"]):not([data-theme="dracula"]):not([data-theme="forest"]):not([data-theme="halloween"]):not([data-theme="night"]):not([data-theme="sunset"]) .stitch-blob.blob-1 {
     background: radial-gradient(circle at 30% 30%, #F8B803, #FF750F);
 }
 [data-theme="light"] .stitch-blob.blob-2,
 [data-theme="fantasy"] .stitch-blob.blob-2,
-:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]) .stitch-blob.blob-2 {
+html:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]):not([data-theme="abyss"]):not([data-theme="aqua"]):not([data-theme="black"]):not([data-theme="business"]):not([data-theme="dim"]):not([data-theme="dracula"]):not([data-theme="forest"]):not([data-theme="halloween"]):not([data-theme="night"]):not([data-theme="sunset"]) .stitch-blob.blob-2 {
     background: radial-gradient(circle at 30% 30%, #F0304E, #7C3AED);
 }
 [data-theme="light"] .stitch-blob.blob-3,
 [data-theme="fantasy"] .stitch-blob.blob-3,
-:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]) .stitch-blob.blob-3 {
+html:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]):not([data-theme="abyss"]):not([data-theme="aqua"]):not([data-theme="black"]):not([data-theme="business"]):not([data-theme="dim"]):not([data-theme="dracula"]):not([data-theme="forest"]):not([data-theme="halloween"]):not([data-theme="night"]):not([data-theme="sunset"]) .stitch-blob.blob-3 {
     background: radial-gradient(circle at 30% 30%, #22D3EE, #7C3AED);
 }
 

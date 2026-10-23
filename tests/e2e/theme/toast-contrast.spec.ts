@@ -1,4 +1,5 @@
 import { test, expect, login } from '../shared/fixtures';
+import { BLOCKING_THEMES, isDarkTheme, setTheme } from './theme-helpers';
 
 /**
  * Toast / alert readability across every enabled DaisyUI theme.
@@ -14,7 +15,6 @@ import { test, expect, login } from '../shared/fixtures';
  * Every theme x every variant must clear WCAG AA (>= 4.5:1).
  */
 
-const THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
 const VARIANTS = ['info', 'success', 'warning', 'error'];
 
 interface ContrastResult {
@@ -136,9 +136,9 @@ test.describe('toast contrast across themes', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  for (const theme of THEMES) {
+  for (const theme of BLOCKING_THEMES) {
     test(`${theme}: toast text clears WCAG AA on every variant`, async ({ page }) => {
-      await page.evaluate((th) => document.documentElement.setAttribute('data-theme', th), theme);
+      await setTheme(page, theme);
 
       const results: ContrastResult[] = [];
       for (const variant of VARIANTS) {
@@ -152,9 +152,8 @@ test.describe('toast contrast across themes', () => {
         });
       }
 
-      const dark = ['dark', 'synthwave', 'coffee', 'luxury'];
       for (const r of results) {
-        if (dark.includes(theme)) {
+        if (isDarkTheme(theme)) {
           // documents the original bug: pre-fix text was unreadable on dark themes
           expect(r.before, `${theme}/${r.variant} pre-fix contrast`).toBeLessThan(3);
         }

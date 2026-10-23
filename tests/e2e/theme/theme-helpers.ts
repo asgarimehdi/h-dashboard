@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Shared measurement helpers for the theme specs (#1220, #1224).
@@ -11,11 +11,59 @@ import { expect, type Page } from '@playwright/test';
  * (6362051811) and reused by the #1224 sweep.
  */
 
-export const THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
+/**
+ * Every enabled daisyUI theme, in the plugin's own `themeOrder` (#1227).
+ * The two families below are the same split as App\Support\ThemeFamilies; a
+ * PHP guard (SettingsThemeTest) locks both lists against the `themes:` line in
+ * app.css, so this is a copy, never a source of truth.
+ */
+export const THEMES = [
+  'light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro',
+  'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel',
+  'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business',
+  'acid', 'lemonade', 'night', 'coffee', 'winter', 'dim', 'nord', 'sunset',
+  'caramellatte', 'abyss', 'silk',
+];
 
-/** Same split as App\Support\ThemeFamilies (#1224). */
-export const LIGHT_THEMES = ['light', 'cupcake', 'fantasy'];
-export const DARK_THEMES = ['dark', 'synthwave', 'coffee', 'luxury'];
+/** Same split as App\Support\ThemeFamilies (#1227): light 21, dark 14. */
+export const LIGHT_THEMES = [
+  'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro', 'cyberpunk',
+  'valentine', 'garden', 'lofi', 'pastel', 'fantasy', 'wireframe', 'cmyk', 'autumn',
+  'acid', 'lemonade', 'winter', 'nord', 'caramellatte', 'silk',
+];
+export const DARK_THEMES = [
+  'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury', 'dracula',
+  'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+];
+
+/**
+ * The themes the mandatory (per-PR) sweep measures. The pre-#1227 seven stay as
+ * the regression lock; themes the full 35-theme run flagged ❌/🧱 are appended
+ * to `WATCH_THEMES` so CI keeps a permanent lock on the risky ones without
+ * paying the whole 875-cell matrix on every PR.
+ */
+export const CORE_BLOCKING_THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
+
+/** Filled from the first full sweep-35 run (#1227). Keep sorted. */
+export const WATCH_THEMES: string[] = [
+  'abyss',
+  'aqua',
+  'autumn',
+  'black',
+  'corporate',
+  'garden',
+  'pastel',
+  'valentine',
+  'winter',
+];
+
+export const BLOCKING_THEMES = [...new Set([...CORE_BLOCKING_THEMES, ...WATCH_THEMES])];
+
+/** True when daisyUI declares `color-scheme: dark` for this theme. */
+export function isDarkTheme(theme: string): boolean {
+  return DARK_THEMES.includes(theme);
+}
+
 
 /** Below `2xl` so the sidebar stays expanded (the #1220 measurement viewport). */
 export const VIEWPORT = { width: 1440, height: 960 };
@@ -130,8 +178,15 @@ async function freezeBlobs(page: Page): Promise<void> {
 }
 
 /**
- * Apply a theme the way the app does (data-theme + MaryUI's JSON localStorage
- * format), disable transitions, then wait for the cascade to settle.
+ * Apply a theme the way the app does (data-theme + MaryUI's `mary-theme` JSON
+ * localStorage format **and** its `mary-class` sibling), disable transitions,
+ * then wait for the cascade to settle.
+ *
+ * #1227: `mary-class` is not decorative. MaryUI's `<x-theme-toggle>` writes
+ * `light`/`dark` there and the app's boot script copies it onto `<html>`;
+ * `.dark .leaflet-*` (the Leaflet invert filter) and the stitch `.dark` rules
+ * key off it, not off the theme name. Leaving it unset measured the seven dark
+ * themes in a state no user ever sees (no invert, no dark backdrop).
  *
  * The settle loop samples two consecutive equal readings: the first #1220 run
  * measured a half-transitioned colour because a fixed sleep was not enough.
@@ -140,10 +195,17 @@ export async function setTheme(page: Page, theme: string): Promise<void> {
   await page.addStyleTag({
     content: '*, *::before, *::after { transition: none !important; animation: none !important; }',
   });
-  await page.evaluate((t) => {
-    document.documentElement.setAttribute('data-theme', t);
-    localStorage.setItem('mary-theme', JSON.stringify(t));
-  }, theme);
+  await page.evaluate(
+    ({ t, familyClass }) => {
+      document.documentElement.setAttribute('data-theme', t);
+      // MaryUI replaces the whole class attribute (lightClass = "light",
+      // darkClass = "dark"), so mirror that instead of appending.
+      document.documentElement.setAttribute('class', familyClass);
+      localStorage.setItem('mary-theme', JSON.stringify(t));
+      localStorage.setItem('mary-class', JSON.stringify(familyClass));
+    },
+    { t: theme, familyClass: isDarkTheme(theme) ? 'dark' : 'light' }
+  );
 
   await freezeBlobs(page);
   await page.waitForTimeout(900);
@@ -253,6 +315,40 @@ async function pixelAt(
   );
 }
 
+const PAINT_FILTER_ATTR = 'data-theme-measure-filter';
+
+/**
+ * Suspend `filter` on the measured node and its ancestors for one sample.
+ *
+ * `filter` is painted after computed style: `.dark .leaflet-control-*` inverts
+ * the Leaflet controls (app.css), so the computed text colour is pre-filter
+ * while the screenshot is post-filter. Comparing them reports 1.00:1 for a
+ * control that actually renders white-on-black (21:1). Invert maps the
+ * achromatic control pair onto its own inverse, so measuring the unfiltered
+ * pair yields the same ratio as the user sees.
+ */
+async function suspendPaintFilters(locator: Locator): Promise<void> {
+  await locator.evaluate((node, attr) => {
+    for (let el: Element | null = node; el; el = el.parentElement) {
+      if (getComputedStyle(el).filter !== 'none') {
+        (el as HTMLElement).setAttribute(attr, (el as HTMLElement).style.filter);
+        (el as HTMLElement).style.setProperty('filter', 'none', 'important');
+      }
+    }
+  }, PAINT_FILTER_ATTR);
+}
+
+async function resumePaintFilters(page: Page): Promise<void> {
+  await page.evaluate((attr) => {
+    document.querySelectorAll<HTMLElement>(`[${attr}]`).forEach((el) => {
+      const previous = el.getAttribute(attr) ?? '';
+      el.style.removeProperty('filter');
+      if (previous) el.style.filter = previous;
+      el.removeAttribute(attr);
+    });
+  }, PAINT_FILTER_ATTR);
+}
+
 /**
  * Measure text contrast by pixel-sampling the rendered backdrop at the text's
  * own coordinates (the primary method locked by #1224 for glass/gradient
@@ -314,10 +410,12 @@ export async function measureText(
   clip.height = Math.max(1, Math.min(viewport.height - clip.y, Math.ceil(probe.rect.height)));
 
   await hideText(page);
+  await suspendPaintFilters(locator);
   let bg: string;
   try {
     bg = await pixelAt(page, clip, probe.point);
   } finally {
+    await resumePaintFilters(page);
     await showText(page);
   }
 
