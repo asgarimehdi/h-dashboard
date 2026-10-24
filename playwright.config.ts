@@ -15,6 +15,10 @@ try {
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // #1227: the full 35-theme matrix is ~15.5 min on its own and is report-only.
+  // It must never join the per-PR E2E job (30-min cap); only
+  // `.github/workflows/theme-sweep-35.yml` sets SWEEP_35=1 and runs it.
+  testIgnore: process.env.SWEEP_35 === '1' ? undefined : ['**/theme/sweep-35.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

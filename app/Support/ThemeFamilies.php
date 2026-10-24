@@ -5,17 +5,24 @@ namespace App\Support;
 /**
  * #1224 — the two theme poles a user may pick from the settings page.
  *
- * The split is measured, not aesthetic: daisyUI declares `color-scheme` per
- * theme and the OKLCH lightness of `--color-base-100` lands in two disjoint
- * bands (issue comment 6364662792):
+ * #1227 — all 35 built-in daisyUI themes are enabled and split here in the
+ * plugin's own `themeOrder`. The split is measured, not aesthetic: daisyUI
+ * declares `color-scheme` per theme and the OKLCH lightness of
+ * `--color-base-100` lands in two disjoint bands (dark ≤ 0.370, light ≥ 0.916;
+ * issue comment 6370514534):
  *
- *   light: light 1.000, fantasy 1.000, cupcake 0.978
- *   dark:  dark 0.253, coffee 0.240, synthwave 0.150, luxury 0.141
+ *   light 21: light 1.000 ... retro 0.916
+ *   dark  14: aqua 0.370, dim 0.309, dracula 0.288, dark 0.253, business 0.244,
+ *             coffee 0.240, sunset 0.220, halloween 0.210, forest 0.208,
+ *             night 0.208, abyss 0.200, synthwave 0.150, luxury 0.141, black 0.000
  *
- * `coffee` is dark on all three signals (declared `color-scheme: dark`, L inside
- * the dark band, and its own neutral-content/base-300 pair). Keep this class as
- * the single source of truth: `save()` whitelists against it, the settings page
- * builds its selects from it, and the header toggle reads its poles through it.
+ * `color-scheme` decides: it is the runtime signal `chartPalette()` reads and
+ * the e2e guard asserts, and both signals agree on all 35 themes. `coffee` is
+ * dark on both; `aqua`/`dim`/`dracula` sit above the old 0.253 ceiling but are
+ * still deep in the dark cluster. Keep this class as the single source of
+ * truth: `save()` whitelists against it, the settings page builds its selects
+ * from it, the header toggle reads its poles through it, and
+ * `SettingsThemeTest` parses the daisyUI `themes:` line against it.
  *
  * Values are interpolated into Alpine strings on every page (MaryUI's
  * `<x-theme-toggle>`), so anything outside these lists must never be persisted.
@@ -23,10 +30,17 @@ namespace App\Support;
 final class ThemeFamilies
 {
     /** @var list<string> */
-    public const LIGHT = ['light', 'cupcake', 'fantasy'];
+    public const LIGHT = [
+        'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro', 'cyberpunk',
+        'valentine', 'garden', 'lofi', 'pastel', 'fantasy', 'wireframe', 'cmyk', 'autumn',
+        'acid', 'lemonade', 'winter', 'nord', 'caramellatte', 'silk',
+    ];
 
     /** @var list<string> */
-    public const DARK = ['dark', 'synthwave', 'coffee', 'luxury'];
+    public const DARK = [
+        'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury', 'dracula',
+        'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
+    ];
 
     /** The pre-#1224 hard-coded poles: a user without settings sees no change. */
     public const DEFAULT_LIGHT = 'fantasy';
@@ -37,11 +51,39 @@ final class ThemeFamilies
     public const LABELS = [
         'light' => 'روشن',
         'cupcake' => 'کاپ‌کیک',
+        'bumblebee' => 'زنبور عسل',
+        'emerald' => 'زمردی',
+        'corporate' => 'شرکتی',
+        'retro' => 'رترو',
+        'cyberpunk' => 'سایبرپانک',
+        'valentine' => 'ولنتاین',
+        'garden' => 'باغ',
+        'lofi' => 'لو فای',
+        'pastel' => 'پاستلی',
         'fantasy' => 'فانتزی',
+        'wireframe' => 'وایرفریم',
+        'cmyk' => 'سی‌ام‌وای‌کی',
+        'autumn' => 'پاییزی',
+        'acid' => 'اسید',
+        'lemonade' => 'لیموناد',
+        'winter' => 'زمستانی',
+        'nord' => 'نورد',
+        'caramellatte' => 'کارامل لاته',
+        'silk' => 'ابریشمی',
         'dark' => 'تیره',
         'synthwave' => 'سینت‌ویو',
-        'coffee' => 'قهوه‌ای',
+        'halloween' => 'هالووین',
+        'forest' => 'جنگلی',
+        'aqua' => 'آکوا',
+        'black' => 'مشکی',
         'luxury' => 'لوکس',
+        'dracula' => 'دراکولا',
+        'business' => 'تجاری',
+        'night' => 'شبانه',
+        'coffee' => 'قهوه‌ای',
+        'dim' => 'کم‌نور',
+        'sunset' => 'غروب',
+        'abyss' => 'اعماق',
     ];
 
     /**

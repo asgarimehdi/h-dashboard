@@ -1,7 +1,7 @@
 import { test, expect, login } from '../shared/fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
-import { installThemeHelpers, setTheme, THEMES, VIEWPORT } from './theme-helpers';
+import { installThemeHelpers, setTheme, BLOCKING_THEMES, VIEWPORT } from './theme-helpers';
 
 /**
  * #1220 — sidebar active item must keep WCAG AA contrast in every theme.
@@ -130,7 +130,7 @@ test.describe('sidebar active item contrast', () => {
     await expect(page.locator('.drawer-side a.mary-active-menu[aria-current="page"]')).toHaveCount(1);
   });
 
-  for (const theme of THEMES) {
+  for (const theme of BLOCKING_THEMES) {
     test(`${theme}: active item is the native neutral pair and clears WCAG AA`, async ({ page }) => {
       await setTheme(page, theme);
       await waitForMenuSettled(page);

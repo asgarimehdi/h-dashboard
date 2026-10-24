@@ -30,6 +30,11 @@ async function storedTheme(page: import('@playwright/test').Page): Promise<strin
   return page.evaluate(() => localStorage.getItem('mary-theme'));
 }
 
+/** MaryUI's `mary-class` sibling — `dark`/`light`, copied onto <html> at boot. */
+async function storedClass(page: import('@playwright/test').Page): Promise<string | null> {
+  return page.evaluate(() => localStorage.getItem('mary-class'));
+}
+
 /** Save the current selects and wait for the Livewire round-trip toast. */
 async function save(page: import('@playwright/test').Page): Promise<void> {
   await page.getByRole('button', { name: SAVE }).click();
@@ -156,6 +161,43 @@ test.describe('custom theme poles', () => {
     expect(await page.locator('.stitch-blobs > *').count()).toBeGreaterThan(0);
 
     await other.close();
+  });
+
+  test('new #1227 themes round-trip through save and the toggle', async ({ page }) => {
+    // At least three fresh themes per family, including the three borderline
+    // dark ones (aqua/dim/dracula are dark by `color-scheme` but sit above the
+    // old 0.253 lightness ceiling).
+    const pairs = [
+      ['emerald', 'dracula'],
+      ['nord', 'night'],
+      ['silk', 'abyss'],
+    ] as const;
+
+    for (const [light, dark] of pairs) {
+      await page.selectOption(LIGHT_SELECT, light);
+      await page.selectOption(DARK_SELECT, dark);
+      await save(page);
+
+      // The applied theme was the previous dark pole, so scenario 1 migrates it
+      // to the same-family pole (the new dark theme), not to the light one.
+      await expect.poll(() => themeOf(page)).toBe(dark);
+      expect(await storedTheme(page)).toBe(JSON.stringify(dark));
+      expect(await storedClass(page)).toBe(JSON.stringify('dark'));
+      await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+
+      // The toggle advertises the new pair.
+      const toggleHtml = await page.locator('.swap').first().evaluate((el) => el.outerHTML);
+      expect(toggleHtml).toContain(`? '${dark}' : '${light}'`);
+
+      await page.locator(TOGGLE).first().click({ force: true });
+      await expect.poll(() => themeOf(page)).toBe(light);
+      expect(await storedTheme(page)).toBe(JSON.stringify(light));
+      expect(await storedClass(page)).toBe(JSON.stringify('light'));
+      await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+
+      await page.locator(TOGGLE).first().click({ force: true });
+      await expect.poll(() => themeOf(page)).toBe(dark);
+    }
   });
 
   test('the two selects list every enabled theme in its own colour-scheme family', async ({ page }) => {
