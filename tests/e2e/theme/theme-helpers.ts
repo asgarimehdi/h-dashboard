@@ -46,8 +46,8 @@ export const CORE_BLOCKING_THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cu
  * (≈39 s/theme on CI) and pushed the E2E job to the 30-min cap before the
  * suite finished (261 tests green at the kill, zero failures). The gate's
  * budget rule is trim-or-report-only, so winter/abyss live in the report-only
- * 35-theme matrix (where their badge cells stay 🧱 via STRUCTURAL) until
- * either their pairs land or the E2E job finds room. A theme earns a spot
+ * 35-theme matrix (their badge cells were fixed in #1231) until the E2E job
+ * finds room. A theme earns a spot
  * here only when the measured budget fits: 7 core + n watch × ~39 s must
  * leave the whole suite under 30 min. Keep sorted.
  */

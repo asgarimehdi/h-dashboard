@@ -410,6 +410,148 @@
 }
 
 /* =====================================================================
+   #1231 — per-theme pairs for the non-core badges (35-theme sweep)
+   =====================================================================
+   `.badge` (above) glasses the variant colour at 70% in oklab. The #1226
+   matrix restored the opaque --badge-color for the five themes it covered
+   (light, dark, synthwave, fantasy, luxury); the other 30 kept the glass
+   re-tint, which left 62 variant cells under AA across 22 of them (plus the
+   10 winter/abyss cells the sweep published as 🧱). This block is purely
+   additive: no rule above is modified and every selector is scoped to the
+   theme × variant pair that was measured below AA.
+
+   Same measurement method as the sweep: rendered pixels + WCAG 2.1 relative
+   luminance (text 4.5:1). Three groups:
+     O    45 selectors  opaque --badge-color; daisyUI's own --badge-fg pair
+                        is already ≥4.5 on the opaque background.
+     OW    4 selectors  opaque + #fff (the token's own fg stays under AA).
+     OB    9 selectors  opaque + #000.
+     BASE  7 selectors  opaque + --color-base-content — the owner's decision
+                        for the eight dual-choice cells (both fg candidates
+                        cleared 4.5; base-content keeps the variant identity).
+   `solid` has no class of its own: the sweep's `badge solid` row measures the
+   first badge on /users, which is the `badge-primary` element, so the primary
+   selectors below fix that row as well. Outline/dash/soft/ghost keep their
+   own backgrounds — same exclusion list as #1226. */
+[data-theme="abyss"] .badge:is(.badge-primary, .badge-secondary, .badge-info, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="aqua"] .badge:is(.badge-primary, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="autumn"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="black"] .badge:is(.badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="bumblebee"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="business"] .badge:is(.badge-info, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="caramellatte"] .badge:is(.badge-neutral, .badge-secondary, .badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="cmyk"] .badge:is(.badge-neutral, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="corporate"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="dracula"] .badge:is(.badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="emerald"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="forest"] .badge:is(.badge-error, .badge-secondary, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="garden"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="halloween"] .badge:is(.badge-error, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="lemonade"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="night"] .badge:is(.badge-error, .badge-info, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="nord"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="retro"] .badge:is(.badge-success, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="silk"] .badge:is(.badge-neutral, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="sunset"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="valentine"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="winter"] .badge:is(.badge-secondary, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="wireframe"] .badge:is(.badge-error, .badge-success, .badge-warning, .badge-info):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+
+/* BASE — the eight dual-choice cells (decision الف): opaque variant background
+   with --color-base-content as fg. Measured 4.64/5.22 (corporate), 4.99
+   (garden), and 9.24–12.90 (pastel). */
+[data-theme="corporate"] .badge:is(.badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="garden"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="pastel"] .badge:is(.badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: var(--color-base-content) !important;
+}
+
+/* OW — opaque background, but the variant's own fg still stays under AA. */
+[data-theme="autumn"] .badge:is(.badge-error, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="pastel"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="winter"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: #fff !important;
+}
+
+/* OB — opaque background + #000. */
+[data-theme="abyss"] .badge:is(.badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="corporate"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="emerald"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="retro"] .badge:is(.badge-error, .badge-info, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="valentine"] .badge:is(.badge-error, .badge-primary, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: #000 !important;
+}
+
+/* =====================================================================
+   #1231 — non-badge surfaces that failed outside the core seven
+   =====================================================================
+   Each rule is scoped to the theme (and, where the failure was one control,
+   the exact variant) that was measured under AA. The seven blocking themes
+   are untouched. */
+
+/* solid button: the opaque --btn-bg is already restored above, but corporate
+   and pastel ship a variant fg that does not clear AA on it (3.29 / 3.62).
+   base-content measures 5.22 / 12.90 there. Black has no passing dark fg —
+   the only green candidate is #fff (5.13; base-content 3.53 and #000 4.09). */
+[data-theme="corporate"] .btn-success,
+[data-theme="pastel"] .btn-success {
+    color: var(--color-base-content) !important;
+}
+[data-theme="black"] .btn-success {
+    color: #fff !important;
+}
+
+/* help button (x-help:button) — `text-base-content/80` on base-content stays at
+   4.36:1 in valentine; the full-alpha pair measures 5.43. Scoped to the help
+   button's own utility so no other ghost button changes. */
+[data-theme="valentine"] .btn-ghost.text-base-content\/80 {
+    color: var(--color-base-content) !important;
+}
+
+/* toast: valentine's alert text is a 30% mix of --alert-color (line 326),
+   which lands at 3.52/3.59/4.17 for info/success/warning. Darkening the same
+   mix toward black at 55% measures 5.94/6.23/8.29 and leaves error (4.91,
+   already AA) and every other theme untouched. */
+[data-theme="valentine"] .alert.alert-info,
+[data-theme="valentine"] .alert.alert-success,
+[data-theme="valentine"] .alert.alert-warning {
+    color: color-mix(in oklab, var(--alert-color) 55%, #000) !important;
+}
+
+/* menu + submenu header: MaryUI's <x-menu> paints the active item with the
+   neutral pair (#1220 decision), and in autumn/pastel neutral/neutral-content
+   measures 3.84/3.82. A 22%-black neutral background with white measures
+   8.41/8.18. MaryUI puts `bg-neutral text-neutral-content` utilities on the
+   <a>/<summary> elements themselves, so utility classes — not the daisyUI
+   active variables — must be overridden here. #1220's neutral pair on
+   <x-menu> is left as-is. */
+[data-theme="autumn"] .menu,
+[data-theme="pastel"] .menu {
+    --menu-active-bg: color-mix(in oklab, var(--color-neutral) 78%, #000);
+    --menu-active-fg: #fff;
+}
+[data-theme="autumn"] .menu a.mary-active-menu,
+[data-theme="pastel"] .menu a.mary-active-menu,
+[data-theme="autumn"] .menu details[open] > summary,
+[data-theme="pastel"] .menu details[open] > summary {
+    background-color: var(--menu-active-bg) !important;
+    color: var(--menu-active-fg) !important;
+}
+
+/* glass modal: valentine's dark-ish base-content on the 70% glass measures
+   4.00. Raising the glass to 88% and darkening the content by 25% measures
+   8.29 (visual review: screenshots in the PR/issue). */
+[data-theme="valentine"] .modal-box {
+    background-color: color-mix(in oklab, var(--color-base-100) 88%, transparent) !important;
+    color: color-mix(in oklab, var(--color-base-content) 75%, #000) !important;
+}
+
+/* =====================================================================
    Charts (Highcharts) — follow the theme instead of a white box
    Highcharts defaults to a hardcoded white background; force transparent
    so the glassy card + animated background show through on every theme.

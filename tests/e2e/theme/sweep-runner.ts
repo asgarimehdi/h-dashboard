@@ -83,25 +83,13 @@ export type Surface = (typeof SURFACES)[number];
  * Known structural findings that cannot be fixed in this PR (verdict 🧱).
  * Key: `${theme}:${surface}`. Value: the measured reason, published verbatim.
  *
- * #1226 (merged in a4276fc8) owns the badge pairs for its seven-theme matrix;
- * light/synthwave/fantasy `badge solid` cells are measured ✅ through that
- * matrix and no longer belong here. winter/abyss sit *outside* the #1226
- * matrix — their solid badges keep the glass re-tint with no opaque pair, so
- * they stay genuine structural findings tracked separately with the gatekeeper.
- * No per-theme pair is invented in #1227.
+ * EMPTY since #1231: every structural cell the 35-theme matrix published —
+ * winter/abyss `badge solid`/`badge primary`/`badge secondary`/`badge
+ * neutral`/`badge info`/`badge warning`/`badge error` — now has a measured
+ * per-theme pair in `resources/css/app.css`. A new 🧱 entry needs a measured
+ * reason; the old "separate issue with the gatekeeper" placeholder is gone.
  */
-export const STRUCTURAL = new Map<string, string>([
-  ['winter:badge solid', 'badge solid 2.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['winter:badge primary', 'badge primary 2.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['winter:badge secondary', 'badge secondary 2.87:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['winter:badge neutral', 'badge neutral 4.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge solid', 'badge solid 2.42:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge primary', 'badge primary 2.41:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge secondary', 'badge secondary 2.66:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge info', 'badge info 3.64:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge warning', 'badge warning 2.55:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge error', 'badge error 2.22:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-]);
+export const STRUCTURAL = new Map<string, string>();
 
 export interface SweepOptions {
   /** Screenshot filename prefix; screenshots are written only when set. */

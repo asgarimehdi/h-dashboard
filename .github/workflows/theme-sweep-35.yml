@@ -4,9 +4,10 @@ name: Theme Sweep (35 × 33)
 #
 # This is deliberately NOT part of `test.yml`: on CI the blocking sweep costs
 # ≈39 s/theme (9-theme run measured 5.8 min), and 35 themes ≈ 20 min would
-# alone break the 30-min E2E job cap. Here the cap is 45 min, the spec is
-# report-only, and the published table (job summary + artifact) is the
-# deliverable. The per-PR gate stays `sweep.spec.ts`.
+# alone break the 30-min E2E job cap. Here the cap is 45 min and the published
+# table (job summary + artifact) is the deliverable. Since #1231 the matrix is
+# a hard lock (`SWEEP_REPORT_ONLY=0`): any ❌ fails the job. The per-PR gate
+# stays `sweep.spec.ts`.
 #
 # Triggers: manual dispatch, a weekly run, or labelling a PR `theme-sweep`.
 
@@ -122,12 +123,13 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run the 35-theme sweep (report-only)
+      - name: Run the 35-theme sweep (hard lock)
         # Through scripts/e2e-test.sh only: it owns the .env swap, the seeded
-        # e2e database, the :8001 server and the restore-on-exit trap. The spec
-        # itself is report-only, so a ❌ still produces the table.
+        # e2e database, the :8001 server and the restore-on-exit trap.
+        # SWEEP_REPORT_ONLY=0 (#1231) makes any ❌ fail this step; the table is
+        # still published below via `if: always()`.
         env:
-          SWEEP_REPORT_ONLY: '1'
+          SWEEP_REPORT_ONLY: '0'
           SWEEP_REPORT_DIR: theme-sweep-35
           # Lifts playwright.config.ts's testIgnore for this one spec; without
           # it the per-PR E2E job would try to run the 15-minute matrix too.
@@ -135,7 +137,7 @@ jobs:
         run: bash scripts/e2e-test.sh tests/e2e/theme/sweep-35.spec.ts --reporter=list 2>&1 | tee sweep-35.log
 
       - name: Assert the sweep really executed
-        # A green report-only run with zero tests is a failure, not a pass
+        # A green hard-lock run with zero tests is a failure, not a pass
         # (issue #935's class of trap).
         run: |
           EXECUTED=$(grep -cE '✓|✔|passed \(' sweep-35.log || true)
