@@ -141,11 +141,16 @@ truth for the first three):
 5. `tests/e2e/theme/sweep.spec.ts` fails on any sub-threshold surface, so the table stays honest.
 
 **Sweep policy is two-layer.** The blocking job (`sweep.spec.ts`, seven themes plus
-`WATCH_THEMES`, 25 cells each) runs on every PR and must stay under the 30-minute E2E cap. The
-full **35 × 25 = 875** matrix runs in `sweep-35.spec.ts` from `.github/workflows/theme-sweep-35.yml`
+`WATCH_THEMES`, 33 cells each) runs on every PR and must stay under the 30-minute E2E cap. The
+full **35 × 33 = 1155** matrix runs in `sweep-35.spec.ts` from `.github/workflows/theme-sweep-35.yml`
 (dispatch, weekly schedule, or a PR labelled `theme-sweep`, 45-minute cap) — report-only by
 default, table in the job summary + artifact, published on issue #1227. Themes the full run flags
 ❌/🧱 go into `WATCH_THEMES` so they get a permanent per-PR lock without paying the whole matrix.
+Both layers measure through the one shared `sweepTheme()` in `sweep-runner.ts`, which since the
+#1226 merge (a4276fc8) also injects the per-variant badge probe strip: the opaque/glass matrix in
+`app.css` is pinned cell by cell, and the only badge cells still held 🧱 by the shared STRUCTURAL
+map are winter/abyss `badge solid` — outside the #1226 matrix, tracked separately with the
+gatekeeper.
 
 The split is measured, not aesthetic: daisyUI declares `color-scheme` per theme, and the e2e suite
 asserts each select's options agree with their theme's own `color-scheme`. The sweep applies

@@ -1,12 +1,12 @@
-name: Theme Sweep (35 × 25)
+name: Theme Sweep (35 × 33)
 
-# #1227 — the full 35-theme × 25-surface contrast matrix.
+# #1227 — the full 35-theme × 33-surface contrast matrix.
 #
-# This is deliberately NOT part of `test.yml`: the blocking sweep measures seven
-# themes in ~3.1 min (26.6 s/theme, run 39977606322), and 35 themes ≈ 15.5 min
-# would break both the 900 s test timeout and the 30-min E2E job cap. Here the
-# cap is 45 min, the spec is report-only, and the published table (job summary +
-# artifact) is the deliverable. The per-PR gate stays `sweep.spec.ts`.
+# This is deliberately NOT part of `test.yml`: the blocking sweep measures
+# sixteen themes in ~7.5 min (~27 s/theme, run 39977606322 baseline + the #1226
+# badge probes), and 35 themes ≈ 17.5 min would break the 30-min E2E job cap.
+# Here the cap is 45 min, the spec is report-only, and the published table (job
+# summary + artifact) is the deliverable. The per-PR gate stays `sweep.spec.ts`.
 #
 # Triggers: manual dispatch, a weekly run, or labelling a PR `theme-sweep`.
 
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   sweep-35:
-    name: All 35 themes × 25 surfaces
+    name: All 35 themes × 33 surfaces
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # `labeled` fires for every label; only the opt-in one pays for this run.

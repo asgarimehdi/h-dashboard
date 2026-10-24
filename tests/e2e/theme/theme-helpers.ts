@@ -40,7 +40,7 @@ export const DARK_THEMES = [
  * The themes the mandatory (per-PR) sweep measures. The pre-#1227 seven stay as
  * the regression lock; themes the full 35-theme run flagged ❌/🧱 are appended
  * to `WATCH_THEMES` so CI keeps a permanent lock on the risky ones without
- * paying the whole 875-cell matrix on every PR.
+ * paying the whole 35-theme matrix on every PR.
  */
 export const CORE_BLOCKING_THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
 

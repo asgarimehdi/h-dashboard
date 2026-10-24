@@ -14,7 +14,7 @@ import {
  * full 35-theme matrix (#1224, #1227).
  *
  * Keeping one implementation is the point: the blocking job and the full report
- * must measure the same 25 cells the same way, or their tables cannot be
+ * must measure the same cells the same way, or their tables cannot be
  * compared. Only the theme list and the reporting layer differ.
  */
 
@@ -33,9 +33,10 @@ export interface Row {
 }
 
 /**
- * Exactly the 25 cells `sweepTheme()` measures, in order. The full matrix spec
+ * Exactly the cells `sweepTheme()` measures, in order. The full matrix spec
  * seeds an `n/a` row for every one of them before a theme runs, so an aborted
- * theme still owns 25 rows instead of silently shrinking the table (#1227).
+ * theme still owns the full cell set instead of silently shrinking the table
+ * (#1227).
  */
 export const SURFACES = [
   'menu normal',
@@ -55,6 +56,17 @@ export const SURFACES = [
   'input placeholder',
   'badge solid',
   'badge outline',
+  // #1226 — one probe per solid variant. The page row above only sees the
+  // first `.badge:visible` (= primary); the per-variant strip pins every cell
+  // of the opaque/glass matrix, in both the blocking sweep and the full 35.
+  'badge primary',
+  'badge secondary',
+  'badge neutral',
+  'badge info',
+  'badge success',
+  'badge warning',
+  'badge error',
+  'badge ghost',
   'leaflet zoom',
   'leaflet attribution',
   'dashboard trend line',
@@ -71,23 +83,16 @@ export type Surface = (typeof SURFACES)[number];
  * Known structural findings that cannot be fixed in this PR (verdict 🧱).
  * Key: `${theme}:${surface}`. Value: the measured reason, published verbatim.
  *
- * #1226 owns the badge pairs and is not merged yet, so the three solid-badge
- * cells it fixes stay 🧱 here — no per-theme pair is invented in #1227.
+ * #1226 (merged in a4276fc8) owns the badge pairs for its seven-theme matrix;
+ * light/synthwave/fantasy `badge solid` cells are measured ✅ through that
+ * matrix and no longer belong here. winter/abyss sit *outside* the #1226
+ * matrix — their solid badges keep the glass re-tint with no opaque pair, so
+ * they stay genuine structural findings tracked separately with the gatekeeper.
+ * No per-theme pair is invented in #1227.
  */
 export const STRUCTURAL = new Map<string, string>([
-  // The glass rule re-tints a solid badge's --badge-color toward the page and
-  // keeps daisyUI's --badge-fg. Restoring the opaque token pair fixes light
-  // (6.76:1) and fantasy (7.42:1), but drops `dark` from 6.04 to 4.14 — that
-  // theme's own primary/primary-content pair is sub-AA and no text colour
-  // reaches 4.5 on it. The required glass alpha also differs per theme
-  // (synthwave needs ≥0.95, dark needs ≤0.92) and the content polarity flips
-  // between themes, so no single colour-only override works for all seven.
-  // A real fix needs per-theme badge pairs → issue #1226.
-  ['light:badge solid', 'opaque token pair fixes this theme but drops dark to 4.14:1 — needs per-theme badge pairs (#1226)'],
-  ['synthwave:badge solid', 'needs glass ≥0.95 while dark needs ≤0.92 — no single value works (#1226)'],
-  ['fantasy:badge solid', 'opaque token pair fixes this theme but drops dark to 4.14:1 — needs per-theme badge pairs (#1226)'],
-  ['winter:badge solid', 'badge solid 2.27:1 — needs per-theme badge pairs (#1226)'],
-  ['abyss:badge solid', 'badge solid 2.42:1 — needs per-theme badge pairs (#1226)'],
+  ['winter:badge solid', 'badge solid 2.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
+  ['abyss:badge solid', 'badge solid 2.42:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
 ]);
 
 export interface SweepOptions {
@@ -204,6 +209,37 @@ async function fireToast(page: Page, variant: string): Promise<void> {
 }
 
 /**
+ * #1226 — solid badge variants the sweep pins. The page row (`badge solid`)
+ * only ever sees the first `.badge:visible` (= primary); several other
+ * variants were sub-AA in dark/synthwave/fantasy/light/luxury before the
+ * per-theme opaque/glass matrix landed in a4276fc8.
+ */
+const BADGE_VARIANTS = ['primary', 'secondary', 'neutral', 'info', 'success', 'warning', 'error', 'ghost'] as const;
+
+/**
+ * Inject one solid badge per variant into a fixed probe strip. Measured through
+ * the same `measureText` pixel path as real badges, so glass/backdrop-filter is
+ * part of the rendered result rather than computed from the CSS source.
+ */
+async function injectBadgeProbes(page: Page): Promise<void> {
+  await page.evaluate((variants) => {
+    document.getElementById('badge-probes')?.remove();
+    const strip = document.createElement('div');
+    strip.id = 'badge-probes';
+    strip.style.cssText =
+      'position:fixed;inset-inline-start:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;padding:8px;';
+    for (const variant of variants) {
+      const badge = document.createElement('span');
+      badge.id = `badge-probe-${variant}`;
+      badge.className = `badge badge-${variant}`;
+      badge.textContent = 'نمونه';
+      strip.appendChild(badge);
+    }
+    document.body.appendChild(strip);
+  }, [...BADGE_VARIANTS]);
+}
+
+/**
  * Wait for a Highcharts container after a hard navigation.
  *
  * `renderTicketCharts` polls for the library (100 × 50 ms) and draws on hard
@@ -232,7 +268,7 @@ async function capture(page: Page, theme: string, name: string, options: SweepOp
 }
 
 /**
- * Measure all 25 surfaces for one theme. Throws on a missing selector (the
+ * Measure every SURFACES cell for one theme. Throws on a missing selector (the
  * caller decides whether that aborts the run or just becomes an `n/a` cell).
  */
 export async function sweepTheme(page: Page, theme: string, recorder: SweepRecorder, options: SweepOptions = {}): Promise<void> {
@@ -333,6 +369,14 @@ export async function sweepTheme(page: Page, theme: string, recorder: SweepRecor
   } else {
     recorder.missing(theme, 'badge outline', 'no outline badge on /users');
   }
+
+  // Every solid variant must clear AA, not just the first badge on the page
+  // (#1226 — the per-theme opaque/glass matrix is pinned cell by cell).
+  await injectBadgeProbes(page);
+  for (const variant of BADGE_VARIANTS) {
+    recorder.add(theme, `badge ${variant}`, await measureText(page, `badge ${variant}`, `#badge-probe-${variant}`));
+  }
+  await page.evaluate(() => document.getElementById('badge-probes')?.remove());
 
   // ---- 6. Leaflet controls ----------------------------------------------
   await page.goto('/maps/county');

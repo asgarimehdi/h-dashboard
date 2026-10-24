@@ -5,22 +5,25 @@ import { installThemeHelpers, THEMES, VIEWPORT } from './theme-helpers';
 import { SURFACES, SweepRecorder, sweepTheme, toMarkdown, toSummary } from './sweep-runner';
 
 /**
- * #1227 — the full matrix: 35 enabled daisyUI themes × 25 measured surfaces.
+ * #1227 — the full matrix: 35 enabled daisyUI themes × every SURFACES cell
+ * (33 after the #1226 per-variant badge probes joined the shared runner).
  *
  * Why this is a separate, non-blocking spec: the blocking sweep already spends
- * ~26.6 s per theme (measured on run 39977606322); 35 themes straight into that
- * job is ~15.5 min of sweep on top of a ~23 min job and breaks both the 30-min
- * job cap and the 900 s test timeout. This spec runs in its own workflow
- * (`theme-sweep-35.yml`, dispatch + weekly + PR label) with a 45-min cap and
- * produces the published table.
+ * ~27 s per theme (measured on run 39977606322, 25 cells); with the eight
+ * badge probes that is ~30 s per theme, so 35 themes straight into that job is
+ * ~17.5 min of sweep on top of a ~23 min job and breaks the 30-min job cap.
+ * This spec runs in its own workflow (`theme-sweep-35.yml`, dispatch +
+ * weekly + PR label) with a 45-min cap and produces the published table.
  *
  * It is report-only by default (`SWEEP_REPORT_ONLY` defaults to `1` here): the
  * matrix's job is to publish evidence, and the blocking sweep is what gates a
  * PR. `SWEEP_REPORT_ONLY=0` makes it fail on any ❌ when a follow-up wants a
  * hard lock on a theme.
  *
- * Badge rows: #1226 owns the per-theme badge pairs and is not merged, so solid
- * badges stay 🧱 via the shared STRUCTURAL map — no pair is invented here.
+ * Badge rows: #1226 (merged in a4276fc8) owns the per-theme opaque/glass
+ * matrix; the probe strip pins every `badge <variant>` cell through it. The
+ * two badge cells outside that matrix (winter/abyss `badge solid`) stay 🧱 via
+ * the shared STRUCTURAL map — no pair is invented here.
  */
 
 const REPORT_ONLY = process.env.SWEEP_REPORT_ONLY !== '0';
@@ -31,7 +34,7 @@ test.use({ viewport: VIEWPORT });
 
 test.describe('35-theme sweep', () => {
   test(`all ${THEMES.length} themes: ${SURFACES.length} surfaces (report)`, async ({ page }, testInfo) => {
-    // 35 × ~26.6 s ≈ 15.5 min of sampling + navigation; the workflow cap is 45.
+    // 35 × ~30 s ≈ 17.5 min of sampling + navigation; the workflow cap is 45.
     test.setTimeout(1_800_000);
     await installThemeHelpers(page);
     await login(page);
@@ -47,7 +50,7 @@ test.describe('35-theme sweep', () => {
     }
 
     // Guarantee the published table is the full cross-product: an aborted
-    // theme keeps its 25 cells as n/a instead of shrinking the matrix.
+    // theme keeps its full cell set as n/a instead of shrinking the matrix.
     recorder.fillMatrix(THEMES);
 
     const summary = toSummary(recorder.rows, THEMES);
