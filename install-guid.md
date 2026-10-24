@@ -13,7 +13,7 @@ Tested on: Ubuntu with PHP 8.5.x, nginx 1.2x, Docker Compose v2.
 | Component | Version |
 |---|---|
 | OS | Ubuntu 22.04 / 24.04 / newer |
-| PHP | ^8.3 (tested on 8.5.x) |
+| PHP | ^8.4.1 (tested on 8.5.x) |
 | Composer | 2.x |
 | Node + npm | Node 20+ (builds Vite assets only) |
 | PostgreSQL | 16 **with PostGIS 3.4** (via Docker) |
@@ -68,7 +68,7 @@ Use a dedicated service account (substitute your own username throughout):
 sudo adduser --disabled-password --gecos "" dashboard
 sudo usermod -aG docker dashboard     # only if it should manage compose
 sudo su - dashboard
-git clone https://github.com/Shabakebehdasht/h-dashboard.git h-dashboard
+git clone https://github.com/asgarimehdi/h-dashboard.git h-dashboard
 cd h-dashboard
 git checkout dev                      # or main / beta
 ```
@@ -213,6 +213,17 @@ server {
 
     charset utf-8;
 
+    # Compression (#1181). font/woff2 is deliberately absent from gzip_types:
+    # woff2 is already compressed, so gzipping it only burns CPU.
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain text/css text/xml text/javascript
+        application/javascript application/json application/xml
+        image/svg+xml;
+
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
@@ -234,10 +245,44 @@ server {
         deny all;
     }
 
+    # Static assets (#1181).
+    #
+    # `add_header` does NOT inherit: a location that declares its own
+    # `add_header` discards every `add_header` of the enclosing server block.
+    # Each location below therefore repeats the two security headers — without
+    # that repetition the static assets would ship without them, and the PHP
+    # SecurityHeaders middleware cannot cover them because they never pass
+    # through PHP.
+    #
+    # Vite emits CONTENT-HASHED filenames under /build/assets, so the content
+    # never changes under the same URL: cache it for a year and never
+    # revalidate. `expires` is deliberately absent here — combined with an
+    # `add_header Cache-Control` it would emit TWO Cache-Control headers.
+    location ^~ /build/assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-Frame-Options SAMEORIGIN;
+    }
+
+    # These paths are NOT hashed: a deploy can replace their content under the
+    # same URL, so they get a short TTL and NO `immutable` — a stale copy must
+    # not outlive the next deploy. Kept after the two regex locations above
+    # because nginx tries regex locations in the order they appear.
+    location ~* ^/(?:js|css|icons|fonts)/ {
+        expires 1d;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-Frame-Options SAMEORIGIN;
+    }
+
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options SAMEORIGIN;
 }
 ```
+
+> **The compression and cache headers above only take effect once the operator
+> reloads nginx** (`nginx -s reload`, or `sudo systemctl reload nginx` as in
+> the next step). Editing the file changes nothing on a running server — until
+> the reload, nginx keeps serving the previous configuration.
 
 Enable and reload:
 
@@ -297,7 +342,26 @@ Re-run after every deploy. After changing `.env`:
 
 ---
 
-## 11. Queue worker + scheduler
+## 11. Queue workers + scheduler
+
+The app pins its long-running jobs to their own queue connections
+(`#[Connection('redis-maintenance')]` and `#[Connection('redis-reports')]` in
+`app/Jobs/`), and each of those connections pushes onto its own Redis list
+(`queues:maintenance`, `queues:reports`) — the default worker never reads them.
+**All three connections need a worker**: without the second and third, retention
+and the daily reports are pushed and then never executed.
+
+`--timeout` is only the fallback for a job that does not declare its own
+`$timeout` (Laravel always prefers the job's property). Keep it **below** the
+connection's `retry_after`, because Redis reserves a job for `retry_after`
+seconds: if that window closes while the first attempt is still running, a
+second worker picks the same job up and the work runs twice.
+
+| Service | Connection | Serves | `retry_after` | `--timeout` |
+|---|---|---|---|---|
+| `h-dashboard-queue` | `redis` | Zabbix sync, notifications | 90s | 60s |
+| `h-dashboard-queue-maintenance` | `redis-maintenance` | activity-log + notification retention | 360s | 300s |
+| `h-dashboard-queue-reports` | `redis-reports` | daily reports | 660s | 600s |
 
 Create `/etc/systemd/system/h-dashboard-queue.service`:
 
@@ -311,7 +375,43 @@ User=dashboard
 Restart=always
 RestartSec=3
 WorkingDirectory=/home/dashboard/h-dashboard
-ExecStart=/usr/bin/php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 --timeout=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create `/etc/systemd/system/h-dashboard-queue-maintenance.service`:
+
+```ini
+[Unit]
+Description=h-dashboard retention queue worker
+After=network.target docker.service
+
+[Service]
+User=dashboard
+Restart=always
+RestartSec=3
+WorkingDirectory=/home/dashboard/h-dashboard
+ExecStart=/usr/bin/php artisan queue:work redis-maintenance --sleep=3 --tries=3 --max-time=3600 --timeout=300
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create `/etc/systemd/system/h-dashboard-queue-reports.service`:
+
+```ini
+[Unit]
+Description=h-dashboard reports queue worker
+After=network.target docker.service
+
+[Service]
+User=dashboard
+Restart=always
+RestartSec=3
+WorkingDirectory=/home/dashboard/h-dashboard
+ExecStart=/usr/bin/php artisan queue:work redis-reports --sleep=3 --tries=3 --max-time=3600 --timeout=600
 
 [Install]
 WantedBy=multi-user.target
@@ -319,7 +419,7 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now h-dashboard-queue
+sudo systemctl enable --now h-dashboard-queue h-dashboard-queue-maintenance h-dashboard-queue-reports
 ```
 
 Scheduler cron (`crontab -e` as the app user) — runs recurring todos, due
@@ -338,7 +438,7 @@ curl -I http://localhost/            # expect 302 -> /login (auth guard)
 curl -I http://localhost/login       # expect 200
 curl -I http://localhost/build/manifest.json   # expect 200
 tail -f storage/logs/laravel.log     # watch for errors while you log in via browser
-systemctl status nginx php8.5-fpm h-dashboard-queue
+systemctl status nginx php8.5-fpm h-dashboard-queue h-dashboard-queue-maintenance h-dashboard-queue-reports
 docker ps                            # postgis healthy, redis up
 ```
 

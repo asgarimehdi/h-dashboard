@@ -7,16 +7,17 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Unit::class);
 
 class UnitTreePickerPartialTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected Unit $rootUnit;
@@ -30,10 +31,7 @@ class UnitTreePickerPartialTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
 
         // Build a 3-level unit tree - these are the units the test user will have access to
         $this->rootUnit = Unit::create(['name' => 'مرکز بهداشت']);

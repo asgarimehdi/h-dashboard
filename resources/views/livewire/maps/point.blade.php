@@ -89,7 +89,7 @@ return new class extends Component
     <x-card shadow class="p-0">
         <div class="relative">
             <div wire:ignore>
-                <livewire:maps.map/>
+                <livewire:maps.map wire:key="point-page-map" />
             </div>
 
             <div class="controls-panel space-y-4">
@@ -136,6 +136,18 @@ return new class extends Component
         filter: invert(100%) hue-rotate(180deg);
     }
 </style>
+@endassets
+
+@assets
+    {{-- Issue #1182: Leaflet core is page-specific now and ships on the HOST page
+         — never inside `maps/map.blade.php`, whose own asset would arrive with the
+         child component, after this page's Alpine `init()` had already asked the
+         store for a map. `@assets`, not `@push('scripts')`: a pushed tag lands at
+         the end of the body, and on `wire:navigate` Livewire morphs the body and
+         runs Alpine BEFORE evaluating those scripts — measured `L is not defined`
+         and a blank map (#028). Livewire injects `@assets` into <head> and
+         evaluates new head assets before the navigation completes. --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
 @endassets
 
 @script

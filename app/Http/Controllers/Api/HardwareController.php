@@ -6,9 +6,12 @@ use App\Events\HardwareUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
-use App\Models\HardwareAudit;
 use App\Models\Person;
+use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Services\HardwareBulkAuditWriter;
+use App\Support\HardwareAuditChange;
+use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -113,10 +116,15 @@ class HardwareController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
+        // Issue #1015: no SELECT DISTINCT here. The join key `persons.n_code` is
+        // UNIQUE, so each `hardwares` row matches at most one person and no
+        // result row can repeat; a DISTINCT only added a sort over all 22
+        // `hardwares` columns before `LIMIT` could apply. Note this is an INNER
+        // join: a hardware row whose `n_code` matches no person is dropped
+        // (pre-existing behaviour, not introduced here).
         $query = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
             ->whereIn('persons.u_id', $accessibleIds)
-            ->select('hardwares.*')
-            ->distinct();
+            ->select('hardwares.*');
 
         // Apply query scopes for filters
         $query->filterSearch($request->input('search'))
@@ -145,6 +153,11 @@ class HardwareController extends Controller
 
         $query->orderBy($sortBy, $sortDir);
 
+        // Issue #894: see UnitController::index(). `min(...)` bounds only the upper
+        // side; a negative `per_page` reaches `limit(-1)`, which the query builder
+        // drops, so the SQL loses its LIMIT clause. 422 is the contract; the
+        // `min()` stays as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min((int) $request->get('per_page', 10), 100);
 
         $paginator = $query->paginate($perPage);
@@ -247,7 +260,7 @@ class HardwareController extends Controller
         // invalidates all previously cached scopes without flushing the whole
         // cache. Stale entries expire naturally via the 10-minute TTL.
         $version = Cache::get('hardware_stats_version', 0);
-        $cacheKey = "hardware_stats:v{$version}:".md5(json_encode($accessibleIds));
+        $cacheKey = "hardware_stats:v{$version}:".ScopeCacheKey::hash($accessibleIds);
 
         $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
             $baseQuery = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
@@ -304,7 +317,7 @@ class HardwareController extends Controller
         }
 
         // Batch insert audit entries
-        $this->batchInsertAudits($hardwares, 'bulk_mark', [
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits($hardwares, 'bulk_mark', [
             ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
         ]);
 
@@ -336,8 +349,15 @@ class HardwareController extends Controller
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
-        // Batch insert audit entries before deletion
-        $this->batchInsertAudits($hardwares, 'bulk_delete', null, fn ($hw) => $hw->getAttributes());
+        // #927: `changes` is a field-level diff list, `[{field, old, new}]` —
+        // this used to write $hw->getAttributes(), a column => value map, which
+        // no reader could render (the export threw a TypeError on it).
+        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+            $hardwares,
+            'bulk_delete',
+            null,
+            fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
+        );
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
@@ -355,34 +375,5 @@ class HardwareController extends Controller
         });
 
         return response()->json(['success' => true, 'message' => "$count device(s) deleted", 'count' => $count]);
-    }
-
-    /**
-     * Batch insert audit entries in a single query instead of N+1 loop.
-     */
-    protected function batchInsertAudits($hardwares, string $action, ?array $staticChanges, ?\Closure $changesPerItem = null): void
-    {
-        $user = \Auth::user();
-        $request = request(); // actual request, not Request::capture()
-
-        $rows = $hardwares->map(function ($hardware) use ($action, $staticChanges, $changesPerItem, $user, $request) {
-            $changes = $changesPerItem ? $changesPerItem($hardware) : $staticChanges;
-
-            return [
-                'hardware_id' => $hardware->id,
-                'user_id' => $user?->id,
-                'action' => $action,
-                'changes' => $changes ? json_encode($changes, JSON_UNESCAPED_UNICODE) : null,
-                'source' => 'bulk',
-                'ip_address' => $request?->ip(),
-                'user_agent' => $request?->userAgent(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        })->toArray();
-
-        if (! empty($rows)) {
-            HardwareAudit::insert($rows);
-        }
     }
 }

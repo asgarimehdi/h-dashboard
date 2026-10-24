@@ -12,12 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(TicketComment::class);
 
 class TicketCommentsRefreshTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -29,12 +31,13 @@ class TicketCommentsRefreshTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'Test Unit']);
         $nCode = (string) fake()->unique()->numerify('##########');

@@ -49,7 +49,7 @@ return new class extends Component {
 </div>
 
 @assets
-<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="{{ asset('js/chart/highcharts.js') }}"></script>
 <style>
     [x-cloak] { display: none !important; }
 </style>

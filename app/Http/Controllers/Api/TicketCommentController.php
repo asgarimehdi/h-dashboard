@@ -9,11 +9,62 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketCommentReaction;
 use App\Models\User;
+use App\Rules\PerPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class TicketCommentController extends Controller
 {
+    /**
+     * Issue #863: hard cap on how many `@handle`s one comment may resolve to.
+     *
+     * A body is capped at `max:10000` characters and every valid handle is
+     * 11 characters (`@` + a 10-digit n_code, `\w+` stops at the next
+     * non-word character so no separator is needed), so ONE maximum-length
+     * comment fits 909 distinct handles — measured, not estimated. Without a
+     * bound that becomes 909 `IN` values and 909 queued `SendNotificationJob`s
+     * from a single request on a route gated only by `create_ticket`, which
+     * the lowest role holds.
+     *
+     * The cap is applied to the MATCHED HANDLES, before the database lookup,
+     * not to the notifications actually created: the amplification is the
+     * 909-element `whereIn` plus one job per match, and unmatched handles are
+     * the majority of any spam attempt, so counting only the recipients that
+     * resolved would let unknown names consume the whole quota.
+     */
+    public const MAX_MENTIONS = 20;
+
+    /**
+     * Issue #1177: explicit column list for every comment row in the list
+     * response. `deleted_at` is internal bookkeeping and never leaves the
+     * server; `id` and `parent_id` are required by `paginate()` and by the
+     * root/reply split. Field names in the payload are unchanged.
+     *
+     * Issue #1189: `body_html` is deliberately absent. It is an internal
+     * render for the Livewire web path and never part of the API contract —
+     * `body` is the single source of truth. Roots and threaded children both
+     * read this constant, so the two list modes stay in step.
+     */
+    private const COMMENT_LIST_COLUMNS = [
+        'id',
+        'ticket_id',
+        'parent_id',
+        'user_id',
+        'body',
+        'is_system',
+        'system_event',
+        'created_at',
+        'updated_at',
+    ];
+
+    /**
+     * Issue #1177: `children()` is a plain `hasMany`, so the thread is one
+     * level deep — the payload risk is the unbounded number of replies a
+     * single parent may carry, not recursion. Ten keeps a thread readable
+     * without shipping every reply on every list refresh.
+     */
+    private const MAX_THREADED_REPLIES = 10;
+
     /**
      * List comments for a ticket.
      */
@@ -26,16 +77,24 @@ class TicketCommentController extends Controller
         }
 
         $threaded = $request->boolean('threaded');
+        // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
+        // clamp; `min()` kept as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min($request->integer('per_page', 20), 100);
 
         $query = $ticket->comments()
+            ->select(self::COMMENT_LIST_COLUMNS)
             ->with(['user:id,n_code', 'reactions'])
             ->whereNull('parent_id')
             ->latest();
 
         if ($threaded) {
-            $comments = $query->with('children.user', 'children.reactions')
-                ->paginate($perPage);
+            $comments = $query->with([
+                'children:'.implode(',', self::COMMENT_LIST_COLUMNS),
+                'children' => fn ($q) => $q->orderBy('id')->limit(self::MAX_THREADED_REPLIES),
+                'children.user.person',
+                'children.reactions',
+            ])->paginate($perPage);
         } else {
             $comments = $query->paginate($perPage);
         }
@@ -82,7 +141,7 @@ class TicketCommentController extends Controller
 
         // Process @mentions and markdown
         $bodyHtml = $this->processMarkdown($validated['body']);
-        $mentions = $this->extractMentions($validated['body']);
+        $mentions = $this->extractMentions($validated['body'], $accessibleIds);
 
         $comment = TicketComment::create([
             'ticket_id' => $ticket->id,
@@ -108,7 +167,7 @@ class TicketCommentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $comment->load(['user:id,n_code', 'reactions']),
+            'data' => $this->withoutBodyHtml($comment->load(['user:id,n_code', 'reactions'])),
         ], 201);
     }
 
@@ -123,8 +182,15 @@ class TicketCommentController extends Controller
             return response()->json(['message' => 'Comment not accessible.'], 403);
         }
 
+        // `children()` no longer force-loads `user.person` (#1177); the detail
+        // response keeps exposing it, so it is requested explicitly here.
         return response()->json([
-            'data' => $comment->load(['user:id,n_code', 'reactions', 'children.user:id,n_code']),
+            'data' => $this->withoutBodyHtml($comment->load([
+                'user:id,n_code',
+                'reactions',
+                'children.user:id,n_code',
+                'children.user.person',
+            ])),
         ]);
     }
 
@@ -154,7 +220,7 @@ class TicketCommentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $comment->fresh()->load(['user:id,n_code', 'reactions']),
+            'data' => $this->withoutBodyHtml($comment->fresh()->load(['user:id,n_code', 'reactions'])),
         ]);
     }
 
@@ -262,6 +328,23 @@ class TicketCommentController extends Controller
     }
 
     /**
+     * Issue #1189: the API contract exposes `body` only. `body_html` stays an
+     * internal render for the Livewire web path, so it is hidden at the API
+     * boundary instead of in the model or the database. When the detail
+     * response carries loaded replies, they are hidden too.
+     */
+    private function withoutBodyHtml(TicketComment $comment): TicketComment
+    {
+        $comment->makeHidden('body_html');
+
+        if ($comment->relationLoaded('children')) {
+            $comment->children->each->makeHidden('body_html');
+        }
+
+        return $comment;
+    }
+
+    /**
      * Calculate thread depth in a single query (recursive CTE) — Issue #392.
      */
     private function getThreadDepth(TicketComment $comment): int
@@ -332,18 +415,49 @@ class TicketCommentController extends Controller
     }
 
     /**
-     * Extract @mentions from body.
+     * Extract @mentions from body, capped and unit-scoped (issue #863).
+     *
+     * Two independent bounds, both applied BEFORE the lookup so neither the
+     * `whereIn` nor the job count can be inflated by the other:
+     *
+     * 1. `MAX_MENTIONS` on the matched handles — the amplification is a
+     *    909-value `IN` list, not the notifications, so the cap sits here.
+     * 2. The author's own `accessibleUnitIds()` — a mention can only reach a user
+     *    whose linked person sits in a unit the author can see, which is the same
+     *    contract every other user-visible query in the app follows. A target the
+     *    author cannot read must not be able to receive a notification about a
+     *    comment they will never see.
+     *
+     * The unit predicate is an UNCONDITIONAL `whereIn`, never `when($ids, …)` or
+     * `! empty($ids)`: `accessibleUnitIds()` is legitimately `[]` for an account
+     * with no `user_units` row and no `person.u_id`, and `[]` must compile to
+     * `0 = 1` (zero recipients), not to "no restriction". A NULL `persons.u_id`
+     * never matches a `whereIn`, so a unit-less person is in scope of nothing —
+     * also fail-closed, and deliberate.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return array<string, int> n_code => user id
      */
-    private function extractMentions(string $body): array
+    private function extractMentions(string $body, array $accessibleIds): array
     {
         preg_match_all('/@(\w+)/', $body, $matches);
-        $usernames = array_unique($matches[1] ?? []);
 
-        if (empty($usernames)) {
+        // `true` preserves the n_code keys notifyMentions() re-emits as the
+        // notification body, and `array_slice` bounds the `whereIn` below.
+        $usernames = array_slice(array_unique($matches[1] ?? []), 0, self::MAX_MENTIONS, true);
+
+        if ($usernames === []) {
             return [];
         }
 
-        return User::whereIn('n_code', $usernames)->pluck('id', 'n_code')->toArray();
+        return User::query()
+            // The IN-filter lives inside a `where()` closure on purpose: a
+            // top-level `whereIn()` re-types the chain to Query\Builder (no
+            // larastan), which makes the `whereHas()` below unresolvable.
+            ->where(fn ($userQuery) => $userQuery->whereIn('n_code', $usernames))
+            ->whereHas('person', fn ($personQuery) => $personQuery->whereIn('u_id', $accessibleIds))
+            ->pluck('id', 'n_code')
+            ->all();
     }
 
     /**

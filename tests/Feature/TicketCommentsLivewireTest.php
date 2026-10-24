@@ -12,12 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(TicketComment::class);
 
 class TicketCommentsLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -29,12 +31,13 @@ class TicketCommentsLivewireTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'Test Unit']);
         $nCode = (string) fake()->unique()->numerify('##########');
@@ -77,6 +80,20 @@ class TicketCommentsLivewireTest extends TestCase
             'user_id' => $this->user->id,
             'body' => 'کامنت از وب',
         ]);
+    }
+
+    // #1176: `refreshComments()` MUST survive the conversion of `$ticket` to
+    // a computed — deleting it (as the plan's step 3 once said) pushes every
+    // freshly written comment behind the next request. The new body is
+    // `unset($this->ticket)`, and THIS is the rendered proof it still works:
+    // the brand new comment is in the modal's HTML in the same round-trip.
+    public function test_add_comment_shows_the_new_comment_in_the_html_immediately(): void
+    {
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('body', 'کامنت تازه بی‌درنگ')
+            ->call('addComment')
+            ->assertSee('کامنت تازه بی‌درنگ');
     }
 
     public function test_can_reply_via_livewire(): void

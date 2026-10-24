@@ -6,9 +6,7 @@
 @source '../**/*.js';
 
 @theme {
-    --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif,
-        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-        "Noto Color Emoji";
+    --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
 }
 
 /**
@@ -17,15 +15,43 @@
 */
 
 /** daisyUI */
+/* #1227: every built-in theme, counted explicitly in daisyUI's `themeOrder`.
+   `themes: all` is NOT equivalent — the plugin's branch hard-codes light/dark
+   and drops both flags; the hybrid form makes the plugin treat `all` as an
+   unknown name and silently drops 32 themes. Only the explicit list keeps
+   fantasy on :root and luxury for prefers-color-scheme: dark. */
 @plugin "daisyui" {
-    themes: light, dark, synthwave, coffee, cupcake,fantasy --default,luxury --prefersdark;
+    themes: light, dark, cupcake, bumblebee, emerald, corporate, synthwave, retro,
+        cyberpunk, valentine, halloween, garden, forest, aqua, lofi, pastel,
+        fantasy --default, wireframe, black, luxury --prefersdark, dracula, cmyk,
+        autumn, business, acid, lemonade, night, coffee, winter, dim, nord,
+        sunset, caramellatte, abyss, silk;
 }
 
 /* maryUI */
 @source "../../vendor/robsontenorio/mary/src/View/Components/**/*.php";
 
 /* Theme toggle */
-@custom-variant dark (&:where([data-theme=synthwave], [data-theme=synthwave] *), &:where([data-theme=dark], [data-theme=dark] *));
+/* #1224 / #1227: every theme a user can pick as a dark pole must be covered
+   here, or a `dark:` utility silently keeps its light styling on it.
+   The list is exactly the dark family from App\Support\ThemeFamilies (daisyUI
+   declares `color-scheme: dark` for these fourteen). */
+@custom-variant dark (
+    &:where([data-theme=dark], [data-theme=dark] *),
+    &:where([data-theme=synthwave], [data-theme=synthwave] *),
+    &:where([data-theme=coffee], [data-theme=coffee] *),
+    &:where([data-theme=luxury], [data-theme=luxury] *),
+    &:where([data-theme=abyss], [data-theme=abyss] *),
+    &:where([data-theme=aqua], [data-theme=aqua] *),
+    &:where([data-theme=black], [data-theme=black] *),
+    &:where([data-theme=business], [data-theme=business] *),
+    &:where([data-theme=dim], [data-theme=dim] *),
+    &:where([data-theme=dracula], [data-theme=dracula] *),
+    &:where([data-theme=forest], [data-theme=forest] *),
+    &:where([data-theme=halloween], [data-theme=halloween] *),
+    &:where([data-theme=night], [data-theme=night] *),
+    &:where([data-theme=sunset], [data-theme=sunset] *)
+);
 
 
 /**
@@ -43,19 +69,18 @@
 
 /* ------------------ */
 @font-face {
-    font-family: "Vazir";
-    src: url("/public/fonts/Vazirmatn-Regular.woff2") format("truetype");
-    font-weight: normal;
+    font-family: "Vazirmatn";
+    src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
+    font-weight: 400;
     font-style: normal;
+    font-display: swap;
 }
 @font-face {
-    font-family: "Vazir";
-    src: url("/public/fonts/Vazirmatn-Bold.woff2") format("truetype");
-    font-weight: bold;
+    font-family: "Vazirmatn";
+    src: url("/fonts/Vazirmatn-Bold.woff2") format("woff2");
+    font-weight: 700;
     font-style: normal;
-}
-body {
-    font-family: "Vazir", sans-serif;
+    font-display: swap;
 }
 
 #map {
@@ -69,7 +94,7 @@ body {
 }
 .leaflet-routing-alt{
     background-color: whitesmoke;
-    font-family: Vazir;
+    font-family: "Vazirmatn", sans-serif;
 }
 .dark .leaflet-routing-alt,
 .dark .leaflet-layer,
@@ -315,6 +340,15 @@ body {
     backdrop-filter: blur(4px) !important;
 }
 
+/* Unchecked toggle knob. daisyUI paints the knob with --input-color at 50%
+   alpha, which falls under the 3:1 non-text minimum against the glassed track
+   in the dark poles (measured: coffee 2.69, luxury 2.96, synthwave 3.09).
+   80% clears 4.5:1 on all seven enabled themes (worst: coffee 4.79) and leaves
+   the checked state — which sets its own --input-color — untouched. */
+.toggle:not(:checked) {
+    --input-color: color-mix(in oklab, var(--color-base-content) 80%, transparent);
+}
+
 /* Glass buttons — keep each variant's color identity (primary=emerald,
    error=red, ...) by glassing the underlying --btn-bg theme var. */
 .btn {
@@ -324,12 +358,197 @@ body {
     backdrop-filter: blur(8px) saturate(140%) !important;
 }
 
+/* ...but a *solid* variant must keep daisyUI's opaque --btn-bg. Glassing it
+   re-tints the background toward the page, which breaks the fg/bg pair daisyUI
+   guarantees: .btn-success measured 3.02:1 in `dark` and 4.19:1 in `synthwave`
+   (WCAG AA needs 4.5). Restoring the token background measures 5.10 / 7.78 and
+   keeps every enabled theme AA. Ghost/outline/link variants carry a transparent
+   --btn-bg, so they stay transparent and the glass rule above still applies to
+   panels around them. */
+.btn:not(.btn-ghost, .btn-outline, .btn-link) {
+    background-color: var(--btn-bg) !important;
+}
+
 /* Glass badges — same idea: glass the badge's theme color var.
    Outline badges (--badge-color transparent) stay transparent. */
 .badge {
     background-color: color-mix(in oklab, var(--badge-color, var(--color-base-200)) 70%, transparent) !important;
     -webkit-backdrop-filter: blur(6px) !important;
     backdrop-filter: blur(6px) !important;
+}
+
+/* ...but a *solid* badge must restore daisyUI's opaque --badge-color where the
+   glass re-tint breaks the fg/bg pair. The alpha has to be per theme: synthwave
+   needs ≥0.95 while dark needs ≤0.92, and painting the token pair globally
+   drops dark primary from 6.04 to 4.14 (its own primary/primary-content pair
+   is sub-AA). Matrix measured per variant × theme (#1226):
+     light     primary, secondary opaque
+     dark      info, success, warning, error opaque (primary stays glass, 6.04)
+     synthwave primary, secondary, info, success, warning, error opaque
+     fantasy   primary, secondary, neutral opaque
+     luxury    error opaque
+     coffee / cupcake unchanged — every cell is already ≥4.5
+   Outline/dash/soft/ghost keep their own backgrounds, and backdrop-filter
+   stays for the glass aesthetic (same pattern as the .btn fix above). */
+[data-theme="light"] .badge:is(.badge-primary, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="dark"] .badge:is(.badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="synthwave"] .badge:is(.badge-primary, .badge-secondary, .badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="fantasy"] .badge:is(.badge-primary, .badge-secondary, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="luxury"] .badge-error:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+
+/* Two foreground overrides are part of the same matrix: the default
+   --badge-fg pair stays under AA even on the opaque background. */
+[data-theme="light"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    /* was 2.21:1 on glass; 4.83:1 on the opaque secondary token */
+    color: var(--color-base-content) !important;
+}
+[data-theme="fantasy"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    /* was 2.24:1 glass / 3.71:1 opaque with the default fg; 4.86:1 here */
+    color: #fff !important;
+}
+
+/* =====================================================================
+   #1231 — per-theme pairs for the non-core badges (35-theme sweep)
+   =====================================================================
+   `.badge` (above) glasses the variant colour at 70% in oklab. The #1226
+   matrix restored the opaque --badge-color for the five themes it covered
+   (light, dark, synthwave, fantasy, luxury); the other 30 kept the glass
+   re-tint, which left 62 variant cells under AA across 22 of them (plus the
+   10 winter/abyss cells the sweep published as 🧱). This block is purely
+   additive: no rule above is modified and every selector is scoped to the
+   theme × variant pair that was measured below AA.
+
+   Same measurement method as the sweep: rendered pixels + WCAG 2.1 relative
+   luminance (text 4.5:1). Three groups:
+     O    45 selectors  opaque --badge-color; daisyUI's own --badge-fg pair
+                        is already ≥4.5 on the opaque background.
+     OW    4 selectors  opaque + #fff (the token's own fg stays under AA).
+     OB    9 selectors  opaque + #000.
+     BASE  7 selectors  opaque + --color-base-content — the owner's decision
+                        for the eight dual-choice cells (both fg candidates
+                        cleared 4.5; base-content keeps the variant identity).
+   `solid` has no class of its own: the sweep's `badge solid` row measures the
+   first badge on /users, which is the `badge-primary` element, so the primary
+   selectors below fix that row as well. Outline/dash/soft/ghost keep their
+   own backgrounds — same exclusion list as #1226. */
+[data-theme="abyss"] .badge:is(.badge-primary, .badge-secondary, .badge-info, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="aqua"] .badge:is(.badge-primary, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="autumn"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="black"] .badge:is(.badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="bumblebee"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="business"] .badge:is(.badge-info, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="caramellatte"] .badge:is(.badge-neutral, .badge-secondary, .badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="cmyk"] .badge:is(.badge-neutral, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="corporate"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="dracula"] .badge:is(.badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="emerald"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="forest"] .badge:is(.badge-error, .badge-secondary, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="garden"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="halloween"] .badge:is(.badge-error, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="lemonade"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="night"] .badge:is(.badge-error, .badge-info, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="nord"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="retro"] .badge:is(.badge-success, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="silk"] .badge:is(.badge-neutral, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="sunset"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="valentine"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="winter"] .badge:is(.badge-secondary, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="wireframe"] .badge:is(.badge-error, .badge-success, .badge-warning, .badge-info):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+
+/* BASE — the eight dual-choice cells (decision الف): opaque variant background
+   with --color-base-content as fg. Measured 4.64/5.22 (corporate), 4.99
+   (garden), and 9.24–12.90 (pastel). */
+[data-theme="corporate"] .badge:is(.badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="garden"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="pastel"] .badge:is(.badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: var(--color-base-content) !important;
+}
+
+/* OW — opaque background, but the variant's own fg still stays under AA. */
+[data-theme="autumn"] .badge:is(.badge-error, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="pastel"] .badge:is(.badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="winter"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: #fff !important;
+}
+
+/* OB — opaque background + #000. */
+[data-theme="abyss"] .badge:is(.badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="corporate"] .badge:is(.badge-primary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="emerald"] .badge:is(.badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="retro"] .badge:is(.badge-error, .badge-info, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="valentine"] .badge:is(.badge-error, .badge-primary, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: #000 !important;
+}
+
+/* =====================================================================
+   #1231 — non-badge surfaces that failed outside the core seven
+   =====================================================================
+   Each rule is scoped to the theme (and, where the failure was one control,
+   the exact variant) that was measured under AA. The seven blocking themes
+   are untouched. */
+
+/* solid button: the opaque --btn-bg is already restored above, but corporate
+   and pastel ship a variant fg that does not clear AA on it (3.29 / 3.62).
+   base-content measures 5.22 / 12.90 there. Black has no passing dark fg —
+   the only green candidate is #fff (5.13; base-content 3.53 and #000 4.09). */
+[data-theme="corporate"] .btn-success,
+[data-theme="pastel"] .btn-success {
+    color: var(--color-base-content) !important;
+}
+[data-theme="black"] .btn-success {
+    color: #fff !important;
+}
+
+/* help button (x-help:button) — `text-base-content/80` on base-content stays at
+   4.36:1 in valentine; the full-alpha pair measures 5.43. Scoped to the help
+   button's own utility so no other ghost button changes. */
+[data-theme="valentine"] .btn-ghost.text-base-content\/80 {
+    color: var(--color-base-content) !important;
+}
+
+/* toast: valentine's alert text is a 30% mix of --alert-color (line 326),
+   which lands at 3.52/3.59/4.17 for info/success/warning. Darkening the same
+   mix toward black at 55% measures 5.94/6.23/8.29 and leaves error (4.91,
+   already AA) and every other theme untouched. */
+[data-theme="valentine"] .alert.alert-info,
+[data-theme="valentine"] .alert.alert-success,
+[data-theme="valentine"] .alert.alert-warning {
+    color: color-mix(in oklab, var(--alert-color) 55%, #000) !important;
+}
+
+/* menu + submenu header: MaryUI's <x-menu> paints the active item with the
+   neutral pair (#1220 decision), and in autumn/pastel neutral/neutral-content
+   measures 3.84/3.82. A 22%-black neutral background with white measures
+   8.41/8.18. MaryUI puts `bg-neutral text-neutral-content` utilities on the
+   <a>/<summary> elements themselves, so utility classes — not the daisyUI
+   active variables — must be overridden here. #1220's neutral pair on
+   <x-menu> is left as-is. */
+[data-theme="autumn"] .menu,
+[data-theme="pastel"] .menu {
+    --menu-active-bg: color-mix(in oklab, var(--color-neutral) 78%, #000);
+    --menu-active-fg: #fff;
+}
+[data-theme="autumn"] .menu a.mary-active-menu,
+[data-theme="pastel"] .menu a.mary-active-menu,
+[data-theme="autumn"] .menu details[open] > summary,
+[data-theme="pastel"] .menu details[open] > summary {
+    background-color: var(--menu-active-bg) !important;
+    color: var(--menu-active-fg) !important;
+}
+
+/* glass modal: valentine's dark-ish base-content on the 70% glass measures
+   4.00. Raising the glass to 88% and darkening the content by 25% measures
+   8.29 (visual review: screenshots in the PR/issue). */
+[data-theme="valentine"] .modal-box {
+    background-color: color-mix(in oklab, var(--color-base-100) 88%, transparent) !important;
+    color: color-mix(in oklab, var(--color-base-content) 75%, #000) !important;
 }
 
 /* =====================================================================
@@ -376,9 +595,13 @@ body {
     transition: background-color 0.3s ease, background-image 0.3s ease;
 }
 
-/* Dark theme (dark/synthwave) */
+/* Dark theme (dark/synthwave/coffee). #1224: `coffee` is a dark pole (daisyUI
+   declares color-scheme: dark) but had no rule here, so it fell through to the
+   light cream base above and washed out every glass surface — measured glass
+   card 2.60:1 and glass modal 4.25:1. With this group: 7.05:1. */
 [data-theme="dark"] .stitch-bg-fixed,
 [data-theme="synthwave"] .stitch-bg-fixed,
+[data-theme="coffee"] .stitch-bg-fixed,
 .dark .stitch-bg-fixed {
     background-color: #140C1E;
     background-image:
@@ -434,36 +657,43 @@ body {
     animation: stitch-drift 20s ease-in-out infinite;
 }
 
-/* Blob color variants for light theme */
-[data-theme="light"] .stitch-blob.blob-1,
-[data-theme="fantasy"] .stitch-blob.blob-1,
-:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="luxury"]) .stitch-blob.blob-1 {
+/* Blob color variants for light themes.
+   #1227: list every dark theme in the :not() chain explicitly. The chain's
+   specificity beats the `.dark` rule below, so a dark theme missing here paints
+   the warm light blobs on its dark page even with the maryUI `dark` class set.
+   The chain is anchored on `html` on purpose: an unanchored `:not(…)` also
+   matches `body` (which never carries `data-theme`), so it matched on every
+   dark theme and no list of names could ever turn it off. */
+html:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]):not([data-theme="abyss"]):not([data-theme="aqua"]):not([data-theme="black"]):not([data-theme="business"]):not([data-theme="dim"]):not([data-theme="dracula"]):not([data-theme="forest"]):not([data-theme="halloween"]):not([data-theme="night"]):not([data-theme="sunset"]) .stitch-blob.blob-1 {
     background: radial-gradient(circle at 30% 30%, #F8B803, #FF750F);
 }
 [data-theme="light"] .stitch-blob.blob-2,
 [data-theme="fantasy"] .stitch-blob.blob-2,
-:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="luxury"]) .stitch-blob.blob-2 {
+html:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]):not([data-theme="abyss"]):not([data-theme="aqua"]):not([data-theme="black"]):not([data-theme="business"]):not([data-theme="dim"]):not([data-theme="dracula"]):not([data-theme="forest"]):not([data-theme="halloween"]):not([data-theme="night"]):not([data-theme="sunset"]) .stitch-blob.blob-2 {
     background: radial-gradient(circle at 30% 30%, #F0304E, #7C3AED);
 }
 [data-theme="light"] .stitch-blob.blob-3,
 [data-theme="fantasy"] .stitch-blob.blob-3,
-:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="luxury"]) .stitch-blob.blob-3 {
+html:not([data-theme="dark"]):not([data-theme="synthwave"]):not([data-theme="coffee"]):not([data-theme="luxury"]):not([data-theme="abyss"]):not([data-theme="aqua"]):not([data-theme="black"]):not([data-theme="business"]):not([data-theme="dim"]):not([data-theme="dracula"]):not([data-theme="forest"]):not([data-theme="halloween"]):not([data-theme="night"]):not([data-theme="sunset"]) .stitch-blob.blob-3 {
     background: radial-gradient(circle at 30% 30%, #22D3EE, #7C3AED);
 }
 
 /* Blob color variants for dark theme */
 [data-theme="dark"] .stitch-blob.blob-1,
 [data-theme="synthwave"] .stitch-blob.blob-1,
+[data-theme="coffee"] .stitch-blob.blob-1,
 .dark .stitch-blob.blob-1 {
     background: radial-gradient(circle at 30% 30%, #A78BFA, #67E8F9);
 }
 [data-theme="dark"] .stitch-blob.blob-2,
 [data-theme="synthwave"] .stitch-blob.blob-2,
+[data-theme="coffee"] .stitch-blob.blob-2,
 .dark .stitch-blob.blob-2 {
     background: radial-gradient(circle at 30% 30%, #FB923C, #FF6B81);
 }
 [data-theme="dark"] .stitch-blob.blob-3,
 [data-theme="synthwave"] .stitch-blob.blob-3,
+[data-theme="coffee"] .stitch-blob.blob-3,
 .dark .stitch-blob.blob-3 {
     background: radial-gradient(circle at 30% 30%, #FCD34D, #A78BFA);
 }

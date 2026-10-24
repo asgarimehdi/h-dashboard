@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
+use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\ScopeCacheKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
@@ -37,26 +39,31 @@ class OrgChartController extends Controller
                 // re-query the same rows to learn something this loop can read off
                 // directly. The Livewire `unit.tree` component, which does NOT
                 // already have the flat list in hand, uses the service.
+                // Children are collected in a SEPARATE map keyed by parent id —
+                // never written onto the models. `units` has no `children` column,
+                // so `$unit->children` resolves to the real `hasMany` relation
+                // (Unit.php:106-108); reading it with `??=` lazy-loads every real
+                // child of the parent from the database and then the loop appended
+                // on top, duplicating every subtree multiplicatively (#933).
+                // See UnitsExportController::buildHierarchy() for the same shape.
                 $byId = $units->keyBy('id');
+                $childrenByParent = [];
                 $tree = [];
                 foreach ($units as $unit) {
                     if ($unit->parent_id && $byId->has($unit->parent_id)) {
-                        $byId[$unit->parent_id]->children ??= [];
-                        $byId[$unit->parent_id]->children[] = $unit;
+                        $childrenByParent[$unit->parent_id][] = $unit;
                     } else {
                         $tree[] = $unit;
                     }
                 }
 
-                $format = function ($unit) use (&$format) {
+                $format = function ($unit) use (&$format, $childrenByParent) {
                     return [
                         'id' => $unit->id,
                         'name' => $unit->name,
                         'parent_id' => $unit->parent_id,
                         'personnel_count' => $unit->personnel_count,
-                        'children' => isset($unit->children)
-                            ? collect($unit->children)->map($format)->values()
-                            : [],
+                        'children' => collect($childrenByParent[$unit->id] ?? [])->map($format)->values(),
                     ];
                 };
 
@@ -74,9 +81,13 @@ class OrgChartController extends Controller
     public function orgChartExpandable(UnitScopedRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
+        // Issue #894: see UnitController::index(). The more dangerous site of the two:
+        // this one calls `->limit()` directly, and the value is hashed into the
+        // cache key, so every distinct negative minted a fresh full-scope entry.
+        $request->validate(['initial_limit' => ['sometimes', new PerPage(100)]]);
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
         $version = Cache::get('hr_stats_version', 0);
         $cacheKey = "hr:expandable:v{$version}:{$scopeHash}:{$initialLimit}";
 
@@ -115,7 +126,7 @@ class OrgChartController extends Controller
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
         $result = app(CacheInvalidationServiceInterface::class)
             ->remember('unit_hierarchy', $scopeHash, function () use ($accessibleIds, $unitId) {
                 $units = Unit::whereIn('id', $accessibleIds)
@@ -131,10 +142,33 @@ class OrgChartController extends Controller
                     return [];
                 }
 
-                $children = $units->filter(fn (Unit $u) => $u->parent_id == $unitId);
+                // #1022: collect children in a single pass keyed by parent id —
+                // the same pattern orgChart() uses above. The previous code
+                // re-filtered the ENTIRE subtree collection once per visited node
+                // (O(n^2) for n nodes); `$byId` was a map, but it was only ever
+                // traversed as a list. Children are never written onto the models:
+                // `units` has no `children` column, so `$unit->children` is the real
+                // `hasMany` relation; reading it duplicates every subtree
+                // multiplicatively (#933).
+                //
+                // `each()` rather than `foreach`, and plain arrays rather than
+                // `collect()->map()`: `$units` is untyped here, so a bare `foreach`
+                // leaves `$unit` mixed and `collect()` on that mixed-valued array is
+                // what produced the unresolvable-type PHPStan errors this refactor
+                // removes. `children` is JSON-identical either way — a Collection and
+                // a 0-indexed array both encode as a JSON array.
+                $childrenByParent = [];
+                $units->each(function (Unit $unit) use (&$childrenByParent, $byId): void {
+                    if ($unit->parent_id && $byId->has($unit->parent_id)) {
+                        $childrenByParent[$unit->parent_id][] = $unit;
+                    }
+                });
 
-                $format = function (Unit $unit) use (&$format, $byId) {
-                    $childUnits = $byId->filter(fn (Unit $u) => $u->parent_id == $unit->id);
+                $format = function (Unit $unit) use (&$format, $childrenByParent): array {
+                    $children = [];
+                    foreach ($childrenByParent[$unit->id] ?? [] as $child) {
+                        $children[] = $format($child);
+                    }
 
                     return [
                         'id' => $unit->id,
@@ -142,12 +176,17 @@ class OrgChartController extends Controller
                         'parent_id' => $unit->parent_id,
                         'unit_type' => $unit->unitType?->name,
                         'personnel_count' => $unit->personnel_count,
-                        'has_children' => $childUnits->isNotEmpty(),
-                        'children' => $childUnits->map(fn (Unit $c) => $format($c))->values(),
+                        'has_children' => $children !== [],
+                        'children' => $children,
                     ];
                 };
 
-                return collect($children)->map(fn (Unit $c) => $format($c))->values();
+                $result = [];
+                foreach ($childrenByParent[$unitId] ?? [] as $child) {
+                    $result[] = $format($child);
+                }
+
+                return $result;
             }, 10, ['subtree' => $unitId]);
 
         return response()->json(['data' => $result]);
@@ -156,7 +195,7 @@ class OrgChartController extends Controller
     private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
     {
         $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         return "hr:{$segment}:v{$version}:{$scopeHash}";
     }

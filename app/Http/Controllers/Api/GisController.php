@@ -262,7 +262,19 @@ class GisController extends Controller
         $cacheKey = $this->gisCacheKey('tickets', $accessibleIds, $bbox, $extra);
 
         $features = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
-            $query = Ticket::with('unit:id,name,lat,lng')
+            // Only the columns the GeoJSON feature serializes are hydrated — the
+            // ticket body (`content`) is never selected. Any new `properties`
+            // field must be added here AND in the map below.
+            $query = Ticket::query()
+                ->with('unit:id,name,lat,lng')
+                ->select(
+                    'tickets.id',
+                    'tickets.ticket_code',
+                    'tickets.subject',
+                    'tickets.priority',
+                    'tickets.status',
+                    'tickets.unit_id',
+                )
                 ->whereIn('unit_id', $accessibleIds)
                 ->whereHas('unit', function ($q) use ($request) {
                     $q->whereNotNull('lat')->whereNotNull('lng');

@@ -151,7 +151,8 @@ return new class extends Component
                 </div>
 
                 {{-- Errors --}}
-                <x-errors title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" class="border-error/30 bg-error/5" />
+                {{-- #957: role="alert" تا «رمز اشتباه است» واقعاً اعلام شود، نه فقط دیده. --}}
+                <x-errors role="alert" title="خطا" description="لطفا موارد خطا را اصلاح نمائید" icon="o-face-frown" class="border-error/30 bg-error/5" />
 
                 {{-- Form --}}
                 <form wire:submit="login" class="space-y-5">

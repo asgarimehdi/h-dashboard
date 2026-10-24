@@ -11,17 +11,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
 
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $this->seedLookupTables();
 
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
@@ -89,6 +87,15 @@ test('authenticated user can load /maps/county', function () {
 
     $this->actingAs($this->user);
     Livewire::test('maps.county')->assertStatus(200);
+});
+
+test('the root redirects guests to login and authenticated users to the dashboard', function () {
+    // Moved here from the deleted tests/Feature/ExampleTest.php (issue #1048):
+    // the same 302 is asserted, plus where it actually lands.
+    $this->get('/')->assertRedirect('/login');
+
+    $this->actingAs($this->user);
+    $this->get('/')->assertRedirect('/dashboard');
 });
 
 test('select-context redirects to dashboard when single unit is assigned', function () {

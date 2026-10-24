@@ -228,6 +228,43 @@ class GisApiTest extends TestCase
         $this->assertEquals('completed', $response->json('features.0.properties.status'));
     }
 
+    /**
+     * The GIS ticket layer serializes 6 fields only — the ticket body
+     * (`content`) must never be hydrated into the response.
+     *
+     * @test
+     */
+    public function test_gis_tickets_response_omits_the_content_column(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        $marker = 'SECRET-TICKET-BODY-MARKER';
+        Ticket::create([
+            'ticket_code' => 'TKT-LONG',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Long Content Ticket',
+            'content' => str_repeat('متن بلند تیکت '.$marker.' ', 400),
+            'priority' => 'normal',
+            'status' => 'created',
+        ]);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/tickets?bbox=48,36,49,37', $token);
+
+        $response->assertStatus(200);
+
+        $properties = $response->json('features.0.properties');
+        $this->assertIsArray($properties);
+        $this->assertCount(6, $properties);
+        $this->assertEqualsCanonicalizing(
+            ['id', 'ticket_code', 'title', 'priority', 'status', 'unit'],
+            array_keys($properties)
+        );
+
+        $response->assertJsonMissingPath('features.0.properties.content');
+        $this->assertStringNotContainsString($marker, $response->getContent());
+    }
+
     /** @test */
     public function test_gis_stats_returns_counts(): void
     {

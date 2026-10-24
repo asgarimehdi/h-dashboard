@@ -1,8 +1,32 @@
 <?php
+use App\Models\Ticket;
+use App\Models\User;
 use Livewire\Component;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 return new class extends Component
 {
+    /**
+     * Name of the personal access token this page mints for its own fetches.
+     * `POST /logout` revokes exactly this name, and nothing else.
+     */
+    public const TOKEN_NAME = 'map-dashboard';
+
+    /**
+     * The page only reads `/api/gis/*` (`routes/api.php`, gated by
+     * `ability:gis:read` + `role_or_permission:map`), so `gis:read` is the
+     * whole surface. Never fall back to Sanctum's `['*']` default here: a
+     * wildcard token passes every `abilities:*write` gate (issue #840).
+     */
+    public const TOKEN_ABILITIES = ['gis:read'];
+
+    /**
+     * Lifetime of the in-page token. The plaintext lives in the rendered HTML,
+     * so it is deliberately short-lived; `config/sanctum.php` expiration is
+     * 24h, which is far too long for a value embedded in a page.
+     */
+    public const TOKEN_TTL_MINUTES = 60;
+
     #[Url(as: 'bbox')]
     public $bbox = null;
     
@@ -22,6 +46,15 @@ return new class extends Component
     public $mapCenterLng = 48.47163;
     public $mapZoom = 10;
     
+    /**
+     * Bearer token for the page's own `/api/gis/*` fetches.
+     *
+     * `#[Locked]` is defence in depth, not the mitigation: the property is
+     * written server-side by `mount()`/`resolveToken()`, and the plaintext is
+     * unavoidably in the rendered HTML (the Alpine factory needs it). What
+     * actually bounds the damage is `TOKEN_ABILITIES` + `TOKEN_TTL_MINUTES`.
+     */
+    #[Locked]
     public $mapToken = '';
 
     protected $listeners = [
@@ -33,12 +66,105 @@ return new class extends Component
 
     public function mount()
     {
+        $this->resolveToken();
+    }
+
+    /**
+     * Reuse a still-valid map token instead of minting a new one per page load.
+     *
+     * Two problems this removes (issue #840):
+     *  - every `F5` created a fresh row plus a fresh plaintext in the HTML, so
+     *    a wildcard/`gis:read` token was produced on each render;
+     *  - the old code deleted the previous token BEFORE creating the new one,
+     *    so a user with two tabs had the first tab's token revoked out from
+     *    under it and its layers started failing.
+     *
+     * Sanctum stores only the hash, so an existing token can never yield its
+     * plaintext again — that is why the plaintext is kept in the encrypted
+     * session and re-read on later requests.
+     */
+    public function resolveToken(): string
+    {
+        if ($this->mapToken !== '') {
+            return $this->mapToken;
+        }
+
         $user = auth()->user();
-        // Always create a new token — Sanctum stores only the hash,
-        // so plainTextToken is null on tokens loaded from DB.
-        // Delete old map-dashboard tokens first to avoid accumulation.
-        $user->tokens()->where('name', 'map-dashboard')->delete();
-        $this->mapToken = $user->createToken('map-dashboard')->plainTextToken;
+        $sessionKey = 'map_dashboard_token_'.$user->getAuthIdentifier();
+
+        // Drop expired/rotated leftovers for this page, never a live token
+        // belonging to another open tab.
+        $user->tokens()
+            ->where('name', self::TOKEN_NAME)
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '<=', now()))
+            ->delete();
+
+        if (($cached = session($sessionKey)) && $this->tokenIsLive($user, $cached)) {
+            $this->mapToken = $cached;
+
+            return $cached;
+        }
+
+        session()->forget($sessionKey);
+
+        $this->mapToken = $user->createToken(
+            self::TOKEN_NAME,
+            self::TOKEN_ABILITIES,
+            now()->addMinutes(self::TOKEN_TTL_MINUTES),
+        )->plainTextToken;
+
+        session([$sessionKey => $this->mapToken]);
+
+        return $this->mapToken;
+    }
+
+    /**
+     * Options for the ticket-priority filter (#954).
+     *
+     * Built from `Ticket::PRIORITIES` — the canonical app vocabulary — so the
+     * filter can never offer a value (e.g. the DB-only `medium`/`high`) that
+     * no report bucket reads. The "all" option (empty value) must stay first.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function priorityOptions(): array
+    {
+        // Partial by design: a value added to Ticket::PRIORITIES without a
+        // Persian label falls back to the raw identifier below.
+        /** @var array<string, string> $labels */
+        $labels = ['low' => 'پایین', 'normal' => 'عادی', 'urgent' => 'فوری'];
+
+        return [
+            ['value' => '', 'label' => 'همه اولویت‌ها'],
+            ...array_map(
+                fn (string $priority): array => [
+                    'value' => $priority,
+                    'label' => $labels[$priority] ?? $priority,
+                ],
+                Ticket::PRIORITIES,
+            ),
+        ];
+    }
+
+    /**
+     * Is the plaintext we kept in the session still backed by a usable row?
+     * Returns false when the row is gone, expired, or was revoked elsewhere.
+     */
+    private function tokenIsLive(User $user, string $plainTextToken): bool
+    {
+        [$id] = array_pad(explode('|', $plainTextToken, 2), 1, '');
+
+        if ($id === '' || ! ctype_digit($id)) {
+            return false;
+        }
+
+        // Expiry is checked in SQL rather than through `$token->expires_at`:
+        // Sanctum's PersonalAccessToken ships no `@property` annotations, so a
+        // property read there is a PHPStan error for a cast that does exist.
+        return $user->tokens()
+            ->whereKey($id)
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->exists();
     }
 
     public function onMapMoved($data)
@@ -64,11 +190,19 @@ return new class extends Component
         $this->layers = implode(',', $layers);
     }
 
+    /** @var array<string, string> $filterPropertyMap Explicit allowlist of client keys → component properties. */
+    private const FILTER_PROPERTY_MAP = [
+        'hardware_type' => 'filterHardware',
+        'ticket_priority' => 'filterPriority',
+        'ticket_status' => 'filterStatus',
+    ];
+
     public function onFilterChanged($filters)
     {
         foreach ($filters as $key => $value) {
-            if (property_exists($this, $key)) {
-                $this->$key = $value;
+            $property = self::FILTER_PROPERTY_MAP[$key] ?? null;
+            if ($property !== null) {
+                $this->$property = $value;
             }
         }
     }
@@ -148,12 +282,9 @@ return new class extends Component
 
             <select x-model="filters.ticket_priority" @change="setFilter('ticket_priority', $event.target.value)"
                     class="select select-sm w-28" x-show="activeLayers.includes('tickets')">
-                <option value="">همه اولویت‌ها</option>
-                <option value="urgent">فوری</option>
-                <option value="high">بالا</option>
-                <option value="normal">عادی</option>
-                <option value="medium">متوسط</option>
-                <option value="low">پایین</option>
+                @foreach ($this->priorityOptions() as $option)
+                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                @endforeach
             </select>
 
             <select x-model="filters.ticket_status" @change="setFilter('ticket_status', $event.target.value)"
@@ -185,7 +316,7 @@ return new class extends Component
 
     <!-- Map Element: the shared maps.map component owns the Leaflet instance
          (Alpine.store('map')); this page only attaches its layers via onReady. -->
-    <livewire:maps.map />
+    <livewire:maps.map wire:key="map-dashboard-page-map" />
 
     <!-- Unit Details Modal -->
     <div x-data="{ unitId: null, unitDetails: null, loading: false }"
@@ -218,6 +349,18 @@ return new class extends Component
         }
     </script>
 </div>
+
+@assets
+    {{-- Issue #1182: Leaflet core is page-specific now and ships on the HOST page
+         — never inside `maps/map.blade.php`, whose own asset would arrive with the
+         child component, after this page's Alpine `init()` had already asked the
+         store for a map. `@assets`, not `@push('scripts')`: a pushed tag lands at
+         the end of the body, and on `wire:navigate` Livewire morphs the body and
+         runs Alpine BEFORE evaluating those scripts — measured `L is not defined`
+         and a blank map (#028). Livewire injects `@assets` into <head> and
+         evaluates new head assets before the navigation completes. --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+@endassets
 
 @script
 <script>

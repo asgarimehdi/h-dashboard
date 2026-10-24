@@ -71,6 +71,39 @@ class TicketApiTest extends TestCase
             ->assertJsonStructure(['data', 'meta']);
     }
 
+    /**
+     * #1189: the list payload is the pre-decision shape MINUS `content`; every
+     * other field (and every `whenLoaded` block) stays exactly as it was.
+     */
+    public function test_index_does_not_expose_ticket_content(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        Ticket::create(['ticket_code' => 'T-LIST-1', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'First', 'content' => 'First body', 'priority' => 'normal', 'status' => 'created']);
+        Ticket::create(['ticket_code' => 'T-LIST-2', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Second', 'content' => 'Second body', 'priority' => 'urgent', 'status' => 'created']);
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet('/api/tickets', $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(2, $data);
+
+        foreach ($data as $item) {
+            $this->assertArrayNotHasKey('content', $item);
+            $this->assertArrayHasKey('subject', $item);
+        }
+
+        $keys = array_keys($data[0]);
+        sort($keys);
+        $expected = [
+            'accepted_at', 'assignee', 'completed_at', 'created_at', 'current_assignee_id',
+            'deadline', 'id', 'priority', 'status', 'status_name', 'subject', 'ticket_code',
+            'unit', 'unit_id', 'updated_at', 'user', 'user_id',
+        ];
+        sort($expected);
+        $this->assertSame($expected, $keys, 'The list shape must stay unchanged apart from dropping content.');
+    }
+
     public function test_user_can_show_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
@@ -79,8 +112,9 @@ class TicketApiTest extends TestCase
         $token = $this->createApiToken($user, ['tickets:read']);
         $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
 
+        // #1189: detail responses keep `content` with its real value.
         $response->assertStatus(200)
-            ->assertJson(['data' => ['subject' => 'Show Me']]);
+            ->assertJson(['data' => ['subject' => 'Show Me', 'content' => 'Body']]);
     }
 
     public function test_user_can_create_ticket(): void
@@ -95,8 +129,10 @@ class TicketApiTest extends TestCase
             'unit_id' => $unit->id,
         ], $token);
 
+        // #1189: the created ticket is a detail response, so `content` is present.
         $response->assertStatus(201)
-            ->assertJson(['success' => true]);
+            ->assertJson(['success' => true])
+            ->assertJsonPath('data.content', 'Description');
 
         $this->assertDatabaseHas('tickets', ['subject' => 'New Ticket']);
     }
@@ -129,8 +165,9 @@ class TicketApiTest extends TestCase
             'subject' => 'Updated',
         ], $token);
 
+        // #1189: update is a detail response, so `content` is present.
         $response->assertStatus(200)
-            ->assertJson(['data' => ['subject' => 'Updated']]);
+            ->assertJson(['data' => ['subject' => 'Updated', 'content' => 'Body']]);
     }
 
     public function test_user_can_delete_ticket(): void
@@ -328,5 +365,74 @@ class TicketApiTest extends TestCase
 
         $data = $response->json('data');
         $this->assertArrayNotHasKey('deleted_at', $data);
+    }
+
+    public function test_cannot_accept_completed_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $acceptedAt = now()->subDay()->startOfSecond();
+        $ticket = Ticket::create(['ticket_code' => 'T-ACC-COMPLETED', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Done', 'content' => 'Body', 'priority' => 'normal', 'status' => 'completed', 'current_assignee_id' => $user->id, 'accepted_at' => $acceptedAt, 'completed_at' => now()]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Only created or forwarded tickets can be accepted.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('completed', $fresh->status);
+        $this->assertSame($acceptedAt->toDateTimeString(), $fresh->accepted_at->toDateTimeString());
+    }
+
+    public function test_cannot_accept_rejected_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = Ticket::create(['ticket_code' => 'T-ACC-REJECTED', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Rejected', 'content' => 'Body', 'priority' => 'normal', 'status' => 'rejected', 'current_assignee_id' => $user->id, 'accepted_at' => null]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Only created or forwarded tickets can be accepted.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('rejected', $fresh->status);
+        $this->assertNull($fresh->accepted_at);
+    }
+
+    public function test_cannot_reaccept_already_accepted_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $acceptedAt = now()->subDay()->startOfSecond();
+        $ticket = Ticket::create(['ticket_code' => 'T-ACC-TWICE', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Already Accepted', 'content' => 'Body', 'priority' => 'normal', 'status' => 'accepted', 'current_assignee_id' => $user->id, 'accepted_at' => $acceptedAt]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Only created or forwarded tickets can be accepted.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('accepted', $fresh->status);
+        // The reported harm of the bug: re-accepting silently re-stamps accepted_at.
+        $this->assertSame($acceptedAt->toDateTimeString(), $fresh->accepted_at->toDateTimeString());
+    }
+
+    public function test_non_assignee_cannot_accept_completed_ticket_even_though_status_is_invalid(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $user2 = $this->createSecondUserInUnit($unit);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        $ticket = Ticket::create(['ticket_code' => 'T-ACC-ORDER', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Order', 'content' => 'Body', 'priority' => 'normal', 'status' => 'completed', 'current_assignee_id' => $user->id, 'accepted_at' => now(), 'completed_at' => now()]);
+
+        $token2 = $this->createApiToken($user2, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token2);
+
+        // The assignee check must win over the status guard: 403, not 422.
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Only the assigned user can accept this ticket.']);
+
+        $this->assertSame('completed', $ticket->fresh()->status);
     }
 }

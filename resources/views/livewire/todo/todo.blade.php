@@ -1,40 +1,95 @@
 <?php
 
-use App\Models\{Todo, Ticket};
+use App\Models\Ticket;
+use App\Models\Todo;
 use App\Services\AccessService;
-use Livewire\Component;
-use Mary\Traits\Toast;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Locked;
+use Livewire\Component;
+use Mary\Traits\Toast;
 use Morilog\Jalali\Jalalian;
 
-return new class extends Component {
+return new class extends Component
+{
     use Toast;
 
     public bool $modal = false;
+
     public string $title = '';
+
     public $start_at;
+
     public $end_at;
+
+    #[Locked]
     public ?int $editingId = null;
+
     public bool $is_completed = false;
+
     public ?int $unit_id = null;
 
     public $start_date_picker;
+
     public $start_time_picker;
+
     public $end_date_picker;
+
     public $end_time_picker;
 
     private ?string $calendarStart = null;
+
     private ?string $calendarEnd = null;
 
     public function mount(): void
     {
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
+
+        // Issue #1169: the first paint used to run `getEvents()` with a null
+        // range — an unbounded query cached under the `:all:` key — and
+        // FullCalendar's `datesSet` immediately discarded that payload for a
+        // date-filtered one. Seed the window the month grid actually shows so
+        // the first render costs the same as the second.
+        [$this->calendarStart, $this->calendarEnd] = $this->calendarWindowFor(now());
+    }
+
+    /**
+     * Issue #1169: the window FullCalendar's `dayGridMonth` really covers.
+     * With `firstDay: 6` the grid starts on the Saturday on/before the 1st and
+     * ends on the Saturday after the last day — `subWeek()` is not that
+     * boundary for every month, which is why a `subWeek()` window never
+     * matched `datesSet` and the redundant first refetch survived.
+     *
+     * Both bounds are ISO 8601 (`toIso8601String()`) so they compare exactly
+     * with the `info.startStr` / `info.endStr` FullCalendar sends.
+     *
+     * `\Carbon\CarbonInterface` is spelled out on purpose: an import above the
+     * anonymous class would shift it off line 14, and the PHPStan baseline is
+     * keyed to that line.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public function calendarWindowFor(\Carbon\CarbonInterface $date): array
+    {
+        $start = $date->copy()->startOfMonth()->startOfDay();
+        $start->subDays(((int) $start->format('w') + 1) % 7);
+
+        $end = $date->copy()->endOfMonth()->startOfDay();
+        $daysToSaturday = (6 - (int) $end->format('w')) % 7;
+        $end->addDays($daysToSaturday === 0 ? 7 : $daysToSaturday);
+
+        return [$start->toIso8601String(), $end->toIso8601String()];
     }
 
     public function fetchEvents(string $start, string $end): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->calendarStart = $start;
         $this->calendarEnd = $end;
         $this->dispatch('calendar-updated', events: $this->getEvents());
@@ -48,19 +103,32 @@ return new class extends Component {
 
         // Build cache key from accessible IDs + date range + user context + version (Issue #389)
         $calendarVersion = Cache::get('calendar_version', 0);
-        $cacheKey = 'calendar:events:' . $user->id . ':' . $calendarVersion . ':' . md5(implode(',', $accessibleIds)) . ':' . ($this->calendarStart ?? 'all') . ':' . ($this->calendarEnd ?? 'all');
+        $cacheKey = 'calendar:events:'.$user->id.':'.$calendarVersion.':'.md5(implode(',', $accessibleIds)).':'.($this->calendarStart ?? 'all').':'.($this->calendarEnd ?? 'all');
 
         return Cache::remember($cacheKey, 120, function () use ($accessibleIds) {
-            // Base query with date range filtering for performance
+            // Base query with date range filtering for performance.
+            // Null-unit contract (#838): a null-unit todo belongs to its creator —
+            // listed only to the creator, never to every calendar holder.
+            $userId = Auth::id();
             $todoQuery = Todo::query()
-                ->where(function ($q) use ($accessibleIds) {
+                ->where(function ($q) use ($accessibleIds, $userId) {
                     $q->whereIn('unit_id', $accessibleIds)
-                      ->orWhereNull('unit_id');
+                        ->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
                 });
+
+            // تیکت‌ها.
+            // #847: `task_title` leaked a todo the viewer cannot reach. This
+            // page is gated by `calendar` alone — not a ticket permission at
+            // all — so it was the cheapest read in the whole chain. The scope
+            // goes on the eager-load itself, so an out-of-scope task arrives as
+            // `null` and the title is never emitted. A null-unit todo belongs
+            // to its creator (#838 contract).
+            $taskScope = fn ($q) => $q->whereIn('unit_id', $accessibleIds)
+                ->orWhere(fn ($q) => $q->whereNull('unit_id')->where('user_id', \Illuminate\Support\Facades\Auth::id()));
 
             $ticketQuery = Ticket::accessible()
                 ->whereHas('task')
-                ->with('task')
+                ->with(['task' => $taskScope])
                 ->whereIn('status', ['created', 'forwarded', 'accepted']);
 
             // Apply date range filter when available
@@ -78,7 +146,7 @@ return new class extends Component {
                 ->get()
                 ->map(function ($todo) {
                     return [
-                        'id' => 'todo-' . $todo->id,
+                        'id' => 'todo-'.$todo->id,
                         'title' => $todo->title,
                         'start' => $todo->start_at,
                         'end' => $todo->end_at,
@@ -97,9 +165,10 @@ return new class extends Component {
                 ->map(function ($ticket) {
                     $priorityColors = ['urgent' => '#ef4444', 'normal' => '#f59e0b', 'low' => '#6b7280'];
                     $priorityLabels = ['urgent' => 'فوری', 'normal' => 'عادی', 'low' => 'کم‌اهمیت'];
+
                     return [
-                        'id' => 'ticket-' . $ticket->id,
-                        'title' => '🎫 ' . $ticket->subject,
+                        'id' => 'ticket-'.$ticket->id,
+                        'title' => '🎫 '.$ticket->subject,
                         'start' => $ticket->created_at,
                         'color' => $priorityColors[$ticket->priority] ?? '#f59e0b',
                         'allDay' => false,
@@ -108,7 +177,7 @@ return new class extends Component {
                             'ticket_code' => $ticket->ticket_code,
                             'status' => $ticket->status_name,
                             'priority' => $priorityLabels[$ticket->priority] ?? 'عادی',
-                            'task_id' => $ticket->task_id,
+                            'task_id' => $ticket->task?->id,
                             'task_title' => $ticket->task?->title,
                         ],
                     ];
@@ -120,6 +189,12 @@ return new class extends Component {
 
     public function openModal()
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->modal = true;
@@ -127,6 +202,12 @@ return new class extends Component {
 
     public function openCreateModal($start, $end)
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->start_at = $start;
@@ -148,6 +229,12 @@ return new class extends Component {
 
     public function updateTodoDates(string $todoId, string $startDate, ?string $endDate = null): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $todo = Todo::find($todoId);
 
         if (! $todo || ! $this->isTodoAccessible($todo)) {
@@ -167,10 +254,17 @@ return new class extends Component {
 
     public function editEvent($id): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $todo = Todo::find($id);
 
         if (! $this->isTodoAccessible($todo)) {
             $this->error('شما دسترسی به این تسک را ندارید');
+
             return;
         }
 
@@ -197,6 +291,12 @@ return new class extends Component {
 
     public function save(): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $this->validate([
             'title' => 'required|min:3',
             'start_date_picker' => 'required',
@@ -204,17 +304,39 @@ return new class extends Component {
 
         // Validate unit_id is accessible
         $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
-        if ($this->unit_id && ! in_array($this->unit_id, $accessibleIds)) {
+        if ($this->unit_id !== null && ! in_array($this->unit_id, $accessibleIds, true)) {
             $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
+
             return;
         }
 
-        $startDateTime = $this->start_date_picker . ' ' . ($this->start_time_picker ?: '00:00');
+        // #838: scope-check the TARGET row, not just the submitted unit_id.
+        // Without this, editingId can point at a foreign-unit todo and
+        // updateOrCreate rewrites + relocates it into the actor's unit.
+        if ($this->editingId) {
+            $stored = Todo::find($this->editingId);
+
+            if (! $this->isTodoAccessible($stored)) {
+                $this->error('شما دسترسی به این تسک را ندارید');
+
+                return;
+            }
+
+            // Relocation-safe: an edit must not park a unit-scoped row into
+            // the ownerless null-unit bucket.
+            if ($this->unit_id === null && $stored->unit_id !== null) {
+                $this->error('شما مجاز به ایجاد/ویرایش تسک در این واحد نیستید');
+
+                return;
+            }
+        }
+
+        $startDateTime = $this->start_date_picker.' '.($this->start_time_picker ?: '00:00');
         $startMildadi = $this->convertToMiladi($startDateTime);
 
         $endMildadi = null;
         if ($this->end_date_picker) {
-            $endDateTime = $this->end_date_picker . ' ' . ($this->end_time_picker ?: '00:00');
+            $endDateTime = $this->end_date_picker.' '.($this->end_time_picker ?: '00:00');
             $endMildadi = $this->convertToMiladi($endDateTime);
         }
 
@@ -249,11 +371,11 @@ return new class extends Component {
         $timeParts = isset($parts[1]) ? explode(':', $parts[1]) : [0, 0];
 
         $jalalian = new Jalalian(
-            (int)$dateParts[0],
-            (int)$dateParts[1],
-            (int)$dateParts[2],
-            (int)$timeParts[0] ?? 0,
-            (int)$timeParts[1] ?? 0,
+            (int) $dateParts[0],
+            (int) $dateParts[1],
+            (int) $dateParts[2],
+            (int) $timeParts[0] ?? 0,
+            (int) $timeParts[1] ?? 0,
             0
         );
 
@@ -271,22 +393,41 @@ return new class extends Component {
 
     public function delete(): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         if ($this->editingId) {
             $todo = Todo::find($this->editingId);
 
             if (! $this->isTodoAccessible($todo)) {
                 $this->error('شما دسترسی به این تسک را ندارید');
+
                 return;
             }
 
-            $todo->delete();
-            $this->success('تسک حذف شد');
-            $this->modal = false;
+            try {
+                $todo->delete();
+                $this->success('تسک حذف شد');
+                $this->modal = false;
 
-            $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
+                $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
 
-            $this->invalidateEventCache();
-            $this->dispatch('calendar-updated', events: $this->getEvents());
+                $this->invalidateEventCache();
+                $this->dispatch('calendar-updated', events: $this->getEvents());
+            } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+                // Issue #892/#975/#978: defence in depth. The `authorize()` above sits
+                // OUTSIDE this try, so the 403 never actually reaches here today —
+                // this clause exists so that a later edit which moves the check
+                // inside the try cannot turn a revoked holder's delete back into a
+                // friendly toast, and so the #892/#975 static scan keeps a handle on
+                // the ordering.
+                throw $e;
+            } catch (\Exception $e) {
+                $this->error('امکان حذف وجود ندارد', position: 'toast-bottom');
+            }
         }
     }
 
@@ -298,14 +439,21 @@ return new class extends Component {
 
     public function toggleComplete(int $id): void
     {
+        // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
+        // does not run on `/livewire/update`, so this mutator re-checks it here.
+        // It must come FIRST — nothing below is scoped by anything a later
+        // check could undo.
+        $this->authorize('calendar');
+
         $todo = Todo::find($id);
 
         if (! $this->isTodoAccessible($todo)) {
             $this->error('شما دسترسی به این تسک را ندارید');
+
             return;
         }
 
-        $todo->update(['is_completed' => !$todo->is_completed]);
+        $todo->update(['is_completed' => ! $todo->is_completed]);
         $this->invalidateEventCache();
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
@@ -314,6 +462,13 @@ return new class extends Component {
     {
         return [
             'events' => $this->getEvents(),
+            // Issue #1169: the window the client compares its first `datesSet`
+            // callback against. It resolves no todo/ticket data, so it needs no
+            // `calendar` gate of its own.
+            'calendarWindow' => [
+                'start' => $this->calendarStart,
+                'end' => $this->calendarEnd,
+            ],
         ];
     }
 
@@ -322,8 +477,13 @@ return new class extends Component {
         if (! $todo) {
             return false;
         }
+        // Null-unit contract (#838): a null-unit todo belongs to its creator.
+        if ($todo->unit_id === null) {
+            return $todo->user_id === Auth::id();
+        }
         $accessibleIds = app(AccessService::class)->accessibleUnitIds(auth()->user());
-        return $todo->unit_id === null || in_array($todo->unit_id, $accessibleIds);
+
+        return in_array($todo->unit_id, $accessibleIds);
     }
 }; ?>
 
@@ -421,7 +581,7 @@ return new class extends Component {
 
             <x-slot:actions>
                 @if($editingId)
-                    <x-button icon="o-trash" class="btn-error" wire:click="delete" wire:confirm="مطمئنی؟" />
+                    <x-ui.icon-button name="حذف کار" icon="o-trash" class="btn-error" wire:click="delete" wire:confirm="مطمئنی؟" />
                 @endif
                 <x-button label="لغو" wire:click="closeModal" />
                 <x-button label="ذخیره" icon="o-check" class="btn-primary" type="submit" spinner="save" />
@@ -429,6 +589,15 @@ return new class extends Component {
         </x-form>
     </x-modal>
 
+@assets
+    {{-- Issue #984 / #1182: FullCalendar is used by this calendar page alone
+         (~275 KB) and jalalidatepicker by its date fields; both ship here instead
+         of in the global layout. `@assets` (not `@push('scripts')`) — the tags
+         belong in <head>, ahead of the `@script` below, and Livewire evaluates new
+         head assets before completing a `wire:navigate` swap. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+    <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
+@endassets
 
 @script
 <script>
@@ -460,6 +629,16 @@ return new class extends Component {
             window.calendarInstance.destroy();
             window.calendarInstance = null;
         }
+
+        // Issue #1169: the server seeded the same window the month grid shows,
+        // so the `datesSet` callback that fires on load must not ask for it
+        // again. Timestamps are compared — the server sends ISO 8601 with a UTC
+        // offset — and only the first callback is skipped, so navigating back
+        // to the seeded month still refetches.
+        const seededWindow = @js($calendarWindow);
+        const seededStart = seededWindow?.start ? Date.parse(seededWindow.start) : null;
+        const seededEnd = seededWindow?.end ? Date.parse(seededWindow.end) : null;
+        let firstPaint = true;
 
         window.calendarInstance = new FullCalendar.Calendar(calendarEl, {
             initialView: 'dayGridMonth',
@@ -496,21 +675,115 @@ return new class extends Component {
             editable: true,
             eventContent: function(arg) {
                 const type = arg.event.extendedProps.type || 'todo';
+
+                // Issue #891: every user-controlled value below (event title,
+                // time text, status) is assigned with `.textContent`, never
+                // concatenated into an HTML string. The previous return built
+                // that string and handed it to FullCalendar as raw markup,
+                // which the library assigns through `dangerouslySetInnerHTML`
+                // — so a `create_ticket` holder could plant a `Todo::title`
+                // (or a `Ticket::subject` copied into one by the ticket-create
+                // page) and have it execute in every calendar viewer's browser.
+                // `domNodes` removes the sink rather than escaping its
+                // contents: there is no string left to escape incorrectly, so
+                // the bug cannot recur.
                 if (type === 'ticket') {
                     const status = arg.event.extendedProps.status || '';
-                    return { html: '<div class="flex items-center gap-1"><span class="text-sm">🎫</span><span class="fc-event-title text-xs">' + arg.event.title.replace('🎫 ', '') + ' <span class="badge badge-xs badge-ghost">' + status + '</span></span></div>' };
+
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center gap-1';
+
+                    const icon = document.createElement('span');
+                    icon.className = 'text-sm';
+                    icon.textContent = '🎫';
+                    row.appendChild(icon);
+
+                    const title = document.createElement('span');
+                    title.className = 'fc-event-title text-xs';
+                    // Strip only the marker this component prepends server-side.
+                    title.textContent = arg.event.title.replace('🎫 ', '');
+
+                    const badge = document.createElement('span');
+                    badge.className = 'badge badge-xs badge-ghost';
+                    badge.textContent = status;
+
+                    title.appendChild(document.createTextNode(' '));
+                    title.appendChild(badge);
+                    row.appendChild(title);
+
+                    return { domNodes: [row] };
                 }
+
                 const todoId = arg.event.id.replace('todo-', '');
-                const checkIcon = arg.event.extendedProps.is_completed
-                    ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-success cursor-pointer" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>'
-                    : '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-base-content/40 cursor-pointer hover:text-success" onclick="event.stopPropagation(); Livewire.find(\'{{ $this->getId() }}\').call(\'toggleComplete\', ' + todoId + ')"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75" /></svg>';
-                return { html: '<div class="flex items-center gap-1">' + checkIcon + '<span class="fc-event-title">' + arg.timeText + ' ' + arg.event.title + '</span></div>' };
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-1';
+
+                const isCompleted = !!arg.event.extendedProps.is_completed;
+                const NS = 'http://www.w3.org/2000/svg';
+
+                const checkIcon = document.createElementNS(NS, 'svg');
+                checkIcon.setAttribute('fill', 'none');
+                checkIcon.setAttribute('viewBox', '0 0 24 24');
+                checkIcon.setAttribute('stroke-width', '2');
+                checkIcon.setAttribute('stroke', 'currentColor');
+                checkIcon.setAttribute('aria-hidden', 'true');
+                checkIcon.style.width = '1rem';
+                checkIcon.style.height = '1rem';
+                checkIcon.style.cursor = 'pointer';
+                checkIcon.classList.add(isCompleted ? 'text-success' : 'text-base-content/40');
+                if (! isCompleted) {
+                    checkIcon.classList.add('hover:text-success');
+                }
+
+                const circle = document.createElementNS(NS, 'path');
+                circle.setAttribute('stroke-linecap', 'round');
+                circle.setAttribute('stroke-linejoin', 'round');
+                circle.setAttribute('d', 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z');
+
+                const tick = document.createElementNS(NS, 'path');
+                tick.setAttribute('stroke-linecap', 'round');
+                tick.setAttribute('stroke-linejoin', 'round');
+                tick.setAttribute('d', 'M9 12.75L11.25 15 15 9.75');
+
+                // The completed and open states draw the same circle + tick and
+                // differ only in colour, which the class list above carries.
+                checkIcon.appendChild(circle);
+                checkIcon.appendChild(tick);
+
+                // Issue #891: the toggle used to be an inline `onclick`
+                // attribute. That pattern is what the report-only CSP's
+                // 'unsafe-inline' permits, so it is removed in the same change.
+                checkIcon.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    Livewire.find(@js($this->getId())).call('toggleComplete', parseInt(todoId, 10));
+                });
+
+                row.appendChild(checkIcon);
+
+                const label = document.createElement('span');
+                label.className = 'fc-event-title';
+                label.textContent = arg.timeText + ' ' + arg.event.title;
+                row.appendChild(label);
+
+                return { domNodes: [row] };
             },
             events: @json($events),
             datesSet: function(info) {
-                if (window.calendarInstance.hasPubliclyVisibleDates) {
-                    @this.fetchEvents(info.startStr, info.endStr);
+                // Issue #1169: the initial callback repeats the window the
+                // server just rendered. Only that first callback is a no-op;
+                // month/week/day navigation always refetches.
+                const initial = firstPaint;
+                firstPaint = false;
+
+                if (initial
+                    && seededStart !== null
+                    && seededEnd !== null
+                    && Date.parse(info.startStr) === seededStart
+                    && Date.parse(info.endStr) === seededEnd) {
+                    return;
                 }
+
+                @this.fetchEvents(info.startStr, info.endStr);
             },
             select: function(info) {
                 @this.openCreateModal(info.startStr, info.endStr);

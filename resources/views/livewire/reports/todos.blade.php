@@ -3,12 +3,19 @@
 use App\Models\Todo;
 use App\Services\AccessService;
 use App\Services\DailySeries;
+use App\Support\JalaliDateRange;
 use Carbon\Carbon;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use WithPagination;
+
+    /** Issue #1024 — the list is paginated instead of hydrated whole. */
+    public int $perPage = 25;
+
     public string $dateFrom = '';
 
     public string $dateTo = '';
@@ -30,17 +37,15 @@ return new class extends Component
         $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
     }
 
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
+    /**
+     * Issue #1024: a filter change starts a new result set, so the list goes
+     * back to page 1. The Jalali datepicker writes `dateFrom`/`dateTo` through
+     * `$wire.set`, which lands here too.
+     */
+    public function updated(string $property): void
     {
-        if (empty($date)) {
-            return null;
-        }
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
+        if (in_array($property, ['selectedUnitId', 'statusFilter', 'dateFrom', 'dateTo'], true)) {
+            $this->resetPage();
         }
     }
 
@@ -52,14 +57,7 @@ return new class extends Component
      */
     private function dateRange(): ?array
     {
-        $from = $this->parseJalaliDate($this->dateFrom);
-        $to = $this->parseJalaliDate($this->dateTo, endOfDay: true);
-
-        if (! $from || ! $to || $from->gt($to)) {
-            return null;
-        }
-
-        return [$from, $to];
+        return JalaliDateRange::range($this->dateFrom, $this->dateTo);
     }
 
     public function chartPayload(): array
@@ -76,10 +74,10 @@ return new class extends Component
             })
             ->when($this->selectedUnitId, fn ($q) => $q->where('unit_id', $this->selectedUnitId));
 
-        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
             $query->where('start_at', '>=', $from);
         }
-        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
             $query->where('end_at', '<=', $to);
         }
 
@@ -117,13 +115,18 @@ return new class extends Component
             'سررسید گذشته' => $overdue,
         ];
 
-        $items = (clone $query)
+        // Issue #1024: only the row list is paginated — `completed`/`pending`/
+        // `overdue`/`byUnit`/`byDay` are computed from their own unpaginated
+        // clones, so they still describe the whole filtered set.
+        $itemsPage = (clone $query)
             ->when($this->statusFilter === 'completed', fn ($q) => $q->where('is_completed', true))
             ->when($this->statusFilter === 'pending', fn ($q) => $q->where('is_completed', false)->where(fn ($q) => $q->whereNull('end_at')->orWhere('end_at', '>=', $now)))
             ->when($this->statusFilter === 'overdue', fn ($q) => $q->where('is_completed', false)->whereNotNull('end_at')->where('end_at', '<', $now))
             ->with('unit:id,name')
             ->orderBy('start_at', 'desc')
-            ->get()
+            ->paginate($this->perPage);
+
+        $items = $itemsPage->getCollection()
             ->map(fn ($t) => [
                 'id' => $t->id,
                 'title' => $t->title,
@@ -133,7 +136,7 @@ return new class extends Component
                 'completed' => $t->is_completed,
                 'is_overdue' => ! $t->is_completed && $t->end_at && $t->end_at < $now,
             ])
-            ->toArray();
+            ->all();
 
         return [
             'completed' => $completed,
@@ -142,7 +145,11 @@ return new class extends Component
             'byUnit' => $byUnit,
             'byDay' => $byDay,
             'byStatus' => $byStatus,
+            // `items` stays a plain array (the fail-closed security test and the
+            // `empty()` check in the view both treat it as one); the paginator
+            // rides alongside for `->hasPages()`/`->links()`.
             'items' => $items,
+            'itemsPaginator' => $itemsPage,
         ];
     }
 
@@ -150,12 +157,17 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        return \App\Models\Unit::whereIn('id', $accessibleIds)->get();
+        // Issue #1024: a `<select>` needs nothing but id/name.
+        return \App\Models\Unit::whereIn('id', $accessibleIds)->get(['id', 'name']);
     }
 }; ?>
 
 <div class="p-6" dir="rtl">
     @php $chart = $this->chartPayload(); @endphp
+    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+        this (morphed on every render) instead of firing a second method request
+        per filter change. --}}
+    <div id="todosChartData" class="hidden" data-chart='@json(['byStatus' => $chart['byStatus'], 'byUnit' => $chart['byUnit']])'></div>
     <x-header title="گزارش وظایف" separator progress-indicator>
         <x-slot:actions>
             <x-help:button section="reports" wireModel="showHelpModal" />
@@ -283,8 +295,27 @@ return new class extends Component
                 </tbody>
             </table>
         </div>
+
+        {{-- Issue #1024: the hand-rolled table has no `with-pagination`, so the
+            paginator rides alongside the payload. --}}
+        @if ($chart['itemsPaginator']->hasPages())
+            {{-- `mary-table-pagination` is the app's own pagination style hook
+                (`resources/css/app.css`); the hand-rolled table cannot pass it
+                through `x-table`, so it is applied by hand. --}}
+            <div class="mt-4 mary-table-pagination">
+                {{ $chart['itemsPaginator']->links() }}
+            </div>
+        @endif
     </x-card>
 </div>
+
+@assets
+    {{-- Issue #1182: jalaliDatepicker is page-specific and used to ship in the
+         global layout on every page. `@assets` keeps the tag in <head>, so the
+         library is defined before this page's first `startWatch()` call — on a
+         full load and before the swap on `wire:navigate`. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
 
 @assets
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
@@ -306,9 +337,13 @@ return new class extends Component
         container.innerHTML = '';
     }
 
-    async function render() {
-        waitForHighcharts(async () => {
-            const data = await $wire.chartPayload();
+    function render() {
+        waitForHighcharts(() => {
+            // Issue #1042: read the server-rendered aggregates above — the
+            // inline @php already ran the payload for this render, so a second
+            // method request would just re-run it.
+            const el = document.getElementById('todosChartData');
+            const data = el ? JSON.parse(el.dataset.chart) : {};
 
             // Status pie
             destroyChart('statusChart');
@@ -343,10 +378,15 @@ return new class extends Component
     }
 
     render();
-    $wire.$watch('selectedUnitId', () => render());
-    $wire.$watch('statusFilter', () => render());
+    // Issue #1042: the unit/status selects re-render through the DOM payload
+    // (morphed on each server render) instead of a second `chartPayload()`
+    // request. The date watchers stay because the Jalali datepicker writes the
+    // properties via `$wire.set`.
     $wire.$watch('dateFrom', () => render());
     $wire.$watch('dateTo', () => render());
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) render();
+    });
 
     const initJdp = () => {
         if (typeof jalaliDatepicker === 'undefined') return;

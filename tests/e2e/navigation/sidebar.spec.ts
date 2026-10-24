@@ -93,6 +93,36 @@ test.describe('active state highlight', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.drawer-side a.mary-active-menu')).toHaveAttribute('href', '/users');
   });
+
+  // #996 — the vendor's `Str::startsWith` prefix match highlighted several items
+  // at once (`/maps/route2` lit `/map`, `/maps/route` AND itself). Every row here
+  // is one page with exactly one owning sidebar link.
+  const ACTIVE = '.drawer-side a.mary-active-menu';
+
+  const ACTIVE_MATRIX = [
+    { path: '/dashboard', href: '/dashboard' },
+    { path: '/map', href: '/map' },
+    { path: '/maps/route', href: '/maps/route' },
+    { path: '/maps/route2', href: '/maps/route2' },   // رگرسیون #996
+    { path: '/maps/point', href: '/maps/point' },     // رگرسیون #996
+    { path: '/users', href: '/users' },
+    { path: '/users?page=1', href: '/users' },        // کوئری نباید هایلایت را بشکند
+    { path: '/users/changepassword', href: '/users/changepassword' },
+    { path: '/tickets/new', href: '/tickets/new' },
+  ];
+
+  for (const { path, href } of ACTIVE_MATRIX) {
+    test(`${path} highlights exactly its own sidebar link`, async ({ page }) => {
+      await login(page);
+      await page.goto(path);
+      await page.waitForLoadState('domcontentloaded');
+
+      await expect(page.locator(ACTIVE)).toHaveCount(1);
+      await expect(page.locator(ACTIVE)).toHaveAttribute('href', href);
+      await expect(page.locator('.drawer-side a[aria-current="page"]')).toHaveCount(1);
+      await expect(page.locator(`.drawer-side a[href="${href}"][aria-current="page"]`)).toHaveCount(1);
+    });
+  }
 });
 
 test.describe('mobile drawer', () => {

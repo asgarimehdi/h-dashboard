@@ -2,11 +2,16 @@
 
 use Livewire\Component;
 
-return new class extends Component {
+return new class extends Component
+{
     public string $map_tile_template;
+
     public string $routing_url;
+
     public string $geocoding_url;
+
     public string $start_point = '';
+
     public string $end_point = '';
 
     public function mount(): void
@@ -64,7 +69,7 @@ return new class extends Component {
                 <x-toggle x-on:click="window.toggleRoutingContainer()" label="نمایش متنی مسیر"/>
             </div>
 
-            <livewire:maps.map/>
+            <livewire:maps.map wire:key="route2-page-map" />
             <div id="route-info" class="bg-base-200 p-4 rounded mt-4">
                 <strong>📏 فاصله جاده‌ای:</strong> <span id="distance">---</span> کیلومتر<br>
                 <strong>⌛ زمان تقریبی سفر:</strong> <span id="duration">---</span> دقیقه
@@ -72,6 +77,26 @@ return new class extends Component {
         </div>
     </x-card>
 </div>
+
+@push('styles')
+    {{-- Issue #984 (CSS half, #1018): the routing stylesheet ships on this page
+         alone — pushed into `<head>` via `@stack('styles')`, not the global
+         layout. --}}
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
+@endpush
+
+@assets
+    {{-- Issue #984 / #1182: Leaflet core and routing are this page's only
+         consumers, so they ship here instead of in the global layout. `@assets`
+         keeps them in <head>: a `@push('scripts')` tag at the end of the body is
+         evaluated after Alpine has initialised the map on `wire:navigate`
+         (`L is not defined`, blank map — #028), while Livewire evaluates new head
+         assets before the swap completes. `L` and `L.Routing` are therefore
+         defined when `onReady()` runs. Leaflet comes first: routing-machine
+         patches `L`. --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
+@endassets
 
 @script
 <script>
@@ -86,16 +111,57 @@ return new class extends Component {
         return null;
     }
 
+    /**
+     * Build the Nominatim search URL with the query encoded by URLSearchParams.
+     *
+     * Hand-written `'?q=' + query` is how a library swap breaks silently: an
+     * address containing `&` or `#` would truncate the query, axios used to
+     * encode it for us.
+     */
+    function geocodeSearchUrl(base, query) {
+        var url = new URL(base + '/search');
+        url.searchParams.set('q', query);
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('limit', '1');
+        return url.toString();
+    }
+
+    /**
+     * Nominatim answers with an array of `{lat, lon}`. An error body (object or
+     * string) is not an array, and `[].length > 0` on a non-array is
+     * `undefined > 0` — false, but only by accident. Be explicit.
+     */
+    function parseGeocodeResponse(data) {
+        if (!Array.isArray(data) || data.length === 0) {
+            return null;
+        }
+
+        var result = data[0];
+        if (result === null || typeof result !== 'object') {
+            return null;
+        }
+
+        var lat = Number(result.lat);
+        var lon = Number(result.lon);
+        if (!isFinite(lat) || !isFinite(lon)) {
+            return null;
+        }
+
+        return L.latLng(lat, lon);
+    }
+
     async function geocode(query) {
         if (!query) return null;
         try {
-            var response = await axios.get('{{ $geocoding_url }}/search', {
-                params: { q: query, format: 'json', limit: 1 }
+            var response = await fetch(geocodeSearchUrl('{{ $geocoding_url }}', query), {
+                headers: { 'Accept': 'application/json' }
             });
-            if (response.data.length > 0) {
-                var result = response.data[0];
-                return L.latLng(result.lat, result.lon);
+            // fetch, unlike axios, resolves on 4xx/5xx — check it ourselves.
+            if (!response.ok) {
+                console.error('Geocoding error:', response.status, response.statusText);
+                return null;
             }
+            return parseGeocodeResponse(await response.json());
         } catch (error) {
             console.error('Geocoding error:', error);
         }

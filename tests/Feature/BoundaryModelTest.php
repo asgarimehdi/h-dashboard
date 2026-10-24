@@ -9,11 +9,12 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Boundary::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 // Coverage gap (#494): Boundary::geojson has two execution paths — the
 // pre-loaded-attribute fast path and the fallback query — plus its relations.
@@ -22,10 +23,7 @@ uses(TestCase::class, RefreshDatabase::class);
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
 
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $this->seedLookupTables();
 });
 
 function makeBoundary(): Boundary
@@ -88,6 +86,27 @@ test('geojson returns null when boundary attribute key is present but empty', fu
     $empty2->setRawAttributes(['id' => 1, 'boundary' => '']);
 
     expect($empty2->geojson)->toBeNull();
+});
+
+// #1023: the map/UI contract is a BARE geometry (no Feature wrapper). A
+// regression here throws in L.geoJSON/fitBounds and silently disables the draw
+// toolbar (#702), so it is pinned at the model level where PostGIS is live.
+test('geojson accessor returns a bare geometry, never a GeoJSON Feature', function () {
+    $b = makeBoundary();
+    $fresh = Boundary::query()->findOrFail($b->id);
+
+    $decoded = json_decode($fresh->geojson, true);
+
+    expect($decoded)->toBeArray()
+        ->and($decoded['type'])->toBe('MultiPolygon')
+        ->and($decoded)->toHaveKey('coordinates')
+        ->and($decoded)->not->toHaveKey('geometry');
+});
+
+// #1023: a `multipolygon => multipolygon` cast pointed at a column that does
+// not exist (the column is `boundary`), so it could never run.
+test('Boundary has no cast for the nonexistent multipolygon column', function () {
+    expect(array_keys((new Boundary)->getCasts()))->not->toContain('multipolygon');
 });
 
 test('boundary belongs to region through boundary_id', function () {

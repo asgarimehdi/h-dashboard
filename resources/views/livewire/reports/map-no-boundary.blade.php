@@ -103,7 +103,7 @@ return new class extends Component
             <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             <span class="text-sm">این واحدها فاقد مرز (polygon) هستند. نقاط قرمز روی نقشه واحدهایی هستند که مختصات دارند.</span>
         </div>
-        <livewire:maps.map/>
+        <livewire:maps.map wire:key="map-no-boundary-page-map" />
     </x-card>
 
     {{-- لیست واحدهای بدون مختصات --}}
@@ -131,6 +131,18 @@ return new class extends Component
     </x-card>
     @endif
 </div>
+
+@assets
+    {{-- Issue #1182: Leaflet core is page-specific now and ships on the HOST page
+         — never inside `maps/map.blade.php`, whose own asset would arrive with the
+         child component, after this page's Alpine `init()` had already asked the
+         store for a map. `@assets`, not `@push('scripts')`: a pushed tag lands at
+         the end of the body, and on `wire:navigate` Livewire morphs the body and
+         runs Alpine BEFORE evaluating those scripts — measured `L is not defined`
+         and a blank map (#028). Livewire injects `@assets` into <head> and
+         evaluates new head assets before the navigation completes. --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+@endassets
 
 @script
 <script>

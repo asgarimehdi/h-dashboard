@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
 use App\Models\Unit;
+use App\Rules\PerPage;
+use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
@@ -78,7 +80,7 @@ class HrStatsController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
         $version = Cache::get('hr_stats_version', 0);
         $cacheKey = "hr:vacancies:v{$version}:{$scopeHash}";
 
@@ -127,7 +129,9 @@ class HrStatsController extends Controller
                 $q->where($p.'n_code', 'LIKE', "%{$s}%")
                     ->orWhere($p.'f_name', 'LIKE', "%{$s}%")
                     ->orWhere($p.'l_name', 'LIKE', "%{$s}%")
-                    ->orWhereRaw("CONCAT({$p}f_name, ' ', {$p}l_name) LIKE ?", ["%{$s}%"]);
+                    // Issue #1009: `||` (NOT `concat()`) so the
+                    // `persons_fullname_trgm_idx` expression index applies.
+                    ->orWhereRaw("({$p}f_name || ' ' || {$p}l_name) LIKE ?", ["%{$s}%"]);
             });
         }
         foreach (['unit_id' => 'u_id', 'semat_id' => 's_id', 'tahsil_id' => 't_id', 'estekhdam_id' => 'e_id', 'radif_id' => 'r_id', 'status' => 'status'] as $param => $col) {
@@ -136,6 +140,9 @@ class HrStatsController extends Controller
             }
         }
 
+        // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
+        // clamp; `min()` kept as defence in depth.
+        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min((int) $request->get('per_page', 20), 100);
         $persons = $query->paginate($perPage);
 
@@ -190,7 +197,7 @@ class HrStatsController extends Controller
     private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
     {
         $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = md5(implode(',', $accessibleIds));
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
         return "hr:{$segment}:v{$version}:{$scopeHash}";
     }

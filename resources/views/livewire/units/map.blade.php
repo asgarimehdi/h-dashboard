@@ -52,16 +52,29 @@ return new class extends Component {
             return;
         }
 
-        $unit = Unit::with('boundary')->find($this->unitId);
+        // #1023: project ST_AsGeoJSON in the query. A LEFT join (not inner):
+        // a unit with no boundary must still load — that is the draw path, and
+        // an inner join would make it disappear. Reading the relation's appended
+        // attribute used to fire the accessor twice for this one unit.
+        /** @var (Unit&object{geojson: string|null})|null $unit */
+        $unit = Unit::query()
+            ->leftJoin('boundaries', 'units.boundary_id', '=', 'boundaries.id')
+            ->select([
+                'units.*',
+                DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+            ])
+            ->find($this->unitId);
 
         if (! $unit) {
             $this->error('واحد یافت نشد.');
             return;
         }
 
+        // Note: `$unit->toArray()` no longer carries a `boundary` key (the
+        // relation is not loaded); the bare geometry now arrives as `geojson`.
         $this->unit = $unit->toArray();
         $this->hasBoundary = $unit->boundary_id !== null;
-        $this->geojson = $unit->boundary?->geojson;
+        $this->geojson = $unit->geojson;
     }
 
     public function saveBoundary($geojsonData): void
@@ -191,6 +204,24 @@ return new class extends Component {
         filter: invert(100%) hue-rotate(180deg) brightness(100%) contrast(100%);
     }
 </style>
+@endassets
+
+@push('styles')
+    {{-- Issue #984 (CSS half, #1018): `units/map` is the only page that draws
+         boundaries, so the draw control's stylesheet ships here rather than in
+         the global layout — pushed into `<head>` via `@stack('styles')`. --}}
+    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
+@endpush
+
+@assets
+    {{-- Issue #984 / #1182: `units/map` is the only page that draws boundaries,
+         so the draw plugin ships here instead of in the global layout, with
+         Leaflet core ahead of it. Both go through `@assets`, i.e. into <head>, so
+         `L` and `L.Control.Draw` exist when `initUnitMap()` runs — a pushed tag
+         at the end of the body would arrive after Alpine on `wire:navigate`
+         (#028). --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
 @endassets
 
 @script

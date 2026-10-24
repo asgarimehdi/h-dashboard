@@ -13,12 +13,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAuditController::class);
 
 class HardwareAuditRollbackAllowlistTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $tId;
@@ -38,12 +40,13 @@ class HardwareAuditRollbackAllowlistTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $this->tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $this->eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $this->sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $this->rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        $this->tId = DB::table('tahsils')->first()->id;
+        $this->eId = DB::table('estekhdams')->first()->id;
+        $this->sId = DB::table('semats')->first()->id;
+        $this->rId = DB::table('radifs')->first()->id;
 
         $nCode = (string) fake()->unique()->numerify('##########');
         $this->unit = Unit::create(['name' => 'Test Unit']);

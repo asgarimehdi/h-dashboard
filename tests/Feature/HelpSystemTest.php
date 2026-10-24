@@ -10,11 +10,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(AppBrand::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 /**
  * Help system tests:
@@ -23,16 +24,17 @@ uses(TestCase::class, RefreshDatabase::class);
  * - No broken sections (all wired content files render)
  */
 beforeEach(function () {
+    $this->seedLookupTables();
     Session::flush();
 });
 
 function makeHelpUser(): User
 {
     $unit = Unit::create(['name' => 'Test Unit']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create(['n_code' => $nCode, 'f_name' => 'T', 'l_name' => 'U', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $unit->id]);
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
@@ -73,6 +75,50 @@ it('hardware page help modal opens via button', function () {
         ->assertSet('showHelpModal', true);
 });
 
+it('does not ship the help modal body while the modal is closed', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->assertOk()
+        ->assertSet('showHelpModal', false)
+        ->assertDontSee('نقشه‌های تعاملی و تحلیل مکانی')
+        ->assertDontSee('راهنمای این بخش در دسترس نیست');
+});
+
+it('ships the help modal body on the same response that opens it', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->assertOk()
+        ->assertDontSee('نقشه‌های تعاملی و تحلیل مکانی')
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('نقشه‌های تعاملی و تحلیل مکانی');
+});
+
+it('ships a materially smaller response while the help modal is closed', function () {
+    $user = makeHelpUser();
+
+    $closed = strlen(Livewire::actingAs($user)->test('hardware.index')->html());
+
+    $open = strlen(
+        Livewire::actingAs($user)->test('hardware.index')
+            ->call('$set', 'showHelpModal', true)
+            ->html()
+    );
+
+    expect($open - $closed)->toBeGreaterThan(20 * 1024);
+});
+
+it('keeps the unknown-section fallback when the help modal is open', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->call('$set', 'showHelpModal', true)
+        ->assertSee('راهنمای این بخش در دسترس نیست')
+        ->assertSee('محتوای راهنما تعریف نشده است');
+});
+
 it('every help content section renders without errors', function (string $section) {
     $user = makeHelpUser();
     // Render each help content file standalone via the modal component path
@@ -82,5 +128,5 @@ it('every help content section renders without errors', function (string $sectio
     'dashboard', 'hardware', 'hardware-import', 'persons-import', 'personnel',
     'units', 'tickets', 'todos', 'reports', 'maps', 'settings', 'roles',
     'permissions', 'users', 'activity-log', 'networks', 'wireless', 'tools',
-    'search', 'profile',
+    'search', 'profile', 'hr-dashboard',
 ]);

@@ -11,11 +11,16 @@ use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionProperty;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -395,9 +400,66 @@ class HardwareExportTest extends TestCase
         $query = Hardware::query();
         $export = new HardwareExport($query, ['n_code', 'pc_name']);
 
-        $this->assertInstanceOf(FromCollection::class, $export);
+        // #1020: chunking is an export-side contract (WithCustomChunkSize,
+        // consulted at Sheet::fromQuery). WithChunkReading is import-only —
+        // declaring it on an export was inert, so it must stay gone.
+        $this->assertInstanceOf(FromQuery::class, $export);
+        $this->assertInstanceOf(WithCustomChunkSize::class, $export);
+        $this->assertNotInstanceOf(WithChunkReading::class, $export);
         $this->assertInstanceOf(WithHeadings::class, $export);
         $this->assertInstanceOf(WithMapping::class, $export);
+    }
+
+    #[Test]
+    public function export_class_runs_the_rows_through_the_chunked_query_path(): void
+    {
+        // With more rows than one chunk every row must land exactly once. The
+        // controller hands the export a builder ending in orderByDesc('id') —
+        // a unique key — so the file's row order must match it exactly.
+        $names = ['PC-A', 'PC-B', 'PC-C', 'PC-D', 'PC-E'];
+        foreach ($names as $i => $name) {
+            $this->createHardware(['n_code' => '10000000'.$i, 'pc_name' => $name]);
+        }
+
+        $export = new HardwareExport(Hardware::query()->orderByDesc('id'), ['n_code', 'pc_name']);
+        $this->forceChunkSize($export, 2);
+
+        Excel::store($export, 'hardware-export-chunk-boundary.xlsx', 'local');
+        $rows = $this->dataRows('hardware-export-chunk-boundary.xlsx');
+
+        $this->assertSame(
+            array_reverse($names),
+            array_column($rows, 'B'), // pc_name — newest id first
+        );
+    }
+
+    /**
+     * #1020: chunkSize is enforced by reflection so every test can walk the
+     * chunk boundary without rewriting the export's own 500 default.
+     *
+     * @param  object  $export
+     */
+    private function forceChunkSize($export, int $size): void
+    {
+        $property = new ReflectionProperty($export::class, 'chunkSize');
+        $property->setValue($export, $size);
+    }
+
+    /**
+     * Read the stored sheet back and return its data rows (headings excluded).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function dataRows(string $filename): array
+    {
+        $path = Storage::disk('local')->path($filename);
+        $spreadsheet = IOFactory::load($path);
+        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+        array_shift($rows);
+        $spreadsheet->disconnectWorksheets();
+        @unlink($path);
+
+        return array_values($rows);
     }
 
     #[Test]

@@ -1,10 +1,24 @@
 import { defineConfig, devices } from '@playwright/test';
-import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.e2e' });
+// Node ≥ 20.12 loads a dotenv file natively (CI runs Node 24), so the `dotenv`
+// package is not needed. Wrapped in try/catch on purpose: `dotenv.config()`
+// failed silently when `.env.e2e` was missing, and a bare `npx playwright test`
+// is a documented fallback — `process.loadEnvFile()` would otherwise throw and
+// abort the run before a single test is listed.
+try {
+  process.loadEnvFile('.env.e2e');
+} catch {
+  // No `.env.e2e` here: `scripts/e2e-test.sh` sources it into the environment
+  // before launching Playwright, or the app is already running with a swapped
+  // `.env`. Existing `process.env` values win either way.
+}
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // #1227: the full 35-theme matrix is ~15.5 min on its own and is report-only.
+  // It must never join the per-PR E2E job (30-min cap); only
+  // `.github/workflows/theme-sweep-35.yml` sets SWEEP_35=1 and runs it.
+  testIgnore: process.env.SWEEP_35 === '1' ? undefined : ['**/theme/sweep-35.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

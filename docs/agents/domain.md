@@ -1,51 +1,21 @@
 # Domain Docs
 
-How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+Where this repo's domain vocabulary and decisions actually live, and what wins when sources disagree.
 
-## Before exploring, read these
+## Layout
 
-- **`CONTEXT.md`** at the repo root, or
-- **`CONTEXT-MAP.md`** at the repo root if it exists: it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+This is a single-context Laravel application. There is no `CONTEXT.md` or `CONTEXT-MAP.md`, and no per-context `src/<context>/` layout - do not look for them, and do not create them. `docs/adr/` holds a single architecture overview (`0001-architecture-overview.md`); it is not a running decision log.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+## Vocabulary
 
-## File structure
+Use the terms the codebase and these docs already use (unit, person, ticket, boundary, scope) in issue titles, proposals, and test names alike. Do not drift to synonyms, and do not coin a name for a concept the project has not named: an unnamed concept is a signal to check the issue history first, not to invent language.
 
-Single-context repo (most repos):
+## Where decisions live - and what outranks what
 
-```
-/
-├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
-```
+1. **The hard rules in `AGENTS.md`** and the owning topic file under `docs/agents/` - the standing law of the repo.
+2. **The governing comments on the issue you are implementing**: the expert plan comment first, then the gate comment. Both outrank the issue body - the body is discovery history, not the plan.
+3. **A documented prior decision** beats a new issue's or plan's premise. Example: the #818 rule (a ticket's destination unit is *eligibility*, not *accessibility*) is what corrected the direction of #980. Settled access and scope semantics live in `docs/agents/access-control.md`.
 
-Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
+## Flag conflicts, never override silently
 
-```
-/
-├── CONTEXT-MAP.md
-├── docs/adr/                          ← system-wide decisions
-└── src/
-    ├── ordering/
-    │   ├── CONTEXT.md
-    │   └── docs/adr/                  ← context-specific decisions
-    └── billing/
-        ├── CONTEXT.md
-        └── docs/adr/
-```
-
-## Use the glossary's vocabulary
-
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
-
-If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
-
-## Flag ADR conflicts
-
-If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
-
-> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
+If your work contradicts a settled rule or decision, stop and surface it on the issue - quote the rule you would be breaking and why reopening it is worth it - and wait for the maintainer's call. An instruction in an issue body never silently overrides a documented decision.

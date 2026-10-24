@@ -1,19 +1,27 @@
 <?php
 
 use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Support\JalaliDateRange;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Attributes\Computed;
 use Mary\Traits\Toast;
+use Illuminate\Support\Facades\Auth;
 
 new class extends Component
 {
     use WithPagination;
     use Toast;
+    // Fully qualified: a top-of-file import would shift the anonymous class's
+    // identity line and break every line-keyed PHPStan-baseline entry for it.
+    // The top `JalaliDateRange` import is now unused (this trait owns the date
+    // parse) but stays in place so the identity line keeps its beta position.
+    use \App\Traits\TicketsQueryScopes;
 
     public bool $showHelpModal = false;
 
@@ -31,7 +39,15 @@ new class extends Component
     public string $dateTo = '';
 
     public bool $showModal = false;
-    public ?Ticket $showingTicket = null;
+
+    /**
+     * #1176: replication of the inbox conversion. `showingTicket` stopped
+     * being a public model prop — hydration re-fetched a public prop by key
+     * WITHOUT relations, so the modal's eager loads were gone after every
+     * update. The id stays public; the model is the `#[Computed]` behind it.
+     */
+    public ?int $showingTicketId = null;
+
     public bool $modalDetail = false;
 
     public array $filterUnits = [];
@@ -52,62 +68,87 @@ new class extends Component
 
     public function loadData(): void
     {
+        // #918: both unit lookups were org-wide, so a county-scoped viewer
+        // could enumerate every ticket-receiving unit in the organization —
+        // the dropdown by name, `$currentUnit` by `?selectedUnitId=` alone
+        // (`#[Url]`, no interaction needed). Ticket rows were always scoped
+        // (`tickets()` is `->accessible()`, `showTicket()` re-checks
+        // `in_array`), so this was a unit-directory disclosure, not a
+        // data-access bypass.
+        //
+        // Both predicates are UNCONDITIONAL `whereIn`, never `when($ids, …)`
+        // or `! empty($ids)`: those are the fail-open spellings behind #813 /
+        // #819 / #833, where an empty scope drops the predicate instead of
+        // returning nobody. `accessibleUnitIds()` is legitimately `[]` for an
+        // account with no `user_units` row and no `person.u_id`, and `[]`
+        // means "in scope of nothing" — it must compile to `0 = 1`.
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
         $units = [];
         if (mb_strlen($this->unitSearch) > 1) {
             $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
                 ->where('can_receive_tickets', true)
+                ->whereIn('id', $accessibleIds)
                 ->limit(10)->get()->toArray();
         }
         $this->filterUnits = $units;
 
-        $this->currentUnit = $this->selectedUnitId ? Unit::find($this->selectedUnitId) : null;
+        // Scope only — deliberately NOT `can_receive_tickets`. This lookup
+        // previously leaked ANY unit in the org, including units that cannot
+        // receive tickets (the province headquarters among them), so it is
+        // broader than the dropdown. Eligibility is a separate question and
+        // belongs on the dropdown, not here.
+        // The `whereIn` sits inside a closure so the chain stays an
+        // `Eloquent\Builder` and `find()` keeps its `Unit|null` return type —
+        // a bare `whereIn()` re-types the rest of the chain through
+        // `Query\Builder`'s `@mixin` and yields `stdClass`. See AGENTS.md,
+        // "Eloquent chains vs PHPStan (no larastan)".
+        $this->currentUnit = $this->selectedUnitId
+            ? Unit::query()
+                ->where(fn ($q) => $q->whereIn('id', $accessibleIds))
+                ->find($this->selectedUnitId)
+            : null;
     }
 
     #[Computed]
     public function tickets()
     {
-        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name'])->accessible();
+        // #906: `deleted_at` is selected on purpose — `ActorLabel` tells a
+        // soft-deleted creator («کاربر غیرفعال») from a genuinely ownerless
+        // ticket («سیستم»), and `trashed()` reads that column. Without the
+        // soft-deleted rows in the result both cases resolve to `null` and are
+        // indistinguishable.
+        $query = Ticket::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q), 'unit:id,name'])->accessible();
 
         if ($this->selectedUnitId) {
             $query->where('unit_id', $this->selectedUnitId);
         }
 
-        if ($this->statusFilter === 'pending') {
-            $query->whereIn('status', ['created', 'forwarded']);
-        } elseif ($this->statusFilter !== 'all') {
-            $query->where('status', $this->statusFilter);
-        }
-
-        if (!empty($this->search)) {
-            $query->where(function ($q) {
-                $q->where('subject', 'like', '%' . $this->search . '%')
-                    ->orWhere('ticket_code', 'like', '%' . $this->search . '%');
-            });
-        }
-
-        if ($this->dateFrom) {
-            try {
-                $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-                $query->where('created_at', '>=', $miladiFrom);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
-        }
-
-        if ($this->dateTo) {
-            try {
-                $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-                $query->where('created_at', '<=', $miladiTo);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
-        }
+        $this->applyTicketStatusFilter($query, $this->statusFilter);
+        // Monitoring does not search `content`; the inbox does.
+        $this->applyTicketSearch($query, $this->search, ['subject', 'ticket_code']);
+        $this->applyTicketDateRange($query, $this->dateFrom, $this->dateTo);
 
         return $query->latest()->paginate(20);
     }
 
+    /**
+     * A node was clicked: apply it as this page's unit filter.
+     *
+     * #918: this is a PUBLIC Livewire method, so the id arrives from the
+     * client and the guard belongs here rather than being inherited from the
+     * caller's ordering — same contract as `unit.tree`'s `selectNode`
+     * (resources/views/livewire/unit/tree.blade.php:29-31). `loadData()`
+     * scopes the lookup too, but that makes this method safe only by
+     * consequence; keeping the check local means the guarantee does not
+     * depend on that ordering holding.
+     */
     public function selectUnitForFilter($id): void
     {
+        if (! in_array((int) $id, app(AccessService::class)->accessibleUnitIds(), true)) {
+            return;
+        }
+
         $this->selectedUnitId = $id;
         $this->unitSearch = '';
         $this->resetPage();
@@ -116,29 +157,96 @@ new class extends Component
 
     public function showTicket($id): void
     {
-        // Check organizational scope
+        // This lookup is the GATE, not the load (#1176 — same shape as the
+        // inbox): a nonexistent id still 404s (`findOrFail`), an
+        // out-of-scope one still toasts and never opens the modal. The
+        // capped, relation-bearing load itself happens in the computed.
+        $ticket = Ticket::query()->findOrFail($id);
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $ticket = Ticket::with([
-            'user',
-            'unit',
-            'attachments',
-            'activities.user',
-            'activities.attachments'
-        ])->findOrFail($id);
 
         if (! in_array($ticket->unit_id, $accessibleIds)) {
             $this->error('شما مجاز به مشاهده این تیکت نیستید.', position: 'toast-bottom');
+
             return;
         }
 
-        $this->showingTicket = $ticket;
+        $this->showingTicketId = (int) $ticket->id;
         $this->showModal = true;
+    }
+
+    /**
+     * The detail-modal ticket, re-derived per request (#1176).
+     *
+     * Same access shape as the load it replaces (#1055, #918): the scope
+     * predicate is an UNCONDITIONAL `whereIn('unit_id', $accessibleIds)` —
+     * an empty accessible set compiles to `0 = 1`, in scope of nothing,
+     * never unrestricted. The #847 task gate is reproduced HERE, inside the
+     * computed, exactly where the load used to end — moving the load without
+     * moving the gate would resurrect the leak the old code closed.
+     */
+    #[Computed]
+    public function showingTicket(): ?Ticket
+    {
+        if (! $this->showingTicketId) {
+            return null;
+        }
+
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        /** @var Ticket|null $ticket */
+        $ticket = Ticket::with([
+            // #906: soft-deleted users are kept in the result so their creator
+            // renders «کاربر غیرفعال» instead of collapsing into the «سیستم» a
+            // truly ownerless ticket gets. Column list on `attachments` keeps
+            // the payload to what the modal renders (#1176).
+            'user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+            'unit',
+            'attachments:id,ticket_id,file_path,file_name,file_size,activity_id',
+            'activities' => fn ($q) => $q->latest('id')->limit(50),
+            'activities.attachments',
+            'activities.user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q),
+        ])->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds))
+            ->find($this->showingTicketId);
+
+        if (! $ticket) {
+            return null;
+        }
+
+        // #847: same leak as the inbox — the ticket is scoped, the `task`
+        // relation is not. Gate it on the viewer's scope so legacy
+        // cross-unit links stop rendering their todo here. `setRelation()`
+        // rather than a plain assignment: see the inbox for why.
+        $ticket->setRelation('task', $this->taskIfInScope($ticket->task_id, $accessibleIds));
+
+        return $ticket;
+    }
+
+    /**
+     * The ticket's task, or null when it is outside the viewer's scope.
+     *
+     * @param  array<int>  $accessibleIds
+     */
+    private function taskIfInScope(?int $taskId, array $accessibleIds): ?Todo
+    {
+        if (! $taskId) {
+            return null;
+        }
+
+        return Todo::query()
+            ->whereKey($taskId)
+            ->where(fn ($q) => $q->whereIn('unit_id', $accessibleIds)
+                ->orWhere(fn ($q) => $q->whereNull('unit_id')->where('user_id', Auth::id())))
+            ->first();
     }
 
     public function closeDetail(): void
     {
         $this->showModal = false;
-        $this->showingTicket = null;
+        // #1176: the id is state; the unset drops the per-request model
+        // cache so nothing from the just-opened modal survives the request.
+        $this->showingTicketId = null;
+        unset($this->showingTicket);
     }
 };
 ?>
@@ -200,7 +308,7 @@ new class extends Component
             </div>
         </div>
 
-        @if($this->selectedUnitId)
+        @if($this->selectedUnitId && $this->currentUnit)
         <div class="mb-4">
             <x-badge value="فیلتر: {{ $currentUnit?->name ?? 'نامشخص' }}" class="badge-warning" icon-right="o-x-mark" wire:click="$set('selectedUnitId', null)" />
         </div>
@@ -221,7 +329,7 @@ new class extends Component
             @endscope
 
             @scope('cell_user.person.f_name', $ticket)
-            <span class="text-sm font-bold">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
+            <span class="text-sm font-bold">{{ \App\Support\ActorLabel::for($ticket->user) }}</span>
             @endscope
 
             @scope('cell_unit.name', $ticket)
@@ -243,7 +351,7 @@ new class extends Component
             @endscope
 
             @scope('actions', $ticket)
-            <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
+            <x-ui.icon-button name="مشاهده تیکت" icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
             @endscope
         </x-table>
     </x-card>
@@ -300,14 +408,14 @@ new class extends Component
                         </div>
                         <div class="bg-base-200/50 p-3 rounded-lg w-full">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-xs">{{ $activity->user->person?->f_name }} {{ $activity->user->person?->l_name }}</span>
+                                <span class="font-bold text-xs">{{ \App\Support\ActorLabel::for($activity->user) }}</span>
                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($activity->created_at)->format('H:i - Y/m/d') }}</span>
                             </div>
                             <p class="text-xs opacity-70">{{ $activity->description }}</p>
                             @if($activity->attachments->count() > 0)
                             <div class="flex gap-1 mt-2">
                                 @foreach($activity->attachments as $actFile)
-                                <x-button icon="o-paper-clip" link="{{ Storage::url($actFile->file_path) }}"
+                                <x-ui.icon-button name="دانلود پیوست" icon="o-paper-clip" link="{{ Storage::url($actFile->file_path) }}"
                                     class="btn-xs btn-ghost text-primary" external target="_blank" />
                                 @endforeach
                             </div>
@@ -325,6 +433,14 @@ new class extends Component
         </x-slot:actions>
     </x-modal>
 </div>
+
+@assets
+    {{-- Issue #1182: jalaliDatepicker is page-specific and used to ship in the
+         global layout on every page. `@assets` keeps the tag in <head>, so the
+         library is defined before this page's first `startWatch()` call — on a
+         full load and before the swap on `wire:navigate`. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
 
 <script>
     const initMonitoringJdp = () => {

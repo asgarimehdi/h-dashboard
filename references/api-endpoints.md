@@ -6,7 +6,7 @@
 
 ## Scheduler & Console Commands
 
-Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule()`). Commands live in `app/Console/Commands/`:
+Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864). Do **not** recreate `app/Console/Kernel.php`: nothing ever bound it, so a schedule put there silently never runs. Commands live in `app/Console/Commands/`:
 
 | Command | Schedule | Class | Purpose |
 |---|---|---|---|
@@ -14,7 +14,7 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 | `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todo instances from `todos.recurrence_rule` templates |
 | `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
 | `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
-| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per accessible unit |
+| `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per unit, org-wide (no actor at 06:00 — see #836) |
 | `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
 
 > `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
@@ -24,7 +24,7 @@ Scheduled tasks are registered in `app/Console/Kernel.php` (Laravel 13 `schedule
 - `todos:generate-recurring` — reads `todos` where `recurrence_rule != 'none'` and `last_generated_at <= now()`. For each due template it creates a fresh instance (`recurrence_rule = 'none'`) and advances `last_generated_at` to `nextOccurrence()` (`daily`/`weekly`/`monthly` × `recurrence_interval`, based on `last_generated_at ?? start_at`). Recurrence fields added in `2026_08_29_000002_add_recurrence_fields_to_todos_table.php`.
 - `maintenance:generate-due` — reads `maintenance_schedules` where `next_due_at <= now()` (or null), creates a `Ticket` (`ticket_code = 'T-'.Str::random(8)`, `status = 'created'`) on the schedule's `unit_id`, then advances `last_generated_at` and `next_due_at` by the schedule frequency.
 - `data:archive` — chunks `activity_logs` older than `--months=12` (default), copies them to `activity_log_archives` (preserving `original_created_at`/`original_updated_at`) and deletes the originals. Supports `--dry-run`.
-- `reports:generate-daily` — iterates `AccessService::accessibleUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`.
+- `reports:generate-daily` — iterates `AccessService::allUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`. **Org-wide by default, not actor-scoped** (#836): the 06:00 schedule runs with no authenticated user, so `accessibleUnitIds()` would be `[]` and the command would write nothing. `--unit=N` scopes a manual single-unit run.
 
 > All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
 
@@ -36,7 +36,7 @@ Other commands: `NormalizePersianText` (one-off Persian normalization), plus the
 
 ## API Reference
 
-All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled).
+All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled). Session route: `POST /api/logout` returns `204`, requires `auth:sanctum` but **no ability** (like `/api/user` — a self-scoped action, #1071), and revokes **only the caller's current token** — other devices stay signed in, and reusing the revoked token is `401`.
 
 **Abilities:** read groups use `ability:*` (Sanctum: ANY of the listed abilities), write groups use `abilities:*` (ALL) — `units:read|write`, `traffic:read`, `hardware:read|write`, `tickets:read|write`, `reports:read`, `persons:read|write`, `todos:read|todos:write`, `hr:read`, `notifications:read`, `gis:read`. Several write groups *also* require a Spatie `role_or_permission` (`organization`, `manage_hardware`, `manage_personnel`, `calendar`, `view_hr_dashboard`, `map`) — both must pass. The full per-route table lives in **AGENTS.md → "API Token Abilities"**; tokens are scoped and revoked on password change (#678), and API tests mint real Bearer tokens (`tests/Feature/ApiAbilityTest.php`).
 
@@ -84,16 +84,6 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 
 **Livewire Component:** "History / تغییرات" modal on `/hardware` page — shows date (Jalali), user, action badge, **source badge**, changed fields (old ← new badges), IP, and a **↺ بازگردانی (rollback)** button per field with confirmation. Rollback restores the field and logs a new `rollback` audit entry.
 
-### Hardware Import (`/hardware/import`)
-
-| Method | URL | Description |
-|---|---|---|
-| GET | `/api/persons` | List with filters: `search`, `unit_id`, `semat_id`. Supports `sort_by`, `sort_dir`, `per_page` |
-| POST | `/api/persons` | Create (requires `n_code`, `f_name`, `l_name`) |
-| GET | `/api/persons/{n_code}` | Show details with relationships (unit, semat, tahsil, estekhdam, radif) |
-| PUT | `/api/persons/{n_code}` | Update |
-| DELETE | `/api/persons/{n_code}` | Delete |
-
 ### Unit CRUD (`/api/units`)
 
 | Method | URL | Description |
@@ -119,6 +109,19 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 - **Columns (8):** `شناسه`, `نام واحد`, `نوع واحد`, **`شهرستان`**, `والد مستقیم`, `مسیر کامل`, `سطح`, `وضعیت`. `شهرستان` was added so the sheet filters by county as a plain Excel filter instead of matching a path substring. A county unit writes **its own county name**; a province-level or region-less unit writes `-` — never the province name, or one filter value would swallow every unit beneath it.
 - `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, gated by `role_or_permission:organization`.
 - ⚠️ `buildHierarchy()` guards against a `parent_id` cycle, and so does `Unit::descendantIds()` — the recursive CTE uses **`UNION`, not `UNION ALL`** (`e5a756d`, 2026-09-26). The set operator dedupes, so a cycle terminates in ~2ms instead of running until `statement_timeout`. Do not "optimize" it back to `UNION ALL`.
+
+### Person CRUD (`/api/persons`)
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/persons` | List with filters: `search`, `unit_id`, `semat_id`. Supports `sort_by`, `sort_dir`, `per_page` |
+| POST | `/api/persons` | Create (requires `n_code`, `f_name`, `l_name`) |
+| GET | `/api/persons/{n_code}` | Show details with relationships (unit, semat, tahsil, estekhdam, radif) |
+| PUT | `/api/persons/{n_code}` | Update |
+| DELETE | `/api/persons/{n_code}` | Delete |
+
+- **Abilities/permissions** (`routes/api.php`): reads need `persons:read` (ANY) **and** `role_or_permission:kargozini|manage_personnel`; writes need `abilities:persons:write` (ALL) **and** `role_or_permission:manage_personnel`. Organizational scope filters the rows.
+- The Xlsx import counterpart for persons is the web page `/kargozini/persons/import` (permission `manage_personnel`) — see the UI Import section below and `app/Imports/PersonImport.php`.
 
 ### Personnel Export (`/kargozini/persons/export`, issue #729, columns #755)
 
@@ -175,6 +178,8 @@ Web UI: `TicketComments` Livewire modal on the tickets inbox page (add/reply/edi
 | DELETE | `/api/todos/{todo}` | Delete |
 | POST | `/api/todos/{todo}/toggle-complete` | Toggle completion |
 
+Null-unit contract (#838, #917): a todo with `unit_id = null` belongs to its creator — the list, profile, search, and ticket picker show it only to the creator, and it serializes with `"unit": null` (key present, value null).
+
 ### Reports (`/api/reports`)
 
 | Method | URL | Description |
@@ -202,7 +207,9 @@ than "zero that day", so the line collapsed whenever the data was sparse.
 Implementation: `App\Services\DailySeries` materialises the window with `generate_series` and
 left-joins the caller's own aggregate, so it fills gaps in an existing (already filtered) query
 instead of re-deriving its filters. The API takes the window from `?days=`; the UI report pages
-pass their own date-from/date-to picker bounds, and the dashboard trend uses
+pass their own date-from/date-to picker bounds — `DailySeries::between()` **keeps that range**
+(capped at `MAX_DAYS = 365`) rather than only its day count, so a past window charts the days the
+user picked instead of "N days ending today" (#866) — and the dashboard trend uses
 `Dashboard::TICKET_CHART_DAYS`.
 
 > Deliberately **not** read from `daily_reports`: that table is written by
@@ -276,6 +283,10 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - Excel/CSV import with validation
 - Persian normalization for search fields
 - Bulk create with duplicate handling
+- **Route & permission:** Livewire page `hardware.import-hardware.import-hardware` (`routes/web.php`), inside the `auth` + `role_or_permission:manage_hardware` group.
+- **File cap:** `xlsx`/`xls`/`csv`, `max:10240` (10 MB).
+- **Behavior:** two-step flow — `import()` builds a preview via `App\Imports\HardwareImport` (ToCollection + WithHeadingRow, scope-filtered), `confirmImport()` applies it. Both are fail-closed: without an import scope (`hasImportScope()`, `AccessService::accessibleUnitIds()`) nothing is imported. `duplicate handling` on the existing hardware records becomes a create/update preview per row (create rows highlighted, update rows show the changed fields).
+- Persons are matched/linked by `n_code` during the import; the persons Excel import itself is a separate page, `/kargozini/persons/import` (`manage_personnel`), which runs `App\Imports\PersonImport`.
 
 ### Maps (`/maps`)
 
@@ -374,13 +385,14 @@ Blade:
 
 - Cache hot queries with `Cache::remember(...)` (stats, notification bell, search, tools) and invalidate on writes
 - Version-counter invalidation: `hardware_stats_version` bumps on hardware writes; stats keys `hardware_stats:v<N>:<md5(accessibleIds)>` become unreachable and expire via TTL (driver-agnostic, avoids full cache flush)
+- Per-scope cache keys MUST hash the accessible-unit list through `App\Support\ScopeCacheKey::hash()` (#1179) — it normalizes the members to `int` and sorts them, so the key depends on the SET of units and not on the order the recursive CTE happened to return them. Hashing the raw list (`md5(implode(',', $ids))` / `md5(json_encode($ids))`) is a bug: the same scope can mint two keys and the shared cache entry is lost. `GisController::gisCacheKey()` is the one documented exception (it hashes with `strval` + `SORT_STRING`, and its keys must stay stable)
 - Eager-load relationships (`with('person.unit')`) in list queries
 - Limit API pagination to max 100 per page
 - Use recursive CTE via raw SQL for unit hierarchy queries; `Unit::ancestorIds()` for ancestor chains
 - Add composite indexes for hot filter paths (e.g. `(task_id, status)` on tickets, `(user_id, created_at)` on activity_logs)
 - Apply `PersianNormalizer` on all text search inputs
 - pg_trgm GIN indexes back leading-wildcard `LIKE` search on `persons` (fullname forms), `hardwares` (pc_name/comments/type/ip_valid/ip_local/mac), and `units.name` (added 2026-08-26)
-- HR analytics endpoints (`stats`, `headcountTrend`, `vacancyTrend`, `staffingRatio`, `loadSubtree`) aggregate in a single pgsql pass and cache the result; `headcountTrend`/`staffingRatio` use a SQLite fallback (strftime / two-query) for tests. `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
+- HR analytics endpoints (`stats`, `headcountTrend`, `vacancyTrend`, `staffingRatio`, `loadSubtree`) aggregate in a single pgsql pass and cache the result. `headcountTrend`/`vacancyTrend` are cumulative monthly stocks over a `generate_series` window (DailySeries pattern, #736/#952): `months=12` yields exactly 12 buckets oldest-first, empty months read as zero, the stock basis is `created_at` (`hire_date` is unpopulated), and `?months=` follows the `ReportDays` contract (0/negative/above-24 are 422). `loadSubtree` is cached under the `unit_hierarchy` version so it invalidates with `descendantIds`
 - **Monitoring note (no code change needed):** `TicketComments::loadTicket()` eager-loads only two levels (`comments.user.person` + `children.user.person`); with max comment depth = 3 this is sufficient and not an N+1. Revisit only if depth grows or tickets accumulate very large comment trees
 
 ---
@@ -479,7 +491,7 @@ psql -h 127.0.0.1 -U h_dashboard -d h_dashboard -c \
 Since 2026-08-24 `phpunit.xml` forces `CACHE_STORE=array` + `SESSION_DRIVER=array` + `QUEUE_CONNECTION=sync` (`force="true"`), so the suite never connects to Redis — the docker Redis password is irrelevant. ⚠️ Laravel 13's `config/cache.php` reads **`CACHE_STORE`**, not the legacy `CACHE_DRIVER` — setting only `CACHE_DRIVER=array` leaves cache on redis and causes `NOAUTH`/`WRONGPASS` failures.
 
 #### 4. Clear cached config/routes BEFORE running (critical!)
-`.env.testing` ships `DB_CONNECTION=mysql` and a **different `APP_KEY`** than `.env`. If `bootstrap/cache/config.php` or the route cache (`bootstrap/cache/routes-v7.php`) exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists). Observed 2026-08-26: a stale `routes-v7.php` built from `.env`'s APP_KEY caused **exactly 75 failures** across every Livewire-mutation test — `config:clear` alone does NOT remove `routes-v7.php`, you must also run `route:clear`.
+`.env.testing` ships `DB_CONNECTION=mysql` and an `APP_KEY` that is **blank in git** (#953) — a local `composer test` fills it in via `scripts/ensure-test-app-key.php` the first time, so it differs from `.env`'s. If `bootstrap/cache/config.php` or the route cache (`bootstrap/cache/routes-v7.php`) exists, they override `phpunit.xml` → `mysql` connection refused, or a **mismatched Livewire endpoint hash → 404 on every `->set()`/`->call()`** (symptom: every mutation test fails, "table is empty", nothing persists). Observed 2026-08-26: a stale `routes-v7.php` built from `.env`'s APP_KEY caused **exactly 75 failures** across every Livewire-mutation test — `config:clear` alone does NOT remove `routes-v7.php`, you must also run `route:clear`.
 ```bash
 php artisan config:clear      # must be clear so phpunit.xml can override DB_* 
 php artisan route:clear       # removes routes-v7.php — fixes the Livewire endpoint-hash mismatch
@@ -551,11 +563,23 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test` with four jobs:
-- **Code Style (Pint)** — `vendor/bin/pint --test` (blocking, timeout 5 min)
-- **Tests & Coverage (blocking, timeout 10 min)** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov
-- **Mutation Testing (non-blocking, `continue-on-error: true`)** — `--covered-only`, treat failures as informational
-- **PHPStan Static Analysis** — `vendor/bin/phpstan analyse --no-progress` (blocking)
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`; three of its jobs are blocking and the rest are informational (`mutation` no longer runs on PRs — manual `workflow_dispatch` only, #1012):
+
+| Job key | Name | Gate | Timeout |
+|---|---|---|---|
+| `lint` | Code Style (Pint) | **blocking** | 5 min |
+| `test` | Tests & Coverage | **blocking** | 10 min |
+| `phpstan` | PHPStan Static Analysis | **blocking** | 10 min |
+| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error: true` | 10 min |
+| `e2e` | E2E Tests (Playwright) | `continue-on-error: true` | 30 min |
+| `mutation` | Mutation Testing | `continue-on-error: true`; manual-only (`workflow_dispatch`, #1012) | 30 min |
+| `test-php86` | PHP 8.6 Preview | `continue-on-error: true` | 10 min |
+
+- **`lint`** — `vendor/bin/pint --test` plus the tracked-`APP_KEY` guard (`php scripts/check-app-key-leak.php`).
+- **`test`** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
+- **`mutation`** — `--covered-only`, treat failures as informational. Gated to manual `workflow_dispatch` (#1012): it never runs on a PR.
+
+> Derivation, re-run instead of hand-counting — `yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml` → `lint, test, coverage-report, e2e, mutation, phpstan, test-php86`, and the blocking set is `yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml` → `lint, test, phpstan`.
 
 ### Storage Permissions (gotcha)
 

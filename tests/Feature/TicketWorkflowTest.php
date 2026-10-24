@@ -15,17 +15,21 @@ class TicketWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function ticket_has_created_status_by_default(): void
+    public function test_ticket_has_created_status_by_default(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
 
-        $ticket = Ticket::factory()->for($user)->for($unit)->create();
+        // The factory picks a RANDOM status (TicketFactory::definition), so the
+        // "created by default" contract is only observable through the explicit
+        // ->created() state. Asserting on a bare factory()->create() would be a
+        // coin flip.
+        $ticket = Ticket::factory()->for($user)->for($unit)->created()->create();
 
         $this->assertEquals('created', $ticket->status);
     }
 
-    public function ticket_can_be_forwarded(): void
+    public function test_ticket_can_be_forwarded(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -36,7 +40,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertEquals('forwarded', $ticket->fresh()->status);
     }
 
-    public function ticket_accepted_sets_accepted_at(): void
+    public function test_ticket_accepted_sets_accepted_at(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -54,7 +58,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $ticket->accepted_at);
     }
 
-    public function ticket_completed_sets_completed_at(): void
+    public function test_ticket_completed_sets_completed_at(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -73,7 +77,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $ticket->completed_at);
     }
 
-    public function ticket_rejected_status_works(): void
+    public function test_ticket_rejected_status_works(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -84,7 +88,7 @@ class TicketWorkflowTest extends TestCase
         $this->assertEquals('rejected', $ticket->fresh()->status);
     }
 
-    public function ticket_timestamps_are_cast(): void
+    public function test_ticket_timestamps_are_cast(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -100,7 +104,22 @@ class TicketWorkflowTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $ticket->completed_at);
     }
 
-    public function ticket_factory_produces_valid_data(): void
+    public function test_ticket_deadline_is_cast(): void
+    {
+        $user = User::factory()->create();
+        $unit = Unit::factory()->create();
+
+        $ticket = Ticket::factory()->for($user)->for($unit)->create([
+            'deadline' => now()->addDay(),
+        ]);
+
+        // The third `datetime` cast on the model — it had no live assertion
+        // before this file was resurrected (issue #935).
+        $this->assertInstanceOf(Carbon::class, $ticket->deadline);
+        $this->assertTrue($ticket->deadline->isFuture());
+    }
+
+    public function test_ticket_factory_produces_valid_data(): void
     {
         $user = User::factory()->create();
         $unit = Unit::factory()->create();
@@ -113,5 +132,45 @@ class TicketWorkflowTest extends TestCase
         $this->assertNotEmpty($ticket->subject);
         $this->assertNotEmpty($ticket->content);
         $this->assertNotNull($ticket->ticket_code);
+    }
+
+    /**
+     * Issue #935 — the factory states that nothing ever consumed.
+     *
+     * `TicketFactory::accepted()` / `->completed()` / `->rejected()` set the
+     * status AND the matching timestamp together. Before this file ran, they
+     * were dead code; these are the assertions that give them a purpose and
+     * pin the pair the endpoints write as one unit.
+     */
+    public function test_ticket_factory_states_write_status_and_timestamps_together(): void
+    {
+        $user = User::factory()->create();
+        $unit = Unit::factory()->create();
+
+        $accepted = Ticket::factory()->for($user)->for($unit)->accepted()->create();
+        $completed = Ticket::factory()->for($user)->for($unit)->completed()->create();
+        $rejected = Ticket::factory()->for($user)->for($unit)->rejected()->create();
+
+        $this->assertEquals('accepted', $accepted->status);
+        $this->assertInstanceOf(Carbon::class, $accepted->accepted_at);
+        $this->assertNull($accepted->completed_at);
+
+        $this->assertEquals('completed', $completed->status);
+        $this->assertInstanceOf(Carbon::class, $completed->accepted_at);
+        $this->assertInstanceOf(Carbon::class, $completed->completed_at);
+
+        $this->assertEquals('rejected', $rejected->status);
+        $this->assertNull($rejected->accepted_at);
+        $this->assertNull($rejected->completed_at);
+    }
+
+    public function test_ticket_factory_priorities_are_all_supported(): void
+    {
+        $user = User::factory()->create();
+        $unit = Unit::factory()->create();
+
+        $this->assertEquals('urgent', Ticket::factory()->for($user)->for($unit)->urgent()->create()->priority);
+        $this->assertEquals('normal', Ticket::factory()->for($user)->for($unit)->normal()->create()->priority);
+        $this->assertEquals('low', Ticket::factory()->for($user)->for($unit)->low()->create()->priority);
     }
 }

@@ -327,7 +327,13 @@ class TicketsCreateLivewireTest extends TestCase
 
         $todo = Todo::where('title', 'تیکت با تولید خودکار وظیفه')->firstOrFail();
         $this->assertFalse((bool) $todo->is_completed);
-        $this->assertEquals($target->id, $todo->unit_id);
+
+        // #847 (تصمیم محصول، گزینهٔ ج): the auto-created todo must sit in the
+        // creator's scope. The destination here is an unrelated unit outside
+        // it, so the todo lands in the creator's own unit — the previous
+        // assertion (`$target->id`) encoded exactly the placement this issue
+        // removes, which put the fresh link out of every reader's reach.
+        $this->assertEquals($unit->id, $todo->unit_id);
 
         // Ticket must reference the new todo via task_id.
         $this->assertDatabaseHas('tickets', [
@@ -370,6 +376,279 @@ class TicketsCreateLivewireTest extends TestCase
             'subject' => 'تیکت مرتبط با وظیفه موجود',
             'task_id' => $existingTodo->id,
         ]);
+    }
+
+    // ==================== task_id scope (issue #847) ====================
+    //
+    // `task_id` was the last input on this form without any validation: it
+    // went straight from the client into `tickets.task_id`. A missing id
+    // raised `QueryException SQLSTATE[23503]`, and any real id linked the
+    // ticket to a todo in a unit the creator cannot reach — which then leaked
+    // through three read surfaces and let a unit_manager force-complete it.
+    //
+    // Product decision on #847 (option ج): `task_id` must point at a todo
+    // inside the creator's `accessibleUnitIds()`.
+    // ==================================================================
+
+    public function test_rejects_task_id_from_a_unit_outside_the_creators_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $target = $this->createTargetUnit();
+        $foreign = Unit::factory()->create();
+        $foreignTodo = Todo::create([
+            'title' => 'وظیفه واحد نامرتبط',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $foreign->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('task_id', $foreignTodo->id)
+            ->set('subject', 'تیکت با وظیفه نامرتبط')
+            ->set('content', 'محتوای تستی برای بررسی دامنه وظیفه')
+            ->call('saveTicket')
+            ->assertHasErrors(['task_id']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با وظیفه نامرتبط']);
+    }
+
+    public function test_rejects_nonexistent_task_id_without_a_database_error(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $target = $this->createTargetUnit();
+
+        // A missing id used to violate the FK: SQLSTATE[23503] plus a 500 for
+        // the user, and the aborted transaction poisoned the next query (25P02).
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('task_id', 999999)
+            ->set('subject', 'تیکت با وظیفه ناموجود')
+            ->set('content', 'محتوای تستی برای بررسی وظیفه ناموجود')
+            ->call('saveTicket')
+            ->assertHasErrors(['task_id'])
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با وظیفه ناموجود']);
+    }
+
+    public function test_rejects_completed_todo_as_task(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $target = $this->createTargetUnit();
+        $done = Todo::create([
+            'title' => 'وظیفه تمام‌شده',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => true,
+            'unit_id' => $unit->id,
+        ]);
+
+        // The picker only ever offered open todos, so accepting a completed one
+        // was always a server/UI disagreement — and it would immediately
+        // satisfy the "all tickets of this task are done" condition.
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('task_id', $done->id)
+            ->set('subject', 'تیکت با وظیفه تمام‌شده')
+            ->set('content', 'محتوای تستی برای بررسی وظیفه تمام‌شده')
+            ->call('saveTicket')
+            ->assertHasErrors(['task_id']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با وظیفه تمام‌شده']);
+    }
+
+    public function test_accepts_task_id_from_another_unit_inside_the_creators_scope(): void
+    {
+        // The decision is the creator's whole reachable scope, not just the
+        // current unit — a child unit's todo is a legitimate pick.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $child = Unit::factory()->create(['parent_id' => $unit->id]);
+        Unit::find($unit->id)->update(['parent_id' => null]);
+        $target = $this->createTargetUnit();
+
+        $scopedTodo = Todo::create([
+            'title' => 'وظیفه واحد فرزند',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => $child->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('task_id', $scopedTodo->id)
+            ->set('subject', 'تیکت با وظیفه در اسکوپ')
+            ->set('content', 'محتوای تستی برای پیوند به وظیفه در اسکوپ')
+            ->call('saveTicket')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('tickets', [
+            'subject' => 'تیکت با وظیفه در اسکوپ',
+            'task_id' => $scopedTodo->id,
+        ]);
+    }
+
+    public function test_creator_can_link_a_null_unit_todo_they_created(): void
+    {
+        // #838 contract: a null-unit todo belongs to its creator.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $target = $this->createTargetUnit();
+        $orphan = Todo::create([
+            'title' => 'وظیفه بی‌واحد من',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => null,
+            'user_id' => $user->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('task_id', $orphan->id)
+            ->set('subject', 'تیکت با وظیفه بی‌واحد خودم')
+            ->set('content', 'محتوای تستی برای پیوند به وظیفه بی‌واحد')
+            ->call('saveTicket')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('tickets', [
+            'subject' => 'تیکت با وظیفه بی‌واحد خودم',
+            'task_id' => $orphan->id,
+        ]);
+    }
+
+    public function test_creator_cannot_link_another_users_null_unit_todo(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $target = $this->createTargetUnit();
+        // `todos.user_id` FKs to `users.id`, not `persons`.
+        $otherUser = User::factory()->create();
+        $orphan = Todo::create([
+            'title' => 'وظیفه بی‌واحد دیگری',
+            'start_at' => now(),
+            'end_at' => now()->addWeek(),
+            'is_completed' => false,
+            'unit_id' => null,
+            'user_id' => $otherUser->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('task_id', $orphan->id)
+            ->set('subject', 'تیکت با وظیفه بی‌واحد دیگری')
+            ->set('content', 'محتوای تستی برای بررسی وظیفه بی‌واحد دیگری')
+            ->call('saveTicket')
+            ->assertHasErrors(['task_id']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با وظیفه بی‌واحد دیگری']);
+    }
+
+    // ==================== priority (issue #847) ====================
+
+    public function test_rejects_priority_outside_the_allowed_set(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $target = $this->createTargetUnit();
+
+        // `medium` and `high` pass the DB CHECK constraint but are not offered
+        // by the picker and are refused by `TicketController`; anything else
+        // used to raise SQLSTATE[23514].
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('priority', 'medium')
+            ->set('subject', 'تیکت با فوریت نامعتبر')
+            ->set('content', 'محتوای تستی برای بررسی سطح فوریت')
+            ->call('saveTicket')
+            ->assertHasErrors(['priority']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با فوریت نامعتبر']);
+    }
+
+    // ==================== picker (issue #847) ====================
+
+    public function test_picker_offers_only_open_todos_in_the_creators_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        $foreign = Unit::factory()->create();
+        $mine = Todo::create(['title' => 'وظیفه من', 'start_at' => now(), 'is_completed' => false, 'unit_id' => $unit->id]);
+        $done = Todo::create(['title' => 'وظیفه تمام‌شده', 'start_at' => now(), 'is_completed' => true, 'unit_id' => $unit->id]);
+        $theirs = Todo::create(['title' => 'وظیفه آن‌ها', 'start_at' => now(), 'is_completed' => false, 'unit_id' => $foreign->id]);
+        $orphan = Todo::create(['title' => 'وظیفه بی‌واحد غریبه', 'start_at' => now(), 'is_completed' => false, 'unit_id' => null, 'user_id' => null]);
+
+        $todos = Livewire::actingAs($user)->test('tickets.create')->get('todos');
+
+        $ids = collect($todos)->pluck('id');
+
+        $this->assertTrue($ids->contains($mine->id));
+        $this->assertFalse($ids->contains($done->id), 'a completed todo must not be offered');
+        $this->assertFalse($ids->contains($theirs->id), 'a foreign-unit todo must not be offered');
+        $this->assertFalse($ids->contains($orphan->id), 'an orphan todo must not be offered');
+    }
+
+    public function test_picker_is_bounded(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        foreach (range(1, 60) as $i) {
+            Todo::create(['title' => "وظیفه {$i}", 'start_at' => now(), 'is_completed' => false, 'unit_id' => $unit->id]);
+        }
+
+        $todos = Livewire::actingAs($user)->test('tickets.create')->get('todos');
+
+        // Previously unbounded — every todo in the unit came back and was
+        // serialized as a public Livewire property.
+        $this->assertLessThanOrEqual(50, count($todos));
+    }
+
+    // ==================== auto-create placement (issue #847) ====================
+
+    public function test_auto_created_todo_stays_in_scope_when_destination_is_outside_it(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+
+        // The destination is a plain, unrelated, ticket-receiving unit, so it
+        // is outside the creator's scope. The todo must land in the creator's
+        // own unit instead — otherwise the freshly linked task is itself
+        // invisible on every read surface.
+        $target = $this->createTargetUnit('واحد مقصد بیرون از اسکوپ');
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('subject', 'تیکت با خودکارسازی')
+            ->set('content', 'محتوای تستی برای بررسی محل ساخت وظیفه')
+            ->call('saveTicket')
+            ->assertHasNoErrors();
+
+        $todo = Todo::where('title', 'تیکت با خودکارسازی')->firstOrFail();
+
+        $this->assertSame($unit->id, $todo->unit_id);
     }
 
     public function test_attachments_are_persisted(): void

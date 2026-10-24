@@ -1,6 +1,7 @@
 <?php
 
 use Livewire\Component;
+use Livewire\WithPagination;
 use App\Models\Person;
 use App\Services\AccessService;
 use Carbon\Carbon;
@@ -8,6 +9,11 @@ use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use WithPagination;
+
+    /** Issue #1024 — the roster is paginated instead of hydrated whole. */
+    public int $perPage = 25;
+
     public string $dateFrom = '';
     public string $dateTo = '';
     public ?int $selectedUnitId = null;
@@ -36,6 +42,18 @@ return new class extends Component
         $this->emptyScope = app(AccessService::class)->accessibleUnitIds() === [];
     }
 
+    /**
+     * Issue #1024: a filter change starts a new result set, so the roster goes
+     * back to page 1 — otherwise the user can be stranded on a page that no
+     * longer exists in the filtered set.
+     */
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['selectedUnitId', 'selectedTahsilId', 'selectedSematId', 'selectedEstekhdamId'], true)) {
+            $this->resetPage();
+        }
+    }
+
     private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
     {
         if (empty($date)) return null;
@@ -51,8 +69,13 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
+        // Issue #858, like reports/todos (#819): the scope predicate goes
+        // inside a closure so the chain stays an Eloquent builder — a
+        // top-level whereIn() degrades it to Query\Builder, on which `with()`
+        // below is undefined. Still unconditional, still fail-closed (`[]`
+        // compiles to `0 = 1`).
         $baseQuery = Person::query()
-            ->whereIn('u_id', $accessibleIds)
+            ->where(fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->when($this->selectedUnitId, fn($q) => $q->where('u_id', $this->selectedUnitId))
             ->when($this->selectedTahsilId, fn($q) => $q->where('t_id', $this->selectedTahsilId))
             ->when($this->selectedSematId, fn($q) => $q->where('s_id', $this->selectedSematId))
@@ -100,9 +123,17 @@ return new class extends Component
             ->pluck('count', 'unit_name')
             ->toArray();
 
-        $persons = (clone $baseQuery)
+        // Eager loads first, exactly like reports/units (#819): `with()` must
+        // precede any degrading call in the chain.
+        // Issue #1024: only the row list is paginated — every aggregate above
+        // is computed from its own unpaginated query, so it still describes the
+        // whole filtered set rather than the current page.
+        $personsPage = (clone $baseQuery)
+            ->with(['unit:id,name', 'tahsil:id,name', 'semat:id,name', 'estekhdam:id,name'])
             ->orderBy('n_code')
-            ->get()
+            ->paginate($this->perPage);
+
+        $persons = $personsPage->getCollection()
             ->map(fn($p) => [
                 'id' => $p->id,
                 'n_code' => $p->n_code,
@@ -112,7 +143,7 @@ return new class extends Component
                 'semat' => $p->semat?->name ?? '—',
                 'estekhdam' => $p->estekhdam?->name ?? '—',
             ])
-            ->toArray();
+            ->all();
 
         return [
             'total' => $total,
@@ -120,14 +151,19 @@ return new class extends Component
             'bySemat' => $bySemat,
             'byEstekhdam' => $byEstekhdam,
             'byUnit' => $byUnit,
+            // `persons` stays a plain array (the fail-closed security tests and
+            // the `empty()` check in the view both treat it as one); the
+            // paginator rides alongside for `->hasPages()`/`->links()`.
             'persons' => $persons,
+            'personsPaginator' => $personsPage,
         ];
     }
 
     public function getAccessibleUnitsProperty()
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        return \App\Models\Unit::whereIn('id', $accessibleIds)->get();
+        // Issue #1024: a `<select>` needs nothing but id/name.
+        return \App\Models\Unit::whereIn('id', $accessibleIds)->get(['id', 'name']);
     }
 }; ?>
 
@@ -227,6 +263,10 @@ return new class extends Component
     {{-- جدول --}}
     <x-card shadow>
         <h3 class="font-bold mb-4">لیست پرسنل</h3>
+        {{-- Issue #858: server-rendered chart aggregates. The @script below
+            reads this (morphed on every render) instead of firing a second
+            method request per filter change. --}}
+        <div id="personsChartData" class="hidden" data-chart='@json(['byTahsil' => $chart['byTahsil'], 'bySemat' => $chart['bySemat'], 'byEstekhdam' => $chart['byEstekhdam']])'></div>
         <div class="overflow-x-auto">
             <table class="table table-sm">
                 <thead>
@@ -260,6 +300,18 @@ return new class extends Component
                 </tbody>
             </table>
         </div>
+
+        {{-- Issue #1024: the hand-rolled table has no `with-pagination`, so the
+            paginator rides alongside the payload. `->links()` renders Livewire's
+            Tailwind view, which `lang/fa.json` already translates. --}}
+        @if ($chart['personsPaginator']->hasPages())
+            {{-- `mary-table-pagination` is the app's own pagination style hook
+                (`resources/css/app.css`); the hand-rolled table cannot pass it
+                through `x-table`, so it is applied by hand. --}}
+            <div class="mt-4 mary-table-pagination">
+                {{ $chart['personsPaginator']->links() }}
+            </div>
+        @endif
     </x-card>
 </div>
 
@@ -299,9 +351,13 @@ return new class extends Component
         }
     }
 
-    async function render() {
-        waitForHighcharts(async () => {
-            const data = await $wire.chartPayload();
+    function render() {
+        waitForHighcharts(() => {
+            // Issue #858: read the server-rendered aggregates above — the
+            // inline @php already ran the payload for this render, so a
+            // second method request would just re-run it.
+            const el = document.getElementById('personsChartData');
+            const data = el ? JSON.parse(el.dataset.chart) : {};
             renderPie('tahsilChart', data.byTahsil);
             renderPie('sematChart', data.bySemat);
             renderPie('estekhdamChart', data.byEstekhdam);
@@ -309,9 +365,14 @@ return new class extends Component
     }
 
     render();
+    // $watch fires when the reactive store patches (before Livewire morphs
+    // the fresh data-chart into the DOM), so re-render again after morph.
     $wire.$watch('selectedUnitId', () => render());
     $wire.$watch('selectedTahsilId', () => render());
     $wire.$watch('selectedSematId', () => render());
     $wire.$watch('selectedEstekhdamId', () => render());
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) render();
+    });
 </script>
 @endscript

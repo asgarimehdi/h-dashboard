@@ -2,20 +2,20 @@
 
 namespace App\Exports;
 
+use App\Support\ExcelCell;
+use App\Support\HardwareAuditChange;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Illuminate\Database\Eloquent\Model;
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Morilog\Jalali\Jalalian;
 
-class HardwareAuditsExport implements FromCollection, WithChunkReading, WithHeadings, WithMapping, WithTitle
+class HardwareAuditsExport implements FromQuery, WithCustomChunkSize, WithHeadings, WithMapping, WithTitle
 {
     protected Builder $query;
-
-    protected int $lastId = 0;
 
     protected int $chunkSize = 500;
 
@@ -24,35 +24,23 @@ class HardwareAuditsExport implements FromCollection, WithChunkReading, WithHead
         $this->query = $query;
     }
 
-    /**
-     * @return Collection<int, array>
-     */
-    public function collection(): Collection
+    public function query(): Builder
     {
-        // Return the raw models; Maatwebsite calls map() per row (WithMapping).
-        return $this->query->with('user.person:id,n_code,f_name,l_name')
-            ->latest('created_at')
-            ->get();
-    }
-
-    /**
-     * Chunked export for large datasets — processes records in batches of $chunkSize
-     * to avoid loading the entire result set into memory at once.
-     */
-    public function chunkCollection(): Collection
-    {
-        $chunk = $this->query
+        $ordered = $this->query
+            // Eager-load per chunk, so map() resolves labels without N+1.
             ->with('user.person:id,n_code,f_name,l_name')
-            ->where('id', '>', $this->lastId)
-            ->orderBy('id')
-            ->take($this->chunkSize)
-            ->get();
+            // `id` is the tie-breaker: the library chunks with LIMIT/OFFSET
+            // and created_at carries second precision, so same-second rows
+            // could silently repeat or drop between chunks without it. It
+            // keeps the newest-first display order (latest is DESC).
+            ->latest('created_at')
+            ->orderBy('id');
 
-        if ($chunk->isNotEmpty()) {
-            $this->lastId = $chunk->last()->id;
-        }
-
-        return $chunk;
+        // orderBy() forwards through the Eloquent mixin and types as the base
+        // query builder; re-pin the Eloquent builder so the hand-off to
+        // `Builder::chunk()` keeps its type.
+        /** @var Builder<Model> $ordered */
+        return $ordered;
     }
 
     public function chunkSize(): int
@@ -85,27 +73,29 @@ class HardwareAuditsExport implements FromCollection, WithChunkReading, WithHead
      */
     public function map($audit): array
     {
-        $changesSummary = '';
-        if ($audit->changes && is_array($audit->changes)) {
-            $changesSummary = implode(' | ', array_map(
-                fn ($c) => "{$c['field']}: {$c['old']} → {$c['new']}",
-                $audit->changes
-            ));
-        }
+        // #927: `changes` is a diff list, but rows written before the fix (and
+        // by any future writer that hands over a raw attribute map) decode to
+        // something else. Interpolating array offsets into that threw a
+        // TypeError out of the mapper and took the whole export down with it,
+        // so render whatever shape arrived and degrade instead.
+        $lines = HardwareAuditChange::lines($audit->changes);
+        $changesSummary = $lines === [] ? '' : ExcelCell::escape(implode(' | ', $lines));
 
+        // #886 (CWE-1236): user_agent / changes / user.name are
+        // attacker-controlled; escape at map() time (also fixes ?format=csv).
         return [
             $audit->id,
             $this->getActionLabel($audit->action),
             $this->getSourceLabel($audit->source),
             $changesSummary,
-            $audit->ip_address ?? '',
-            $audit->user_agent ?? '',
+            ExcelCell::escape($audit->ip_address ?? ''),
+            ExcelCell::escape($audit->user_agent ?? ''),
             $audit->created_at?->toIso8601String() ?? '',
             $audit->created_at
                 ? Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')
                 : '',
-            $audit->user?->n_code ?? '',
-            $audit->user?->name ?? '',
+            ExcelCell::escape($audit->user?->n_code ?? ''),
+            ExcelCell::escape($audit->user?->name ?? ''),
         ];
     }
 

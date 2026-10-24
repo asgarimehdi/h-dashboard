@@ -120,6 +120,39 @@ test.describe('maps — SPA navigation lifecycle (#028)', () => {
     expect(await page.locator('#map .leaflet-marker-icon').count()).toBeGreaterThan(100);
   });
 
+  /**
+   * Issue #1182 — Leaflet left the global layout; every map host now pushes it
+   * into `@stack('scripts')` itself. county never mentions "leaflet" in its own
+   * markup, so before this change it only had Leaflet because the layout loaded
+   * it on EVERY page. If its push goes missing (or lands after the host script),
+   * the page does not error — it renders an empty container, which is exactly
+   * what this test sees.
+   *
+   * The origin is /dashboard, i.e. a page that no longer loads Leaflet at all, so
+   * the navigation path crosses from "no Leaflet in the document" to "Leaflet
+   * must be there and working".
+   */
+  test('/dashboard → /maps/county renders the map and its region toggles still draw', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+
+    await navigateByMenu(page, '/maps/county');
+
+    await expect(page.locator('.leaflet-container').first()).toBeVisible();
+
+    // Nothing is drawn until a region toggle is switched on.
+    const polygons = page.locator('#map .leaflet-overlay-pane path');
+    expect(await polygons.count()).toBe(0);
+
+    const toggle = page.locator('#unitMenu input.toggle').first();
+    await toggle.click({ force: true });
+    await expect(polygons.first()).toBeVisible({ timeout: 10000 });
+
+    // Off again: the layer really belongs to this map instance.
+    await toggle.click({ force: true });
+    await expect(polygons).toHaveCount(0, { timeout: 10000 });
+  });
+
   test('direct load still renders markers (no regression)', async ({ page }) => {
     await page.goto('/maps/point');
     await waitForMap(page);

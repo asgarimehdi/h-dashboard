@@ -3,6 +3,10 @@ name: Tests
 on:
   pull_request:
     branches: [main, beta, test]
+  # Manual runs exist for the `mutation` job below, which is gated to this
+  # trigger (#1012): a manual run executes every job, so read the mutation
+  # job's own result, not the run's overall conclusion.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,15 +28,31 @@ jobs:
           php-version: '8.5'
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
+
+      # Issue #953. A tracked env file committed with a real APP_KEY leaks the
+      # master secret: it encrypts session payloads and signs the cookie MAC,
+      # so anyone holding it can mint a cookie for any account. Blanking the
+      # four files that carried one prevents recurrence; this is what stops it
+      # coming back — and it runs here because `lint` is the cheapest blocking
+      # job, so a leak fails a PR in seconds rather than after the suite.
+      - name: Assert no tracked env file commits an APP_KEY
+        run: php scripts/check-app-key-leak.php
 
       - name: Check code style
         run: vendor/bin/pint --test
@@ -78,27 +98,27 @@ jobs:
           coverage: pcov
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Build frontend assets
+      - name: Assert the lock is present and current
         run: |
-          npm ci
-          npm run build
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
 
+      # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
+      # `withoutVite()` for the whole suite and no test reads the Vite manifest
+      # or the built bundle — the build was never asserted on, only paid for.
+      # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
         run: |
           cp .env.example .env.testing
@@ -126,7 +146,38 @@ jobs:
           php artisan view:clear
 
       - name: Run tests with coverage
-        run: ./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml
+        # `set -o pipefail` is LOAD-BEARING. GitHub Actions runs `run:` blocks
+        # with `bash -e`, which has no pipefail, so `pest … | tee` would hand
+        # back tee's exit status and report GREEN on a red suite — the exact
+        # "a failing job that reads as a pass" trap issue #935 is about.
+        run: |
+          set -o pipefail
+          ./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml 2>&1 | tee pest-list.log
+
+      - name: Assert tests really executed
+        # A green job that executed zero tests is a failure, not a pass.
+        #
+        # The summary line is ANSI-wrapped ("…[32;1m341 passed[39m[2m (995
+        # assertions)"), so the colour codes are stripped before matching — a
+        # naive 'passed \(' never matches and the guard would be decorative.
+        #
+        # `failOnEmptyTestSuite` in phpunit.xml is NOT enough on its own: it
+        # fires when a whole RUN finds no tests, and a single dead FILE beside
+        # live ones is silently skipped even under --parallel (issue #935) —
+        # verified on this tree. The per-file sweep in the next step is the
+        # guard that actually catches that class.
+        run: |
+          sed -e 's/\x1b\[[0-9;]*m//g' pest-list.log > pest-plain.log
+          EXECUTED=$(grep -cE 'Tests:.*[0-9]+ passed' pest-plain.log || true)
+          echo "pest summary lines: ${EXECUTED}"
+          echo "summary: $(grep -E 'Tests:' pest-plain.log | tail -1)"
+          test "${EXECUTED}" -gt 0
+
+      - name: Assert no test file runs zero tests
+        # Issue #935 — `tests/Feature/TicketWorkflowTest.php` sat in the suite
+        # for a year executing nothing: seven `public function <noun>` methods
+        # that PHPUnit never collects. Coverage is a ratio, so it never moved.
+        run: php scripts/find-dead-test-files.php
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -138,14 +189,276 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-  mutation:
-    name: Mutation Testing
+      # Issue #1011: publish the Clover THIS job already produces so the
+      # informational `coverage-report` job can parse it without re-running
+      # the whole suite (it used to repeat checkout → composer → npm ci →
+      # migrate → pest just to print a ~96-line report). `if: always()` so the
+      # report still receives data on a red suite (the contract before #1011);
+      # `if-no-files-found: warn` so a missing file warns instead of failing
+      # (this must never gate the build).
+      - name: Upload coverage.xml for the coverage-report job
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 1
+          if-no-files-found: warn
+
+  coverage-report:
+    name: Coverage Report (Blade-aware, informational)
+    runs-on: ubuntu-latest
+    # Issue #1011: this job used to re-run the ENTIRE suite (checkout →
+    # composer install → npm ci + build → migrate → pest) just to print a
+    # ~96-line report. It now only parses the Clover XML the `test` job
+    # already produced, downloaded as an artifact — no services, no frontend
+    # build, no migrations, no second pest run.
+    timeout-minutes: 5
+    # `needs: test` + `if: always()`: the report must STILL be produced on a
+    # RED suite — that is the exact contract before #1011. Without
+    # `if: always()`, GitHub Actions would SKIP this job whenever `test`
+    # fails, losing the report entirely (expert correction #2).
+    needs: test
+    if: always()
+    # Non-blocking signal (issue #865): this job REPORTS the real coverage
+    # picture — the app/ number plus the Blade component logic that sits
+    # outside the --min=80 denominator — and must never fail the build.
+    # The hard gate stays exactly where it is until a real total exists;
+    # changing min= is out of scope for #865 (locked decision).
+    continue-on-error: true
+
+    steps:
+      # Checkout is REQUIRED (issue #1011 expert correction #1): the script
+      # lives in the repo, `cd`s to the repo root, and greps Blade sources —
+      # without this step the job could never run the report.
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # `coverage: none`: this job only runs `php -r` to parse XML; it must
+      # not pay for a coverage driver it never uses.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          coverage: none
+          tools: composer:latest
+
+      # Pull the Clover the `test` job uploaded (same workflow run, guaranteed
+      # by `needs: test`). The name `coverage-xml` must match on both sides —
+      # if it drifts, this step fails rather than silently reporting "no data"
+      # (the #865 trap), and the job stays non-blocking via continue-on-error.
+      - name: Download coverage.xml from the test job
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-xml
+
+      - name: Report the real coverage picture (app/ + Blade)
+        # Proves coverage was really computed: the script parses the clover
+        # file the `test` job produced and prints covered/valid statement
+        # counts — a run with no coverage data says so explicitly instead of
+        # going green silently (the #865 trap).
+        # It also prints the per-component table for resources/views/livewire
+        # (#1045): public methods + test references per Blade file, worst
+        # first — still informational, still never gates.
+        run: bash scripts/coverage-report.sh --clover=coverage.xml
+
+  typecheck:
+    name: Typecheck (Playwright specs, informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Non-blocking signal (issue #1069): the e2e surface is TypeScript, but
+    # Playwright only transpiles it — a type error used to surface at runtime
+    # and, with `retries: 2`, could hide as a flake. Same shape as
+    # `coverage-report` and `e2e`: this job REPORTS, it never gates, and it
+    # never touches the blocking lint/test/phpstan jobs.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # `npm ci` also proves package-lock.json and package.json agree — the
+        # lock step of the #1069 plan (typescript + @types/node are new).
+        run: npm ci
+
+      - name: Typecheck tests/e2e + playwright.config.ts (never gates)
+        # Deliberately NOT wrapped in `|| true`: a type error should render
+        # this job red so it is visible in the checks list. `continue-on-error`
+        # above is what keeps the workflow run green (issue #865/#867 pattern).
+        run: npm run typecheck
+
+  e2e:
+    name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Non-blocking signal for now: the mutation job has never passed — the
-    # suite has no covers()/mutates() declarations and mutation mode trips
-    # over lookup-table id collisions. Treat failures as informational until
-    # the job is properly wired up.
+    # Non-blocking ramp (issue #867): the suite has never run in CI, so the
+    # first executions will surface real latent failures (the inert
+    # waitForLivewire() wait, the self-skipping unit-map-boundary spec).
+    # Ship continue-on-error:true now; promote to required only after two
+    # consecutive green runs AND the two collateral fixes land (separate PRs,
+    # preconditions for required status — see #867's git review).
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_e2e
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for the app (CI services)
+        run: |
+          cp .env.example .env
+          # CI services: postgres/postgres/secret + passwordless redis.
+          # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
+          # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
+          # ever printing the values.
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+          php artisan key:generate --force
+
+      - name: Build .env.e2e (secret-safe)
+        # CI redis is passwordless, so build-env-e2e.sh leaves the EXAMPLE
+        # placeholders (`<same as dev>`) for secrets it could not copy — and
+        # `set -a; source .env.e2e` in e2e-test.sh chokes on the `<...>`
+        # metacharacters (syntax error, first CI run). Clear ONLY lines that
+        # still carry a `<...>` placeholder: a real copied value (e.g.
+        # DB_PASSWORD=secret) must survive — emptying it breaks pg auth
+        # (fe_sendauth, second CI run). Then guard: no `<...>` may remain.
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+
+      - name: Assert APP_LOCALE=fa in .env.e2e
+        # MANDATORY (issue #867): without it Laravel falls back to `en` and
+        # 11 Persian-text specs fail. Fail fast here, not after a 20-min run.
+        run: grep -q '^APP_LOCALE=fa' .env.e2e
+
+      - name: Verify the isolated e2e database exists
+        # The postgres service creates h_dashboard_e2e from POSTGRES_DB at
+        # startup — no manual CREATE needed (it errors as "already exists").
+        # NEVER point e2e at h_dashboard: scripts/e2e-test.sh runs
+        # migrate:fresh --seed on this database every run.
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+
+      - name: Cache Playwright chromium (issue #1067)
+        # The browser binary is the only part of `playwright install` that is
+        # worth caching — a ~1-2 min download every run. Keyed on the LOCK
+        # file, not package.json: `@playwright/test` is pinned with a caret
+        # while the downloaded browser revision comes from the exact
+        # `playwright` version in package-lock.json, so package.json would
+        # miss real bumps. restore-keys covers the delta when the lock moves
+        # (an older browser revision stays until it is pruned).
+        # Limits, recorded so nobody re-derives them: `--with-deps` (apt
+        # packages) is NOT cacheable and still runs every time; and a PR from
+        # a fork can read caches but never write one, so it will not hit until
+        # a same-repo run has saved this entry.
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright chromium
+        # Kept exactly as it was (issue #1067): on a cache hit the browser
+        # download is a no-op, but `--with-deps` must still install the system
+        # libraries — do not make this step conditional on cache-hit.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E suite (list reporter proves execution)
+        # Through scripts/e2e-test.sh ONLY — never bare `npx playwright test`:
+        # fixtures.ts needs tests/e2e/.run-state.json, which only this script
+        # writes (migrate:fresh → pwd user → serve :8001 → test → restore).
+        # The script swaps .env, so it must NEVER run in parallel with
+        # anything (not concurrency-safe). --reporter=list makes the log
+        # itself the proof that tests executed; the count assertion below
+        # turns the #865 trap (green with zero tests) into a hard failure.
+        # Output is tee'd to e2e-list.log so the next step can count real
+        # executions from the reporter stream itself.
+        run: bash scripts/e2e-test.sh --reporter=list 2>&1 | tee e2e-list.log
+
+      - name: Assert tests really executed
+        # A green job that executed zero tests is a failure, not a pass.
+        # The list reporter prints one line per executed test; the summary
+        # line looks like "  202 passed (3.5m)". Both must be present.
+        run: |
+          EXECUTED=$(grep -cE '✓|✔|passed \(' e2e-list.log || true)
+          echo "e2e executed-test lines: ${EXECUTED}"
+          grep -qE '[0-9]+ passed' e2e-list.log
+          test "${EXECUTED}" -gt 0
+
+  mutation:
+    name: Mutation Testing
+    # Manual-only (#1012): the job is green, but each run is expensive
+    # (checkout, composer install and migrations before the single
+    # `pest --mutate` line below) and it used to spend ~23 minutes
+    # on every PR for a signal that gates nothing (`continue-on-error: true`).
+    # Re-enable on PRs by dropping this `if:`. The manual "Run workflow"
+    # button appears only once this trigger is on the default branch.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Non-blocking: the score is informational, so keeping this job off PRs
+    # removes no quality gate.
     continue-on-error: true
 
     services:
@@ -183,27 +496,27 @@ jobs:
           extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
           tools: composer:latest
 
-      - name: Cache Composer packages
+      - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Build frontend assets
+      - name: Assert the lock is present and current
         run: |
-          npm ci
-          npm run build
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
 
+      # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
+      # `withoutVite()` for the whole suite and no test reads the Vite manifest
+      # or the built bundle — the build was never asserted on, only paid for.
+      # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
         run: |
           cp .env.example .env.testing
@@ -242,6 +555,71 @@ jobs:
           extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
           tools: composer:latest
 
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress
+
+  test-php86:
+    name: PHP 8.6 Preview (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Informational only: PHP 8.6 is pre-release (RC3 2026-10-08, GA 2026-11-19).
+    # Same precedent as the mutation job — never blocks a merge; it surfaces
+    # 8.6 incompatibilities and deprecations while there is still time to fix them.
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.6'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          coverage: none
+          tools: composer:latest
+
       - name: Cache Composer packages
         uses: actions/cache@v5
         with:
@@ -250,7 +628,41 @@ jobs:
           restore-keys: composer-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        # The lock predates PHP 8.6: three packages cap php at 8.5 — nette/schema
+        # and nette/utils (both on the production path, via league/commonmark) plus
+        # brianium/paratest (dev) — so a plain install cannot even resolve on 8.6,
+        # with or without dev dependencies. The preview installs the locked packages
+        # anyway — surfacing real 8.6 behaviour is the job's whole point. This flag
+        # exists ONLY in this job; it carries production weight, not just tooling.
+        run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php
 
-      - name: Run PHPStan
-        run: vendor/bin/phpstan analyse --no-progress
+      # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
+      # `withoutVite()` for the whole suite and no test reads the Vite manifest
+      # or the built bundle — the build was never asserted on, only paid for.
+      # The `e2e` job still builds: it drives a real browser.
+      - name: Copy .env for testing
+        run: |
+          cp .env.example .env.testing
+          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
+          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
+          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
+          # cache between parallel test processes and cross-pollutes their separate DBs.
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
+          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+
+      - name: Generate application key
+        run: php artisan key:generate --env=testing
+
+      - name: Run migrations
+        run: php artisan migrate --env=testing --force
+
+      # Same stale-cache guard as the test job: a bootstrap/cache/routes-v7.php
+      # built with a DIFFERENT APP_KEY silently no-ops Livewire mutations in Pest.
+      - name: Clear cached config/routes before tests
+        run: |
+          php artisan config:clear --env=testing
+          php artisan route:clear --env=testing
+          php artisan view:clear
+
+      - name: Run tests (no coverage gate on a pre-release PHP)
+        run: ./vendor/bin/pest --parallel

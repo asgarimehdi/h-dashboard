@@ -40,19 +40,28 @@ Health Dashboard is a Laravel application for managing hospital/healthcare cente
 git clone https://github.com/asgarimehdi/h-dashboard.git
 cd h-dashboard
 
-# 2. Start database
-docker compose -f docker-compose-pgsql-.yml up -d
-
-# 3. Install dependencies
+# 2. Install dependencies
 composer install
 npm install
 
-# 4. Configure environment
+# 3. Configure environment — MUST come before `docker compose up`
+#    docker-compose-pgsql-.yml interpolates ${DB_DATABASE}, ${DB_USERNAME},
+#    ${DB_PASSWORD} and ${REDIS_PASSWORD} from this file. With no `.env` they
+#    all resolve to "" and the PostGIS container refuses to initialise:
+#    "You must specify POSTGRES_PASSWORD to a non-empty value for the superuser"
 cp .env.example .env
+
+#    Then edit .env: the template ships DB_PASSWORD blank, so set it to any
+#    non-empty value and keep REDIS_PASSWORD in sync with it.
 php artisan key:generate
 
-# 5. Run migrations
-php artisan migrate
+# 4. Start database + Redis
+docker compose -f docker-compose-pgsql-.yml up -d
+
+# 5. Migrate and seed — `--seed` is NOT optional. Roles and the login users
+#    come from the seeders; `migrate` alone leaves 0 users and 0 roles, so
+#    login is impossible.
+php artisan migrate --seed
 
 # 6. Build frontend
 npm run build
@@ -106,19 +115,28 @@ composer test
 git clone https://github.com/asgarimehdi/h-dashboard.git
 cd h-dashboard
 
-# ۲. راه‌اندازی پایگاه داده
-docker compose -f docker-compose-pgsql-.yml up -d
-
-# ۳. نصب وابستگی‌ها
+# ۲. نصب وابستگی‌ها
 composer install
 npm install
 
-# ۴. تنظیم فایل محیطی
+# ۳. تنظیم فایل محیطی — حتما پیش از `docker compose up`
+#    فایل compose مقدارهای ${DB_DATABASE} و ${DB_USERNAME} و ${DB_PASSWORD} و
+#    ${REDIS_PASSWORD} را از همین فایل می‌خواند؛ بدون `.env` همه خالی می‌شوند و
+#    کانتینر PostGIS راه‌اندازی نمی‌شود
+#    («You must specify POSTGRES_PASSWORD to a non-empty value for the superuser»)
 cp .env.example .env
+
+#    سپس در `.env` مقدار `DB_PASSWORD` را (برخلاف قالب، که خالی است) غیرخالی
+#    کنید و `REDIS_PASSWORD` را با همان مقدار هماهنگ نگه دارید.
 php artisan key:generate
 
-# ۵. اجرای مایگریشن‌ها
-php artisan migrate
+# ۴. راه‌اندازی پایگاه داده و Redis
+docker compose -f docker-compose-pgsql-.yml up -d
+
+# ۵. اجرای مایگریشن‌ها همراه با seed — پرچم `--seed` اختیاری نیست. نقش‌ها و
+#    کاربران ورود از سیدرها می‌آیند؛ `migrate` تنها صفر کاربر و صفر نقش
+#    می‌سازد و ورود غیرممکن می‌شود.
+php artisan migrate --seed
 
 # ۶. بیلد فرانت‌اند
 npm run build

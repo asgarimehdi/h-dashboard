@@ -1,3 +1,4 @@
+{{-- render-on-open؛ مصرف‌کنندهٔ تازه باید داخل @if باشد: این پارشال کل درخت را در هر رندر می‌سازد (≈۴۹۴KB روی دیتابیس توسعه)، پس هر مصرف‌کننده باید آن را فقط وقتی مودالش باز است include کند. --}}
 @php
     // Group units by parent_id for tree traversal
     $byParent = collect($units)->groupBy('parent_id');

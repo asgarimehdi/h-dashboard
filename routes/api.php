@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 
 // Login route — stricter rate limit
 Route::post('/login', function (Request $request) {
@@ -53,6 +54,26 @@ Route::post('/login', function (Request $request) {
 Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
+    });
+
+    // API logout — revoke ONLY the caller's current token (Issue #1071).
+    //
+    // No ability, exactly like `/api/user` above: this is a self-scoped
+    // action (#837), not a resource mutation. The revoke is conditional
+    // because `statefulApi()` is on, so a session-cookie request reaches the
+    // Sanctum guard as a `TransientToken`, which has no `delete()` method —
+    // an unconditional call is a 500. Deliberately scoped to the current
+    // token, never `tokens()->delete()`: web logout (#840) and admin reset
+    // (#1030) are separate decisions. A second call with the same token is
+    // 401 because the row is gone.
+    Route::post('/logout', function (Request $request) {
+        $token = $request->user()->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
+
+        return response()->noContent();
     });
 
     // Unit API routes — ability:units:read (Issue #690)
@@ -97,30 +118,45 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         });
     });
 
-    // Ticket API routes — ability:tickets:read (Issue #690)
+    // Ticket API routes — reads: ability:tickets:read (Issue #690)
+    //
+    // Issue #895: the six write routes used to sit INSIDE this group, and
+    // nested middleware is AND. `getApiTokenAbilities()` grants `tickets:read`
+    // only from `view_assigned_tickets|view_all_tickets`, so the `user` role —
+    // which holds `create_ticket` alone — minted a token that could satisfy
+    // `abilities:tickets:write` and never `ability:tickets:read`, and every
+    // write 403'd with "Invalid ability provided." while the same account
+    // worked on the web UI (`routes/web.php` gates `tickets/new` on
+    // `create_ticket` alone). The writes have their own group below.
+    //
+    // Only the redundant read ability came off. Every `permission:*` gate stays
+    // exactly where it was, so no write becomes newly permitted — and each
+    // handler is `UnitScopedRequest`-based and re-checks the unit itself.
     Route::middleware('ability:tickets:read')->group(function () {
         Route::get('/tickets', [TicketController::class, 'index'])
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
         Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
-
-        Route::middleware('abilities:tickets:write')->group(function () {
-            Route::post('/tickets', [TicketController::class, 'store'])
-                ->middleware('permission:create_ticket');
-            Route::put('/tickets/{ticket}', [TicketController::class, 'update'])
-                ->middleware('permission:manage_unit_tickets');
-            Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
-                ->middleware('permission:manage_unit_tickets');
-            Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
-                ->middleware('permission:manage_unit_tickets');
-            Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept'])
-                ->middleware('permission:create_ticket');
-            Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete'])
-                ->middleware('permission:manage_unit_tickets');
-        });
     });
 
-    // Ticket Comments — ability:tickets:read (Issue #690)
+    // Ticket API writes — abilities:tickets:write, no read ability required
+    // (issue #895). Every `permission:*` gate is unchanged from before.
+    Route::middleware('abilities:tickets:write')->group(function () {
+        Route::post('/tickets', [TicketController::class, 'store'])
+            ->middleware('permission:create_ticket');
+        Route::put('/tickets/{ticket}', [TicketController::class, 'update'])
+            ->middleware('permission:manage_unit_tickets');
+        Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy'])
+            ->middleware('permission:manage_unit_tickets');
+        Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
+            ->middleware('permission:manage_unit_tickets');
+        Route::post('/tickets/{ticket}/accept', [TicketController::class, 'accept'])
+            ->middleware('permission:create_ticket');
+        Route::post('/tickets/{ticket}/complete', [TicketController::class, 'complete'])
+            ->middleware('permission:manage_unit_tickets');
+    });
+
+    // Ticket Comments — reads: ability:tickets:read (Issue #690)
     Route::middleware('ability:tickets:read')->group(function () {
         Route::get('/tickets/{ticket}/comments', [TicketCommentController::class, 'index'])
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
@@ -128,19 +164,21 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
         Route::get('/tickets/{ticket}/comments/{comment}/reactions', [TicketCommentController::class, 'reactions'])
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+    });
 
-        Route::middleware('abilities:tickets:write')->group(function () {
-            Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store'])
-                ->middleware('permission:create_ticket');
-            Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])
-                ->middleware('permission:manage_unit_tickets');
-            Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])
-                ->middleware('permission:manage_unit_tickets');
-            Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react'])
-                ->middleware('permission:create_ticket');
-            Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact'])
-                ->middleware('permission:create_ticket');
-        });
+    // Ticket comment writes — abilities:tickets:write, no read ability
+    // required (issue #895). Every `permission:*` gate is unchanged from before.
+    Route::middleware('abilities:tickets:write')->group(function () {
+        Route::post('/tickets/{ticket}/comments', [TicketCommentController::class, 'store'])
+            ->middleware('permission:create_ticket');
+        Route::match(['put', 'patch'], '/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'update'])
+            ->middleware('permission:manage_unit_tickets');
+        Route::delete('/tickets/{ticket}/comments/{comment}', [TicketCommentController::class, 'destroy'])
+            ->middleware('permission:manage_unit_tickets');
+        Route::post('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'react'])
+            ->middleware('permission:create_ticket');
+        Route::delete('/tickets/{ticket}/comments/{comment}/react', [TicketCommentController::class, 'unreact'])
+            ->middleware('permission:create_ticket');
     });
 
     // Report API routes — ability:reports:read (Issue #690)
@@ -162,14 +200,17 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         });
     });
 
-    // Todo API routes — ability:todos:read|todos:write (Issue #690)
+    // Todo API routes — ability:todos:read|todos:write (Issue #690), writes nested under abilities:todos:write (#837)
     Route::middleware(['ability:todos:read,todos:write', 'role_or_permission:calendar'])->group(function () {
         Route::get('/todos', [TodoController::class, 'index']);
         Route::get('/todos/{todo}', [TodoController::class, 'show']);
-        Route::post('/todos', [TodoController::class, 'store']);
-        Route::put('/todos/{todo}', [TodoController::class, 'update']);
-        Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
-        Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+
+        Route::middleware('abilities:todos:write')->group(function () {
+            Route::post('/todos', [TodoController::class, 'store']);
+            Route::put('/todos/{todo}', [TodoController::class, 'update']);
+            Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
+            Route::post('/todos/{todo}/toggle-complete', [TodoController::class, 'toggleComplete']);
+        });
     });
 
     // HR API routes (Issue #223, #444) — ability:hr:read (Issue #690)
@@ -191,16 +232,35 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/analytics/staffing-ratio', [HrAnalyticsController::class, 'staffingRatio']);
     });
 
-    // Notification API routes — ability:notifications:read (Issue #690)
+    // Notification API routes — Issue #690, split read/write per Issue #1002.
+    //
+    // Reads stay under `ability:notifications:read`; the two mutations (mark
+    // read / mark-all-read) moved to their own `abilities:notifications:write`
+    // group so a read-only token can no longer destroy unread-state signal.
+    // Both abilities are minted unconditionally in `getApiTokenAbilities()`.
+    // New notification endpoints must pick read vs write at creation. Tokens
+    // issued before this split hold only `notifications:read` and get 403 on
+    // the POST routes until they re-login / re-mint — no migration code, by
+    // design.
     Route::middleware('ability:notifications:read')->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    });
+
+    Route::middleware('abilities:notifications:write')->group(function () {
         Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     });
 
     // GIS / Map API routes — ability:gis:read (Issue #690)
-    Route::prefix('gis')->middleware(['ability:gis:read', 'role_or_permission:map'])->group(function () {
+    //
+    // Issue #895: `role_or_permission:map` → `role_or_permission:map|bw`.
+    // `getApiTokenAbilities()` grants `gis:read` on `map|bw`, so a `bw`-only
+    // holder was handed an ability this group would never accept — the grant
+    // and the gate had been edited in different places. This matches the
+    // traffic group above (`routes/api.php` `map|bw`) and the `AGENTS.md`
+    // web-route precedent for `/it/networks` + `/it/wireless`.
+    Route::prefix('gis')->middleware(['ability:gis:read', 'role_or_permission:map|bw'])->group(function () {
         Route::get('/units', [GisController::class, 'units'])->name('api.gis.units');
         Route::get('/hardware', [GisController::class, 'hardware'])->name('api.gis.hardware');
         Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');

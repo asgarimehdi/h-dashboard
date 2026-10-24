@@ -10,14 +10,15 @@ use App\Models\Tahsil;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 #[CoversNothing]
 
 class LookupSimpleModelsTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -25,19 +26,7 @@ class LookupSimpleModelsTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
-
-        // Explicit-id inserts do not advance Postgres sequences, so a later
-        // auto-increment create would collide with id=1 (sequences survive
-        // RefreshDatabase's per-test rollback). Sync them past max(id).
-        foreach (['tahsils', 'estekhdams', 'semats', 'radifs'] as $table) {
-            DB::unprepared(
-                "SELECT setval(pg_get_serial_sequence('{$table}', 'id'), (SELECT MAX(id) FROM {$table}))"
-            );
-        }
+        $this->seedLookupTables();
     }
 
     // ==================== Semat ====================

@@ -12,12 +12,14 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
 class TicketModelTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -25,10 +27,7 @@ class TicketModelTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
 
-        DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-        DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+        $this->seedLookupTables();
     }
 
     protected function createTicketWithRelations(array $ticketAttrs = []): array
@@ -91,7 +90,7 @@ class TicketModelTest extends TestCase
     {
         ['ticket' => $ticket] = $this->createTicketWithRelations(['status' => 'created']);
 
-        $this->assertEquals('جدید ', $ticket->status_name);
+        $this->assertEquals('جدید', $ticket->status_name);
     }
 
     public function test_status_name_returns_persian_for_forwarded(): void

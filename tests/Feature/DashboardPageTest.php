@@ -1,24 +1,23 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
 
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $this->seedLookupTables();
 
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
@@ -79,6 +78,130 @@ test('dashboard renders expected sections', function () {
 
     Livewire::test('dashboard')
         ->assertSee('داشبورد مدیریت اطلاعات سلامت')
-        ->assertSee('روند تیکت‌ها')
+        ->assertSee('روند ایجاد تیکت‌ها')
         ->assertSee('وضعیت وظایف');
+});
+
+test('dashboard ships the Highcharts core and accessibility modules', function () {
+    $response = $this->actingAs($this->user)->get('/dashboard');
+
+    // accessibility.js is load-bearing: Highcharts v12 ships a11y separately
+    // and its core warns at runtime when the module is absent (#957).
+    $response->assertSee('js/chart/highcharts.js');
+    $response->assertSee('js/chart/accessibility.js');
+});
+
+test('dashboard does not ship the unused treemap, treegraph and exporting modules', function () {
+    $response = $this->actingAs($this->user)->get('/dashboard');
+
+    $response->assertDontSee('js/chart/treemap.js');
+    $response->assertDontSee('js/chart/treegraph.js');
+    $response->assertDontSee('js/chart/exporting.js');
+});
+
+test('dashboard with an active interval does not call $wire.mount()', function () {
+    $this->user->settings = ['dashboard_refresh' => 60];
+    $this->user->save();
+    $this->actingAs($this->user);
+
+    // #1164: `mount` is a protected Livewire lifecycle method; the refresh
+    // timer must target refreshStats, never mount.
+    Livewire::test('dashboard')
+        ->assertStatus(200)
+        ->assertDontSee('$wire.mount()')
+        ->assertSee('refreshStats');
+});
+
+test('refreshStats re-runs the aggregation after invalidation', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('dashboard')->assertSet('totalPersons', 1);
+
+    // A new record in scope plus a version bump: the operation count is now
+    // stale in the cache, and refreshStats() must re-run the aggregation
+    // (a bare $refresh would re-render without re-querying).
+    Person::create([
+        'n_code' => '1122334455',
+        'f_name' => 'دوم',
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    app(CacheInvalidationServiceInterface::class)->increment('dashboard');
+
+    $component->call('refreshStats')->assertSet('totalPersons', 2);
+});
+
+test('recent activities keep an in-scope trashed user and label them as inactive', function () {
+    $nCode = '2222222222';
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'غیرفعال',
+        'l_name' => 'کاربر',
+        'u_id' => $this->unit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    $trashed = User::factory()->create(['n_code' => $nCode]);
+    $trashed->delete();
+
+    ActivityLog::create([
+        'user_id' => $trashed->id,
+        'type' => 'login',
+        'description' => 'ورود کاربر حذف‌شده درون‌محدوده',
+    ]);
+
+    $this->actingAs($this->user);
+
+    // #1057: the access list is a permission list, not a display list — a
+    // soft-deleted account in scope must not erase its own audit trail.
+    Livewire::test('dashboard')
+        ->assertSee('ورود کاربر حذف‌شده درون‌محدوده')
+        ->assertSee('کاربر غیرفعال');
+});
+
+test('recent activities hide a trashed user from an out-of-scope unit', function () {
+    $foreignUnit = Unit::create(['name' => 'واحد بیرونی']);
+    $nCode = '3333333333';
+    Person::create([
+        'n_code' => $nCode,
+        'f_name' => 'بیرونی',
+        'l_name' => 'کاربر',
+        'u_id' => $foreignUnit->id,
+        's_id' => 1,
+        't_id' => 1,
+        'e_id' => 1,
+        'r_id' => 1,
+    ]);
+    $trashed = User::factory()->create(['n_code' => $nCode]);
+    $trashed->delete();
+
+    ActivityLog::create([
+        'user_id' => $trashed->id,
+        'type' => 'login',
+        'description' => 'ورود کاربر حذف‌شده بیرون از محدوده',
+    ]);
+
+    $this->actingAs($this->user);
+
+    // The deletion-state widening must not widen the unit scope (#1057).
+    Livewire::test('dashboard')
+        ->assertDontSee('ورود کاربر حذف‌شده بیرون از محدوده')
+        ->assertDontSee('کاربر غیرفعال');
+});
+
+test('dashboard_refresh = 0 renders no timer', function () {
+    $this->user->settings = ['dashboard_refresh' => 0];
+    $this->user->save();
+    $this->actingAs($this->user);
+
+    Livewire::test('dashboard')
+        ->assertStatus(200)
+        ->assertSet('refreshInterval', 0)
+        ->assertDontSee('setInterval');
 });

@@ -8,41 +8,57 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
 
+    <link rel="preload" href="{{ asset('fonts/Vazirmatn-Regular.woff2') }}" as="font" type="font/woff2" crossorigin>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    {{-- Issue #984 (CSS half, #1018): page-specific stylesheets land in
+         `@stack('styles')` right here — the draw and routing stylesheets used to
+         be linked globally below (~11.5 KB of parser-blocking CSS in the hot
+         path for three pages that use them). Their pages push them now. --}}
+    @stack('styles')
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
-    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.draw.css') }}" />
-    <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet-routing-machine.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 
 
-    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
-    <script src="{{ asset('js/leaflet/leaflet.draw.js') }}"></script>
-    <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
-    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
-    <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
-<style>
-    @font-face {
-        font-family: 'Vazirmatn';
-        src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
-        font-weight: normal;
-    }
-
-    body {
-        font-family: 'Vazirmatn', sans-serif !important;
-        direction: rtl;
-    }
-    
-    /* برای اینکه کلاس‌های پیش‌فرض تیلوند هم از این فونت استفاده کنند */
-    .font-sans {
-        font-family: 'Vazirmatn', sans-serif !important;
-    }
-</style>
+    {{-- Issues #984 / #1018 / #1182: Leaflet, jalalidatepicker, leaflet.draw,
+         leaflet-routing-machine and FullCalendar are page-specific. Loading them
+         here cost ~914 KB of render-blocking JS for the three plugin/calendar
+         libraries (~85% of the global JS payload) on top of ~167 KB for Leaflet
+         core + jalalidatepicker — on every page, including the ones that never
+         touch a map or a Persian date field. Each page now loads what it needs
+         with `@assets` (also from #1182 — see below):
+           maps/route, maps/route2  -> leaflet core + routing-machine
+           units/map                -> leaflet core + leaflet.draw
+           map/map-dashboard, maps/county, maps/unit, maps/point,
+           reports/map-no-boundary  -> leaflet core        (8 Leaflet pages total)
+           activity-log/index, reports/advanced, reports/todos,
+           tickets/inbox, tickets/monitoring, todo/todo
+                                    -> jalalidatepicker   (6 date pages total)
+         Two rules for whoever moves the next library:
+         1. It goes on the HOST page, never inside `maps/map.blade.php` — the
+            child's asset arrives with the child, after the page's Alpine
+            `init()` already asked the store for a map.
+         2. It goes through `@assets`, NOT `@push('scripts')`. Livewire injects
+            `@assets` into this <head> and evaluates new head assets before it
+            completes a `wire:navigate` swap. A pushed tag lands at the end of
+            <body>, and on navigate Livewire morphs the body and runs Alpine
+            BEFORE evaluating those scripts — measured as `L is not defined` and
+            a blank map on /dashboard -> /maps/county (#028, #1182).
+         The CSS half (#1018) is untouched by #1182: `leaflet.css` and
+         `jalalidatepicker.min.css` stay linked here, and LeafletCssScopingTest
+         pins them to this <head>.
+         Do not move a library back here without re-measuring. --}}
 @php
     $compactMode = auth()->user()->settings['compact_mode'] ?? false;
 @endphp
 </head>
 
 <body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
+    {{-- #957: لینک پرش. `focus:absolute` لازم است چون `not-sr-only` حالتِ
+         static می‌گذارد و بدون آن با هر بار فوکوس، کل صفحه یک خط پایین می‌رود. --}}
+    <a href="#main-content"
+       class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[1000] focus:rounded-lg focus:bg-base-100 focus:px-4 focus:py-2 focus:shadow-lg">
+        رفتن به محتوای اصلی
+    </a>
     <!-- Stitch-style animated background JavaScript -->
     <script>
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
@@ -134,11 +150,11 @@
             <x-app-brand />
         </x-slot:brand>
         <x-slot:actions>
-            <a href="/search" wire:navigate class="btn btn-ghost btn-sm">
+            <a href="/search" wire:navigate aria-label="جستجو" class="btn btn-ghost btn-sm">
                 <x-icon name="o-magnifying-glass" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">جستجو</span>
             </a>
-            <a href="/profile" wire:navigate class="btn btn-ghost btn-sm gap-2">
+            <a href="/profile" wire:navigate aria-label="پروفایل {{ Auth::user()->person?->f_name ?? 'کاربر' }}" class="btn btn-ghost btn-sm gap-2">
                 <x-icon name="o-user-circle" class="w-5 h-5" />
                 <span class="hidden md:inline text-xs">{{ Auth::user()->person?->f_name ?? 'کاربر' }}</span>
             </a>
@@ -163,7 +179,19 @@
             {{-- BRAND --}}
             <x-app-brand class="px-5 pt-4" />
 
-            <x-menu activate-by-route>
+            {{-- #957: برچسب‌دار کردن نشانهٔ ناوبری. بدون `aria-label` چند
+                 ناوبری روی صفحه برای صفحه‌خوان یکسان و بی‌نام می‌شوند. --}}
+            <nav aria-label="منوی اصلی">
+                {{-- #1220: جفت‌رنگ آیتم فعال باید از یک خانوادهٔ توکن بیاید.
+                     daisyUI برای `[aria-current="page"]` متن را با
+                     `--menu-active-fg` (= `--color-neutral-content`) رنگ می‌کند،
+                     ولی MaryUI پس‌زمینه را از `bg-base-300` می‌گیرد؛ در تم‌های
+                     روشن این دو به هم می‌رسند (light 1.09، cupcake/fantasy 1.01).
+                     تصمیم مالک: جفت بومی daisyUI (`neutral` / `neutral-content`)
+                     در هر ۷ تم — پس هر دو نیمه از یک خانواده‌اند.
+                     `activeBgColor` هم به آیتم فعال و هم به `<summary>` زیرمنوی
+                     باز cascade می‌شود؛ اعداد در tests/e2e/theme پین شده‌اند. --}}
+                <x-menu activate-by-route active-bg-color="bg-neutral text-neutral-content">
                 @if($user = auth()->user())
                 <x-menu-separator />
                 <x-list-item :item="auth()->user()" value="name" no-separator no-hover
@@ -171,7 +199,7 @@
                     <x-slot:actions>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <x-button type="submit" icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate />
+                            <x-ui.icon-button name="خروج از حساب" type="submit" icon="o-power" class="btn-circle btn-ghost btn-xs" tooltip-right="logoff" no-wire-navigate />
                         </form>
                     </x-slot:actions>
                 </x-list-item>
@@ -185,7 +213,7 @@
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-sm font-bold truncate">{{ session('current_unit_name') }}</span>
                         @if(auth()->user()->units()->count() > 1)
-                            <x-button icon="o-arrows-right-left" class="btn-ghost btn-xs"
+                            <x-ui.icon-button name="تغییر حوزه" icon="o-arrows-right-left" class="btn-ghost btn-xs"
                                 tooltip-right="تغییر حوزه" no-wire-navigate link="/select-context" />
                         @endif
                     </div>
@@ -193,7 +221,9 @@
                 <x-menu-separator />
                 @endif
                 <x-menu-item title="جستجوی کلی" icon="o-magnifying-glass" link="/search" wire:navigate />
-                <x-menu-item title="صفحه اول" icon="o-home" link="/" wire:navigate />
+                {{-- #996: روت `/` یک `Route::redirect('/', '/dashboard')` است؛
+                     با `link="/"` این آیتم هیچوقت active نمی‌شد. --}}
+                <x-menu-item title="صفحه اول" icon="o-home" link="/dashboard" wire:navigate />
 
                 {{-- منابع انسانی --}}
                 @can('kargozini')
@@ -316,7 +346,9 @@
                 @canany(['manage_users', 'manage_roles'])
                 <x-menu-sub title="مدیریت" icon="o-cog-6-tooth">
                     @can('manage_users')
-                    <x-menu-item title="کاربران" icon="o-users" link="/users" wire:navigate />
+                    {{-- #996: `/users/changepassword` آیتم مستقل دارد؛ بدون `:exact`
+                         آیتم `/users` آن صفحه را هم ادعا می‌کرد. --}}
+                    <x-menu-item title="کاربران" icon="o-users" link="/users" :exact="true" wire:navigate />
                     @endcan
                     @can('manage_roles')
                     <x-menu-item title="مدیریت نقش‌ها" icon="o-shield-check" link="/roles" wire:navigate />
@@ -338,14 +370,23 @@
                 <x-menu-item title="پروفایل من" icon="o-user-circle" link="/profile" wire:navigate />
                 <x-menu-item title="تغییر رمز عبور" icon="o-lock-closed" link="/users/changepassword" wire:navigate />
                 <x-menu-item title="تنظیمات" icon="o-cog-6-tooth" link="/settings" wire:navigate />
-            </x-menu>
+                </x-menu>
+            </nav>
         </x-slot:sidebar>
-        <x-slot:content>
+        {{-- #957: هدف لینک پرش. Mary's Main روی `<main>` هیچ کیسهٔ صفتی نمی‌دهد،
+             اما صفت‌های این اسلات را روی div محتوا merge می‌کند؛ `tabindex="-1"`
+             بدون آن لازم است چون مرورگر فقط با فوکوس برنامه‌نویسی‌شده کار می‌کند. --}}
+        <x-slot:content id="main-content" tabindex="-1">
             {{ $slot }}
         </x-slot:content>
     </x-main>
 
-    <x-toast />
+    {{-- #957: توست تا حالا فقط بصری بود؛ `x-show` آن را در DOM نگه می‌دارد
+         ولی بدون ناحیهٔ زنده هیچ صفحه‌خوانی متوجه باز شدنش نمی‌شود. زنده‌بودن
+         باید روی ظرفی باشد که همیشه در DOM است، نه روی خودِ توست. --}}
+    <div aria-live="polite" aria-atomic="true">
+        <x-toast />
+    </div>
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
 <script>
     // Register service worker for browser notifications

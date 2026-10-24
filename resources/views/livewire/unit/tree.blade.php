@@ -311,10 +311,16 @@ return new class extends Component
     }
 
     /**
-     * Depth-first id walk that caches every children query it makes. The
-     * visited set is carried down the path, so a parent_id cycle stops at
+     * Level-wise id walk that caches every level's children in one query
+     * (`childrenOfMany`). The recursion this replaced issued one
+     * `childrenOf()` per node — a 1→6→36 tree cost ~43 queries for one
+     * "باز کردن همه" click, which this walk brings down to one query per
+     * depth (issue #1013).
+     *
+     * The visited set spans the whole walk, so a `parent_id` cycle stops at
      * its own repeat instead of walking forever (same guard as
-     * UnitTreeService::ancestorChain).
+     * UnitTreeService::ancestorChain). A level whose every id is already
+     * visited adds nothing and ends the loop.
      *
      * @param  iterable<mixed, \App\Models\Unit>  $nodes
      * @param  array<int>  $accessibleIds
@@ -324,21 +330,35 @@ return new class extends Component
     protected function collectAllIds($nodes, array $accessibleIds, array $visited): array
     {
         $ids = [];
+        $service = app(UnitTreeService::class);
+        $level = collect($nodes);
 
-        foreach ($nodes as $node) {
-            if (isset($visited[(int) $node->id])) {
-                continue;
+        while ($level->isNotEmpty()) {
+            $levelIds = [];
+
+            foreach ($level as $node) {
+                $id = (int) $node->id;
+
+                if (isset($visited[$id])) {
+                    continue;
+                }
+
+                $visited[$id] = true;
+                $ids[] = (string) $node->id;
+                $levelIds[] = $id;
             }
 
-            $visited[(int) $node->id] = true;
-            $ids[] = (string) $node->id;
-
-            $children = app(UnitTreeService::class)->childrenOf((int) $node->id, $accessibleIds);
-            $this->lazyChildren[(int) $node->id] = $children;
-
-            if ($children->isNotEmpty()) {
-                $ids = array_merge($ids, $this->collectAllIds($children, $accessibleIds, $visited));
+            if ($levelIds === []) {
+                break;
             }
+
+            $grouped = $service->childrenOfMany($levelIds, $accessibleIds);
+
+            foreach ($levelIds as $id) {
+                $this->lazyChildren[$id] = $grouped->get($id, collect());
+            }
+
+            $level = $grouped->flatten();
         }
 
         return $ids;

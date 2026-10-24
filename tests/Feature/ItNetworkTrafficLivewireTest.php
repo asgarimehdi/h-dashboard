@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -82,6 +84,39 @@ class ItNetworkTrafficLivewireTest extends TestCase
             ->assertSet('title', 'WAN Traffic')
             ->assertSet('initialDuration', 7200)
             ->assertSee('WAN Traffic');
+    }
+
+    // ==================== Chart asset source (#1183) ====================
+
+    public function test_chart_script_is_the_vendored_build(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_users']);
+        $this->actingAs($user);
+
+        // The chart must load the vendored build (`public/js/chart/`), not a
+        // public CDN: the CDN serves a different (newer) Highcharts major
+        // version, rejects requests without a Referer header, and violates the
+        // app CSP.
+        //
+        // Asserted on a page that renders the component itself: `/it/networks`
+        // hosts it inside a lazy `@island`, so its `@assets` never reach the
+        // initial page HTML, and `Livewire::test()` returns only the component
+        // markup — the assets are injected into the page, not the component.
+        Route::get('/__test/it-network-traffic-chart', fn () => Blade::render(<<<'BLADE'
+        <!DOCTYPE html>
+        <html lang="fa" dir="rtl">
+        <head><title>chart</title></head>
+        <body>
+        <livewire:it.network-traffic-chart out-item-id="out_1" in-item-id="in_1" title="Test Traffic" />
+        </body>
+        </html>
+        BLADE));
+
+        $response = $this->get('/__test/it-network-traffic-chart');
+
+        $response->assertStatus(200);
+        $response->assertSee('js/chart/highcharts.js');
+        $response->assertDontSee('code.highcharts.com');
     }
 
     // ==================== Edge cases ====================

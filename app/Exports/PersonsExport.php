@@ -2,27 +2,33 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Services\UnitTreeService;
+use App\Support\ExcelCell;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
+use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use Morilog\Jalali\Jalalian;
 
 /**
  * One row per person (flat table), mirroring the personnel list columns so the
  * sheet is readable on its own. Lookup labels (سمت، تحصیلات، …) are resolved
- * from relations the controller eager-loads, so mapping a row never queries.
+ * from relations the controller eager-loads on the builder handed in here, so
+ * mapping a row never queries. The library chunked-reads that same builder
+ * (WithCustomChunkSize), so every chunk inherits the eager loads it carries.
  */
-class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHeadings, WithMapping, WithTitle
+class PersonsExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, WithEvents, WithHeadings, WithMapping, WithTitle
 {
+    use FormatsJalaliDates;
+
     /**
      * Column definitions: key => ['label' => Persian]
      *
@@ -49,8 +55,10 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
         'estekhdam', 'radif', 'unit', 'status', 'birth_date', 'hire_date',
     ];
 
-    /** @var Collection<int, Person> */
-    protected Collection $persons;
+    /** @var Builder<Person> The controller's already-filtered builder, with the eager loads. */
+    protected Builder $persons;
+
+    protected int $chunkSize = 500;
 
     /**
      * Breadcrumb walker from the shared unit tree service (#756) — the same
@@ -66,19 +74,26 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
      */
     protected ?array $unitsById = null;
 
-    /** @param  Collection<int, Person>  $persons */
-    public function __construct(Collection $persons)
+    /** @param  Builder<Person>  $persons */
+    public function __construct(Builder $persons)
     {
         $this->persons = $persons;
         $this->unitTree = new UnitTreeService;
     }
 
     /**
-     * @return Collection<int, Person>
+     * The controller's builder (scope, search, filters, eager loads and
+     * `orderBy('id')`) is handed over untouched — what the user was looking
+     * at is what gets downloaded, chunk after chunk.
      */
-    public function collection(): Collection
+    public function query(): Builder
     {
         return $this->persons;
+    }
+
+    public function chunkSize(): int
+    {
+        return $this->chunkSize;
     }
 
     public function headings(): array
@@ -94,8 +109,11 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
      */
     public function map($person): array
     {
+        // #886 (CWE-1236): escape at map() time so '='-leading values bind
+        // as text. Only map() also fixes the audits CSV route, which carries
+        // no cell-type metadata.
         return array_map(
-            fn (string $key) => $this->resolveValue($person, $key),
+            fn (string $key) => ExcelCell::escape($this->resolveValue($person, $key)),
             $this->columns
         );
     }
@@ -127,9 +145,17 @@ class PersonsExport implements FromCollection, ShouldAutoSize, WithEvents, WithH
         return $name !== '' ? $name : '-';
     }
 
+    /**
+     * #890: delegates to the shared formatter so `birth_date` / `hire_date`
+     * cannot re-introduce the "one unformattable date 500s the whole export"
+     * failure the hardware export had. PersonImport carries neither
+     * birth_date nor hire_date as importable columns today, so this is
+     * prevention rather than a live bug fix — the guard is here so that if
+     * those columns are ever added to the personnel sheet, they inherit it.
+     */
     protected function resolveJalaliDate(?Carbon $date): string
     {
-        return $date !== null ? Jalalian::fromCarbon($date)->format('Y/m/d') : '-';
+        return $this->formatJalaliOrDash($date);
     }
 
     /**

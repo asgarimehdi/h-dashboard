@@ -8,22 +8,19 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
 
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $this->seedLookupTables();
 
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
@@ -90,7 +87,10 @@ test('creating ticket persists data', function () {
         ->set('unit_id', $targetUnit->id)
         ->set('subject', 'تیکت جدید تست')
         ->set('content', 'توضیحات تست تست تست')
-        ->set('priority', 'high')
+        // `high` used to be accepted here because `priority` carried no
+        // validation at all (#847). It is not offered by the picker and
+        // `TicketController` refuses it, so the form now uses the same set.
+        ->set('priority', 'urgent')
         ->call('saveTicket');
 
     $this->assertDatabaseHas('tickets', [

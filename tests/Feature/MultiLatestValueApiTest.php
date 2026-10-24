@@ -30,8 +30,11 @@ class MultiLatestValueApiTest extends TestCase
 
     protected function tearDown(): void
     {
-        Mockery::close();
+        // Parent first: the RefreshDatabase rollback must not be skipped when
+        // Mockery::close() reports an unmet expectation — an open test
+        // transaction deadlocks the next test's database preparation.
         parent::tearDown();
+        Mockery::close();
     }
 
     public function test_unauthenticated_user_cannot_access_multi_latest(): void

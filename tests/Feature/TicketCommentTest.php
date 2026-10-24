@@ -15,6 +15,7 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\Concerns\InteractsWithApiTokens;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 /**
@@ -29,6 +30,7 @@ covers(TicketComment::class);
 class TicketCommentTest extends TestCase
 {
     use InteractsWithApiTokens;
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected $unit;
@@ -40,6 +42,7 @@ class TicketCommentTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
         // Ensure permissions and roles exist for testing (Issue #323)
@@ -51,10 +54,10 @@ class TicketCommentTest extends TestCase
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
         $adminRole->syncPermissions(Permission::all());
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'Test Unit']);
         $nCode = (string) fake()->unique()->numerify('##########');
@@ -141,10 +144,10 @@ class TicketCommentTest extends TestCase
         $nCode2 = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode2, 'f_name' => 'رضا', 'l_name' => 'احمدی',
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T2']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E2']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S2']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R2']),
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $this->unit->id,
         ]);
         $other = User::create(['n_code' => $nCode2, 'password' => Hash::make('x')]);
@@ -187,6 +190,32 @@ class TicketCommentTest extends TestCase
             'comment_id' => $comment['id'],
             'user_id' => $this->user->id,
         ]);
+    }
+
+    /**
+     * #1177: `children()` must not carry eager loads of its own — a `with()`
+     * inside the relation definition forces every consumer to pay for it.
+     * Callers that render author names opt in explicitly
+     * (`children.user.person` in the Livewire thread and in the API
+     * controller).
+     */
+    public function test_children_relation_does_not_force_eager_loads(): void
+    {
+        $root = TicketComment::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => $this->user->id,
+            'body' => 'والد',
+        ]);
+        TicketComment::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => $this->user->id,
+            'parent_id' => $root->id,
+            'body' => 'پاسخ',
+        ]);
+
+        $child = $root->children()->firstOrFail();
+
+        $this->assertFalse($child->relationLoaded('user'));
     }
 
     public function test_can_soft_delete_comment(): void

@@ -163,13 +163,25 @@ return [
     | HTTPS Only Cookies
     |--------------------------------------------------------------------------
     |
-    | By setting this option to true, session cookies will only be sent back
-    | to the server if the browser has a HTTPS connection. This will keep
-    | the cookie from being sent to you when it can't be done securely.
+    | null (the default when SESSION_SECURE_COOKIE is unset) lets Symfony
+    | decide per request: the cookie is marked Secure only when the request
+    | itself is HTTPS — either direct fastcgi/nginx HTTPS, or
+    | X-Forwarded-Proto:https from a proxy pinned in TRUSTED_PROXIES (#855:
+    | unpinned X-Forwarded-* headers are never trusted).
+    |
+    | This is what keeps every fresh server logable-in at startup:
+    | unconditionally-forced Secure (#1003) made browsers refuse the cookie
+    | over plain http (e.g. `php artisan serve`), so the CSRF/session cookie
+    | never came back and login died with the 419 "Page Expired" wall.
+    | Https deployments still inherit Secure from the scheme automatically.
+    |
+    | Set SESSION_SECURE_COOKIE=true to force Secure regardless of scheme,
+    | or false to force non-Secure (plaintext local dev / e2e on :8001).
+    | tests/Feature/SessionCookieSecureTest.php pins the behavior end to end.
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE') === '' ? null : env('SESSION_SECURE_COOKIE'),
 
     /*
     |--------------------------------------------------------------------------

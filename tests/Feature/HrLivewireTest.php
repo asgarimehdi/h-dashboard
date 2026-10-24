@@ -9,27 +9,31 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(OrgChartController::class, HrStatsController::class, HrAnalyticsController::class);
 
 class HrLivewireTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         Session::flush();
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'مرکز بهداشت']);
         Unit::create(['name' => 'خانه بهداشت', 'parent_id' => $this->unit->id]);
@@ -53,6 +57,104 @@ class HrLivewireTest extends TestCase
             ->assertOk()
             ->assertSee('داشبورد منابع انسانی')
             ->assertSee('کل پرسنل');
+    }
+
+    /**
+     * Add personnel to the unit the acting user can see.
+     *
+     * @param  int  $active  how many active persons to create
+     * @param  int  $retired  how many retired persons to create
+     */
+    private function addPersonnel(int $active, int $retired): void
+    {
+        $lookups = [
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+        ];
+
+        foreach ([[$active, 'active'], [$retired, 'retired']] as [$count, $status]) {
+            for ($i = 0; $i < $count; $i++) {
+                Person::create([
+                    'n_code' => (string) fake()->unique()->numerify('##########'),
+                    'f_name' => 'کارمند',
+                    'l_name' => $status === 'active' ? 'فعال' : 'بازنشسته',
+                    ...$lookups,
+                    'u_id' => $this->unit->id,
+                    'status' => $status,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Read the number MaryUI rendered next to a stat tile title.
+     *
+     * The tile is a title element followed by an element that holds nothing but
+     * the number, so the pair is read back without pinning the markup classes.
+     *
+     * @return string|null the rendered number, or null when the tile is absent
+     */
+    private function statValueFor(string $html, string $title): ?string
+    {
+        // Livewire keeps conditional Blade comments in the markup; drop them so
+        // the tile title sits right next to its value.
+        $html = preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+
+        $pattern = '/'.preg_quote($title, '/').'<\/div>.*?<div[^>]*>\s*(-?\d+)\s*<\/div>/s';
+
+        return preg_match($pattern, $html, $matches) === 1 ? $matches[1] : null;
+    }
+
+    /** @test */
+    public function test_dashboard_renders_headcount_scalars_from_dedicated_props(): void
+    {
+        // setUp() already seeded one active person in the accessible unit.
+        $this->addPersonnel(active: 2, retired: 2);
+
+        $component = Livewire::test('hr.dashboard')
+            ->assertOk()
+            ->assertSetStrict('totalPersons', 5)
+            ->assertSetStrict('activePersons', 3)
+            ->assertSetStrict('retiredPersons', 2);
+
+        $html = $component->html();
+
+        $this->assertSame('5', $this->statValueFor($html, 'کل پرسنل'), 'کل پرسنل must render the total headcount.');
+        $this->assertSame('3', $this->statValueFor($html, 'فعال'), 'فعال must render the active headcount.');
+        $this->assertSame('2', $this->statValueFor($html, 'بازنشسته'), 'بازنشسته must render the retired headcount.');
+
+        // The five groupings used to be serialised twice per render: once
+        // inside the $stats bag and once in the by_* props. The bag is gone,
+        // so the snapshot must not carry it any more (#1174).
+        $this->assertArrayNotHasKey('stats', $component->snapshot['data']);
+    }
+
+    /** @test */
+    public function test_dashboard_snapshot_carries_each_grouping_exactly_once(): void
+    {
+        $this->addPersonnel(active: 2, retired: 2);
+
+        $component = Livewire::test('hr.dashboard')->assertOk();
+
+        $snapshot = $component->snapshot;
+        $json = json_encode($snapshot, JSON_UNESCAPED_UNICODE);
+
+        foreach (['byUnit', 'bySemat', 'byTahsil', 'byEstekhdam', 'byRadif'] as $property) {
+            $payload = $snapshot['data'][$property];
+
+            $this->assertNotEmpty($payload, "{$property} must not be empty in this fixture.");
+
+            // The grouping payload must appear verbatim exactly once in the
+            // serialised snapshot — a second copy means it is still shipped
+            // twice per render (#1174).
+            $this->assertSame(
+                1,
+                substr_count($json, json_encode($payload, JSON_UNESCAPED_UNICODE)),
+                "{$property} must be serialised exactly once per render."
+            );
+        }
     }
 
     public function test_org_chart_renders_tree(): void
@@ -163,10 +265,10 @@ class HrLivewireTest extends TestCase
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'بدون', 'l_name' => 'کاربر',
-            't_id' => DB::table('tahsils')->insertGetId(['name' => 'T']),
-            'e_id' => DB::table('estekhdams')->insertGetId(['name' => 'E']),
-            's_id' => DB::table('semats')->insertGetId(['name' => 'S']),
-            'r_id' => DB::table('radifs')->insertGetId(['name' => 'R']),
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
             'u_id' => $this->unit->id, 'status' => 'active',
         ]);
 
@@ -211,5 +313,114 @@ class HrLivewireTest extends TestCase
             ->assertOk()
             ->assertSee('0 نفر')
             ->assertSee('خالی');
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_lists_only_units_without_personnel(): void
+    {
+        // $this->unit holds the single person; 'خانه بهداشت' is empty.
+        $vacancies = collect(Livewire::test('hr.dashboard')->get('vacancies'))->pluck('name');
+
+        $this->assertContains('خانه بهداشت', $vacancies);
+        $this->assertNotContains('مرکز بهداشت', $vacancies);
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_caps_at_ten_units(): void
+    {
+        for ($i = 1; $i <= 15; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        // Sixteen empty units are in scope, but the widget shows at most ten.
+        $this->assertCount(10, Livewire::test('hr.dashboard')->get('vacancies'));
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_respect_scope_fail_closed(): void
+    {
+        // A top-level unit outside the user's scope must never surface.
+        Unit::create(['name' => 'Out Of Scope']);
+
+        $vacancies = collect(Livewire::test('hr.dashboard')->get('vacancies'))->pluck('name');
+
+        $this->assertNotContains('Out Of Scope', $vacancies);
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_payload_shape_is_id_and_name_only(): void
+    {
+        $vacancies = Livewire::test('hr.dashboard')->get('vacancies');
+
+        $this->assertNotEmpty($vacancies);
+        foreach ($vacancies as $row) {
+            $this->assertSame(['id', 'name'], array_keys($row));
+        }
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_are_ordered_by_name(): void
+    {
+        // ASCII names sort identically in every collation, so the assertion is
+        // stable regardless of where the Persian-named units fall.
+        foreach (['CCC', 'AAA', 'BBB'] as $name) {
+            Unit::create(['name' => $name, 'parent_id' => $this->unit->id]);
+        }
+
+        $names = collect(Livewire::test('hr.dashboard')->get('vacancies'))->pluck('name');
+        $ascii = $names->filter(fn ($n) => in_array($n, ['AAA', 'BBB', 'CCC'], true))->values()->all();
+
+        $this->assertSame(['AAA', 'BBB', 'CCC'], $ascii);
+    }
+
+    /** @test */
+    public function test_dashboard_vacancies_query_is_bounded_and_not_counting(): void
+    {
+        // Force a cache miss so the query actually runs, and seed more units
+        // than the cap so an unbounded query would return them all.
+        Cache::flush();
+        for ($i = 1; $i <= 25; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        $sql = [];
+        DB::listen(function ($query) use (&$sql) {
+            $sql[] = $query->sql;
+        });
+        Livewire::test('hr.dashboard');
+
+        $vacancySql = collect($sql)->first(
+            fn ($q) => str_contains($q, 'from "units"')
+                && str_contains($q, 'not exists')
+        );
+
+        $this->assertNotNull($vacancySql, 'Vacancies should be filtered in SQL with a NOT EXISTS predicate.');
+        $this->assertStringContainsString('limit 10', $vacancySql, 'Vacancies should be capped in SQL.');
+        $this->assertStringNotContainsString('personnel_count', $vacancySql, 'The withCount subquery should be gone.');
+    }
+
+    /** @test */
+    public function test_dashboard_queries_do_not_grow_with_unit_count(): void
+    {
+        $countUnitQueries = function (): int {
+            Cache::flush();
+            $count = 0;
+            DB::listen(function ($query) use (&$count) {
+                if (str_contains($query->sql, 'from "units"')) {
+                    $count++;
+                }
+            });
+            Livewire::test('hr.dashboard');
+
+            return $count;
+        };
+
+        $baseline = $countUnitQueries();
+
+        for ($i = 1; $i <= 30; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        $this->assertSame($baseline, $countUnitQueries(), 'Unit queries must not scale with the number of units.');
     }
 }

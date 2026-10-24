@@ -40,16 +40,16 @@ class MultiLatestValueControllerTest extends TestCase
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
-                ->andReturn(['item1' => 12.5, 'item2' => 8.0]);
+                ->andReturn(['12' => 12.5, '34' => 8.0]);
         });
 
         $response = $this->apiGet(
-            '/api/zabbix/multi-latest?item_ids[]=item1&item_ids[]=item2',
+            '/api/zabbix/multi-latest?item_ids[]=12&item_ids[]=34',
             $this->authUser()
         );
 
         $response->assertStatus(200)
-            ->assertJson(['item1' => 12.5, 'item2' => 8.0]);
+            ->assertJson(['12' => 12.5, '34' => 8.0]);
     }
 
     public function test_validates_item_ids_is_required_array(): void
@@ -70,9 +70,27 @@ class MultiLatestValueControllerTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_rejects_a_non_numeric_item_id_before_touching_the_upstream(): void
+    {
+        // #1019 decision 1: item ids feed the cache key (`multi_latest_<ids>`
+        // sorted), so they must be numeric strings — validation runs BEFORE
+        // any cache/lock/upstream access.
+        $this->mock(ZabbixService::class, function ($mock) {
+            $mock->shouldReceive('getLatestValues')->never();
+        });
+
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=abc',
+            $this->authUser()
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['item_ids.0']);
+    }
+
     public function test_rejects_item_ids_exceeding_max_limit(): void
     {
-        $itemIds = array_map(fn ($i) => "item{$i}", range(1, 101));
+        $itemIds = array_map('strval', range(1, 101));
 
         $response = $this->apiGet(
             '/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]),
@@ -84,7 +102,9 @@ class MultiLatestValueControllerTest extends TestCase
 
     public function test_rejects_item_id_exceeding_max_length(): void
     {
-        $longId = str_repeat('a', 65);
+        // A numeric 65-character string passes the digits regex, so only the
+        // max:64 rule rejects it — this is the length boundary, not a shape one.
+        $longId = str_repeat('1', 65);
 
         $response = $this->apiGet(
             "/api/zabbix/multi-latest?item_ids[]={$longId}",
@@ -102,7 +122,7 @@ class MultiLatestValueControllerTest extends TestCase
                 ->andReturn([]);
         });
 
-        $itemIds = array_map(fn ($i) => "item{$i}", range(1, 100));
+        $itemIds = array_map('strval', range(1, 100));
 
         $response = $this->apiGet(
             '/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]),
@@ -121,7 +141,7 @@ class MultiLatestValueControllerTest extends TestCase
         });
 
         $response = $this->apiGet(
-            '/api/zabbix/multi-latest?item_ids[]=item1',
+            '/api/zabbix/multi-latest?item_ids[]=123',
             $this->authUser()
         );
 
@@ -136,27 +156,29 @@ class MultiLatestValueControllerTest extends TestCase
     public function test_a_second_request_is_served_from_the_cache(): void
     {
         // The cache-hit branch returns before the client is called at all —
-        // the mock allows exactly one call across both requests.
+        // the mock allows exactly one call across both requests, and the
+        // literal `multi_latest_<sorted numeric ids>` key format stays as
+        // pinned by #1019 decision 4.
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
-                ->andReturn(['item1' => 12.5]);
+                ->andReturn(['123' => 12.5]);
         });
 
-        $url = '/api/zabbix/multi-latest?item_ids[]=item1';
+        $url = '/api/zabbix/multi-latest?item_ids[]=123';
         $token = $this->authUser();
 
         $this->apiGet($url, $token)->assertStatus(200);
 
         $this->assertSame(
-            ['item1' => 12.5],
-            Cache::get('multi_latest_item1'),
+            ['123' => 12.5],
+            Cache::get('multi_latest_123'),
             'A successful fetch must be cached.'
         );
 
         $this->apiGet($url, $token)
             ->assertStatus(200)
-            ->assertJson(['item1' => 12.5]);
+            ->assertJson(['123' => 12.5]);
     }
 
     public function test_the_cache_key_is_order_independent(): void
@@ -166,39 +188,39 @@ class MultiLatestValueControllerTest extends TestCase
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
-                ->andReturn(['a' => 1.0, 'b' => 2.0]);
+                ->andReturn(['20' => 1.0, '30' => 2.0]);
         });
 
         $token = $this->authUser();
 
-        $this->apiGet('/api/zabbix/multi-latest?item_ids[]=b&item_ids[]=a', $token)
+        $this->apiGet('/api/zabbix/multi-latest?item_ids[]=30&item_ids[]=20', $token)
             ->assertStatus(200);
 
-        $this->apiGet('/api/zabbix/multi-latest?item_ids[]=a&item_ids[]=b', $token)
+        $this->apiGet('/api/zabbix/multi-latest?item_ids[]=20&item_ids[]=30', $token)
             ->assertStatus(200)
-            ->assertJson(['a' => 1.0, 'b' => 2.0]);
+            ->assertJson(['20' => 1.0, '30' => 2.0]);
 
-        $this->assertNotNull(Cache::get('multi_latest_a_b'));
+        $this->assertNotNull(Cache::get('multi_latest_20_30'));
     }
 
     public function test_a_failure_is_never_written_to_the_cache(): void
     {
         // The whole reason remember() was split into get/put: a broken Zabbix
-        // must not pin its own 503 for the 20-second TTL. Assert the behaviour
-        // a user sees — the next request retries — not the cache key.
+        // must not pin its own 503 for the TTL. Assert the behaviour a user
+        // sees — the next request retries — not the cache key.
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
                 ->andThrow(new \Exception('Zabbix connection failed'));
         });
 
-        $url = '/api/zabbix/multi-latest?item_ids[]=item1';
+        $url = '/api/zabbix/multi-latest?item_ids[]=123';
         $token = $this->authUser();
 
         $this->apiGet($url, $token)->assertStatus(503);
 
         $this->assertNull(
-            Cache::get('multi_latest_item1'),
+            Cache::get('multi_latest_123'),
             'A failed fetch must not be cached.'
         );
     }
@@ -213,7 +235,7 @@ class MultiLatestValueControllerTest extends TestCase
                 ->andThrow(new \Exception('Zabbix connection failed'));
         });
 
-        $url = '/api/zabbix/multi-latest?item_ids[]=item1';
+        $url = '/api/zabbix/multi-latest?item_ids[]=123';
         $token = $this->authUser();
 
         $this->apiGet($url, $token)->assertStatus(503);
@@ -230,12 +252,12 @@ class MultiLatestValueControllerTest extends TestCase
 
             public function getLatestValues(array $itemIds): array
             {
-                return ['item1' => 7.5];
+                return ['123' => 7.5];
             }
         });
 
         $this->apiGet($url, $token)
             ->assertStatus(200)
-            ->assertJson(['item1' => 7.5]);
+            ->assertJson(['123' => 7.5]);
     }
 }

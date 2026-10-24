@@ -9,6 +9,7 @@ use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
@@ -16,6 +17,18 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
+    /**
+     * Same chunking contract as HardwareImport (#1167): each statement stays
+     * under PostgreSQL's bind-parameter ceiling and a 5,000-row sheet becomes
+     * ten writes instead of 5,000.
+     */
+    private const CHUNK_SIZE = 500;
+
+    /**
+     * Fields Person::boot() folds on save; bulk writes must reproduce it.
+     */
+    private const NORMALIZED_FIELDS = ['f_name', 'l_name'];
+
     private array $accessibleUnitIds = [];
 
     private array $existingRecords = [];
@@ -23,6 +36,25 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     private string $compareKey = 'n_code'; // always match by n_code for persons
 
     private array $selectedActions = [];
+
+    /**
+     * #1209: sheet rows the preview rejected, keyed by spreadsheet row number
+     * with the preview's own error message. The confirm pass uses this to
+     * carry every rejected row — with the same message — into the published
+     * result instead of dropping it.
+     *
+     * @var array<int, string>
+     */
+    private array $previewErrorMessages = [];
+
+    /** @var list<array{data: array<string, mixed>}> */
+    private array $pendingCreates = [];
+
+    /** @var list<array{id: int, data: array<string, mixed>}> */
+    private array $pendingUpdates = [];
+
+    /** Did any queued write create a person or move one between units? */
+    private bool $touchesMapScope = false;
 
     // Pre-loaded related models to avoid N+1 queries
     private array $units = [];
@@ -66,39 +98,71 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
     public function collection(Collection $rows): void
     {
-        // Pre-load existing person records by n_code for comparison
-        $this->loadExistingRecords();
+        // Map once: the mapped rows drive the lookup window and both passes.
+        $dataByRow = [];
 
-        // Pre-load all related reference data to avoid N+1 queries
-        $this->loadReferenceData();
-
-        // First pass: build preview data
         foreach ($rows as $index => $row) {
-            $this->buildPreview($row->toArray(), $index + 2); // +2 for header row and 1-indexed
+            $dataByRow[$index + 2] = $this->mapRowToData($row->toArray());
         }
 
-        // Second pass: apply selected actions if provided
-        if (! empty($this->selectedActions)) {
-            // Reset counters since they were incremented during preview pass
-            $this->importResults['created'] = 0;
-            $this->importResults['updated'] = 0;
-            $this->importResults['skipped'] = 0;
-            $this->importResults['changes'] = [];
+        // #1167: collect every cache bump into one flush per namespace.
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($dataByRow) {
+            // Pre-load existing person records by n_code for comparison
+            $this->loadExistingRecords($dataByRow);
 
-            foreach ($rows as $index => $row) {
-                $this->applySelectedAction($row->toArray(), $index + 2);
+            // Pre-load all related reference data to avoid N+1 queries
+            $this->loadReferenceData();
+
+            // First pass: build preview data
+            foreach ($dataByRow as $rowNumber => $data) {
+                $this->buildPreview($data, $rowNumber);
             }
-        }
+
+            // Second pass: apply selected actions if provided
+            if (! empty($this->selectedActions)) {
+                // Reset counters since they were incremented during preview pass.
+                // #1209: `errors` is reset too — the confirm pass re-derives
+                // every preview-rejected row below (with the preview's own
+                // message), instead of letting the buckets double up.
+                $this->importResults['created'] = 0;
+                $this->importResults['updated'] = 0;
+                $this->importResults['skipped'] = 0;
+                $this->importResults['changes'] = [];
+                $this->importResults['errors'] = [];
+
+                foreach ($dataByRow as $rowNumber => $data) {
+                    $this->applySelectedAction($data, $rowNumber);
+                }
+
+                $this->flushPendingWrites();
+            }
+        });
     }
 
-    private function loadExistingRecords(): void
+    /**
+     * #1167: restrict the hydration to the national codes actually present in
+     * the sheet. The scope predicate stays unconditional (issue #839).
+     *
+     * @param  array<int, array<string, mixed>>  $rowsData
+     */
+    private function loadExistingRecords(array $rowsData): void
     {
+        $nCodes = [];
+        foreach ($rowsData as $data) {
+            if (! empty($data['n_code'])) {
+                $nCodes[$data['n_code']] = true;
+            }
+        }
+
         $query = Person::query();
 
-        // Apply organizational scope
-        if (! empty($this->accessibleUnitIds)) {
-            $query->whereIn('u_id', $this->accessibleUnitIds);
-        }
+        // Apply organizational scope — UNCONDITIONAL (issue #839 / Plan 50).
+        // `[]` is a legitimate `AccessService` output, so an emptiness guard
+        // here would drop the predicate and put the whole org in scope.
+        // An empty array compiles to `0 = 1`, which is fail-closed by
+        // construction. Never re-add `if (! empty($this->accessibleUnitIds))`.
+        $query->whereIn('u_id', $this->accessibleUnitIds)
+            ->whereIn('n_code', array_keys($nCodes));
 
         // NOTE: 'id' MUST be selected — records are later updated via these
         // models; without the PK, update() issues WHERE id IS NULL and
@@ -119,10 +183,10 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     private function loadReferenceData(): void
     {
         // Load units
-        $unitQuery = Unit::query();
-        if (! empty($this->accessibleUnitIds)) {
-            $unitQuery->whereIn('id', $this->accessibleUnitIds);
-        }
+        // UNCONDITIONAL scope (issue #839): an empty scope loads NO unit, so the
+        // "unit not found" check downstream fires for every row instead of
+        // accepting an org-wide import.
+        $unitQuery = Unit::query()->whereIn('id', $this->accessibleUnitIds);
         foreach ($unitQuery->get(['id', 'name']) as $unit) {
             $this->units[$unit->id] = $unit;
         }
@@ -148,36 +212,75 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         }
     }
 
-    private function applySelectedAction($row, int $rowNumber): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function applySelectedAction(array $data, int $rowNumber): void
     {
-        // Check if this row has a selected action
-        $actionKey = "row_{$rowNumber}";
-        if (! isset($this->selectedActions[$actionKey])) {
-            return;
-        }
-
-        $action = $this->selectedActions[$actionKey];
-        if ($action === 'skip') {
-            return;
-        }
-
-        $this->processRow($row, $rowNumber, $action, true);
-    }
-
-    private function buildPreview($row, int $rowNumber): void
-    {
-        // Map CSV columns to person fields
-        $data = $this->mapRowToData($row);
-
-        // Validate required fields
-        if (empty($data['n_code']) || empty($data['f_name']) || empty($data['l_name'])) {
-            $this->importResults['preview'][] = [
+        // #1209: a row the preview rejected is never written, and the
+        // operator's action map cannot resurrect it. Count it as skipped and
+        // carry the preview's own error message into the confirm result, so
+        // the published error list matches what the operator approved.
+        $previewMessage = $this->previewErrorMessages[$rowNumber] ?? null;
+        if (is_string($previewMessage)) {
+            $this->importResults['skipped']++;
+            $this->importResults['errors'][] = [
                 'row' => $rowNumber,
-                'status' => 'error',
-                'message' => 'فیلدهای اجباری n_code، f_name و l_name خالی هستند',
+                'error' => $previewMessage,
                 'data' => $data,
             ];
+
+            return;
+        }
+
+        // Check if this row has a selected action. #1209: a row the operator
+        // skipped — or that never received an action — must still be counted,
+        // not dropped silently.
+        $actionKey = "row_{$rowNumber}";
+        if (! isset($this->selectedActions[$actionKey]) || $this->selectedActions[$actionKey] === 'skip') {
             $this->importResults['skipped']++;
+
+            return;
+        }
+
+        $this->processRow($data, $rowNumber, $this->selectedActions[$actionKey], true);
+    }
+
+    /**
+     * #1209: record one sheet row the preview rejected.
+     *
+     * The row is written twice on purpose: the `preview` entry drives the
+     * operator-facing preview table, the `errors` entry publishes the same
+     * rejection in the result (both passes read the same counter buckets),
+     * and the message is remembered so the confirm pass can re-publish it
+     * verbatim.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function recordRejectedRow(int $rowNumber, string $message, array $data): void
+    {
+        $this->importResults['preview'][] = [
+            'row' => $rowNumber,
+            'status' => 'error',
+            'message' => $message,
+            'data' => $data,
+        ];
+        $this->importResults['errors'][] = [
+            'row' => $rowNumber,
+            'error' => $message,
+            'data' => $data,
+        ];
+        $this->previewErrorMessages[$rowNumber] = $message;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function buildPreview(array $data, int $rowNumber): void
+    {
+        // Validate required fields
+        if (empty($data['n_code']) || empty($data['f_name']) || empty($data['l_name'])) {
+            $this->recordRejectedRow($rowNumber, 'فیلدهای اجباری n_code، f_name و l_name خالی هستند', $data);
 
             return;
         }
@@ -186,36 +289,22 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         if (! empty($data['u_id'])) {
             $unit = $this->units[$data['u_id']] ?? null;
             if (! $unit) {
-                $this->importResults['preview'][] = [
-                    'row' => $rowNumber,
-                    'status' => 'error',
-                    'message' => "واحد با شناسه {$data['u_id']} یافت نشد",
-                    'data' => $data,
-                ];
-                $this->importResults['skipped']++;
+                $this->recordRejectedRow($rowNumber, "واحد با شناسه {$data['u_id']} یافت نشد", $data);
 
                 return;
             }
 
-            if (! empty($this->accessibleUnitIds) && ! in_array($unit->id, $this->accessibleUnitIds)) {
-                $this->importResults['preview'][] = [
-                    'row' => $rowNumber,
-                    'status' => 'error',
-                    'message' => "واحد {$unit->name} در واحدهای قابل دسترس شما نیست",
-                    'data' => $data,
-                ];
-                $this->importResults['skipped']++;
+            // UNCONDITIONAL membership test (issue #839): the `! empty(...)`
+            // conjunct made this `! empty([]) && ...` = false, i.e. ACCEPT.
+            // Under an empty scope `$this->units` is empty, so the check above
+            // already rejected the row — this is a defence-in-depth backstop.
+            if (! in_array($unit->id, $this->accessibleUnitIds)) {
+                $this->recordRejectedRow($rowNumber, "واحد {$unit->name} در واحدهای قابل دسترس شما نیست", $data);
 
                 return;
             }
         } else {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => 'شناسه واحد (u_id) خالی است',
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
+            $this->recordRejectedRow($rowNumber, 'شناسه واحد (u_id) خالی است', $data);
 
             return;
         }
@@ -223,13 +312,7 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         // Verify related models exist (using pre-loaded data)
         $validationError = $this->validateRelatedModels($data);
         if ($validationError) {
-            $this->importResults['preview'][] = [
-                'row' => $rowNumber,
-                'status' => 'error',
-                'message' => $validationError,
-                'data' => $data,
-            ];
-            $this->importResults['skipped']++;
+            $this->recordRejectedRow($rowNumber, $validationError, $data);
 
             return;
         }
@@ -327,10 +410,11 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         return null;
     }
 
-    private function processRow(array $row, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function processRow(array $data, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
     {
-        $data = $this->mapRowToData($row);
-
         // Validate required fields
         if (empty($data['n_code']) || empty($data['f_name']) || empty($data['l_name'])) {
             $this->importResults['errors'][] = [
@@ -356,7 +440,11 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
             return;
         }
 
-        if (! empty($this->accessibleUnitIds) && ! in_array($unit->id, $this->accessibleUnitIds)) {
+        // UNCONDITIONAL membership test (issue #839): the `! empty(...)` conjunct
+        // made this `! empty([]) && ...` = false, i.e. ACCEPT the row. Under an
+        // empty scope `$this->units` is empty, so the "not found" check above
+        // already rejected it — this is a defence-in-depth backstop.
+        if (! in_array($unit->id, $this->accessibleUnitIds)) {
             $this->importResults['errors'][] = [
                 'row' => $rowNumber,
                 'error' => "Unit {$data['u_id']} is not in your accessible units",
@@ -396,10 +484,29 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
                     'changes' => $changes,
                 ];
 
-                // Update the record
+                // Queue the write and mirror it in memory, so a second sheet
+                // row matching the same person sees the new values the way the
+                // old row-by-row `update()` did.
                 if ($action === 'update' || $action === 'auto') {
-                    $existing['record']->update($data);
+                    $writeData = $this->normalizeWriteData($data);
+
+                    if ((int) $existing['record']->u_id !== (int) $writeData['u_id']) {
+                        $this->touchesMapScope = true;
+                    }
+
+                    $this->pendingUpdates[] = [
+                        'id' => $existing['record']->id,
+                        'data' => $writeData,
+                    ];
+
+                    $existing['record']->fill($writeData);
+
                     $this->importResults['updated']++;
+                } else {
+                    // #1209: 'create' cannot write onto an existing record —
+                    // such an action combo never writes anything, so the row
+                    // must still land in a bucket.
+                    $this->importResults['skipped']++;
                 }
             } else {
                 $this->importResults['skipped']++;
@@ -407,10 +514,143 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         } else {
             // Create new record
             if ($action === 'create' || $action === 'auto') {
-                Person::create($data);
+                $writeData = $this->normalizeWriteData($data);
+
+                $this->pendingCreates[] = ['data' => $writeData];
+                $this->touchesMapScope = true;
+
                 $this->importResults['created']++;
+            } else {
+                // #1209: 'update' cannot write onto a record that does not
+                // exist — the row must still land in a bucket.
+                $this->importResults['skipped']++;
             }
         }
+    }
+
+    /**
+     * Reproduce Person::boot()'s `saving` normalization on the bulk path.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeWriteData(array $data): array
+    {
+        foreach (self::NORMALIZED_FIELDS as $field) {
+            if (isset($data[$field]) && is_string($data[$field]) && $data[$field] !== '') {
+                $data[$field] = Person::normalizeForSearch($data[$field]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Write the queued rows in chunks, then bump the cache namespaces once.
+     *
+     * Bulk writes bypass `saved`, so the two unconditional bumps and the two
+     * u_id-dependent ones (maps/gis) are reproduced here; the surrounding
+     * `batch()` collapses repeats into one increment per namespace.
+     */
+    private function flushPendingWrites(): void
+    {
+        $wrote = ! empty($this->pendingCreates) || ! empty($this->pendingUpdates);
+
+        // #1194: two sheet rows can carry the same NEW n_code. `persons.n_code`
+        // is unique, so a plain INSERT of both rows trips
+        // `persons_n_code_unique` and aborts the whole chunk — the import then
+        // rolls back with nothing written and, on the queued path, only the
+        // worker sees the error. Dedupe by n_code (last write wins), exactly
+        // like the update path below.
+        $dedupedCreates = [];
+        foreach ($this->pendingCreates as $item) {
+            $nCode = $item['data']['n_code'] ?? null;
+
+            if (! is_string($nCode) || $nCode === '') {
+                // A row without a national code is not a create candidate
+                // anyway (processRow rejects it), so keep it verbatim rather
+                // than collapsing unrelated rows onto one key.
+                $dedupedCreates[] = $item;
+
+                continue;
+            }
+
+            $dedupedCreates['n_code:'.$nCode] = $item;
+        }
+
+        $droppedCreates = count($this->pendingCreates) - count($dedupedCreates);
+
+        if ($droppedCreates > 0) {
+            $this->importResults['created'] = max(0, $this->importResults['created'] - $droppedCreates);
+        }
+
+        $this->pendingCreates = array_values($dedupedCreates);
+
+        foreach (array_chunk($this->pendingCreates, self::CHUNK_SIZE) as $chunk) {
+            $now = now();
+            $rows = [];
+
+            foreach ($chunk as $item) {
+                $rows[] = array_merge($item['data'], [
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            Person::query()->insert($rows);
+        }
+
+        // #1194: two sheet rows can resolve to the same person (n_code is the
+        // compare key, but a sheet may repeat it). PostgreSQL rejects an upsert
+        // whose VALUES list contains the same conflict target twice.
+        $dedupedUpdates = [];
+        foreach ($this->pendingUpdates as $item) {
+            $dedupedUpdates[$item['id']] = $item;
+        }
+        $this->pendingUpdates = array_values($dedupedUpdates);
+
+        foreach (array_chunk($this->pendingUpdates, self::CHUNK_SIZE) as $chunk) {
+            $now = now();
+            $rows = [];
+
+            foreach ($chunk as $item) {
+                $rows[] = array_merge($item['data'], [
+                    'id' => $item['id'],
+                    'updated_at' => $now,
+                ]);
+            }
+
+            // `id` is the primary key — a legal ON CONFLICT target.
+            Person::query()->upsert(
+                $rows,
+                ['id'],
+                array_merge($this->updateColumns(), ['updated_at'])
+            );
+        }
+
+        $this->pendingCreates = [];
+        $this->pendingUpdates = [];
+
+        if (! $wrote) {
+            return;
+        }
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('hr_stats');
+        $cache->increment('dashboard');
+
+        if ($this->touchesMapScope) {
+            $cache->increment('maps');
+            $cache->increment('gis');
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function updateColumns(): array
+    {
+        return ['n_code', 'f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'phone'];
     }
 
     private function detectChanges(Person $existing, array $newData): array

@@ -110,4 +110,59 @@ test.describe('daily window is materialised', () => {
     await expect(page.locator('#trendChart')).toBeVisible();
     expect(await page.locator('.highcharts-root').count()).toBeGreaterThanOrEqual(1);
   });
+
+  /**
+   * Issue #866 — the picker pages charted an axis rebuilt as "N days ending
+   * today", so every past range drew the wrong days and dropped the rows that
+   * lived inside the range the user picked. This reads the axis labels the user
+   * actually looks at.
+   */
+  test('reports page axis follows the picked past range', async ({ page }) => {
+    await login(page);
+    await page.goto('/reports/tickets');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+
+    // A range that ended months ago. A rebuilt axis would have ended today, so
+    // its last label would be today's date instead of the picked to-day.
+    const from = '1403/10/01';
+    const to = '1403/10/07';
+
+    // The date inputs are `readonly` and live inside `wire:ignore`, so they are
+    // driven by jalali-datepicker, which dispatches `jdp:change` — exactly what
+    // the page's own listener binds to `$wire.set('dateFrom'|'dateTo', …)`.
+    const setRange = async (inputId: string, value: string) => {
+      await page.locator(`#${inputId}`).evaluate(
+        (el, v) => {
+          const input = el as HTMLInputElement;
+          input.value = v;
+          input.dispatchEvent(new CustomEvent('jdp:change', { detail: { value: v }, bubbles: true }));
+        },
+        value,
+      );
+    };
+
+    await setRange('advanced_report_date_from', from);
+    await setRange('advanced_report_date_to', to);
+    await page.waitForTimeout(2500);
+
+    const categories = await page.evaluate(() => {
+      const chart = (window as any).Highcharts?.charts?.find(
+        (c: any) => c?.renderTo?.id === 'trendChart',
+      );
+      return chart ? (chart.xAxis[0].categories ?? []) : null;
+    });
+
+    expect(categories, 'the trend chart rendered').not.toBeNull();
+    // from..to inclusive is 7 days, and they are the 7 days that were picked.
+    expect(categories).toEqual([
+      '1403/10/01',
+      '1403/10/02',
+      '1403/10/03',
+      '1403/10/04',
+      '1403/10/05',
+      '1403/10/06',
+      '1403/10/07',
+    ]);
+  });
 });

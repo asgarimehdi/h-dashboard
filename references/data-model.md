@@ -52,6 +52,7 @@
 
 **Ticket** (`tickets` table)
 - `id`, `title`, `description`, `status`, `priority`, `assignee_id`, `unit_id`
+- `archived_at` (nullable, indexed) — archiving stamps this and keeps `status = 'completed'`; never a sixth status value (#929)
 - Relationships: `unit`, `task` (→ `todos`, `task_id`), `user`, `assignee` (`current_assignee_id`), `attachments`, `activities` (`task_activities`)
 - Composite index on `(task_id, status)` (performance fix)
 - Helpers: `canBeCompleted()`, `waitingDuration`, `statusName`
@@ -115,7 +116,6 @@ User ↔ Unit (user_units pivot)
 | `user_units.user_id → users` / `unit_id → units` | cascade |
 | `tickets → task_activities`, `attachments` | cascade |
 | `task_activities.activity_id → attachments` | cascade |
-| `location_logs.user_id → users` | cascade |
 | `todos.unit_id → units` | set null |
 | `activity_logs.user_id → users` | set null (2026-09-03; was cascade) |
 | `persons.u_id → units` | set null, `onUpdate: cascade` (2026-09-03) |

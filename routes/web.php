@@ -38,13 +38,22 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 // Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
 Route::post('/logout', function () {
+    $user = Auth::user();
     $userId = Auth::id();
-    $userName = Auth::user()?->name ?? 'نامشخص';
+    $userName = $user?->name ?? 'نامشخص';
 
     // ثبت فعالیت خروج
     if ($userId) {
         ActivityLogService::logout('خروج از سیستم - کاربر: '.$userName);
         Session::forget("user_{$userId}_display_name");
+
+        // Revoke the map page's token only (issue #840). Its plaintext sits in
+        // the rendered HTML, so it must not stay valid after the session ends.
+        // Deliberately NOT `$user->tokens()->delete()`: that would also kill the
+        // `flutter-app` mobile token, which is a separate product decision.
+        // The name mirrors `TOKEN_NAME` on the `map.map-dashboard` component;
+        // `MapDashboardTest` pins the two against each other.
+        $user->tokens()->where('name', 'map-dashboard')->delete();
     }
 
     auth()->logout();

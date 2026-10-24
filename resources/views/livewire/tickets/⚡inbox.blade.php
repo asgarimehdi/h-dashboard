@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\TaskActivity;
 use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
+use App\Support\JalaliDateRange;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
@@ -14,22 +16,25 @@ use Livewire\Attributes\Computed;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use App\Services\CacheInvalidationServiceInterface;
+use Illuminate\Support\Facades\Auth;
 
 new class extends Component
 {
     use WithPagination;
     use WithFileUploads;
+    // Fully qualified: a top-of-file import would shift the anonymous class's
+    // identity line and break every line-keyed PHPStan-baseline entry for it.
+    // The top `JalaliDateRange` import is now unused (this trait owns the date
+    // parse) but stays in place so the identity line keeps its beta position.
+    use \App\Traits\TicketsQueryScopes;
+    use \App\Traits\TicketsInboxFlow;
 
     #[Url]
     public string $search = '';
     #[Url]
     public string $unitSearch = '';
-    // Issue #818: the routing target is deliberately NOT a #[Url] property — it
-    // was settable from the query string, so a crafted link pre-selected a unit
-    // the user never picked. It is only ever set through selectTargetUnit(),
-    // which resolves the name itself.
-    public ?int $targetUnitId = null;
-    public string $targetUnitName = '';
+    // The single-ticket flow's state (the ticket being shown, the target unit,
+    // the completion modal and its attachments) lives in TicketsInboxFlow below.
     #[Url]
     public string $forwardNote = '';
     #[Url]
@@ -42,13 +47,6 @@ new class extends Component
     public string $viewMode = 'received';
     #[Url]
     public string $statusFilter = 'pending';
-
-    public bool $isCompletionModalOpen = false;
-    public string $completionNote = '';
-    public array $completionFiles = [];
-    public ?Ticket $showingTicket = null;
-    public ?int $showingTicketId = null;
-    public bool $showModal = false;
 
     // Bulk Actions
     public array $selectedTickets = [];
@@ -87,34 +85,34 @@ new class extends Component
         $this->units = $units;
     }
 
-    /**
-     * Issue #818: one validation shape for the destination unit, shared by
-     * `forward()` and `submitAction()`.
-     *
-     * `submitAction()` had no `targetUnitId` rule at all — the branch it
-     * chose, the `unit_id` it wrote and the notification it fanned out all came
-     * straight from a client property, and the FK's ON DELETE RESTRICT turned a
-     * bogus id into a generic error toast instead of a validation message.
-     *
-     * The target is NOT constrained to `accessibleUnitIds()`: forwarding across
-     * units is legitimate. Permission + eligibility is the contract.
-     *
-     * @return array<int, \Illuminate\Contracts\Validation\ValidationRule|string>
-     */
-    protected function targetUnitRule(bool $required): array
-    {
-        return [
-            $required ? 'required' : 'nullable',
-            new TicketTargetUnit,
-        ];
-    }
-
     #[Computed]
     public function tickets()
     {
-        $user = auth()->user();
+        // #906: `deleted_at` is selected on purpose — `ActorLabel` tells a
+        // soft-deleted creator («کاربر غیرفعال») from a genuinely ownerless
+        // ticket («سیستم»), and `trashed()` reads that column. Without the
+        // soft-deleted rows in the result both cases resolve to `null` and are
+        // indistinguishable.
+        $query = Ticket::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q), 'unit:id,name']);
 
-        $query = Ticket::with(['user' => fn ($q) => $q->select('id', 'n_code')->with('person:f_name,l_name'), 'unit:id,name']);
+        $this->applyInboxFilters($query);
+
+        return $query->latest()->paginate(20);
+    }
+
+    /**
+     * The filter predicate the inbox table itself runs — viewMode scope
+     * (received = `accessible()`, sent = owner/assignee/activity paths), tab
+     * status filter, Jalali date window and search — appended onto whichever
+     * base query the caller builds. Extracted unchanged from `tickets()` so
+     * #1040's select-all expansion and count see EXACTLY the rows the
+     * operator sees, instead of a copy that could drift.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\Ticket> $query
+     */
+    private function applyInboxFilters(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $user = auth()->user();
 
         if ($this->viewMode === 'received') {
             $query->accessible();
@@ -126,37 +124,10 @@ new class extends Component
             });
         }
 
-        if ($this->statusFilter === 'pending') {
-            $query->whereIn('status', ['created', 'forwarded']);
-        } elseif ($this->statusFilter !== 'all') {
-            $query->where('status', $this->statusFilter);
-        }
-
-        if ($this->dateFrom) {
-            try {
-                $miladiFrom = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateFrom)->toCarbon()->startOfDay();
-                $query->where('created_at', '>=', $miladiFrom);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
-        }
-        if ($this->dateTo) {
-            try {
-                $miladiTo = \Morilog\Jalali\Jalalian::fromFormat('Y/m/d', $this->dateTo)->toCarbon()->endOfDay();
-                $query->where('created_at', '<=', $miladiTo);
-            } catch (\Throwable) {
-                // Invalid Jalali date string — ignore filter
-            }
-        }
-        if (!empty($this->search)) {
-            $query->where(function ($q) {
-                $q->where('subject', 'like', '%' . $this->search . '%')
-                    ->orWhere('ticket_code', 'like', '%' . $this->search . '%')
-                    ->orWhere('content', 'like', '%' . $this->search . '%');
-            });
-        }
-
-        return $query->latest()->paginate(20);
+        $this->applyTicketStatusFilter($query, $this->statusFilter);
+        $this->applyTicketDateRange($query, $this->dateFrom, $this->dateTo);
+        // The inbox searches `content` as well; monitoring does not.
+        $this->applyTicketSearch($query, $this->search, ['subject', 'ticket_code', 'content']);
     }
 
     public function updatedViewMode(): void
@@ -210,8 +181,10 @@ new class extends Component
     public function closeAllModals(): void
     {
         $this->isCompletionModalOpen = false;
-        $this->showingTicket = null;
+        // #1176: `showingTicket` is a computed now — only the id is state,
+        // and the unset drops the per-request model cache beside it.
         $this->showingTicketId = null;
+        unset($this->showingTicket);
         $this->reset([
             'completionNote', 'completionFiles', 'targetUnitId',
             'targetUnitName', 'unitSearch', 'selectedTickets',
@@ -222,6 +195,11 @@ new class extends Component
     // ===== Bulk Actions =====
     public function toggleTicketSelection($ticketId): void
     {
+        // Under `$selectAll = false` this toggles a MANUAL pick (inclusion);
+        // under `$selectAll = true` the same call marks the row OUT of the
+        // all-selection (exclusion — the checked renderer and the count both
+        // read it that way). One action, two sides of the same ledger, both
+        // pinned by tests.
         if (in_array($ticketId, $this->selectedTickets)) {
             $this->selectedTickets = array_values(array_diff($this->selectedTickets, [$ticketId]));
         } else {
@@ -229,22 +207,54 @@ new class extends Component
         }
     }
 
+    /**
+     * #1040: `$selectAll` is the source of truth and nothing is materialized
+     * into `selectedTickets` here — the old code plucked EVERY open ticket
+     * in the accessible scope into the public array and shipped it across
+     * every roundtrip. Expansion happens at action time on the server
+     * (`executeBulkAction()`), against the page's active filter/search; the
+     * ledger stays empty the whole time.
+     */
     public function toggleSelectAll(): void
     {
-        if ($this->selectAll) {
-            $this->selectedTickets = [];
-            $this->selectAll = false;
-        } else {
-            $this->selectedTickets = Ticket::whereIn('unit_id', $this->getAccessibleUnitIds())
-                ->whereIn('status', ['created', 'forwarded', 'accepted'])
-                ->pluck('id')->toArray();
-            $this->selectAll = true;
+        $this->selectAll = ! $this->selectAll;
+        $this->selectedTickets = [];
+    }
+
+    /**
+     * #1040: how many rows the operator believes are selected. Without
+     * select-all that is the manual picks; with it, a server-side COUNT of
+     * the page's filtered set minus the manually UN-picked rows. The bulk
+     * bar and both its buttons key off this instead of the snapshot array's
+     * length.
+     */
+    #[Computed]
+    public function selectedTicketsCount(): int
+    {
+        if (! $this->selectAll) {
+            return count($this->selectedTickets);
         }
+
+        $query = Ticket::query();
+        $this->applyInboxFilters($query);
+
+        return $query->whereNotIn('id', $this->selectedTickets)->count();
+    }
+
+    /**
+     * #1040: today's client-only `$set('selectedTickets', [])` left the
+     * `selectAll=true` flag standing with an empty ledger — bulk actions
+     * silently found nothing while every row still rendered checked. Clear
+     * BOTH flags.
+     */
+    public function clearSelection(): void
+    {
+        $this->reset(['selectedTickets', 'selectAll']);
     }
 
     public function openBulkModal($action): void
     {
-        if (empty($this->selectedTickets)) {
+        if ($this->selectedTicketsCount() === 0) {
             $this->dispatch('swal', ['title' => 'هیچ تیکتی انتخاب نشده', 'icon' => 'warning']);
             return;
         }
@@ -254,7 +264,13 @@ new class extends Component
 
     public function executeBulkAction(): void
     {
-        if (empty($this->selectedTickets)) return;
+        // #1040: the effective selection (select-all seen through the page's
+        // filter, minus manual un-picks, or the manual picks alone) has to be
+        // resolved BEFORE any state reset — this method is also the only
+        // place that materializes it.
+        if ($this->selectedTicketsCount() === 0) {
+            return;
+        }
 
         // Issue #818: the bulk `complete` branch closes tickets in bulk, which is
         // the same state change the single-ticket path needed
@@ -262,10 +278,9 @@ new class extends Component
         // because it does not move the ticket out of its unit (its own latent
         // issue — see #818 "Out of scope").
         if ($this->bulkAction === 'complete') {
-            $this->authorize('manage_unit_tickets');
+            $this->authorizeMutation();
         }
 
-        $count = count($this->selectedTickets);
         $now = now();
         $userId = auth()->id();
         $bulkNote = $this->bulkNote;
@@ -274,10 +289,26 @@ new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده + محدوده سازمانی
-        $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
-            ->where('status', '!=', 'completed')
-            ->whereIn('unit_id', $accessibleIds)
-            ->pluck('id');
+        //
+        // #1040: «انتخاب همه» is NOT the whole accessible pool any more —
+        // the approved semantics expand it right here, against the page's
+        // ACTIVE filter/search/view-mode, minus the rows the operator
+        // un-picked. The manual path is unchanged (`selectedTickets` holds
+        // only hand-picked ids in that mode).
+        if ($this->selectAll) {
+            $scope = Ticket::query();
+            $this->applyInboxFilters($scope);
+            $ticketIds = $scope
+                ->whereNotIn('id', $this->selectedTickets)
+                ->where('status', '!=', 'completed')
+                ->whereIn('unit_id', $accessibleIds)
+                ->pluck('id');
+        } else {
+            $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
+                ->where('status', '!=', 'completed')
+                ->whereIn('unit_id', $accessibleIds)
+                ->pluck('id');
+        }
 
         if ($ticketIds->isEmpty()) {
             $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
@@ -285,7 +316,7 @@ new class extends Component
             return;
         }
 
-        DB::transaction(function () use ($ticketIds, $count, $now, $userId, $bulkNote) {
+        DB::transaction(function () use ($ticketIds, $now, $userId, $bulkNote) {
             // Issue #531: capture old statuses BEFORE the bulk update
             $oldStatuses = Ticket::whereIn('id', $ticketIds)
                 ->pluck('status', 'id');
@@ -365,17 +396,16 @@ new class extends Component
             }
         });
 
-        $this->dispatch('swal', ['title' => "{$count} تیکت با موفقیت پردازش شد", 'icon' => 'success']);
+        // #1001: report the tickets actually processed after scope/status
+        // filtering — not how many the operator selected.
+        $this->dispatch('swal', ['title' => "{$ticketIds->count()} تیکت با موفقیت پردازش شد", 'icon' => 'success']);
         $this->closeAllModals();
         $this->resetPage();
     }
 
     // متدهای bulkCompleteTicket و bulkForwardTicket حذف شدند - منطق در executeBulkAction ادغام شد
-
-    private function getAccessibleUnitIds(): array
-    {
-        return app(AccessService::class)->accessibleUnitIds();
-    }
+    // (#1040: getAccessibleUnitIds هم حذف شد — تنها فراخواننده‌اش مادی‌سازیِ
+    // «انتخاب همه» در toggleSelectAll بود.)
 
     public function switchView($mode): void
     {
@@ -387,343 +417,6 @@ new class extends Component
     public function openCommentsFor($ticketId): void
     {
         $this->dispatch('openComments', ticketId: (int) $ticketId);
-    }
-
-    public function showTicket($id): void
-    {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
-        $ticket = Ticket::with(['attachments', 'activities.attachments', 'activities.user', 'user', 'unit'])
-            ->whereIn('unit_id', $accessibleIds)
-            ->find($id);
-
-        if (! $ticket) {
-            return;
-        }
-
-        $this->showingTicket = $ticket;
-        $this->showModal = true;
-    }
-
-    public function closeDetail(): void
-    {
-        $this->showingTicket = null;
-        $this->reset(['targetUnitId', 'showingTicket', 'targetUnitName', 'unitSearch', 'forwardNote']);
-        $this->showModal = false;
-    }
-
-    public function selectTargetUnit($id): void
-    {
-        // Issue #818: the name is resolved here, never taken from the client —
-        // it is written verbatim into activity descriptions and notifications,
-        // so a client-supplied name was attacker-controlled audit-trail text.
-        // The eligibility check still happens in forward()/submitAction(); an
-        // unknown id simply resolves to an empty name here.
-        $this->targetUnitId = $id === null ? null : (int) $id;
-        $this->targetUnitName = (string) (Unit::query()->whereKey($this->targetUnitId)->value('name') ?? '');
-        $this->unitSearch = '';
-    }
-
-    public function forward(): void
-    {
-        // Issue #818: /tickets/inbox is gated only on view_assigned_tickets
-        // (which `expert` holds), so without this the web path could move a
-        // ticket to any unit while the API required manage_unit_tickets for
-        // the same operation. Match the API (routes/api.php:110-119).
-        $this->authorize('manage_unit_tickets');
-
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
-        // Verify showingTicket is accessible
-        if (!$this->showingTicket || !in_array($this->showingTicket->unit_id, $accessibleIds)) {
-            $this->dispatch('swal', ['title' => 'شما مجاز به ارجاع این تیکت نیستید.', 'icon' => 'error']);
-            return;
-        }
-        
-        $this->validate([
-            'targetUnitId' => $this->targetUnitRule(required: true),
-            'forwardNote' => 'nullable|string|max:500',
-        ]);
-
-        // Re-resolve server-side: targetUnitName is display state the client can
-        // still set, and it lands in the audit trail.
-        $targetUnitName = $this->resolveTargetUnitName();
-
-        try {
-            \DB::transaction(function () use ($targetUnitName) {
-                $this->showingTicket->update([
-                    'unit_id' => $this->targetUnitId,
-                    'status' => 'forwarded',
-                    'current_assignee_id' => null
-                ]);
-
-                $this->showingTicket->activities()->create([
-                    'user_id' => auth()->id(),
-                    'action' => 'forwarded',
-                    'description' => "ارجاع تیکت به واحد: " . $targetUnitName . " - توضیحات: " . $this->forwardNote,
-                    // Issue #818: the destination was only in the description;
-                    // nothing recorded it structurally on this path.
-                    'to_unit_id' => $this->targetUnitId,
-                ]);
-
-                // Issue #818 (correction 5): forward() sent no notification while
-                // submitAction() did, so two ways of doing the same thing behaved
-                // differently. Both paths now notify the destination unit, and both
-                // do it inside the transaction — so a failed fan-out rolls the
-                // move back instead of leaving a ticket forwarded silently.
-                \App\Services\NotificationService::notifyUnit(
-                    $this->targetUnitId,
-                    'ticket_forwarded',
-                    'تیکت ارجاع شد',
-                    "تیکت #{$this->showingTicket->ticket_code} به واحد شما ارجاع شد - موضوع: {$this->showingTicket->subject}",
-                    '/tickets/inbox'
-                );
-            });
-
-            $this->dispatch('swal', ['title' => 'تیکت با موفقیت ارجاع شد', 'icon' => 'success']);
-            $this->closeDetail();
-        } catch (\Exception $e) {
-            $this->dispatch('swal', ['title' => 'خطا در انجام عملیات', 'icon' => 'error']);
-        }
-    }
-
-    /**
-     * Issue #818: the unit name is display state that travels through the
-     * request, so it is re-read from the database before it is written into an
-     * activity description or a notification body.
-     */
-    protected function resolveTargetUnitName(): string
-    {
-        $name = $this->targetUnitId
-            ? Unit::query()->whereKey($this->targetUnitId)->value('name')
-            : null;
-
-        return (string) ($name ?? '');
-    }
-
-    public function acceptTicket($ticketId): void
-    {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
-        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
-
-        if (! $ticket) {
-            return;
-        }
-
-        // Capture old status BEFORE any changes (Plan 003: dynamic, not hardcoded)
-        $oldStatus = $ticket->status;
-
-        // Plan 002: Only allow accepting from 'created' or 'forwarded' status
-        if ($oldStatus !== 'created' && $oldStatus !== 'forwarded') {
-            $this->dispatch('swal', [
-                'title' => 'تیکت قبلاً پذیرفته شده است',
-                'icon' => 'warning',
-            ]);
-            return;
-        }
-
-        DB::transaction(function () use ($ticket, $oldStatus) {
-            // Plan 002: Pessimistic lock to prevent concurrent accept
-            $locked = DB::select('SELECT id, status FROM tickets WHERE id = ? FOR UPDATE', [$ticket->id]);
-
-            if ($locked[0]->status !== $oldStatus) {
-                $this->dispatch('swal', [
-                    'title' => 'تیکت قبلاً پذیرفته شده است',
-                    'icon' => 'warning',
-                ]);
-                return;
-            }
-
-            $ticket->update([
-                'status' => 'accepted',
-                'current_assignee_id' => auth()->id(),
-                'accepted_at' => now(),
-            ]);
-
-            $ticket->activities()->create([
-                'user_id' => auth()->id(),
-                'action' => 'accepted',
-                'description' => 'تیکت توسط کارشناس تایید شد و مسئولیت آن پذیرفته شد.',
-            ]);
-
-            // Plan 003: Use dynamic old status, not hardcoded 'created'
-            \App\Services\ActivityLogService::updated(
-                $ticket,
-                ['status' => $oldStatus],
-                ['status' => 'accepted'],
-                "پذیرش تیکت {$ticket->ticket_code}"
-            );
-        });
-
-        $this->dispatch('swal', ['title' => 'تیکت پذیرفته شد', 'icon' => 'success']);
-        $this->closeDetail();
-    }
-
-    public function rejectTicket($ticketId): void
-    {
-        // Issue #818: no API counterpart exists, so manage_unit_tickets is the
-        // right proxy — rejecting is the same class of state change as
-        // completing, and the route gate alone never checked it.
-        $this->authorize('manage_unit_tickets');
-
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($ticketId);
-
-        if (! $ticket) {
-            $this->dispatch('swal', ['title' => 'تیکت یافت نشد.', 'icon' => 'error']);
-
-            return;
-        }
-
-        \DB::transaction(function () use ($ticket) {
-            $ticket->update([
-                'status' => 'rejected',
-                'current_assignee_id' => auth()->id(),
-            ]);
-
-            $ticket->activities()->create([
-                'user_id' => auth()->id(),
-                'action' => 'rejected',
-                'description' => 'تیکت توسط واحد '.(auth()->user()->person?->unit?->name ?? 'بدون واحد').' رد شد.',
-            ]);
-        });
-
-        $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
-        $this->closeDetail();
-    }
-
-    public function openCompletionModal($id): void
-    {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
-        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->find($id);
-        
-        if (!$ticket) {
-            $this->dispatch('swal', ['title' => 'شما مجاز به مشاهده این تیکت نیستید.', 'icon' => 'error']);
-            return;
-        }
-        
-        $this->showingTicketId = $id;
-        $this->showingTicket = $ticket;
-        $this->isCompletionModalOpen = true;
-    }
-
-    public function submitAction($id = null): void
-    {
-        // Issue #818: same gate as forward() — this path could complete a ticket
-        // or move it to any unit in the system under view_assigned_tickets alone.
-        $this->authorize('manage_unit_tickets');
-
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        
-        $finalId = $id ?? $this->showingTicketId;
-        
-        $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($finalId);
-
-        if ($ticket->status !== 'accepted' && !$this->targetUnitId) {
-            $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
-            return;
-        }
-
-        $actionType = $this->targetUnitId ? 'forwarded' : 'completed';
-
-        $this->validate([
-            // Issue #818: this rule did not exist here — only completionNote and
-            // completionFiles were validated, while the branch, the unit_id and
-            // the notification all came from targetUnitId.
-            'targetUnitId' => $this->targetUnitRule(required: false),
-            'completionNote' => $actionType === 'completed' ? 'required|min:5' : 'nullable|max:1000',
-            'completionFiles' => 'nullable|array|max:5',
-            'completionFiles.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar,docx,xlsx|max:5120',
-        ]);
-
-        // Issue #818: never write the client-supplied name into the audit trail
-        // or the notification body.
-        $targetUnitName = $this->resolveTargetUnitName();
-
-        try {
-            DB::beginTransaction();
-
-            if ($actionType === 'forwarded') {
-                $ticket->update([
-                    'unit_id' => $this->targetUnitId,
-                    'status' => 'forwarded',
-                    'current_assignee_id' => null,
-                ]);
-                $description = "ارجاع تیکت به واحد: {$targetUnitName}";
-                if ($this->completionNote) {
-                    $description .= " | توضیحات: {$this->completionNote}";
-                }
-                $message = "تیکت با موفقیت به واحد {$targetUnitName} ارجاع شد.";
-
-                // ارسال اعلان به واحد مقصد
-                \App\Services\NotificationService::notifyUnit(
-                    $this->targetUnitId,
-                    'ticket_forwarded',
-                    'تیکت ارجاع شد',
-                    "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
-                    '/tickets/inbox'
-                );
-            } else {
-                $ticket->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
-                $description = "تیکت مختومه شد. گزارش نهایی: {$this->completionNote}";
-                $message = "تیکت با موفقیت مختومه و بسته شد.";
-
-                // اگر وظیفه مرتبطی دارد و تمام تیکت‌های آن وظیفه بسته شده‌اند، وظیفه را تکمیل کن
-                if ($ticket->task_id) {
-                    $relatedTicket = \App\Models\Ticket::where('task_id', $ticket->task_id)
-                        ->where('status', '!=', 'completed')
-                        ->where('id', '!=', $ticket->id)
-                        ->count();
-                    if ($relatedTicket === 0) {
-                        $ticket->task->update(['is_completed' => true]);
-                        $message .= " وظیفه مرتبط نیز تکمیل شد.";
-                    }
-                }
-            }
-
-            $newActivity = $ticket->activities()->create([
-                'user_id' => auth()->id(),
-                'action' => $actionType,
-                'description' => $description,
-                'to_unit_id' => $this->targetUnitId ?? $ticket->unit_id,
-            ]);
-
-            if ($this->completionFiles) {
-                foreach ($this->completionFiles as $file) {
-                    $path = $file->store('attachments', 'public');
-                    $ticket->attachments()->create([
-                        'user_id' => auth()->id(),
-                        'activity_id' => $newActivity->id,
-                        'file_path' => $path,
-                        'file_name' => $file->getClientOriginalName(),
-                        'file_size' => $file->getSize(),
-                    ]);
-                }
-            }
-
-            DB::commit();
-
-            $this->reset(['isCompletionModalOpen', 'showingTicket', 'completionNote', 'completionFiles', 'targetUnitId', 'targetUnitName', 'unitSearch']);
-
-            $this->dispatch('swal', [
-                'title' => 'عملیات موفق',
-                'text' => $message,
-                'icon' => 'success'
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: ' . $e->getMessage());
-        }
-    }
-
-    public function removeFile($index): void
-    {
-        array_splice($this->completionFiles, $index, 1);
     }
 };
 ?>
@@ -789,15 +482,17 @@ new class extends Component
         </div>
 
         {{-- نوار Bulk Actions — Issue #818: تکمیل دسته‌ای نیاز به manage_unit_tickets دارد --}}
-        @if(count($this->selectedTickets) > 0)
+        {{-- #1040: شمارنده و شرط نمایش از count سمت سرور می‌آیند؛ زیر «انتخاب همه»،
+             selectedTickets فقط منهای دستی سطرها را حمل می‌کند و به‌تنهایی طول نداشته معنا ندارد. --}}
+        @if($this->selectedTicketsCount() > 0)
         <div class="flex items-center gap-3 p-3 mb-4 bg-primary/10 rounded-xl border border-primary/20">
-            <span class="text-sm font-bold text-primary">{{ count($this->selectedTickets) }} تیکت انتخاب شده</span>
+            <span class="text-sm font-bold text-primary">{{ $this->selectedTicketsCount() }} تیکت انتخاب شده</span>
             <div class="flex gap-2 mr-auto">
                 @can('manage_unit_tickets')
                 <x-button icon="o-check-circle" label="تکمیل دسته‌ای" wire:click="openBulkModal('complete')" class="btn-success btn-sm" spinner />
                 <x-button icon="o-arrow-right" label="ارجاع دسته‌ای" wire:click="openBulkModal('forward')" class="btn-warning btn-sm" spinner />
                 @endcan
-                <x-button icon="o-x-mark" label="لغو انتخاب" wire:click="$set('selectedTickets', [])" class="btn-ghost btn-sm" />
+                <x-button icon="o-x-mark" label="لغو انتخاب" wire:click="clearSelection" class="btn-ghost btn-sm" />
             </div>
         </div>
         @endif
@@ -813,15 +508,19 @@ new class extends Component
         ]" :rows="$this->tickets" with-pagination>
 
             @scope('cell_checkbox', $ticket)
+            {{-- #957: بدون نام، صفحه‌خوان این را صرفاً «چک‌باکس» می‌خواند. --}}
+            {{-- #1040: وضعیت سطر $selectAll-aware است — زیر «انتخاب همه» هر سطری که
+                 به‌صورت دستی ازانتخاب نشده باشد checked است (منهای دستی = id در ledgers). --}}
             <input type="checkbox"
                 class="checkbox checkbox-sm checkbox-primary"
                 wire:click="toggleTicketSelection({{ $ticket->id }})"
-                @if(in_array($ticket->id, $this->selectedTickets)) checked @endif />
+                aria-label="انتخاب تیکت {{ $ticket->ticket_code }}"
+                @if($this->selectAll ? ! in_array($ticket->id, $this->selectedTickets) : in_array($ticket->id, $this->selectedTickets)) checked @endif />
             @endscope
 
             @scope('cell_user.person.f_name', $ticket)
             <div class="flex flex-col">
-                <span class="font-bold text-sm">{{ $ticket->user->person?->f_name }} {{ $ticket->user->person?->l_name }}</span>
+                <span class="font-bold text-sm">{{ \App\Support\ActorLabel::for($ticket->user) }}</span>
                 <span class="text-xs opacity-50 font-mono">#{{ $ticket->ticket_code }}</span>
             </div>
             @endscope
@@ -853,24 +552,24 @@ new class extends Component
             @scope('actions', $ticket)
             <div class="flex gap-1">
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
+                <x-ui.icon-button name="پذیرش تیکت" icon="o-check" wire:click="acceptTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-success" spinner />
                 @endif
                 {{-- Issue #818: reject پشت manage_unit_tickets است، پس دکمه‌اش هم همان‌جا نمایش داده می‌شود --}}
                 @can('manage_unit_tickets')
                 @if($ticket->status !== 'accepted' && $ticket->status !== 'rejected' && $ticket->status !== 'completed' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
+                <x-ui.icon-button name="رد تیکت" icon="o-x-mark" wire:click="rejectTicket({{ $ticket->id }})"
                     wire:confirm="آیا مطمئن هستید؟" class="btn-ghost btn-sm text-error" spinner />
                 @endif
                 @endcan
 
-                <x-button icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
+                <x-ui.icon-button name="مشاهده تیکت" icon="o-eye" wire:click="showTicket({{ $ticket->id }})" class="btn-ghost btn-sm text-info" spinner />
 
-                <x-button icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
+                <x-ui.icon-button name="کامنت‌های تیکت" icon="o-chat-bubble-left" wire:click="openCommentsFor({{ $ticket->id }})" class="btn-ghost btn-sm text-secondary" spinner />
 
                 {{-- Issue #818: مودال تکمیل/ارجاع پشت manage_unit_tickets است --}}
                 @can('manage_unit_tickets')
                 @if($ticket->status !== 'completed' && $ticket->status !== 'rejected' && $ticket->unit_id == auth()->user()->person?->u_id)
-                <x-button icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
+                <x-ui.icon-button name="تکمیل تیکت" icon="o-arrow-path" wire:click="openCompletionModal({{ $ticket->id }})" class="btn-ghost btn-sm text-primary" spinner />
                 @endif
                 @endcan
             </div>
@@ -930,14 +629,14 @@ new class extends Component
                         </div>
                         <div class="bg-base-200/50 p-3 rounded-lg w-full">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-bold text-xs">{{ $activity->user->person?->f_name }} {{ $activity->user->person?->l_name }}</span>
+                                <span class="font-bold text-xs">{{ \App\Support\ActorLabel::for($activity->user) }}</span>
                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($activity->created_at)->format('H:i - Y/m/d') }}</span>
                             </div>
                             <p class="text-xs opacity-70">{{ $activity->description }}</p>
                             @if($activity->attachments->count() > 0)
                             <div class="flex gap-1 mt-2">
                                 @foreach($activity->attachments as $actFile)
-                                <x-button icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
+                                <x-ui.icon-button name="دانلود پیوست" icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
                                     class="btn-xs btn-ghost text-primary" external target="_blank" />
                                 @endforeach
                             </div>
@@ -978,7 +677,7 @@ new class extends Component
                 <div class="mt-2 flex items-center gap-2 text-info text-sm">
                     <x-icon name="o-check-circle" />
                     <span class="font-bold">مقصد: {{ $this->targetUnitName }}</span>
-                    <x-button icon="o-x-mark" wire:click="$set('targetUnitId', null)" class="btn-ghost btn-xs" />
+                    <x-ui.icon-button name="پاک کردن واحد هدف" icon="o-x-mark" wire:click="$set('targetUnitId', null)" class="btn-ghost btn-xs" />
                 </div>
                 @endif
             </div>
@@ -1002,6 +701,14 @@ new class extends Component
     {{-- Ticket Comments modal --}}
     <livewire:tickets.ticket-comments />
 </div>
+
+@assets
+    {{-- Issue #1182: jalaliDatepicker is page-specific and used to ship in the
+         global layout on every page. `@assets` keeps the tag in <head>, so the
+         library is defined before this page's first `startWatch()` call — on a
+         full load and before the swap on `wire:navigate`. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
 
 <script>
     const initJdp = () => {

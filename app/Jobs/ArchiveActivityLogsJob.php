@@ -8,10 +8,16 @@ use App\Services\AccessService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\Connection;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
+// A sweep can run for 300s, so it goes on the connection whose `retry_after`
+// (360s) outlives this job's $timeout. The default `redis` connection reserves a
+// job for only 90s and a second worker would re-reserve a sweep that is still
+// deleting rows (#1010).
+#[Connection('redis-maintenance')]
 class ArchiveActivityLogsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -27,7 +33,7 @@ class ArchiveActivityLogsJob implements ShouldQueue
 
     /**
      * @param  int  $days  حذف لاگ‌های قدیمی‌تر از این تعداد روز
-     * @param  array<int>  $unitIds  آی‌دی واحدها (خالی = از AccessService)
+     * @param  array<int>  $unitIds  آی‌دی واحدها؛ خالی یعنی سراسری (`allUnitIds()`)
      */
     public function __construct(int $days = 90, array $unitIds = [])
     {
@@ -37,13 +43,19 @@ class ArchiveActivityLogsJob implements ShouldQueue
 
     public function handle(): int
     {
-        $unitIds = $this->unitIds ?: app(AccessService::class)->accessibleUnitIds();
+        // Org-wide retention: an empty scope must NOT fall back to
+        // accessibleUnitIds(), which is request-scoped and therefore always
+        // `[]` on a real queue worker — the job would silently delete nothing
+        // (issue #836). A caller that wants a scoped run passes $unitIds.
+        $unitIds = $this->unitIds ?: app(AccessService::class)->allUnitIds();
 
         $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $unitIds))
             ->pluck('id')
             ->toArray();
 
         if (empty($userIds)) {
+            Log::info('ArchiveActivityLogsJob: no users in scope, nothing archived');
+
             return 0;
         }
 

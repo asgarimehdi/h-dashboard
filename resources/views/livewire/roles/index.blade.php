@@ -21,6 +21,9 @@ return new class extends Component
     public array $allPermissions = [];
     public array $permissions = [];
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
+
+    // #914: `sortBy` is client-settable, so only real columns are sortable.
+    private const SORTABLE_COLUMNS = ['id', 'label', 'name'];
     public bool $showHelpModal = false;
 
     // تعریف headers به عنوان پروپرتی برای جلوگیری از خطای Method Not Found
@@ -49,9 +52,17 @@ return new class extends Component
 
     public function delete(Role $role): void
     {
+        $this->authorize('manage_roles');
+
         try {
             $role->delete();
             $this->warning("$role->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            // Issue #892: the generic `catch (\Exception $e)` swallowed the
+            // 403 into a friendly toast, which is what made a revoked
+            // holder's delete look like a harmless failure. Re-throw so a
+            // 403 stays distinguishable from a foreign-key violation.
+            throw $e;
         } catch (\Exception $e) {
             $this->error("امکان حذف وجود ندارد.", position: 'toast-bottom');
         }
@@ -59,6 +70,8 @@ return new class extends Component
 
     public function createRole(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
             'label' => 'required|string|max:255|unique:roles,label',
@@ -74,6 +87,8 @@ return new class extends Component
 
     public function editRole($id): void
     {
+        $this->authorize('manage_roles');
+
         $role = Role::with('permissions')->findOrFail($id);
         $this->editingId = $id;
         $this->name = $role->name;
@@ -87,6 +102,8 @@ return new class extends Component
 
     public function updateRole(): void
     {
+        $this->authorize('manage_roles');
+
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name,' . $this->editingId,
             'label' => 'required|string|max:255|unique:roles,label,' . $this->editingId,
@@ -110,7 +127,10 @@ return new class extends Component
                   ->orWhere('label', 'LIKE', '%' . $this->search . '%');
         }
         
-        $query->orderBy(...array_values($this->sortBy));
+        $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
+            ? $this->sortBy['column'] : 'id';
+        $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($column, $direction);
 
         return $query->paginate($this->perPage);
     }
@@ -136,7 +156,7 @@ return new class extends Component
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">
-            <x-button class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
+            <x-ui.icon-button name="نقش جدید" label="نقش جدید" class="btn-success" @click="$wire.modal = true" responsive icon="o-plus"/>
             <div class="flex-1">
                 <x-input
                     placeholder="جستجو..."
@@ -152,11 +172,11 @@ return new class extends Component
             {{-- بخش Actions به صورت خودکار برای هر ردیف رندر می‌شود --}}
             @scope('actions', $role)
             <div class="flex gap-2">
-                <x-button icon="o-pencil"
+                <x-ui.icon-button name="ویرایش نقش" icon="o-pencil"
                         wire:click="editRole({{ $role->id }})"
                         class="btn-ghost btn-sm text-primary" />
 
-                <x-button icon="o-trash"
+                <x-ui.icon-button name="حذف نقش" icon="o-trash"
                         wire:click="delete({{ $role->id }})"
                         wire:confirm="آیا مطمئن هستید؟"
                         spinner

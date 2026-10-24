@@ -21,6 +21,8 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
 
+        // Reference/demo data. These seeders run in every environment, so a
+        // production `migrate --seed` keeps bootstrapping its reference tables.
         $this->call([
             BoundarySeeder::class,
             EstekhdamSeeder::class,
@@ -32,7 +34,21 @@ class DatabaseSeeder extends Seeder
             UnitTypeRelationshipSeeder::class,
             UnitSeeder::class,
             PersonsTableSeeder::class,
-            UsersTableSeeder::class,
+        ]);
+
+        // Demo login accounts (#1036). Deliberately detached from the batch
+        // above: UsersTableSeeder refuses to run in production (it seeds three
+        // accounts with one shared, publicly-known password), and having it in
+        // the batch would abort every seeder after it there. isAllowed() keeps
+        // that decision owned by the seeder itself.
+        //
+        // It must stay *before* RoleSeeder below, which grants `admin` to users
+        // with id 1..3 — the ids these three accounts get on a fresh database.
+        if (UsersTableSeeder::isAllowed()) {
+            $this->call(UsersTableSeeder::class);
+        }
+
+        $this->call([
             UnitCapabilitySeeder::class,
             UserUnitSeeder::class,
             PermissionSeeder::class,

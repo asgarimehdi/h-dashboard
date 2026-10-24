@@ -11,6 +11,15 @@ return new class extends Component
 {
     public bool $showHelpModal = false;
 
+    /**
+     * #1188: the unit rows the toggle table renders — id/name/type_id only.
+     *
+     * The geometry is deliberately NOT here: this property is public, so it is
+     * dehydrated into the snapshot of EVERY round trip, and the search box
+     * fires one round trip per keystroke — the whole county geometry used to
+     * travel back and forth with it. The geometry leaves the component through
+     * the `units-updated` event payload alone (see unitsWithGeometry()).
+     */
     public $units = [];
 
     public $regions = [];
@@ -31,8 +40,21 @@ return new class extends Component
     public function mount(): void
     {
         $v = Cache::get('maps_version', 0);
-        $this->regions = Cache::remember('unit_map:regions:v' . $v, 300, function () {
-            return Region::where('type', 'county')
+
+        // #1032: the county toggles are scoped to the caller's accessible units,
+        // the same rule maps/county applies. Fail-closed — an empty scope makes
+        // the IN-filter compile to `0 = 1`, so a unit-less caller sees no county.
+        // `Unit::query()` (not `Unit::whereIn`) keeps the chain on Eloquent's
+        // Builder, which PHPStan understands without larastan.
+        $accessibleRegionIds = Unit::query()
+            ->whereIn('id', app(AccessService::class)->accessibleUnitIds())
+            ->whereNotNull('region_id')
+            ->pluck('region_id');
+
+        $this->regions = Cache::remember('unit_map:regions:v' . $v . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
+            return Region::query()
+                ->where('type', 'county')
+                ->whereIn('id', $accessibleRegionIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
@@ -65,17 +87,41 @@ return new class extends Component
             return;
         }
 
-        $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0) . '_' . md5(implode(',', $this->selectedRegions));
+        // #1032: boundaries are scoped exactly like maps/county — a caller only
+        // receives geometry for regions an accessible unit sits in. The scope is
+        // part of the cache key too: with a shared key, a boundary cached by a
+        // broad-scope user was served to a narrower one on the next hit, which
+        // bypassed the query filter entirely. Do not drop either half.
+        $accessibleRegionIds = Unit::query()
+            ->whereIn('id', app(AccessService::class)->accessibleUnitIds())
+            ->whereNotNull('region_id')
+            ->pluck('region_id');
 
-        $counties = Cache::remember($cacheKey, 300, function () {
-            return Region::whereIn('id', $this->selectedRegions)
-                ->whereNotNull('boundary_id')
-                ->with('boundary')
+        $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0)
+            . '_' . md5(implode(',', $this->selectedRegions))
+            . '_' . md5(implode(',', $accessibleRegionIds->all()));
+
+        $counties = Cache::remember($cacheKey, 300, function () use ($accessibleRegionIds) {
+            // #1023: project ST_AsGeoJSON in the query (the pattern county.blade.php
+            // already uses) instead of reading Boundary::$appends['geojson'] per
+            // row, which fired one query per region and round-tripped the geometry.
+            // DB is referenced fully-qualified on purpose: a `use` line here would
+            // push `return new class` off line 10 and break the line-keyed PHPStan
+            // baseline anchors for this anonymous component.
+            return Region::whereIn('regions.id', $this->selectedRegions)
+                ->whereIn('regions.id', $accessibleRegionIds)
+                ->whereNotNull('regions.boundary_id')
+                ->join('boundaries', 'regions.boundary_id', '=', 'boundaries.id')
+                ->select([
+                    'regions.id',
+                    'regions.name',
+                    \Illuminate\Support\Facades\DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
                 ->get()
                 ->map(fn($r) => [
                     'id' => $r->id,
                     'name' => $r->name,
-                    'geojson' => $r->boundary?->geojson,
+                    'geojson' => $r->geojson,
                 ])
                 ->filter(fn($r) => $r['geojson'])
                 ->values()
@@ -95,12 +141,24 @@ return new class extends Component
         $this->loadUnits();
     }
 
-    public function loadUnits(): void
+    /**
+     * #1188: the unit rows WITH their geometry — the non-public source the
+     * `units-updated` event is built from, read only when it is dispatched.
+     *
+     * A private method, not a Livewire `#[Computed]`: a computed is read as a
+     * magic property (`$this->unitsWithGeometry`), which PHPStan cannot
+     * resolve on this anonymous class — it would need a new baseline entry,
+     * and the baseline is not allowed to grow. This is the same trade #1040
+     * made in users/index.blade.php, where the equivalent cache lives in a
+     * private member: Livewire 4 dehydrates public properties only, so the
+     * geometry never enters the snapshot either way.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function unitsWithGeometry(): array
     {
         if (empty($this->selectedRegions)) {
-            $this->units = [];
-            $this->dispatch('units-updated', units: []);
-            return;
+            return [];
         }
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
@@ -112,12 +170,18 @@ return new class extends Component
         // Centers (types 5, 6, 7) — filtered by selected center types
         $parentIds = collect();
         if (!empty($this->selectedCenterTypes)) {
-            $centers = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
-                ->whereNotNull('boundary_id')
-                ->whereIn('region_id', $this->selectedRegions)
-                ->whereIn('unit_type_id', $this->selectedCenterTypes)
-                ->select('id', 'name', 'unit_type_id', 'boundary_id')
-                ->with('boundary:id,boundary')
+            $centers = Unit::whereIn('units.id', $accessibleIds)  // Organizational Scope
+                ->whereNotNull('units.boundary_id')
+                ->whereIn('units.region_id', $this->selectedRegions)
+                ->whereIn('units.unit_type_id', $this->selectedCenterTypes)
+                ->join('boundaries', 'units.boundary_id', '=', 'boundaries.id')
+                ->select([
+                    'units.id',
+                    'units.name',
+                    'units.unit_type_id',
+                    'units.boundary_id',
+                    \Illuminate\Support\Facades\DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
                 ->get();
             $unitLists[] = $centers;
 
@@ -129,26 +193,53 @@ return new class extends Component
         if (!empty($this->selectedSubTypes) && !empty($this->selectedCenterTypes)) {
             $subTypeIds = $this->resolveSubTypeIds();
 
-            $unitLists[] = Unit::whereIn('id', $accessibleIds)  // Organizational Scope
-                ->whereNotNull('boundary_id')
-                ->whereIn('region_id', $this->selectedRegions)
-                ->whereIn('unit_type_id', $subTypeIds)
-                ->whereIn('parent_id', $parentIds)
-                ->select('id', 'name', 'unit_type_id', 'boundary_id')
-                ->with('boundary:id,boundary')
+            $unitLists[] = Unit::whereIn('units.id', $accessibleIds)  // Organizational Scope
+                ->whereNotNull('units.boundary_id')
+                ->whereIn('units.region_id', $this->selectedRegions)
+                ->whereIn('units.unit_type_id', $subTypeIds)
+                ->whereIn('units.parent_id', $parentIds)
+                ->join('boundaries', 'units.boundary_id', '=', 'boundaries.id')
+                ->select([
+                    'units.id',
+                    'units.name',
+                    'units.unit_type_id',
+                    'units.boundary_id',
+                    \Illuminate\Support\Facades\DB::raw('ST_AsGeoJSON(boundaries.boundary) as geojson'),
+                ])
                 ->get();
         }
 
         $units = collect($unitLists)->collapse();
 
-        $this->units = $units->map(fn($u) => [
+        // The event payload keeps the row shape it always had:
+        // id, name, type_id, geojson.
+        return $units->map(fn($u) => [
             'id' => $u->id,
             'name' => $u->name,
             'type_id' => $u->unit_type_id,
-            'geojson' => $u->boundary?->geojson,
-        ])->toArray();
+            'geojson' => $u->geojson,
+        ])->values()->toArray();
+    }
 
-        $this->dispatch('units-updated', units: $this->units);
+    public function loadUnits(): void
+    {
+        // #1188: the geometry leaves the component ONLY through the event
+        // payload. The public state keeps what the toggle table needs
+        // (id/name/type_id) and nothing more — it is dehydrated into the
+        // snapshot of every round trip, and the search box fires one round
+        // trip per keystroke.
+        $rows = $this->unitsWithGeometry();
+
+        $this->units = collect($rows)
+            ->map(fn($u) => [
+                'id' => $u['id'],
+                'name' => $u['name'],
+                'type_id' => $u['type_id'],
+            ])
+            ->values()
+            ->all();
+
+        $this->dispatch('units-updated', units: $rows);
     }
 
     private function resolveSubTypeIds(): array
@@ -225,7 +316,7 @@ return new class extends Component
     {{-- Map + right-side unit list --}}
     <x-card shadow class="p-0">
         <div class="relative">
-            <livewire:maps.map/>
+            <livewire:maps.map wire:key="unit-page-map" />
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
                 {{-- Search --}}
@@ -271,10 +362,26 @@ return new class extends Component
 </style>
 @endassets
 
+@assets
+    {{-- Issue #1182: Leaflet core is page-specific now and ships on the HOST page
+         — never inside `maps/map.blade.php`, whose own asset would arrive with the
+         child component, after this page's Alpine `init()` had already asked the
+         store for a map. `@assets`, not `@push('scripts')`: a pushed tag lands at
+         the end of the body, and on `wire:navigate` Livewire morphs the body and
+         runs Alpine BEFORE evaluating those scripts — measured `L is not defined`
+         and a blank map (#028). Livewire injects `@assets` into <head> and
+         evaluates new head assets before the navigation completes. --}}
+    <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
+@endassets
+
 @script
 <script>
     var geojsonLayers = {};
-    var allUnits = {{ Js::from($units) }};
+    // #1188: the geometry is NOT published here. This script runs once, on the
+    // first render, when no filter is picked yet — so this was always an empty
+    // array. The unit rows (with their geometry) arrive with the
+    // `units-updated` event and are handed to `allUnits` by its listener below.
+    var allUnits = [];
     var countyLayers = {};
     var activeToggles = {};
 

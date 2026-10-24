@@ -7,7 +7,14 @@ use Livewire\Component;
 
 return new class extends Component
 {
-    public array $stats = [];
+    // Only the three scalars the overview tiles need. The five groupings live
+    // in the by_* props below — keeping a copy of them in a $stats bag shipped
+    // every grouping twice in each Livewire snapshot (#1174).
+    public int $totalPersons = 0;
+
+    public int $activePersons = 0;
+
+    public int $retiredPersons = 0;
 
     public array $byUnit = [];
 
@@ -66,20 +73,27 @@ return new class extends Component
             ];
         });
 
-        $this->stats = $data;
+        $this->totalPersons = $data['total'];
+        $this->activePersons = $data['active'];
+        $this->retiredPersons = $data['retired'];
         $this->byUnit = $data['by_unit'];
         $this->bySemat = $data['by_semat'];
         $this->byTahsil = $data['by_tahsil'];
         $this->byEstekhdam = $data['by_estekhdam'];
         $this->byRadif = $data['by_radif'];
 
-        // Vacancies: units with zero personnel
+        // Vacancies: units with zero personnel. Filter and cap in SQL so the
+        // database returns at most ten narrow rows instead of hydrating every
+        // unit — geometry columns included — and discarding all but ten in PHP
+        // (#1043). `whereDoesntHave('person')` is the same NOT EXISTS predicate
+        // HrStatsController::vacancies() already uses. Ordering by name is new
+        // and deliberate: the previous order was Postgres' physical order.
         $this->vacancies = Unit::whereIn('id', $accessibleIds)
-            ->withCount('person as personnel_count')
+            ->whereDoesntHave('person')
+            ->select(['id', 'name'])
+            ->orderBy('name')
+            ->limit(10)
             ->get()
-            ->filter(fn ($u) => $u->personnel_count === 0)
-            ->take(10)
-            ->values()
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
             ->toArray();
     }
@@ -112,9 +126,9 @@ return new class extends Component
 
     {{-- Overview stats --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <x-stat title="کل پرسنل" value="{{ $stats['total'] }}" icon="o-users" color="text-primary" />
-        <x-stat title="فعال" value="{{ $stats['active'] }}" icon="o-user-circle" color="text-success" />
-        <x-stat title="بازنشسته" value="{{ $stats['retired'] }}" icon="o-user-minus" color="text-warning" />
+        <x-stat title="کل پرسنل" value="{{ $totalPersons }}" icon="o-users" color="text-primary" />
+        <x-stat title="فعال" value="{{ $activePersons }}" icon="o-user-circle" color="text-success" />
+        <x-stat title="بازنشسته" value="{{ $retiredPersons }}" icon="o-user-minus" color="text-warning" />
         <x-stat title="واحدهای بدون پرسنل" value="{{ count($vacancies) }}" icon="o-exclamation-triangle" color="text-error" />
     </div>
 
@@ -156,23 +170,26 @@ return new class extends Component
 
 @script
 <script>
-    // Palettes keyed by data-theme (see x-theme-selector: fantasy light / dark).
-    // Bars, axis text and grid lines must follow the active DaisyUI theme.
-    const HR_CHART_PALETTES = {
-        fantasy: {
-            colors: ['#6366f1', '#10b981', '#0ea5e9', '#f59e0b'],
-            text: '#3f3f46',
-            grid: '#e4e4e7'
-        },
-        dark: {
-            colors: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24'],
-            text: '#d4d4d8',
-            grid: '#3f3f46'
-        }
+    // Bars need a per-family palette (daisyUI's own `color-scheme` is the same
+    // signal App\Support\ThemeFamilies uses: light/cupcake/fantasy = light,
+    // dark/synthwave/coffee/luxury = dark). Text and grid read the active
+    // theme's tokens, so a newly enabled theme needs no table entry here.
+    const HR_CHART_COLORS = {
+        light: ['#4f46e5', '#047857', '#0369a1', '#b45309'],
+        dark: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24']
     };
 
     function hrPalette() {
-        return HR_CHART_PALETTES[document.documentElement.dataset.theme] ?? HR_CHART_PALETTES.fantasy;
+        const root = document.documentElement;
+        const style = getComputedStyle(root);
+        const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
+        const token = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+
+        return {
+            colors: HR_CHART_COLORS[scheme],
+            text: token('--color-base-content', scheme === 'dark' ? '#d4d4d8' : '#3f3f46'),
+            grid: token('--color-base-300', scheme === 'dark' ? '#3f3f46' : '#e4e4e7')
+        };
     }
 
     function destroyHrChart(id) {

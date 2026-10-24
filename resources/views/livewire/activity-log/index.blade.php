@@ -2,26 +2,33 @@
 
 use App\Models\ActivityLog;
 use App\Services\AccessService;
-use Carbon\Carbon;
+use App\Support\JalaliDateRange;
+use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Livewire\Attributes\Layout;
-use Livewire\Attributes\Computed;
-use Morilog\Jalali\Jalalian;
-use Illuminate\Support\Facades\Cache;
 
 return new class extends Component
 {
     use WithPagination;
 
     public string $search = '';
+
     public string $typeFilter = 'all';
+
     public ?int $userId = null;
+
     public ?string $dateFrom = null;
+
     public ?string $dateTo = null;
+
     public bool $showModal = false;
+
     public bool $showHelpModal = false;
+
     public ?ActivityLog $selectedLog = null;
+
     public array $typeStats = [];
 
     public function mount(): void
@@ -52,28 +59,19 @@ return new class extends Component
     private function getAccessibleUserIds(): array
     {
         $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
-        $cacheKey = 'activity_log:accessible_users:' . md5(implode(',', $accessibleUnitIds));
+        $cacheKey = 'activity_log:accessible_users:'.md5(implode(',', $accessibleUnitIds));
 
         return Cache::remember($cacheKey, 300, function () use ($accessibleUnitIds) {
-            return \App\Models\User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleUnitIds))
+            // #1057: an access list, not a display list — a soft-deleted user
+            // in scope keeps their audit rows visible. Only the deletion state
+            // is widened; the unit predicate stays exactly as it was, so an
+            // out-of-scope account remains invisible (and 404s in showDetail).
+            return \App\Models\User::query()
+                ->withoutGlobalScope(\Illuminate\Database\Eloquent\SoftDeletingScope::class)
+                ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleUnitIds))
                 ->pluck('id')
                 ->toArray();
         });
-    }
-
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
-    {
-        if (empty($date)) {
-            return null;
-        }
-
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
     }
 
     #[Computed]
@@ -81,30 +79,31 @@ return new class extends Component
     {
         $accessibleUserIds = $this->getAccessibleUserIds();
 
-        $query = ActivityLog::with("user")
-            ->whereIn("user_id", $accessibleUserIds);
+        $query = ActivityLog::query()
+            ->with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q)])
+            ->whereIn('user_id', $accessibleUserIds);
 
-        if (!empty($this->search)) {
+        if (! empty($this->search)) {
             $query->where(function ($q) {
-                $q->where("description", "like", "%" . $this->search . "%")
-                    ->orWhere("type", "like", "%" . $this->search . "%");
+                $q->where('description', 'like', '%'.$this->search.'%')
+                    ->orWhere('type', 'like', '%'.$this->search.'%');
             });
         }
 
-        if ($this->typeFilter !== "all") {
-            $query->where("type", $this->typeFilter);
+        if ($this->typeFilter !== 'all') {
+            $query->where('type', $this->typeFilter);
         }
 
         if ($this->userId && in_array($this->userId, $accessibleUserIds)) {
-            $query->where("user_id", $this->userId);
+            $query->where('user_id', $this->userId);
         }
 
-        if ($from = $this->parseJalaliDate($this->dateFrom)) {
-            $query->where("created_at", ">=", $from);
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
+            $query->where('created_at', '>=', $from);
         }
 
-        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
-            $query->where("created_at", "<=", $to);
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
+            $query->where('created_at', '<=', $to);
         }
 
         return $query->latest()->paginate(20);
@@ -112,7 +111,22 @@ return new class extends Component
 
     public function showDetail($id): void
     {
-        $this->selectedLog = ActivityLog::with('user')->findOrFail($id);
+        // Scoped exactly like logs()/getTypeStats(): this is a public Livewire
+        // method, so an unscoped findOrFail would let any manage_users holder
+        // read another unit's audit row by guessing a sequential id. An empty
+        // accessible list compiles to `0 = 1`, so an unscoped caller gets a 404
+        // rather than a row — 404 rather than 403 so it does not confirm the
+        // row exists.
+        //
+        // The predicate sits inside a where(Closure) on purpose: a top-level
+        // whereIn() resolves through Eloquent's `@mixin Query\Builder` and
+        // re-types the rest of the chain, and Query\Builder has no findOrFail().
+        $this->selectedLog = ActivityLog::query()
+            ->with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q)])
+            ->where(function ($query) {
+                $query->whereIn('user_id', $this->getAccessibleUserIds());
+            })
+            ->findOrFail($id);
         $this->showModal = true;
     }
 
@@ -125,7 +139,7 @@ return new class extends Component
     public function getTypeStats(): array
     {
         $accessibleUserIds = $this->getAccessibleUserIds();
-        $cacheKey = 'activity_log:types:' . md5(implode(',', $accessibleUserIds));
+        $cacheKey = 'activity_log:types:'.md5(implode(',', $accessibleUserIds));
 
         return Cache::remember($cacheKey, 300, function () use ($accessibleUserIds) {
             return ActivityLog::selectRaw('type, count(*) as count')
@@ -246,7 +260,7 @@ return new class extends Component
             @endscope
 
             @scope('actions', $log)
-            <x-button icon="o-eye" wire:click="showDetail({{ $log->id }})" class="btn-ghost btn-sm text-info" spinner />
+            <x-ui.icon-button name="مشاهده جزئیات فعالیت" icon="o-eye" wire:click="showDetail({{ $log->id }})" class="btn-ghost btn-sm text-info" spinner />
             @endscope
         </x-table>
     </x-card>
@@ -258,7 +272,7 @@ return new class extends Component
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <span class="text-xs text-base-content/50">کاربر:</span>
-                    <p class="text-sm font-bold">{{ $this->selectedLog->user->full_name ?? $this->selectedLog->user->name ?? 'نامشخص' }}</p>
+                    <p class="text-sm font-bold">{{ \App\Support\ActorLabel::for($this->selectedLog->user) }}</p>
                 </div>
                 <div>
                     <span class="text-xs text-base-content/50">نوع:</span>
@@ -307,6 +321,14 @@ return new class extends Component
         </x-slot:actions>
     </x-modal>
 </div>
+
+@assets
+    {{-- Issue #1182: jalaliDatepicker is page-specific and used to ship in the
+         global layout on every page. `@assets` keeps the tag in <head>, so it is
+         defined before this page's first `startWatch()` call on a full
+         load and before the swap on `wire:navigate`. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
 
 @script
 <script>

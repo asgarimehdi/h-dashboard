@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $unit_id
+ * @property int|null $unit_id nullable: org-wide schedules have no unit
  * @property string $title
  * @property string $frequency
  * @property int $recurrence_interval

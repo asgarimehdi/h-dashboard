@@ -8,8 +8,8 @@ workflow. Read this file first, then `AGENTS.md` (authoritative project instruct
 Work in `/home/runner/h-dashboard`. The repo is a fork; do not clone it again and do
 not add or edit remotes.
 
-- Current server branch: `baran`
-- `origin` = `https://github.com/haileen7/h-dashboard.git` (this server's fork)
+- This server's fork (origin) and current branch: read them, never hardcode —
+  `git remote -v` and `git branch --show-current`
 - Upstream canonical: `https://github.com/asgarimehdi/h-dashboard.git`, base branch `beta`
 
 Sync the canonical `beta` into this branch, then push:
@@ -18,20 +18,20 @@ Sync the canonical `beta` into this branch, then push:
 cd h-dashboard
 git fetch https://github.com/asgarimehdi/h-dashboard.git beta:refs/remotes/canonical/beta
 git merge --ff-only canonical/beta
-git push origin baran
+git push origin HEAD:refs/heads/$(git branch --show-current)
 ```
 
 Never merge, force-push, or push development work to `beta`.
 
 ## 2. On every code change
 
-Commit and push to `baran` on its existing remote. One clear commit per logical
+Commit and push to the current branch (read it — `git branch --show-current`) on its existing remote. One clear commit per logical
 change, message in the repo's existing style (imperative subject, body explaining
 the *why*).
 
 ## 3. On `pr`
 
-Open a pull request from `baran` → `beta` on `asgarimehdi/h-dashboard`. Use the
+Open a pull request from the current branch → `beta` on `asgarimehdi/h-dashboard`. Use the
 GitHub MCP (`create_pull_request`). Never merge unless explicitly asked.
 
 ## 4. Required tools
@@ -58,7 +58,7 @@ not a retry in this one.
 
 - **`read-the-damn-docs`** — always. Read `AGENTS.md` first, then Boost
   `search_docs` / Context7 for anything framework- or version-dependent. This repo
-  pins unusual versions (Laravel 13.33, Livewire 4.4, spatie/permission 8.3).
+  pins unusual versions (Laravel 13.35, Livewire 4.4, spatie/permission 8.3).
 - **`improve`** (shadcn) — installed and available, **not run** in this session. Use
   it on request for a read-only codebase audit that writes plans under `plans/`.
   It must never edit source code itself.

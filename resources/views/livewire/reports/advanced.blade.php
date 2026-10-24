@@ -6,7 +6,11 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
 use App\Services\DailySeries;
+use App\Support\JalaliDateRange;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -57,21 +61,6 @@ return new class extends Component
         }
     }
 
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
-    {
-        if (empty($date)) {
-            return null;
-        }
-
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     /**
      * The chosen from..to range as Carbon bounds, or null when either end is
      * missing/invalid or the range is inverted — in which case the daily series
@@ -81,14 +70,7 @@ return new class extends Component
      */
     private function dateRange(): ?array
     {
-        $from = $this->parseJalaliDate($this->dateFrom);
-        $to = $this->parseJalaliDate($this->dateTo, endOfDay: true);
-
-        if (! $from || ! $to || $from->gt($to)) {
-            return null;
-        }
-
-        return [$from, $to];
+        return JalaliDateRange::range($this->dateFrom, $this->dateTo);
     }
 
     #[Livewire\Attributes\Computed]
@@ -122,9 +104,107 @@ return new class extends Component
         $this->unitId = null;
     }
 
+    /**
+     * Issue #915 — the status option list and the predicate whitelist are
+     * the same data, keyed by `reportType`. Tickets read their labels from
+     * `Ticket::getStatusNameAttribute()`, todos reuse the
+     * `reports/todos.blade.php` values, and persons read theirs from
+     * `PersonsExport::resolveStatus()` (`active|inactive|retired`).
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const STATUS_OPTIONS = [
+        'tickets' => [
+            'created' => 'جدید',
+            'forwarded' => 'ارجاع شده',
+            'accepted' => 'در حال پیگیری',
+            'completed' => 'پایان یافته',
+            'rejected' => 'رد شده',
+        ],
+        'todos' => [
+            'completed' => 'تکمیل شده',
+            'pending' => 'در انتظار',
+            'overdue' => 'سررسید گذشته',
+        ],
+        'persons' => [
+            'active' => 'فعال',
+            'inactive' => 'غیرفعال',
+            'retired' => 'بازنشسته',
+        ],
+    ];
+
+    /**
+     * The status options for the current report type. Consumed by both the
+     * Blade `@foreach` and the `statusFilter` whitelist, so the rendered
+     * select and the applied predicate cannot drift apart.
+     *
+     * @return array<string, string>
+     */
+    public function statusOptions(): array
+    {
+        return self::STATUS_OPTIONS[$this->reportType] ?? [];
+    }
+
+    /**
+     * Issue #915 — `statusFilter` is public Livewire state with no
+     * validation. An unknown value falls back to `'all'` instead of reaching
+     * a column reference. Called at the top of `reportData()` so the
+     * assignment persists for the render that follows.
+     */
+    private function normalizeStatusFilter(): void
+    {
+        if (! array_key_exists($this->statusFilter, $this->statusOptions())) {
+            $this->statusFilter = 'all';
+        }
+    }
+
+    /**
+     * Issue #915 — a value picked under one report type (e.g. a ticket
+     * status) must not survive the switch to another type whose predicates
+     * mean something else (or nothing at all).
+     */
+    public function updatedReportType(): void
+    {
+        $this->statusFilter = 'all';
+    }
+
+    /**
+     * Issue #915 — apply the status clause for the current report type.
+     * Tickets and persons filter their real `status` column; todos map
+     * `completed|pending|overdue` onto the `is_completed`/`end_at`
+     * predicates from `reports/todos.blade.php:121-123`.
+     *
+     * @param  EloquentBuilder<covariant Model>|QueryBuilder  $query
+     */
+    private function applyStatusFilter(EloquentBuilder|QueryBuilder $query): void
+    {
+        if ($this->statusFilter === 'all') {
+            return;
+        }
+
+        if ($this->reportType === 'todos') {
+            $now = now();
+
+            match ($this->statusFilter) {
+                'completed' => $query->where('is_completed', true),
+                'pending' => $query->where('is_completed', false)
+                    ->where(fn ($q) => $q->whereNull('end_at')->orWhere('end_at', '>=', $now)),
+                'overdue' => $query->where('is_completed', false)
+                    ->whereNotNull('end_at')->where('end_at', '<', $now),
+                default => null,
+            };
+
+            return;
+        }
+
+        $query->where('status', $this->statusFilter);
+    }
+
     #[Livewire\Attributes\Computed]
     public function reportData(): array
     {
+        $this->normalizeStatusFilter();
+
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $query = match ($this->reportType) {
@@ -135,10 +215,10 @@ return new class extends Component
         };
 
         // فیلتر تاریخ (ورودی شمسی)
-        if ($from = $this->parseJalaliDate($this->dateFrom)) {
+        if ($from = JalaliDateRange::parse($this->dateFrom)) {
             $query->where('created_at', '>=', $from);
         }
-        if ($to = $this->parseJalaliDate($this->dateTo, endOfDay: true)) {
+        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
             $query->where('created_at', '<=', $to);
         }
 
@@ -151,10 +231,10 @@ return new class extends Component
             $query->whereIn($unitColumn, $descendantIds);
         }
 
-        // فیلتر وضعیت
-        if ($this->statusFilter !== 'all' && $this->reportType !== 'persons') {
-            $query->where('status', $this->statusFilter);
-        }
+        // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
+        // STATUS_OPTIONS کنار هم زندگی می‌کنند؛ todos ستون status ندارد و
+        // روی is_completed/end_at نگاشت می‌شود.
+        $this->applyStatusFilter($query);
 
         $total = $query->count();
 
@@ -237,6 +317,10 @@ return new class extends Component
     }
 }; ?>
 <div>
+    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+        this (morphed on every render) instead of firing a second method request
+        per filter change. --}}
+    <div id="advancedChartData" class="hidden" data-chart='@json(['byDay' => $this->reportData['byDay'], 'byUnit' => $this->reportData['byUnit'], 'details' => $this->reportData['details']])'></div>
     <x-header title="گزارش تیکت‌ها" separator progress-indicator>
         <x-slot:actions>
             <x-theme-selector/>
@@ -292,9 +376,9 @@ return new class extends Component
                 <label class="font-bold text-xs">وضعیت</label>
                 <select class="select select-bordered select-sm w-full" wire:model.live="statusFilter">
                     <option value="all">همه</option>
-                    <option value="created">ایجاد شده</option>
-                    <option value="forwarded">ارجاع شده</option>
-                    <option value="completed">تکمیل شده</option>
+                    @foreach($this->statusOptions() as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -383,10 +467,15 @@ return new class extends Component
 </div>
 
 @assets
+    {{-- Issue #1182: jalaliDatepicker is page-specific and used to ship in the
+         global layout on every page. `@assets` keeps the tag in <head>, so the
+         library is defined before this page's first `startWatch()` call — on a
+         full load and before the swap on `wire:navigate`. --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
+
+@assets
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
-<script src="{{ asset('js/chart/treemap.js') }}"></script>
-<script src="{{ asset('js/chart/treegraph.js') }}"></script>
-<script src="{{ asset('js/chart/exporting.js') }}"></script>
 <script src="{{ asset('js/chart/accessibility.js') }}"></script>
 @endassets
 
@@ -416,9 +505,13 @@ return new class extends Component
         container.innerHTML = '';
     }
 
-    async function renderCharts() {
-        waitForHighcharts(async () => {
-            const reportData = await $wire.chartPayload();
+    function renderCharts() {
+        waitForHighcharts(() => {
+            // Issue #1042: read the server-rendered aggregates above — the view
+            // already ran reportData for this render, so a second method request
+            // would just re-run it.
+            const el = document.getElementById('advancedChartData');
+            const reportData = el ? JSON.parse(el.dataset.chart) : {};
 
             destroyChartById('trendChart');
             destroyChartById('unitChart');
@@ -482,13 +575,15 @@ return new class extends Component
     renderCharts();
 
     // Re-render after filter updates
-    $wire.$watch('reportType', () => renderCharts());
-    $wire.$watch('rootUnitId', () => renderCharts());
-    $wire.$watch('parentUnitId', () => renderCharts());
-    $wire.$watch('unitId', () => renderCharts());
-    $wire.$watch('statusFilter', () => renderCharts());
+    // Issue #1042: the report-type and unit selects re-render through the DOM
+    // payload (morphed on each server render) instead of a second
+    // `chartPayload()` request. The date watchers stay because the Jalali
+    // datepicker writes the properties via `$wire.set`.
     $wire.$watch('dateFrom', () => renderCharts());
     $wire.$watch('dateTo', () => renderCharts());
+    Livewire.hook('morphed', ({ component }) => {
+        if (component.id === $wire.$id) renderCharts();
+    });
 
     const initAdvancedReportJdp = () => {
         if (typeof jalaliDatepicker === 'undefined') {

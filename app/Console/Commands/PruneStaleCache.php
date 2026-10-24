@@ -7,9 +7,9 @@ use Illuminate\Console\Command;
 
 class PruneStaleCache extends Command
 {
-    protected $signature = 'cache:prune-stale {--dry-run : Show what would be pruned without actually removing}';
+    protected $signature = 'cache:prune-stale';
 
-    protected $description = 'Prune stale cache entries from expired versioned keys';
+    protected $description = 'Audit current cache versions per namespace (deletes nothing — stale versioned keys expire via TTL)';
 
     /**
      * Versioned namespaces maintained by CacheInvalidationService.
@@ -18,31 +18,28 @@ class PruneStaleCache extends Command
      *
      * @var array<int, string>
      */
-    public const NAMESPACES = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_units', 'unit_hierarchy', 'calendar', 'zabbix_devices'];
+    public const NAMESPACES = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_units', 'unit_hierarchy', 'calendar', 'zabbix_devices', 'global_search'];
 
     public function handle(CacheInvalidationServiceInterface $cache): int
     {
-        $this->info('Pruning stale cache entries...');
+        // Issue #981 (owner decision, option A — honest audit): this command
+        // has never deleted anything. Laravel's cache abstraction cannot
+        // enumerate keys, so versioned keys orphaned by a version bump stay
+        // unreachable and expire via TTL (remember() defaults to 60 minutes).
+        // The command is kept as an hourly version audit so operators can
+        // see the current version of every registered namespace. The name
+        // is historical; the schedule and the NAMESPACES registry are
+        // deliberately untouched.
+        $this->info('Cache version audit — this command deletes nothing; stale versioned keys expire via TTL.');
 
-        $namespaces = self::NAMESPACES;
-        $pruned = 0;
-
-        foreach ($namespaces as $namespace) {
+        foreach (self::NAMESPACES as $namespace) {
             $currentVersion = $cache->getVersion($namespace);
-            $threshold = $currentVersion - 10; // Keep last 10 versions
 
-            // Redis-specific pruning using tags would be ideal, but we
-            // preserve backward compatibility by relying on TTL expiry.
-            // This command is a hook point for future tag-based cleanup.
             $this->line("  [{$namespace}] current version: {$currentVersion}");
         }
 
-        if ($this->option('dry-run')) {
-            $this->info('Dry run complete. No entries were removed.');
-        } else {
-            $this->info('Cache prune check complete. Stale keys will expire via TTL.');
-        }
+        $this->info('Audit complete: '.count(self::NAMESPACES).' namespaces checked, nothing was deleted.');
 
-        return 0;
+        return self::SUCCESS;
     }
 }

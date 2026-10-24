@@ -9,6 +9,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
+use App\Rules\PerPage;
 use App\Services\HardwareAuditScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,12 @@ class HardwareAuditController extends Controller
             $query->where('source', $request->source);
         }
 
+        // Issue #894: see UnitController::index(). `min(...)` bounds only the upper
+        // side; a negative `per_page` reaches `limit(-1)`, which the query builder
+        // drops, so the SQL loses its LIMIT clause. 422 is the contract; the
+        // `min()` stays as defence in depth. This endpoint's own cap is 50, so
+        // the rule is parametrised to match it.
+        $request->validate(['per_page' => ['sometimes', new PerPage(50)]]);
         $perPage = min((int) $request->get('per_page', 20), 50);
         $audits = $query->paginate($perPage);
 
@@ -200,12 +207,23 @@ class HardwareAuditController extends Controller
 
         $restoreData['id'] = $audit->hardware_id;
 
-        $hardware = Hardware::create($restoreData);
+        // #888: `id` is not in Hardware::$fillable, so Hardware::create() dropped
+        // it silently and the row landed under a fresh auto-increment id. That
+        // made the `exists` guard above permanently blind — it checks the
+        // original id, which never came back — so restoring the same audit twice
+        // created a duplicate row and orphaned the audit trail. forceFill()
+        // bypasses $fillable; this mirrors HardwareIndexHelpers::restoreRecord()
+        // so the two paths cannot drift apart again.
+        $hardware = new Hardware;
+        $hardware->forceFill($restoreData)->save();
 
         // Advance the Postgres sequence past the restored id so the next
         // auto-increment does not collide (duplicate key on hardwares_pkey).
         // pg_get_serial_sequence resolves the sequence name regardless of
         // SERIAL vs IDENTITY column definition.
+        // This is NOT redundant now that the id is genuinely reused: MAX(id)
+        // already includes the restored row, so setval to MAX(id) is exactly
+        // what keeps the next auto-insert from colliding with it.
         if (DB::connection()->getDriverName() === 'pgsql') {
             $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
             if ($seq && $seq->seq) {

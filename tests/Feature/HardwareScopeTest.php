@@ -10,27 +10,30 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HasOrganizationalScope::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 /**
  * Issue #201: hardware Livewire component person search/validation
  * must enforce organizational scope — no cross-unit person data leakage.
  */
 beforeEach(function () {
+    $this->seedLookupTables();
     Session::flush();
 });
 
 function makeUnitAndPerson(string $unitName, string $nCode, string $fName, string $lName): array
 {
     $unit = Unit::create(['name' => $unitName]);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     Person::create([
         'n_code' => $nCode,
         'f_name' => $fName,
@@ -49,10 +52,10 @@ function makeUserInUnit(Unit $unit): User
 {
     // User must correspond to an existing person (users.n_code FK)
     $nCode = (string) fake()->unique()->numerify('##########');
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     Person::create([
         'n_code' => $nCode,
         'f_name' => 'Test',
@@ -64,6 +67,18 @@ function makeUserInUnit(Unit $unit): User
         'u_id' => $unit->id,
     ]);
     $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+
+    // Issue #975: every mutator on `hardware.index` now re-checks
+    // `manage_hardware` itself, because the route gate does not re-run on
+    // `/livewire/update`. This file exercises those mutators, so its actor has
+    // to be someone who LEGITIMATELY holds the permission — otherwise these
+    // tests 403 before reaching the scope assertion they exist to make.
+    // `findOrCreate` keeps this file independent of PermissionSeeder.
+    //
+    // Granting the permission does not weaken anything below: scope comes from
+    // `accessibleUnitIds()`, which never consults the permission.
+    $user->givePermissionTo(Permission::findOrCreate('manage_hardware'));
+
     $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $unit->id);
 
@@ -76,17 +91,27 @@ it('person search only returns persons within the user\'s organizational scope',
 
     $user = makeUserInUnit($ownUnit);
 
+    // Issue #1047: assert on what is RENDERED, not on the in-memory
+    // `personResults` property — a lazy refactor that keeps the property but
+    // still leaks into the view must fail this test.
+    //
+    // Out-of-scope search: the other unit's person must not appear in the
+    // person-search dropdown that the open create form renders.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', '2222') // other unit's n_code prefix
-        ->assertSet('personResults', []); // must NOT see Unit B person
+        ->assertDontSee('Sara Ahmadi')
+        ->assertDontSee('2222222222');
 
+    // In-scope search renders the person as a selectable option — this proves
+    // the dropdown path above is genuinely exercised rather than vacuously empty.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', 'Ali')
-        ->assertSet('personResults', [
-            ['n_code' => '1111111111', 'name' => 'Ali Rezaei'],
-        ]);
+        ->assertSee('Ali Rezaei')
+        ->assertSee('1111111111');
 });
 
 it('person search by n_code respects scope', function () {
@@ -97,15 +122,17 @@ it('person search by n_code respects scope', function () {
 
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', '4444444444')
-        ->assertSet('personResults', []);
+        ->assertDontSee('Neda Karimi')
+        ->assertDontSee('4444444444');
 
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('personSearch', '3333333333')
-        ->assertSet('personResults', [
-            ['n_code' => '3333333333', 'name' => 'Mohammad Hosseini'],
-        ]);
+        ->assertSee('Mohammad Hosseini')
+        ->assertSee('3333333333');
 });
 
 it('n_code validation does not leak other units\' person info', function () {
@@ -114,21 +141,20 @@ it('n_code validation does not leak other units\' person info', function () {
 
     $user = makeUserInUnit($ownUnit);
 
-    // Typing an out-of-scope n_code must NOT reveal name/unit
+    // Typing an out-of-scope n_code must NOT render that person's name/unit.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('n_code', '6666666666')
-        ->assertSet('n_code_status', 'invalid')
-        ->assertSet('n_code_name', null)
-        ->assertSet('n_code_unit', null);
+        ->assertSee('کد ملی یافت نشد') // rendered "invalid" hint
+        ->assertDontSee('Maryam Sadeghi');
 
-    // In-scope n_code still validates and shows name/unit
+    // In-scope n_code still validates and renders the person's name.
     Livewire::actingAs($user)
         ->test('hardware.index')
+        ->call('startCreate')
         ->set('n_code', '5555555555')
-        ->assertSet('n_code_status', 'valid')
-        ->assertSet('n_code_name', 'Hassan Moradi')
-        ->assertSet('n_code_unit', 'Unit A');
+        ->assertSee('Hassan Moradi');
 });
 
 it('createHardware rejects out-of-scope person', function () {
@@ -143,6 +169,10 @@ it('createHardware rejects out-of-scope person', function () {
         ->set('pc_name', 'PC-OUT-OF-SCOPE')
         ->call('createHardware')
         ->assertHasErrors('n_code'); // exists:persons rule fails for out-of-scope n_code
+
+    // Issue #1047: the database is the source of truth — no row may be written
+    // for the out-of-scope person.
+    $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-OUT-OF-SCOPE']);
 });
 
 it('general search matches the full person name (f_name + l_name)', function () {
@@ -166,10 +196,10 @@ it('general search matches the full person name (f_name + l_name)', function () 
 
 it('filterType escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Unit A']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
@@ -193,10 +223,10 @@ it('filterType escapes LIKE wildcards — percent does not match all', function 
 
 it('filterType escapes LIKE wildcards — underscore does not match single char', function () {
     $unit = Unit::create(['name' => 'Unit A']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
@@ -217,10 +247,10 @@ it('filterType escapes LIKE wildcards — underscore does not match single char'
 
 it('filterOs escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Unit A']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',
@@ -241,12 +271,66 @@ it('filterOs escapes LIKE wildcards — percent does not match all', function ()
     expect($component->html())->not->toContain('PC-2');
 });
 
+it('updateHardware refuses to re-point hardware to a person in an inaccessible unit', function () {
+    [$ownUnit, $ownPerson] = makeUnitAndPerson('Unit A', '1111111111', 'Ali', 'Rezaei');
+    [$otherUnit, $otherPerson] = makeUnitAndPerson('Unit B', '2222222222', 'Sara', 'Ahmadi');
+
+    $user = makeUserInUnit($ownUnit);
+
+    $hw = Hardware::create([
+        'n_code' => '1111111111',
+        'pc_name' => 'PC-OWN-UNIT',
+        'type' => 'pc',
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->call('editHardware', $hw->id)
+        ->set('n_code', '2222222222') // person of the inaccessible Unit B
+        ->call('updateHardware')
+        ->assertHasNoErrors();
+
+    $hw->refresh();
+    expect($hw->n_code)->toBe('1111111111');
+
+    // The user gets the Persian message (MaryUI toast), not a bare validation error.
+    $toastJs = collect($component->effects['xjs'] ?? [])
+        ->pluck('expression')
+        ->first(fn (string $expression) => str_starts_with($expression, 'toast('));
+    $toast = $toastJs ? json_decode(substr($toastJs, 6, -1), true) : null;
+
+    expect($toast['toast']['type'] ?? null)->toBe('error');
+    expect($toast['toast']['title'] ?? null)->toBe('شما به این پرسنل دسترسی ندارید.');
+});
+
+it('updateHardware allows reassigning hardware to a person within the accessible unit', function () {
+    [$ownUnit, $ownPerson] = makeUnitAndPerson('Unit A', '3333333333', 'Ali', 'Rezaei');
+
+    $user = makeUserInUnit($ownUnit); // creates a second person inside Unit A
+
+    $hw = Hardware::create([
+        'n_code' => '3333333333',
+        'pc_name' => 'PC-OWN-UNIT',
+        'type' => 'pc',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('hardware.index')
+        ->call('editHardware', $hw->id)
+        ->set('n_code', $user->n_code) // person of the same accessible Unit A
+        ->call('updateHardware')
+        ->assertHasNoErrors();
+
+    $hw->refresh();
+    expect($hw->n_code)->toBe($user->n_code);
+});
+
 it('filterUnit escapes LIKE wildcards — percent does not match all', function () {
     $unit = Unit::create(['name' => 'Test Unit']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'T']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'E']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'S']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'R']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Test', 'l_name' => 'User',

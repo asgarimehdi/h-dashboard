@@ -10,7 +10,6 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @property-read int $id
  * @property-read string $ticket_code
  * @property-read string $subject
- * @property-read string $content
  * @property-read string $priority
  * @property-read string $status
  * @property-read string $status_name
@@ -37,7 +36,6 @@ class TicketResource extends JsonResource
             'id' => $model->id,
             'ticket_code' => $model->ticket_code,
             'subject' => $model->subject,
-            'content' => $model->content,
             'priority' => $model->priority,
             'status' => $model->status,
             'status_name' => $model->status_name,

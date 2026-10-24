@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
+use App\Http\Resources\TicketDetailResource;
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
@@ -17,7 +19,7 @@ class TicketController extends Controller
     {
         $request->validate([
             'status' => 'sometimes|in:created,forwarded,accepted,completed,rejected',
-            'priority' => 'sometimes|in:low,normal,urgent',
+            'priority' => ['sometimes', Rule::in(Ticket::PRIORITIES)],
         ]);
 
         $user = $request->user();
@@ -50,7 +52,7 @@ class TicketController extends Controller
         }
 
         return response()->json([
-            'data' => new TicketResource($ticket->load([
+            'data' => new TicketDetailResource($ticket->load([
                 'unit:id,name',
                 'user:id,n_code',
                 'assignee:id,n_code',
@@ -65,7 +67,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
             'content' => 'required|string',
-            'priority' => 'required|in:low,normal,urgent',
+            'priority' => ['required', Rule::in(Ticket::PRIORITIES)],
             'unit_id' => 'required|exists:units,id',
             'deadline' => 'nullable|date',
         ]);
@@ -84,7 +86,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->load(['unit:id,name'])),
+            'data' => new TicketDetailResource($ticket->load(['unit:id,name'])),
         ], 201);
     }
 
@@ -98,7 +100,7 @@ class TicketController extends Controller
         $validated = $request->validate([
             'subject' => 'sometimes|required|string|max:255',
             'content' => 'sometimes|required|string',
-            'priority' => 'sometimes|required|in:low,normal,urgent',
+            'priority' => ['sometimes', 'required', Rule::in(Ticket::PRIORITIES)],
             'deadline' => 'nullable|date',
         ]);
 
@@ -106,7 +108,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name'])),
         ]);
     }
 
@@ -150,7 +152,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 
@@ -166,6 +168,13 @@ class TicketController extends Controller
             return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
         }
 
+        // Issue #1000: accepting only makes sense from an open status. Keep this
+        // guard in step with the web path (⚡inbox.blade.php, which allows the
+        // same two statuses).
+        if (! in_array($ticket->status, ['created', 'forwarded'], true)) {
+            return response()->json(['message' => 'Only created or forwarded tickets can be accepted.'], 422);
+        }
+
         $ticket->update([
             'status' => 'accepted',
             'accepted_at' => now(),
@@ -173,7 +182,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 
@@ -200,7 +209,7 @@ class TicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new TicketResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
+            'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
     }
 }

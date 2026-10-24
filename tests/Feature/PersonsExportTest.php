@@ -6,13 +6,17 @@ use App\Exports\PersonsExport;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Models\Person;
 use App\Models\Unit;
+use Database\Factories\SematFactory;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use ReflectionProperty;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -60,7 +64,7 @@ class PersonsExportTest extends TestCase
      */
     protected function column(array $rows, string $heading): array
     {
-        $column = array_search($heading, (new PersonsExport(collect()))->headings(), true);
+        $column = array_search($heading, (new PersonsExport(Person::query()))->headings(), true);
 
         $this->assertNotFalse($column, "Unknown heading [{$heading}].");
         $letter = Coordinate::stringFromColumnIndex($column + 1);
@@ -190,12 +194,12 @@ class PersonsExportTest extends TestCase
             'وضعیت',
             'تاریخ تولد',
             'تاریخ استخدام',
-        ], (new PersonsExport(collect()))->headings());
+        ], (new PersonsExport(Person::query()))->headings());
     }
 
     public function test_export_title_is_persian(): void
     {
-        $this->assertSame('پرسنل', (new PersonsExport(collect()))->title());
+        $this->assertSame('پرسنل', (new PersonsExport(Person::query()))->title());
     }
 
     // -----------------------------------------------------------
@@ -320,8 +324,9 @@ class PersonsExportTest extends TestCase
 
     public function test_export_normalizes_persian_input_before_matching(): void
     {
-        // normalizeForQuery folds Arabic ی/ک and escapes LIKE wildcards, so the
-        // export must match on the same normalized term the list does.
+        // normalizeForSearch folds Arabic ی/ک and foldedTerm() escapes the LIKE
+        // wildcards on top of it, so the export must match on the same term the
+        // list does.
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
 
         $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $unit->id]);
@@ -343,6 +348,164 @@ class PersonsExportTest extends TestCase
         $this->actingAs($user);
 
         $this->assertSame([], $this->rowsFromRoute(['search' => '%']));
+    }
+
+    public function test_export_search_folds_a_name_column_written_without_the_model_hook(): void
+    {
+        // #815 folded the unit column because Unit has no saving hook; the same
+        // argument applies to a person row that reached the table by any path
+        // other than the model's `saving` hook — the stored text then still
+        // carries the unfodded spelling and only a folded column can match it.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        // The helper's person is created through the model and shares this
+        // search scope, so its name is pinned to something the «عسگری» filter
+        // cannot match — assertSame() below pins the exact row set.
+        $user->person->update(['f_name' => 'بی‌نام', 'l_name' => 'آزمون']);
+
+        // Inserted straight to the table: Person::$saving would have normalized
+        // these names, which is exactly what this row must be missing.
+        DB::table('persons')->insert([
+            'n_code' => '0012345678',
+            'f_name' => 'عسگري',   // Arabic yeh, never normalized
+            'l_name' => 'كريبى',   // Arabic kaf, never normalized
+            // Pinned so the helper's own faker person cannot collide with the
+            // «عسگری» filter and make the exact-row-set assertion flake.
+            't_id' => 1,
+            'e_id' => 1,
+            's_id' => 1,
+            'r_id' => 1,
+            'u_id' => $unit->id,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // No explicit id was supplied, so the sequence already advanced past
+        // this row — resyncSequence() is only for hand-seeded ids.
+        $this->actingAs($user);
+
+        // Searched with the Persian spelling; only the folded column bridges
+        // the two.
+        $this->assertSame(
+            ['0012345678'],
+            $this->codes($this->rowsFromRoute(['search' => 'عسگری']))
+        );
+    }
+
+    public function test_export_does_not_error_on_a_zwnj_search(): void
+    {
+        // #940: ZWNJ (U+200C) is the standard Persian compound separator, so this
+        // is ordinary typing on the screen the export link sits on. It must not
+        // 500.
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+
+        $this->actingAs($user);
+
+        $response = $this->get(route('kargozini.persons.export', [
+            'search' => "خانه\u{200C}بهداشت",
+        ]));
+
+        $response->assertOk();
+        $response->assertDownload();
+    }
+
+    public function test_export_search_matches_a_unit_name_containing_a_zwnj_compound(): void
+    {
+        // Unit has no saving hook, so its name keeps the ZWNJ verbatim and the
+        // stored column is what has to be folded — proving the match, not just
+        // the absence of a crash.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        // Pinned: UnitFactory draws from 15 names and 'خانه بهداشت روستایی'
+        // contains BOTH search terms, so a random $unit would match the filter
+        // and flake this exact-row-set assertion (~1/15 runs).
+        $unit->update(['name' => 'واحد مالی و اداری']);
+
+        $clinic = Unit::factory()->create([
+            'name' => "خانه\u{200C}بهداشت مرکزی",
+            'parent_id' => $unit->id,
+        ]);
+
+        $this->createPerson([
+            'n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $clinic->id,
+        ]);
+        $this->createPerson([
+            'n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $unit->id,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['0012345678'],
+            $this->codes($this->rowsFromRoute(['search' => "خانه\u{200C}بهداشت"]))
+        );
+    }
+
+    public function test_export_folds_each_search_term_exactly_once(): void
+    {
+        // The `%`-only test above cannot tell single from double escaping: it
+        // asserts an empty sheet, and a double-escaped `%` matches nothing too.
+        // This term must BOTH escape a wildcard and match something — folded
+        // once it binds `%100\%%` and finds «ظرفیت 100%», folded twice it binds
+        // `%100\\%%` and finds neither row.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson([
+            'n_code' => '0012345678', 'f_name' => 'ظرفیت 100', 'l_name' => 'مهدی', 'u_id' => $unit->id,
+        ]);
+        $this->createPerson([
+            'n_code' => '0098765432', 'f_name' => 'ظرفیت 100%', 'l_name' => 'زهرا', 'u_id' => $unit->id,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['0098765432'],
+            $this->codes($this->rowsFromRoute(['search' => '100%']))
+        );
+    }
+
+    public function test_export_search_ands_every_term_of_a_zwnj_and_space_search(): void
+    {
+        // The ZWNJ becomes one more term, so this is three AND-ed terms. Only
+        // the unit carrying all three may come back, which also pins that the
+        // fold does not reorder or drop a term.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        // Pinned for the same reason as the ZWNJ-compound test above: a random
+        // factory name must never contribute a search term to this assertion.
+        $unit->update(['name' => 'واحد مالی و اداری']);
+
+        $partial = Unit::factory()->create(['name' => "خانه\u{200C}بهداشت", 'parent_id' => $unit->id]);
+        $full = Unit::factory()->create(['name' => "مرکز خانه\u{200C}بهداشت", 'parent_id' => $unit->id]);
+
+        $this->createPerson(['n_code' => '0012345678', 'u_id' => $partial->id]);
+        $this->createPerson(['n_code' => '0098765432', 'u_id' => $full->id]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['0098765432'],
+            $this->codes($this->rowsFromRoute(['search' => "خانه\u{200C}بهداشت مرکز"]))
+        );
+    }
+
+    public function test_export_search_matches_a_national_code_typed_with_persian_digits(): void
+    {
+        // digitMap() folds ۰-۹ to Latin on the term side, so a national code
+        // typed on a Persian keyboard still matches the stored Latin digits.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $this->createPerson(['n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $unit->id]);
+        $this->createPerson(['n_code' => '0098765432', 'f_name' => 'زهرا', 'l_name' => 'کریمی', 'u_id' => $unit->id]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['0098765432'],
+            $this->codes($this->rowsFromRoute(['search' => '۰۰۹۸۷۶۵']))
+        );
     }
 
     public function test_export_applies_the_unit_filter(): void
@@ -484,7 +647,7 @@ class PersonsExportTest extends TestCase
         // through the ORM — the fallback is proved on an in-memory person whose
         // lookup rows simply do not exist.
         $person = $this->orphanPerson();
-        $export = new PersonsExport(collect([$person]));
+        $export = new PersonsExport(Person::query());
 
         $row = $export->map($person);
 
@@ -518,7 +681,7 @@ class PersonsExportTest extends TestCase
      */
     protected function forCode(array $rows, string $heading, string $nCode): array
     {
-        $codeIndex = array_search('کد ملی', (new PersonsExport(collect()))->headings(), true);
+        $codeIndex = array_search('کد ملی', (new PersonsExport(Person::query()))->headings(), true);
         $letter = Coordinate::stringFromColumnIndex($codeIndex + 1);
 
         $filtered = array_values(array_filter(
@@ -592,7 +755,7 @@ class PersonsExportTest extends TestCase
         $person->r_id = 1;
         $person->u_id = 1;
 
-        $export = new PersonsExport(collect([$person]));
+        $export = new PersonsExport(Person::query());
 
         $this->assertSame('-', $export->map($person)[3]);
     }
@@ -624,6 +787,114 @@ class PersonsExportTest extends TestCase
         $this->actingAs($user);
 
         $this->assertNoNPlusOne(fn () => $this->rowsFromRoute(), 10);
+    }
+
+    /**
+     * #1020: the export now chunked-reads the controller's builder, so the
+     * lookup labels must resolve from the eager loads *per chunk* — no chunk
+     * may fall back to lazy-loading. A distinct semat per person makes a
+     * missing eager load show wrong labels, not a shared one.
+     */
+    public function test_export_resolves_lookup_labels_in_every_chunk(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        $semats = [
+            'a' => SematFactory::new()->create(['name' => 'سمت الف'])->id,
+            'b' => SematFactory::new()->create(['name' => 'سمت ب'])->id,
+        ];
+
+        $expectedSematByCode = [];
+        foreach (range(1, 6) as $i) {
+            $nCode = '00200000'.str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            $expectedSematByCode[$nCode] = $i % 2 === 0 ? 'سمت ب' : 'سمت الف';
+
+            $this->createPerson([
+                'n_code' => $nCode,
+                'u_id' => $unit->id,
+                's_id' => $i % 2 === 0 ? $semats['b'] : $semats['a'],
+            ]);
+        }
+
+        $export = new PersonsExport(
+            // The same builder the controller hands over: eager loads and id order.
+            Person::query()
+                ->with(['semat', 'tahsil', 'estekhdam', 'radif', 'unit'])
+                ->whereIn('u_id', [$unit->id])
+                ->orderBy('id')
+        );
+        $this->forceChunkSize($export, 2);
+
+        Excel::store($export, 'persons-export-per-chunk.xlsx', 'local');
+        $rows = $this->storedRows('persons-export-per-chunk.xlsx');
+
+        $codeKey = Coordinate::stringFromColumnIndex(array_search('کد ملی', $export->headings(), true) + 1);
+        $sematKey = Coordinate::stringFromColumnIndex(array_search('سمت', $export->headings(), true) + 1);
+
+        $sematByCode = [];
+        foreach ($rows as $row) {
+            $sematByCode[$row[$codeKey]] = $row[$sematKey];
+        }
+
+        foreach ($expectedSematByCode as $nCode => $semat) {
+            $this->assertSame($semat, $sematByCode[$nCode] ?? null, "سمت of {$nCode}");
+        }
+    }
+
+    /**
+     * #1020: more rows than one chunk. The chunked path must keep the
+     * per-chunk eager loads inexpensive — a per-row N+1 would multiply the
+     * lookup queries by the row count instead of the relation count.
+     */
+    public function test_a_chunked_export_does_not_query_per_row(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
+
+        foreach (range(1, 6) as $i) {
+            $this->createPerson([
+                'n_code' => '00300000'.str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                'u_id' => $unit->id,
+            ]);
+        }
+
+        $export = new PersonsExport(
+            Person::query()
+                ->with(['semat', 'tahsil', 'estekhdam', 'radif', 'unit'])
+                ->whereIn('u_id', [$unit->id])
+                ->orderBy('id')
+        );
+        $this->forceChunkSize($export, 2);
+
+        // 7 rows over chunkSize 2 = 4 chunks: 4 chain selects + 5 eager-load
+        // queries per chunk + one units index query. A per-row N+1 would be
+        // 7 rows × 5 relations more and blow far past this bound.
+        $this->assertNoNPlusOne(fn () => Excel::store($export, 'persons-export-n-plus-one.xlsx', 'local'), 30);
+    }
+
+    /**
+     * @param  object  $export
+     */
+    private function forceChunkSize($export, int $size): void
+    {
+        (new ReflectionProperty($export::class, 'chunkSize'))->setValue($export, $size);
+    }
+
+    /**
+     * Read a sheet written through `Excel::store` back into plain rows
+     * (headings excluded), each keyed by column letter.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function storedRows(string $filename): array
+    {
+        $path = Storage::disk('local')->path($filename);
+        $spreadsheet = IOFactory::load($path);
+        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+        array_shift($rows);
+        $spreadsheet->disconnectWorksheets();
+        @unlink($path);
+
+        return array_values($rows);
     }
 
     // -----------------------------------------------------------

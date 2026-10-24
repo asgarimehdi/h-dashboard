@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\UnitController;
+use App\Models\Person;
+use App\Models\Ticket;
+use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -136,18 +140,25 @@ class UnitApiTest extends TestCase
         $response->assertStatus(403);
     }
 
+    /**
+     * #949: the happy path is now "a unit with nothing left in it". The old
+     * version deleted `createUserWithUnit()`'s own unit — which carries that
+     * helper's person and its `user_units` row — so it pinned the contract that a
+     * populated unit deletes cleanly. That contract is the defect.
+     */
     public function test_user_can_delete_accessible_unit(): void
     {
         ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Empty', 'parent_id' => $unit->id]);
         $user = User::first();
         $token = $this->createApiToken($user, ['units:read', 'units:write']);
 
-        $response = $this->apiDelete("/api/units/{$unit->id}", $token);
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
 
         $response->assertStatus(200)
             ->assertJson(['success' => true]);
 
-        $this->assertDatabaseMissing('units', ['id' => $unit->id]);
+        $this->assertDatabaseMissing('units', ['id' => $target->id]);
     }
 
     public function test_user_cannot_delete_unit_with_children(): void
@@ -161,6 +172,106 @@ class UnitApiTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson(['message' => 'Cannot delete unit with children.']);
+    }
+
+    // ==================== #949 step 5: API parity with the Livewire list ====================
+
+    /**
+     * Step 5, first half: the API was strictly weaker than the UI and failed
+     * with an uncaught 500. `tickets_unit_fk` is RESTRICT, so the database
+     * refused the delete and the exception escaped the controller. The UI
+     * counts it and refuses with a reason.
+     */
+    public function test_user_cannot_delete_unit_with_tickets_returns_422_not_500(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Ticketed', 'parent_id' => $unit->id]);
+        Ticket::create([
+            'ticket_code' => 'T-API-949',
+            'subject' => 's',
+            'content' => 'c',
+            'status' => 'open',
+            'priority' => 'normal',
+            'unit_id' => $target->id,
+        ]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+    }
+
+    /**
+     * Step 5, second half: the API ignored the six non-RESTRICT FKs entirely,
+     * so the mobile client could strip staff the web UI would have refused.
+     * Same guard, same answer as `UnitsIndexLivewireTest`.
+     */
+    public function test_user_cannot_delete_unit_with_personnel(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Staffed', 'parent_id' => $unit->id]);
+        $person = Person::factory()->create(['u_id' => $target->id]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        // SET NULL would still leave the row — the column value is the contract.
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'u_id' => $target->id]);
+    }
+
+    /**
+     * Step 4 on the API surface: the refusal must be machine-readable, not
+     * just prose. The counts are the whole value of the impact report, and a
+     * client that can only read a sentence cannot show the user what a delete
+     * is about to cost.
+     */
+    public function test_delete_refusal_reports_the_blocking_counts(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Staffed', 'parent_id' => $unit->id]);
+        Person::factory()->count(3)->create(['u_id' => $target->id]);
+        Todo::factory()->count(2)->create(['unit_id' => $target->id]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Cannot delete unit.',
+                'blockers' => ['persons' => 3, 'todos' => 2],
+            ]);
+    }
+
+    /**
+     * `uu_unit_fk` is CASCADE — the only one of the six that destroys the row
+     * outright, so the mobile client could silently unassign an account that
+     * the web UI now refuses to unassign.
+     */
+    public function test_user_cannot_delete_unit_with_accounts(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Assigned', 'parent_id' => $unit->id]);
+        $staff = User::factory()->create();
+        DB::table('user_units')->insert([
+            'user_id' => $staff->id,
+            'unit_id' => $target->id,
+            'role' => 'staff',
+            'is_primary' => true,
+        ]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertDatabaseHas('user_units', ['user_id' => $staff->id, 'unit_id' => $target->id]);
     }
 
     public function test_pagination_per_page_is_limited(): void
@@ -177,9 +288,56 @@ class UnitApiTest extends TestCase
 
         $user = User::first();
         $token = $this->createApiToken($user, ['units:read']);
-        $response = $this->apiGet('/api/units?per_page=1000', $token);
+
+        // Issue #894: over the cap is now a 422 rather than a silent clamp —
+        // the `min(...)` stays as defence in depth, but the contract the client
+        // sees is a validation error, matching `ReportDays` for `?days`.
+        $this->apiGet('/api/units?per_page=1000', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
+        // The cap itself still succeeds and is still honoured.
+        $response = $this->apiGet('/api/units?per_page=100', $token);
 
         $response->assertStatus(200);
-        $this->assertLessThanOrEqual(100, $response->json('meta.per_page'));
+        $this->assertEquals(100, $response->json('meta.per_page'));
+        $this->assertCount(100, $response->json('data'));
+    }
+
+    /**
+     * Issue #894: the test above asserts the upper bound only, never a row
+     * count, which is how a one-sided clamp survived — `per_page=-1` is
+     * truthy, reaches `limit(-1)`, and the query builder DROPS the clause, so
+     * the SQL loses its LIMIT and returns all 151 units while still reporting a
+     * plausible `meta.per_page`. `per_page=0` fell back to the model default via
+     * paginate()'s `?:` and was silently accepted.
+     *
+     * The contract is now 422 for both, matching `ReportDays` for `?days`.
+     */
+    public function test_pagination_rejects_out_of_range_per_page(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+
+        for ($i = 0; $i < 150; $i++) {
+            Unit::create([
+                'name' => "Unit {$i}",
+                'parent_id' => $unit->id,
+            ]);
+        }
+
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read']);
+
+        $this->apiGet('/api/units?per_page=-1', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
+        $this->apiGet('/api/units?per_page=0', $token)->assertStatus(422);
+
+        // Junk input keeps the existing fallback rather than failing, and a
+        // valid page is still bounded.
+        $ok = $this->apiGet('/api/units?per_page=20', $token);
+        $ok->assertStatus(200);
+        $this->assertCount(20, $ok->json('data'));
     }
 }

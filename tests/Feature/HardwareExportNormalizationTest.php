@@ -14,12 +14,14 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareExportController::class);
 
 class HardwareExportNormalizationTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected Unit $unit;
@@ -29,13 +31,14 @@ class HardwareExportNormalizationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seedLookupTables();
         $this->seed(PermissionSeeder::class);
         Session::flush();
 
-        $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-        $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-        $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-        $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+        $tId = DB::table('tahsils')->first()->id;
+        $eId = DB::table('estekhdams')->first()->id;
+        $sId = DB::table('semats')->first()->id;
+        $rId = DB::table('radifs')->first()->id;
 
         $this->unit = Unit::create(['name' => 'واحد تست']);
         $nCode = (string) fake()->unique()->numerify('##########');
@@ -149,13 +152,25 @@ class HardwareExportNormalizationTest extends TestCase
     }
 
     #[Test]
-    public function export_controller_uses_persian_normalizer_trait(): void
+    public function export_controller_delegates_filtering_to_hardware_filters(): void
     {
         $src = file_get_contents(base_path('app/Http/Controllers/Api/HardwareExportController.php'));
 
+        // Issue #1050: the export no longer re-implements the filters (and their
+        // Persian normalization); it only hands the raw request values to the
+        // shared implementation.
+        expect($src)->toContain('HardwareFilters::apply');
+        expect($src)->not->toContain('PersianNormalizer');
+    }
+
+    #[Test]
+    public function hardware_filters_keep_persian_normalization(): void
+    {
+        $src = file_get_contents(base_path('app/Support/HardwareFilters.php'));
+
         expect($src)->toContain('use App\Traits\PersianNormalizer;');
         expect($src)->toContain('use PersianNormalizer;');
-        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(8);
+        expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(2);
         // #815: the hook-less lookup columns (unit/semat) fold the column instead.
         expect($src)->toContain('foldSeparatorsSql');
         expect($src)->toContain('foldedTerm');

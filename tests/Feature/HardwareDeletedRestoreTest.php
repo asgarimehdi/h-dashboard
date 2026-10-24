@@ -70,7 +70,7 @@ it('deleted hardware appears in trash modal', function () {
         ->test('hardware.index')
         ->call('loadDeletedHardware')
         ->assertSet('showTrashModal', true)
-        ->assertCount('deletedHardware', 1);
+        ->assertCount('trashRows', 1);
 });
 
 it('deleted hardware can be restored from audit trail (unit logic)', function () {
@@ -132,7 +132,7 @@ it('multiple deleted hardware all appear in trash modal', function () {
     Livewire::actingAs($user)
         ->test('hardware.index')
         ->call('loadDeletedHardware')
-        ->assertCount('deletedHardware', 3);
+        ->assertCount('trashRows', 3);
 });
 
 it('restore preserves original hardware id', function () {

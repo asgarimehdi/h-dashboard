@@ -8,20 +8,17 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
 
-    DB::table('tahsils')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('estekhdams')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('semats')->insert(['id' => 1, 'name' => 'Test']);
-    DB::table('radifs')->insert(['id' => 1, 'name' => 'Test']);
+    $this->seedLookupTables();
 
     $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->person = Person::create([
@@ -98,4 +95,19 @@ test('reports pages render Persian labels', function () {
     Livewire::actingAs($this->user)
         ->test('reports.advanced')
         ->assertSee('گزارش تیکت‌ها');
+});
+
+test('advanced reports page ships the Highcharts core and accessibility modules', function () {
+    $response = $this->actingAs($this->user)->get('/reports/tickets');
+
+    $response->assertSee('js/chart/highcharts.js');
+    $response->assertSee('js/chart/accessibility.js');
+});
+
+test('advanced reports page does not ship the unused treemap, treegraph and exporting modules', function () {
+    $response = $this->actingAs($this->user)->get('/reports/tickets');
+
+    $response->assertDontSee('js/chart/treemap.js');
+    $response->assertDontSee('js/chart/treegraph.js');
+    $response->assertDontSee('js/chart/exporting.js');
 });

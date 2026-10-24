@@ -11,19 +11,24 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(HardwareAuditController::class);
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
+
+beforeEach(function () {
+    $this->seedLookupTables();
+});
 
 function makeScopeTestUser(): array
 {
     $unit = Unit::create(['name' => 'Scope Test Unit']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $nCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $nCode, 'f_name' => 'Scope', 'l_name' => 'User',
@@ -95,10 +100,10 @@ it('restore denied when audit n_code points to out-of-scope unit', function () {
 
     // Create a person in a DIFFERENT unit
     $otherUnit = Unit::create(['name' => 'Other Unit']);
-    $tId = DB::table('tahsils')->insertGetId(['name' => 'Test']);
-    $eId = DB::table('estekhdams')->insertGetId(['name' => 'Test']);
-    $sId = DB::table('semats')->insertGetId(['name' => 'Test']);
-    $rId = DB::table('radifs')->insertGetId(['name' => 'Test']);
+    $tId = DB::table('tahsils')->first()->id;
+    $eId = DB::table('estekhdams')->first()->id;
+    $sId = DB::table('semats')->first()->id;
+    $rId = DB::table('radifs')->first()->id;
     $outOfScopeNCode = (string) fake()->unique()->numerify('##########');
     Person::create([
         'n_code' => $outOfScopeNCode, 'f_name' => 'Out', 'l_name' => 'Scope',
@@ -139,7 +144,12 @@ it('restore succeeds when audit n_code is in-scope', function () {
         ->postJson("/api/hardware/audits/{$audit->id}/restore-record");
 
     $response->assertStatus(200)->assertJsonPath('success', true);
-    // id is not in $fillable, so Hardware::create() assigns a new auto-increment id
+    // The restore reuses the audit's original primary key (#888): Hardware::create()
+    // dropped `id` because it is not in $fillable, which left the `exists` guard
+    // blind and let a second restore of the same audit create a duplicate row.
+    $restored = Hardware::where('pc_name', 'INSOPE_HW')->first();
+    expect($restored)->not->toBeNull();
+    expect($restored->id)->toBe($audit->hardware_id);
     $this->assertDatabaseHas('hardwares', ['pc_name' => 'INSOPE_HW', 'n_code' => $nCode]);
 });
 

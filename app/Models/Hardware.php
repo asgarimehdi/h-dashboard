@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\HardwareFilters;
 use App\Traits\PersianNormalizer;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -131,175 +133,129 @@ class Hardware extends Model
     }
 
     // ── Query Scopes ──────────────────────────────────────────────────────
+    //
+    // Issue #1050: every filter now delegates to `HardwareFilters`, the single
+    // implementation shared with the export controller and the Livewire
+    // component. These wrappers remain so existing callers (the API controller
+    // and the tests) keep the `filterX()` entry points.
 
     /**
      * Filter by general search term (pc_name, n_code, IPs, MAC, comments, person name).
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterSearch($query, ?string $term): void
+    public function scopeFilterSearch(Builder $query, ?string $term): void
     {
-        if (! $term) {
-            return;
-        }
-
-        $s = self::normalizeForQuery($term);
-
-        $query->where(function ($q) use ($s) {
-            $q->where('hardwares.pc_name', 'LIKE', "%{$s}%")
-                ->orWhere('hardwares.n_code', 'LIKE', "%{$s}%")
-                ->orWhere('hardwares.ip_valid', 'LIKE', "%{$s}%")
-                ->orWhere('hardwares.ip_local', 'LIKE', "%{$s}%")
-                ->orWhere('hardwares.mac', 'LIKE', "%{$s}%")
-                ->orWhere('hardwares.comments', 'LIKE', "%{$s}%")
-                ->orWhere('persons.f_name', 'LIKE', "%{$s}%")
-                ->orWhere('persons.l_name', 'LIKE', "%{$s}%");
-        });
+        HardwareFilters::applySearch($query, $term);
     }
 
     /**
      * Filter by hardware type (with alias mapping).
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterType($query, ?string $type): void
+    public function scopeFilterType(Builder $query, ?string $type): void
     {
-        if (! $type) {
-            return;
-        }
-
-        $typeAliases = ['desktop' => 'pc', 'پی‌سی' => 'pc'];
-        $type = $typeAliases[$type] ?? $type;
-        $type = self::normalizeForQuery($type);
-
-        $query->where('hardwares.type', 'LIKE', "%{$type}%");
+        HardwareFilters::applyType($query, $type);
     }
 
     /**
      * Filter by OS.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterOs($query, ?string $os): void
+    public function scopeFilterOs(Builder $query, ?string $os): void
     {
-        if ($os) {
-            $os = self::normalizeForQuery($os);
-            $query->where('hardwares.os', 'LIKE', "%{$os}%");
-        }
+        HardwareFilters::applyText($query, 'os', $os);
     }
 
     /**
      * Filter by CPU.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterCpu($query, ?string $cpu): void
+    public function scopeFilterCpu(Builder $query, ?string $cpu): void
     {
-        if ($cpu) {
-            $cpu = self::normalizeForQuery($cpu);
-            $query->where('hardwares.cpu', 'LIKE', "%{$cpu}%");
-        }
+        HardwareFilters::applyText($query, 'cpu', $cpu);
     }
 
     /**
      * Filter by RAM.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterRam($query, ?string $ram): void
+    public function scopeFilterRam(Builder $query, ?string $ram): void
     {
-        if ($ram) {
-            $ram = self::normalizeForQuery($ram);
-            $query->where('hardwares.ram', 'LIKE', "%{$ram}%");
-        }
+        HardwareFilters::applyText($query, 'ram', $ram);
     }
 
     /**
      * Filter by HDD.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterHdd($query, ?string $hdd): void
+    public function scopeFilterHdd(Builder $query, ?string $hdd): void
     {
-        if ($hdd) {
-            $hdd = self::normalizeForQuery($hdd);
-            $query->where('hardwares.hdd', 'LIKE', "%{$hdd}%");
-        }
+        HardwareFilters::applyText($query, 'hdd', $hdd);
     }
 
     /**
      * Filter by shutdown status.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterShutdown($query, ?string $shutdown): void
+    public function scopeFilterShutdown(Builder $query, ?string $shutdown): void
     {
-        if ($shutdown !== null && $shutdown !== '') {
-            $query->where('hardwares.shutdown', $shutdown === 'true' || $shutdown === '1');
-        }
+        HardwareFilters::applyBoolean($query, 'shutdown', $shutdown);
     }
 
     /**
      * Filter by network type.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterNetType($query, ?string $netType): void
+    public function scopeFilterNetType(Builder $query, ?string $netType): void
     {
-        if ($netType) {
-            $netType = self::normalizeForQuery($netType);
-            $query->where('hardwares.net_type', 'LIKE', "%{$netType}%");
-        }
+        HardwareFilters::applyText($query, 'net_type', $netType);
     }
 
     /**
      * Filter by mark status.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterMark($query, ?string $mark): void
+    public function scopeFilterMark(Builder $query, ?string $mark): void
     {
-        if ($mark !== null && $mark !== '') {
-            $query->where('hardwares.mark', $mark === 'true' || $mark === '1');
-        }
+        HardwareFilters::applyBoolean($query, 'mark', $mark);
     }
 
     /**
-     * Filter by person name/n_code (searches persons table via join).
+     * Filter by person name/n_code.
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterPerson($query, ?string $term): void
+    public function scopeFilterPerson(Builder $query, ?string $term): void
     {
-        if (! $term) {
-            return;
-        }
-
-        $normalized = self::normalizeForQuery($term);
-
-        $query->where(function ($q) use ($normalized) {
-            $q->where('persons.f_name', 'LIKE', "%{$normalized}%")
-                ->orWhere('persons.l_name', 'LIKE', "%{$normalized}%")
-                ->orWhere('persons.n_code', 'LIKE', "%{$normalized}%")
-                ->orWhereRaw("CONCAT(persons.f_name, ' ', persons.l_name) LIKE ?", ["%{$normalized}%"]);
-        });
+        HardwareFilters::applyPerson($query, $term);
     }
 
     /**
      * Filter by unit name (via persons.u_id → units).
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterUnit($query, ?string $term): void
+    public function scopeFilterUnit(Builder $query, ?string $term): void
     {
-        if (! $term) {
-            return;
-        }
-
-        $folded = self::foldedTerm($term);
-
-        $query->whereExists(function ($q) use ($folded) {
-            $q->selectRaw('1')
-                ->from('units')
-                ->whereColumn('units.id', 'persons.u_id')
-                ->whereRaw(self::foldSeparatorsSql('units.name').' LIKE ?', ["%{$folded}%"]);
-        });
+        HardwareFilters::applyUnit($query, $term);
     }
 
     /**
      * Filter by semat (job title) name (via persons.s_id → semats).
+     *
+     * @param  Builder<Hardware>  $query
      */
-    public function scopeFilterSemat($query, ?string $term): void
+    public function scopeFilterSemat(Builder $query, ?string $term): void
     {
-        if (! $term) {
-            return;
-        }
-
-        $folded = self::foldedTerm($term);
-
-        $query->whereExists(function ($q) use ($folded) {
-            $q->selectRaw('1')
-                ->from('semats')
-                ->whereColumn('semats.id', 'persons.s_id')
-                ->whereRaw(self::foldSeparatorsSql('semats.name').' LIKE ?', ["%{$folded}%"]);
-        });
+        HardwareFilters::applySemat($query, $term);
     }
 }
