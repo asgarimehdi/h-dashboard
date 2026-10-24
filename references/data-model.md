@@ -116,7 +116,6 @@ User ↔ Unit (user_units pivot)
 | `user_units.user_id → users` / `unit_id → units` | cascade |
 | `tickets → task_activities`, `attachments` | cascade |
 | `task_activities.activity_id → attachments` | cascade |
-| `location_logs.user_id → users` | cascade |
 | `todos.unit_id → units` | set null |
 | `activity_logs.user_id → users` | set null (2026-09-03; was cascade) |
 | `persons.u_id → units` | set null, `onUpdate: cascade` (2026-09-03) |

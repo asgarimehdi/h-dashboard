@@ -38,7 +38,6 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **UnitType** — classification of a Unit; allowed parent types via `unit_type_relationships`.
 - **Region** — hierarchical geographic division (province or county).
 - **Boundary** — GIS polygon (MULTIPOLYGON, SRID 4326) representing a geographic area.
-- **Location Log** — GPS point recorded by the mobile app (`location_logs`).
 
 **Key facts:** the `persons` PK is `id` (bigint) — `n_code` is only a *unique* `string(10)` and is **not** a safe key to carry across a JS boundary. `s_id` (not `semat_id`) is the FK column on `persons` for job title. `user_units` is the many-to-many user↔unit pivot (role enum `responsible`/`staff`, `is_primary` flag).
 
