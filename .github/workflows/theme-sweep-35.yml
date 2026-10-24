@@ -2,11 +2,11 @@ name: Theme Sweep (35 × 33)
 
 # #1227 — the full 35-theme × 33-surface contrast matrix.
 #
-# This is deliberately NOT part of `test.yml`: the blocking sweep measures
-# sixteen themes in ~7.5 min (~27 s/theme, run 39977606322 baseline + the #1226
-# badge probes), and 35 themes ≈ 17.5 min would break the 30-min E2E job cap.
-# Here the cap is 45 min, the spec is report-only, and the published table (job
-# summary + artifact) is the deliverable. The per-PR gate stays `sweep.spec.ts`.
+# This is deliberately NOT part of `test.yml`: on CI the blocking sweep costs
+# ≈39 s/theme (9-theme run measured 5.8 min), and 35 themes ≈ 20 min would
+# alone break the 30-min E2E job cap. Here the cap is 45 min, the spec is
+# report-only, and the published table (job summary + artifact) is the
+# deliverable. The per-PR gate stays `sweep.spec.ts`.
 #
 # Triggers: manual dispatch, a weekly run, or labelling a PR `theme-sweep`.
 

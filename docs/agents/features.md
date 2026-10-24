@@ -145,9 +145,10 @@ truth for the first three):
 full **35 × 33 = 1155** matrix runs in `sweep-35.spec.ts` from `.github/workflows/theme-sweep-35.yml`
 (dispatch, weekly schedule, or a PR labelled `theme-sweep`, 45-minute cap) — report-only by
 default, table in the job summary + artifact, published on issue #1227. A theme the full run
-flags only earns a place in `WATCH_THEMES` (and the per-PR lock) when its non-badge cells all
-pass — themes with wider genuine failures stay in the report-only matrix until their own issues
-land, so the blocking job never carries findings no one has triaged.
+flags earns a place in `WATCH_THEMES` (and the per-PR lock) only when its non-badge cells all
+pass **and** the measured E2E budget fits — with CI at ≈39 s per theme the watch list is
+currently empty (the first 9-theme run hit the 30-min cap); wider findings stay in the
+report-only matrix until their own issues land.
 Both layers measure through the one shared `sweepTheme()` in `sweep-runner.ts`, which since the
 #1226 merge (a4276fc8) also injects the per-variant badge probe strip: the opaque/glass matrix in
 `app.css` is pinned cell by cell, and the only badge cells still held 🧱 by the shared STRUCTURAL

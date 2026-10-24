@@ -8,12 +8,12 @@ import { SURFACES, SweepRecorder, sweepTheme, toMarkdown, toSummary } from './sw
  * #1227 — the full matrix: 35 enabled daisyUI themes × every SURFACES cell
  * (33 after the #1226 per-variant badge probes joined the shared runner).
  *
- * Why this is a separate, non-blocking spec: the blocking sweep already spends
- * ~27 s per theme (measured on run 39977606322, 25 cells); with the eight
- * badge probes that is ~30 s per theme, so 35 themes straight into that job is
- * ~17.5 min of sweep on top of a ~23 min job and breaks the 30-min job cap.
- * This spec runs in its own workflow (`theme-sweep-35.yml`, dispatch +
- * weekly + PR label) with a 45-min cap and produces the published table.
+ * Why this is a separate, non-blocking spec: on CI the blocking sweep costs
+ * ≈39 s per theme (9-theme run measured 5.8 min, 2026-10-24), so 35 themes
+ * straight into that job is ~22.7 min of sweep on top of the suite and breaks
+ * the 30-min E2E job cap. This spec runs in its own workflow
+ * (`theme-sweep-35.yml`, dispatch + weekly + PR label) with a 45-min cap and
+ * produces the published table.
  *
  * It is report-only by default (`SWEEP_REPORT_ONLY` defaults to `1` here): the
  * matrix's job is to publish evidence, and the blocking sweep is what gates a
@@ -34,7 +34,7 @@ test.use({ viewport: VIEWPORT });
 
 test.describe('35-theme sweep', () => {
   test(`all ${THEMES.length} themes: ${SURFACES.length} surfaces (report)`, async ({ page }, testInfo) => {
-    // 35 × ~30 s ≈ 17.5 min of sampling + navigation; the workflow cap is 45.
+    // 35 × ~39 s (CI-measured) ≈ 22.7 min of sampling + navigation; cap is 45.
     test.setTimeout(1_800_000);
     await installThemeHelpers(page);
     await login(page);

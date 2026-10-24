@@ -36,25 +36,22 @@ export const DARK_THEMES = [
   'business', 'night', 'coffee', 'dim', 'sunset', 'abyss',
 ];
 
-/**
- * The themes the mandatory (per-PR) sweep measures. The pre-#1227 seven stay as
- * the regression lock; a theme from the full 35-theme matrix only earns a
- * permanent per-PR lock when its *non-badge* cells all pass — the rest stay in
- * the report-only matrix until their own issues land.
- */
 export const CORE_BLOCKING_THEMES = ['light', 'dark', 'synthwave', 'coffee', 'cupcake', 'fantasy', 'luxury'];
 
 /**
- * Post-#1226 (a4276fc8) re-baseline, measured on the merged base: aqua, autumn,
- * black, corporate, garden, pastel and valentine carry genuine sub-AA
- * menu/toast/button cells outside this PR's scope, so they stay report-only.
- * winter/abyss fail only on badge pairs outside the #1226 matrix — tracked
- * with the gatekeeper via the shared STRUCTURAL map. Keep sorted.
+ * The themes the mandatory (per-PR) sweep measures, on top of the core seven.
+ *
+ * Currently EMPTY — and deliberately so. The first post-#1226 CI run with
+ * winter/abyss appended (9 themes) measured the blocking sweep at 5.8 min
+ * (≈39 s/theme on CI) and pushed the E2E job to the 30-min cap before the
+ * suite finished (261 tests green at the kill, zero failures). The gate's
+ * budget rule is trim-or-report-only, so winter/abyss live in the report-only
+ * 35-theme matrix (where their badge cells stay 🧱 via STRUCTURAL) until
+ * either their pairs land or the E2E job finds room. A theme earns a spot
+ * here only when the measured budget fits: 7 core + n watch × ~39 s must
+ * leave the whole suite under 30 min. Keep sorted.
  */
-export const WATCH_THEMES: string[] = [
-  'abyss',
-  'winter',
-];
+export const WATCH_THEMES: string[] = [];
 
 export const BLOCKING_THEMES = [...new Set([...CORE_BLOCKING_THEMES, ...WATCH_THEMES])];
 
