@@ -410,6 +410,81 @@
 }
 
 /* =====================================================================
+   #1231 — Badge matrix extension (after #1226 matrix, line 410)
+   Organized in three additive groups:
+     O  = opaque-base (restore --badge-color only)
+     OW = opaque + #fff foreground
+     OB = opaque + #000 foreground
+   Values from expert comment on #1231 (measured ratios in parentheses).
+   ===================================================================== */
+
+/* O — opaque-base: restore the theme's --badge-color token (no fg override) */
+/* corporate: info 4.64, success 5.22 */
+[data-theme="corporate"] .badge:is(.badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+/* garden: solid/primary 4.99 */
+[data-theme="garden"] .badge.badge-primary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+/* pastel: info 12.32, success 12.90, warning 10.46, error 9.24 */
+[data-theme="pastel"] .badge:is(.badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+
+/* OW — opaque + #fff foreground */
+/* (no OW cells in this batch) */
+
+/* OB — opaque + #000 foreground */
+/* (no OB cells in this batch) */
+
+/* =====================================================================
+   #1231 — Non-badge fixes (each limited to its theme(s))
+   ===================================================================== */
+
+/* Button solid — corporate / pastel / black: restore opaque --btn-bg */
+[data-theme="corporate"] .btn:not(.btn-ghost, .btn-outline, .btn-link),
+[data-theme="pastel"] .btn:not(.btn-ghost, .btn-outline, .btn-link),
+[data-theme="black"] .btn:not(.btn-ghost, .btn-outline, .btn-link) {
+    background-color: var(--btn-bg) !important;
+}
+
+/* Menu / submenu active — autumn / pastel: darker-bg + fg white via CSS vars */
+[data-theme="autumn"] .drawer-side .menu a.mary-active-menu[aria-current="page"],
+[data-theme="pastel"] .drawer-side .menu a.mary-active-menu[aria-current="page"],
+[data-theme="autumn"] .drawer-side details[open] > summary,
+[data-theme="pastel"] .drawer-side details[open] > summary {
+    --menu-active-bg: color-mix(in oklab, var(--color-base-200) 60%, var(--color-base-100));
+    --menu-active-fg: #fff;
+    background-color: var(--menu-active-bg) !important;
+    color: var(--menu-active-fg) !important;
+}
+
+/* Toast (alert) — valentine: alert50 + fg black for info/success/warning */
+[data-theme="valentine"] .alert.alert-info,
+[data-theme="valentine"] .alert.alert-success,
+[data-theme="valentine"] .alert.alert-warning {
+    --alert-color: color-mix(in oklab, var(--color-base-100) 50%, var(--alert-color));
+    color: #000 !important;
+}
+
+/* Modal glass — valentine: opacity 88% + darken base-content */
+[data-theme="valentine"] .modal-box {
+    background-color: color-mix(in oklab, var(--color-base-100) 88%, transparent) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+    backdrop-filter: blur(12px) saturate(160%) !important;
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 14%, transparent) !important;
+    box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.28) !important;
+    color: color-mix(in oklab, var(--color-base-content) 60%, #000) !important;
+}
+
+/* Ghost button — valentine: alpha=1 (fully opaque fg) */
+[data-theme="valentine"] .btn-ghost {
+    color: var(--btn-bg) !important;
+    background-color: transparent !important;
+}
+
+/* =====================================================================
    Charts (Highcharts) — follow the theme instead of a white box
    Highcharts defaults to a hardcoded white background; force transparent
    so the glassy card + animated background show through on every theme.

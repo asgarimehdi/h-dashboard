@@ -127,7 +127,7 @@ jobs:
         # e2e database, the :8001 server and the restore-on-exit trap. The spec
         # itself is report-only, so a ❌ still produces the table.
         env:
-          SWEEP_REPORT_ONLY: '1'
+          SWEEP_REPORT_ONLY: '0'
           SWEEP_REPORT_DIR: theme-sweep-35
           # Lifts playwright.config.ts's testIgnore for this one spec; without
           # it the per-PR E2E job would try to run the 15-minute matrix too.
