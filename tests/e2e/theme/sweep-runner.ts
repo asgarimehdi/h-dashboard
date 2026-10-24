@@ -91,16 +91,8 @@ export type Surface = (typeof SURFACES)[number];
  * No per-theme pair is invented in #1227.
  */
 export const STRUCTURAL = new Map<string, string>([
-  ['winter:badge solid', 'badge solid 2.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['winter:badge primary', 'badge primary 2.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['winter:badge secondary', 'badge secondary 2.87:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['winter:badge neutral', 'badge neutral 4.27:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge solid', 'badge solid 2.42:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge primary', 'badge primary 2.41:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge secondary', 'badge secondary 2.66:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge info', 'badge info 3.64:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge warning', 'badge warning 2.55:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
-  ['abyss:badge error', 'badge error 2.22:1 — glass re-tint, outside the #1226 opaque/glass matrix; needs per-theme badge pairs (separate issue with the gatekeeper)'],
+  // #1231: all winter/abyss badge cells are now fixed via per-theme opaque
+  // pairs in resources/css/app.css; no structural (🧱) findings remain.
 ]);
 
 export interface SweepOptions {
