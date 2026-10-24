@@ -4,9 +4,13 @@ name: Theme Sweep (35 × 33)
 #
 # This is deliberately NOT part of `test.yml`: on CI the blocking sweep costs
 # ≈39 s/theme (9-theme run measured 5.8 min), and 35 themes ≈ 20 min would
-# alone break the 30-min E2E job cap. Here the cap is 45 min, the spec is
-# report-only, and the published table (job summary + artifact) is the
-# deliverable. The per-PR gate stays `sweep.spec.ts`.
+# alone break the 30-min E2E job cap. This runs in its own workflow
+# (`theme-sweep-35.yml`, dispatch + weekly + PR label) with a 45-min cap. The
+# per-PR gate stays `sweep.spec.ts`.
+#
+# #1231 — the matrix is now a hard lock: any ❌ fails the run (the acceptance
+# contract is an empty `failures()` on this branch). `SWEEP_REPORT_ONLY` below
+# is '0'; the spec itself still defaults to report-only when run ad hoc.
 #
 # Triggers: manual dispatch, a weekly run, or labelling a PR `theme-sweep`.
 
@@ -122,12 +126,13 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run the 35-theme sweep (report-only)
+      - name: Run the 35-theme sweep
         # Through scripts/e2e-test.sh only: it owns the .env swap, the seeded
-        # e2e database, the :8001 server and the restore-on-exit trap. The spec
-        # itself is report-only, so a ❌ still produces the table.
+        # e2e database, the :8001 server and the restore-on-exit trap. Since
+        # #1231 the matrix is a hard lock (failures() must be empty), not a
+        # report the ❌ cells survive.
         env:
-          SWEEP_REPORT_ONLY: '1'
+          SWEEP_REPORT_ONLY: '0'
           SWEEP_REPORT_DIR: theme-sweep-35
           # Lifts playwright.config.ts's testIgnore for this one spec; without
           # it the per-PR E2E job would try to run the 15-minute matrix too.

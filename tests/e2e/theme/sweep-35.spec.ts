@@ -15,15 +15,15 @@ import { SURFACES, SweepRecorder, sweepTheme, toMarkdown, toSummary } from './sw
  * (`theme-sweep-35.yml`, dispatch + weekly + PR label) with a 45-min cap and
  * produces the published table.
  *
- * It is report-only by default (`SWEEP_REPORT_ONLY` defaults to `1` here): the
- * matrix's job is to publish evidence, and the blocking sweep is what gates a
- * PR. `SWEEP_REPORT_ONLY=0` makes it fail on any ❌ when a follow-up wants a
- * hard lock on a theme.
+ * It is report-only by default (`SWEEP_REPORT_ONLY` defaults to `1` here) so
+ * ad-hoc/local runs still produce the table; `SWEEP_REPORT_ONLY=0` turns the
+ * run into a hard gate on any ❌. The 35-theme workflow passes '0' since
+ * #1231, whose acceptance is an empty `failures()` on the branch.
  *
  * Badge rows: #1226 (merged in a4276fc8) owns the per-theme opaque/glass
- * matrix; the probe strip pins every `badge <variant>` cell through it. The
- * two badge cells outside that matrix (winter/abyss `badge solid`) stay 🧱 via
- * the shared STRUCTURAL map — no pair is invented here.
+ * matrix for its five themes; #1231 extends the same opaque-token restore to
+ * every other failing badge cell (the winter/abyss cells included), so the
+ * STRUCTURAL map is now empty and nothing is exempt from AA here.
  */
 
 const REPORT_ONLY = process.env.SWEEP_REPORT_ONLY !== '0';

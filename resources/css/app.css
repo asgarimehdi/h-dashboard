@@ -410,6 +410,158 @@
 }
 
 /* =====================================================================
+   #1231 — the 35-theme sweep pinned 62 ❌ badge cells across 22 themes,
+   all produced by the 70% oklab badge glass above. The probe on #1231
+   measured an opaque-token candidate for every cell, in four shapes:
+   O      opaque + daisyUI's own badge fg                    — 33 cells
+   O-base opaque + the theme's base-content fg (owner call)   —  8 cells
+   OW     opaque + #fff                                       —  3 cells
+   OB     opaque + #000                                       — 18 cells
+   The eight dual-choice cells (corporate info/success, garden primary,
+   pastel info/success/warning/error) follow the owner decision الف:
+   opacity O's default fg is white in these (daisyUI paints from
+   *-content), and white measured red — so fg is pinned to base-content.
+   ===================================================================== */
+/* O — opaque --badge-color when the default daisyUI fg is sufficient.
+   The `badge solid` row shares its element with `badge primary` on /users,
+   so primary also covers solid (corporate/valentine solid are in the
+   OB block below instead, by the same sharing). */
+[data-theme="aqua"] .badge:is(.badge-primary, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="autumn"] .badge-primary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="bumblebee"] .badge-neutral:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="black"] .badge-error:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="business"] .badge:is(.badge-info, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="caramellatte"] .badge:is(.badge-neutral, .badge-secondary, .badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="cmyk"] .badge:is(.badge-neutral, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="corporate"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="dracula"] .badge-error:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="emerald"] .badge-neutral:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="forest"] .badge:is(.badge-error, .badge-secondary, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="garden"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="halloween"] .badge:is(.badge-error, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="lemonade"] .badge-neutral:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="night"] .badge:is(.badge-error, .badge-info, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="nord"] .badge-neutral:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="retro"] .badge:is(.badge-success, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="silk"] .badge:is(.badge-neutral, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="sunset"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="valentine"] .badge-neutral:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="wireframe"] .badge:is(.badge-info, .badge-error, .badge-success, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="winter"] .badge:is(.badge-secondary, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="abyss"] .badge:is(.badge-primary, .badge-secondary, .badge-info, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+}
+
+/* Opaque-base — owner decision الف for the eight dual-choice cells: the
+   opaque variant token stays, and fg pins to the theme's --color-base-content
+   (the daisyUI default fg for these variants is white *-content, which
+   measured red on the opaque token). Published targets 4.83–12.90. */
+[data-theme="corporate"] .badge:is(.badge-info, .badge-success):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="garden"] .badge-primary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="pastel"] .badge:is(.badge-info, .badge-success, .badge-warning, .badge-error):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: var(--color-base-content) !important;
+}
+
+/* OW — opaque + #fff. These three cells keep the default fg red
+   (autumn error 3.04, autumn neutral 2.27, pastel neutral 2.17 on the
+   published matrix); #fff over the opaque token clears AA. */
+[data-theme="autumn"] .badge:is(.badge-error, .badge-neutral):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="pastel"] .badge-neutral:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="winter"] .badge-primary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: #fff !important;
+}
+
+/* OB — opaque + #000 (18 cells). `badge primary` carries the matching
+   `badge solid` row (corporate/valentine). */
+[data-theme="corporate"] .badge-primary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="emerald"] .badge-secondary:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="retro"] .badge:is(.badge-error, .badge-info, .badge-warning):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="valentine"] .badge:is(.badge-error, .badge-primary, .badge-secondary):not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost),
+[data-theme="abyss"] .badge-error:not(.badge-outline, .badge-dash, .badge-soft, .badge-ghost) {
+    background-color: var(--badge-color, var(--color-base-200)) !important;
+    color: #000 !important;
+}
+
+/* =====================================================================
+   #1231 — non-badge fixes, each scoped to its measured theme(s).
+   ===================================================================== */
+/* button solid (the `button solid` cell measures .btn-success:visible on
+   /hardware): the opaque --btn-bg restore above keeps daisyUI's own
+   success-content fg, which sits below AA in corporate (3.29), pastel
+   (3.62) and black (3.90). Varied fg per theme: corporate/pastel clear
+   AA on the opaque base-content fg (5.22 / 12.90), black only clears on
+   #fff (5.13 — fg-base 3.53 and #000 4.09 stay red). */
+[data-theme="corporate"] .btn-success:not(.btn-ghost, .btn-outline, .btn-link),
+[data-theme="pastel"] .btn-success:not(.btn-ghost, .btn-outline, .btn-link) {
+    color: var(--color-base-content) !important;
+}
+[data-theme="black"] .btn-success:not(.btn-ghost, .btn-outline, .btn-link) {
+    color: #fff !important;
+}
+
+/* menu active + open submenu header (autumn/pastel only): daisyUI renders
+   both through --menu-active-bg/--menu-active-fg, whose theme defaults
+   (neutral / neutral-content) measure 3.84 / 3.82. The owner take is the
+   darkened bg + white fg — the two vars plus the same values pinned
+   directly on the rendered nodes, because MaryUI's own bg-neutral /
+   text-neutral-content utilities on those nodes outrun the var-consuming
+   daisyUI rule (measured bg stayed var(--color-neutral)). 80% oklab
+   to-black measured 7.99 on both surfaces (published target 8.41/8.18);
+   #1220's neutral pair on <x-menu> stays, no text override in any
+   Blade file. */
+[data-theme="autumn"],
+[data-theme="pastel"] {
+    --menu-active-bg: color-mix(in oklab, var(--color-neutral) 80%, #000) !important;
+    --menu-active-fg: #fff !important;
+}
+[data-theme="autumn"] .drawer-side a.mary-active-menu[aria-current="page"],
+[data-theme="autumn"] .drawer-side details[open] > summary,
+[data-theme="pastel"] .drawer-side a.mary-active-menu[aria-current="page"],
+[data-theme="pastel"] .drawer-side details[open] > summary {
+    background-color: color-mix(in oklab, var(--color-neutral) 80%, #000) !important;
+    color: #fff !important;
+}
+
+/* toast valentine (the info/success/warning cells; error is 4.98 and
+   stays): the base-100 glass leaves the 30% --alert-color fg mix below
+   AA (3.52 / 3.59 / 4.17). The owner call is a variant-colored surface
+   (`alert50`) with black fg, limited to these three classes in
+   valentine. Glass candidates before/after the fg change measure worse
+   (published down to 1.34), so the surface is opaque: --alert-color
+   oklab-mixed 50% into base-content puts black fg at 7.38 / 7.17 / 5.60
+   on this stack (the published winner stack reproduces the RED cells at
+   0.00 delta but its winner lands at 5.97/6.19/8.26 there). */
+[data-theme="valentine"] .toast .alert-info,
+[data-theme="valentine"] .toast .alert-success,
+[data-theme="valentine"] .toast .alert-warning {
+    background-color: color-mix(in oklab, var(--alert-color, var(--color-base-200)) 50%, var(--color-base-content)) !important;
+    color: #000 !important;
+}
+
+/* modal glass valentine (the glass modal cell, measured on the help modal
+   of /settings): the 70% glass backdrop gives fg 4.00 on rgb(212,210,218).
+   Owner call: 88% glass + fg anchored darker into base-content. Fractions
+   measured on the 88% surface: base-content 4.86 (in AA but thin),
+   70%→black 9.17, 55% 12.04, 50% 12.99 — 70% lands closest above the
+   published 8.29 without over-darkening. Screenshot review before push
+   is part of the #1231 contract. */
+[data-theme="valentine"] .modal-box {
+    background-color: color-mix(in oklab, var(--color-base-100) 88%, transparent) !important;
+    color: color-mix(in oklab, var(--color-base-content) 70%, #000) !important;
+}
+
+/* ghost valentine (the `button ghost` cell = the help button
+   (resources/views/components/help/button.blade.php) with
+   text-base-content/80: 4.36). Owner call: the same base-content token at
+   full alpha (published 5.43) — scoped to the /80 utility class the help
+   button carries; other ghost buttons are untouched. */
+[data-theme="valentine"] .btn-ghost.text-base-content\/80 {
+    color: var(--color-base-content) !important;
+}
+
+/* =====================================================================
    Charts (Highcharts) — follow the theme instead of a white box
    Highcharts defaults to a hardcoded white background; force transparent
    so the glassy card + animated background show through on every theme.
