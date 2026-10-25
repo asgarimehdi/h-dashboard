@@ -2,8 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\Disease;
+use App\Models\DiseaseCase;
+use App\Models\Patient;
+use App\Models\Unit;
+use App\Models\UnitPopulation;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -112,4 +118,50 @@ test('disease_cases rejects a duplicate patient, disease and day at the database
 
     expect(fn () => DB::table('disease_cases')->insert($row))
         ->toThrow(QueryException::class);
+});
+
+test('patient, disease and case factories produce valid rows through the models', function () {
+    $patient = Patient::factory()->create();
+    $disease = Disease::factory()->create();
+    $case = DiseaseCase::factory()->create();
+
+    $this->assertDatabaseHas('patients', ['id' => $patient->id]);
+    $this->assertDatabaseHas('diseases', ['id' => $disease->id, 'is_active' => true]);
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'patient_id' => $case->patient_id,
+        'disease_id' => $case->disease_id,
+    ]);
+
+    expect($patient->kod_melli)->toHaveLength(10)
+        ->and($patient->gender)->toBeIn(['male', 'female'])
+        ->and($disease->is_active)->toBeTrue()
+        ->and($case->fields)->toBe([])
+        ->and($case->subject_unit_id)->toBe($case->unit_id)
+        ->and($case->diagnosed_at)->toBeInstanceOf(Carbon::class)
+        ->and($case->recorded_at)->toBeInstanceOf(Carbon::class)
+        ->and($case->patient->id)->toBe($case->patient_id)
+        ->and($case->disease->id)->toBe($case->disease_id)
+        ->and($case->unit->id)->toBe($case->unit_id)
+        ->and($case->subjectUnit->id)->toBe($case->subject_unit_id);
+});
+
+test('disease factory slugs stay unique across several rows', function () {
+    Disease::factory()->count(5)->create();
+
+    expect(Disease::query()->count())->toBe(5)
+        ->and(Disease::query()->distinct()->count('slug'))->toBe(5);
+});
+
+test('model relations expose cases, field defs and populations', function () {
+    $case = DiseaseCase::factory()->create();
+    $population = UnitPopulation::create([
+        'unit_id' => Unit::factory()->create()->id,
+        'year' => 1404,
+        'population' => 12000,
+    ]);
+
+    expect($case->patient->diseaseCases()->whereKey($case->id)->exists())->toBeTrue()
+        ->and($case->disease->diseaseCases()->whereKey($case->id)->exists())->toBeTrue()
+        ->and($population->unit)->toBeInstanceOf(Unit::class);
 });
