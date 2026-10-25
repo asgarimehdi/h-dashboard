@@ -266,3 +266,15 @@ test('type select options render', function () {
         ->assertSee('انتخابی')
         ->assertSee('تاریخ');
 });
+
+test('route is gated by manage_diseases', function () {
+    ['user' => $unauthorized] = $this->createUserWithUnit();
+    $this->actingAs($unauthorized);
+
+    $this->get('/disease/manage')->assertStatus(403);
+
+    ['user' => $authorized] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($authorized);
+
+    $this->get('/disease/manage')->assertStatus(200);
+});

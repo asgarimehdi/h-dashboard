@@ -125,6 +125,12 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/hr/org-chart', 'hr.org-chart')->name('hr.org-chart');
         });
 
+        // مدیریت بیماری‌ها و فیلدهایشان (Issue #1242، فاز ۲) — ورودی منو در
+        // فاز ۴ (#1246) می‌آید؛ تا آن زمان صفحه فقط با URL مستقیم باز می‌شود.
+        Route::middleware('role_or_permission:manage_diseases')->group(function () {
+            Route::livewire('/disease/manage', 'disease.manage')->name('disease.manage');
+        });
+
         Route::middleware('role_or_permission:map')->group(function () {
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');
