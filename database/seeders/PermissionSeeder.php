@@ -40,7 +40,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage_personnel', 'label' => 'مدیریت پرسنل']);
         Permission::firstOrCreate(['name' => 'manage_org_chart', 'label' => 'مدیریت چارت سازمانی']);
         // سامانه ثبت بیماری (Discussion #1160، تصمیم ۱۷)
-        Permission::firstOrCreate(['name' => 'manage_diseases', 'label' => 'مدیریت بیماری‌ها و فیلدها']);
+        Permission::query()->firstOrCreate(['name' => 'manage_diseases', 'label' => 'مدیریت بیماری‌ها و فیلدها']);
         // Test permission for SafeRoleOrPermission middleware tests
         Permission::firstOrCreate(['name' => 'test-permission', 'label' => 'تست مجوز']);
         // The admin ROLE — tests (TicketApiTest, TicketCommentPolicyTest, ...)

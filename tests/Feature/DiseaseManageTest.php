@@ -278,3 +278,41 @@ test('route is gated by manage_diseases', function () {
 
     $this->get('/disease/manage')->assertStatus(200);
 });
+
+test('smoke created disease and field survive a fresh mount', function () {
+    // §8.4 smoke test part 1: create a dummy disease + field through the
+    // component (the same mutators the UI calls), then mount a FRESH instance
+    // and read both back — proof the catalogue is data, not code.
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    Livewire::test('disease.manage')
+        ->call('startCreateDisease')
+        ->set('nameFa', 'بیماری نمایشی')
+        ->set('slug', 'demo-disease')
+        ->call('saveDisease')
+        ->assertHasNoErrors();
+
+    $disease = Disease::query()->where('slug', 'demo-disease')->firstOrFail();
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'demo_field')
+        ->set('labelFa', 'فیلد نمایشی')
+        ->set('type', 'text')
+        ->call('saveFieldDef')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('diseases', ['id' => $disease->id, 'name_fa' => 'بیماری نمایشی']);
+    $this->assertDatabaseHas('disease_field_defs', [
+        'disease_id' => $disease->id,
+        'field_key' => 'demo_field',
+        'label_fa' => 'فیلد نمایشی',
+    ]);
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->assertSee('بیماری نمایشی')
+        ->assertSee('فیلد نمایشی');
+});
