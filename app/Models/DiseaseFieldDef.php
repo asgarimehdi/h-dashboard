@@ -39,6 +39,7 @@ class DiseaseFieldDef extends Model
     protected $casts = [
         'options' => 'array',
         'required' => 'boolean',
+        'sort' => 'integer',
         'is_active' => 'boolean',
     ];
 

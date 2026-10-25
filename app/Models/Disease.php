@@ -40,7 +40,7 @@ class Disease extends Model
     /** @return HasMany<DiseaseFieldDef, $this> */
     public function fieldDefs(): HasMany
     {
-        return $this->hasMany(DiseaseFieldDef::class);
+        return $this->hasMany(DiseaseFieldDef::class)->orderBy('sort');
     }
 
     /** @return HasMany<DiseaseCase, $this> */
