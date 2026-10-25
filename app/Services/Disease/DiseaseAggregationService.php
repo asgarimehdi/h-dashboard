@@ -187,6 +187,97 @@ final class DiseaseAggregationService
         ];
     }
 
+    /**
+     * Cases attributed to each region for the choropleth, in one query.
+     *
+     * `unmapped` holds the cases whose subject unit has no region — reported in
+     * `meta`, never guessed into a neighbouring polygon (escape hatch #3).
+     *
+     * @param  array<int>  $accessibleUnitIds
+     * @return array{byRegion: array<int, int>, unmapped: int}
+     */
+    public function regionCaseCounts(
+        int $diseaseId,
+        array $accessibleUnitIds,
+        ?DateTimeInterface $from = null,
+        ?DateTimeInterface $to = null
+    ): array {
+        $this->assertRange($from, $to);
+
+        if ($accessibleUnitIds === []) {
+            return ['byRegion' => [], 'unmapped' => 0];
+        }
+
+        $query = DB::table('disease_cases')
+            ->join('units', 'units.id', '=', 'disease_cases.subject_unit_id')
+            ->where('disease_cases.disease_id', $diseaseId)
+            ->whereIn('disease_cases.subject_unit_id', $accessibleUnitIds)
+            ->selectRaw('units.region_id AS region_id, COUNT(*) AS cases')
+            ->groupBy('units.region_id');
+
+        if ($from !== null) {
+            $query->where('disease_cases.diagnosed_at', '>=', $from->format('Y-m-d'));
+        }
+
+        if ($to !== null) {
+            $query->where('disease_cases.diagnosed_at', '<=', $to->format('Y-m-d'));
+        }
+
+        $byRegion = [];
+        $unmapped = 0;
+
+        foreach ($query->get() as $row) {
+            $cases = (int) $row->cases;
+
+            if ($row->region_id === null) {
+                $unmapped += $cases;
+            } else {
+                $byRegion[(int) $row->region_id] = $cases;
+            }
+        }
+
+        return ['byRegion' => $byRegion, 'unmapped' => $unmapped];
+    }
+
+    /**
+     * Population per region: each unit's latest year, summed. One query.
+     *
+     * A unit whose region is null contributes to no region; a unit with no
+     * population row contributes nothing (never read from a parent row).
+     *
+     * @param  array<int>  $accessibleUnitIds
+     * @return array<int, int>
+     */
+    public function regionPopulations(array $accessibleUnitIds): array
+    {
+        if ($accessibleUnitIds === []) {
+            return [];
+        }
+
+        $latestPerUnit = DB::table('unit_populations')
+            ->selectRaw('DISTINCT ON (unit_id) unit_id, population')
+            ->whereIn('unit_id', $accessibleUnitIds)
+            ->orderBy('unit_id')
+            ->orderByDesc('year');
+
+        $rows = DB::query()
+            ->fromSub($latestPerUnit, 'up')
+            ->join('units', 'units.id', '=', 'up.unit_id')
+            ->whereIn('up.unit_id', $accessibleUnitIds)
+            ->whereNotNull('units.region_id')
+            ->selectRaw('units.region_id AS region_id, SUM(up.population) AS population')
+            ->groupBy('units.region_id')
+            ->get();
+
+        $populations = [];
+
+        foreach ($rows as $row) {
+            $populations[(int) $row->region_id] = (int) $row->population;
+        }
+
+        return $populations;
+    }
+
     private function assertRange(?DateTimeInterface $from, ?DateTimeInterface $to): void
     {
         if ($from !== null && $to !== null && $from > $to) {

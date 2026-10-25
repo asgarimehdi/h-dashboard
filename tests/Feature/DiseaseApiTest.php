@@ -5,13 +5,16 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\DiseaseMapController;
 use App\Models\Disease;
 use App\Models\DiseaseCase;
+use App\Models\Region;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Testing\TestResponse;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -231,5 +234,321 @@ class DiseaseApiTest extends TestCase
             ['cases' => 0, 'population' => null, 'rate' => null],
             $response->json()
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // #1245 Task 4 — region choropleth (zoom < ZOOM_SWITCH)
+    // ---------------------------------------------------------------------
+
+    private function boundary(string $wkt): int
+    {
+        DB::table('boundaries')->insert([
+            'boundary' => DB::raw("ST_GeomFromText('{$wkt}', 4326)"),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return (int) DB::getPdo()->lastInsertId();
+    }
+
+    private function square(float $minLon, float $minLat, float $maxLon, float $maxLat): string
+    {
+        return "MULTIPOLYGON((({$minLon} {$minLat},{$maxLon} {$minLat},{$maxLon} {$maxLat},{$minLon} {$maxLat},{$minLon} {$minLat})))";
+    }
+
+    private function region(string $type, ?Region $parent, ?int $boundaryId): Region
+    {
+        return Region::query()->create([
+            'name' => $type.'-'.fake()->unique()->numberBetween(1, 100000),
+            'type' => $type,
+            'parent_id' => $parent?->id,
+            'boundary_id' => $boundaryId,
+        ]);
+    }
+
+    private function ensureUnitType(int $id, string $name): void
+    {
+        if (! DB::table('unit_types')->where('id', $id)->exists()) {
+            DB::table('unit_types')->insert([
+                'id' => $id,
+                'name' => $name,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function baseUnit(Unit $parent, ?Region $region, string $name = 'خانه بهداشت'): Unit
+    {
+        return Unit::factory()->create([
+            'name' => $name,
+            'parent_id' => $parent->id,
+            'region_id' => $region?->id,
+            'unit_type_id' => 9,
+            'is_active' => true,
+            'lat' => 36.5,
+            'lng' => 48.5,
+        ]);
+    }
+
+    /**
+     * province P (boundary) → C1 (boundary) + C2 (no boundary)  → fallback
+     * province Q (boundary) → Q1 (boundary) + Q2 (boundary)      → counties
+     * province R (no boundary) → R1 (boundary)                   → counties
+     *
+     * @return array{token: string, disease: Disease, units: array<string, Unit>, regions: array<string, Region>}
+     */
+    private function regionFixture(): array
+    {
+        ['unit' => $root] = $this->createUserWithUnit(['map']);
+        $token = $this->tokenForUnit($root);
+        $disease = Disease::factory()->create();
+
+        $this->ensureUnitType(9, 'خانه بهداشت');
+
+        $p = $this->region('province', null, $this->boundary($this->square(48, 36, 49, 37)));
+        $c1 = $this->region('county', $p, $this->boundary($this->square(48, 36, 48.5, 36.5)));
+        $c2 = $this->region('county', $p, null);
+
+        $q = $this->region('province', null, $this->boundary($this->square(50, 36, 51, 37)));
+        $q1 = $this->region('county', $q, $this->boundary($this->square(50, 36, 50.5, 36.5)));
+        // Two parts on purpose: the geometry must stay a MultiPolygon.
+        $q2 = $this->region('county', $q, $this->boundary(
+            'MULTIPOLYGON(((50.5 36.5,51 36.5,51 37,50.5 37,50.5 36.5)),((50.6 36.6,50.7 36.6,50.7 36.7,50.6 36.7,50.6 36.6)))'
+        ));
+
+        $r = $this->region('province', null, null);
+        $r1 = $this->region('county', $r, $this->boundary($this->square(52, 36, 53, 37)));
+
+        $unitC1 = $this->baseUnit($root, $c1, 'C1 base');
+        $unitC2 = $this->baseUnit($root, $c2, 'C2 base');
+        $unitQ1 = $this->baseUnit($root, $q1, 'Q1 base');
+        $unitQ2 = $this->baseUnit($root, $q2, 'Q2 base');
+        $unitR1 = $this->baseUnit($root, $r1, 'R1 base');
+        $unitProvince = $this->baseUnit($root, $p, 'P direct base');
+        $unitUnmapped = $this->baseUnit($root, null, 'No region base');
+
+        $this->caseOn('2026-04-01', $unitC1, $disease, $root);
+        $this->caseOn('2026-04-02', $unitC2, $disease, $root);
+        $this->caseOn('2026-04-03', $unitQ1, $disease, $root);
+        $this->caseOn('2026-04-04', $unitProvince, $disease, $root);
+        $this->caseOn('2026-04-05', $unitUnmapped, $disease, $root);
+
+        DB::table('unit_populations')->insert([
+            ['unit_id' => $unitC1->id, 'year' => 2026, 'population' => 1000, 'created_at' => now(), 'updated_at' => now()],
+            ['unit_id' => $unitQ1->id, 'year' => 2026, 'population' => 0, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        return [
+            'token' => $token,
+            'disease' => $disease,
+            'root' => $root,
+            'units' => compact('unitC1', 'unitC2', 'unitQ1', 'unitQ2', 'unitR1', 'unitProvince', 'unitUnmapped'),
+            'regions' => compact('p', 'c1', 'c2', 'q', 'q1', 'q2', 'r', 'r1'),
+        ];
+    }
+
+    private function mapFor(array $fixture, array $query = []): TestResponse
+    {
+        $query = array_merge(['disease' => $fixture['disease']->id, 'zoom' => 8], $query);
+
+        return $this->apiGet('/api/gis/disease-map?'.http_build_query($query), $fixture['token']);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function featuresByRegion(TestResponse $response): array
+    {
+        $byRegion = [];
+
+        foreach ($response->json('features') as $feature) {
+            $byRegion[$feature['properties']['region_id']] = $feature;
+        }
+
+        return $byRegion;
+    }
+
+    public function test_region_map_returns_polygon_features(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $response = $this->mapFor($fixture);
+
+        $response->assertOk();
+        $this->assertSame('FeatureCollection', $response->json('type'));
+
+        foreach ($response->json('features') as $feature) {
+            $this->assertContains($feature['geometry']['type'], ['Polygon', 'MultiPolygon']);
+            $this->assertContains($feature['properties']['level'], ['county', 'province']);
+        }
+    }
+
+    public function test_region_map_falls_back_per_province_all_or_nothing(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $response = $this->mapFor($fixture);
+        $features = $this->featuresByRegion($response);
+
+        // P has one county without a boundary → one province feature summing
+        // both counties plus the province's own direct row.
+        $this->assertArrayHasKey($fixture['regions']['p']->id, $features);
+        $this->assertSame('province', $features[$fixture['regions']['p']->id]['properties']['level']);
+        $this->assertSame(3, $features[$fixture['regions']['p']->id]['properties']['cases']);
+        $this->assertArrayNotHasKey($fixture['regions']['c1']->id, $features);
+        $this->assertArrayNotHasKey($fixture['regions']['c2']->id, $features);
+
+        // Q has complete county coverage → counties, no province feature.
+        $this->assertSame('county', $features[$fixture['regions']['q1']->id]['properties']['level']);
+        $this->assertSame('county', $features[$fixture['regions']['q2']->id]['properties']['level']);
+        $this->assertArrayNotHasKey($fixture['regions']['q']->id, $features);
+
+        $this->assertSame('mixed', $response->json('meta.level'));
+        $this->assertSame(1, $response->json('meta.fallback_provinces'));
+    }
+
+    public function test_region_feature_properties_are_the_whitelist(): void
+    {
+        $fixture = $this->regionFixture();
+
+        foreach ($this->mapFor($fixture)->json('features') as $feature) {
+            $this->assertSame(
+                ['level', 'region_id', 'name', 'cases', 'population', 'rate', 'class'],
+                array_keys($feature['properties'])
+            );
+            $this->assertSame('region:'.$feature['properties']['region_id'], $feature['id']);
+        }
+    }
+
+    public function test_region_rate_and_class_follow_population(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $features = $this->featuresByRegion($this->mapFor($fixture));
+
+        $p = $features[$fixture['regions']['p']->id]['properties'];
+        $this->assertSame(1000, $p['population']);
+        // JSON drops the `.0`, so compare numerically (plan's test note).
+        $this->assertEquals(30.0, $p['rate']);
+        $this->assertNotNull($p['class']);
+
+        $q1 = $features[$fixture['regions']['q1']->id]['properties'];
+        $this->assertSame(0, $q1['population']);
+        $this->assertNull($q1['rate']);
+        $this->assertNull($q1['class']);
+
+        $q2 = $features[$fixture['regions']['q2']->id]['properties'];
+        $this->assertNull($q2['population']);
+        $this->assertNull($q2['rate']);
+        $this->assertNull($q2['class']);
+    }
+
+    public function test_region_geometry_keeps_islands_and_unwraps_single_parts(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $features = $this->featuresByRegion($this->mapFor($fixture));
+
+        $p = $features[$fixture['regions']['p']->id];
+        $this->assertSame('Polygon', $p['geometry']['type']);
+
+        $q2 = $features[$fixture['regions']['q2']->id];
+        $this->assertSame('MultiPolygon', $q2['geometry']['type']);
+        $this->assertCount(2, $q2['geometry']['coordinates']);
+
+        foreach ($features as $feature) {
+            $this->assertNotNull($feature['geometry']);
+            $this->assertNotEmpty($feature['geometry']['coordinates']);
+        }
+    }
+
+    public function test_region_without_boundary_is_dropped_not_centroided(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $features = $this->featuresByRegion($this->mapFor($fixture));
+
+        $this->assertArrayNotHasKey($fixture['regions']['r']->id, $features);
+        $this->assertArrayHasKey($fixture['regions']['r1']->id, $features);
+    }
+
+    public function test_region_bbox_filters_features_without_changing_meta(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $response = $this->mapFor($fixture, ['bbox' => '49.5,35.5,51.5,37.5']);
+
+        $response->assertOk();
+        $features = $this->featuresByRegion($response);
+
+        // Only province Q and its two counties fall inside the envelope.
+        $this->assertArrayHasKey($fixture['regions']['q1']->id, $features);
+        $this->assertArrayHasKey($fixture['regions']['q2']->id, $features);
+        $this->assertArrayNotHasKey($fixture['regions']['p']->id, $features);
+        $this->assertArrayNotHasKey($fixture['regions']['r1']->id, $features);
+        $this->assertSame('mixed', $response->json('meta.level'));
+    }
+
+    public function test_region_map_never_leaks_pii(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $response = $this->mapFor($fixture);
+        $content = $response->getContent();
+
+        foreach (['patient_id', 'kod_melli', 'first_name', 'last_name', 'birth_date', 'gender', 'city', 'fields'] as $key) {
+            $this->assertStringNotContainsString($key, $content);
+        }
+
+        foreach ($response->json('features') as $feature) {
+            $this->assertSame([], array_diff(array_keys($feature['properties']), [
+                'level', 'region_id', 'name', 'cases', 'population', 'rate', 'class',
+            ]));
+        }
+    }
+
+    public function test_region_map_reports_unmapped_cases(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $response = $this->mapFor($fixture);
+
+        $this->assertSame(1, $response->json('meta.unmapped_cases'));
+
+        $totalCases = 0;
+        foreach ($response->json('features') as $feature) {
+            $totalCases += $feature['properties']['cases'];
+        }
+        $this->assertSame(4, $totalCases);
+    }
+
+    public function test_region_map_validates_zoom_and_bbox(): void
+    {
+        $fixture = $this->regionFixture();
+
+        $this->mapFor($fixture, ['bbox' => '48,36,49'])->assertStatus(422)->assertJsonValidationErrors('bbox');
+        $this->mapFor($fixture, ['bbox' => '49,36,48,37'])->assertStatus(422)->assertJsonValidationErrors('bbox');
+        $this->mapFor($fixture, ['zoom' => 'abc'])->assertStatus(422)->assertJsonValidationErrors('zoom');
+        $this->mapFor($fixture, ['zoom' => -1])->assertStatus(422)->assertJsonValidationErrors('zoom');
+        $this->mapFor($fixture, ['zoom' => 23])->assertStatus(422)->assertJsonValidationErrors('zoom');
+    }
+
+    public function test_region_map_empty_scope_is_an_empty_collection(): void
+    {
+        $user = User::factory()->create();
+        $user->person()->update(['u_id' => null]);
+        $user->givePermissionTo('map');
+        $token = $this->createApiToken($user, ['gis:read']);
+        $disease = Disease::factory()->create();
+
+        $response = $this->apiGet(
+            "/api/gis/disease-map?disease={$disease->id}&zoom=8",
+            $token
+        );
+
+        $response->assertOk();
+        $this->assertSame('FeatureCollection', $response->json('type'));
+        $this->assertCount(0, $response->json('features'));
+        $this->assertSame('none', $response->json('meta.level'));
+        $this->assertSame(0, $response->json('meta.unmapped_cases'));
     }
 }

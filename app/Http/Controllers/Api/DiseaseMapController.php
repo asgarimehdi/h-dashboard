@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DiseaseMapRequest;
 use App\Http\Requests\DiseasePeriodRequest;
 use App\Models\Disease;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\Disease\DiseaseAggregationService;
+use App\Services\Disease\DiseaseMapService;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -57,5 +59,46 @@ class DiseaseMapController extends Controller
         return response()->json(
             $aggregation->scopeStats($request->integer('disease'), $ids, $from, $to)
         );
+    }
+
+    /**
+     * The GeoJSON layer: region choropleth below the zoom switch, unit markers
+     * above it. Uncached until Task 6 wires the `disease_maps` namespace.
+     */
+    public function map(DiseaseMapRequest $request, DiseaseMapService $service): JsonResponse
+    {
+        $ids = $request->accessibleIds();
+
+        if ($ids === []) {
+            return response()->json([
+                'type' => 'FeatureCollection',
+                'features' => [],
+                'meta' => [
+                    'level' => 'none',
+                    'zoom_switch' => DiseaseMapService::ZOOM_SWITCH,
+                    'classes' => 0,
+                    'breaks' => [],
+                    'fallback_provinces' => 0,
+                    'unmapped_cases' => 0,
+                ],
+            ]);
+        }
+
+        ['from' => $from, 'to' => $to] = $request->periodBounds();
+
+        $payload = $service->map(
+            $request->integer('disease'),
+            $ids,
+            $from,
+            $to,
+            $request->zoom(),
+            $request->bboxOrNull()
+        );
+
+        return response()->json([
+            'type' => 'FeatureCollection',
+            'features' => $payload['features'],
+            'meta' => $payload['meta'],
+        ]);
     }
 }

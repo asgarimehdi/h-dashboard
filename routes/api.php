@@ -272,5 +272,6 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         // `gis:read` + `map|bw`. Read-only aggregates, no `manage_diseases`.
         Route::get('/diseases', [DiseaseMapController::class, 'diseases'])->name('api.gis.diseases');
         Route::get('/disease-stats', [DiseaseMapController::class, 'stats'])->name('api.gis.disease-stats');
+        Route::get('/disease-map', [DiseaseMapController::class, 'map'])->name('api.gis.disease-map');
     });
 });

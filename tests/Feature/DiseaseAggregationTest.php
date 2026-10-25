@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Disease;
 use App\Models\DiseaseCase;
+use App\Models\Region;
 use App\Models\Unit;
 use App\Services\Disease\DiseaseAggregationService;
 use App\Support\Bbox;
@@ -518,5 +519,108 @@ class DiseaseAggregationTest extends TestCase
         $noisy = Bbox::normalize('48.0000001,36.0000001,49.0000001,37.0000001');
         $this->assertNotNull($noisy);
         $this->assertSame(Bbox::toKey($box), Bbox::toKey($noisy));
+    }
+
+    // ---------------------------------------------------------------------
+    // #1245 — region attribution for the choropleth
+    // ---------------------------------------------------------------------
+
+    private function region(string $type, ?Region $parent = null): Region
+    {
+        return Region::query()->create([
+            'name' => $type.'-'.fake()->unique()->numberBetween(1, 100000),
+            'type' => $type,
+            'parent_id' => $parent?->id,
+        ]);
+    }
+
+    public function test_region_case_counts_split_mapped_from_unmapped(): void
+    {
+        $countyA = $this->region('county');
+        $countyB = $this->region('county');
+
+        $unitA = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => $countyA->id]);
+        $unitB = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => $countyB->id]);
+        $unitNull = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => null]);
+
+        $this->caseAt('2026-03-01', $unitA);
+        $this->caseAt('2026-03-01', $unitB);
+        $this->caseAt('2026-03-01', $unitNull);
+        $this->caseAt('2026-03-01', $unitA, Disease::factory()->create());
+
+        $counts = $this->service->regionCaseCounts($this->disease->id, $this->subtree($this->staff));
+
+        $this->assertSame([$countyA->id => 1, $countyB->id => 1], $counts['byRegion']);
+        $this->assertSame(1, $counts['unmapped']);
+    }
+
+    public function test_region_case_counts_use_the_analytical_date(): void
+    {
+        $county = $this->region('county');
+        $unit = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => $county->id]);
+
+        $this->caseAt('2026-02-28', $unit);
+        $this->caseAt('2026-03-01', $unit);
+        $this->caseAt('2026-03-31', $unit);
+        $this->caseAt('2026-04-01', $unit);
+
+        DiseaseCase::factory()->create([
+            'disease_id' => $this->disease->id,
+            'unit_id' => $this->staff->id,
+            'subject_unit_id' => $unit->id,
+            'diagnosed_at' => '2026-03-15',
+            'recorded_at' => '2026-09-01',
+        ]);
+
+        $counts = $this->service->regionCaseCounts(
+            $this->disease->id,
+            $this->subtree($this->staff),
+            $this->marchFrom(),
+            $this->marchTo()
+        );
+
+        $this->assertSame([$county->id => 3], $counts['byRegion']);
+    }
+
+    public function test_region_populations_sum_the_latest_year_of_each_unit(): void
+    {
+        $county = $this->region('county');
+        $unitA = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => $county->id]);
+        $unitB = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => $county->id]);
+
+        $this->populationRow($unitA, 2024, 100);
+        $this->populationRow($unitA, 2025, 200);
+        $this->populationRow($unitB, 2025, 50);
+
+        $populations = $this->service->regionPopulations($this->subtree($this->staff));
+
+        // 200 (A's latest) + 50 (B's latest); 2024 is not added again.
+        $this->assertSame([$county->id => 250], $populations);
+    }
+
+    public function test_region_aggregates_are_fail_closed_outside_the_scope(): void
+    {
+        $county = $this->region('county');
+        $outside = Unit::factory()->create(['parent_id' => $this->centerB->id, 'region_id' => $county->id]);
+        $this->caseAt('2026-03-01', $outside);
+        $this->populationRow($outside, 2026, 900);
+
+        $ids = $this->subtree($this->centerA);
+
+        $this->assertSame(['byRegion' => [], 'unmapped' => 0], $this->service->regionCaseCounts($this->disease->id, $ids));
+        $this->assertSame([], $this->service->regionPopulations($ids));
+    }
+
+    public function test_region_aggregates_are_one_query_each(): void
+    {
+        $county = $this->region('county');
+        $unit = Unit::factory()->create(['parent_id' => $this->staff->id, 'region_id' => $county->id]);
+        $this->caseAt('2026-03-01', $unit);
+        $this->populationRow($unit, 2026, 500);
+
+        $ids = $this->subtree($this->staff);
+
+        $this->assertQueryCount(1, fn () => $this->service->regionCaseCounts($this->disease->id, $ids));
+        $this->assertQueryCount(1, fn () => $this->service->regionPopulations($ids));
     }
 }
