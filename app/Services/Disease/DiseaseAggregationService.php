@@ -278,6 +278,48 @@ final class DiseaseAggregationService
         return $populations;
     }
 
+    /**
+     * Cases per subject unit, in one query. Units without cases are absent —
+     * the marker layer fills 0 so the layer never looks empty.
+     *
+     * @param  array<int>  $unitIds
+     * @return array<int, int>
+     */
+    public function unitCaseCounts(
+        int $diseaseId,
+        array $unitIds,
+        ?DateTimeInterface $from = null,
+        ?DateTimeInterface $to = null
+    ): array {
+        $this->assertRange($from, $to);
+
+        if ($unitIds === []) {
+            return [];
+        }
+
+        $query = DiseaseCase::query()
+            ->where('disease_id', $diseaseId)
+            ->whereIn('subject_unit_id', $unitIds)
+            ->selectRaw('subject_unit_id, COUNT(*) AS cases')
+            ->groupBy('subject_unit_id');
+
+        if ($from !== null) {
+            $query->where('diagnosed_at', '>=', $from->format('Y-m-d'));
+        }
+
+        if ($to !== null) {
+            $query->where('diagnosed_at', '<=', $to->format('Y-m-d'));
+        }
+
+        $counts = [];
+
+        foreach ($query->get() as $row) {
+            $counts[(int) $row->subject_unit_id] = (int) $row->cases;
+        }
+
+        return $counts;
+    }
+
     private function assertRange(?DateTimeInterface $from, ?DateTimeInterface $to): void
     {
         if ($from !== null && $to !== null && $from > $to) {

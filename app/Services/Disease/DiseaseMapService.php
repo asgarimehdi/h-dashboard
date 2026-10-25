@@ -2,8 +2,10 @@
 
 namespace App\Services\Disease;
 
+use App\Support\BaseUnitTypes;
 use App\Support\QuantileBuckets;
 use Carbon\Carbon;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -41,7 +43,106 @@ final class DiseaseMapService
         int $zoom,
         ?array $bbox
     ): array {
+        if ($zoom >= self::ZOOM_SWITCH) {
+            return $this->unitMap($diseaseId, $accessibleIds, $from, $to, $bbox);
+        }
+
         return $this->regionMap($diseaseId, $accessibleIds, $from, $to, $bbox);
+    }
+
+    /**
+     * The accessible base units that can carry a marker: active, a base type,
+     * and with coordinates. Ordered by id for a deterministic layer.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return list<int>
+     */
+    public function baseUnitIds(array $accessibleIds): array
+    {
+        return $this->baseUnitQuery($accessibleIds, null)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  array<int>  $accessibleIds
+     * @param  array{minLon: float, minLat: float, maxLon: float, maxLat: float}|null  $bbox
+     */
+    private function baseUnitQuery(array $accessibleIds, ?array $bbox): Builder
+    {
+        $query = DB::table('units')
+            ->whereIn('id', $accessibleIds)
+            ->whereIn('unit_type_id', BaseUnitTypes::IDS)
+            ->where('is_active', true)
+            ->whereNotNull('lat')
+            ->whereNotNull('lng');
+
+        if ($bbox !== null) {
+            $query->whereBetween('lat', [$bbox['minLat'], $bbox['maxLat']])
+                ->whereBetween('lng', [$bbox['minLon'], $bbox['maxLon']]);
+        }
+
+        return $query->orderBy('id');
+    }
+
+    /**
+     * Unit markers above the zoom switch.
+     *
+     * Two queries: the base units and the per-unit counts (over the WHOLE
+     * scope, so cases on non-base units are reported as unmapped rather than
+     * silently dropped).
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  array{minLon: float, minLat: float, maxLon: float, maxLat: float}|null  $bbox
+     * @return array{features: list<array<string, mixed>>, meta: array<string, mixed>}
+     */
+    private function unitMap(
+        int $diseaseId,
+        array $accessibleIds,
+        Carbon $from,
+        Carbon $to,
+        ?array $bbox
+    ): array {
+        $units = $this->baseUnitQuery($accessibleIds, $bbox)
+            ->get(['id', 'name', 'lat', 'lng']);
+
+        $counts = $this->aggregation->unitCaseCounts($diseaseId, $accessibleIds, $from, $to);
+
+        $features = [];
+        $placedCases = 0;
+
+        foreach ($units as $unit) {
+            $cases = $counts[(int) $unit->id] ?? 0;
+            $placedCases += $cases;
+
+            $features[] = [
+                'type' => 'Feature',
+                'id' => 'unit:'.$unit->id,
+                'geometry' => [
+                    'type' => 'Point',
+                    'coordinates' => [(float) $unit->lng, (float) $unit->lat],
+                ],
+                'properties' => [
+                    'level' => 'unit',
+                    'unit_id' => (int) $unit->id,
+                    'name' => $unit->name,
+                    'cases' => $cases,
+                ],
+            ];
+        }
+
+        return [
+            'features' => $features,
+            'meta' => [
+                'level' => 'unit',
+                'zoom_switch' => self::ZOOM_SWITCH,
+                'classes' => 0,
+                'breaks' => [],
+                'fallback_provinces' => 0,
+                'unmapped_cases' => max(0, array_sum($counts) - $placedCases),
+            ],
+        ];
     }
 
     /**

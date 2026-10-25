@@ -623,4 +623,72 @@ class DiseaseAggregationTest extends TestCase
         $this->assertQueryCount(1, fn () => $this->service->regionCaseCounts($this->disease->id, $ids));
         $this->assertQueryCount(1, fn () => $this->service->regionPopulations($ids));
     }
+
+    // ---------------------------------------------------------------------
+    // #1245 Task 5 — per-unit case counts for the marker layer
+    // ---------------------------------------------------------------------
+
+    public function test_unit_case_counts_only_return_units_with_cases(): void
+    {
+        $houseZ = Unit::factory()->create(['parent_id' => $this->centerA->id]);
+
+        $this->caseAt('2026-03-01', $this->houseX);
+        $this->caseAt('2026-03-01', $this->houseY);
+
+        $counts = $this->service->unitCaseCounts($this->disease->id, [
+            $this->houseX->id,
+            $this->houseY->id,
+            $houseZ->id,
+        ]);
+
+        // houseZ is absent — the caller fills 0 for units without cases.
+        $this->assertSame([$this->houseX->id => 1, $this->houseY->id => 1], $counts);
+    }
+
+    public function test_unit_case_counts_ignore_subjects_outside_the_set(): void
+    {
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $this->assertSame(
+            [],
+            $this->service->unitCaseCounts($this->disease->id, [$this->houseY->id])
+        );
+    }
+
+    public function test_unit_case_counts_use_the_analytical_date(): void
+    {
+        $this->caseAt('2026-02-28', $this->houseX);
+        $this->caseAt('2026-03-01', $this->houseX);
+        $this->caseAt('2026-04-01', $this->houseX);
+
+        $counts = $this->service->unitCaseCounts(
+            $this->disease->id,
+            [$this->houseX->id],
+            $this->marchFrom(),
+            $this->marchTo()
+        );
+
+        $this->assertSame([$this->houseX->id => 1], $counts);
+    }
+
+    public function test_unit_case_counts_empty_set_is_empty_without_a_query(): void
+    {
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $this->assertQueryCount(0, function (): void {
+            $this->assertSame([], $this->service->unitCaseCounts($this->disease->id, []));
+        });
+    }
+
+    public function test_unit_case_counts_are_one_query(): void
+    {
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $ids = $this->subtree($this->staff);
+
+        $this->assertQueryCount(1, fn () => $this->service->unitCaseCounts(
+            $this->disease->id,
+            $ids
+        ));
+    }
 }

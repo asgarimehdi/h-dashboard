@@ -8,6 +8,7 @@ use App\Models\DiseaseCase;
 use App\Models\Region;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Disease\DiseaseMapService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -77,10 +78,9 @@ class DiseaseApiTest extends TestCase
 
     public function test_unauthenticated_disease_endpoints_return_401(): void
     {
-        // The map route lands in Task 4; that task extends this list when its
-        // route exists, so the suite never pins a 404 as a 401.
         $this->getJson('/api/gis/diseases')->assertUnauthorized();
         $this->getJson('/api/gis/disease-stats')->assertUnauthorized();
+        $this->getJson('/api/gis/disease-map')->assertUnauthorized();
     }
 
     public function test_diseases_returns_active_only_sorted(): void
@@ -550,5 +550,182 @@ class DiseaseApiTest extends TestCase
         $this->assertCount(0, $response->json('features'));
         $this->assertSame('none', $response->json('meta.level'));
         $this->assertSame(0, $response->json('meta.unmapped_cases'));
+    }
+
+    // ---------------------------------------------------------------------
+    // #1245 Task 5 — unit markers (zoom >= ZOOM_SWITCH)
+    // ---------------------------------------------------------------------
+
+    /**
+     * houseA / houseB / houseC are base units; houseNoGeo and houseInactive are
+     * filtered out; `center` is not a base type; `outside` is out of scope.
+     *
+     * @return array<string, mixed>
+     */
+    private function unitFixture(): array
+    {
+        ['unit' => $root] = $this->createUserWithUnit(['map']);
+        $token = $this->tokenForUnit($root);
+        $disease = Disease::factory()->create();
+
+        $this->ensureUnitType(9, 'خانه بهداشت');
+        $this->ensureUnitType(1, 'ستاد');
+
+        $houseA = $this->baseUnit($root, null, 'House A');
+        $houseA->update(['lat' => 36.5, 'lng' => 48.5]);
+
+        $houseB = $this->baseUnit($root, null, 'House B');
+        $houseB->update(['lat' => 37.5, 'lng' => 49.5]);
+
+        $houseC = $this->baseUnit($root, null, 'House C');
+        $houseC->update(['lat' => 38.5, 'lng' => 50.5]);
+
+        $houseNoGeo = $this->baseUnit($root, null, 'No geo');
+        $houseNoGeo->update(['lat' => null, 'lng' => null]);
+
+        $houseInactive = $this->baseUnit($root, null, 'Inactive');
+        $houseInactive->update(['is_active' => false]);
+
+        $center = Unit::factory()->create([
+            'name' => 'Center',
+            'parent_id' => $root->id,
+            'unit_type_id' => 1,
+            'lat' => 36.6,
+            'lng' => 48.6,
+        ]);
+
+        $outsideRoot = Unit::factory()->create();
+        $outside = Unit::factory()->create([
+            'parent_id' => $outsideRoot->id,
+            'unit_type_id' => 9,
+            'lat' => 36.7,
+            'lng' => 48.7,
+        ]);
+
+        $this->caseOn('2026-04-01', $houseA, $disease, $root);
+        $this->caseOn('2026-04-02', $houseB, $disease, $root);
+        $this->caseOn('2026-04-03', $houseNoGeo, $disease, $root);
+        $this->caseOn('2026-04-04', $houseInactive, $disease, $root);
+        $this->caseOn('2026-04-05', $center, $disease, $root);
+        $this->caseOn('2026-04-06', $outside, $disease, $root);
+
+        return [
+            'token' => $token,
+            'disease' => $disease,
+            'units' => compact('houseA', 'houseB', 'houseC', 'houseNoGeo', 'houseInactive', 'center', 'outside'),
+        ];
+    }
+
+    public function test_unit_map_returns_points_for_every_base_unit(): void
+    {
+        $fixture = $this->unitFixture();
+
+        $response = $this->mapFor($fixture, ['zoom' => DiseaseMapService::ZOOM_SWITCH]);
+
+        $response->assertOk();
+
+        $features = $response->json('features');
+        $this->assertCount(3, $features);
+
+        $byId = [];
+        foreach ($features as $feature) {
+            $this->assertSame('Point', $feature['geometry']['type']);
+            $this->assertSame('unit', $feature['properties']['level']);
+            $this->assertSame(
+                ['level', 'unit_id', 'name', 'cases'],
+                array_keys($feature['properties'])
+            );
+            $this->assertSame('unit:'.$feature['properties']['unit_id'], $feature['id']);
+            $byId[$feature['properties']['unit_id']] = $feature['properties'];
+        }
+
+        // Units without cases are present with 0 so the layer never looks empty.
+        $this->assertSame(0, $byId[$fixture['units']['houseC']->id]['cases']);
+        $this->assertSame(1, $byId[$fixture['units']['houseA']->id]['cases']);
+        $this->assertSame([(float) 48.5, (float) 36.5], $features[0]['geometry']['coordinates']);
+    }
+
+    public function test_unit_map_skips_units_without_coordinates_or_inactive(): void
+    {
+        $fixture = $this->unitFixture();
+
+        $response = $this->mapFor($fixture, ['zoom' => 9]);
+
+        $ids = array_column($response->json('features'), 'id');
+
+        $this->assertNotContains('unit:'.$fixture['units']['houseNoGeo']->id, $ids);
+        $this->assertNotContains('unit:'.$fixture['units']['houseInactive']->id, $ids);
+        $this->assertNotContains('unit:'.$fixture['units']['center']->id, $ids);
+        $this->assertNotContains('unit:'.$fixture['units']['outside']->id, $ids);
+
+        foreach ($response->json('features') as $feature) {
+            $this->assertNotNull($feature['geometry']);
+        }
+    }
+
+    public function test_unit_map_bbox_filters_on_coordinates(): void
+    {
+        $fixture = $this->unitFixture();
+
+        $response = $this->mapFor($fixture, ['zoom' => 9, 'bbox' => '48,36,49,37']);
+
+        $response->assertOk();
+
+        $ids = array_column($response->json('features'), 'id');
+
+        $this->assertSame(['unit:'.$fixture['units']['houseA']->id], $ids);
+    }
+
+    public function test_zoom_switch_separates_region_and_unit_modes(): void
+    {
+        $fixture = $this->unitFixture();
+
+        $region = $this->mapFor($fixture, ['zoom' => DiseaseMapService::ZOOM_SWITCH - 1]);
+        $unit = $this->mapFor($fixture, ['zoom' => DiseaseMapService::ZOOM_SWITCH]);
+
+        foreach ($region->json('features') as $feature) {
+            $this->assertNotSame('unit', $feature['properties']['level']);
+        }
+
+        foreach ($unit->json('features') as $feature) {
+            $this->assertSame('Point', $feature['geometry']['type']);
+        }
+
+        $this->assertSame(9, DiseaseMapService::ZOOM_SWITCH);
+        $this->assertSame(DiseaseMapService::ZOOM_SWITCH, $region->json('meta.zoom_switch'));
+        $this->assertSame(DiseaseMapService::ZOOM_SWITCH, $unit->json('meta.zoom_switch'));
+    }
+
+    public function test_unit_map_meta_has_no_breaks(): void
+    {
+        $fixture = $this->unitFixture();
+
+        $response = $this->mapFor($fixture, ['zoom' => 9]);
+
+        $this->assertSame('unit', $response->json('meta.level'));
+        $this->assertSame([], $response->json('meta.breaks'));
+        $this->assertSame(0, $response->json('meta.classes'));
+        $this->assertSame(0, $response->json('meta.fallback_provinces'));
+        // 4 in-scope cases (the inactive unit is outside the scope); only
+        // houseA (1) and houseB (1) sit on a marker.
+        $this->assertSame(2, $response->json('meta.unmapped_cases'));
+    }
+
+    public function test_unit_map_never_leaks_pii(): void
+    {
+        $fixture = $this->unitFixture();
+
+        $response = $this->mapFor($fixture, ['zoom' => 9]);
+
+        foreach (['patient_id', 'kod_melli', 'first_name', 'last_name', 'birth_date', 'gender', 'city', 'fields'] as $key) {
+            $this->assertStringNotContainsString($key, $response->getContent());
+        }
+
+        foreach ($response->json('features') as $feature) {
+            $this->assertSame(
+                ['level', 'unit_id', 'name', 'cases'],
+                array_keys($feature['properties'])
+            );
+        }
     }
 }
