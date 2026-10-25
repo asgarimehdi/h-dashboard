@@ -277,10 +277,12 @@ return new class extends Component
         $options = null;
 
         if ($this->type === 'select') {
-            $options = array_values(array_unique(array_filter(array_map(
-                'trim',
-                preg_split('/\r\n|\r|\n/', $this->optionsText) ?: []
-            ))));
+            $options = array_values(array_unique(array_filter(
+                array_map('trim', preg_split('/\r\n|\r|\n/', $this->optionsText) ?: []),
+                // `array_filter` without a callback drops the string "0"; an
+                // option value of zero is legitimate, only empty lines go.
+                static fn (string $value): bool => $value !== ''
+            )));
 
             if ($options === []) {
                 $this->addError('optionsText', 'حداقل یک گزینه لازم است.');

@@ -166,6 +166,30 @@ test('options required for select type', function () {
     $this->assertDatabaseCount('disease_field_defs', 0);
 });
 
+test('select options preserve zero', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $disease = Disease::factory()->create();
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'score')
+        ->set('labelFa', 'امتیاز')
+        ->set('type', 'select')
+        ->set('optionsText', "0\n1")
+        ->call('saveFieldDef')
+        ->assertHasNoErrors();
+
+    $def = DiseaseFieldDef::query()
+        ->where('disease_id', $disease->id)
+        ->where('field_key', 'score')
+        ->firstOrFail();
+
+    expect($def->options)->toBe(['0', '1']);
+});
+
 test('options rejected for non select type', function () {
     ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
     $this->actingAs($user);
