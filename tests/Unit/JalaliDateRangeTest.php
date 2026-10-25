@@ -84,6 +84,42 @@ class JalaliDateRangeTest extends TestCase
         $this->assertNull(JalaliDateRange::parse('1403/5/1'));
     }
 
+    // ==================== parseStrict() — API contract (#1245) ====================
+
+    public function test_strict_parse_accepts_a_valid_jalali_date(): void
+    {
+        $result = JalaliDateRange::parseStrict('1405/01/01');
+
+        $this->assertNotNull($result);
+        $this->assertSame('2026-03-21 00:00:00', $result->format('Y-m-d H:i:s'));
+    }
+
+    public function test_strict_parse_accepts_the_last_day_of_a_leap_esfand(): void
+    {
+        $this->assertNotNull(JalaliDateRange::parseStrict('1403/12/30'));
+        $this->assertNotNull(JalaliDateRange::parseStrict('1405/12/29'));
+    }
+
+    public function test_strict_parse_rejects_esfand_thirty_in_a_non_leap_year(): void
+    {
+        // 1405 has 29 days in Esfand; a lenient parse would roll over to
+        // 1406/01/01 and silently shift the report window.
+        $this->assertNull(JalaliDateRange::parseStrict('1405/12/30'));
+    }
+
+    public function test_strict_parse_rejects_impossible_months_and_days(): void
+    {
+        $this->assertNull(JalaliDateRange::parseStrict('1405/13/01'));
+        $this->assertNull(JalaliDateRange::parseStrict('1405/00/10'));
+        $this->assertNull(JalaliDateRange::parseStrict('1405/07/32'));
+    }
+
+    public function test_strict_parse_rejects_empty_input(): void
+    {
+        $this->assertNull(JalaliDateRange::parseStrict(''));
+        $this->assertNull(JalaliDateRange::parseStrict(null));
+    }
+
     // ==================== range() ====================
 
     public function test_range_returns_ordered_bounds_and_ends_the_to_day(): void

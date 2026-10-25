@@ -6,6 +6,8 @@ use App\Models\Disease;
 use App\Models\DiseaseCase;
 use App\Models\Unit;
 use App\Services\Disease\DiseaseAggregationService;
+use App\Support\Bbox;
+use App\Support\QuantileBuckets;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -420,5 +422,101 @@ class DiseaseAggregationTest extends TestCase
         foreach ($stats as $value) {
             $this->assertTrue($value === null || is_scalar($value));
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // #1245 — quantile buckets (5 classes on rate, decision 21)
+    // ---------------------------------------------------------------------
+
+    public function test_quantile_breaks_five_classes_on_ten_values(): void
+    {
+        $breaks = QuantileBuckets::breaks([10, 1, 9, 2, 8, 3, 7, 4, 6, 5]);
+
+        $this->assertSame([2.0, 4.0, 6.0, 8.0], $breaks);
+    }
+
+    public function test_quantile_class_is_the_upper_bound_count(): void
+    {
+        $breaks = QuantileBuckets::breaks([10, 1, 9, 2, 8, 3, 7, 4, 6, 5]);
+
+        $this->assertSame(0, QuantileBuckets::classOf(2.0, $breaks));
+        $this->assertSame(1, QuantileBuckets::classOf(2.1, $breaks));
+        $this->assertSame(4, QuantileBuckets::classOf(10.0, $breaks));
+    }
+
+    public function test_quantile_breaks_are_empty_without_rates(): void
+    {
+        $this->assertSame([], QuantileBuckets::breaks([]));
+    }
+
+    public function test_quantile_all_equal_rates_collapse_to_one_break(): void
+    {
+        $breaks = QuantileBuckets::breaks([5, 5, 5, 5, 5]);
+
+        $this->assertSame([5.0], $breaks);
+        $this->assertSame(0, QuantileBuckets::classOf(5.0, $breaks));
+    }
+
+    public function test_quantile_handles_fewer_values_than_classes(): void
+    {
+        $this->assertSame([1.0, 2.0, 3.0], QuantileBuckets::breaks([1, 2, 3]));
+    }
+
+    public function test_quantile_missing_rate_has_no_class(): void
+    {
+        $breaks = QuantileBuckets::breaks([1, 2, 3]);
+
+        $this->assertNull(QuantileBuckets::classOf(null, $breaks));
+    }
+
+    public function test_quantile_ignores_nulls_and_is_order_independent(): void
+    {
+        $sorted = QuantileBuckets::breaks([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+        $this->assertSame($sorted, QuantileBuckets::breaks([10, 1, 9, 2, 8, 3, 7, 4, 6, 5]));
+        $this->assertSame($sorted, QuantileBuckets::breaks([null, 10, 1, null, 9, 2, 8, 3, 7, 4, 6, 5]));
+    }
+
+    // ---------------------------------------------------------------------
+    // #1245 — bbox normalisation
+    // ---------------------------------------------------------------------
+
+    public function test_bbox_normalizes_four_numbers(): void
+    {
+        $this->assertSame(
+            ['minLon' => 48.0, 'minLat' => 36.0, 'maxLon' => 49.0, 'maxLat' => 37.0],
+            Bbox::normalize('48,36,49,37')
+        );
+    }
+
+    public function test_bbox_rejects_malformed_or_inverted_input(): void
+    {
+        $this->assertNull(Bbox::normalize(null));
+        $this->assertNull(Bbox::normalize(''));
+        $this->assertNull(Bbox::normalize('48,36,49'));
+        $this->assertNull(Bbox::normalize('48,36,49,37,1'));
+        $this->assertNull(Bbox::normalize('48,36,abc,37'));
+        $this->assertNull(Bbox::normalize('49,36,48,37'));
+        $this->assertNull(Bbox::normalize('48,37,49,36'));
+    }
+
+    public function test_bbox_rejects_out_of_range_coordinates(): void
+    {
+        $this->assertNull(Bbox::normalize('-181,36,49,37'));
+        $this->assertNull(Bbox::normalize('48,-91,49,37'));
+        $this->assertNull(Bbox::normalize('48,36,181,37'));
+        $this->assertNull(Bbox::normalize('48,36,49,91'));
+    }
+
+    public function test_bbox_key_is_stable_at_six_decimals(): void
+    {
+        $box = Bbox::normalize('48,36,49,37');
+
+        $this->assertNotNull($box);
+        $this->assertSame('48.000000,36.000000,49.000000,37.000000', Bbox::toKey($box));
+
+        $noisy = Bbox::normalize('48.0000001,36.0000001,49.0000001,37.0000001');
+        $this->assertNotNull($noisy);
+        $this->assertSame(Bbox::toKey($box), Bbox::toKey($noisy));
     }
 }
