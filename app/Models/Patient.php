@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\PatientFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, DiseaseCase> $diseaseCases
+ *
+ * @method static Builder<static> visibleTo(array<int> $accessibleUnitIds)
  */
 class Patient extends Model
 {
@@ -44,5 +47,22 @@ class Patient extends Model
     public function diseaseCases(): HasMany
     {
         return $this->hasMany(DiseaseCase::class);
+    }
+
+    /**
+     * Patients reachable through a visible case.
+     *
+     * Direct patient access is gated by permission (spec §4.1); this predicate
+     * only applies when a patient is read through the case path.
+     *
+     * @param  Builder<Patient>  $query
+     * @param  array<int>  $accessibleUnitIds
+     * @return Builder<Patient>
+     */
+    public function scopeVisibleTo(Builder $query, array $accessibleUnitIds): Builder
+    {
+        return $query->whereHas('diseaseCases', function (Builder $q) use ($accessibleUnitIds): void {
+            DiseaseCase::applyVisibility($q, $accessibleUnitIds);
+        });
     }
 }
