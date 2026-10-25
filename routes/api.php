@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DiseaseMapController;
 use App\Http\Controllers\Api\GisController;
 use App\Http\Controllers\Api\HardwareAuditController;
 use App\Http\Controllers\Api\HardwareController;
@@ -266,5 +267,9 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');
         Route::get('/stats', [GisController::class, 'stats'])->name('api.gis.stats');
         Route::get('/clusters', [GisController::class, 'clusters'])->name('api.gis.clusters');
+
+        // Disease layer (issue #1245) — same gate as the rest of the group:
+        // `gis:read` + `map|bw`. Read-only aggregates, no `manage_diseases`.
+        Route::get('/diseases', [DiseaseMapController::class, 'diseases'])->name('api.gis.diseases');
     });
 });
