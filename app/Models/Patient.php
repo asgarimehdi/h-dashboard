@@ -49,6 +49,22 @@ class Patient extends Model
         return $this->hasMany(DiseaseCase::class);
     }
 
+    /** Display name — the identity fields are exactly first + last (#1243). */
+    public function fullName(): string
+    {
+        return trim($this->first_name.' '.$this->last_name);
+    }
+
+    /** Persian label for the stored English enum (`male`/`female`). */
+    public function genderLabel(): string
+    {
+        return match ($this->gender) {
+            'male' => 'مرد',
+            'female' => 'زن',
+            default => $this->gender,
+        };
+    }
+
     /**
      * Patients reachable through a visible case.
      *

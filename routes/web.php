@@ -131,6 +131,13 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/disease/manage', 'disease.manage')->name('disease.manage');
         });
 
+        // پروندهٔ بیماران (Issue #1243، فاز ۲) — گروه جدا، نه تودرتو با
+        // `disease.manage`/`map` (nesting = AND). صفحه unit-scoped نیست؛
+        // دسترسی مستقیم فقط با همین پرمیژن است (اسپک §4.1). ورودی منو فاز ۴.
+        Route::middleware('role_or_permission:manage_diseases')->group(function () {
+            Route::livewire('/disease/patients', 'disease.patients')->name('disease.patients');
+        });
+
         Route::middleware('role_or_permission:map')->group(function () {
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');
