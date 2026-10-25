@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Disease;
 use App\Models\DiseaseCase;
+use App\Models\DiseaseFieldDef;
 use App\Models\Patient;
 use App\Models\Unit;
 use App\Models\UnitPopulation;
+use Database\Seeders\DiseaseSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -164,4 +166,39 @@ test('model relations expose cases, field defs and populations', function () {
     expect($case->patient->diseaseCases()->whereKey($case->id)->exists())->toBeTrue()
         ->and($case->disease->diseaseCases()->whereKey($case->id)->exists())->toBeTrue()
         ->and($population->unit)->toBeInstanceOf(Unit::class);
+});
+
+test('DiseaseSeeder seeds five diseases and seven field definitions idempotently', function () {
+    $this->seed(DiseaseSeeder::class);
+
+    expect(Disease::query()->count())->toBe(5)
+        ->and(DiseaseFieldDef::query()->count())->toBe(7);
+
+    $htn = Disease::query()->where('slug', 'htn')->firstOrFail();
+    expect($htn->name_fa)->toBe('فشار خون')
+        ->and($htn->sort)->toBe(1)
+        ->and($htn->is_active)->toBeTrue()
+        ->and($htn->fieldDefs()->orderBy('sort')->pluck('field_key')->all())->toBe(['sys', 'dia'])
+        ->and($htn->fieldDefs()->where('field_key', 'sys')->value('unit'))->toBe('mmHg')
+        ->and($htn->fieldDefs()->where('field_key', 'sys')->value('required'))->toBeTrue();
+
+    $thalassemiaType = Disease::query()->where('slug', 'thalassemia')->firstOrFail()
+        ->fieldDefs()->where('field_key', 'type')->firstOrFail();
+    expect($thalassemiaType->options)->toBe(['β/thal', 'δβ', 'α/thal'])
+        ->and($thalassemiaType->unit)->toBeNull()
+        ->and($thalassemiaType->is_active)->toBeTrue();
+
+    expect(Disease::query()->where('slug', 'cancer')->firstOrFail()
+        ->fieldDefs()->where('field_key', 'stage')->value('options'))
+        ->toBe(['I', 'II', 'III', 'IV']);
+
+    expect(Disease::query()->where('slug', 'hiv')->firstOrFail()
+        ->fieldDefs()->where('field_key', 'cd4')->value('required'))->toBeFalse();
+
+    // DatabaseSeeder runs in every environment, so a second run must not
+    // duplicate rows nor violate a unique key.
+    $this->seed(DiseaseSeeder::class);
+
+    expect(Disease::query()->count())->toBe(5)
+        ->and(DiseaseFieldDef::query()->count())->toBe(7);
 });
