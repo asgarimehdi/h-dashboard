@@ -2,7 +2,9 @@
 
 use App\Models\Disease;
 use App\Models\DiseaseCase;
+use App\Models\DiseaseFieldDef;
 use App\Traits\PersianNormalizer;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -29,6 +31,23 @@ return new class extends Component
 
     public int $sort = 0;
 
+    // ── field def form state ──
+    public ?int $editingFieldId = null;
+
+    public string $fieldKey = '';
+
+    public string $labelFa = '';
+
+    public string $type = 'number';
+
+    public ?string $unit = null;
+
+    public string $optionsText = '';
+
+    public bool $isRequired = false;
+
+    public int $fieldSort = 0;
+
     // ── listing state ──
     public string $search = '';
 
@@ -45,6 +64,7 @@ return new class extends Component
 
         Disease::query()->findOrFail($id);
         $this->selectedDiseaseId = $id;
+        $this->resetFieldForm();
     }
 
     public function startCreateDisease(): void
@@ -168,6 +188,211 @@ return new class extends Component
         }
     }
 
+    // ── field def CRUD ────────────────────────────────────────────────────
+
+    /** @return array<int, array{value: string, label: string}> */
+    public function typeOptions(): array
+    {
+        return [
+            ['value' => 'number', 'label' => 'عددی'],
+            ['value' => 'text', 'label' => 'متنی'],
+            ['value' => 'select', 'label' => 'انتخابی'],
+            ['value' => 'date', 'label' => 'تاریخ'],
+        ];
+    }
+
+    public function typeLabel(string $type): string
+    {
+        foreach ($this->typeOptions() as $option) {
+            if ($option['value'] === $type) {
+                return $option['label'];
+            }
+        }
+
+        return $type;
+    }
+
+    public function startCreateFieldDef(): void
+    {
+        $this->authorize('manage_diseases');
+
+        if ($this->selectedDiseaseId === null) {
+            $this->error('ابتدا یک بیماری انتخاب کنید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        $this->resetValidation();
+        $this->resetFieldForm();
+    }
+
+    public function editFieldDef(int $id): void
+    {
+        $this->authorize('manage_diseases');
+
+        $def = DiseaseFieldDef::query()->findOrFail($id);
+
+        $this->resetValidation();
+        $this->selectedDiseaseId = $def->disease_id;
+        $this->editingFieldId = $def->id;
+        $this->fieldKey = $def->field_key;
+        $this->labelFa = $def->label_fa;
+        $this->type = $def->type;
+        $this->unit = $def->unit;
+        $this->optionsText = implode("\n", $def->options ?? []);
+        $this->isRequired = $def->required;
+        $this->fieldSort = $def->sort;
+    }
+
+    public function saveFieldDef(): void
+    {
+        $this->authorize('manage_diseases');
+
+        if ($this->selectedDiseaseId === null) {
+            $this->error('ابتدا یک بیماری انتخاب کنید.', position: 'toast-bottom');
+
+            return;
+        }
+
+        $rules = [
+            'labelFa' => 'required|string|max:255',
+            'type' => 'required|in:number,text,select,date',
+            'unit' => 'nullable|string|max:50',
+            'optionsText' => 'required_if:type,select|nullable|string',
+            'isRequired' => 'boolean',
+            'fieldSort' => 'required|integer|min:0',
+        ];
+
+        // `field_key` is the JSON key on every stored case, so it is only
+        // accepted at creation time (decision «ه»-adjacent, §4 note 4).
+        if ($this->editingFieldId === null) {
+            $rules['fieldKey'] = ['required', 'string', 'max:50', 'regex:/^[a-z][a-z0-9_]*$/',
+                Rule::unique('disease_field_defs', 'field_key')
+                    ->where('disease_id', $this->selectedDiseaseId)
+                    ->ignore($this->editingFieldId)];
+        }
+
+        $this->validate($rules);
+
+        $options = null;
+
+        if ($this->type === 'select') {
+            $options = array_values(array_unique(array_filter(array_map(
+                'trim',
+                preg_split('/\r\n|\r|\n/', $this->optionsText) ?: []
+            ))));
+
+            if ($options === []) {
+                $this->addError('optionsText', 'حداقل یک گزینه لازم است.');
+
+                return;
+            }
+        } elseif (trim($this->optionsText) !== '') {
+            $this->addError('optionsText', 'گزینه‌ها فقط برای نوع انتخابی مجاز است.');
+
+            return;
+        }
+
+        $payload = [
+            'label_fa' => $this->labelFa,
+            'type' => $this->type,
+            'unit' => $this->unit,
+            'options' => $options,
+            'required' => $this->isRequired,
+            'sort' => $this->fieldSort,
+        ];
+
+        if ($this->editingFieldId !== null) {
+            $def = DiseaseFieldDef::query()->findOrFail($this->editingFieldId);
+            // field_key and is_active are deliberately absent.
+            $def->update($payload);
+        } else {
+            DiseaseFieldDef::query()->create([
+                'disease_id' => $this->selectedDiseaseId,
+                'field_key' => $this->fieldKey,
+                // New definitions are visible on new forms (decision «الف»).
+                'is_active' => true,
+                ...$payload,
+            ]);
+        }
+
+        $this->success("«{$this->labelFa}» ذخیره شد", 'با موفقیت', position: 'toast-bottom');
+        $this->resetValidation();
+        $this->resetFieldForm();
+    }
+
+    public function deleteFieldDef(int $id): void
+    {
+        $this->authorize('manage_diseases');
+
+        $def = DiseaseFieldDef::query()->findOrFail($id);
+
+        // The gate correction: `jsonb_exists` does not exist on this
+        // PostgreSQL 16, and `fields ? ?` collides with PDO placeholders.
+        $hasData = DiseaseCase::query()
+            ->where('disease_id', $def->disease_id)
+            ->whereRaw('jsonb_exists_any(fields, ARRAY[?])', [$def->field_key])
+            ->exists();
+
+        if ($hasData) {
+            $this->error('این فیلد برای بعضی کیس‌ها مقدار ثبت‌شده دارد؛ حذف نمی‌شود.', position: 'toast-bottom');
+
+            return;
+        }
+
+        $def->delete();
+
+        if ($this->editingFieldId === $id) {
+            $this->resetFieldForm();
+        }
+    }
+
+    private function resetFieldForm(): void
+    {
+        $this->reset([
+            'editingFieldId', 'fieldKey', 'labelFa', 'type', 'unit',
+            'optionsText', 'isRequired', 'fieldSort',
+        ]);
+    }
+
+    // ── selection helpers ─────────────────────────────────────────────────
+
+    public function selectedDisease(): ?Disease
+    {
+        if ($this->selectedDiseaseId === null) {
+            return null;
+        }
+
+        return Disease::query()->find($this->selectedDiseaseId);
+    }
+
+    /** @return Collection<int, DiseaseFieldDef> */
+    public function fields(): Collection
+    {
+        if ($this->selectedDiseaseId === null) {
+            return new Collection();
+        }
+
+        return DiseaseFieldDef::query()
+            ->where('disease_id', $this->selectedDiseaseId)
+            ->orderBy('sort')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function fieldHeaders(): array
+    {
+        return [
+            ['key' => 'field_key', 'label' => 'کلید'],
+            ['key' => 'label_fa', 'label' => 'برچسب'],
+            ['key' => 'type', 'label' => 'نوع'],
+            ['key' => 'unit', 'label' => 'واحد'],
+            ['key' => 'required', 'label' => 'الزامی', 'sortable' => false],
+            ['key' => 'sort', 'label' => 'ترتیب'],
+        ];
+    }
+
     /** Decision «ه»: the edit form locks `slug` once a case references it. */
     public function slugLocked(): bool
     {
@@ -216,6 +441,8 @@ return new class extends Component
         return [
             'diseases' => $this->diseases(),
             'headers' => $this->headers(),
+            'fields' => $this->fields(),
+            'fieldHeaders' => $this->fieldHeaders(),
         ];
     }
 }; ?>
@@ -336,6 +563,109 @@ return new class extends Component
                     </p>
                 @endif
             </x-card>
+
+            @php $disease = $this->selectedDisease(); @endphp
+            @if($disease !== null)
+                <div class="mt-4">
+                    <x-card shadow>
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <h3 class="font-bold">فیلدهای «{{ $disease->name_fa }}»</h3>
+                            <x-ui.icon-button name="فیلد جدید" label="فیلد جدید" class="btn-success btn-sm"
+                                             wire:click="startCreateFieldDef" icon="o-plus" responsive/>
+                        </div>
+
+                        <div class="flex flex-col gap-3 p-3 bg-base-200 rounded-lg mb-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <x-input wire:model="fieldKey" label="کلید" dir="ltr" placeholder="sys"
+                                             :disabled="$editingFieldId !== null"/>
+                                    @if($editingFieldId !== null)
+                                        <span class="text-xs text-base-content/60">کلید پس از ثبت قابل ویرایش نیست.</span>
+                                    @endif
+                                    @error('fieldKey') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <x-input wire:model="labelFa" label="برچسب" placeholder="مثلاً فشار سیستولیک"/>
+                                    @error('labelFa') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    {{-- option-value/option-label are required: MaryUI defaults to
+                                         id/name, so value/label keys would render blank options (#706). --}}
+                                    <x-select wire:model="type" label="نوع"
+                                              :options="$this->typeOptions()"
+                                              option-value="value"
+                                              option-label="label"/>
+                                    @error('type') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <x-input wire:model="unit" label="واحد (اختیاری)" placeholder="مثلاً mmHg"/>
+                                    @error('unit') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div>
+                                    <x-input wire:model="fieldSort" label="ترتیب" type="number" min="0"/>
+                                    @error('fieldSort') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div class="self-end pb-2">
+                                    <x-toggle wire:model="isRequired" label="الزامی"/>
+                                </div>
+                            </div>
+
+                            <div>
+                                <x-textarea wire:model="optionsText"
+                                            label="گزینه‌ها (هر مقدار در یک خط)"
+                                            placeholder="I&#10;II&#10;III"
+                                            rows="3"/>
+                                <span class="text-xs text-base-content/60">فقط برای نوع «انتخابی».</span>
+                                @error('optionsText') <span class="text-error text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div class="flex gap-2">
+                                <x-button wire:click="saveFieldDef" label="ذخیره فیلد" icon="o-check"
+                                          class="btn-primary" spinner/>
+                                <x-button wire:click="startCreateFieldDef" label="فرم خالی" icon="o-x-mark"
+                                          class="btn-ghost"/>
+                            </div>
+                        </div>
+
+                        <x-table :headers="$fieldHeaders" :rows="$fields">
+                            @scope('cell_field_key', $field)
+                                <span dir="ltr" class="font-mono text-xs">{{ $field->field_key }}</span>
+                            @endscope
+
+                            @scope('cell_type', $field)
+                                {{ $this->typeLabel($field->type) }}
+                            @endscope
+
+                            @scope('cell_required', $field)
+                                @if($field->required)
+                                    <span class="badge badge-warning badge-sm">الزامی</span>
+                                @else
+                                    <span class="badge badge-ghost badge-sm">اختیاری</span>
+                                @endif
+                            @endscope
+
+                            @scope('actions', $field)
+                                <div class="flex gap-1">
+                                    <x-ui.icon-button name="ویرایش فیلد" icon="o-pencil"
+                                                     wire:click="editFieldDef({{ $field->id }})"
+                                                     class="btn-ghost btn-circle btn-sm text-primary"
+                                                     title="ویرایش"/>
+                                    <x-ui.icon-button name="حذف فیلد" icon="o-trash"
+                                                     wire:click="deleteFieldDef({{ $field->id }})"
+                                                     wire:confirm="آیا مطمئن هستید؟" spinner
+                                                     class="btn-ghost btn-circle btn-sm text-error"
+                                                     title="حذف"/>
+                                </div>
+                            @endscope
+                        </x-table>
+                    </x-card>
+                </div>
+            @endif
         </div>
     </div>
 </div>

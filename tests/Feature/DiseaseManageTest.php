@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Disease;
+use App\Models\DiseaseFieldDef;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -118,4 +119,150 @@ test('delete disease without cases', function () {
         ->call('deleteDisease', $disease->id);
 
     $this->assertDatabaseMissing('diseases', ['id' => $disease->id]);
+});
+
+test('create field def with select options', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $disease = Disease::factory()->create();
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'stage')
+        ->set('labelFa', 'مرحله')
+        ->set('type', 'select')
+        ->set('optionsText', "I\nII\nIII")
+        ->call('saveFieldDef')
+        ->assertHasNoErrors();
+
+    $def = DiseaseFieldDef::query()
+        ->where('disease_id', $disease->id)
+        ->where('field_key', 'stage')
+        ->firstOrFail();
+
+    expect($def->options)->toBe(['I', 'II', 'III'])
+        ->and($def->is_active)->toBeTrue()
+        ->and($def->required)->toBeFalse();
+});
+
+test('options required for select type', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $disease = Disease::factory()->create();
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'stage')
+        ->set('labelFa', 'مرحله')
+        ->set('type', 'select')
+        ->set('optionsText', '')
+        ->call('saveFieldDef')
+        ->assertHasErrors(['optionsText' => 'required_if']);
+
+    $this->assertDatabaseCount('disease_field_defs', 0);
+});
+
+test('options rejected for non select type', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $disease = Disease::factory()->create();
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'stage')
+        ->set('labelFa', 'مرحله')
+        ->set('type', 'number')
+        ->set('optionsText', "I\nII")
+        ->call('saveFieldDef')
+        ->assertHasErrors('optionsText');
+
+    $this->assertDatabaseCount('disease_field_defs', 0);
+});
+
+test('field key is unique per disease', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $first = Disease::factory()->create();
+    $second = Disease::factory()->create();
+
+    $component = Livewire::test('disease.manage')
+        ->call('selectDisease', $first->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'sys')
+        ->set('labelFa', 'فشار سیستولیک')
+        ->set('type', 'number')
+        ->call('saveFieldDef')
+        ->assertHasNoErrors();
+
+    $component
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'sys')
+        ->set('labelFa', 'تکرار')
+        ->set('type', 'number')
+        ->call('saveFieldDef')
+        ->assertHasErrors(['fieldKey' => 'unique']);
+
+    $component
+        ->call('selectDisease', $second->id)
+        ->call('startCreateFieldDef')
+        ->set('fieldKey', 'sys')
+        ->set('labelFa', 'فشار سیستولیک')
+        ->set('type', 'number')
+        ->call('saveFieldDef')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_field_defs', ['disease_id' => $second->id, 'field_key' => 'sys']);
+    $this->assertDatabaseCount('disease_field_defs', 2);
+});
+
+test('field key immutable on edit', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $disease = Disease::factory()->create();
+    $def = DiseaseFieldDef::query()->create([
+        'disease_id' => $disease->id,
+        'field_key' => 'sys',
+        'label_fa' => 'فشار سیستولیک',
+        'type' => 'number',
+        'required' => false,
+        'sort' => 0,
+    ]);
+
+    $component = Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->call('editFieldDef', $def->id)
+        ->assertSet('fieldKey', 'sys')
+        ->set('labelFa', 'فشار سیستولیک (ویرایش‌شده)')
+        // A tampered payload must not rename a consumed JSON key either.
+        ->set('fieldKey', 'hijacked')
+        ->call('saveFieldDef')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_field_defs', [
+        'id' => $def->id,
+        'field_key' => 'sys',
+        'label_fa' => 'فشار سیستولیک (ویرایش‌شده)',
+    ]);
+});
+
+test('type select options render', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+
+    $disease = Disease::factory()->create();
+
+    Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->assertSee('عددی')
+        ->assertSee('متنی')
+        ->assertSee('انتخابی')
+        ->assertSee('تاریخ');
 });
