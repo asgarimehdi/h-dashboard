@@ -261,7 +261,82 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 > The streak is derived by reading the previous row (`orderByDesc('id')->first()`), so run recording is **serial by nature** — parallelising it would let two runs compute the same streak value.
 
+### GIS Disease Layer (issue #1245)
+
+Three aggregate-only endpoints for the disease map (#1246 consumes them). They ride the existing
+`gis` group — `auth:sanctum` + `ability:gis:read` + `role_or_permission:map|bw` — and do **not**
+require `manage_diseases`.
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/gis/diseases` | Active diseases only (`id`, `name_fa`, `slug`), ordered by `sort`, `id`. Uncached. |
+| GET | `/api/gis/disease-stats` | Scope-wide `{cases, population, rate}` for the period, no envelope |
+| GET | `/api/gis/disease-map` | GeoJSON `FeatureCollection` for the period, region or unit layer |
+
+Parameters (shared by `disease-stats` and `disease-map`):
+
+| Param | Default | Notes |
+|---|---|---|
+| `disease` | — (required) | Any existing disease id. **Inactive diseases remain readable**: the catalogue hides them, but their historical cases must still chart. |
+| `from`, `to` | current Persian year | Jalali `Y/m/d` only, parsed strictly — an impossible date (`1405/12/30` in a non-leap year, month 13) is a `422`, never silently normalised. Inclusive. Esfand's length comes from the calendar. |
+| `zoom` | `0` | `0..22`. Below `9` → region choropleth, `9+` → unit markers. `meta.zoom_switch` carries the real value so the client never hard-codes it. |
+| `bbox` | — | `minLon,minLat,maxLon,maxLat`. Validated by the same normaliser the cache key uses; malformed → `422`. Region polygons filter with `ST_Intersects`, unit points with `lat`/`lng` between. |
+
+`disease-stats` response:
+
+```json
+{"cases": 34, "population": 42000, "rate": 8.1}
+```
+
+`rate = round(cases / population × 10000, 1)`; `null` when the population is missing or zero
+(never `0` — "no denominator" is not "zero rate"). `population` is the sum of each unit's latest
+recorded year; it is never read from an upper-layer row.
+
+`disease-map` response:
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "region:12",
+      "geometry": {"type": "Polygon", "coordinates": [[[48,36],[49,36],[49,37],[48,36]]]},
+      "properties": {"level": "county", "region_id": 12, "name": "…", "cases": 4, "population": 1000, "rate": 40.0, "class": 2}
+    }
+  ],
+  "meta": {"level": "mixed", "zoom_switch": 9, "classes": 5, "breaks": [2.0,4.0,6.0,8.0], "fallback_provinces": 1, "unmapped_cases": 0}
+}
+```
+
+- **Region mode** draws county polygons. A province whose counties lack boundaries falls back
+  **all-or-nothing** to one province polygon (cases summed, `level = "province"`); a province with
+  no boundary at all is dropped rather than centroided. `meta.level` is `county`, `province`,
+  `mixed` or `none`; `meta.fallback_provinces` counts provinces that actually fell back.
+- **Unit mode** draws one `Point` per accessible **base** unit (types `8, 9, 10, 18`) that is
+  active and has coordinates. Units without cases are present with `cases = 0` so the layer never
+  looks empty. `meta.breaks = []`, `meta.classes = 0`.
+- `class` is the quantile bucket (`0..count(breaks)`, `null` when `rate` is `null`); `meta.breaks`
+  are the 4 quantile boundaries (fewer when there are fewer distinct rates). Both are additive
+  fields, safe for an older client to ignore.
+- `meta.unmapped_cases` reports cases that sit on no drawn feature (subject unit with no region,
+  or a non-base unit) — they are surfaced, never guessed into a neighbouring polygon. `meta` is
+  computed before `bbox` filtering, so a viewport never changes it.
+- **PII:** the payload carries counts, rates and organizational names only. No patient id, national
+  code, name, birth date, gender, city or dynamic field value ever appears (decision 18).
+
+Cache: namespace `disease_maps`, TTL 60 minutes, keyed by scope hash + disease + Jalali range
+(+ `mode`/`bbox` for the layer). Seven disease-domain models (`Disease`, `DiseaseCase`,
+`DiseaseFieldDef`, `Patient`, `UnitPopulation`, `Region`, `Boundary`) plus `Unit` bump the
+namespace on `created`/`updated`/`deleted`, so a write makes stale entries unreachable instead of
+serving them. **Known limit:** a bulk `DB::table()` update/delete fires no model event and does not
+bump the namespace until the TTL expires. `cache:prune-stale` only audits versions — it deletes
+nothing.
+
+> The rest of `/api/gis/*` is not documented here (older drift, outside #1245's scope).
+
 ---
+
 
 ## UI Features
 
