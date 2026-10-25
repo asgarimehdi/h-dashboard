@@ -287,4 +287,138 @@ class DiseaseAggregationTest extends TestCase
             $this->marchTo()
         ));
     }
+
+    // ---------------------------------------------------------------------
+    // #1245 — scope-wide stats (a SET of roots, not one root)
+    // ---------------------------------------------------------------------
+
+    public function test_scope_stats_sums_multiple_roots(): void
+    {
+        $otherProvince = Unit::factory()->create();
+        $otherCenter = Unit::factory()->create(['parent_id' => $otherProvince->id]);
+
+        $this->caseAt('2026-03-01', $this->houseX);
+        $this->caseAt('2026-03-02', $this->houseY);
+        $this->caseAt('2026-03-03', $otherCenter);
+
+        $ids = array_values(array_unique(array_merge(
+            $this->subtree($this->staff),
+            $this->subtree($otherProvince)
+        )));
+
+        $stats = $this->service->scopeStats($this->disease->id, $ids, $this->marchFrom(), $this->marchTo());
+
+        // One root would miss the other province's case — the exact bug
+        // decision 12 exists to prevent.
+        $this->assertSame(2, $this->service->cases(
+            $this->disease->id,
+            $this->staff->id,
+            $ids,
+            $this->marchFrom(),
+            $this->marchTo()
+        ));
+        $this->assertSame(3, $stats['cases']);
+    }
+
+    public function test_scope_stats_filters_by_disease_and_analytical_date(): void
+    {
+        $other = Disease::factory()->create();
+
+        $this->caseAt('2026-02-28', $this->houseX);
+        $this->caseAt('2026-03-01', $this->houseX);
+        $this->caseAt('2026-03-31', $this->houseY);
+        $this->caseAt('2026-04-01', $this->houseY);
+        $this->caseAt('2026-03-15', $this->houseX, $other);
+
+        // `recorded_at` is outside the range on purpose: only `diagnosed_at`
+        // is analytical.
+        DiseaseCase::factory()->create([
+            'disease_id' => $this->disease->id,
+            'unit_id' => $this->houseX->id,
+            'subject_unit_id' => $this->houseX->id,
+            'diagnosed_at' => '2026-03-15',
+            'recorded_at' => '2026-09-01',
+        ]);
+
+        $stats = $this->service->scopeStats(
+            $this->disease->id,
+            $this->subtree($this->staff),
+            $this->marchFrom(),
+            $this->marchTo()
+        );
+
+        $this->assertSame(3, $stats['cases']);
+    }
+
+    public function test_scope_stats_rate_is_per_ten_thousand_with_one_decimal(): void
+    {
+        DiseaseCase::factory()->count(34)->create([
+            'disease_id' => $this->disease->id,
+            'unit_id' => $this->houseX->id,
+            'subject_unit_id' => $this->houseX->id,
+        ]);
+        $this->populationRow($this->houseX, 2026, 42000);
+
+        $stats = $this->service->scopeStats($this->disease->id, $this->subtree($this->houseX));
+
+        $this->assertSame(34, $stats['cases']);
+        $this->assertSame(42000, $stats['population']);
+        $this->assertSame(8.1, $stats['rate']);
+    }
+
+    public function test_scope_stats_missing_or_zero_population_has_null_rate(): void
+    {
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $missing = $this->service->scopeStats($this->disease->id, $this->subtree($this->houseX));
+        $this->assertNull($missing['population']);
+        $this->assertNull($missing['rate']);
+
+        $this->populationRow($this->houseX, 2026, 0);
+
+        $zero = $this->service->scopeStats($this->disease->id, $this->subtree($this->houseX));
+        $this->assertSame(0, $zero['population']);
+        $this->assertNull($zero['rate']);
+    }
+
+    public function test_scope_stats_is_fail_closed_without_a_query(): void
+    {
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $this->assertQueryCount(0, function (): void {
+            $this->assertSame(
+                ['cases' => 0, 'population' => null, 'rate' => null],
+                $this->service->scopeStats($this->disease->id, [])
+            );
+        });
+    }
+
+    public function test_scope_stats_runs_two_queries(): void
+    {
+        $this->populationRow($this->houseX, 2026, 5000);
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $ids = $this->subtree($this->houseX);
+
+        $this->assertQueryCount(2, fn () => $this->service->scopeStats(
+            $this->disease->id,
+            $ids,
+            $this->marchFrom(),
+            $this->marchTo()
+        ));
+    }
+
+    public function test_scope_stats_shape_is_scalar_and_has_no_pii(): void
+    {
+        $this->populationRow($this->houseX, 2026, 5000);
+        $this->caseAt('2026-03-01', $this->houseX);
+
+        $stats = $this->service->scopeStats($this->disease->id, $this->subtree($this->houseX));
+
+        $this->assertSame(['cases', 'population', 'rate'], array_keys($stats));
+
+        foreach ($stats as $value) {
+            $this->assertTrue($value === null || is_scalar($value));
+        }
+    }
 }

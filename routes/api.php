@@ -271,5 +271,6 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         // Disease layer (issue #1245) — same gate as the rest of the group:
         // `gis:read` + `map|bw`. Read-only aggregates, no `manage_diseases`.
         Route::get('/diseases', [DiseaseMapController::class, 'diseases'])->name('api.gis.diseases');
+        Route::get('/disease-stats', [DiseaseMapController::class, 'stats'])->name('api.gis.disease-stats');
     });
 });

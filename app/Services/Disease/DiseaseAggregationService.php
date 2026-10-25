@@ -38,10 +38,32 @@ final class DiseaseAggregationService
             return 0;
         }
 
+        return $this->countIn($diseaseId, $subtree, $from, $to);
+    }
+
+    /**
+     * Cases for a SET of unit ids — the scope of a multi-unit actor, not one
+     * subtree (decision 12). The predicate is unconditional `whereIn`, so an
+     * empty set compiles to `0 = 1`; the early return only spares the query.
+     *
+     * @param  array<int>  $unitIds
+     */
+    public function countIn(
+        int $diseaseId,
+        array $unitIds,
+        ?DateTimeInterface $from = null,
+        ?DateTimeInterface $to = null
+    ): int {
+        $this->assertRange($from, $to);
+
+        if ($unitIds === []) {
+            return 0;
+        }
+
         $query = DiseaseCase::query()
             ->where('disease_id', $diseaseId)
-            ->where(function ($query) use ($subtree): void {
-                $query->whereIn('subject_unit_id', $subtree);
+            ->where(function ($query) use ($unitIds): void {
+                $query->whereIn('subject_unit_id', $unitIds);
             });
 
         if ($from !== null) {
@@ -69,9 +91,26 @@ final class DiseaseAggregationService
             return null;
         }
 
+        return $this->populationOf($subtree);
+    }
+
+    /**
+     * Sum of each unit's latest recorded year over a SET of units.
+     *
+     * Population is never read from an upper-layer row (decision 10): the
+     * subtree sum is the only source of truth.
+     *
+     * @param  array<int>  $unitIds
+     */
+    public function populationOf(array $unitIds): ?int
+    {
+        if ($unitIds === []) {
+            return null;
+        }
+
         $latestPerUnit = DB::table('unit_populations')
             ->selectRaw('DISTINCT ON (unit_id) unit_id, population')
-            ->whereIn('unit_id', $subtree)
+            ->whereIn('unit_id', $unitIds)
             ->orderBy('unit_id')
             ->orderByDesc('year');
 
@@ -88,6 +127,17 @@ final class DiseaseAggregationService
     }
 
     /**
+     * Rate per 10,000 with one decimal; null when the population is missing
+     * or zero (decision 17).
+     */
+    public function rate(int $cases, ?int $population): ?float
+    {
+        return ($population === null || $population === 0)
+            ? null
+            : round($cases / $population * 10000, 1);
+    }
+
+    /**
      * @param  array<int>  $accessibleUnitIds
      * @return array{cases: int, population: int|null, rate: float|null}
      */
@@ -101,14 +151,39 @@ final class DiseaseAggregationService
         $cases = $this->cases($diseaseId, $unitId, $accessibleUnitIds, $from, $to);
         $population = $this->population($unitId, $accessibleUnitIds);
 
-        $rate = ($population === null || $population === 0)
-            ? null
-            : round($cases / $population * 10000, 1);
+        return [
+            'cases' => $cases,
+            'population' => $population,
+            'rate' => $this->rate($cases, $population),
+        ];
+    }
+
+    /**
+     * Stats across the actor's whole scope (a SET of units, possibly several
+     * roots). `[]` means "in scope of nothing" — zero/null without a query.
+     *
+     * @param  array<int>  $accessibleUnitIds
+     * @return array{cases: int, population: int|null, rate: float|null}
+     */
+    public function scopeStats(
+        int $diseaseId,
+        array $accessibleUnitIds,
+        ?DateTimeInterface $from = null,
+        ?DateTimeInterface $to = null
+    ): array {
+        $unitIds = array_map(intval(...), $accessibleUnitIds);
+
+        if ($unitIds === []) {
+            return ['cases' => 0, 'population' => null, 'rate' => null];
+        }
+
+        $cases = $this->countIn($diseaseId, $unitIds, $from, $to);
+        $population = $this->populationOf($unitIds);
 
         return [
             'cases' => $cases,
             'population' => $population,
-            'rate' => $rate,
+            'rate' => $this->rate($cases, $population),
         ];
     }
 
