@@ -3,9 +3,11 @@ name: Tests
 on:
   pull_request:
     branches: [main, beta, test]
-  # Manual runs exist for the `mutation` job below, which is gated to this
-  # trigger (#1012): a manual run executes every job, so read the mutation
-  # job's own result, not the run's overall conclusion.
+  # The `mutation` job below runs on PRs too (re-enabled 2026-10-25,
+  # reversing the manual-only gate from #1012): it runs in parallel under
+  # E2E's ~30-minute shadow and gates nothing (`continue-on-error: true`).
+  # A manual run executes every job, so read the mutation job's own result,
+  # not the run's overall conclusion.
   workflow_dispatch:
 
 concurrency:
@@ -448,17 +450,14 @@ jobs:
 
   mutation:
     name: Mutation Testing
-    # Manual-only (#1012): the job is green, but each run is expensive
-    # (checkout, composer install and migrations before the single
-    # `pest --mutate` line below) and it used to spend ~23 minutes
-    # on every PR for a signal that gates nothing (`continue-on-error: true`).
-    # Re-enable on PRs by dropping this `if:`. The manual "Run workflow"
-    # button appears only once this trigger is on the default branch.
-    if: github.event_name == 'workflow_dispatch'
+    # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
+    # gate from #1012): each run is expensive (checkout, composer install
+    # and migrations before the single `pest --mutate` line below, ~23
+    # minutes), but it runs in parallel with E2E (~30 minutes) and gates
+    # nothing (`continue-on-error: true`), so it adds no wall time.
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Non-blocking: the score is informational, so keeping this job off PRs
-    # removes no quality gate.
+    # Non-blocking: the score is informational and gates nothing.
     continue-on-error: true
 
     services:
