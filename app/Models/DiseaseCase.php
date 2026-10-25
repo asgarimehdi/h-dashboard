@@ -99,9 +99,11 @@ class DiseaseCase extends Model
     /**
      * The single visibility predicate shared by cases and patients.
      *
-     * @param  Builder<DiseaseCase>  $query
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
      * @param  array<int>  $accessibleUnitIds
-     * @return Builder<DiseaseCase>
+     * @return Builder<TModel>
      */
     public static function applyVisibility(Builder $query, array $accessibleUnitIds): Builder
     {

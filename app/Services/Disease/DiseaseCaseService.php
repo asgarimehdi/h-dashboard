@@ -25,7 +25,7 @@ final class DiseaseCaseService
     public function __construct(private readonly DiseaseFieldValidator $fieldValidator) {}
 
     /**
-     * @param  array{patient_id?: int, disease_id?: int, subject_unit_id?: int, diagnosed_at?: string, recorded_at?: string|null, fields?: array<string, mixed>}  $data
+     * @param  array{patient_id?: int, disease_id?: int, subject_unit_id?: int, diagnosed_at?: string, recorded_at?: string|null, fields?: mixed}  $data
      * @param  array<int>  $accessibleUnitIds
      */
     public function create(array $data, int $recorderUnitId, array $accessibleUnitIds): DiseaseCase
@@ -73,7 +73,7 @@ final class DiseaseCaseService
     }
 
     /**
-     * @param  array{patient_id?: int, disease_id?: int, subject_unit_id?: int, diagnosed_at?: string, recorded_at?: string|null, fields?: array<string, mixed>}  $data
+     * @param  array{patient_id?: int, disease_id?: int, subject_unit_id?: int, diagnosed_at?: string, recorded_at?: string|null, fields?: mixed}  $data
      * @param  array<int>  $accessibleUnitIds
      */
     public function update(int $caseId, array $data, array $accessibleUnitIds): DiseaseCase
@@ -182,7 +182,6 @@ final class DiseaseCaseService
     }
 
     /**
-     * @param  array<string, mixed>  $fields
      * @return array<string, mixed>
      */
     private function validatedFields(Disease $disease, mixed $fields): array
