@@ -85,6 +85,34 @@
 - BelongsToMany `units` via `user_units` pivot (with `role`, `is_primary`), `primaryUnit()`
 - Spatie `HasRoles`
 
+### Disease Registration (phase 1, #1240)
+
+**Patient** (`patients` table)
+- `id`, `kod_melli` (string(10), unique), `first_name`, `last_name`, `birth_date` (date, nullable, stored Gregorian), `gender` (string, `male`/`female` — app-level validation, no DB CHECK), `city` (nullable), timestamps
+- Separate from `persons` (decision 4): a registry entry, not an HR record. No FK in either direction; the only link is a possibly-equal `kod_melli` value. No soft deletes in v1.
+- Relationship: `diseaseCases()` → `DiseaseCase`
+
+**Disease** (`diseases` table)
+- `id`, `name_fa`, `slug` (unique, stable machine key), `is_active` (boolean, default true), `sort` (integer, default 0), timestamps
+- Relationships: `fieldDefs()` → `DiseaseFieldDef`, `diseaseCases()` → `DiseaseCase`
+
+**DiseaseFieldDef** (`disease_field_defs` table)
+- `id`, `disease_id` (FK, cascade), `field_key`, `label_fa`, `type` (enum: `number`/`text`/`select`/`date`), `unit` (nullable), `options` (json, nullable — select only), `required` (boolean, default false), `sort` (integer, default 0), `is_active` (boolean, default true; lets a field disappear from new forms without deleting history), timestamps
+- Unique: `(disease_id, field_key)`
+- Relationship: `disease()` → `Disease`
+
+**DiseaseCase** (`disease_cases` table)
+- `id`, `patient_id` (FK), `disease_id` (FK), `unit_id` (FK — the registering unit), `subject_unit_id` (FK — the patient's unit, decision 8), `diagnosed_at` (date), `recorded_at` (date; no DB default — "today" is application behaviour), `fields` (jsonb, default `'{}'`), timestamps
+- Indexes: `(disease_id, subject_unit_id)`, `subject_unit_id`, `diagnosed_at`, `patient_id` (kept alongside the three-column unique on purpose); unique `(patient_id, disease_id, diagnosed_at)` named `disease_cases_unique_patient_disease_day`
+- Relationships: `patient()` → `Patient`, `disease()` → `Disease`, `unit()` → `Unit`, `subjectUnit()` → `Unit`
+
+**UnitPopulation** (`unit_populations` table)
+- `id`, `unit_id` (FK), `year` (smallint), `population` (integer), timestamps
+- Unique: `(unit_id, year)`
+- Relationship: `unit()` → `Unit`
+
+> **Two schema warnings.** (1) Only `disease_field_defs.disease_id` cascades; every other new FK is plain RESTRICT — health data is never deleted silently. (2) Higher unit layers never store a population row (decision 10): reading population from an upper-layer row is a bug; the subtree sum is always the source of truth.
+
 ### Relationships
 
 ```
@@ -98,6 +126,10 @@ Unit → Unit (parent_id, recursive self-join)
 Ticket → Todo (task_id)  Ticket → User (user_id / current_assignee_id)
 Ticket → Attachment / TaskActivity
 User ↔ Unit (user_units pivot)
+Patient → DiseaseCase (patient_id)
+Disease → DiseaseFieldDef / DiseaseCase
+DiseaseCase → Patient / Disease / Unit (unit_id, subject_unit_id)
+UnitPopulation → Unit (unit_id)
 ```
 
 ### Key Linked Entities
@@ -120,3 +152,6 @@ User ↔ Unit (user_units pivot)
 | `activity_logs.user_id → users` | set null (2026-09-03; was cascade) |
 | `persons.u_id → units` | set null, `onUpdate: cascade` (2026-09-03) |
 | `regions.boundary_id`, `units.boundary_id → boundaries` | cascade |
+| `disease_field_defs.disease_id → diseases` | cascade |
+| `disease_cases.patient_id/disease_id/unit_id/subject_unit_id` | restrict |
+| `unit_populations.unit_id → units` | restrict |
