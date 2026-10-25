@@ -2,10 +2,17 @@
 
 namespace App\Providers;
 
+use App\Models\Boundary;
+use App\Models\Disease;
+use App\Models\DiseaseCase;
+use App\Models\DiseaseFieldDef;
 use App\Models\Hardware;
+use App\Models\Patient;
+use App\Models\Region;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\UnitPopulation;
 use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationService;
@@ -17,6 +24,7 @@ use App\Support\VendorRouteGuard;
 use App\View\Components\AccessibleMenuItem;
 use App\View\Components\AccessibleTable;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -136,10 +144,34 @@ class AppServiceProvider extends ServiceProvider
         Ticket::deleted(fn () => $invalidate($ticketNamespaces));
 
         // Invalidate units report + hierarchy + GIS + HR caches on Unit changes (Issues #340, #372, #391)
-        $unitNamespaces = ['report_units', 'unit_hierarchy', 'gis', 'hr_stats'];
+        // `disease_maps` belongs here too: `region_id`, `parent_id` and
+        // `is_active` change both the scope and the case attribution (#1245).
+        $unitNamespaces = ['report_units', 'unit_hierarchy', 'gis', 'hr_stats', 'disease_maps'];
         Unit::created(fn () => $invalidate($unitNamespaces));
         Unit::updated(fn () => $invalidate($unitNamespaces));
         Unit::deleted(fn () => $invalidate($unitNamespaces));
+
+        // Issue #1245: every disease-domain write invalidates the map layer.
+        // Bulk `DB::table()` updates fire no model event — documented in
+        // docs/agents/features.md as the known limit of this hook.
+        $diseaseNamespaces = ['disease_maps'];
+
+        /** @var list<class-string<Model>> $diseaseModels */
+        $diseaseModels = [
+            Disease::class,
+            DiseaseCase::class,
+            DiseaseFieldDef::class,
+            Patient::class,
+            UnitPopulation::class,
+            Region::class,
+            Boundary::class,
+        ];
+
+        foreach ($diseaseModels as $model) {
+            $model::created(fn () => $invalidate($diseaseNamespaces));
+            $model::updated(fn () => $invalidate($diseaseNamespaces));
+            $model::deleted(fn () => $invalidate($diseaseNamespaces));
+        }
 
         // Issue #951: the vendored maryUI upload endpoint is not mounted. See
         // App\Support\VendorRouteGuard for why the route has to be stripped

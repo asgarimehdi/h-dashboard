@@ -9,6 +9,7 @@ use App\Models\Disease;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\Disease\DiseaseAggregationService;
 use App\Services\Disease\DiseaseMapService;
+use App\Support\ScopeCacheKey;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -43,8 +44,9 @@ class DiseaseMapController extends Controller
     /**
      * Scope-wide counts for the whole period, without an envelope (spec §6).
      *
-     * Deliberately uncached until the `disease_maps` invalidation is complete
-     * (Task 6): a cached range with no bump would serve stale counts.
+     * Cached under `disease_maps` for 60 minutes; every disease-domain model
+     * write bumps the namespace (Task 6), so a stale range is unreachable
+     * rather than served.
      */
     public function stats(DiseasePeriodRequest $request, DiseaseAggregationService $aggregation): JsonResponse
     {
@@ -56,14 +58,28 @@ class DiseaseMapController extends Controller
 
         ['from' => $from, 'to' => $to] = $request->periodBounds();
 
-        return response()->json(
-            $aggregation->scopeStats($request->integer('disease'), $ids, $from, $to)
+        /** @var array{cases: int, population: int|null, rate: float|null} $stats */
+        $stats = $this->cache->remember(
+            'disease_maps',
+            ScopeCacheKey::hash($ids),
+            fn () => $aggregation->scopeStats($request->integer('disease'), $ids, $from, $to),
+            60,
+            [
+                'v' => 1,
+                'kind' => 'stats',
+                'disease' => $request->integer('disease'),
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
         );
+
+        return response()->json($stats);
     }
 
     /**
      * The GeoJSON layer: region choropleth below the zoom switch, unit markers
-     * above it. Uncached until Task 6 wires the `disease_maps` namespace.
+     * above it. Cached under `disease_maps`; the mode and bbox are part of the
+     * key so a viewport never serves another viewport's payload.
      */
     public function map(DiseaseMapRequest $request, DiseaseMapService $service): JsonResponse
     {
@@ -86,13 +102,30 @@ class DiseaseMapController extends Controller
 
         ['from' => $from, 'to' => $to] = $request->periodBounds();
 
-        $payload = $service->map(
-            $request->integer('disease'),
-            $ids,
-            $from,
-            $to,
-            $request->zoom(),
-            $request->bboxOrNull()
+        $extra = [
+            'v' => 1,
+            'kind' => 'map',
+            'disease' => $request->integer('disease'),
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'mode' => $request->zoom() >= DiseaseMapService::ZOOM_SWITCH ? 'unit' : 'region',
+            'bbox' => $request->bboxKey(),
+        ];
+
+        /** @var array{features: list<array<string, mixed>>, meta: array<string, mixed>} $payload */
+        $payload = $this->cache->remember(
+            'disease_maps',
+            ScopeCacheKey::hash($ids),
+            fn () => $service->map(
+                $request->integer('disease'),
+                $ids,
+                $from,
+                $to,
+                $request->zoom(),
+                $request->bboxOrNull()
+            ),
+            60,
+            $extra,
         );
 
         return response()->json([

@@ -3,10 +3,14 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\DiseaseMapController;
+use App\Models\Boundary;
 use App\Models\Disease;
 use App\Models\DiseaseCase;
+use App\Models\DiseaseFieldDef;
+use App\Models\Patient;
 use App\Models\Region;
 use App\Models\Unit;
+use App\Models\UnitPopulation;
 use App\Models\User;
 use App\Services\Disease\DiseaseMapService;
 use Database\Seeders\PermissionSeeder;
@@ -727,5 +731,89 @@ class DiseaseApiTest extends TestCase
                 array_keys($feature['properties'])
             );
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // #1245 Task 6 — `disease_maps` cache and invalidation
+    // ---------------------------------------------------------------------
+
+    public function test_every_disease_model_invalidates_the_map_cache(): void
+    {
+        $unit = Unit::factory()->create();
+        $disease = Disease::factory()->create();
+        $patient = Patient::factory()->create();
+
+        $boundaryId = DB::table('boundaries')->insertGetId([
+            'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((48 36,49 36,49 37,48 37,48 36)))', 4326)"),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $mutations = [
+            'Disease' => fn () => Disease::factory()->create(),
+            'DiseaseCase' => fn () => DiseaseCase::factory()->create([
+                'disease_id' => $disease->id,
+                'patient_id' => $patient->id,
+                'unit_id' => $unit->id,
+                'subject_unit_id' => $unit->id,
+            ]),
+            'DiseaseFieldDef' => fn () => DiseaseFieldDef::query()->create([
+                'disease_id' => $disease->id,
+                'field_key' => 'fever',
+                'label_fa' => 'تب',
+                'type' => 'number',
+            ]),
+            'Patient' => fn () => Patient::factory()->create(),
+            'UnitPopulation' => fn () => UnitPopulation::query()->create([
+                'unit_id' => $unit->id,
+                'year' => (int) now()->year,
+                'population' => 100,
+            ]),
+            'Unit' => fn () => Unit::factory()->create(),
+            'Region' => fn () => Region::query()->create(['name' => 'x', 'type' => 'county']),
+            'Boundary' => fn () => Boundary::query()->findOrFail($boundaryId)->delete(),
+        ];
+
+        foreach ($mutations as $label => $mutate) {
+            $this->assertCacheInvalidated('disease_maps', $mutate);
+        }
+    }
+
+    public function test_disease_map_cache_is_held_until_a_model_event(): void
+    {
+        $fixture = $this->unitFixture();
+        $patient = Patient::factory()->create();
+
+        $first = $this->mapFor($fixture, ['zoom' => 9])->json();
+        $second = $this->mapFor($fixture, ['zoom' => 9])->json();
+
+        $this->assertSame($first, $second);
+
+        // A raw insert fires no model event, so the cached payload must stay.
+        DB::table('disease_cases')->insert([
+            'patient_id' => $patient->id,
+            'disease_id' => $fixture['disease']->id,
+            'unit_id' => $fixture['units']['houseA']->id,
+            'subject_unit_id' => $fixture['units']['houseA']->id,
+            'diagnosed_at' => '2026-04-10',
+            'recorded_at' => '2026-04-10',
+            'fields' => '{}',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame($first, $this->mapFor($fixture, ['zoom' => 9])->json());
+
+        // A model event bumps the namespace, so the next read sees the new case.
+        $this->caseOn('2026-04-11', $fixture['units']['houseA'], $fixture['disease']);
+
+        $third = $this->mapFor($fixture, ['zoom' => 9])->json();
+
+        $this->assertNotSame($first, $third);
+
+        $houseA = collect($third['features'])
+            ->firstWhere('id', 'unit:'.$fixture['units']['houseA']->id);
+
+        $this->assertSame(3, $houseA['properties']['cases']);
     }
 }

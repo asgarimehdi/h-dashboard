@@ -88,10 +88,16 @@ trait InteractsWithTestSetup
         return Hardware::factory()->create($data);
     }
 
-    protected function assertCacheInvalidated(string $cacheKey): void
+    /**
+     * Assert that a mutation bumps a versioned cache namespace.
+     *
+     * The default mutation is a hardware create (the original #320 contract);
+     * pass `$mutate` to exercise another model's events.
+     */
+    protected function assertCacheInvalidated(string $cacheKey, ?Closure $mutate = null): void
     {
         $versionBefore = Cache::get($cacheKey.'_version', 0);
-        $this->createHardware(['pc_name' => 'Cache-Invalidate-Test']);
+        ($mutate ?? fn () => $this->createHardware(['pc_name' => 'Cache-Invalidate-Test']))();
         $versionAfter = Cache::get($cacheKey.'_version', 0);
         $this->assertGreaterThan($versionBefore, $versionAfter, "Cache key '{$cacheKey}' was not invalidated.");
     }
