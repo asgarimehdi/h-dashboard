@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Support\JalaliDateRange;
-use Illuminate\Support\Carbon;
+use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use InvalidArgumentException;
@@ -80,7 +80,7 @@ class DiseasePeriodRequest extends UnitScopedRequest
      */
     public function periodBounds(): array
     {
-        $year = Jalalian::fromCarbon(now())->getYear();
+        $year = Jalalian::fromCarbon(Carbon::now())->getYear();
 
         $from = JalaliDateRange::parseStrict(
             $this->boundInput('from') ?? sprintf('%04d/01/01', $year)
