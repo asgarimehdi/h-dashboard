@@ -42,6 +42,7 @@ class DiseaseFieldDef extends Model
         'is_active' => 'boolean',
     ];
 
+    /** @return BelongsTo<Disease, $this> */
     public function disease(): BelongsTo
     {
         return $this->belongsTo(Disease::class);

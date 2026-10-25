@@ -46,11 +46,13 @@ class DiseaseCase extends Model
         'recorded_at' => 'date',
     ];
 
+    /** @return BelongsTo<Patient, $this> */
     public function patient(): BelongsTo
     {
         return $this->belongsTo(Patient::class);
     }
 
+    /** @return BelongsTo<Disease, $this> */
     public function disease(): BelongsTo
     {
         return $this->belongsTo(Disease::class);
@@ -59,6 +61,7 @@ class DiseaseCase extends Model
     /**
      * The unit that recorded the case (session-resolved, later phase).
      */
+    /** @return BelongsTo<Unit, $this> */
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
@@ -67,6 +70,7 @@ class DiseaseCase extends Model
     /**
      * The patient's unit (decision 8) — not the recording unit.
      */
+    /** @return BelongsTo<Unit, $this> */
     public function subjectUnit(): BelongsTo
     {
         return $this->belongsTo(Unit::class, 'subject_unit_id');

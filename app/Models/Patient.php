@@ -40,6 +40,7 @@ class Patient extends Model
         'birth_date' => 'date',
     ];
 
+    /** @return HasMany<DiseaseCase, $this> */
     public function diseaseCases(): HasMany
     {
         return $this->hasMany(DiseaseCase::class);

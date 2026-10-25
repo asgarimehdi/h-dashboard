@@ -29,6 +29,7 @@ class UnitPopulation extends Model
         'population' => 'integer',
     ];
 
+    /** @return BelongsTo<Unit, $this> */
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);

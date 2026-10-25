@@ -37,11 +37,13 @@ class Disease extends Model
         'is_active' => 'boolean',
     ];
 
+    /** @return HasMany<DiseaseFieldDef, $this> */
     public function fieldDefs(): HasMany
     {
         return $this->hasMany(DiseaseFieldDef::class);
     }
 
+    /** @return HasMany<DiseaseCase, $this> */
     public function diseaseCases(): HasMany
     {
         return $this->hasMany(DiseaseCase::class);
