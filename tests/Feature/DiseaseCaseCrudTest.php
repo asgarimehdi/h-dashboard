@@ -6,8 +6,10 @@ use App\Models\DiseaseCase;
 use App\Models\DiseaseFieldDef;
 use App\Models\Patient;
 use App\Models\Unit;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
@@ -66,6 +68,51 @@ function dc_patient(array $attrs = []): Patient
         'first_name' => 'علی',
         'last_name' => 'رضایی',
     ]);
+}
+
+/**
+ * A stored case. Defaults to the actor's unit on both sides so the row is in
+ * scope unless a test says otherwise.
+ */
+function dc_case(Unit $recorderUnit, array $attrs = []): DiseaseCase
+{
+    return DiseaseCase::factory()->create($attrs + [
+        'unit_id' => $recorderUnit->id,
+        'subject_unit_id' => $recorderUnit->id,
+        'diagnosed_at' => '2026-10-01',
+        'recorded_at' => '2026-10-01',
+    ]);
+}
+
+/** Gregorian `Y-m-d` → the Jalali `Y/m/d` the UI binds to. */
+function dc_jalali(string $gregorian): string
+{
+    return Jalalian::fromCarbon(Carbon::parse($gregorian))->format('Y/m/d');
+}
+
+/**
+ * The ids `disease.index` lists while the session is parked on `$unit`.
+ *
+ * @return array<int>
+ */
+function dc_listed(?Unit $unit): array
+{
+    if ($unit instanceof Unit) {
+        Session::put('current_unit_id', $unit->id);
+    } else {
+        Session::forget('current_unit_id');
+    }
+
+    // The service memoises per request and the hierarchy version gates the
+    // cache key; bump both so the switch is visible immediately.
+    app(AccessService::class)->clearCache(auth()->user());
+
+    return Livewire::test('disease.index')
+        ->instance()
+        ->cases()
+        ->pluck('id')
+        ->map(static fn (mixed $id): int => (int) $id)
+        ->all();
 }
 
 /**
@@ -398,4 +445,303 @@ test('phase two smoke: a disease and field created from the manage UI are usable
     $case = DiseaseCase::query()->where('patient_id', $patient->id)->firstOrFail();
 
     expect($case->fields['sys'])->toBe(130);
+});
+
+// ── index: visibility, filters, pagination ────────────────────────────────
+
+test('a case is visible to its recorder unit and its subject unit, but not to an unrelated sibling', function () {
+    $disease = dc_disease('vis-disease');
+    $patient = dc_patient();
+    $subjectUnit = Unit::factory()->create(['name' => 'خانه بهداشت X']);
+    $siblingUnit = Unit::factory()->create(['name' => 'خانه بهداشت Y']);
+
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+        'subject_unit_id' => $subjectUnit->id,
+    ]);
+
+    expect(dc_listed($this->actorUnit))->toBe([$case->id])
+        ->and(dc_listed($subjectUnit))->toBe([$case->id])
+        ->and(dc_listed($siblingUnit))->toBe([]);
+});
+
+test('the index filters by disease and by an accessible subject unit', function () {
+    $htn = dc_disease('filter-htn', ['name_fa' => 'پرفشاری خون']);
+    $dm = dc_disease('filter-dm', ['name_fa' => 'دیابت']);
+
+    $otherUnit = Unit::factory()->create(['parent_id' => $this->actorUnit->id]);
+    $htnCase = dc_case($this->actorUnit, [
+        'disease_id' => $htn->id,
+        'subject_unit_id' => $this->actorUnit->id,
+        'diagnosed_at' => '2026-09-10',
+    ]);
+    $dmCase = dc_case($this->actorUnit, [
+        'disease_id' => $dm->id,
+        'subject_unit_id' => $otherUnit->id,
+        'diagnosed_at' => '2026-09-11',
+    ]);
+
+    expect(Livewire::test('disease.index')->instance()->cases()->pluck('id')->all())
+        ->toBe([$dmCase->id, $htnCase->id]);
+
+    expect(Livewire::test('disease.index')
+        ->set('diseaseFilter', $htn->id)
+        ->instance()->cases()->pluck('id')->all())
+        ->toBe([$htnCase->id]);
+
+    expect(Livewire::test('disease.index')
+        ->set('subjectUnitFilter', $otherUnit->id)
+        ->instance()->cases()->pluck('id')->all())
+        ->toBe([$dmCase->id]);
+
+    // A client-supplied unit id outside the scope is ignored, not trusted.
+    $outside = Unit::factory()->create();
+    expect(Livewire::test('disease.index')
+        ->set('subjectUnitFilter', $outside->id)
+        ->instance()->cases()->pluck('id')->all())
+        ->toBe([$dmCase->id, $htnCase->id]);
+});
+
+test('the index filters diagnosed_at by an inclusive jalali date range', function () {
+    $disease = dc_disease('range-disease');
+
+    $before = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'diagnosed_at' => '2026-09-01',
+    ]);
+    $inside = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'diagnosed_at' => '2026-10-01',
+    ]);
+    $after = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'diagnosed_at' => '2026-10-05',
+    ]);
+
+    $component = Livewire::test('disease.index')
+        ->set('dateFrom', dc_jalali('2026-09-15'))
+        ->set('dateTo', dc_jalali('2026-10-01'));
+
+    expect($component->instance()->cases()->pluck('id')->all())->toBe([$inside->id]);
+
+    // An empty range means "everything" (decision ح), never "today".
+    expect(Livewire::test('disease.index')->instance()->cases()->total())->toBe(3);
+    expect($before->id)->not->toBe($after->id);
+});
+
+test('the index searches patients by name and by national code, folding zwnj, alef variants and persian digits', function () {
+    $disease = dc_disease('search-disease');
+
+    $zahra = dc_patient([
+        'kod_melli' => '0499370899',
+        'first_name' => 'زهرا',
+        'last_name' => 'آقایی',
+    ]);
+    $maryam = dc_patient([
+        'kod_melli' => '0013542419',
+        'first_name' => 'مریم',
+        'last_name' => 'رضایی',
+    ]);
+
+    $zahraCase = dc_case($this->actorUnit, ['disease_id' => $disease->id, 'patient_id' => $zahra->id]);
+    $maryamCase = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'patient_id' => $maryam->id,
+        'diagnosed_at' => '2026-10-02',
+    ]);
+
+    // ZWNJ between the terms + Arabic yeh + an alef variant in the column.
+    expect(Livewire::test('disease.index')
+        ->set('search', "زهرا\u{200C}آقايي")
+        ->instance()->cases()->pluck('id')->all())
+        ->toBe([$zahraCase->id]);
+
+    // Persian digits typed on a Persian keyboard still find the Latin code.
+    expect(Livewire::test('disease.index')
+        ->set('search', '۰۰۱۳۵۴۲۴۱۹')
+        ->instance()->cases()->pluck('id')->all())
+        ->toBe([$maryamCase->id]);
+});
+
+test('the index paginates by perPage, clamps it, and a filter change resets the page', function () {
+    $disease = dc_disease('page-disease');
+
+    foreach (['2026-10-01', '2026-10-02', '2026-10-03'] as $day) {
+        dc_case($this->actorUnit, ['disease_id' => $disease->id, 'diagnosed_at' => $day]);
+    }
+
+    $component = Livewire::test('disease.index')->set('perPage', 2);
+
+    expect($component->instance()->cases()->perPage())->toBe(2)
+        ->and($component->instance()->cases()->count())->toBe(2)
+        ->and($component->instance()->cases()->total())->toBe(3);
+
+    $component->call('setPage', 2);
+    expect($component->instance()->cases()->count())->toBe(1);
+
+    $component->set('diseaseFilter', $disease->id)
+        ->assertSet('paginators.page', 1);
+
+    // The defensive clamp: 0 would make paginate() divide by zero.
+    $component->set('perPage', 0);
+    expect($component->instance()->cases()->count())->toBe(1);
+});
+
+test('an empty unit scope renders the banner and lists nothing', function () {
+    $disease = dc_disease('empty-scope-disease');
+    dc_case($this->actorUnit, ['disease_id' => $disease->id]);
+
+    $this->actor->units()->detach();
+    $this->actor->person?->update(['u_id' => null]);
+    Session::forget('current_unit_id');
+    app(AccessService::class)->clearCache($this->actor);
+
+    Livewire::test('disease.index')
+        ->assertSee('واحدی برای نمایش انتخاب نشده')
+        ->assertSet('emptyScope', true)
+        ->assertDontSee('رضایی');
+});
+
+// ── index: edit and delete ────────────────────────────────────────────────
+
+test('editing changes the dynamic fields and subject unit but never the recorder unit', function () {
+    $disease = dc_disease('edit-disease');
+    dc_required_defs($disease);
+    $patient = dc_patient();
+
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80],
+    ]);
+
+    $descendant = Unit::factory()->create(['parent_id' => $this->actorUnit->id]);
+    $outside = Unit::factory()->create();
+
+    $component = Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->assertSet('editingId', $case->id)
+        ->assertSet('diagnosedAt', dc_jalali('2026-10-01'))
+        ->assertSet('fields.sys', 120)
+        ->set('subjectUnitId', $outside->id)
+        ->call('saveEdit')
+        ->assertHasErrors('subjectUnitId');
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'unit_id' => $this->actorUnit->id,
+        'subject_unit_id' => $this->actorUnit->id,
+        'fields->sys' => 120,
+    ]);
+
+    $component
+        ->set('subjectUnitId', $descendant->id)
+        ->set('fields.sys', 130)
+        ->set('diagnosedAt', dc_jalali('2026-10-02'))
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'unit_id' => $this->actorUnit->id,
+        'subject_unit_id' => $descendant->id,
+        'fields->sys' => 130,
+        'diagnosed_at' => '2026-10-02',
+    ]);
+});
+
+test('editing preserves stored field keys whose definition no longer exists', function () {
+    $disease = dc_disease('orphan-disease');
+    dc_required_defs($disease);
+
+    $case = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80, 'legacy' => 'kept'],
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('fields.sys', 125)
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $case->refresh();
+
+    expect($case->fields['sys'])->toBe(125)
+        ->and($case->fields['legacy'])->toBe('kept');
+});
+
+test('a case outside the unit scope cannot be opened for editing', function () {
+    $disease = dc_disease('foreign-edit-disease');
+    $foreignUnit = Unit::factory()->create();
+
+    $case = dc_case($foreignUnit, [
+        'disease_id' => $disease->id,
+        'subject_unit_id' => $foreignUnit->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->assertStatus(403);
+});
+
+test('editing writes an updated activity log with the old and new values', function () {
+    $disease = dc_disease('log-edit-disease');
+    $case = dc_case($this->actorUnit, ['disease_id' => $disease->id]);
+    $descendant = Unit::factory()->create(['parent_id' => $this->actorUnit->id]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('subjectUnitId', $descendant->id)
+        ->set('diagnosedAt', dc_jalali('2026-10-03'))
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $log = ActivityLog::query()
+        ->where('type', 'updated')
+        ->where('subject_type', DiseaseCase::class)
+        ->where('subject_id', $case->id)
+        ->firstOrFail();
+
+    expect($log->old_values['subject_unit_id'])->toBe($this->actorUnit->id)
+        ->and($log->new_values['subject_unit_id'])->toBe($descendant->id)
+        ->and($log->old_values['diagnosed_at'])->toBe('2026-10-01')
+        ->and($log->new_values['diagnosed_at'])->toBe('2026-10-03');
+});
+
+test('deleting removes the row and writes a deleted activity log', function () {
+    $disease = dc_disease('delete-disease');
+    $case = dc_case($this->actorUnit, ['disease_id' => $disease->id]);
+
+    Livewire::test('disease.index')
+        ->call('delete', $case->id)
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseMissing('disease_cases', ['id' => $case->id]);
+
+    $log = ActivityLog::query()
+        ->where('type', 'deleted')
+        ->where('subject_type', DiseaseCase::class)
+        ->where('subject_id', $case->id)
+        ->firstOrFail();
+
+    expect($log->old_values['unit_id'])->toBe($this->actorUnit->id)
+        ->and($log->old_values['subject_unit_id'])->toBe($this->actorUnit->id);
+});
+
+test('a case outside the unit scope cannot be deleted', function () {
+    $disease = dc_disease('foreign-delete-disease');
+    $foreignUnit = Unit::factory()->create();
+
+    $case = dc_case($foreignUnit, [
+        'disease_id' => $disease->id,
+        'subject_unit_id' => $foreignUnit->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('delete', $case->id)
+        ->assertStatus(403);
+
+    $this->assertDatabaseHas('disease_cases', ['id' => $case->id]);
 });
