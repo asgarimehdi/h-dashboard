@@ -60,7 +60,6 @@ final class PatientService
                 },
             ],
             'gender' => ['required', 'in:male,female'],
-            'city' => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -75,7 +74,6 @@ final class PatientService
             'last_name' => $this->nullableString($data['last_name'] ?? null),
             'birth_date' => $this->birthDate($data['birth_date_jalali'] ?? null),
             'gender' => (string) ($data['gender'] ?? ''),
-            'city' => $this->nullableString($data['city'] ?? null),
         ]);
 
         ActivityLogService::created($patient, 'ثبت بیمار جدید');

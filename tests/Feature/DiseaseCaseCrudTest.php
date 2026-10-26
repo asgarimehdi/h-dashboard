@@ -343,7 +343,6 @@ test('an unknown national code opens inline create and the new patient is used f
         'last_name' => 'آقایی',
         'birth_date_jalali' => '1370/01/01',
         'gender' => 'female',
-        'city' => 'تهران',
     ])->call('createPatient')->assertHasNoErrors();
 
     $patient = Patient::query()->where('kod_melli', '0013542419')->firstOrFail();
@@ -378,7 +377,6 @@ test('an invalid national code is rejected before a patient row exists', functio
         'last_name' => 'کد',
         'birth_date_jalali' => '',
         'gender' => 'male',
-        'city' => '',
     ])->call('createPatient')->assertHasErrors('newPatient.kod_melli');
 
     $this->assertDatabaseCount('patients', 0);
@@ -397,13 +395,38 @@ test('a duplicate national code names the existing patient and creates no second
         'last_name' => 'نفر',
         'birth_date_jalali' => '',
         'gender' => 'male',
-        'city' => '',
     ])
         ->call('createPatient')
         ->assertHasErrors('newPatient.kod_melli')
         ->assertSee($existing->fullName());
 
     $this->assertDatabaseCount('patients', 1);
+});
+
+test('the inline patient block no longer offers a county field', function () {
+    Livewire::test('disease.create')
+        ->set('kodMelli', '0013542419')
+        ->assertSet('inlinePatient', true)
+        ->assertDontSee('شهرستان');
+});
+
+test('a patient created from the case form without a county is stored with null', function () {
+    $component = Livewire::test('disease.create')
+        ->set('kodMelli', '0013542419')
+        ->assertSet('inlinePatient', true);
+
+    $component->set('newPatient', [
+        'kod_melli' => '0013542419',
+        'first_name' => 'زهرا',
+        'last_name' => 'آقایی',
+        'birth_date_jalali' => '1370/01/01',
+        'gender' => 'female',
+    ])->call('createPatient')->assertHasNoErrors();
+
+    $patient = Patient::query()->where('kod_melli', '0013542419')->firstOrFail();
+
+    expect($patient->city)->toBeNull()
+        ->and($component->get('patientId'))->toBe($patient->id);
 });
 
 test('persian digits in the national code find the latin patient', function () {

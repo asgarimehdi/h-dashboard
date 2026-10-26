@@ -37,7 +37,7 @@ test('disease schema tables and key columns exist', function () {
     }
 
     $columns = [
-        'patients' => ['id', 'kod_melli', 'first_name', 'last_name', 'birth_date', 'gender', 'city', 'created_at', 'updated_at'],
+        'patients' => ['id', 'kod_melli', 'first_name', 'last_name', 'birth_date', 'gender', 'created_at', 'updated_at'],
         'diseases' => ['id', 'name_fa', 'slug', 'is_active', 'sort', 'created_at', 'updated_at'],
         'disease_field_defs' => ['id', 'disease_id', 'field_key', 'label_fa', 'type', 'unit', 'options', 'required', 'sort', 'is_active', 'created_at', 'updated_at'],
         'disease_cases' => ['id', 'patient_id', 'disease_id', 'unit_id', 'subject_unit_id', 'diagnosed_at', 'recorded_at', 'fields', 'created_at', 'updated_at'],
@@ -51,6 +51,7 @@ test('disease schema tables and key columns exist', function () {
     }
 
     expect(Schema::hasColumn('patients', 'deleted_at'))->toBeFalse();
+    expect(Schema::hasColumn('patients', 'city'))->toBeFalse();
 });
 
 test('disease_cases.fields defaults to an empty jsonb object at the database level', function () {

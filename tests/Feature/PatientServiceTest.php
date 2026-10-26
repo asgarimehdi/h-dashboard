@@ -52,7 +52,6 @@ class PatientServiceTest extends TestCase
             'last_name' => 'محمدی',
             'gender' => 'male',
             'birth_date' => '1990-01-01',
-            'city' => 'تهران',
         ], $overrides);
     }
 
@@ -109,9 +108,9 @@ class PatientServiceTest extends TestCase
     {
         $patient = $this->service->create($this->payload(), $this->unit->id);
 
-        $updated = $this->service->update($patient->id, $this->payload(['city' => 'مشهد']), $this->unit->id);
+        $updated = $this->service->update($patient->id, $this->payload(['first_name' => 'رضا']), $this->unit->id);
 
-        $this->assertSame('مشهد', $updated->city);
+        $this->assertSame('رضا', $updated->first_name);
 
         $log = $this->latestLog('updated');
         $this->assertSame($patient->id, $log->subject_id);

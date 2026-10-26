@@ -145,7 +145,6 @@ return new class extends Component
                 'last_name' => $this->newPatient['last_name'] ?? '',
                 'birth_date_jalali' => $this->newPatient['birth_date_jalali'] ?? '',
                 'gender' => $this->newPatient['gender'] ?? '',
-                'city' => $this->newPatient['city'] ?? '',
             ]);
         } catch (UniqueConstraintViolationException) {
             // Race: the row appeared between the lookup and the insert.
@@ -383,7 +382,6 @@ return new class extends Component
             'last_name' => '',
             'birth_date_jalali' => '',
             'gender' => '',
-            'city' => '',
         ];
     }
 
@@ -480,8 +478,6 @@ return new class extends Component
                         option-label="label"
                         placeholder="انتخاب کنید"
                     />
-
-                    <x-input label="شهرستان" wire:model="newPatient.city" placeholder="اختیاری"/>
                 </div>
 
                 <x-button

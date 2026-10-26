@@ -39,8 +39,6 @@ return new class extends Component
 
     public string $gender = '';
 
-    public string $city = '';
-
     public function mount(): void
     {
         $this->authorize('manage_diseases');
@@ -118,7 +116,7 @@ return new class extends Component
         $this->authorize('manage_diseases');
 
         $this->resetValidation();
-        $this->reset(['first_name', 'last_name', 'birth_date_jalali', 'gender', 'city']);
+        $this->reset(['first_name', 'last_name', 'birth_date_jalali', 'gender']);
         $this->duplicatePatientId = null;
         // Inline-create: the searched code is the one being registered.
         $this->kod_melli = $this->normalizedCode();
@@ -153,7 +151,6 @@ return new class extends Component
                 'last_name' => $this->last_name,
                 'birth_date_jalali' => $this->birth_date_jalali,
                 'gender' => $this->gender,
-                'city' => $this->city,
             ]);
         } catch (UniqueConstraintViolationException) {
             // Race: another request inserted the same code between the lookup
@@ -172,7 +169,7 @@ return new class extends Component
         }
 
         $this->resetValidation();
-        $this->reset(['kod_melli', 'first_name', 'last_name', 'birth_date_jalali', 'gender', 'city']);
+        $this->reset(['kod_melli', 'first_name', 'last_name', 'birth_date_jalali', 'gender']);
         $this->duplicatePatientId = null;
         $this->formOpen = false;
         $this->searchCode = '';
@@ -233,7 +230,6 @@ return new class extends Component
             ['key' => 'kod_melli', 'label' => 'کد ملی'],
             ['key' => 'birth_date', 'label' => 'تاریخ تولد'],
             ['key' => 'gender', 'label' => 'جنسیت'],
-            ['key' => 'city', 'label' => 'شهرستان'],
         ];
     }
 
@@ -403,10 +399,6 @@ return new class extends Component
                 @scope('cell_gender', $patient)
                     {{ $patient->genderLabel() }}
                 @endscope
-
-                @scope('cell_city', $patient)
-                    {{ $patient->city ?? '—' }}
-                @endscope
             </x-table>
         @endif
     </x-card>
@@ -437,7 +429,6 @@ return new class extends Component
                     {{ $selectedPatient->birth_date ? \Morilog\Jalali\Jalalian::fromCarbon($selectedPatient->birth_date)->format('Y/m/d') : '—' }}
                 </div>
                 <div><span class="opacity-60">جنسیت:</span> {{ $selectedPatient->genderLabel() }}</div>
-                <div><span class="opacity-60">شهرستان:</span> {{ $selectedPatient->city ?? '—' }}</div>
             </div>
 
             <h3 class="text-sm font-bold mt-6 mb-2">پرونده‌های بیماری</h3>
