@@ -730,6 +730,10 @@ test('deleting removes the row and writes a deleted activity log', function () {
         ->and($log->old_values['subject_unit_id'])->toBe($this->actorUnit->id);
 });
 
+test('cases index renders the theme selector', function () {
+    Livewire::test('disease.index')->assertSeeHtml('theme-controller');
+});
+
 test('a case outside the unit scope cannot be deleted', function () {
     $disease = dc_disease('foreign-delete-disease');
     $foreignUnit = Unit::factory()->create();

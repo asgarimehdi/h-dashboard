@@ -462,7 +462,11 @@ return new class extends Component
 }; ?>
 
 <div>
-    <x-header title="کیس‌های بیماری" separator progress-indicator/>
+    <x-header title="کیس‌های بیماری" separator progress-indicator>
+        <x-slot:actions>
+            <x-theme-selector/>
+        </x-slot:actions>
+    </x-header>
 
     @if($emptyScope)
         <div class="alert alert-info mb-6" role="alert">
