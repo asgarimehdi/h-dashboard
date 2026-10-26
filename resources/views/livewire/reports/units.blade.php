@@ -59,7 +59,7 @@ return new class extends Component
         $query = Unit::query()
             ->whereIn('id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '', function ($q) {
+            ->when($this->showOnlyNoBoundary !== null, function ($q) {
                 if ($this->showOnlyNoBoundary == '1') {
                     $q->whereNull('boundary_id');
                 } else {
@@ -69,7 +69,7 @@ return new class extends Component
 
         $total = $query->count();
 
-        $hasBoundaryFilter = $this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '';
+        $hasBoundaryFilter = $this->showOnlyNoBoundary !== null;
 
         $byType = Unit::query()
             ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])

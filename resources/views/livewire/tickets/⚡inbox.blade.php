@@ -539,13 +539,13 @@ new class extends Component
 
             @scope('cell_subject', $ticket)
             <span class="text-sm font-medium line-clamp-1 max-w-[150px]" title="{{ $ticket->subject }}">
-                {{ Str::limit($ticket->subject, 15, '...') }}
+                {{ \Illuminate\Support\Str::limit($ticket->subject, 15, '...') }}
             </span>
             @endscope
 
             @scope('cell_unit.name', $ticket)
             <span class="text-xs font-medium" title="{{ $ticket->unit->name }}">
-                {{ Str::limit($ticket->unit->name, 15, '...') }}
+                {{ \Illuminate\Support\Str::limit($ticket->unit->name, 15, '...') }}
             </span>
             @endscope
 

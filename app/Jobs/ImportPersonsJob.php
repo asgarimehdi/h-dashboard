@@ -59,7 +59,6 @@ class ImportPersonsJob implements ShouldQueue
     public function handle(): void
     {
         $import = new PersonImport;
-        $import->setCompareKey($this->compareKey);
         $import->setAccessibleUnitIds($this->accessibleUnitIds);
         $import->setSelectedActions($this->selectedActions);
 

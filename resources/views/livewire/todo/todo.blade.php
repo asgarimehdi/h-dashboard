@@ -246,7 +246,7 @@ return new class extends Component
             'end_at' => $endDate ?? $startDate,
         ]);
 
-        \Cache::increment('calendar_version');
+        Cache::increment('calendar_version');
 
         $this->dispatch('swal', ['title' => 'تاریخ وظیفه به‌روزرسانی شد', 'icon' => 'success']);
         $this->mount();
@@ -374,8 +374,8 @@ return new class extends Component
             (int) $dateParts[0],
             (int) $dateParts[1],
             (int) $dateParts[2],
-            (int) $timeParts[0] ?? 0,
-            (int) $timeParts[1] ?? 0,
+            (int) $timeParts[0],
+            (int) $timeParts[1],
             0
         );
 

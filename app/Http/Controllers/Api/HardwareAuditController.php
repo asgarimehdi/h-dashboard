@@ -105,7 +105,7 @@ class HardwareAuditController extends Controller
         ]);
 
         $changes = $audit->changes;
-        if (! $changes || ! is_array($changes)) {
+        if (! $changes) {
             return response()->json(['message' => 'No changes to rollback.'], 422);
         }
 
@@ -182,7 +182,7 @@ class HardwareAuditController extends Controller
         }
 
         // Verify the audit is not orphaned (linked hardware has never existed or no changes)
-        if (! $audit->changes || ! is_array($audit->changes)) {
+        if (! $audit->changes) {
             return response()->json(['message' => 'No change data in audit to restore from.'], 422);
         }
 

@@ -444,7 +444,7 @@ class TicketCommentController extends Controller
 
         // `true` preserves the n_code keys notifyMentions() re-emits as the
         // notification body, and `array_slice` bounds the `whereIn` below.
-        $usernames = array_slice(array_unique($matches[1] ?? []), 0, self::MAX_MENTIONS, true);
+        $usernames = array_slice(array_unique($matches[1]), 0, self::MAX_MENTIONS, true);
 
         if ($usernames === []) {
             return [];

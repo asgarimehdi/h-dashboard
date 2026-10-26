@@ -111,10 +111,10 @@ class HardwareAuditObserver
             'action' => 'rollback',
             'changes' => $this->sanitizeChanges($rollbackChanges),
             'source' => $this->detectSource(),
-            'ip_address' => request()?->ip(),
+            'ip_address' => request()->ip(),
             // #886 (CWE-1236): user_agent is attacker-controlled; neutralise
             // '='-leading values at the source so the payload never persists.
-            'user_agent' => ExcelCell::escape(request()?->userAgent()),
+            'user_agent' => ExcelCell::escape(request()->userAgent()),
         ]);
     }
 
@@ -150,9 +150,9 @@ class HardwareAuditObserver
             'action' => $action,
             'changes' => $this->sanitizeChanges($changes),
             'source' => $source,
-            'ip_address' => $request?->ip(),
+            'ip_address' => $request->ip(),
             // #886 (CWE-1236): see recordRollbackAudit.
-            'user_agent' => ExcelCell::escape($request?->userAgent()),
+            'user_agent' => ExcelCell::escape($request->userAgent()),
         ]);
     }
 
