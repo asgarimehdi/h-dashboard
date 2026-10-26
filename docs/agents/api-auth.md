@@ -36,6 +36,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 | `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | — (no write routes; the group is GET-only) |
 | `/api/notifications*` | `ability:notifications:read` | `abilities:notifications:write` (POST `{id}/read` and `read-all`, in their own group since #1002) |
 | `/api/gis*` | `ability:gis:read` + `role_or_permission:map\|bw` | — |
+| `/api/gis/diseases`, `/api/gis/disease-stats`, `/api/gis/disease-map` (#1245) | same `gis` group: `ability:gis:read` + `role_or_permission:map\|bw` | — (GET-only; no `manage_diseases`). Payloads are **aggregate-only and PII-free** — counts, rates and organizational names, never a patient identifier, name or dynamic field value. |
 
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.

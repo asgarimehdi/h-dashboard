@@ -44,6 +44,30 @@ final class JalaliDateRange
     }
 
     /**
+     * Parse one Jalali `Y/m/d` string strictly (API contract, issue #1245).
+     *
+     * Unlike `parse()`, an impossible date is rejected instead of silently
+     * normalised: `1405/12/30` in a non-leap year, `1405/13/01` and
+     * `1405/00/10` all yield `null`, because the round-trip back to Jalali no
+     * longer spells the input. The UI keeps the lenient `parse()` on purpose —
+     * a half-typed filter must not error mid-keystroke; an API request must.
+     */
+    public static function parseStrict(?string $value): ?Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $carbon = self::parse($value);
+
+        if ($carbon === null) {
+            return null;
+        }
+
+        return Jalalian::fromCarbon($carbon)->format('Y/m/d') === $value ? $carbon : null;
+    }
+
+    /**
      * A from..to pair as Carbon bounds, or `null` when either end is
      * missing/invalid or the range is inverted.
      *
