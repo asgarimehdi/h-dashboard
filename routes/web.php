@@ -126,8 +126,13 @@ Route::middleware('auth')->group(function () {
         });
 
         // مدیریت بیماری‌ها و فیلدهایشان (Issue #1242، فاز ۲) — ورودی منو در
-        // فاز ۴ (#1246) می‌آید؛ تا آن زمان صفحه فقط با URL مستقیم باز می‌شود.
+        // فاز ۴ (#1246) آمد.
         Route::middleware('role_or_permission:manage_diseases')->group(function () {
+            // Issue #1246، فاز ۴: دو صفحهٔ باقی‌مانده. گروه `unit_context` بیرونی
+            // است (بالاتر)، پس `ValidateUnitContext` خودکار اعمال می‌شود.
+            Route::livewire('/disease', 'disease.index')->name('disease.index');
+            Route::livewire('/disease/create', 'disease.create')->name('disease.create');
+
             Route::livewire('/disease/manage', 'disease.manage')->name('disease.manage');
         });
 

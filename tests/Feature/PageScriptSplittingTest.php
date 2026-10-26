@@ -127,8 +127,16 @@ class PageScriptSplittingTest extends TestCase
 
             $this->assertLoads($response, self::LEAFLET, $url);
 
-            // No map page has a Persian date boundary, so none may pull the
-            // datepicker back in.
+            // #1246: `/map` gained a Persian period boundary — the disease
+            // layer's Jalali from/to — so it is now the one map page that must
+            // load the datepicker itself. Every other map page still has no
+            // Persian date boundary and must not pull it back in.
+            if ($url === '/map') {
+                $this->assertLoads($response, self::JALALI_DATEPICKER, $url);
+
+                continue;
+            }
+
             $response->assertDontSee(self::JALALI_DATEPICKER);
         }
     }
