@@ -29,23 +29,25 @@ return new class extends Component
 
     #[Url(as: 'bbox')]
     public $bbox = null;
-    
+
     #[Url(as: 'layers')]
     public $layers = 'units';
-    
+
     #[Url(as: 'filter_hardware')]
     public $filterHardware = '';
-    
+
     #[Url(as: 'filter_priority')]
     public $filterPriority = '';
-    
+
     #[Url(as: 'filter_status')]
     public $filterStatus = '';
 
     public $mapCenterLat = 36.669343;
+
     public $mapCenterLng = 48.47163;
+
     public $mapZoom = 10;
-    
+
     /**
      * Bearer token for the page's own `/api/gis/*` fetches.
      *
@@ -57,6 +59,17 @@ return new class extends Component
     #[Locked]
     public $mapToken = '';
 
+    /**
+     * Disease layer period (#1246). Jalali `Y/m/d`, both ends inclusive.
+     *
+     * Defaults to the current Persian year (1 Farvardin → today), computed in
+     * `mount()` with the calendar, never hard-coded. The server re-parses and
+     * validates these; they are display defaults, not an authorization input.
+     */
+    public string $diseaseFrom = '';
+
+    public string $diseaseTo = '';
+
     protected $listeners = [
         'mapMoved' => 'onMapMoved',
         'layerToggled' => 'onLayerToggled',
@@ -67,6 +80,9 @@ return new class extends Component
     public function mount()
     {
         $this->resolveToken();
+
+        $this->diseaseFrom = \Morilog\Jalali\Jalalian::now()->getYear().'/01/01';
+        $this->diseaseTo = \Morilog\Jalali\Jalalian::now()->format('Y/m/d');
     }
 
     /**
@@ -190,7 +206,7 @@ return new class extends Component
         $this->layers = implode(',', $layers);
     }
 
-    /** @var array<string, string> $filterPropertyMap Explicit allowlist of client keys → component properties. */
+    /** @var array<string, string> Explicit allowlist of client keys → component properties. */
     private const FILTER_PROPERTY_MAP = [
         'hardware_type' => 'filterHardware',
         'ticket_priority' => 'filterPriority',
@@ -216,15 +232,15 @@ return new class extends Component
     {
         $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
 
-        if (!in_array($unitId, $accessibleIds)) {
+        if (! in_array($unitId, $accessibleIds)) {
             return ['error' => 'Unit not found'];
         }
 
         $unit = \App\Models\Unit::with(['children', 'unitType'])->withCount('children')->find($unitId);
-        if (!$unit) {
+        if (! $unit) {
             return ['error' => 'Unit not found'];
         }
-        
+
         return [
             'id' => $unit->id,
             'name' => $unit->name,
@@ -234,7 +250,6 @@ return new class extends Component
             'children_count' => $unit->children_count,
         ];
     }
-
 };
 ?>
 
@@ -267,6 +282,15 @@ return new class extends Component
                    @click="toggleLayer('tickets')">
                 <i class="fa fa-ticket"></i> تیکت‌ها
             </button>
+            {{-- #1246: aggregate-only disease layer. Same `map` gate as the rest
+                 of this page — `/api/gis/disease*` carries counts/rates, never
+                 patient data (decision 18). --}}
+            <button type="button" id="disease-layer-toggle"
+                   class="btn btn-xs btn-ghost gap-1"
+                   :class="{ 'btn-primary': activeLayers.includes('diseases') }"
+                   @click="toggleLayer('diseases')">
+                <i class="fa fa-virus"></i> بیماری‌ها
+            </button>
         </div>
 
         <!-- Filters -->
@@ -295,6 +319,47 @@ return new class extends Component
                 <option value="accepted">پذیرفته شده</option>
                 <option value="completed">تکمیل شده</option>
             </select>
+        </div>
+
+        {{-- #1246: disease controls. Hidden until the layer is on; the row is
+             full-width so `flex-wrap` pushes it onto a second line instead of
+             squeezing the layer buttons. All state is Alpine — this panel does
+             no server round-trip. --}}
+        <div id="disease-controls"
+             x-show="activeLayers.includes('diseases')"
+             class="w-full flex flex-wrap items-end gap-2 border-t border-base-300 pt-2"
+             style="display: none;">
+            <select id="disease-select"
+                    x-model.number="disease.id"
+                    @change="$nextTick(() => loadDiseaseLayer(true))"
+                    class="select select-sm w-48">
+                <option value="">انتخاب بیماری</option>
+                <template x-for="d in diseases" :key="d.id">
+                    <option :value="d.id" x-text="d.name_fa"></option>
+                </template>
+            </select>
+
+            <input id="disease_date_from" data-jdp readonly value="{{ $diseaseFrom }}"
+                   class="input input-sm w-32" aria-label="از تاریخ" />
+            <input id="disease_date_to" data-jdp readonly value="{{ $diseaseTo }}"
+                   class="input input-sm w-32" aria-label="تا تاریخ" />
+
+            <span x-show="diseaseLoading" class="loading loading-spinner loading-xs"></span>
+            <span id="disease-error" x-show="diseaseError" class="text-error text-xs"
+                  x-text="diseaseError"></span>
+
+            <div id="disease-legend"
+                 x-show="diseaseLevel === 'region' && diseaseLegend.length"
+                 class="flex flex-wrap items-center gap-2 text-xs">
+                <template x-for="row in diseaseLegend" :key="row.label">
+                    <span class="flex items-center gap-1">
+                        <span class="inline-block w-3 h-3 rounded"
+                              :style="`background:${row.color}`"></span>
+                        <span x-text="row.label"></span>
+                    </span>
+                </template>
+                <span class="text-base-content/60">نرخ در هر ۱۰٬۰۰۰ نفر</span>
+            </div>
         </div>
 
         <!-- Stats Panel -->
@@ -362,6 +427,14 @@ return new class extends Component
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
 @endassets
 
+@assets
+    {{-- #1246: the disease period pickers. Same `@assets` rationale as Leaflet
+         above — `jalalidatepicker` must exist before this page's Alpine
+         `init()` starts watching, and a pushed tag would arrive after Alpine
+         on `wire:navigate`. The CSS is global (`layouts/app.blade.php`). --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
+
 @script
 <script>
     Alpine.data('mapDashboard', () => {
@@ -373,6 +446,17 @@ return new class extends Component
         let map = null;
         let layerGroups = {};
         let moveTimer = null;
+        let diseasesPromise = null;
+
+        // One definition of the region→unit boundary on the client. Mirrors
+        // `DiseaseMapService::ZOOM_SWITCH`; `meta.zoom_switch` is authoritative
+        // for the payload but this keeps the local branch from guessing.
+        const DISEASE_ZOOM_SWITCH = 9;
+        // Quantile classes, light → dark. `class`/`meta.breaks` come from
+        // `/api/gis/disease-map` (#1245 decision ه) so the client never
+        // re-derives quantiles and cannot disagree with the server.
+        const DISEASE_COLORS = ['#ffffb2', '#fecc5c', '#fd8d3c', '#f03b20', '#bd0026'];
+        const DISEASE_NO_DATA_COLOR = '#9ca3af';
 
         return {
             activeLayers: ['units'],
@@ -388,6 +472,17 @@ return new class extends Component
             center: [{{ $mapCenterLat }}, {{ $mapCenterLng }}],
             zoom: {{ $mapZoom }},
 
+            // Disease layer (#1246). `diseaseLevel` is 'region' | 'unit' | null.
+            diseases: [],
+            disease: { id: null, from: '{{ $diseaseFrom }}', to: '{{ $diseaseTo }}' },
+            diseaseError: '',
+            diseaseLegend: [],
+            diseaseBreaks: [],
+            diseaseLevel: null,
+            diseaseLoading: false,
+            diseaseRequestId: 0,
+            diseasesLoading: null,
+
             init() {
                 window.Alpine.store('map').onReady((readyMap) => {
                     map = readyMap;
@@ -397,11 +492,56 @@ return new class extends Component
                         units: L.layerGroup().addTo(map),
                         hardware: L.layerGroup(),
                         tickets: L.layerGroup(),
+                        // Never added to the map here: only when the layer is
+                        // switched on. Cleared individually — see toggleLayer.
+                        diseaseRegions: L.layerGroup(),
+                        diseaseUnits: L.layerGroup(),
                     };
+
+                    // Region below the marker pane (600), units above it, so a
+                    // unit marker is never buried under a polygon.
+                    map.createPane('diseaseRegionPane').style.zIndex = 410;
+                    map.createPane('diseaseUnitPane').style.zIndex = 620;
+
+                    ['diseaseRegionPane', 'diseaseUnitPane'].forEach((paneName) => {
+                        const pane = map.getPane(paneName);
+                        pane.style.transition = 'opacity 200ms ease';
+                        pane.style.opacity = '0';
+                        pane.style.pointerEvents = 'none';
+                    });
 
                     map.on('moveend', () => this.onMapMove());
 
+                    this.initDiseaseDatepickers();
                     this.onMapMove();
+                });
+            },
+
+            initDiseaseDatepickers() {
+                if (typeof jalaliDatepicker === 'undefined') return;
+
+                jalaliDatepicker.startWatch({
+                    time: false,
+                    hasSecond: false,
+                    format: 'YYYY/MM/DD',
+                    separatorChars: { date: '/', between: ' ', time: ':' },
+                });
+
+                [
+                    ['disease_date_from', 'from'],
+                    ['disease_date_to', 'to'],
+                ].forEach(([elementId, key]) => {
+                    const input = document.getElementById(elementId);
+
+                    // `wire:navigate` re-runs init against the same DOM node;
+                    // rebinding would stack duplicate listeners.
+                    if (!input || input.dataset.jdpBound === '1') return;
+
+                    input.dataset.jdpBound = '1';
+                    input.addEventListener('jdp:change', () => {
+                        this.disease[key] = input.value;
+                        this.loadDiseaseLayer(true);
+                    });
                 });
             },
 
@@ -446,9 +586,327 @@ return new class extends Component
                     if (this.filters.ticket_status) url += `&status=${this.filters.ticket_status}`;
                     this.fetchAndRender(url, layerGroups.tickets, 'ticket', headers);
                 }
+                // #1246: after the point layers, before the stats refresh. The
+                // disease layer decides region/unit from the current zoom.
+                if (this.activeLayers.includes('diseases')) {
+                    this.loadDiseaseLayer();
+                }
 
                 // Load stats
                 this.fetchStats(bbox, headers);
+            },
+
+            apiHeaders() {
+                return {
+                    'Authorization': 'Bearer ' + this.apiToken,
+                    'Accept': 'application/json',
+                };
+            },
+
+            async loadDiseases() {
+                if (this.diseases.length > 0) return;
+                if (diseasesPromise) return diseasesPromise;
+
+                // Promise kept in a closure local: an Alpine-reactive Promise
+                // is proxied, and every `await` would walk the proxy.
+                diseasesPromise = (async () => {
+                    try {
+                        const response = await fetch(`${this.apiBase}/diseases`, { headers: this.apiHeaders() });
+                        if (!response.ok) throw new Error(`diseases ${response.status}`);
+
+                        const list = await response.json();
+                        this.diseases = Array.isArray(list) ? list : [];
+
+                        if (this.diseases.length === 0) {
+                            this.diseaseError = 'بیماری فعالی تعریف نشده است.';
+
+                            return;
+                        }
+
+                        this.diseaseError = '';
+
+                        // Auto-select the first catalogue row: an empty map
+                        // reads as "nothing to show", the selector stays as the
+                        // escape hatch.
+                        if (!this.disease.id) {
+                            this.disease.id = this.diseases[0].id;
+                            this.loadDiseaseLayer(true);
+                        }
+                    } catch (error) {
+                        this.diseaseError = 'بارگذاری فهرست بیماری‌ها ناموفق بود.';
+                    } finally {
+                        diseasesPromise = null;
+                    }
+                })();
+
+                return diseasesPromise;
+            },
+
+            async loadDiseaseLayer(force = false) {
+                if (!map || !this.activeLayers.includes('diseases')) return;
+                if (!this.disease.id) return;
+
+                const level = map.getZoom() >= DISEASE_ZOOM_SWITCH ? 'unit' : 'region';
+
+                // Region payloads are not bbox-filtered, so panning cannot
+                // change the answer: refetch only on an explicit change
+                // (disease/period/toggle). Unit mode refetches on every
+                // `moveend` because its bbox did change.
+                if (level === 'region' && this.diseaseLevel === 'region' && !force) return;
+
+                const requestId = ++this.diseaseRequestId;
+                this.diseaseLoading = true;
+
+                const params = new URLSearchParams({
+                    disease: this.disease.id,
+                    from: this.disease.from,
+                    to: this.disease.to,
+                    zoom: String(Math.round(map.getZoom())),
+                });
+
+                // No `bbox` in region mode on purpose: the quantile must be
+                // computed over every visible region, not just the viewport.
+                if (level === 'unit' && this.currentBbox) params.set('bbox', this.currentBbox);
+
+                try {
+                    const response = await fetch(`${this.apiBase}/disease-map?${params}`, { headers: this.apiHeaders() });
+                    if (!response.ok) throw new Error(`disease-map ${response.status}`);
+
+                    const data = await response.json();
+
+                    // A fast pan can land two responses out of order; only the
+                    // newest request may touch the layers.
+                    if (requestId !== this.diseaseRequestId) return;
+
+                    if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+                        throw new Error('قرارداد لایه بیماری نامعتبر است.');
+                    }
+
+                    // #1245 ships `county`/`province` below the switch and
+                    // `unit` above it. Anything else means the contract moved;
+                    // render an error instead of mis-reading a payload.
+                    if (data.features.length > 0 && !this.featuresMatchLevel(data.features, level)) {
+                        throw new Error('قرارداد لایه بیماری نامعتبر است.');
+                    }
+
+                    this.diseaseError = '';
+                    this.applyDiseaseLevel(level, data.features, data.meta || {});
+                } catch (error) {
+                    if (requestId !== this.diseaseRequestId) return;
+
+                    // Keep the previous level on screen: a failed refresh must
+                    // not blank the map.
+                    this.diseaseError = error.message.startsWith('disease-map')
+                        ? 'بارگذاری لایه بیماری ناموفق بود.'
+                        : error.message;
+                } finally {
+                    if (requestId === this.diseaseRequestId) this.diseaseLoading = false;
+                }
+            },
+
+            featuresMatchLevel(features, level) {
+                return features.every((feature) => {
+                    const featureLevel = feature?.properties?.level;
+
+                    return level === 'unit'
+                        ? featureLevel === 'unit'
+                        : featureLevel === 'county' || featureLevel === 'province';
+                });
+            },
+
+            applyDiseaseLevel(level, features, meta) {
+                const isUnit = level === 'unit';
+                const targetGroup = isUnit ? layerGroups.diseaseUnits : layerGroups.diseaseRegions;
+                const sourceGroup = isUnit ? layerGroups.diseaseRegions : layerGroups.diseaseUnits;
+                const targetPaneName = isUnit ? 'diseaseUnitPane' : 'diseaseRegionPane';
+                const sourcePaneName = isUnit ? 'diseaseRegionPane' : 'diseaseUnitPane';
+
+                const levelChanged = this.diseaseLevel !== level;
+
+                targetGroup.clearLayers();
+                this.renderDiseaseFeatures(features, level, meta);
+                this.diseaseLevel = level;
+
+                if (!map) return;
+
+                const target = map.getPane(targetPaneName);
+                const source = map.getPane(sourcePaneName);
+
+                if (!target || !source) return;
+
+                if (!levelChanged) {
+                    target.style.opacity = '1';
+                    target.style.pointerEvents = '';
+
+                    return;
+                }
+
+                // Crossfade between the two panes; the hidden pane must not
+                // swallow clicks meant for the visible one.
+                const requestId = this.diseaseRequestId;
+                source.style.pointerEvents = 'none';
+                target.style.opacity = '0';
+
+                requestAnimationFrame(() => {
+                    target.style.opacity = '1';
+                    target.style.pointerEvents = '';
+                    source.style.opacity = '0';
+
+                    setTimeout(() => {
+                        if (this.diseaseRequestId === requestId) sourceGroup.clearLayers();
+                    }, 220);
+                });
+            },
+
+            renderDiseaseFeatures(features, level, meta) {
+                if (features.length === 0) {
+                    this.diseaseLegend = [];
+                    this.diseaseBreaks = [];
+                    this.diseaseError = 'در این بازه یا محدوده، داده‌ای ثبت نشده است.';
+
+                    return;
+                }
+
+                if (level === 'unit') {
+                    this.diseaseLegend = [];
+                    this.diseaseBreaks = [];
+
+                    features.forEach((feature) => {
+                        if (feature?.geometry?.type !== 'Point') return;
+
+                        const [lng, lat] = feature.geometry.coordinates;
+                        const latNumber = Number(lat);
+                        const lngNumber = Number(lng);
+
+                        if (!Number.isFinite(latNumber) || !Number.isFinite(lngNumber)) return;
+
+                        // Every base unit in scope gets a marker, `cases = 0`
+                        // included (decision 14) — an absent marker would read
+                        // as "unit does not exist".
+                        L.circleMarker([latNumber, lngNumber], {
+                            pane: 'diseaseUnitPane',
+                            className: 'disease-unit-marker',
+                            radius: 7,
+                            color: '#ffffff',
+                            weight: 2,
+                            opacity: 1,
+                            fillColor: '#2563eb',
+                            fillOpacity: 1,
+                        })
+                            .bindPopup(() => this.diseaseUnitPopup(feature.properties))
+                            .addTo(layerGroups.diseaseUnits);
+                    });
+
+                    return;
+                }
+
+                // Server-side quantile (decision ه in #1245). The client reads
+                // `class` per feature and `breaks` for the legend, so there is
+                // one quantile implementation, not two.
+                const breaks = Array.isArray(meta.breaks)
+                    ? meta.breaks.map((value) => this.toRate(value)).filter((value) => value !== null)
+                    : [];
+
+                this.diseaseBreaks = breaks;
+                this.diseaseLegend = this.buildDiseaseLegend(breaks, features);
+
+                const geoLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
+                    pane: 'diseaseRegionPane',
+                    style: (feature) => {
+                        const rate = this.toRate(feature.properties.rate);
+
+                        return {
+                            color: '#ffffff',
+                            weight: 1,
+                            opacity: 0.9,
+                            fillColor: rate === null
+                                ? DISEASE_NO_DATA_COLOR
+                                : this.diseaseColor(feature.properties.class),
+                            // Grey polygons stay visible but visibly "unknown".
+                            fillOpacity: rate === null ? 0.35 : 0.75,
+                        };
+                    },
+                    onEachFeature: (feature, polygon) => {
+                        polygon.bindPopup(() => this.diseaseRegionPopup(feature.properties));
+                    },
+                });
+
+                layerGroups.diseaseRegions.addLayer(geoLayer);
+            },
+
+            buildDiseaseLegend(breaks, features) {
+                const hasRate = features.some((feature) => this.toRate(feature.properties.rate) !== null);
+
+                if (!hasRate) {
+                    return [{
+                        color: DISEASE_NO_DATA_COLOR,
+                        label: 'نرخ قابل محاسبه نیست (جمعیت ثبت نشده)',
+                    }];
+                }
+
+                if (breaks.length === 0) return [];
+
+                const rows = breaks.map((upper, index) => ({
+                    color: DISEASE_COLORS[Math.min(index, DISEASE_COLORS.length - 1)],
+                    label: index === 0
+                        ? `≤ ${this.fa(upper, 1)}`
+                        : `${this.fa(breaks[index - 1], 1)} – ${this.fa(upper, 1)}`,
+                }));
+
+                rows.push({
+                    color: DISEASE_COLORS[Math.min(rows.length, DISEASE_COLORS.length - 1)],
+                    label: `> ${this.fa(breaks[breaks.length - 1], 1)}`,
+                });
+
+                return rows.slice(0, DISEASE_COLORS.length);
+            },
+
+            diseaseColor(classIndex) {
+                const index = Number.isInteger(Number(classIndex)) ? Number(classIndex) : 0;
+
+                return DISEASE_COLORS[Math.min(Math.max(index, 0), DISEASE_COLORS.length - 1)];
+            },
+
+            toRate(value) {
+                if (value === null || value === undefined || value === '' || value === '—') return null;
+
+                const number = Number(value);
+
+                return Number.isFinite(number) ? number : null;
+            },
+
+            fa(value, digits = 0) {
+                return Number(value).toLocaleString('fa-IR', {
+                    minimumFractionDigits: digits,
+                    maximumFractionDigits: digits,
+                });
+            },
+
+            escapeHtml(value) {
+                const div = document.createElement('div');
+                div.textContent = value ?? '';
+
+                return div.innerHTML;
+            },
+
+            diseaseRegionPopup(props) {
+                const rate = this.toRate(props.rate);
+
+                return `
+                    <div dir="rtl" style="min-width:200px;font-family:inherit;">
+                        <strong>${this.escapeHtml(props.name)}</strong><br>
+                        موارد: ${this.fa(Number(props.cases) || 0, 0)}<br>
+                        جمعیت: ${props.population == null ? '—' : this.fa(Number(props.population), 0)}<br>
+                        نرخ: ${rate === null ? '—' : this.fa(rate, 1) + ' در ۱۰٬۰۰۰'}
+                    </div>`;
+            },
+
+            diseaseUnitPopup(props) {
+                return `
+                    <div dir="rtl" style="min-width:160px;font-family:inherit;">
+                        <strong>${this.escapeHtml(props.name)}</strong><br>
+                        <span class="badge badge-primary badge-sm">${this.fa(Number(props.cases) || 0, 0)} مورد</span>
+                    </div>`;
             },
 
             async fetchAndRender(url, layerGroup, type, headers) {
@@ -609,17 +1067,61 @@ return new class extends Component
             },
 
             toggleLayer(layer) {
+                const isDisease = layer === 'diseases';
+
                 if (this.activeLayers.includes(layer)) {
                     this.activeLayers = this.activeLayers.filter(l => l !== layer);
-                    layerGroups[layer]?.clearLayers();
-                    if (map && layerGroups[layer]) {
-                        map.removeLayer(layerGroups[layer]);
+
+                    if (isDisease) {
+                        // Two sibling groups, cleared explicitly:
+                        // `LayerGroup.clearLayers()` is not recursive, and a
+                        // parent group would only detach its children.
+                        layerGroups.diseaseRegions?.clearLayers();
+                        layerGroups.diseaseUnits?.clearLayers();
+
+                        if (map) {
+                            [layerGroups.diseaseRegions, layerGroups.diseaseUnits].forEach((group) => {
+                                if (group && map.hasLayer(group)) map.removeLayer(group);
+                            });
+
+                            ['diseaseRegionPane', 'diseaseUnitPane'].forEach((paneName) => {
+                                const pane = map.getPane(paneName);
+
+                                if (!pane) return;
+
+                                pane.style.opacity = '0';
+                                pane.style.pointerEvents = 'none';
+                            });
+                        }
+
+                        this.diseaseLevel = null;
+                        this.diseaseLegend = [];
+                        this.diseaseBreaks = [];
+                        this.diseaseError = '';
+                        // Discard any response still in flight: re-enabling the
+                        // layer must not show the old period's data.
+                        this.diseaseRequestId += 1;
+                    } else {
+                        layerGroups[layer]?.clearLayers();
+                        if (map && layerGroups[layer]) {
+                            map.removeLayer(layerGroups[layer]);
+                        }
                     }
                 } else {
                     this.activeLayers.push(layer);
-                    if (map && layerGroups[layer] && !map.hasLayer(layerGroups[layer])) {
+
+                    if (isDisease) {
+                        if (map) {
+                            layerGroups.diseaseRegions.addTo(map);
+                            layerGroups.diseaseUnits.addTo(map);
+                        }
+
+                        // Catalogue is fetched once; the map fetch follows it.
+                        this.loadDiseases();
+                    } else if (map && layerGroups[layer] && !map.hasLayer(layerGroups[layer])) {
                         layerGroups[layer].addTo(map);
                     }
+
                     this.loadLayers();
                 }
                 @this('layerToggled', layer);

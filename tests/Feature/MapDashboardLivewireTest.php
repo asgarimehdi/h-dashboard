@@ -7,6 +7,7 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Morilog\Jalali\Jalalian;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -176,5 +177,64 @@ class MapDashboardLivewireTest extends TestCase
         preg_match_all('/<option value="([^"]*)"/', $block[0], $matches);
 
         $this->assertSame(['', ...Ticket::PRIORITIES], $matches[1]);
+    }
+
+    // ==================== Disease layer (#1246) ====================
+
+    /**
+     * #1246: the disease layer is opt-in. A `map` holder who never touches the
+     * new button must still get exactly the layers they had before, and the
+     * `layers` URL contract must not change under them.
+     */
+    public function test_disease_layer_is_off_by_default(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        Livewire::test('map.map-dashboard')
+            ->assertOk()
+            ->assertSet('layers', 'units')
+            ->assertSee('disease-controls')
+            ->assertSee('بیماری‌ها');
+    }
+
+    /**
+     * #1246: one toggle adds the layer key `diseases` (plural — the service
+     * accepts any string, but the URL and `layerGroups` must agree), and a
+     * second toggle removes it without disturbing the others.
+     */
+    public function test_disease_layer_toggles_on_and_off(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        Livewire::test('map.map-dashboard')
+            ->assertOk()
+            ->call('onLayerToggled', 'diseases')
+            ->assertSet('layers', 'units,diseases')
+            ->call('onLayerToggled', 'diseases')
+            ->assertSet('layers', 'units');
+    }
+
+    /**
+     * #1246: the default period is the current Persian year (1 Farvardin →
+     * today), never a rolling 30-day window — the map is a year-to-date view.
+     */
+    public function test_disease_controls_default_to_the_current_persian_year(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $year = Jalalian::now()->getYear();
+
+        Livewire::test('map.map-dashboard')
+            ->assertOk()
+            ->assertSet('diseaseFrom', $year.'/01/01')
+            ->assertSet('diseaseTo', Jalalian::now()->format('Y/m/d'))
+            ->assertSee('disease-select')
+            ->assertSee('disease_date_from')
+            ->assertSee('disease_date_to')
+            ->assertSee('disease-legend')
+            ->assertSee('انتخاب بیماری');
     }
 }
