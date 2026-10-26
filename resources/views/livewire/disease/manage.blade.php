@@ -620,7 +620,7 @@ return new class extends Component
                             <div>
                                 <x-textarea wire:model="optionsText"
                                             label="گزینه‌ها (هر مقدار در یک خط)"
-                                            placeholder="I&#10;II&#10;III"
+                                            :placeholder="implode(PHP_EOL, ['I', 'II', 'III'])"
                                             rows="3"/>
                                 <span class="text-xs text-base-content/60">فقط برای نوع «انتخابی».</span>
                                 @error('optionsText') <span class="text-error text-xs">{{ $message }}</span> @enderror
