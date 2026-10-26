@@ -379,9 +379,9 @@ return new class extends Component
             ]);
 
             $user = User::where('n_code', $this->n_code)->first();
-            $user->roles()->sync($this->role_ids ?? []);
-            $user->syncPermissions($this->user_permissions ?? []);
-            $user->units()->sync($this->unit_ids ?? []);
+            $user->roles()->sync($this->role_ids);
+            $user->syncPermissions($this->user_permissions);
+            $user->units()->sync($this->unit_ids);
             app(AccessService::class)->clearCache($user);
 
             $this->resetForm();
@@ -461,9 +461,9 @@ return new class extends Component
                 $user->tokens()->delete();
             }
 
-            $user->roles()->sync($this->role_ids ?? []);
-            $user->syncPermissions($this->user_permissions ?? []);
-            $user->units()->sync($this->unit_ids ?? []);
+            $user->roles()->sync($this->role_ids);
+            $user->syncPermissions($this->user_permissions);
+            $user->units()->sync($this->unit_ids);
             app(AccessService::class)->clearCache($user);
 
             $this->resetForm();
@@ -596,7 +596,7 @@ return new class extends Component
         // `$this->allUnits()` is the computed property, not public state — the
         // chips read from the per-request list.
         $selectedUnitNames = collect($this->allUnits())
-            ->whereIn('id', $this->unit_ids ?? [])
+            ->whereIn('id', $this->unit_ids)
             ->pluck('name')
             ->values()
             ->all();

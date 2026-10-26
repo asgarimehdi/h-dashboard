@@ -33,8 +33,6 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
     private array $existingRecords = [];
 
-    private string $compareKey = 'n_code'; // always match by n_code for persons
-
     private array $selectedActions = [];
 
     /**
@@ -79,11 +77,6 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     public function __construct()
     {
         $this->accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
-    }
-
-    public function setCompareKey(string $key): void
-    {
-        $this->compareKey = $key;
     }
 
     public function setAccessibleUnitIds(array $ids): void

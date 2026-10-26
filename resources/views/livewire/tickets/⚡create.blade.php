@@ -163,7 +163,7 @@ new class extends Component
             'files.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar|max:5120',
         ]);
 
-        $ticketCode = 'TK-' . strtoupper(Str::random(8));
+        $ticketCode = 'TK-' . strtoupper(\Illuminate\Support\Str::random(8));
 
         $ticket = Ticket::create([
             'ticket_code' => $ticketCode,

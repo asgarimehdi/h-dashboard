@@ -54,17 +54,6 @@ return new class extends Component
         }
     }
 
-    private function parseJalaliDate(?string $date, bool $endOfDay = false): ?Carbon
-    {
-        if (empty($date)) return null;
-        try {
-            $carbon = Jalalian::fromFormat('Y/m/d', $date)->toCarbon();
-            return $endOfDay ? $carbon->endOfDay() : $carbon->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     public function chartPayload(): array
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();

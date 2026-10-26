@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User|null $user
- * @property-read \App\Models\Model|ActivityLog|null $subject
+ * @property-read Model|ActivityLog|null $subject
  *
  * @method static \Illuminate\Database\Eloquent\Builder<static> where(string $column, mixed $value)
  */

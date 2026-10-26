@@ -3,10 +3,13 @@
 use App\Http\Controllers\Api\HardwareExportController;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
+use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Session;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
@@ -38,6 +41,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 // Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
 Route::post('/logout', function () {
+    /** @var User|null $user */
     $user = Auth::user();
     $userId = Auth::id();
     $userName = $user?->name ?? 'نامشخص';

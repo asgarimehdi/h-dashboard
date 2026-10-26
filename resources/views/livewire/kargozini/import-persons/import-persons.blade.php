@@ -113,7 +113,6 @@ return new class extends Component
 
         try {
             $import = new PersonImport;
-            $import->setCompareKey($this->compareKey);
             $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
 
             Excel::import($import, $this->file->getRealPath());
