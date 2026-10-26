@@ -300,7 +300,7 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     # Non-blocking ramp (issue #867): the suite has never run in CI, so the
     # first executions will surface real latent failures (the inert
     # waitForLivewire() wait, the self-skipping unit-map-boundary spec).
