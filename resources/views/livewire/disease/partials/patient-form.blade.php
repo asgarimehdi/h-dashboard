@@ -54,6 +54,4 @@
         option-label="label"
         placeholder="انتخاب کنید"
     />
-
-    <x-input label="شهرستان" wire:model="city" placeholder="اختیاری" />
 </div>

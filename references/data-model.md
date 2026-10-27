@@ -88,7 +88,7 @@
 ### Disease Registration (phase 1, #1240)
 
 **Patient** (`patients` table)
-- `id`, `kod_melli` (string(10), unique), `first_name`, `last_name`, `birth_date` (date, nullable, stored Gregorian), `gender` (string, `male`/`female` — app-level validation, no DB CHECK), `city` (nullable), timestamps
+- `id`, `kod_melli` (string(10), unique), `first_name`, `last_name`, `birth_date` (date, nullable, stored Gregorian), `gender` (string, `male`/`female` — app-level validation, no DB CHECK), timestamps
 - Separate from `persons` (decision 4): a registry entry, not an HR record. No FK in either direction; the only link is a possibly-equal `kod_melli` value. No soft deletes in v1.
 - Relationship: `diseaseCases()` → `DiseaseCase`
 

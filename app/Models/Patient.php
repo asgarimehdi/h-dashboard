@@ -17,7 +17,6 @@ use Illuminate\Support\Carbon;
  * @property string $last_name
  * @property Carbon|null $birth_date
  * @property string $gender
- * @property string|null $city
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, DiseaseCase> $diseaseCases
@@ -35,7 +34,6 @@ class Patient extends Model
         'last_name',
         'birth_date',
         'gender',
-        'city',
     ];
 
     /** @var array<string, string> */

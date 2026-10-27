@@ -54,7 +54,6 @@ class PatientSearchTest extends TestCase
             'last_name' => 'حسن‌زاده',
             'birth_date_jalali' => '1370/01/01',
             'gender' => 'male',
-            'city' => 'تهران',
         ], $overrides);
     }
 
@@ -204,7 +203,7 @@ class PatientSearchTest extends TestCase
         ], $overrides));
     }
 
-    public function test_the_detail_panel_shows_the_five_identity_fields(): void
+    public function test_the_detail_panel_shows_the_four_identity_fields(): void
     {
         $patient = $this->makePatient(['gender' => 'female']);
 
@@ -215,7 +214,7 @@ class PatientSearchTest extends TestCase
             ->assertSee('0499370899')
             ->assertSee(Jalalian::fromCarbon(Carbon::parse('1991-03-21'))->format('Y/m/d'))
             ->assertSeeHtml('جنسیت:</span> زن')
-            ->assertSee('تهران');
+            ->assertDontSee('شهرستان');
     }
 
     public function test_the_detail_panel_lists_cases_label_first(): void
@@ -301,7 +300,6 @@ class PatientSearchTest extends TestCase
             ->set('last_name', 'حسن‌زاده')
             ->set('birth_date_jalali', '1370/01/01')
             ->set('gender', 'male')
-            ->set('city', 'تهران')
             ->call('savePatient')
             ->assertHasNoErrors()
             ->assertSet('formOpen', false);
@@ -313,7 +311,6 @@ class PatientSearchTest extends TestCase
             'first_name' => 'آرش',
             'last_name' => 'حسن‌زاده',
             'gender' => 'male',
-            'city' => 'تهران',
         ]);
         $this->assertSame('1991-03-21', $patient->birth_date?->format('Y-m-d'));
 
@@ -400,9 +397,23 @@ class PatientSearchTest extends TestCase
             ->set('kod_melli', '0499370899')
             ->call('savePatient')
             ->assertHasErrors(['first_name', 'last_name', 'gender'])
-            ->assertHasNoErrors(['birth_date_jalali', 'city']);
+            ->assertHasNoErrors(['birth_date_jalali']);
 
         $this->assertSame(0, Patient::query()->count());
+    }
+
+    public function test_the_registry_page_and_modal_no_longer_offer_a_county_field(): void
+    {
+        $patient = Patient::factory()->create([
+            'kod_melli' => '0499370899',
+            'first_name' => 'آرش',
+            'last_name' => 'حسن‌زاده',
+        ]);
+
+        Livewire::test('disease.patients')
+            ->assertDontSee('شهرستان')
+            ->call('selectPatient', id: $patient->id)
+            ->assertDontSee('شهرستان');
     }
 
     public function test_a_future_birth_date_is_rejected_by_the_form(): void
@@ -437,7 +448,6 @@ class PatientSearchTest extends TestCase
             'first_name' => 'آرش',
             'last_name' => 'حسن‌زاده',
             'gender' => 'male',
-            'city' => 'تهران',
         ]);
         $this->assertSame('1991-03-21', $patient->fresh()?->birth_date?->format('Y-m-d'));
     }
@@ -446,12 +456,10 @@ class PatientSearchTest extends TestCase
     {
         $patient = app(PatientService::class)->create($this->payload([
             'birth_date_jalali' => '',
-            'city' => '   ',
         ]));
 
         $fresh = $patient->fresh();
         $this->assertNull($fresh?->birth_date);
-        $this->assertNull($fresh?->city);
     }
 
     public function test_create_writes_an_audit_row_without_name_or_national_code(): void
@@ -550,6 +558,5 @@ class PatientSearchTest extends TestCase
         $this->assertArrayHasKey('last_name', $validator->errors()->toArray());
         $this->assertArrayHasKey('gender', $validator->errors()->toArray());
         $this->assertArrayNotHasKey('birth_date_jalali', $validator->errors()->toArray());
-        $this->assertArrayNotHasKey('city', $validator->errors()->toArray());
     }
 }

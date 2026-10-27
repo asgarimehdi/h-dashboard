@@ -98,7 +98,6 @@ final class PatientService
             'last_name' => ['required', 'string', 'max:255'],
             'gender' => ['required', 'in:male,female'],
             'birth_date' => ['nullable', 'date_format:Y-m-d'],
-            'city' => ['nullable', 'string', 'max:255'],
         ];
     }
 
