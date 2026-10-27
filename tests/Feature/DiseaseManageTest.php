@@ -26,6 +26,20 @@ test('permission seeder creates manage_diseases and grants it to admin', functio
     expect(Role::query()->where('name', 'admin')->firstOrFail()->hasPermissionTo('manage_diseases'))->toBeTrue();
 });
 
+test('options placeholder renders real line breaks, not entities', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_diseases']);
+    $this->actingAs($user);
+    $disease = Disease::factory()->create();
+
+    $html = Livewire::test('disease.manage')
+        ->call('selectDisease', $disease->id)
+        ->html();
+
+    expect($html)->not->toContain('&amp;#10;')
+        ->not->toContain('&#10;')
+        ->toContain('placeholder="I'.PHP_EOL.'II'.PHP_EOL.'III');
+});
+
 test('page requires manage_diseases', function () {
     ['user' => $unauthorized] = $this->createUserWithUnit();
     $this->actingAs($unauthorized);
