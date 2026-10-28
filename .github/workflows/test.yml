@@ -452,11 +452,13 @@ jobs:
     name: Mutation Testing
     # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
     # gate from #1012): each run is expensive (checkout, composer install
-    # and migrations before the single `pest --mutate` line below, ~23
-    # minutes), but it runs in parallel with E2E (~30 minutes) and gates
-    # nothing (`continue-on-error: true`), so it adds no wall time.
+    # and migrations before the single `pest --mutate` line below, ~30
+    # minutes as of 2026-10-28), but it runs in parallel with E2E and
+    # gates nothing (`continue-on-error: true`), so it adds no wall time.
+    # Cap 45 minutes (raised from 30 on 2026-10-28 after the job hit the
+    # 30-minute timeout on #1270 and #1271).
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Non-blocking: the score is informational and gates nothing.
     continue-on-error: true
 
