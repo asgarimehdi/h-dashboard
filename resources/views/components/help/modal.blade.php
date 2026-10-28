@@ -13,7 +13,6 @@
     x-init="
         document.addEventListener('help-open', (e) => {
             if (e.detail?.section) { helpSection = e.detail.section; }
-            $wire.{{ $wireModel }} = true;
         });
     "
 >
