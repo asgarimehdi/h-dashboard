@@ -74,7 +74,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **PHPStan baseline is line-keyed** — after editing baselined code, regenerate it and verify `git diff phpstan-baseline.neon` adds **0** entries; `Eloquent\Builder` has no larastan, so start chains `Model::query()->with([...])` and put IN-filters inside `where(Closure)`. → [testing](docs/agents/testing.md)
 - **A tracked env file carries no real `APP_KEY` (#953)** and the gitignored working `.env` **must** have one. `composer verify` fails fast if `.env` is missing — deliberate, not a bug. → [testing](docs/agents/testing.md)
 - **E2E only via `scripts/e2e-test.sh`** (swaps `.env`, fresh DB, `:8001`) and `.env.e2e` **must** set `APP_LOCALE=fa` — without it 11 Persian-text specs fail. Never point e2e at `h_dashboard`; the e2e DB is wiped every run. → [e2e](docs/agents/e2e.md)
-- **هیچ بارگذاری خارجیِ زمان اجرا (script/style/font/tile/iframe/fetch) بدون ردیف در `docs/agents/offline.md` اضافه نمی‌شود؛ پیش‌فرض، لوکال است.** → [offline](docs/agents/offline.md)
+- **No external runtime load (script/style/font/tile/iframe/fetch) without a row in `docs/agents/offline.md`; local by default.** → [offline](docs/agents/offline.md)
 
 ---
 
