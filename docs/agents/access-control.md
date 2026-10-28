@@ -60,9 +60,8 @@ invited to click; a hidden link for a permission the route accepts is a lost fea
 `tests/Feature/SidebarPermissionsTest.php`, which renders the sidebar per permission and asserts each
 link's visibility in both directions, plus a real `GET` per link.
 
-- Groups: **ابزارهای مدیریتی** (`map`|`bw` → `/it/networks` + `/it/wireless`; `manage_zabbix` →
-  `/it/zabbix-devices`; `op-cache` → `/op`, with `@production` so the link never renders where the route
-  does not exist), **ابزار مدیریتی** (`manage_users` → `/tools`), **سخت افزار** (`manage_hardware` →
+- Groups: **ابزارهای مدیریتی** (`map`|`bw` → `/it/networks` + `/it/wireless`؛ `manage_zabbix` →
+  `/it/zabbix-devices`؛ `op-cache` → `/op` فقط در محیط local؛ `manage_users` → `/tools`), **سخت افزار** (`manage_hardware` →
   `/hardware` + `/maintenance`), **گزارش ها** (`manage_personnel`, plus `manage_users` for `/activity-log`).
 - `/it/networks` and `/it/wireless` live in their **own** `role_or_permission:map|bw` group — **not**
   nested inside the `map` group. Nesting re-adds `map` as an extra requirement and 403s a `bw`-only user

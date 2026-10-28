@@ -295,11 +295,14 @@
                 </x-menu-sub>
                 @endcan
 
-                {{-- ابزارهای مدیریتی (IT) — هر آیتم با همان گیتی که روتش دارد:
-                     شبکه/وایرلس → `map` یا `bw`، زبیکس → `manage_zabbix`، کش سرور → `op-cache`.
-                     قبلاً کل گروه زیر `bw` بود، پس دارنده‌ی `map` بدون `bw` صفحه‌ها را پنهان
-                     می‌دید و دارنده‌ی `bw` بدون `map` با ۴۰۳ روبه‌رو می‌شد. --}}
-                @canany(['map', 'bw', 'manage_zabbix', 'op-cache'])
+                {{-- ابزارهای مدیریتی (IT + ابزارها) — گیت گروه = اجتماع گیت‌های آیتم‌هاست،
+                     ولی هر آیتم گیتِ همان روت خودش را نگه می‌دارد تا هیچ آیتمِ بی‌دسترسی
+                     رندر نشود و هیچ دارندهٔ گیتی آیتمش را از دست ندهد:
+                     شبکه/وایرلس → `map` یا `bw`، زبیکس → `manage_zabbix`،
+                     کش سرور → `op-cache` (فقط local)، ابزارها (`/tools`) → `manage_users`.
+                     تاریخچه: قبلاً کل گروه زیر `bw` بود، پس دارندهٔ `map` بدون `bw`
+                     صفحه‌ها را پنهان می‌دید و دارندهٔ `bw` بدون `map` با ۴۰۳ روبه‌رو می‌شد. --}}
+                @canany(['map', 'bw', 'manage_zabbix', 'op-cache', 'manage_users'])
                 <x-menu-sub title="ابزارهای مدیریتی" icon="o-wrench-screwdriver">
                     @canany(['map', 'bw'])
                     <x-menu-item title="شبکه‌ها" icon="o-globe-alt" link="/it/networks" wire:navigate />
@@ -317,15 +320,13 @@
                     </a>
                     @endif
                     @endcan
+                    {{-- `/tools` پشت `manage_users` است، نه گیت گروه — همان گیت روتش در
+                         routes/web.php. آخر گروه می‌ماند تا آیتم‌های IT پیوسته و بی‌جابه‌جایی بمانند. --}}
+                    @can('manage_users')
+                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
+                    @endcan
                 </x-menu-sub>
                 @endcanany
-
-                {{-- ابزارهای نرم‌افزاری — روت /tools پشت `manage_users` است، نه `bw`. --}}
-                @can('manage_users')
-                <x-menu-sub title="ابزار مدیریتی" icon="o-wrench">
-                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
-                </x-menu-sub>
-                @endcan
 
                 {{-- سخت‌افزار — /hardware و /maintenance هر دو پشت `manage_hardware`؛
                      قبلاً داخل گروه IT بودند و دارندگان manage_hardware بدون `bw` آن‌ها را نمی‌دیدند. --}}

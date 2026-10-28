@@ -4,7 +4,7 @@ import { test, expect, login, logout, TEST_USER } from '../shared/fixtures';
  * Plan 002 — Navigation & Sidebar E2E
  *
  * The sidebar is the primary navigation surface: a MaryUI `x-menu activate-by-route`
- * inside a collapsible drawer (`#main-drawer`). It renders 10 collapsible sections
+ * inside a collapsible drawer (`#main-drawer`). It renders 9 collapsible sections
  * as native `<details>/<summary>` and each menu item as `<li><a wire:navigate>`.
  *
  * DOM facts (probed against the live app, NOT guessed):
@@ -21,7 +21,6 @@ const SECTION_TITLES = [
   'مدیریت سازمان',
   'کار با نقشه',
   'ابزارهای مدیریتی',
-  'ابزار مدیریتی',
   'سخت‌افزار',
   'گزارش‌ها',
   'مدیریت',
@@ -31,7 +30,7 @@ const SECTION_TITLES = [
 const STANDALONE_ITEMS = ['جستجوی کلی', 'صفحه اول', 'پروفایل من', 'تنظیمات'];
 
 test.describe('sidebar structure', () => {
-  test('renders all 8 collapsible sections', async ({ page }) => {
+  test('renders all 9 collapsible sections', async ({ page }) => {
     await login(page);
     const summaries = page.locator('.drawer-side summary');
 
