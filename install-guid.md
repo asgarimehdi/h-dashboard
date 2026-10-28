@@ -153,7 +153,9 @@ DB_DEFAULT_PASSWORD=...
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=...
-TILE_SERVER_IP=tile.openstreetmap.org
+# Map tiles: only TILE_URL_TEMPLATE has any effect. TILE_SERVER_IP / TILE_SERVER_PORT /
+# TILE_SERVER_SCHEME are reserved — they build map.tile_url, which nothing consumes.
+TILE_URL_TEMPLATE=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
 
 Initialize the app:

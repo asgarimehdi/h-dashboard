@@ -8,6 +8,10 @@
 
 ## Leaflet map lifecycle (issue #028)
 
+> **Tile template comes only from `TILE_URL_TEMPLATE`.** `TILE_SERVER_IP` / `TILE_SERVER_PORT` /
+> `TILE_SERVER_SCHEME` build `map.tile_url`, which has no consumer — changing them does nothing.
+> → `docs/agents/offline.md`.
+
 The Leaflet instance lives in a **module-scope variable in `resources/js/map-store.js`** (registered
 in `resources/js/bootstrap.js`) — **not** on `window.map`, and not inside the reactive Alpine store
 either. `Alpine.store('map')` holds the config, the callbacks, and the lifecycle API
