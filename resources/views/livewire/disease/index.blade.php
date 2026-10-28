@@ -567,7 +567,7 @@ return new class extends Component
 
     {{-- Filters ─────────────────────────────────────────────────────────── --}}
     <x-card shadow>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <x-input
                 label="بیمار (نام یا کد ملی)"
                 wire:model.live.debounce.500ms="search"

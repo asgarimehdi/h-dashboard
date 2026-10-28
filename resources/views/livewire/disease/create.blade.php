@@ -440,8 +440,8 @@ return new class extends Component
             <div class="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-3">
                 <p class="text-sm font-medium">بیمار با این کد ملی یافت نشد — ثبت بیمار جدید</p>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                    <div class="md:col-span-2">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                    <div>
                         <x-input label="کد ملی" wire:model="newPatient.kod_melli" dir="ltr" placeholder="۱۰ رقم" icon="o-identification"/>
                         @error('newPatient.kod_melli')
                             <p class="text-xs text-error mt-1">{{ $message }}</p>
@@ -495,17 +495,21 @@ return new class extends Component
     <x-card shadow class="mt-4">
         <h2 class="font-bold mb-3">۲. بیماری</h2>
 
-        <x-select
-            label="بیماری"
-            wire:model.live="diseaseId"
-            :options="$this->diseaseOptions()"
-            option-value="value"
-            option-label="label"
-            placeholder="انتخاب بیماری"
-        />
-        @error('diseaseId')
-            <p class="text-xs text-error mt-1">{{ $message }}</p>
-        @enderror
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+                <x-select
+                    label="بیماری"
+                    wire:model.live="diseaseId"
+                    :options="$this->diseaseOptions()"
+                    option-value="value"
+                    option-label="label"
+                    placeholder="انتخاب بیماری"
+                />
+                @error('diseaseId')
+                    <p class="text-xs text-error mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+        </div>
     </x-card>
 
     {{-- Step 3 — dynamic fields ──────────────────────────────────────────── --}}

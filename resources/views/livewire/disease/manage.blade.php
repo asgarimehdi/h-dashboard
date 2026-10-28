@@ -577,7 +577,7 @@ return new class extends Component
                         </div>
 
                         <div class="flex flex-col gap-3 p-3 bg-base-200 rounded-lg mb-4">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="flex flex-col gap-3">
                                 <div>
                                     <x-input wire:model="fieldKey" label="کلید" dir="ltr" placeholder="sys"
                                              :disabled="$editingFieldId !== null"/>
@@ -612,7 +612,7 @@ return new class extends Component
                                     @error('fieldSort') <span class="text-error text-xs">{{ $message }}</span> @enderror
                                 </div>
 
-                                <div class="self-end pb-2">
+                                <div>
                                     <x-toggle wire:model="isRequired" label="الزامی"/>
                                 </div>
                             </div>

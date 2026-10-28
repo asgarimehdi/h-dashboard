@@ -8,7 +8,7 @@
     between dynamic rows.
 --}}
 @foreach($defs as $def)
-    <div class="form-control w-full" wire:key="field-{{ $def->field_key }}">
+    <div @class(['form-control w-full', 'md:col-span-2' => $def->type === 'text']) wire:key="field-{{ $def->field_key }}">
         @if($def->type === 'number')
             <x-input
                 label="{{ $def->label_fa }}{{ $def->unit ? ' ('.$def->unit.')' : '' }}"
