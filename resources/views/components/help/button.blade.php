@@ -5,7 +5,11 @@
      seven enabled themes (worst: coffee 4.97:1). --}}
 <button
     type="button"
-    wire:click="$wire.{{ $wireModel }} = true; $dispatch('help-open', { section: '{{ $section }}' })"
+    {{-- #1263: `$wire.{{ $wireModel }} = true` is client-only and never reaches
+         the server, so the modal body (server-gated in #1166) never renders.
+         $set() commits the open flag; the Alpine event still carries the
+         section, since 23 of 24 pages do not pass it to <x-help:modal>. --}}
+    wire:click="$dispatch('help-open', { section: '{{ $section }}' }); $set('{{ $wireModel }}', true)"
     class="btn-ghost btn-sm btn-circle text-base-content/80 hover:text-primary hover:bg-primary/10 transition-colors"
     title="راهنما"
     aria-label="نمایش راهنمای {{ $section }}"
