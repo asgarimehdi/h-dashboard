@@ -214,7 +214,7 @@ test('list shows in-scope units plus org-wide schedules, never another unit (iss
     expect(renderedScheduleIds())->toHaveCount(2);
 });
 
-test('empty scope holder sees only org-wide schedules (issue #835)', function () {
+test('empty scope holder sees nothing, not even org-wide schedules (issue #1310)', function () {
     // A truly scope-less holder is not constructible in this schema: the user
     // factory always creates a Person (users.n_code FKs persons.n_code) and
     // persons.u_id is NOT NULL, so accessibleUnitIds() always falls back to
@@ -234,15 +234,20 @@ test('empty scope holder sees only org-wide schedules (issue #835)', function ()
         }
     });
 
-    $orgWide = makeSchedule('ویژه کل سازمان', null);
+    makeSchedule('ویژه کل سازمان', null);
     makeSchedule('ویژه واحد تست', $this->unit->id);
 
     $this->actingAs($holder);
 
+    // Issue #1310, closed decision (option ب): an empty scope sees NOTHING —
+    // fail-closed of the documented «خالی = هیچ‌چیز» semantics, org-wide
+    // (unit_id = null) rows included. Supersedes the #835 open-equivalent.
     $html = Livewire::test('maintenance.index')->html();
 
-    expect($html)->toContain('ویژه کل سازمان')->not->toContain('ویژه واحد تست');
-    expect(renderedScheduleIds())->toBe([$orgWide->id]);
+    expect($html)
+        ->not->toContain('ویژه کل سازمان')
+        ->not->toContain('ویژه واحد تست');
+    expect(renderedScheduleIds())->toBe([]);
 });
 
 test('unit picker offers only accessible units with non-empty labels (issue #835)', function () {
