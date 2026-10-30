@@ -299,14 +299,22 @@ return new class extends Component
     {
         $query = MaintenanceSchedule::query();
 
-        // پیش‌وند بی‌قیدوشر: دامنه‌ی خالی نباید پیش‌وند را حذف کند و کل
-        // سازمان را برگرداند. واحدهای در دامنه به‌علاوه‌ی رکوردهای null-unit.
-        $query->where(function ($q) {
-            $q->whereNull('unit_id');
+        $ids = $this->accessibleUnitIds();
 
-            if (! empty($this->accessibleUnitIds())) {
-                $q->orWhereIn('unit_id', $this->accessibleUnitIds());
+        // کامنت تصمیم #1310 (گزینهٔ ب، fail-closed): دامنهٔ خالی یعنی هیچ‌چیز —
+        // حتی رکوردهای سراسری (unit_id = null) هم دیده نمی‌شوند. شرطِ بستهٔ
+        // «۰ = ۱» عمداً بی‌قیدوشرط است: گارد «! empty» پیرامونِ خودِ پیش‌وندِ
+        // scope ،بستنِ دامنه را باز می‌کند (همان دام fail-open که در #819
+        // کل سازمان را نشت داده بود). برای کاربرِ scopeدار بدون تغییر:
+        // رکوردهای سراسری + واحدهای در دامنه.
+        $query->where(function ($q) use ($ids) {
+            if ($ids === []) {
+                $q->whereRaw('0 = 1');
+
+                return;
             }
+
+            $q->whereNull('unit_id')->orWhereIn('unit_id', $ids);
         });
 
         if (!empty($this->search)) {
