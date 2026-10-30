@@ -50,17 +50,18 @@ test.describe('Zabbix device management', () => {
 
   test('search narrows the device table', async ({ page }) => {
     const search = page.locator('input[placeholder*="جستجو"]');
+    const searchUpdate = waitForLivewire(page);
     await search.fill('فیبر');
-    await waitForLivewire(page);
-    await page.waitForTimeout(700); // 500ms debounce + render
+    await searchUpdate;
 
     await expect(page.locator('body')).toContainText('فیبر اصلی');
     await expect(page.locator('body')).not.toContainText('بیمارستان الغدیر');
   });
 
   test('new device form opens with the network fields', async ({ page }) => {
+    const openForm = waitForLivewire(page);
     await page.getByRole('button', { name: 'دستگاه جدید' }).click();
-    await waitForLivewire(page);
+    await openForm;
 
     await expect(page.locator('input[placeholder*="نام دستگاه"]')).toBeVisible();
     await expect(page.locator('input[placeholder*="مثلاً 73638"]')).toBeVisible();
@@ -68,14 +69,16 @@ test.describe('Zabbix device management', () => {
   });
 
   test('validation blocks a non numeric item id', async ({ page }) => {
+    const openForm = waitForLivewire(page);
     await page.getByRole('button', { name: 'دستگاه جدید' }).click();
-    await waitForLivewire(page);
+    await openForm;
 
     await page.locator('input[placeholder*="نام دستگاه"]').fill('دستگاه تست e2e');
     await page.locator('input[placeholder*="مثلاً 73638"]').fill('not-a-number');
     await page.locator('input[placeholder*="مثلاً 73494"]').fill('12345');
+    const save = waitForLivewire(page);
     await page.getByRole('button', { name: 'ذخیره' }).click();
-    await waitForLivewire(page);
+    await save;
 
     // the row must NOT be persisted — the invalid item id fails validation
     await expect(page.locator('tbody td', { hasText: 'دستگاه تست e2e' })).toHaveCount(0);
