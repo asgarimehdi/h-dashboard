@@ -17,6 +17,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -680,6 +681,11 @@ class TicketsCreateLivewireTest extends TestCase
             'user_id' => $user->id,
             'file_name' => 'report.pdf',
         ]);
+
+        // Issue #1276 — the write goes to the private disk, never `public`.
+        $attachment = Attachment::where('ticket_id', $ticket->id)->firstOrFail();
+        Storage::disk('local')->assertExists($attachment->file_path);
+        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
     }
 
     // ==================== Validation ====================
@@ -833,8 +839,10 @@ class TicketsCreateLivewireTest extends TestCase
 if (! function_exists('Tests\Feature\StorageFake')) {
     function StorageFake(): void
     {
-        // Helper no-op — Livewire's WithFileUploads uses Storage::fake('public')
-        // in setUp of feature tests via automatic framework boot; this stub keeps
-        // the test fluent without dragging the facade into every test method.
+        // Issue #1276 — attachments live on the private `local` disk now.
+        // Both disks are faked so the assertions can also prove nothing lands
+        // on `public` any more.
+        Storage::fake('local');
+        Storage::fake('public');
     }
 }

@@ -151,10 +151,11 @@ new class extends Component
             // fresh error bag — so it never guarded the write loop below, and
             // any holder of `create_ticket` (the lowest role) could store a
             // file of any type, up to Livewire's 12MB temporary-upload
-            // ceiling, into `public/storage/attachments`. Validate in the
-            // method that writes, same shape as `⚡inbox.blade.php:676-677`
-            // (`submitAction()`). The allowlist and the 5120KB cap are the
-            // ones this component already documents in `updatedFiles()` —
+            // ceiling. Validate in the method that writes, same shape as
+            // `⚡inbox.blade.php:676-677` (`submitAction()`). The allowlist and
+            // the 5120KB cap are the ones this component already documents in
+            // `updatedFiles()` — Issue #1276: the file now lands on the private
+            // `local` disk, not `public/storage`.
             // deliberately NOT widened to docx/xlsx (out of scope for #873),
             // and deliberately NOT pushed into `config/livewire.php`, where a
             // global allowlist would break the two import components that
@@ -225,7 +226,7 @@ new class extends Component
 
         if ($this->files) {
             foreach ($this->files as $file) {
-                $path = $file->store('attachments', 'public');
+                $path = $file->store('attachments', 'local');
                 $ticket->attachments()->create([
                     'user_id' => auth()->id(),
                     'activity_id' => $initialActivity->id,
