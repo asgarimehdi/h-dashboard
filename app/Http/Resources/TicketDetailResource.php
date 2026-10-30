@@ -69,7 +69,7 @@ class TicketDetailResource extends JsonResource
                 'n_code' => $model->assignee->n_code,
             ]),
             'activities' => $this->whenLoaded('activities'),
-            'attachments' => $this->whenLoaded('attachments'),
+            'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
         ];
     }
 }

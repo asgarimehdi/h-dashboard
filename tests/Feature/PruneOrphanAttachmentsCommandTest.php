@@ -50,7 +50,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
         $path = "attachments/{$name}";
-        Storage::disk('public')->put($path, 'bytes');
+        Storage::disk('local')->put($path, 'bytes');
 
         $ticket = $this->ticketFor($user, $unit, $name);
 
@@ -100,13 +100,14 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
     private function orphanFile(string $name): string
     {
         $path = "attachments/{$name}";
-        Storage::disk('public')->put($path, 'bytes');
+        Storage::disk('local')->put($path, 'bytes');
 
         return $path;
     }
 
     public function test_dry_run_reports_without_deleting(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $this->referencedAttachment('kept.pdf');
@@ -117,11 +118,12 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
             ->expectsOutputToContain('Dry run')
             ->assertExitCode(0);
 
-        Storage::disk('public')->assertExists($orphan);
+        Storage::disk('local')->assertExists($orphan);
     }
 
     public function test_dry_run_keeps_referenced_files(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $this->referencedAttachment('kept.pdf');
@@ -129,11 +131,12 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         $this->artisan('attachments:prune-orphans', ['--dry-run' => true])
             ->assertExitCode(0);
 
-        Storage::disk('public')->assertExists('attachments/kept.pdf');
+        Storage::disk('local')->assertExists('attachments/kept.pdf');
     }
 
     public function test_without_dry_run_unreferenced_files_are_deleted(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $this->referencedAttachment('kept.pdf');
@@ -142,11 +145,15 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         $this->artisan('attachments:prune-orphans')
             ->assertExitCode(0);
 
-        Storage::disk('public')->assertMissing($orphan);
+        Storage::disk('local')->assertMissing($orphan);
+        // Issue #1276 — the command scans the private disk only; nothing on
+        // the public disk is touched (or created).
+        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
     }
 
     public function test_referenced_files_are_never_deleted(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $this->referencedAttachment('kept.pdf');
@@ -154,8 +161,8 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
 
         $this->artisan('attachments:prune-orphans')->assertExitCode(0);
 
-        Storage::disk('public')->assertExists('attachments/kept.pdf');
-        Storage::disk('public')->assertExists('attachments/also-kept.jpg');
+        Storage::disk('local')->assertExists('attachments/kept.pdf');
+        Storage::disk('local')->assertExists('attachments/also-kept.jpg');
     }
 
     public function test_the_command_never_deletes_attachment_rows(): void
@@ -163,10 +170,11 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         // The command is a FILE cleanup tool, not a database one: a row whose
         // file is gone is a different (also real) problem and removing the row
         // here would hide it.
+        Storage::fake('local');
         Storage::fake('public');
 
         $attachment = $this->referencedAttachment('kept.pdf');
-        Storage::disk('public')->delete($attachment->file_path);
+        Storage::disk('local')->delete($attachment->file_path);
 
         $this->artisan('attachments:prune-orphans')->assertExitCode(0);
 
@@ -175,20 +183,22 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
 
     public function test_nested_files_are_matched_by_their_stored_path(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
-        Storage::disk('public')->put('attachments/2026/01/nested.pdf', 'bytes');
+        Storage::disk('local')->put('attachments/2026/01/nested.pdf', 'bytes');
         $attachment = $this->referencedAttachment('sibling.pdf');
         Attachment::whereKey($attachment->id)->update(['file_path' => 'attachments/2026/01/nested.pdf']);
 
         $this->artisan('attachments:prune-orphans')->assertExitCode(0);
 
-        Storage::disk('public')->assertExists('attachments/2026/01/nested.pdf');
-        Storage::disk('public')->assertMissing('attachments/sibling.pdf');
+        Storage::disk('local')->assertExists('attachments/2026/01/nested.pdf');
+        Storage::disk('local')->assertMissing('attachments/sibling.pdf');
     }
 
     public function test_an_empty_attachments_directory_succeeds(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $this->artisan('attachments:prune-orphans')->assertExitCode(0);
@@ -207,6 +217,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
      */
     public function test_the_reference_lookup_does_not_scale_with_the_number_of_files_on_disk(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
@@ -214,7 +225,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
 
         // 20 files on the fake disk, 5 of them referenced by a row.
         foreach (range(1, 20) as $index) {
-            Storage::disk('public')->put("attachments/file-{$index}.pdf", 'bytes');
+            Storage::disk('local')->put("attachments/file-{$index}.pdf", 'bytes');
         }
 
         foreach (range(1, 5) as $index) {
@@ -229,7 +240,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         // 40 files now — a per-file lookup would double the query count,
         // the bulk lookup keeps it flat.
         foreach (range(21, 40) as $index) {
-            Storage::disk('public')->put("attachments/file-{$index}.pdf", 'bytes');
+            Storage::disk('local')->put("attachments/file-{$index}.pdf", 'bytes');
         }
 
         $this->assertQueryCount(self::MAX_LOOKUP_QUERIES, function (): void {
@@ -246,6 +257,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
      */
     public function test_the_bulk_lookup_reports_and_deletes_the_same_orphans_as_the_per_file_lookup(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $referenced = ['kept-a.pdf', 'kept-b.pdf', 'kept-c.pdf'];
@@ -271,7 +283,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
 
         // `--dry-run` reports but never deletes.
         foreach ($orphans as $name) {
-            Storage::disk('public')->assertExists("attachments/{$name}");
+            Storage::disk('local')->assertExists("attachments/{$name}");
         }
 
         $this->artisan('attachments:prune-orphans')
@@ -282,11 +294,11 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
             ->assertExitCode(0);
 
         foreach ($referenced as $name) {
-            Storage::disk('public')->assertExists("attachments/{$name}");
+            Storage::disk('local')->assertExists("attachments/{$name}");
         }
 
         foreach ($orphans as $name) {
-            Storage::disk('public')->assertMissing("attachments/{$name}");
+            Storage::disk('local')->assertMissing("attachments/{$name}");
         }
 
         // The command only ever deletes FILES — the rows survive both runs.

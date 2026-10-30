@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
+use App\Http\Controllers\TicketAttachmentController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -138,6 +139,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
         Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+        // Issue #1276 — the web download route sits behind `unit_context`,
+        // which redirects a token-only (sessionless) request to
+        // `/select-context`, so the app gets its own authenticated route.
+        Route::get('/tickets/{ticket}/attachments/{attachment}', [TicketAttachmentController::class, 'show'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets')
+            ->name('api.tickets.attachments.download');
     });
 
     // Ticket API writes — abilities:tickets:write, no read ability required

@@ -41,7 +41,7 @@ class TicketAttachmentCleanupTest extends TestCase
      */
     private function storeAttachmentFile(string $name): string
     {
-        Storage::disk('public')->put($path = "attachments/{$name}", 'pdf-bytes');
+        Storage::disk('local')->put($path = "attachments/{$name}", 'pdf-bytes');
 
         return $path;
     }
@@ -77,11 +77,12 @@ class TicketAttachmentCleanupTest extends TestCase
 
     public function test_deleting_a_ticket_deletes_its_attachment_files(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         [, $ticket, $attachment, $path] = $this->createTicketWithAttachment();
 
-        Storage::disk('public')->assertExists($path);
+        Storage::disk('local')->assertExists($path);
 
         // Delete through the real API surface (`DELETE /api/tickets/{ticket}`),
         // the only ticket-delete route in the codebase.
@@ -93,12 +94,15 @@ class TicketAttachmentCleanupTest extends TestCase
         $response->assertStatus(200);
 
         // The file must be gone, not just its row.
-        Storage::disk('public')->assertMissing($path);
+        Storage::disk('local')->assertMissing($path);
+        // Issue #1276 — nothing may be left on the public disk either.
+        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
         $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
     }
 
     public function test_deleting_a_ticket_removes_every_attachment_not_only_the_first(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         [, $ticket] = $this->createTicketWithAttachment('one.pdf');
@@ -126,14 +130,15 @@ class TicketAttachmentCleanupTest extends TestCase
 
         $this->apiDelete("/api/tickets/{$ticket->id}", $token)->assertStatus(200);
 
-        Storage::disk('public')->assertMissing('attachments/one.pdf');
-        Storage::disk('public')->assertMissing($second);
-        Storage::disk('public')->assertMissing($third);
+        Storage::disk('local')->assertMissing('attachments/one.pdf');
+        Storage::disk('local')->assertMissing($second);
+        Storage::disk('local')->assertMissing($third);
         $this->assertDatabaseMissing('attachments', ['ticket_id' => $ticket->id]);
     }
 
     public function test_deleting_a_ticket_without_attachments_still_succeeds(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit([
@@ -161,10 +166,11 @@ class TicketAttachmentCleanupTest extends TestCase
     {
         // `config/filesystems.php` sets `throw => false` on the public disk, so
         // a row whose file was already removed by hand must still delete.
+        Storage::fake('local');
         Storage::fake('public');
 
         [, $ticket, $attachment] = $this->createTicketWithAttachment('vanished.pdf');
-        Storage::disk('public')->delete('attachments/vanished.pdf');
+        Storage::disk('local')->delete('attachments/vanished.pdf');
 
         $user = User::find($ticket->user_id);
         $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
@@ -176,6 +182,7 @@ class TicketAttachmentCleanupTest extends TestCase
 
     public function test_deleting_one_ticket_leaves_another_tickets_file_alone(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         // One actor and ONE unit for both tickets: a second
@@ -227,8 +234,8 @@ class TicketAttachmentCleanupTest extends TestCase
 
         $this->apiDelete("/api/tickets/{$first->id}", $token)->assertStatus(200);
 
-        Storage::disk('public')->assertMissing($firstPath);
-        Storage::disk('public')->assertExists($kept);
+        Storage::disk('local')->assertMissing($firstPath);
+        Storage::disk('local')->assertExists($kept);
         $this->assertDatabaseHas('attachments', ['file_path' => $kept]);
     }
 }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\HardwareExportController;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
+use App\Http\Controllers\TicketAttachmentController;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
@@ -190,6 +191,12 @@ Route::middleware('auth')->group(function () {
             Route::middleware('role_or_permission:view_assigned_tickets')->group(function () {
                 Route::livewire('/inbox', 'tickets.inbox')->name('inbox');
             });
+            // Issue #1276 — attachments moved to the private `local` disk, so the
+            // only way to read one is this authenticated, unit-scoped route.
+            // `auth` + `unit_context` are inherited from the enclosing groups.
+            Route::get('/{ticket}/attachments/{attachment}', [TicketAttachmentController::class, 'show'])
+                ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets')
+                ->name('attachments.download');
         });
 
         Route::middleware('role_or_permission:manage_users')->group(function () {

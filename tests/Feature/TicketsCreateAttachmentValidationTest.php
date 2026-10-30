@@ -58,6 +58,17 @@ class TicketsCreateAttachmentValidationTest extends TestCase
         $this->seedLookupTables();
     }
 
+    /**
+     * Issue #1276 — attachments belong on the private `local` disk. A rejected
+     * upload must leave BOTH disks empty, and nothing may ever land on `public`
+     * again.
+     */
+    private function assertNoAttachmentFilesAnywhere(): void
+    {
+        $this->assertSame([], Storage::disk('local')->allFiles('attachments'));
+        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
+    }
+
     protected function createTargetUnit(string $name = 'واحد پیوست'): Unit
     {
         return Unit::create([
@@ -69,10 +80,11 @@ class TicketsCreateAttachmentValidationTest extends TestCase
 
     /**
      * Drive the component all the way to `saveTicket()` with one attachment,
-     * faking the `public` disk so nothing touches the real storage.
+     * faking both disks so nothing touches the real storage.
      */
     protected function submitWithFile(UploadedFile $file, string $subject = 'تیکت با پیوست'): Testable
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
@@ -103,7 +115,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
         // Validation runs before Ticket::create, so no ticket row exists either.
         $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با پیوست']);
         $this->assertSame(0, Attachment::count());
-        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
+        $this->assertNoAttachmentFilesAnywhere();
     }
 
     /**
@@ -119,7 +131,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
 
         $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با پیوست']);
         $this->assertSame(0, Attachment::count());
-        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
+        $this->assertNoAttachmentFilesAnywhere();
     }
 
     /**
@@ -129,6 +141,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
      */
     public function test_a_previously_flagged_file_is_not_stored_by_a_later_save_call(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
@@ -151,7 +164,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
 
         $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با پیوست']);
         $this->assertSame(0, Attachment::count());
-        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
+        $this->assertNoAttachmentFilesAnywhere();
     }
 
     /**
@@ -167,7 +180,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
 
         $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت با پیوست']);
         $this->assertSame(0, Attachment::count());
-        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
+        $this->assertNoAttachmentFilesAnywhere();
     }
 
     /**
@@ -183,6 +196,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
      */
     public function test_save_stores_no_file_when_the_payload_exceeds_five_files(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
@@ -205,7 +219,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
             ->call('saveTicket');
 
         $this->assertSame(0, Attachment::count());
-        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
+        $this->assertNoAttachmentFilesAnywhere();
     }
 
     /**
@@ -221,6 +235,7 @@ class TicketsCreateAttachmentValidationTest extends TestCase
         $ticket = Ticket::where('subject', 'تیکت با پیوست')->firstOrFail();
 
         $this->assertSame(1, Attachment::where('ticket_id', $ticket->id)->count());
-        $this->assertCount(1, Storage::disk('public')->allFiles('attachments'));
+        $this->assertCount(1, Storage::disk('local')->allFiles('attachments'));
+        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
     }
 }
