@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\TicketController;
+use App\Models\Attachment;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
@@ -365,6 +366,43 @@ class TicketApiTest extends TestCase
 
         $data = $response->json('data');
         $this->assertArrayNotHasKey('deleted_at', $data);
+    }
+
+    /**
+     * Issue #1276 — attachments left the public disk, so the app can no longer
+     * build `baseUrl + '/storage/' + file_path`. The detail payload carries an
+     * absolute API download URL instead; `file_path` stays for compatibility
+     * (deprecated, not removed).
+     */
+    public function test_api_detail_exposes_the_attachment_download_url(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = Ticket::create(['ticket_code' => 'T-ATT', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Attachment', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
+
+        $attachment = Attachment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'file_path' => 'attachments/report.pdf',
+            'file_name' => 'report.pdf',
+            'file_size' => 9,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
+
+        $url = route('api.tickets.attachments.download', [
+            'ticket' => $ticket->id,
+            'attachment' => $attachment->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.attachments.0.id', $attachment->id)
+            ->assertJsonPath('data.attachments.0.url', $url)
+            ->assertJsonPath('data.attachments.0.file_path', 'attachments/report.pdf');
+
+        // The app's URL must be the token-authenticated API route, never the
+        // web route (which `unit_context` redirects for a sessionless token).
+        $this->assertStringContainsString('/api/tickets/', $url);
     }
 
     public function test_cannot_accept_completed_ticket(): void
