@@ -47,6 +47,13 @@ class TicketAttachmentController extends Controller
         $this->authorize('view', $attachment);
 
         $path = ltrim((string) $attachment->file_path, '/');
+
+        // `file_path` is database data rather than request input, but a `..`
+        // segment would let a stray value address a file outside the disk root.
+        if (in_array('..', explode('/', $path), true)) {
+            abort(404);
+        }
+
         $disk = $this->localDisk();
 
         // A row whose file is gone must 404, never 500.

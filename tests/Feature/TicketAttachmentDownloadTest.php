@@ -216,6 +216,24 @@ class TicketAttachmentDownloadTest extends TestCase
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 
+    /**
+     * `file_path` is database data, not request input, but a stray `..` segment
+     * would let a row address a file outside the disk root.
+     */
+    public function test_a_file_path_with_traversal_segments_is_not_served(): void
+    {
+        Storage::fake('local');
+        ['user' => $user, 'ticket' => $ticket, 'attachment' => $attachment] = $this->ticketWithAttachment();
+
+        // The file exists inside the disk; only the `..` segment makes the row
+        // unaddressable.
+        $attachment->update(['file_path' => 'attachments/../attachments/report.pdf']);
+
+        $this->actingAs($user)
+            ->get($this->webDownloadUrl($ticket, $attachment))
+            ->assertNotFound();
+    }
+
     // ---------------------------------------------------------------------
     // API route (Sanctum token — the web route's `unit_context` would 302 the
     // app instead, so the Flutter client gets its own route)
