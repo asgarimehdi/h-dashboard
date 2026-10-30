@@ -138,8 +138,9 @@ test.describe('sortable table headers', () => {
 
     await header.focus();
     await expect(header).toBeFocused();
+    const sortUpdate = waitForLivewire(page);
     await page.keyboard.press('Enter');
-    await waitForLivewire(page);
+    await sortUpdate;
 
     await expect(header).toHaveAttribute('aria-sort', 'descending');
   });
@@ -149,8 +150,9 @@ test.describe('sortable table headers', () => {
     await expect(header).toHaveAttribute('aria-sort', 'none');
 
     await header.focus();
+    const sortUpdate = waitForLivewire(page);
     await page.keyboard.press('Space');
-    await waitForLivewire(page);
+    await sortUpdate;
 
     // Sorting an unsorted column starts ascending.
     await expect(header).toHaveAttribute('aria-sort', 'ascending');
@@ -159,8 +161,9 @@ test.describe('sortable table headers', () => {
 
   test('mouse sorting still works — the keyboard change did not replace it', async ({ page }) => {
     const header = page.locator('table thead th[aria-sort]').first();
+    const sortUpdate = waitForLivewire(page);
     await header.click();
-    await waitForLivewire(page);
+    await sortUpdate;
 
     await expect(header).toHaveAttribute('aria-sort', 'descending');
   });

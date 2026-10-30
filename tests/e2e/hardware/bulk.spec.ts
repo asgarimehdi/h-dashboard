@@ -1,4 +1,4 @@
-import { test, expect, login, TEST_USER } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire, TEST_USER } from '../shared/fixtures';
 /**
  * Plan 010 / #1175 — Hardware bulk actions
  *
@@ -79,9 +79,10 @@ test.describe('hardware bulk actions', () => {
 
   test('bulk mark persists and unmark reverts', async ({ page }) => {
     // Isolate one stable row so bulk actions touch exactly one record.
+    const search = waitForLivewire(page);
     await page.locator('input[placeholder*="جستجو در تمام"]').first().fill('AB-17SH-EZDEVAJ');
     // Wait for Livewire search to complete
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await search;
     await expect(page.locator('table tbody tr')).toHaveCount(1);
 
     await page.locator('table input[type="checkbox"]').first().check();
@@ -121,8 +122,9 @@ test.describe('hardware bulk actions', () => {
     await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
     await expect(page.locator('.toast', { hasText: 'ایجاد شد' }).first()).toBeVisible({ timeout: 10000 });
 
+    const search = waitForLivewire(page);
     await page.locator('input[placeholder*="جستجو در تمام"]').first().fill(pcName);
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await search;
     await expect(page.locator('table tbody tr')).toHaveCount(1);
 
     await page.locator('table input[type="checkbox"]').first().check();
@@ -131,11 +133,12 @@ test.describe('hardware bulk actions', () => {
 
     // Livewire's wire:confirm uses the native confirm() dialog.
     page.on('dialog', (dialog) => dialog.accept());
+    const bulkDelete = waitForLivewire(page);
     await page.getByRole('button', BULK_DELETE).click();
+    await bulkDelete;
     await expect(page.locator('.toast', { hasText: 'حذف شدند' }).first()).toBeVisible({ timeout: 10000 });
 
     // The row is gone from the list …
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
     await expect(page.locator('table tbody tr')).toHaveCount(0);
 
     // … and it is in the trash, which is built from the audit trail and the

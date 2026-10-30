@@ -79,7 +79,7 @@ Playwright only transpiles the specs — it never type-checks them — so a type
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
 - `login(page, nCode?, password?)` — fills login form, waits for redirect
 - `logout(page)` — submits the real `<form action="/logout">`
-- `waitForLivewire(page)` — waits for `.wire-loading` to disappear
+- `waitForLivewire(page)` — waits for a matching Livewire update response (hashed endpoint: `/livewire-<hash>/update` — **not** a literal `/livewire/update`; matching the literal string never fires and the wait times out). `page.waitForResponse` only sees requests that start after it is armed, so call it **before** the interaction and await it after: `const update = waitForLivewire(page); await action(); await update;`
 - `waitForSearchResults(page, selector)` — waits for Livewire debounced results
 - `waitForToast(page, text?)` — waits for toast notification
 - `TEST_USER` / `ROLE_ACCOUNTS` — credentials from env vars

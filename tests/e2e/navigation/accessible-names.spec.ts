@@ -1,4 +1,4 @@
-import { test, expect, login, waitForLivewire } from '../shared/fixtures';
+import { test, expect, login } from '../shared/fixtures';
 
 type Page = import('@playwright/test').Page;
 
@@ -92,7 +92,7 @@ async function unnamedActionControls(page: Page): Promise<string[]> {
 }
 
 /**
- * Navigate and let Livewire settle before reading the accessibility tree.
+ * Navigate and let the page settle before reading the accessibility tree.
  *
  * `domcontentloaded` alone is not enough. A control that a Livewire request is
  * still re-rendering is absent from the tree, and an absent control reads as a
@@ -102,8 +102,9 @@ async function unnamedActionControls(page: Page): Promise<string[]> {
  */
 async function openSettled(page: Page, path: string): Promise<void> {
   await page.goto(path);
-  await page.waitForLoadState('domcontentloaded');
-  await waitForLivewire(page);
+  // A fresh navigation is a full page load, not a Livewire update request, so
+  // there is no update response to await here — settle on the network instead.
+  await page.waitForLoadState('networkidle');
 }
 
 /** The pages the issue names as representative, plus the layout chrome. */

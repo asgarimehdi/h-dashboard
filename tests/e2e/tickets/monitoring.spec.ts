@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 /**
  * Plan 005 — Tickets monitoring
  * Probed DOM facts:
@@ -26,9 +26,10 @@ test.describe('tickets monitoring', () => {
 
   test('filter tabs switch status filter', async ({ page }) => {
     for (const label of ['همه', 'انتظار', 'انجام', 'تکمیل']) {
+      const update = waitForLivewire(page);
       await page.getByRole('button', { name: label, exact: true }).first().click();
       // Wait for Livewire filter to complete
-      await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+      await update;
       await expect(page.locator('table').first()).toBeVisible();
     }
   });
