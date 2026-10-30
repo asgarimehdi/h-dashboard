@@ -8,10 +8,12 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
+use App\Support\HardwareAuditChange;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use RuntimeException;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -97,20 +99,112 @@ class HardwareAuditObserverTest extends TestCase
         $this->assertEquals($countBefore, $countAfter);
     }
 
-    public function test_updating_logs_only_changed_fields(): void
+    public function test_updated_logs_only_changed_fields(): void
     {
-        $this->hardware->update(['cpu' => 'Intel i9']);
+        $this->hardware->update(['cpu' => 'Intel i9', 'mark' => true]);
 
-        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+        $audits = HardwareAudit::where('hardware_id', $this->hardware->id)
             ->where('action', 'updated')
-            ->first();
+            ->get();
 
-        $this->assertNotNull($audit);
-        $cpuChange = collect($audit->changes)->firstWhere('field', 'cpu');
-        $this->assertNotNull($cpuChange);
-        $this->assertEquals('Intel i9', $cpuChange['new']);
+        // R3: exactly one row, never one from `updating` plus one from `updated`.
+        $this->assertCount(1, $audits);
+
+        $changes = collect($audits->first()->changes);
+        $this->assertCount(2, $changes);
+        $this->assertEquals(
+            ['field' => 'cpu', 'old' => '—', 'new' => 'Intel i9'],
+            $changes->firstWhere('field', 'cpu')
+        );
+        $this->assertEquals(
+            ['field' => 'mark', 'old' => 'خیر', 'new' => 'بله'],
+            $changes->firstWhere('field', 'mark')
+        );
+        $this->assertNull($changes->firstWhere('field', 'updated_at'));
         // unchanged field should not appear
-        $this->assertNull(collect($audit->changes)->firstWhere('field', 'pc_name'));
+        $this->assertNull($changes->firstWhere('field', 'pc_name'));
+    }
+
+    public function test_failed_save_writes_no_updated_audit(): void
+    {
+        $countUpdated = fn (): int => HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->count();
+        $before = $countUpdated();
+
+        Hardware::updating(fn () => throw new RuntimeException('save aborted'));
+
+        $thrown = false;
+        try {
+            $this->hardware->update(['cpu' => 'Should Not Persist']);
+        } catch (RuntimeException) {
+            $thrown = true;
+        }
+
+        $this->assertTrue($thrown, 'the updating listener should abort the save');
+        $this->assertSame($before, $countUpdated());
+        $this->assertNull($this->hardware->fresh()->cpu);
+    }
+
+    public function test_exception_inside_committed_transaction_writes_no_updated_audit(): void
+    {
+        $countUpdated = fn (): int => HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->count();
+        $before = $countUpdated();
+
+        Hardware::updating(fn () => throw new RuntimeException('boom'));
+
+        DB::beginTransaction();
+        try {
+            $this->hardware->update(['cpu' => 'Phantom']);
+        } catch (RuntimeException) {
+            // Caller swallows the failure and commits the transaction anyway.
+        }
+        DB::commit();
+
+        $this->assertSame($before, $countUpdated());
+        $this->assertNull($this->hardware->fresh()->cpu);
+    }
+
+    public function test_rolled_back_update_writes_no_updated_audit(): void
+    {
+        $countUpdated = fn (): int => HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->count();
+        $before = $countUpdated();
+
+        DB::beginTransaction();
+        $this->hardware->update(['cpu' => 'Rolled Back']);
+        DB::rollBack();
+
+        $this->assertSame($before, $countUpdated());
+        $this->assertNull($this->hardware->fresh()->cpu);
+    }
+
+    public function test_update_without_real_change_writes_no_updated_audit(): void
+    {
+        // Make updated_at stale so the next save touches it, but nothing else.
+        $this->hardware->forceFill(['updated_at' => now()->subHour()])->saveQuietly();
+
+        $countUpdated = fn (): int => HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->count();
+        $before = $countUpdated();
+
+        $this->hardware->update(['cpu' => null]);
+
+        $this->assertSame($before, $countUpdated());
+    }
+
+    public function test_every_audited_field_is_fillable(): void
+    {
+        // Method (2) reads getChanges(); the contract keeps AUDITED_FIELDS ⊆ fillable
+        // so a future fillable removal cannot silently drop a field from the audit.
+        $this->assertSame([], array_values(array_diff(
+            HardwareAuditChange::AUDITED_FIELDS,
+            (new Hardware)->getFillable()
+        )));
     }
 
     public function test_deleting_records_deleted_audit(): void
