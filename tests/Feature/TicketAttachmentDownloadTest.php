@@ -8,6 +8,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -276,5 +277,28 @@ class TicketAttachmentDownloadTest extends TestCase
             ->test('tickets.monitoring')
             ->call('showTicket', $ticket->id)
             ->assertSee($this->webDownloadUrl($ticket, $attachment), escape: false);
+    }
+
+    // ---------------------------------------------------------------------
+    // The old public URL is gone
+    // ---------------------------------------------------------------------
+
+    public function test_legacy_storage_url_is_not_served(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        ['user' => $user, 'attachment' => $attachment] = $this->ticketWithAttachment();
+
+        // The copy a non-migrated host still has on the public disk.
+        Storage::disk('public')->put($attachment->file_path, 'public-bytes');
+
+        // `serve => true` on the (local) disk is what registers the framework's
+        // `/storage/{path}` route; #1276 removed it.
+        $this->assertFalse(Route::has('storage.local'));
+
+        $this->actingAs($user)
+            ->get('/storage/'.$attachment->file_path)
+            ->assertNotFound();
     }
 }
