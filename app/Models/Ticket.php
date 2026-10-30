@@ -164,9 +164,10 @@ class Ticket extends Model
      *
      * `attachments.ticket_id` is `ON DELETE CASCADE`, so deleting a ticket
      * erased every attachment row — and with it the only database record of
-     * each file. The file itself stayed under `storage/app/public/attachments/`,
-     * still reachable at its public URL forever, with no row left to locate or
-     * purge it.
+     * each file. The file itself stayed on disk, still reachable at its public
+     * URL forever, with no row left to locate or purge it. (Issue #1276 moved
+     * the files to the private `local` disk — `storage/app/private/attachments/`
+     * — where nothing serves them without this hook running.)
      *
      * This runs on `deleting`, not `deleted`: the FK cascade happens in the
      * database AFTER Eloquent's events, so by `deleted` the paths are already
@@ -175,7 +176,7 @@ class Ticket extends Model
      *
      * The rows are deleted explicitly (before the cascade) so the file and its
      * row disappear as one unit. `config/filesystems.php` sets `throw => false`
-     * on the `public` disk, so a row whose file was already removed by hand
+     * on the `local` disk, so a row whose file was already removed by hand
      * still deletes cleanly.
      */
     protected static function booted(): void
@@ -190,7 +191,7 @@ class Ticket extends Model
                 ->all();
 
             if ($paths !== []) {
-                Storage::disk('public')->delete($paths);
+                Storage::disk('local')->delete($paths);
             }
 
             $ids = $attachments->pluck('id')->all();
