@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Attachment;
 use App\Models\Ticket;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -45,7 +47,7 @@ class TicketAttachmentController extends Controller
         $this->authorize('view', $attachment);
 
         $path = ltrim((string) $attachment->file_path, '/');
-        $disk = Storage::disk('local');
+        $disk = $this->localDisk();
 
         // A row whose file is gone must 404, never 500.
         abort_if($path === '' || ! $disk->exists($path), 404);
@@ -60,5 +62,22 @@ class TicketAttachmentController extends Controller
         }
 
         return $disk->download($path, $name, self::DOWNLOAD_HEADERS);
+    }
+
+    /**
+     * `Storage::disk()` is typed as the filesystem contract, which does not
+     * declare `response()`/`download()`. The app's `local` disk is a local
+     * driver, so it always resolves to the adapter; the guard turns a config
+     * change into a clear error instead of a fatal "method not found".
+     */
+    private function localDisk(): FilesystemAdapter
+    {
+        $disk = Storage::disk('local');
+
+        if (! $disk instanceof FilesystemAdapter) {
+            throw new RuntimeException('The [local] disk must resolve to a FilesystemAdapter.');
+        }
+
+        return $disk;
     }
 }
