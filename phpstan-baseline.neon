@@ -31,18 +31,6 @@ parameters:
 			path: app/Console/Commands/GenerateRecurringTodos.php
 
 		-
-			message: '#^Cannot call method nextOccurrence\(\) on stdClass\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Console/Commands/GenerateRecurringTodos.php
-
-		-
-			message: '#^Cannot call method update\(\) on stdClass\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Console/Commands/GenerateRecurringTodos.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:chunk\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
