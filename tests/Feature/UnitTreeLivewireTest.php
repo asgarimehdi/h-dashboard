@@ -427,4 +427,37 @@ class UnitTreeLivewireTest extends TestCase
 
         $this->assertNotContains($outsider->id, array_map('intval', $component->get('expanded')));
     }
+
+    public function test_search_query_count_does_not_grow_with_distinct_parents(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // 30 DISTINCT parents, one matching leaf each: depth 2, 61 units.
+        // A single-match fixture would pass both before and after the fix
+        // (its chain shares one parent); the N+1 only shows up when every
+        // match hangs off a different branch.
+        for ($i = 0; $i < 30; $i++) {
+            $mid = Unit::create(['name' => "میانی جستجو {$i}", 'parent_id' => $unit->id]);
+            Unit::create(['name' => "برگ جستجو {$i}", 'parent_id' => $mid->id]);
+        }
+
+        // Count the SEARCH update only — the mount's own paint is covered by
+        // test_initial_paint_batches_one_query_per_level.
+        $component = Livewire::test('unit.tree');
+
+        // Measured: 5 = 3 search queries (units + 2 eager parent levels) +
+        // 1 batched childrenOfMany + 1 scope re-resolution on rehydrate.
+        // The same fixture cost 34 before the fix, so the cap discriminates.
+        $this->assertNoNPlusOne(function () use ($component): void {
+            $component->set('search', 'برگ جستجو');
+        }, 5);
+
+        // Every rendered node (root + 30 mids + 30 leaves) is expanded, so
+        // tree-node.blade.php reads the lazy cache and never calls
+        // hasChildren(); the count above stays a search+chain measurement.
+        $expanded = array_map('intval', $component->get('expanded'));
+        $this->assertContains($unit->id, $expanded);
+        $this->assertCount(61, $expanded);
+    }
 }
