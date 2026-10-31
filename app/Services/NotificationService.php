@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\Notification as NotificationModel;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class NotificationService
@@ -46,7 +47,11 @@ class NotificationService
             return;
         }
 
-        // Batch insert for better performance (must include UUID since insert() bypasses model boot)
+        // Batch insert for better performance (must include UUID since insert()
+        // bypasses model boot). It also bypasses Eloquent events entirely — no
+        // model is instantiated, so no observer/listener/broadcast fires after
+        // it; if Notification ever gains one, this path silently skips it and
+        // needs its own review.
         $notifications = $userIds->map(fn ($userId) => [
             'id' => Str::uuid(),
             'user_id' => $userId,
@@ -62,9 +67,14 @@ class NotificationService
 
         Notification::insert($notifications);
 
-        // Issue #393: invalidate bell cache for all recipients
-        foreach ($userIds as $userId) {
-            Cache::forget("notifications:user:{$userId}");
-        }
+        // Issue #393: invalidate the bell cache for all recipients. Issue #1304:
+        // defer the Redis round-trips behind afterCommit so they never run while
+        // a transaction is open (and are dropped on rollback). Outside a
+        // transaction afterCommit runs immediately, keeping the old behaviour.
+        DB::afterCommit(function () use ($userIds) {
+            foreach ($userIds as $userId) {
+                Cache::forget("notifications:user:{$userId}");
+            }
+        });
     }
 }

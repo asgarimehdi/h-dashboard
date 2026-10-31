@@ -165,4 +165,37 @@ class NotificationServiceTest extends TestCase
 
         $this->assertNull(Cache::get("notifications:user:{$user->id}"));
     }
+
+    public function test_notify_unit_invalidates_bell_cache_after_commit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $unit = $user->units()->first();
+
+        Cache::put("notifications:user:{$user->id}", ['cached' => true]);
+
+        DB::transaction(fn () => NotificationService::notifyUnit($unit->id, 'test', 'عنوان'));
+
+        $this->assertNull(Cache::get("notifications:user:{$user->id}"));
+        $this->assertEquals(1, DB::table('notifications')->where('user_id', $user->id)->count());
+    }
+
+    public function test_notify_unit_rollback_leaves_cache_untouched_and_writes_nothing(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $unit = $user->units()->first();
+
+        Cache::put("notifications:user:{$user->id}", ['cached' => true]);
+
+        try {
+            DB::transaction(function () use ($unit) {
+                NotificationService::notifyUnit($unit->id, 'test', 'عنوان');
+                throw new \RuntimeException('rollback');
+            });
+        } catch (\RuntimeException) {
+            // expected
+        }
+
+        $this->assertNotNull(Cache::get("notifications:user:{$user->id}"));
+        $this->assertEquals(0, DB::table('notifications')->count());
+    }
 }
