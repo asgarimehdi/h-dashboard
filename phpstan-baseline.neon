@@ -601,24 +601,6 @@ parameters:
 			path: app/Http/Controllers/Api/UnitController.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:check\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Middleware/SafeRoleOrPermission.php
-
-		-
-			message: '#^Method App\\Http\\Middleware\\SafeRoleOrPermission\:\:handle\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: app/Http/Middleware/SafeRoleOrPermission.php
-
-		-
-			message: '#^Method App\\Http\\Middleware\\SafeRoleOrPermission\:\:handle\(\) has parameter \$permissions with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: app/Http/Middleware/SafeRoleOrPermission.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2079,7 +2061,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Spatie\\Permission\\Models\\Permission\:\:firstOrCreate\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 18
+			count: 17
 			path: database/seeders/PermissionSeeder.php
 
 		-
