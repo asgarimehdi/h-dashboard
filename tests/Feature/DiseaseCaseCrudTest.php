@@ -403,6 +403,45 @@ test('a duplicate national code names the existing patient and creates no second
     $this->assertDatabaseCount('patients', 1);
 });
 
+test('the inline form maps a service duplicate to newPatient.kod_melli', function () {
+    $injected = false;
+    Patient::creating(function () use (&$injected): void {
+        $injected = true;
+
+        // Deterministic race (#1300): the duplicate row appears inside the
+        // service insert's own transaction; query builder so no event re-fires.
+        DB::table('patients')->insert([
+            'kod_melli' => '0499370899',
+            'first_name' => 'تزریقی',
+            'last_name' => 'پیش‌آمده',
+            'gender' => 'male',
+        ]);
+    });
+
+    try {
+        $component = Livewire::test('disease.create')
+            ->set('kodMelli', '0499370899')
+            ->assertSet('inlinePatient', true);
+
+        $component->set('newPatient', [
+            'kod_melli' => '0499370899',
+            'first_name' => 'دیگر',
+            'last_name' => 'نفر',
+            'birth_date_jalali' => '',
+            'gender' => 'male',
+        ])
+            ->call('createPatient')
+            ->assertHasErrors('newPatient.kod_melli')
+            // The injected row rolled back with the insert: fallback message.
+            ->assertSee('این کد ملی قبلاً ثبت شده است.');
+    } finally {
+        Patient::flushEventListeners();
+    }
+
+    $this->assertTrue($injected, 'The injected duplicate never fired.');
+    $this->assertDatabaseCount('patients', 0);
+});
+
 test('the inline patient block no longer offers a county field', function () {
     Livewire::test('disease.create')
         ->set('kodMelli', '0013542419')

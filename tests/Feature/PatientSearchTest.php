@@ -12,6 +12,7 @@ use App\Services\PatientService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -558,5 +559,44 @@ class PatientSearchTest extends TestCase
         $this->assertArrayHasKey('last_name', $validator->errors()->toArray());
         $this->assertArrayHasKey('gender', $validator->errors()->toArray());
         $this->assertArrayNotHasKey('birth_date_jalali', $validator->errors()->toArray());
+    }
+
+    // ==================== race duplicate (#1300) ====================
+
+    public function test_the_race_duplicate_is_mapped_to_the_registry_form(): void
+    {
+        $injected = false;
+        Patient::creating(function () use (&$injected): void {
+            $injected = true;
+
+            // Deterministic race: the row appears inside the service insert's
+            // own transaction. Query builder, not Eloquent —\Eloquent would
+            // re-fire the event. The service rolls this back with the insert.
+            DB::table('patients')->insert([
+                'kod_melli' => '0499370899',
+                'first_name' => 'تزریقی',
+                'last_name' => 'پیش‌آمده',
+                'gender' => 'male',
+            ]);
+        });
+
+        try {
+            Livewire::test('disease.patients')
+                ->call('openCreateForm')
+                ->set('kod_melli', '0499370899')
+                ->set('first_name', 'سعید')
+                ->set('last_name', 'اکبری')
+                ->set('gender', 'male')
+                ->call('savePatient')
+                ->assertHasErrors('kod_melli')
+                // The injected row rolled back, so the lookup finds nothing and
+                // the fallback message is what the user sees.
+                ->assertSee('این کد ملی قبلاً ثبت شده است.');
+        } finally {
+            Patient::flushEventListeners();
+        }
+
+        $this->assertTrue($injected, 'The injected duplicate never fired.');
+        $this->assertDatabaseCount('patients', 0);
     }
 }
