@@ -2,7 +2,7 @@
 use App\Models\Person;
 use App\Models\Unit;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
 use Livewire\Component;
 
 return new class extends Component
@@ -35,10 +35,9 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         // Cache heavy aggregations (5 min) — Issue #223 perf note
-        // Versioned by hr_stats_version so Person saved/deleted invalidates it immediately (#375)
-        $version = Cache::get('hr_stats_version', 0);
-        $cacheKey = 'hr:dashboard:v'.$version.':'.md5(implode(',', $accessibleIds));
-        $data = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
+        // Versioned by `hr_stats` so Person saved/deleted invalidates it immediately (#375).
+        // Issue #1290: the versioned key is built by the service, never by hand.
+        $data = app(CacheInvalidationServiceInterface::class)->remember('hr_stats', \App\Support\ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds) {
             $persons = Person::whereIn('u_id', $accessibleIds);
 
             return [
@@ -71,7 +70,7 @@ return new class extends Component
                         'total' => $p->total,
                     ])->values()->toArray(),
             ];
-        });
+        }, 5);
 
         $this->totalPersons = $data['total'];
         $this->activePersons = $data['active'];

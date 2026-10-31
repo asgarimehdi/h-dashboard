@@ -129,7 +129,7 @@ class ScopeCacheKeyStabilityTest extends TestCase
         $this->assertSame($first->json(), $second->json(), 'a reordered scope must not change the payload');
         $this->assertCount(
             1,
-            $this->cacheKeysWritten('hr:stats:'),
+            $this->cacheKeysWritten('hr_stats:'),
             'a reordered scope must not open a second cache entry for the same scope'
         );
         $this->assertSame(

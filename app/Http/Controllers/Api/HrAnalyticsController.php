@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Rules\ReportMonths;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,10 +36,11 @@ class HrAnalyticsController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
         $months = $this->months($request);
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
-        $data = Cache::remember(
-            $this->hrAnalyticsCacheKey('headcount_trend', $accessibleIds, $months),
-            now()->addMinutes(5),
+        $data = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
             function () use ($accessibleIds, $months) {
                 $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
                 // One grouped pass plus a cumulative window (issue #1180). The
@@ -80,7 +81,9 @@ class HrAnalyticsController extends Controller
                     'month' => $row->month,
                     'count' => (int) $row->count,
                 ])->values();
-            }
+            },
+            5,
+            ['segment' => 'analytics:headcount_trend', 'months' => $months]
         );
 
         return response()->json(['data' => $data]);
@@ -103,10 +106,11 @@ class HrAnalyticsController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
         $months = $this->months($request);
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
-        $data = Cache::remember(
-            $this->hrAnalyticsCacheKey('vacancy_trend', $accessibleIds, $months),
-            now()->addMinutes(5),
+        $data = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
             function () use ($accessibleIds, $months) {
                 $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
                 $results = DB::select(
@@ -143,7 +147,9 @@ class HrAnalyticsController extends Controller
                     'month' => $row->month,
                     'count' => (int) $row->vacant_count,
                 ]);
-            }
+            },
+            5,
+            ['segment' => 'analytics:vacancy_trend', 'months' => $months]
         );
 
         return response()->json(['data' => $data]);
@@ -155,10 +161,11 @@ class HrAnalyticsController extends Controller
     public function staffingRatio(UnitScopedRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
-        $data = Cache::remember(
-            $this->hrAnalyticsCacheKey('staffing_ratio', $accessibleIds),
-            now()->addMinutes(5),
+        $data = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
             function () use ($accessibleIds) {
                 $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
 
@@ -192,7 +199,10 @@ class HrAnalyticsController extends Controller
                     'by_unit_type' => $byUnitType,
                     'by_semat' => $bySemat,
                 ];
-            }
+            },
+            5,
+            // `staffingRatio` takes no `?months=`; 12 was the old helper's default.
+            ['segment' => 'analytics:staffing_ratio', 'months' => 12]
         );
 
         return response()->json(['data' => $data]);
@@ -211,13 +221,5 @@ class HrAnalyticsController extends Controller
         $request->validate(['months' => ['sometimes', new ReportMonths]]);
 
         return min(ReportMonths::resolveMonths($request->query('months')), ReportMonths::MAX_MONTHS);
-    }
-
-    private function hrAnalyticsCacheKey(string $type, array $accessibleIds, int $months = 12): string
-    {
-        $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = ScopeCacheKey::hash($accessibleIds);
-
-        return "hr:analytics:{$type}:v{$version}:m{$months}:{$scopeHash}";
     }
 }

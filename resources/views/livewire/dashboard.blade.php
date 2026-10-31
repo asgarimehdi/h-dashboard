@@ -76,21 +76,22 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->emptyScope = $accessibleIds === [];
-        $scopeKey = md5(implode(',', $accessibleIds));
-        $v = Cache::get('dashboard_version', 0);
+        $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
+        // Issue #1290: version lookup and key shape are the service's job.
+        $cache = app(\App\Services\CacheInvalidationServiceInterface::class);
 
         // Global stats (not scoped) — 1 query
-        $globalStats = Cache::remember("dashboard:global:v{$v}", 300, function () {
+        $globalStats = $cache->remember('dashboard', 'global', function () {
             return [
                 'totalUsers' => User::count(),
                 'totalRoles' => Role::count(),
             ];
-        });
+        }, 5);
         $this->totalUsers = $globalStats['totalUsers'];
         $this->totalRoles = $globalStats['totalRoles'];
 
         // Scoped stats — consolidated with PostgreSQL FILTER
-        $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
+        $stats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'totalPersons' => 0,
@@ -151,10 +152,10 @@ return new class extends Component
                 'completedTodos' => (int) ($todoRow->completed_todos ?? 0),
                 'linkedTodos' => (int) ($linkedTodos->cnt ?? 0),
             ];
-        });
+        }, 5, ['segment' => 'stats']);
 
         // Today stats — 1 consolidated query
-        $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
+        $todayStats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'todayTickets' => 0,
@@ -184,10 +185,10 @@ return new class extends Component
                 'todayActivities' => ActivityLog::whereIn('user_id', $userIds)
                     ->where('created_at', '>=', $today)->count(),
             ];
-        });
+        }, 2, ['segment' => 'today']);
 
         // Ticket details — 1 consolidated query
-        $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
+        $details = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'urgentTickets' => 0,
@@ -222,7 +223,7 @@ return new class extends Component
                 'overdueTickets' => (int) ($row->overdue ?? 0),
                 'avgResolutionDays' => (float) ($row->avg_days ?? 0),
             ];
-        });
+        }, 3, ['segment' => 'ticket_details']);
 
         $this->totalPersons = $stats['totalPersons'];
         $this->totalUnits = $stats['totalUnits'];
@@ -262,53 +263,52 @@ return new class extends Component
     // داده‌های نمودار تیکت‌ها — TTL 5 دقیقه
     public function getTicketChartDataProperty(): array
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $scopeKey = \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds());
 
-        return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)
+            ->remember('dashboard', $scopeKey, function () {
+                $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-            // Issue #736: the window is 30 days ending today, with every day
-            // present (zeros included). The previous `ORDER BY day` +
-            // `LIMIT 30` returned the *oldest* 30 days, so recent days were
-            // missing from the chart entirely.
-            $days = DailySeries::lastDays(self::TICKET_CHART_DAYS)
-                ->counts(Ticket::query()->whereIn('unit_id', $accessibleIds), 'created_at');
+                // Issue #736: the window is 30 days ending today, with every day
+                // present (zeros included). The previous `ORDER BY day` +
+                // `LIMIT 30` returned the *oldest* 30 days, so recent days were
+                // missing from the chart entirely.
+                $days = DailySeries::lastDays(self::TICKET_CHART_DAYS)
+                    ->counts(Ticket::query()->whereIn('unit_id', $accessibleIds), 'created_at');
 
-            return [
-                'categories' => array_map(
-                    fn (array $row) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($row['day']))->format('m/d'),
-                    $days
-                ),
-                'series' => array_column($days, 'count'),
-            ];
-        });
+                return [
+                    'categories' => array_map(
+                        fn (array $row) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($row['day']))->format('m/d'),
+                        $days
+                    ),
+                    'series' => array_column($days, 'count'),
+                ];
+            }, 5, ['segment' => 'ticket_chart']);
     }
 
     // داده‌های نمودار وضعیت تیکت‌ها — TTL 5 دقیقه
     public function getTicketStatusDataProperty(): array
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $scopeKey = \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds());
 
-        return Cache::remember("dashboard:ticket_status:v{$v}:{$scopeKey}", 300, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)
+            ->remember('dashboard', $scopeKey, function () {
+                $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-            return Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw('status, count(*) as count')
-                ->groupBy('status')
-                ->pluck('count', 'status')
-                ->toArray();
-        });
+                return Ticket::whereIn('unit_id', $accessibleIds)
+                    ->selectRaw('status, count(*) as count')
+                    ->groupBy('status')
+                    ->pluck('count', 'status')
+                    ->toArray();
+            }, 5, ['segment' => 'ticket_status']);
     }
 
     // آخرین فعالیت‌ها — TTL 2 دقیقه
     public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $scopeKey = \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds());
 
-        return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
+        return app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             // #1057: include soft-deleted users in scope so their activity
             // stays in the audit trail; the unit predicate is unchanged.
@@ -321,7 +321,7 @@ return new class extends Component
             return ActivityLog::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q)])
                 ->whereIn('user_id', $userIds)
                 ->latest()->take(10)->get();
-        });
+        }, 2, ['segment' => 'recent_activities']);
     }
 
     /**
