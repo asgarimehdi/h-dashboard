@@ -34,7 +34,6 @@ coverage/
 /deploy
 *.lock
 !composer.lock
-package-lock.json
 /.claude
 
 # Per-instance Hermes boot note. Local to each server: it only tells an agent
