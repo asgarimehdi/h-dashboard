@@ -181,7 +181,7 @@ return new class extends Component {
         <div class="flex justify-end gap-2 mt-4">
             {{-- #817: out-of-scope mounts render no actionable controls. --}}
             @if($unit)
-            <button type="button" class="btn btn-primary" onclick="saveMapBoundary()">
+            <button type="button" class="btn btn-primary" id="saveMapBoundaryBtn">
                 <x-icon name="o-check" class="w-5 h-5"/>
                 ذخیره
             </button>
@@ -195,7 +195,7 @@ return new class extends Component {
 </div>
 
 @assets
-<style>
+<style nonce="{{ Vite::cspNonce() }}">
     #unitMap { z-index: 0; }
     .dark .leaflet-layer,
     .dark .leaflet-control-zoom-in,
@@ -383,6 +383,11 @@ return new class extends Component {
             $wire.deleteBoundary();
         }
     };
+
+    const saveMapBoundaryBtn = document.getElementById('saveMapBoundaryBtn');
+    if (saveMapBoundaryBtn) {
+        saveMapBoundaryBtn.addEventListener('click', window.saveMapBoundary);
+    }
 
     $wire.on('boundaryUpdated', function() {
         window.location.reload();
