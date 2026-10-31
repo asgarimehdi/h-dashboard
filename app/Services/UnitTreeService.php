@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Unit;
+use App\Support\UnitAncestry;
 use App\Traits\PersianNormalizer;
 use Illuminate\Support\Collection;
 
@@ -193,25 +194,41 @@ class UnitTreeService
      * itself. Stops at the scope boundary, so a chain never names a unit the
      * caller is not allowed to see.
      *
-     * The walk keeps its own visited set: a `parent_id` cycle would otherwise
-     * loop forever, and this runs per search match. Same guard the units
-     * export's `buildHierarchy()` uses (issue #702). The chain is walked
-     * through the `parent` relation rather than a per-hop `Unit::find()`,
-     * matching how the original org chart walked it.
+     * Adapter over `UnitAncestry::chain()` (#1302): this method only turns the
+     * chain of already eager/pre-linked `parent` relations into the helper's
+     * flat index and maps the answer back to the same models. The scope, cycle
+     * and order rules live in the helper. Scope is checked on the `parent_id`
+     * attribute BEFORE the `parent` relation is touched, so an out-of-scope
+     * parent is never loaded — an eager chain costs 0 queries, and only the
+     * one documented lazy hop (the seventh ancestor) costs a query.
      *
      * @param  array<int>  $accessibleIds
      * @return Collection<int, Unit>
      */
     public function ancestorChain(Unit $unit, array $accessibleIds): Collection
     {
-        $chain = collect();
-        $visited = [(int) $unit->id => true];
+        /** @var array<int, array{name: string, parent_id: int|null}> $index */
+        $index = [];
+        /** @var array<int, Unit> $models */
+        $models = [];
         $current = $unit;
 
-        while ($current->parent_id) {
-            $parentId = (int) $current->parent_id;
+        // Prefetch the relation chain the helper will read. `$index` doubles as
+        // the visited set here: an id already indexed is a cycle.
+        for ($depth = 0; $depth <= UnitAncestry::MAX_DEPTH; $depth++) {
+            $id = (int) $current->id;
+            $index[$id] = ['name' => $current->name, 'parent_id' => $current->parent_id];
+            $models[$id] = $current;
 
-            if (isset($visited[$parentId]) || ! in_array($parentId, $accessibleIds, true)) {
+            $parentId = $current->parent_id;
+
+            if ($parentId === null) {
+                break;
+            }
+
+            $parentId = (int) $parentId;
+
+            if (isset($index[$parentId]) || ! UnitAncestry::inScope($parentId, $accessibleIds)) {
                 break;
             }
 
@@ -221,11 +238,11 @@ class UnitTreeService
                 break;
             }
 
-            $chain->prepend($parent);
-            $visited[$parentId] = true;
             $current = $parent;
         }
 
-        return $chain;
+        return collect(UnitAncestry::chain((int) $unit->id, $index, $accessibleIds))
+            ->map(fn (array $entry) => $models[$entry['id']])
+            ->values();
     }
 }
