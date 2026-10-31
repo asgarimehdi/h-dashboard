@@ -629,12 +629,19 @@ jobs:
           restore-keys: composer-
 
       - name: Install dependencies
-        # The lock predates PHP 8.6: three packages cap php at 8.5 — nette/schema
-        # and nette/utils (both on the production path, via league/commonmark) plus
-        # brianium/paratest (dev) — so a plain install cannot even resolve on 8.6,
-        # with or without dev dependencies. The preview installs the locked packages
-        # anyway — surfacing real 8.6 behaviour is the job's whole point. This flag
-        # exists ONLY in this job; it carries production weight, not just tooling.
+        # The *locked* versions cap php at 8.5: nette/schema v1.3.6 (8.1 - 8.5) and
+        # nette/utils v4.1.5 (8.2 - 8.5), both on the production path via
+        # league/commonmark -> league/config -> nette/schema -> nette/utils, plus
+        # brianium/paratest v7.20.0 (~8.3.0 || ~8.4.0 || ~8.5.0, dev) — so a plain
+        # install cannot even resolve on 8.6, with or without dev dependencies. The
+        # preview installs the locked packages anyway — surfacing real 8.6 behaviour
+        # is the job's whole point. Drop the flag once a plain install resolves on
+        # 8.6: nette is open upstream (nette/schema >=1.4.0 and nette/utils >=4.1.6
+        # allow 8.6 and sit inside today's ^1.2/^4.0, so a lock refresh clears both),
+        # while brianium/paratest needs >=7.25.0 (~8.4.0 || ~8.5.0 || ~8.6.0; 7.24.1
+        # still caps at 8.5) and that pulls phpunit ^13.3.4 (pest 5) — a test-stack
+        # major, not a bump. This flag exists ONLY in this job; it carries production
+        # weight, not just tooling.
         run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php
 
       # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
