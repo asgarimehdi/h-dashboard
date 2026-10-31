@@ -73,6 +73,11 @@ final class DiseaseCaseService
     }
 
     /**
+     * Only `disease_id` is optional: when the key is absent the case keeps its
+     * stored disease (#1299). Every other clinical key is required — an absent
+     * `fields` still replaces the stored fields with an empty set, and
+     * `recorded_at` keeps its stored value.
+     *
      * @param  array{patient_id?: int, disease_id?: int, subject_unit_id?: int, diagnosed_at?: string, recorded_at?: string|null, fields?: mixed}  $data
      * @param  array<int>  $accessibleUnitIds
      */
@@ -83,8 +88,8 @@ final class DiseaseCaseService
         $subjectUnitId = $this->accessibleSubjectUnit($data['subject_unit_id'] ?? null, $accessibleUnitIds);
         $patientId = $this->existingPatientId($data['patient_id'] ?? null);
 
-        $newDiseaseId = is_numeric($data['disease_id'] ?? null) ? (int) $data['disease_id'] : 0;
-        $diseaseIsChanging = $newDiseaseId !== $case->disease_id;
+        $newDiseaseId = $this->submittedDiseaseId($data, $case);
+        $diseaseIsChanging = $newDiseaseId !== (int) $case->disease_id;
         $disease = $this->activeDisease($newDiseaseId, $diseaseIsChanging);
 
         $diagnosedAt = $this->dateValue($data['diagnosed_at'] ?? null, 'diagnosed_at', true);
@@ -159,6 +164,29 @@ final class DiseaseCaseService
         }
 
         return $id;
+    }
+
+    /**
+     * An absent `disease_id` keeps the stored disease; a present one must be a
+     * positive integer id. Everything else (null, 0, negative, '', 'abc',
+     * 12.9, '1e3') resolves to 0 and is rejected by activeDisease() with the
+     * same `disease_id` error — never a silent fallback (#1299).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function submittedDiseaseId(array $data, DiseaseCase $case): int
+    {
+        if (! array_key_exists('disease_id', $data)) {
+            return (int) $case->disease_id;
+        }
+
+        $value = $data['disease_id'];
+
+        if (is_string($value) && ctype_digit(trim($value))) {
+            $value = (int) trim($value);
+        }
+
+        return is_int($value) && $value > 0 ? $value : 0;
     }
 
     private function activeDisease(mixed $diseaseId, bool $mustBeActive = true): Disease

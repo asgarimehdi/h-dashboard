@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -275,6 +276,90 @@ class DiseaseCaseServiceTest extends TestCase
             ),
             'disease_id'
         );
+    }
+
+    public function test_update_without_disease_id_keeps_the_current_disease(): void
+    {
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        $payload = $this->payload(['diagnosed_at' => '2026-03-12', 'fields' => ['sys' => '150']]);
+        unset($payload['disease_id']);
+
+        $updated = $this->service->update($case->id, $payload, $this->accessIds);
+
+        $this->assertSame((int) $this->disease->id, (int) $updated->disease_id);
+        $this->assertSame('2026-03-12', $updated->diagnosed_at->format('Y-m-d'));
+        $this->assertSame(['sys' => 150], $updated->fields);
+        $this->assertSame($this->center->id, $updated->unit_id);
+
+        $log = $this->latestLog('updated');
+        $this->assertSame($this->disease->id, $log->old_values['disease_id']);
+        $this->assertSame($this->disease->id, $log->new_values['disease_id']);
+    }
+
+    public function test_update_without_disease_id_keeps_an_inactive_current_disease(): void
+    {
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        $this->disease->update(['is_active' => false]);
+
+        $payload = $this->payload(['fields' => ['sys' => '150']]);
+        unset($payload['disease_id']);
+
+        $updated = $this->service->update($case->id, $payload, $this->accessIds);
+
+        $this->assertSame((int) $this->disease->id, (int) $updated->disease_id);
+        $this->assertSame(['sys' => 150], $updated->fields);
+    }
+
+    /** @return array<string, array{mixed}> */
+    public static function invalidDiseaseIdProvider(): array
+    {
+        return [
+            'zero' => [0],
+            'negative' => [-5],
+            'null' => [null],
+            'empty string' => [''],
+            'non-numeric string' => ['abc'],
+            'decimal' => [12.9],
+            'exponent' => ['1e3'],
+        ];
+    }
+
+    #[DataProvider('invalidDiseaseIdProvider')]
+    public function test_update_with_an_explicit_invalid_disease_id_is_rejected(mixed $diseaseId): void
+    {
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        $this->assertValidationError(
+            fn () => $this->service->update(
+                $case->id,
+                $this->payload([
+                    'disease_id' => $diseaseId,
+                    'diagnosed_at' => '2026-05-05',
+                    'fields' => ['sys' => '200'],
+                ]),
+                $this->accessIds
+            ),
+            'disease_id'
+        );
+
+        $case->refresh();
+        $this->assertSame('2026-03-11', $case->diagnosed_at->format('Y-m-d'));
+        $this->assertSame(['sys' => 140], $case->fields);
+    }
+
+    public function test_update_with_a_numeric_string_disease_id_is_accepted(): void
+    {
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        $updated = $this->service->update(
+            $case->id,
+            $this->payload(['disease_id' => (string) $this->disease->id]),
+            $this->accessIds
+        );
+
+        $this->assertSame((int) $this->disease->id, (int) $updated->disease_id);
     }
 
     public function test_delete_in_scope_removes_and_audits(): void
