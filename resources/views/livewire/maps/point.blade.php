@@ -118,7 +118,7 @@ return new class extends Component
 </div>
 
 @assets
-<style>
+<style nonce="{{ Vite::cspNonce() }}">
     .controls-panel {
         padding: 15px;
         background: rgba(255, 255, 255, .6);

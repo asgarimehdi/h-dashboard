@@ -6,6 +6,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Auth;
 
 class HardwareAuditObserver
@@ -126,17 +127,23 @@ class HardwareAuditObserver
     }
 
     /**
-     * Detect the source of the change (web, api, import, bulk).
+     * Resolve the current route in a way PHPStan treats as nullable regardless
+     * of the framework's (overly certain) inference for request()->route().
      */
+    protected function currentRoute(): ?Route
+    {
+        return request()->route();
+    }
+
     protected function detectSource(): string
     {
-        $route = request()->route();
+        $route = $this->currentRoute();
 
-        if ($route && $route->getName() === 'hardware.import') {
+        if ($route instanceof Route && $route->getName() === 'hardware.import') {
             return 'import';
         }
 
-        if ($route && str_starts_with($route->uri(), 'api/')) {
+        if ($route instanceof Route && str_starts_with($route->uri(), 'api/')) {
             return 'api';
         }
 

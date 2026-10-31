@@ -136,6 +136,6 @@ class CenterBoundarySeeder extends Seeder
             Unit::where('id', $unitId)->update(['boundary_id' => $boundaryId]);
         }
 
-        $this->command?->info('Created '.count($boundaries).' boundaries for center units.');
+        $this->command->info('Created '.count($boundaries).' boundaries for center units.');
     }
 }

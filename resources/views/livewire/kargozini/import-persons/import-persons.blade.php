@@ -712,7 +712,7 @@ return new class extends Component
     </div></div>
 
 @push('scripts')
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     document.addEventListener('livewire:init', () => {
         Livewire.on('persons-imported', () => {
             // Optionally refresh the persons table
