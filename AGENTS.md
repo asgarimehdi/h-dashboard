@@ -17,7 +17,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 ### Tech Stack
 
 - **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
-- **PHP 8.6 preview:** blocked by three locked packages that cap `require.php` at 8.5 — `nette/schema` and `nette/utils` (production path, via league/commonmark) and `brianium/paratest` (dev); the `test-php86` job installs with `--ignore-platform-req=php`.
+- **PHP 8.6 preview:** the *locked* versions cap `require.php` at 8.5 — `nette/schema` v1.3.6 (`8.1 - 8.5`) and `nette/utils` v4.1.5 (`8.2 - 8.5`), pulled in by `league/commonmark` → `league/config` → `nette/schema` → `nette/utils`, plus `brianium/paratest` v7.20.0 (`~8.3.0 || ~8.4.0 || ~8.5.0`, dev); so `test-php86` installs with `--ignore-platform-req=php`. Upstream is not blocking 8.6: `nette/schema` ≥1.4.0 and `nette/utils` ≥4.1.6 allow it inside today's `^1.2`/`^4.0`, while `brianium/paratest` ≥7.25.0 (`~8.4.0 || ~8.5.0 || ~8.6.0`) requires `phpunit ^13` (pest 5) — that test-stack major is the long pole, not nette. `composer.json`'s `^8.4.1` does not cap 8.6 (`>=8.4.1 <9.0.0`).
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
