@@ -68,13 +68,6 @@ Route::post('/logout', function () {
     return redirect('/');
 })->name('logout');
 
-// Test route for SafeRoleOrPermission middleware
-if (app()->isLocal() || app()->environment('testing')) {
-    Route::middleware('safe_role_or_permission:test-permission')->get('/test-safe-route', function () {
-        return response('OK', 200);
-    })->name('test.safe-route');
-}
-
 // Protected routes here
 Route::middleware('auth')->group(function () {
     Route::livewire('/select-context', 'select-context');

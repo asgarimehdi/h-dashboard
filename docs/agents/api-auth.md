@@ -45,7 +45,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - Tokens are **scoped and revoked on password change** (#678) on **both** password-change paths: the self-service form (`resources/views/livewire/auth/changepassword.blade.php`) and an admin reset through `users.index`'s `updateUser()` (#1030) each `delete()` **all** of the account's Sanctum tokens — including `map-dashboard`, not just `flutter-app`, so the two paths stay in lockstep. The admin path is guarded on an actually-changed password: a profile/role edit that leaves the password untouched keeps every token alive. API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
 
 
-**Safe Role/Permission Middleware:** `SafeRoleOrPermission` is registered but **intentionally NOT used on hardware routes**. Hardware routes require full auth via `auth` + `role_or_permission:manage_hardware`.
+**Hardware routes require full auth:** `auth` + `role_or_permission:manage_hardware`. A guest-bypassing middleware alias used to sit here and was removed in #1287 — do not reintroduce a middleware that skips `auth()->check()` for guests; its test was pinning 200-for-guests.
 
 > **Gotcha:** `test_hardware_page_loads_without_auth` asserts **302 → /login** for guests — a security decision. Do NOT "fix" it back to 200 — that reopens the data leak.
 
