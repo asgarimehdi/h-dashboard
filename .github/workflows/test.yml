@@ -122,14 +122,7 @@ jobs:
       # or the built bundle — the build was never asserted on, only paid for.
       # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
-          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
-          # cache between parallel test processes and cross-pollutes their separate DBs.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+        run: bash scripts/build-env-testing.sh
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -519,14 +512,7 @@ jobs:
       # or the built bundle — the build was never asserted on, only paid for.
       # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
-          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
-          # cache between parallel test processes and cross-pollutes their separate DBs.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+        run: bash scripts/build-env-testing.sh
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -649,14 +635,7 @@ jobs:
       # or the built bundle — the build was never asserted on, only paid for.
       # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
-          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
-          # cache between parallel test processes and cross-pollutes their separate DBs.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+        run: bash scripts/build-env-testing.sh
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
