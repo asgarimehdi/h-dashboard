@@ -104,7 +104,7 @@ return new class extends Component
 </div>
 
 @assets
-<style>
+<style nonce="{{ Vite::cspNonce() }}">
     .unit-menu {
         padding: 5px;
         position: absolute;

@@ -404,7 +404,7 @@ return new class extends Component
         </dialog>
     </div>
 
-    <script>
+    <script nonce="{{ Vite::cspNonce() }}">
         function loadUnitDetails() {
             if (!this.unitId) return;
             @this('loadUnitDetails', this.unitId).then(r => {

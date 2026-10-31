@@ -60,7 +60,7 @@
         رفتن به محتوای اصلی
     </a>
     <!-- Stitch-style animated background JavaScript -->
-    <script>
+    <script nonce="{{ Vite::cspNonce() }}">
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
         (function() {
             const savedTheme = localStorage.getItem('mary-theme')?.replaceAll('"', '');
@@ -397,10 +397,10 @@
          ولی بدون ناحیهٔ زنده هیچ صفحه‌خوانی متوجه باز شدنش نمی‌شود. زنده‌بودن
          باید روی ظرفی باشد که همیشه در DOM است، نه روی خودِ توست. --}}
     <div aria-live="polite" aria-atomic="true">
-        <x-toast />
+        <x-csp-toast />
     </div>
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     // Register service worker for browser notifications
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});

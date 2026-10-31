@@ -410,7 +410,7 @@ return new class extends Component
         </div>
     </x-card>
 
-    <style>
+    <style nonce="{{ Vite::cspNonce() }}">
         .tree-line-branch {
             position: absolute;
             right: -20px;

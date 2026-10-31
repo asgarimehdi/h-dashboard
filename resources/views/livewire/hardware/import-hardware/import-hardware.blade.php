@@ -723,7 +723,7 @@ return new class extends Component
 </div>
 
 @push('scripts')
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     document.addEventListener('livewire:init', () => {
         Livewire.on('hardware-imported', () => {
             // Optionally refresh the hardware table

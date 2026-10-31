@@ -18,5 +18,5 @@
 @endphp
 <div class="flex items-center gap-1">
     <livewire:notifications.bell />
-    <x-theme-toggle darkTheme="{{ $darkTheme }}" lightTheme="{{ $lightTheme }}" />
+    <x-csp-theme-toggle darkTheme="{{ $darkTheme }}" lightTheme="{{ $lightTheme }}" />
 </div>

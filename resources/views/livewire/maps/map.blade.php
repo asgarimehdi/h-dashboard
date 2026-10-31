@@ -85,7 +85,7 @@ return new class extends Component {
 </div>
 
 @assets
-<style>
+<style nonce="{{ Vite::cspNonce() }}">
     #map {
         z-index: 0;
     }

@@ -442,7 +442,7 @@ new class extends Component
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
 @endassets
 
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     const initMonitoringJdp = () => {
         if (typeof jalaliDatepicker !== 'undefined') {
             jalaliDatepicker.startWatch();
