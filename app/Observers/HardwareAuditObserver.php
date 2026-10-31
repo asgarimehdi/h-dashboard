@@ -132,7 +132,7 @@ class HardwareAuditObserver
     {
         $route = request()->route();
 
-        if ($route && $route->getName() === 'hardware.import') {
+        if ($route->getName() === 'hardware.import') {
             return 'import';
         }
 

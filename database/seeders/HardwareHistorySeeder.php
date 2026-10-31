@@ -54,7 +54,7 @@ class HardwareHistorySeeder extends Seeder
             ->pluck('id', 'n_code')
             ->all();
 
-        $this->command?->info('Seeding hardware audit history for '.count($records).' devices...');
+        $this->command->info('Seeding hardware audit history for '.count($records).' devices...');
 
         $inserted = 0;
         $skipped = 0;
@@ -105,7 +105,7 @@ class HardwareHistorySeeder extends Seeder
             }
         }
 
-        $this->command?->info("Hardware history seeded: {$inserted} new audit entries".($skipped ? ", {$skipped} devices skipped (not found)." : '.'));
+        $this->command->info("Hardware history seeded: {$inserted} new audit entries".($skipped ? ", {$skipped} devices skipped (not found)." : '.'));
     }
 
     /**
