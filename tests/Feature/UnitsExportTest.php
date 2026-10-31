@@ -483,12 +483,70 @@ class UnitsExportTest extends TestCase
     //  Slice 6 — cycle guard on user-editable parent_id
     // -----------------------------------------------------------
 
+    public function test_export_does_not_issue_a_query_per_row(): void
+    {
+        // The map walk is in-memory: adding units must not add queries. The
+        // bound is measured on the current code, not guessed.
+        ['user' => $user, 'unit' => $ministry] = $this->createUserWithUnit(['organization']);
+        $ministry->update(['unit_type_id' => 1, 'name' => 'وزارت شمارش', 'is_active' => true]);
+
+        foreach (range(1, 5) as $i) {
+            Unit::factory()->create([
+                'name' => "واحد شمارش {$i}",
+                'unit_type_id' => 2,
+                'parent_id' => $ministry->id,
+                'region_id' => 1,
+                'is_active' => true,
+            ]);
+        }
+
+        $this->actingAs($user);
+
+        $this->assertNoNPlusOne(fn () => $this->rowsFromRoute(), 7);
+    }
+
+    public function test_export_paths_for_self_parent_and_cycle_are_exact(): void
+    {
+        // User-editable parent_id can point at itself or form a cycle. These
+        // are the values produced today (traced from the walk, not previously
+        // pinned): the migration to the shared helper changes them on purpose.
+        $self = new Unit(['name' => 'الف']);
+        $self->id = 1;
+        $self->parent_id = 1;
+
+        $a = new Unit(['name' => 'الف']);
+        $a->id = 2;
+        $a->parent_id = 3;
+
+        $b = new Unit(['name' => 'ب']);
+        $b->id = 3;
+        $b->parent_id = 2;
+
+        $map = [
+            1 => ['name' => 'الف', 'parent_id' => 1],
+            2 => ['name' => 'الف', 'parent_id' => 3],
+            3 => ['name' => 'ب', 'parent_id' => 2],
+        ];
+
+        $hierarchy = $this->invokeBuildHierarchy(collect([$self, $a, $b]), $map);
+
+        // Decision ه (issue #1302): on corrupt data the chain is cut as soon as
+        // it would repeat a node, so a name appears once. This is the only
+        // intentional behaviour change, and only on self-parent/cyclic rows —
+        // acyclic paths are identical.
+        $this->assertSame(['path' => 'الف', 'depth' => 0, 'parent_name' => ''], $hierarchy[1]);
+        $this->assertSame(['path' => 'ب > الف', 'depth' => 1, 'parent_name' => 'ب'], $hierarchy[2]);
+        $this->assertSame(['path' => 'الف > ب', 'depth' => 1, 'parent_name' => 'الف'], $hierarchy[3]);
+    }
+
     public function test_export_survives_a_cyclic_parent_chain(): void
     {
-        // Built from in-memory models, not seeded rows: a real cyclic row hangs
-        // Unit::descendantIds(), whose WITH RECURSIVE ... UNION ALL never
-        // terminates on a cycle (pre-existing app-wide hazard — the reason the
-        // export needs its own guard). The guard under test is the export's.
+        // Built from in-memory models, not seeded rows: a real cyclic row is a
+        // hazard for every recursive walk over the tree (Unit::descendantIds()
+        // survives it only because its CTE uses UNION — see
+        // docs/agents/features.md), so the export's own guard is proved without
+        // writing that corruption into the database. The guard under test is
+        // the export's.
         $a = new Unit(['name' => 'الف']);
         $a->id = 1;
         $a->parent_id = 2;
