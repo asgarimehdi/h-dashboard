@@ -179,7 +179,8 @@ class UnitTreeService
         $folded = self::foldedTerm($term);
 
         return Unit::query()
-            ->with(['unitType', 'parent'])
+            // ۶ hop = عمیق‌ترین زنجیرهٔ dev (#1285)؛ hop ۷+ lazy می‌شود.
+            ->with(['unitType', 'parent.parent.parent.parent.parent.parent'])
             ->where(function ($query) use ($accessibleIds, $folded) {
                 $query->whereIn('id', $accessibleIds);
                 $query->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$folded}%"]);
