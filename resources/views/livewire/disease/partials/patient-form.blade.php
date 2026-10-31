@@ -3,7 +3,9 @@
     Contract: the host component owns the six properties and calls
     PatientService::validationRules()/create()/duplicateMessage(); this partial
     renders inputs only (no submit button). `$genderOptions` is passed in by the
-    host — included partials in this repo never use `$this`.
+    host — included partials in this repo never use `$this`. The host must also
+    catch the service's ValidationException and map its keys: `duplicate` (with
+    the friendly message via lookup) and every other key flat (#1300).
 --}}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
     <div class="md:col-span-2">
@@ -20,9 +22,19 @@
         @enderror
     </div>
 
-    <x-input label="نام" wire:model="first_name" placeholder="نام" />
+    <div>
+        <x-input label="نام" wire:model="first_name" placeholder="نام" />
+        @error('first_name')
+            <p class="text-xs text-error mt-1">{{ $message }}</p>
+        @enderror
+    </div>
 
-    <x-input label="نام خانوادگی" wire:model="last_name" placeholder="نام خانوادگی" />
+    <div>
+        <x-input label="نام خانوادگی" wire:model="last_name" placeholder="نام خانوادگی" />
+        @error('last_name')
+            <p class="text-xs text-error mt-1">{{ $message }}</p>
+        @enderror
+    </div>
 
     <div class="form-control">
         <label class="label" for="patient_birth_date">

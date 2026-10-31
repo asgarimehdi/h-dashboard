@@ -8,8 +8,8 @@ use App\Services\PatientService;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
@@ -152,18 +152,30 @@ return new class extends Component
                 'birth_date_jalali' => $this->birth_date_jalali,
                 'gender' => $this->gender,
             ]);
-        } catch (UniqueConstraintViolationException) {
-            // Race: another request inserted the same code between the lookup
-            // and the insert. Same friendly path, same existing row.
-            $existing = $service->findByKodMelli($this->kod_melli);
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
 
-            $this->addError(
-                'kod_melli',
-                $existing !== null
-                    ? PatientService::duplicateMessage($existing)
-                    : 'این کد ملی قبلاً ثبت شده است.',
-            );
-            $this->duplicatePatientId = $existing?->id;
+            if (array_key_exists('duplicate', $errors)) {
+                // Race: another request inserted the same code between the lookup
+                // and the insert. Same friendly path, same existing row.
+                $existing = $service->findByKodMelli($this->kod_melli);
+
+                $this->addError(
+                    'kod_melli',
+                    $existing !== null
+                        ? PatientService::duplicateMessage($existing)
+                        : (string) ($errors['duplicate'][0] ?? 'این کد ملی قبلاً ثبت شده است.'),
+                );
+                $this->duplicatePatientId = $existing?->id;
+
+                return;
+            }
+
+            // Service-side rule violations — same shared rules, re-run over the
+            // normalized copy inside create() (#1300); flat keys match this form.
+            foreach ($errors as $key => $keyMessages) {
+                $this->addError((string) $key, array_first($keyMessages) ?? '');
+            }
 
             return;
         }

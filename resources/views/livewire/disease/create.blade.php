@@ -11,7 +11,6 @@ use App\Services\PatientService;
 use App\Support\JalaliDateRange;
 use App\Traits\BuildsDiseaseCaseForm;
 use App\Traits\PersianNormalizer;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
@@ -146,15 +145,28 @@ return new class extends Component
                 'birth_date_jalali' => $this->newPatient['birth_date_jalali'] ?? '',
                 'gender' => $this->newPatient['gender'] ?? '',
             ]);
-        } catch (UniqueConstraintViolationException) {
-            // Race: the row appeared between the lookup and the insert.
-            $existing = $service->findByKodMelli($this->newPatient['kod_melli']);
-            $this->addError(
-                'newPatient.kod_melli',
-                $existing instanceof Patient
-                    ? PatientService::duplicateMessage($existing)
-                    : 'این کد ملی قبلاً ثبت شده است.',
-            );
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
+
+            if (array_key_exists('duplicate', $errors)) {
+                // Race: the row appeared between the lookup and the insert.
+                $existing = $service->findByKodMelli($this->newPatient['kod_melli']);
+
+                $this->addError(
+                    'newPatient.kod_melli',
+                    $existing instanceof Patient
+                        ? PatientService::duplicateMessage($existing)
+                        : (string) ($errors['duplicate'][0] ?? 'این کد ملی قبلاً ثبت شده است.'),
+                );
+
+                return;
+            }
+
+            // Service-side rule violations — same shared rules, re-run over the
+            // normalized copy inside create() (#1300); remapped onto the form.
+            foreach ($errors as $key => $keyMessages) {
+                $this->addError('newPatient.'.((string) $key), array_first($keyMessages) ?? '');
+            }
 
             return;
         }
@@ -448,8 +460,18 @@ return new class extends Component
                         @enderror
                     </div>
 
-                    <x-input label="نام" wire:model="newPatient.first_name" placeholder="نام"/>
-                    <x-input label="نام خانوادگی" wire:model="newPatient.last_name" placeholder="نام خانوادگی"/>
+                    <div>
+                        <x-input label="نام" wire:model="newPatient.first_name" placeholder="نام"/>
+                        @error('newPatient.first_name')
+                            <p class="text-xs text-error mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <x-input label="نام خانوادگی" wire:model="newPatient.last_name" placeholder="نام خانوادگی"/>
+                        @error('newPatient.last_name')
+                            <p class="text-xs text-error mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
 
                     <div class="form-control">
                         <label class="label" for="disease_patient_birth_date">

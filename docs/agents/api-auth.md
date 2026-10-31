@@ -52,6 +52,10 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 
 **Unit Context Middleware:** `ValidateUnitContext` ensures `session('current_unit_id')` is set before entering unit-scoped sections.
 
+### Patient registry write path (#1300)
+
+`App\Services\PatientService` is the patient registry's **only write path** — web/Livewire only; **no API route or token ability is added for patients (ADR 0002: no patient write API)**. Input is Jalali (`birth_date_jalali`); `create()` normalizes (digits + trim) *then* re-applies its `validationRules()` on the normalized copy, inserts only the five validated keys, and wraps insert + `ActivityLogService::created` audit in one transaction — a failed audit rolls the patient back. No unit scope (`patients` has no unit column). A PostgreSQL `23505` becomes a `ValidationException` under the `duplicate` key with a PII-free message; callers keep the friendly path (`duplicateMessage` + `duplicatePatientId` via lookup) in `disease/patients` and map errors onto `newPatient.<key>` in the case form.
+
 ### Security Headers
 
 `SecurityHeaders` middleware sets on every response:
