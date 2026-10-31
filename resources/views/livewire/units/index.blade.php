@@ -171,13 +171,13 @@ return new class extends Component
         $this->unitTypes = $this->getAllowedUnitTypes();
 
         if ($this->userUnitLevel === 'ministry') {
-            $this->provinces = Region::where('type', 'province')->get();
+            $this->provinces = Region::where('type', 'province')->get(['id', 'name']);
             $this->counties = $this->province_id
-                ? Region::where('type', 'county')->where('parent_id', $this->province_id)->get()
+                ? Region::where('type', 'county')->where('parent_id', $this->province_id)->get(['id', 'name'])
                 : collect();
         } elseif ($this->userUnitLevel === 'province') {
             $this->provinces = collect();
-            $this->counties = Region::where('type', 'county')->where('parent_id', $this->userRegionId)->get();
+            $this->counties = Region::where('type', 'county')->where('parent_id', $this->userRegionId)->get(['id', 'name']);
         } else {
             $this->provinces = collect();
             $this->counties = collect();
@@ -315,10 +315,10 @@ return new class extends Component
             ->when($this->userUnitLevel === 'province', function ($query) {
                 return $query->whereIn('region_id', Region::where('parent_id', $this->userRegionId)->pluck('id')->push($this->userRegionId));
             })
-            ->get();
+            ->get(['id', 'name']);
 
         if ($parentUnits->isEmpty() && $this->userUnitLevel === 'ministry') {
-            $parentUnits = Unit::where('unit_type_id', 1)->get();
+            $parentUnits = Unit::where('unit_type_id', 1)->get(['id', 'name']);
         }
 
         return $parentUnits;
