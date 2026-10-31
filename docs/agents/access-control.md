@@ -38,6 +38,45 @@ Uses **Spatie Permission** package:
   `whereIn(... unitIds())` at all is the same leak this section is about,
   just silent — no fail-open spelling to catch. Read **every** hit; the
   two sweeps together catch the `when`/`empty` shapes **and** absence.
+
+### Guard (issue #1306)
+
+`tests/Feature/ScopeFailOpenGuardTest.php` scans `app/` and `resources/views/livewire/`
+(214 `.php` files today) and fails CI with `path:line`. Static scan, no database.
+Comments and docblocks are stripped first, so the spellings may still be quoted in
+prose; the guard flags code, not documentation.
+
+It covers **four** groups: `->when($scope, …)` (1), `if (! empty($scope)) { … }` (2),
+`! empty($scope) && ! in_array(…)` (3), and `->when(! empty($scope), …)` (4). The
+fourth is not one of the three documented spellings — it is the same fail-open shape
+wearing an "extra guard" and is kept deliberately.
+
+**Naming contract:** a *scope list* is `$ids` or camelCase ending in `Ids`
+(`$accessibleUnitIds`, `$unitIds`, `$this->accessibleUnitIds()`). Singular
+(`$unitId`) and snake_case (`$this->role_ids`) are user filters and are not matched.
+Keep new scope lists on this contract, or the guard will not see them.
+
+`ALLOWLIST` lives in the guard file, keyed by path with the groups it may match and a
+mandatory `reason`; `test_every_allowlist_entry_still_matches_its_file` removes dead
+entries. It is empty today and must stay that way — a live spelling found at
+implementation time is stop-and-report, not an allowlist entry.
+
+The guard does **not** replace the manual sweeps above: the absent-precondition shape
+(#980) and `resources/views/` outside `livewire/` still need a human read. The
+documented sweep cannot see `$this->…` variables (`[a-zA-Z]*` cannot match `this->`);
+the guard can.
+
+**Known regex gaps** (no live instance today, so the guard is green):
+- The regex treats **every** `…Ids` name as a scope list. Names that are not scope
+  lists (`$userIds`, `$itemIds`, `$unitIds`, `$scopedIds`, `$allowedUnitTypeIds`)
+  would be flagged if wrapped in `! empty(…)`; the contract above names the scope
+  lists, it does not bless every `…Ids`.
+- `if (! empty($ids) && $q->whereIn(…))` (conjunction + `whereIn`, not `in_array`)
+  matches none of the four groups.
+- Spelling 3 needs the variable text to be byte-identical in both conjuncts.
+- Scope lists that miss the `…Ids` contract (`$accessible_ids`, `$allowedUnits`,
+  `$scope`) are not matched, and `resources/views/` outside `livewire/` is not scanned.
+
 - Users see only their own unit's data (plus sub-units via recursive CTE)
 - **`users.index` is unit-scoped (issue #849) — `manage_users` is NOT a global grant.** The whole file avoids every fail-open spelling: no `when($ids, …)`, no `! empty($ids)` — each predicate is an unconditional `whereIn` / `in_array`, so an empty scope is `0 = 1`, never "no filter".
   - `users()` filters with the **disjunction** `person.u_id ∈ scope` **OR** a `user_units` row ∈ scope. Do not copy `activity-log`'s `whereHas('person', …)` verbatim here: alone it hides accounts with no linked person (admin accounts).
