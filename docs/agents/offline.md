@@ -6,6 +6,7 @@
 | Split out of `AGENTS.md` on 2026-10-28; that file keeps the one-line rules and
 | the map of where each topic lives.
 | Audited on `beta` @ `a7ce9d17` (issue #1265, phase 1 — documentation only).
+| Row anchors re-pinned on `beta` @ `f432ad76` (issue #1307, guard test).
 
 ## Verdict
 
@@ -37,8 +38,8 @@ row carries `file:line` and local/external, never a general description.
 | 1 | `resources/views/components/layouts/app.blade.php:11` | font (preload) | `/fonts/Vazirmatn-Regular.woff2` | local | — |
 | 2 | `app.blade.php:12` | JS + CSS | `@vite` → `public/build` | local | — |
 | 3 | `app.blade.php:18-19` | stylesheet | `css/leaflet/leaflet.css`, `css/other/jalalidatepicker.min.css` | local | — |
-| 4 | `app.blade.php:401` | CDN script | `cdn.jsdelivr.net/npm/sweetalert2@11` | **external, commented out — never loads** | — (needs a code change) |
-| 5 | `app.blade.php:402-406` | service worker | `/sw.js` | local (no cache/offline — see gaps) | — |
+| 4 | `app.blade.php:402` | CDN script | `cdn.jsdelivr.net/npm/sweetalert2@11` | **external, commented out — never loads** | — (needs a code change) |
+| 5 | `app.blade.php:403-407` | service worker | `/sw.js` | local (no cache/offline — see gaps) | — |
 | 6 | `resources/js/map-store.js:107-113` | map tile | `config('map.tile_url_template')` | **external (OSM by default)** | `TILE_URL_TEMPLATE` |
 | 7 | `resources/js/map-store.js:108` | map tile (fallback) | literal `https://{s}.tile.openstreetmap.org/...` | **external, dead but risky** | `TILE_URL_TEMPLATE` (always set today; phase 2 removes the literal) |
 | 8 | `resources/views/livewire/maps/map.blade.php:12,56` | map tile | `tileUrl` handed to the store; OSM literal as the `config()` fallback | external by default | `TILE_URL_TEMPLATE` |
@@ -49,7 +50,7 @@ row carries `file:line` and local/external, never a general description.
 | 13 | `resources/views/livewire/map/map-dashboard.blade.php:614,672,914,924` | fetch | `/api/gis/*` (same origin) | local | — |
 | 14 | `resources/views/livewire/it/network-traffic-chart.blade.php:130`, `it/wireless.blade.php:174` | fetch | `/api/zabbix/*` (same origin) | local | — |
 | 15 | `resources/views/livewire/todo/todo.blade.php:599` | JS | `js/other/full-calendar.min.js` | local | — |
-| 16 | `resources/views/livewire/dashboard.blade.php:666-667`, `reports/advanced.blade.php:478-479`, `reports/{persons,units,todos}.blade.php`, `hr/dashboard.blade.php:168`, `it/network-traffic-chart.blade.php:52` | JS | `js/chart/highcharts.js` + `accessibility.js` | local | — |
+| 16 | `resources/views/livewire/dashboard.blade.php:666-667`, `reports/advanced.blade.php:597-598`, `reports/{persons,units,todos}.blade.php`, `hr/dashboard.blade.php:168`, `it/network-traffic-chart.blade.php:52` | JS | `js/chart/highcharts.js` (+ `accessibility.js` only on dashboard/advanced) | local | — |
 | 17 | `resources/views/op/index.php:525-527` | CDN scripts | `cdnjs.cloudflare.com` → React 18 / ReactDOM 18 / axios | **external — `/op`, local-only** | — (needs a code change; separate issue) |
 | 18 | `public/js/leaflet/leaflet-routing-machine.min.js` | library default | `router.project-osrm.org`, `api.mapbox.com` | external defaults, overridden on both pages via `serviceUrl` | `ROUTING_SERVER_*` |
 | 19 | `public/js/chart/exporting.js` | library default | `export-svg.highcharts.com` | **external default, never loaded** | — (file is not included anywhere) |
@@ -167,7 +168,7 @@ after a hard load of each page:
 - **`public/sw.js` does not make the app offline-capable.** It only handles
   `install/activate/push/notificationclick` — no `fetch` handler and no cache. Nothing
   calls `pushManager.subscribe`, so it is effectively inert; registration on plain HTTP
-  fails and `app.blade.php:405` swallows it with `catch(() => {})` (and
+  fails and `app.blade.php:406` swallows it with `catch(() => {})` (and
   `install-guid.md:135` suggests `APP_URL=http://...`).
 - **Tile attribution is not OSM's.** `map-store.js:110` and `units/map.blade.php:235`
   render `&copy; Health-Dashboard`. OSM requires "© OpenStreetMap contributors"; this is
@@ -182,15 +183,16 @@ after a hard load of each page:
   from them and nothing consumes it. Changing only `TILE_SERVER_IP` leaves every map on
   OSM with no error. The only lever is `TILE_URL_TEMPLATE`.
 - **`/op` CDN and the `Swal` bug need their own issues** (owner decision, 2026-10-28).
-  `app.blade.php:401` really is a comment, yet `Swal.fire` is called at `:411` with no
+  `app.blade.php:402` really is a comment, yet `Swal.fire` is called at `:412` with no
   other provider anywhere in source or `public/build/assets`; the `swal` listener throws
   `ReferenceError` and the calls in `todo.blade.php:251` and
   `tickets/⚡inbox.blade.php:258,314,401` do nothing. Recorded here, not fixed — phase 1
   touches no code.
-- **No automated guard yet.** A `tests/Feature/NoExternalRuntimeAssetsTest.php` that
-  strips HTML/Blade comments and asserts on `(src|href)=["'](https?:)?//` plus
-  `url\(http` with an explicit allowlist (`op/index.php` only) belongs to a separate
-  issue (owner decision, 2026-10-28).
+- **Automated guard:** `tests/Feature/NoExternalRuntimeAssetsTest.php` (issue #1307) pins the
+  table above — nine allowlist entries plus the two vendored defaults. It scans
+  `resources/views`, `resources/js`, `resources/css` and `config`; a new external load
+  outside the allowlist fails CI. It does not strip comments: the one commented literal is
+  pinned as `kind=commented`, so uncommenting it also goes red.
 
 ## Phase 2
 
