@@ -55,9 +55,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Report generation — daily at 06:00 Tehran time
         // Issue #1021: withoutOverlapping() so a slow run cannot stack on the
         // next one, matching the Zabbix entry below. This stays a command rather
-        // than `->job(new GenerateDailyReportsJob)`: the job's 600s $timeout is
-        // above the default redis connection's 90s retry_after, so dispatching it
-        // needs its queue connection pinned first (#1010).
+        // than `->job(new GenerateDailyReportsJob)`: the job's queue connection
+        // is already pinned (#1010), but `redis-reports` is consumed only by the
+        // documented reports worker (install-guid.md §11), so a deployment with
+        // just the default worker would never run it.
         $schedule->command('reports:generate-daily')
             ->dailyAt('06:00')
             ->withoutOverlapping();
