@@ -8,10 +8,12 @@ use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use ReflectionMethod;
+use RuntimeException;
 use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -950,4 +952,124 @@ test('#1028: the n_code exists rule itself constrains u_id to the accessible uni
     $v = validator(['n_code' => $f['victim']->n_code], ['n_code' => [$rule]]);
     expect($v->passes())->toBeFalse();
     expect($v->errors()->has('n_code'))->toBeTrue();
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue #1277 — user create/edit must be atomic
+ * ---------------------------------------------------------------------------
+ * Each test arms a query listener that throws on the FIRST insert into the
+ * named table, so a partially written user can never be observed. The listener
+ * disarms itself after firing: Pest test files share one DB connection, and a
+ * listener left armed would fail every later insert in the process.
+ */
+function users1277BoomOnInsert(string $table): void
+{
+    $armed = true;
+
+    DB::listen(function ($query) use ($table, &$armed) {
+        $sql = strtolower(ltrim($query->sql));
+
+        if ($armed && str_starts_with($sql, 'insert') && str_contains($sql, $table)) {
+            $armed = false;
+
+            throw new RuntimeException('boom-'.$table);
+        }
+    });
+}
+
+test('#1277: a failed role sync leaves no user row behind on create', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    Person::create([
+        'n_code' => '1277000001',
+        'f_name' => 'نیمه',
+        'l_name' => 'ساخته',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    users1277BoomOnInsert('model_has_roles');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '1277000001')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('createUser'))->toThrow(RuntimeException::class);
+
+    expect(User::where('n_code', '1277000001')->exists())->toBeFalse();
+    expect(DB::table('model_has_roles')->count())->toBe(0);
+});
+
+test('#1277: a failed unit sync leaves no user row behind on create', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    Person::create([
+        'n_code' => '1277000002',
+        'f_name' => 'نیمه',
+        'l_name' => 'ساخته',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    users1277BoomOnInsert('user_units');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '1277000002')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('createUser'))->toThrow(RuntimeException::class);
+
+    expect(User::where('n_code', '1277000002')->exists())->toBeFalse();
+    expect(DB::table('model_has_roles')->count())->toBe(0);
+});
+
+test('#1277: a failed unit sync on edit leaves password, role, unit and tokens untouched', function () {
+    $oldRole = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $newRole = Role::create(['name' => 'supervisor', 'label' => 'سرپرست']);
+    $child = Unit::create(['name' => 'واحد فرزند', 'parent_id' => $this->unit->id]);
+
+    $target = users1030Target($this->unit, '1277000003');
+    $target->assignRole($oldRole);
+    $tokenId = $target->createToken('flutter-app')->accessToken->id;
+
+    // A DIFFERENT in-scope unit must be submitted: syncing the same set writes
+    // nothing, so the listener would never fire.
+    users1277BoomOnInsert('user_units');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$newRole->id])
+        ->set('password', 'new-secret-123')
+        ->set('unit_ids', [$child->id])
+        ->call('updateUser'))->toThrow(RuntimeException::class);
+
+    expect(Hash::check('password', $target->fresh()->password))->toBeTrue();
+    expect($target->fresh()->hasRole($oldRole->name))->toBeTrue();
+    expect($target->fresh()->hasRole($newRole->name))->toBeFalse();
+    expect($target->fresh()->units()->pluck('units.id')->all())->toBe([$this->unit->id]);
+    $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
+});
+
+test('#1277: a failed role sync on a password reset leaves the old password and tokens alive', function () {
+    $oldRole = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $newRole = Role::create(['name' => 'supervisor', 'label' => 'سرپرست']);
+
+    $target = users1030Target($this->unit, '1277000004');
+    $target->assignRole($oldRole);
+    $tokenId = $target->createToken('flutter-app')->accessToken->id;
+
+    users1277BoomOnInsert('model_has_roles');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$newRole->id])
+        ->set('password', 'new-secret-123')
+        ->call('updateUser'))->toThrow(RuntimeException::class);
+
+    expect(Hash::check('password', $target->fresh()->password))->toBeTrue();
+    expect($target->fresh()->hasRole($oldRole->name))->toBeTrue();
+    $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
 });
