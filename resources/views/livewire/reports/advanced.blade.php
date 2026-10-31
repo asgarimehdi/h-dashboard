@@ -5,8 +5,10 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Services\DailySeries;
 use App\Support\JalaliDateRange;
+use App\Support\ScopeCacheKey;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
@@ -207,12 +209,14 @@ return new class extends Component
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = match ($this->reportType) {
-            'tickets' => Ticket::whereIn('unit_id', $accessibleIds),
-            'todos' => Todo::whereIn('unit_id', $accessibleIds),
-            'persons' => Person::whereIn('u_id', $accessibleIds),
-            default => Ticket::whereIn('unit_id', $accessibleIds),
-        };
+        // Issue #1282 — tickets/todos go through the versioned cache below.
+        // The persons branch stays uncached and untouched on purpose: it has
+        // no `report_persons` namespace and no invalidation hook yet.
+        if ($this->reportType !== 'persons') {
+            return $this->rememberReport($accessibleIds);
+        }
+
+        $query = Person::whereIn('u_id', $accessibleIds);
 
         // فیلتر تاریخ (ورودی شمسی)
         if ($from = JalaliDateRange::parse($this->dateFrom)) {
@@ -227,8 +231,7 @@ return new class extends Component
         if ($unitId) {
             $descendantIds = Unit::descendantIds($unitId)->toArray();
             $descendantIds[] = $unitId;
-            $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
-            $query->whereIn($unitColumn, $descendantIds);
+            $query->whereIn('u_id', $descendantIds);
         }
 
         // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
@@ -252,50 +255,166 @@ return new class extends Component
             )
             : [];
 
-        $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
         $byUnit = $query->clone()
-            ->selectRaw("$unitColumn, count(*) as count")
-            ->groupBy($unitColumn)
+            ->selectRaw('u_id, count(*) as count')
+            ->groupBy('u_id')
             ->with('unit:id,name')
             ->get()
             ->mapWithKeys(fn ($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
             ->toArray();
 
-        $details = [];
+        $details = [
+            'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+            'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+            'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+        ];
+
+        return [
+            'total' => $total,
+            'byDay' => $byDay,
+            'byUnit' => $byUnit,
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Issue #1282 — cache the whole tickets/todos payload behind the existing
+     * versioned namespace.
+     *
+     * The filters, the query and `Unit::descendantIds()` all run inside the
+     * closure so a cache hit costs zero report queries. The key carries every
+     * input that changes the payload: scope hash (namespace version handles
+     * Ticket/Todo writes), from/to, the effective unit, the normalized status,
+     * and the hierarchy version for unit names and descendants.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>}
+     */
+    private function rememberReport(array $accessibleIds): array
+    {
+        $from = JalaliDateRange::parse($this->dateFrom);
+        $to = JalaliDateRange::parse($this->dateTo, endOfDay: true);
+        $range = $this->dateRange();
+        $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+
+        /** @var array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>} $data */
+        $data = $cache->remember(
+            $this->reportType === 'todos' ? 'report_todos' : 'report_tickets',
+            ScopeCacheKey::hash($accessibleIds),
+            fn (): array => $this->buildReport($accessibleIds, $from, $to, $range, $unitId),
+            10,
+            [
+                'type' => $this->reportType,
+                'from' => $from?->toDateString(),
+                'to' => $to?->toDateString(),
+                'days' => $range ? (int) $range[0]->diffInDays($range[1]) + 1 : null,
+                'unit' => $unitId,
+                'status' => $this->statusFilter,
+                'hierarchy' => $cache->getVersion('unit_hierarchy'),
+            ],
+        );
+
+        return $data;
+    }
+
+    /**
+     * Build the uncached tickets/todos payload (the cache-miss path).
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  array{0: Carbon, 1: Carbon}|null  $range
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>}
+     */
+    private function buildReport(array $accessibleIds, ?Carbon $from, ?Carbon $to, ?array $range, ?int $unitId): array
+    {
+        $query = $this->reportType === 'todos'
+            ? Todo::whereIn('unit_id', $accessibleIds)
+            : Ticket::whereIn('unit_id', $accessibleIds);
+
+        // فیلتر تاریخ (ورودی شمسی)
+        if ($from) {
+            $query->where('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->where('created_at', '<=', $to);
+        }
+
+        // فیلتر واحد (سلسله‌مراتبی)
+        if ($unitId) {
+            $descendantIds = Unit::descendantIds($unitId)->toArray();
+            $descendantIds[] = $unitId;
+            $query->whereIn('unit_id', $descendantIds);
+        }
+
+        // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
+        // STATUS_OPTIONS کنار هم زندگی می‌کنند؛ todos ستون status ندارد و
+        // روی is_completed/end_at نگاشت می‌شود.
+        $this->applyStatusFilter($query);
+
+        // Issue #736: materialise every day in the chosen range, zeros included,
+        // so a day with no rows is a zero rather than a missing column. The
+        // filtered $query is reused, so unit/status/date filters still apply.
+        $byDay = $range
+            ? array_map(
+                fn (array $row) => [
+                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                    'count' => $row['count'],
+                ],
+                DailySeries::between($range[0], $range[1])->counts($query->clone(), 'created_at')
+            )
+            : [];
+
+        $byUnit = (clone $query)
+            ->selectRaw('unit_id, count(*) as count')
+            ->groupBy('unit_id')
+            ->with('unit:id,name')
+            ->get()
+            ->mapWithKeys(fn ($item) => [$item->unit->name ?? 'نامشخص' => $item->count])
+            ->toArray();
+
         if ($this->reportType === 'tickets') {
+            // Issue #1282 — total and the four detail buckets in one aggregate.
+            // Only the FILTER syntax comes from the dashboard: urgent/normal/low
+            // count every status here, and overdue binds PHP `now()`, not SQL
+            // `NOW()`.
+            $stats = (clone $query)->selectRaw(
+                'COUNT(*) AS total, '.
+                'COUNT(*) FILTER (WHERE tickets.priority = ?) AS urgent, '.
+                'COUNT(*) FILTER (WHERE tickets.priority = ?) AS normal, '.
+                'COUNT(*) FILTER (WHERE tickets.priority = ?) AS low, '.
+                'COUNT(*) FILTER (WHERE tickets.status IN (?, ?) AND tickets.deadline < ?) AS overdue',
+                ['urgent', 'normal', 'low', 'created', 'forwarded', now()],
+            )->toBase()->first();
+
+            $total = (int) ($stats->total ?? 0);
             $details = [
-                'urgent' => (clone $query)->where('priority', 'urgent')->count(),
-                'normal' => (clone $query)->where('priority', 'normal')->count(),
-                'low' => (clone $query)->where('priority', 'low')->count(),
-                'overdue' => (clone $query)
-                    ->whereIn('status', ['created', 'forwarded'])
-                    ->where('deadline', '<', now())
-                    ->count(),
+                'urgent' => (int) ($stats->urgent ?? 0),
+                'normal' => (int) ($stats->normal ?? 0),
+                'low' => (int) ($stats->low ?? 0),
+                'overdue' => (int) ($stats->overdue ?? 0),
             ];
-        } elseif ($this->reportType === 'persons') {
-            $details = [
-                'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                    ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-                    ->whereIn('persons.u_id', $accessibleIds)
-                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                    ->groupBy('name')
-                    ->pluck('count', 'name')
-                    ->toArray(),
-                'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                    ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-                    ->whereIn('persons.u_id', $accessibleIds)
-                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                    ->groupBy('name')
-                    ->pluck('count', 'name')
-                    ->toArray(),
-                'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                    ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-                    ->whereIn('persons.u_id', $accessibleIds)
-                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                    ->groupBy('name')
-                    ->pluck('count', 'name')
-                    ->toArray(),
-            ];
+        } else {
+            $total = $query->count();
+            $details = [];
         }
 
         return [
