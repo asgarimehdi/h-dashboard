@@ -137,6 +137,33 @@ class ReportsEmptyScopeTest extends TestCase
         $this->assertSame([], $payload['byType']);
     }
 
+    /**
+     * Issue #1288 — `map-no-boundary` still carried the #819-shaped
+     * `->when($accessibleIds, …)` predicate behind its own empty-scope guard.
+     * The predicate is unconditional now; this pins that the page's map
+     * payloads stay empty when the scope is empty.
+     */
+    public function test_map_no_boundary_leaks_nothing_on_an_empty_scope(): void
+    {
+        $this->actingAsUserWithoutUnit();
+
+        // A second foreign unit WITH coordinates. `chartPayload()` keeps only
+        // rows that have lat/lng, so without it the marker assertion below
+        // would be vacuous — the fixture's foreign unit has no coordinates.
+        Unit::create([
+            'name' => 'واحد بیرونی مختصات‌دار تست',
+            'lat' => 35.6892,
+            'lng' => 51.3890,
+        ]);
+
+        $component = Livewire::test('reports.map-no-boundary')->assertStatus(200);
+
+        $component->assertDontSee(self::FOREIGN_UNIT_NAME);
+
+        $this->assertSame([], $component->instance()->allUnits, 'the map payload must be empty');
+        $this->assertSame([], $component->instance()->chartPayload(), 'the marker payload must be empty');
+    }
+
     public function test_advanced_persons_aggregates_fail_closed_on_an_empty_scope(): void
     {
         $this->actingAsUserWithoutUnit();
