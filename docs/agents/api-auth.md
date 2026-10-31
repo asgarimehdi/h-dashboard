@@ -20,12 +20,13 @@
 
 ### API Token Abilities (issue #690)
 
-Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise).
+Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise) — **except three intentionally exempt routes**: `POST /api/login` (public; it mints the token), `GET /api/user` and `POST /api/logout` (self-scoped; they act on the caller, not on a resource — logout by #1071, following the pre-existing `/api/user` precedent). A fourth exception is a decision, not an implementation detail: record it here and in `AGENTS.md`.
 
 Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:a,b` = ALL of them** (`CheckForAnyAbility` vs `CheckAbilities`).
 
 | Route group | Read (GET) | Write (POST/PUT/DELETE) |
 |---|---|---|
+| `/api/login`, `/api/user`, `/api/logout` | **none** — `POST /api/login` is public (no `auth:sanctum`); `GET /api/user` + `POST /api/logout` are `auth:sanctum` only (self-scoped; logout by #1071) | — |
 | `/api/units` | `ability:units:read` + `role_or_permission:organization` | `abilities:units:write` + `role_or_permission:organization` |
 | `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` + `role_or_permission:map\|bw` | — |
 | `/api/hardware/*` | `ability:hardware:read` + `role_or_permission:manage_hardware` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
