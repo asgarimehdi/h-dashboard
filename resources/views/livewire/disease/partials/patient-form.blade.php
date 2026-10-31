@@ -22,9 +22,19 @@
         @enderror
     </div>
 
-    <x-input label="نام" wire:model="first_name" placeholder="نام" />
+    <div>
+        <x-input label="نام" wire:model="first_name" placeholder="نام" />
+        @error('first_name')
+            <p class="text-xs text-error mt-1">{{ $message }}</p>
+        @enderror
+    </div>
 
-    <x-input label="نام خانوادگی" wire:model="last_name" placeholder="نام خانوادگی" />
+    <div>
+        <x-input label="نام خانوادگی" wire:model="last_name" placeholder="نام خانوادگی" />
+        @error('last_name')
+            <p class="text-xs text-error mt-1">{{ $message }}</p>
+        @enderror
+    </div>
 
     <div class="form-control">
         <label class="label" for="patient_birth_date">
