@@ -132,11 +132,11 @@ class HardwareAuditObserver
     {
         $route = request()->route();
 
-        if ($route->getName() === 'hardware.import') {
+        if ($route instanceof \Illuminate\Routing\Route && $route->getName() === 'hardware.import') {
             return 'import';
         }
 
-        if ($route && str_starts_with($route->uri(), 'api/')) {
+        if ($route instanceof \Illuminate\Routing\Route && str_starts_with($route->uri(), 'api/')) {
             return 'api';
         }
 
