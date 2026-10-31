@@ -131,7 +131,7 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs with **seven** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and four `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `test-php86`); an eighth job, `mutation`, is manual-only behind `workflow_dispatch` (#1012). The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
+`.github/workflows/test.yml` runs on PRs with **eight** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`); `mutation` runs on every PR too (Composer-only, no Node/Vite, 45-min timeout, ~30 min typical) and gates nothing. The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
 
 ---
 
