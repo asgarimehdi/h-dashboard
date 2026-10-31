@@ -58,7 +58,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `Content-Security-Policy-Report-Only` — CSP in report-only mode (validate 1-2 weeks before enforcing)
+- `Content-Security-Policy` (enforcing) or `Content-Security-Policy-Report-Only` (default) — per-request nonce (`App\Support\CspPolicy::for($nonce)`); `'unsafe-inline'` is gone from `script-src`/`style-src`, `'unsafe-eval'` and `style-src-attr 'unsafe-inline'` remain as phase-1 exceptions; `connect-src` carries the OSRM/Nominatim origins from `config/map.php`; switch via `config('csp.enforcing')` / `CSP_ENFORCING` (#1281, phase 1).
 - `Reporting-Endpoints: csp-endpoint="/csp-report"` — the Reporting API destination
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS)
 

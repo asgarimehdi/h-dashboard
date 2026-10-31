@@ -64,7 +64,7 @@ Counts come from `php artisan test <file> --list-tests` — the authoritative pe
 | `tests/Feature/UnitsExportTest.php` | 22 | Units Excel export (8 columns incl. «شهرستان») |
 | `tests/Feature/SyncZabbixObservabilityTest.php` | 10 | `zabbix_sync_logs` rows, streak, admin alert (#740) |
 | `tests/Unit/PersianNormalizerTest.php` | 11 | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
-| `tests/Feature/SecurityHeadersMiddlewareTest.php` | 10 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
+| `tests/Feature/SecurityHeadersMiddlewareTest.php` | 12 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
 | `tests/Feature/Jobs/JobsTest.php` | 12 | Archive / clean / generate jobs |
 | `tests/Feature/MaintenanceLivewireTest.php` | 21 | Maintenance schedule CRUD |
 | `tests/Unit/ZabbixAdapterTest.php` | 7 | `ZabbixResult` failure classification with a stub client (#741) |
