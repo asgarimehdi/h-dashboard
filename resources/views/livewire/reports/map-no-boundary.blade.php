@@ -33,7 +33,7 @@ return new class extends Component
 
         return Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
             return Unit::query()
-                ->when($accessibleIds, fn($q) => $q->whereIn('id', $accessibleIds))
+                ->whereIn('id', $accessibleIds)
                 ->whereNull('boundary_id')
                 ->with('unitType:id,name', 'region:id,name')
                 ->get();
