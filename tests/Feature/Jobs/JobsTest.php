@@ -8,6 +8,7 @@ use App\Jobs\GenerateDailyReportsJob;
 use App\Jobs\SendNotificationJob;
 use App\Jobs\SyncZabbixJob;
 use App\Models\Unit;
+use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Bus\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -143,6 +144,89 @@ class JobsTest extends TestCase
         $this->assertEquals(1, $result);
         $this->assertDatabaseMissing('notifications', ['title' => 'Old notification']);
         $this->assertDatabaseHas('notifications', ['title' => 'Recent notification']);
+    }
+
+    // ── Org-wide retention covers users without a usable unit (#1280) ──
+    //
+    // An org-wide run (empty $unitIds) is every live user. A person row with
+    // u_id = null is legal in the schema (nullable FK, ON DELETE SET NULL),
+    // and such an account used to be skipped by both jobs. A scoped run must
+    // keep skipping it: the boundary is pinned by the two scoped tests.
+
+    public function test_clean_notifications_job_org_wide_cleans_user_without_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $user->person->update(['u_id' => null]);
+
+        $this->seedNotifications($user->id);
+
+        $result = (new CleanNotificationsJob(7, []))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('notifications', ['title' => 'Old notification']);
+        $this->assertDatabaseHas('notifications', ['title' => 'Recent notification']);
+    }
+
+    public function test_archive_activity_logs_job_org_wide_cleans_user_without_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $user->person->update(['u_id' => null]);
+
+        $this->seedActivityLogs($user->id); // Old = 100d، Recent = 10d
+
+        $result = (new ArchiveActivityLogsJob(90, []))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('activity_logs', ['description' => 'Old log']);
+        $this->assertDatabaseHas('activity_logs', ['description' => 'Recent log']);
+    }
+
+    public function test_clean_notifications_job_scoped_leaves_user_without_unit_untouched(): void
+    {
+        ['user' => $inScope, 'unit' => $unit] = $this->createUserWithUnit();
+
+        $outOfScope = User::factory()->create();
+        $outOfScope->person->update(['u_id' => null]);
+
+        $this->seedNotifications($inScope->id);
+        $this->seedNotifications($outOfScope->id);
+
+        $result = (new CleanNotificationsJob(7, [$unit->id]))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $inScope->id, 'title' => 'Old notification',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $outOfScope->id, 'title' => 'Old notification',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $outOfScope->id, 'title' => 'Recent notification',
+        ]);
+    }
+
+    public function test_archive_activity_logs_job_scoped_leaves_user_without_unit_untouched(): void
+    {
+        ['user' => $inScope, 'unit' => $unit] = $this->createUserWithUnit();
+
+        $outOfScope = User::factory()->create();
+        $outOfScope->person->update(['u_id' => null]);
+
+        $this->seedActivityLogs($inScope->id);
+        $this->seedActivityLogs($outOfScope->id);
+
+        $result = (new ArchiveActivityLogsJob(90, [$unit->id]))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('activity_logs', [
+            'user_id' => $inScope->id, 'description' => 'Old log',
+        ]);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $outOfScope->id, 'description' => 'Old log',
+        ]);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $outOfScope->id, 'description' => 'Recent log',
+        ]);
     }
 
     public function test_generate_daily_reports_job_creates_reports_without_authenticated_user(): void
