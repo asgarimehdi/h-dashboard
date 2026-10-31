@@ -61,7 +61,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     // API logout — revoke ONLY the caller's current token (Issue #1071).
     //
     // No ability, exactly like `/api/user` above: this is a self-scoped
-    // action (#837), not a resource mutation. The revoke is conditional
+    // action (#1071), not a resource mutation. The revoke is conditional
     // because `statefulApi()` is on, so a session-cookie request reaches the
     // Sanctum guard as a `TransientToken`, which has no `delete()` method —
     // an unconditional call is a 500. Deliberately scoped to the current
