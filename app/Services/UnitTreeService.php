@@ -18,8 +18,10 @@ use Illuminate\Support\Collection;
  *
  * The `/api/hr/org-chart*` endpoints deliberately stay inline (comment in
  * OrgChartController): they interleave person counts and Flutter-specific
- * shaping into the tree walk, and HrApiTest gates their payload byte-identical.
- * Converging them onto this service is a separate, test-gated change.
+ * shaping into the tree walk, and HrApiTest pins their payload structurally
+ * (json structure, emit-once counts, exact subtree keys) — there is no
+ * byte-identical gate. Converging them onto this service is a separate,
+ * test-gated change.
  *
  * Extract the logic here rather than copy-pasting it — a second feature that
  * needs a unit tree (e.g. covered population per unit) plugs its own badge

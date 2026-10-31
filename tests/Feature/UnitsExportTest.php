@@ -541,10 +541,12 @@ class UnitsExportTest extends TestCase
 
     public function test_export_survives_a_cyclic_parent_chain(): void
     {
-        // Built from in-memory models, not seeded rows: a real cyclic row hangs
-        // Unit::descendantIds(), whose WITH RECURSIVE ... UNION ALL never
-        // terminates on a cycle (pre-existing app-wide hazard — the reason the
-        // export needs its own guard). The guard under test is the export's.
+        // Built from in-memory models, not seeded rows: a real cyclic row is a
+        // hazard for every recursive walk over the tree (Unit::descendantIds()
+        // survives it only because its CTE uses UNION — see
+        // docs/agents/features.md), so the export's own guard is proved without
+        // writing that corruption into the database. The guard under test is
+        // the export's.
         $a = new Unit(['name' => 'الف']);
         $a->id = 1;
         $a->parent_id = 2;

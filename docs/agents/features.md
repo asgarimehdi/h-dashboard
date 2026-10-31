@@ -33,7 +33,7 @@ These components and routes were removed — do not recreate:
 - Button is a plain `<a href="{{ route('units.export') }}">` in `resources/views/livewire/units/index.blade.php` — **Livewire cannot return file downloads**, so never `wire:click` it.
 - Files: `app/Exports/UnitsExport.php`, `app/Http/Controllers/Api/UnitsExportController.php`, tests in `tests/Feature/UnitsExportTest.php`.
 
-> ✅ **`descendantIds` uses `UNION`, not `UNION ALL`** — deliberate. The set operator dedupes, so a `parent_id` cycle terminates (2ms) instead of hanging the connection (proven: `UNION ALL` on a cycle runs until `statement_timeout`). Do not "optimize" it back to `UNION ALL`. The export's own `buildHierarchy()` guards its upward walk separately.
+> ✅ **`descendantIds` uses `UNION`, not `UNION ALL`** — deliberate. The set operator dedupes, so a `parent_id` cycle terminates (2ms) instead of hanging the connection (proven: `UNION ALL` on a cycle runs until `statement_timeout`). Do not "optimize" it back to `UNION ALL`. The export's upward walk is guarded separately by `UnitAncestry` (below).
 
 ### Personnel Export (issue #729, columns #755)
 
@@ -41,7 +41,7 @@ These components and routes were removed — do not recreate:
 
 - **Exports the filtered result**, not the whole table — search and every active filter are reapplied server-side, so what you download is what you were looking at.
 - **12 columns:** `کد ملی`, `نام`, `نام خانوادگی`, `نام کامل`, `سمت`, `تحصیلات`, `نوع استخدام`, `ردیف سازمانی`, `واحد سازمانی`, `وضعیت`, **`تاریخ تولد`**, `تاریخ استخدام`. «تاریخ تولد» was added in #755 — `birth_date`/`hire_date` had **no cast** and were returning raw strings, so the export would have printed unformatted values.
-- The unit column carries the **full breadcrumb** via `UnitTreeService::ancestorChain()` — the same contract as the units export's «مسیر کامل».
+- The unit column carries the **full breadcrumb** via `UnitAncestry::chain()` over a memoised `id => [name, parent_id]` index (`unitsById()`, one units query per export, none per row or chunk) — the same contract as the units export's «مسیر کامل».
 - **Relations are eager-loaded in the controller** (`semat`, `tahsil`, `estekhdam`, `radif`, `unit`) so mapping a row never queries. An empty scope uses `whereRaw('1 = 0')`, not a raw empty `IN ()`.
 - Same plain-`<a>` rule: Livewire cannot return file downloads.
 - Files: `app/Exports/PersonsExport.php`, `app/Http/Controllers/Api/PersonsExportController.php`, `tests/Feature/PersonsExportTest.php`, e2e `tests/e2e/personnel/list.spec.ts`.
@@ -63,7 +63,47 @@ Reuse contract (documented at the top of `tree.blade.php`):
 
 `hr/org-chart` is the reference consumer: it contributes only `livewire/hr/personnel-badge` (count + «خالی») and the personnel detail panel. `hr/org-node.blade.php` is **deleted** — do not recreate it; node markup lives in `unit/tree-node.blade.php`. The search box and expand/collapse buttons live INSIDE `unit.tree` because they drive the child's own state — a parent cannot call a child's methods without a ref. A second consumer (e.g. covered population per unit) needs zero tree code: a badge view + an event listener.
 
-`UnitTreeService::ancestorChain()` is the **shared breadcrumb walker** — the personnel export's unit path and the tree UI resolve hierarchy through it. The units export is the exception: `UnitsExportController` walks its own `hierarchyMap()` / `buildHierarchy()` (see the note above). Do not re-implement an upward walk anywhere else.
+`UnitTreeService::ancestorChain()` is the tree UI's breadcrumb walker, and every upward walk runs through the same helper — see below. Do not re-implement an upward walk anywhere else.
+
+### One ancestor walk (issue #1302)
+
+`App\Support\UnitAncestry` is the only walk over `parent_id`. DB-free, one operation:
+`chain(int $unitId, array $index, ?array $accessibleIds, int $maxDepth = MAX_DEPTH): list<array{id, name}>`
+— root-first, excluding the unit itself. `$index` is `id => [name, parent_id]`. Scope has exactly
+one meaning: **`null` = explicitly unlimited, `[]` = in scope of nothing, an array = the parent
+must be a member and is then named.** A cycle, self-parent, parent missing from the index,
+out-of-scope parent or `MAX_DEPTH = 100` cuts the chain **silently** — no throw, no marker in the
+payload. `$visited` is seeded with the unit itself; the cap is a safety net for a corrupt linear
+chain (the real dev depth is 6). `inScope()` is public so an adapter decides "is this parent worth
+loading?" from the same predicate instead of a second copy.
+
+Adapters, all keeping their public shape:
+
+- `UnitTreeService::ancestorChain()` — scope-checked; it tests `parent_id` **before** touching
+  `->parent`, so an out-of-scope parent is never loaded. An eager chain costs 0 queries and only
+  the documented seventh hop costs one (`UnitTreeServiceTest` pins the 7/0/1 counts).
+- `UnitsExportController::buildHierarchy()` — presenter only: unlimited scope over the full
+  `hierarchyMap()` (which includes inactive units), then shapes `path/depth/parent_name`.
+  Ancestors above the caller's scope are named on purpose.
+- `PersonsExport::resolveUnitPath()` — calls the helper directly with `null` scope.
+
+On corrupt `parent_id` (self-parent, A↔B cycle) the units export now names each unit once:
+`"A"`/depth 0 and `"B > A"`/1, where the old walk repeated the unit (`"A > A"`, `"A > B > A"`).
+Acyclic paths are unchanged; do not "restore" the repeat.
+
+**Parked (downward) sites — current contract, deliberately untouched:**
+
+- `OrgChartController::orgChart()` — root = parent null **or out of scope**, no visited set. A cycle
+  wholly inside the scope has no root, so it is **silently dropped** from the tree.
+- `OrgChartController::loadSubtree()` — the flat `Unit::subtree()` CTE is safe (`UNION` dedupes),
+  but the recursive `format()` can recurse forever when the requested unit sits **inside** a cycle.
+  Traced from code, not reproduced; parked for the gatekeeper's follow-up issue.
+- `UnitsExportController::orderDepthFirst()`/`walk()` — **no visited set**. Only root-less cycles
+  are saved, by the orphan-append; a cycle reachable from a root re-enters `walk` forever. `walk`
+  is not dead code (the ordering uses it), and must never be described as cycle-safe.
+- `unit.tree`'s `collectAllIds()` — global visited set, descendant direction, safe.
+- `Unit::buildTree()` — descendant CTE; `$attachChildren` can recurse forever when a root id is
+  inside a cycle. Parked with the rest.
 
 ### Batched child loading (issue #722)
 
