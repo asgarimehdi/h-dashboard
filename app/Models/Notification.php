@@ -21,6 +21,7 @@ use Illuminate\Support\Str;
  * @property string|null $color
  * @property string|null $url
  * @property array<string, mixed>|null $data
+ * @property string|null $dedupe_key
  * @property bool $is_read
  * @property Carbon|null $read_at
  * @property Carbon|null $created_at
@@ -56,6 +57,7 @@ class Notification extends Model
         'color',
         'url',
         'data',
+        'dedupe_key',
         'is_read',
         'read_at',
     ];
