@@ -126,11 +126,18 @@ class HardwareAuditObserver
     }
 
     /**
-     * Detect the source of the change (web, api, import, bulk).
+     * Resolve the current route in a way PHPStan treats as nullable regardless
+     * of the framework's (overly certain) inference for request()->route().
+     *
+     * @return \Illuminate\Routing\Route|null
      */
+    protected function currentRoute(): ?\Illuminate\Routing\Route
+    {
+        return request()->route();
+    }
     protected function detectSource(): string
     {
-        $route = request()->route();
+        $route = $this->currentRoute();
 
         if ($route instanceof \Illuminate\Routing\Route && $route->getName() === 'hardware.import') {
             return 'import';
