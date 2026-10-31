@@ -187,6 +187,8 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 > Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
 
+> Gotcha: the optional `$dedupeKey` on `NotificationService::send()` is the **event identity, not a content hash** — retries/duplicates of one event pass the same key, different events pass different keys; a second send with the same `(user_id, dedupe_key)` returns the existing row (backed by the `notifications_user_dedupe_key_unique` index). Today only `SendNotificationJob` passes one (`job:{queue uuid}`); direct callers like `SyncZabbixJob::alertAdmins()` are still unkeyed (#1286 step 6 split).
+
 ---
 
 ## Scheduler & Console Commands

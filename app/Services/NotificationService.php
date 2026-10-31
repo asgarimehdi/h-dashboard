@@ -11,6 +11,23 @@ use Illuminate\Support\Str;
 
 class NotificationService
 {
+    /**
+     * Create a notification for a user.
+     *
+     * `$dedupeKey` is the identity of the event that produced the notification,
+     * not a hash of its content: every retry (or duplicate delivery) of the same
+     * event must pass the same key, and different events must pass different
+     * keys. A second send with the same key on the same user returns the row
+     * that already exists instead of inserting another one.
+     *
+     * Rules:
+     * - Empty string is treated as "no key" (falls back to a plain insert).
+     * - The key is at most 191 characters; longer keys are rejected with an
+     *   InvalidArgumentException rather than silently truncated.
+     * - There is no separate TTL: the key lives exactly as long as its
+     *   notification row (CleanNotificationsJob deletes both together), so any
+     *   time window belongs in the key itself.
+     */
     public static function send(
         int $userId,
         string $type,
@@ -19,9 +36,18 @@ class NotificationService
         string $icon = 'o-bell',
         string $color = 'text-info',
         ?string $url = null,
-        ?array $data = null
+        ?array $data = null,
+        ?string $dedupeKey = null,
     ): NotificationModel {
-        $notification = NotificationModel::create([
+        if ($dedupeKey === '') {
+            $dedupeKey = null;
+        }
+
+        if ($dedupeKey !== null && mb_strlen($dedupeKey) > 191) {
+            throw new \InvalidArgumentException('Notification dedupe key must be 191 characters or fewer.');
+        }
+
+        $attributes = [
             'user_id' => $userId,
             'type' => $type,
             'title' => $title,
@@ -30,9 +56,21 @@ class NotificationService
             'color' => $color,
             'url' => $url,
             'data' => $data,
-        ]);
+        ];
 
-        // Issue #393: invalidate the bell component cache for the recipient
+        if ($dedupeKey === null) {
+            $notification = NotificationModel::create($attributes);
+        } else {
+            $notification = NotificationModel::query()->firstOrCreate(
+                ['user_id' => $userId, 'dedupe_key' => $dedupeKey],
+                $attributes,
+            );
+        }
+
+        // Issue #393: invalidate the bell component cache for the recipient.
+        // Deliberately unconditional (also on the deduped path) and deliberately
+        // not made non-fatal: a failed invalidation throws, and the retry hits
+        // the existing row again and repairs the stale cache.
         Cache::forget("notifications:user:{$userId}");
 
         return $notification;

@@ -34,6 +34,8 @@ class SendNotificationJob implements ShouldQueue
 
     public function handle(): void
     {
+        $queueUuid = $this->job?->uuid();
+
         NotificationService::send(
             $this->userId,
             $this->type,
@@ -42,7 +44,8 @@ class SendNotificationJob implements ShouldQueue
             $this->icon,
             $this->color,
             $this->url,
-            $this->data
+            $this->data,
+            $queueUuid ? 'job:'.$queueUuid : null,
         );
     }
 
