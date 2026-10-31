@@ -3,7 +3,7 @@
 use App\Models\Region;
 use App\Models\Unit;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -57,7 +57,7 @@ return new class extends Component
             ->whereNotNull('region_id')
             ->pluck('region_id');
 
-        return Cache::remember('county:regions_with_boundaries:v' . Cache::get('maps_version', 0) . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
+        return app(CacheInvalidationServiceInterface::class)->remember('maps', \App\Support\ScopeCacheKey::hash($accessibleRegionIds->all()), function () use ($accessibleRegionIds) {
             return Region::query()
                 ->whereNotNull('boundary_id')
                 ->whereIn('regions.id', $accessibleRegionIds)
@@ -74,7 +74,7 @@ return new class extends Component
                     'geojson' => $r->geojson,
                 ])
                 ->toArray();
-        });
+        }, 5, ['segment' => 'county:regions_with_boundaries']);
     }
 };
 ?>

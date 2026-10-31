@@ -7,10 +7,10 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Rules\PerPage;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,9 +27,11 @@ class HrStatsController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
-        $data = Cache::remember(
-            $this->hrStatsCacheKey($accessibleIds),
-            now()->addMinutes(5),
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
+
+        $data = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
             function () use ($accessibleIds) {
                 $idArray = '{'.implode(',', array_map('intval', $accessibleIds)).'}';
 
@@ -67,7 +69,9 @@ class HrStatsController extends Controller
                     'by_estekhdam' => json_decode($row->by_estekhdam, true) ?? [],
                     'by_radif' => json_decode($row->by_radif, true) ?? [],
                 ];
-            }
+            },
+            5,
+            ['segment' => 'stats']
         );
 
         return response()->json(['data' => $data]);
@@ -81,14 +85,18 @@ class HrStatsController extends Controller
         $accessibleIds = $request->accessibleIds();
 
         $scopeHash = ScopeCacheKey::hash($accessibleIds);
-        $version = Cache::get('hr_stats_version', 0);
-        $cacheKey = "hr:vacancies:v{$version}:{$scopeHash}";
 
-        $units = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
-            return Unit::whereIn('id', $accessibleIds)
-                ->whereDoesntHave('person')
-                ->get();
-        });
+        $units = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
+            function () use ($accessibleIds) {
+                return Unit::whereIn('id', $accessibleIds)
+                    ->whereDoesntHave('person')
+                    ->get();
+            },
+            10,
+            ['segment' => 'vacancies']
+        );
 
         return response()->json([
             'data' => $units->map(fn ($u) => [
@@ -192,13 +200,5 @@ class HrStatsController extends Controller
         }
 
         return response()->json(['data' => $person]);
-    }
-
-    private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
-    {
-        $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = ScopeCacheKey::hash($accessibleIds);
-
-        return "hr:{$segment}:v{$version}:{$scopeHash}";
     }
 }

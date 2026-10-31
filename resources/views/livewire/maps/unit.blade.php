@@ -5,7 +5,7 @@ use App\Models\UnitType;
 use App\Models\Region;
 use App\Services\AccessService;
 use Livewire\Component;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
 
 return new class extends Component
 {
@@ -39,8 +39,6 @@ return new class extends Component
 
     public function mount(): void
     {
-        $v = Cache::get('maps_version', 0);
-
         // #1032: the county toggles are scoped to the caller's accessible units,
         // the same rule maps/county applies. Fail-closed — an empty scope makes
         // the IN-filter compile to `0 = 1`, so a unit-less caller sees no county.
@@ -51,21 +49,21 @@ return new class extends Component
             ->whereNotNull('region_id')
             ->pluck('region_id');
 
-        $this->regions = Cache::remember('unit_map:regions:v' . $v . ':' . md5(implode(',', $accessibleRegionIds->all())), 300, function () use ($accessibleRegionIds) {
+        $this->regions = app(CacheInvalidationServiceInterface::class)->remember('maps', \App\Support\ScopeCacheKey::hash($accessibleRegionIds->all()), function () use ($accessibleRegionIds) {
             return Region::query()
                 ->where('type', 'county')
                 ->whereIn('id', $accessibleRegionIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
-        });
+        }, 5, ['segment' => 'unit_map:regions']);
 
-        $this->centerTypes = Cache::remember('unit_map:center_types:v' . $v, 300, function () {
+        $this->centerTypes = app(CacheInvalidationServiceInterface::class)->remember('maps', 'global', function () {
             return UnitType::whereIn('id', [5, 6, 7])
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
-        });
+        }, 5, ['segment' => 'unit_map:center_types']);
 
         $this->subTypes = [
             ['name' => 'خانه بهداشت'],
@@ -97,11 +95,7 @@ return new class extends Component
             ->whereNotNull('region_id')
             ->pluck('region_id');
 
-        $cacheKey = 'county_boundaries_v' . Cache::get('maps_version', 0)
-            . '_' . md5(implode(',', $this->selectedRegions))
-            . '_' . md5(implode(',', $accessibleRegionIds->all()));
-
-        $counties = Cache::remember($cacheKey, 300, function () use ($accessibleRegionIds) {
+        $counties = app(CacheInvalidationServiceInterface::class)->remember('maps', \App\Support\ScopeCacheKey::hash($accessibleRegionIds->all()), function () use ($accessibleRegionIds) {
             // #1023: project ST_AsGeoJSON in the query (the pattern county.blade.php
             // already uses) instead of reading Boundary::$appends['geojson'] per
             // row, which fired one query per region and round-tripped the geometry.
@@ -126,7 +120,7 @@ return new class extends Component
                 ->filter(fn($r) => $r['geojson'])
                 ->values()
                 ->toArray();
-        });
+        }, 5, ['segment' => 'county_boundaries', 'regions' => \App\Support\ScopeCacheKey::hash($this->selectedRegions)]);
 
         $this->dispatch('county-boundaries-loaded', counties: $counties);
     }

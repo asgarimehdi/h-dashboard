@@ -4,7 +4,7 @@ use App\Models\Region;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
 use Livewire\Component;
 
 return new class extends Component
@@ -20,21 +20,19 @@ return new class extends Component
         $excludedRegionIds = [1];
         $excludedTypeIds = [1, 2, 3];
 
-        $v = Cache::get('maps_version', 0);
-
-        $this->regions = Cache::remember('point_map:regions:v'.$v, 300, function () use ($excludedRegionIds) {
+        $this->regions = app(CacheInvalidationServiceInterface::class)->remember('maps', 'global', function () use ($excludedRegionIds) {
             return Region::whereNotIn('id', $excludedRegionIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
-        });
+        }, 5, ['segment' => 'point_map:regions']);
 
-        $this->types = Cache::remember('point_map:types:v'.$v, 300, function () use ($excludedTypeIds) {
+        $this->types = app(CacheInvalidationServiceInterface::class)->remember('maps', 'global', function () use ($excludedTypeIds) {
             return UnitType::whereNotIn('id', $excludedTypeIds)
                 ->select('id', 'name')
                 ->get()
                 ->toArray();
-        });
+        }, 5, ['segment' => 'point_map:types']);
 
         $this->fetchLocation();
     }

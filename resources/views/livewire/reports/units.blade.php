@@ -49,7 +49,8 @@ return new class extends Component
 
     public function getUnitTypesProperty()
     {
-        return Cache::remember('unit_types_all', 86400, fn() => UnitType::all());
+        $cacheKey = 'unit_types_all';
+        return Cache::remember($cacheKey, 86400, fn() => UnitType::all());
     }
 
     public function chartPayload(): array

@@ -737,7 +737,7 @@ test('initial calendar cache key is range-scoped and never falls back to all', f
 
     Livewire::test('todo.todo');
 
-    Event::assertDispatched(KeyWritten::class, fn (KeyWritten $event) => str_starts_with($event->key, 'calendar:events:')
+    Event::assertDispatched(KeyWritten::class, fn (KeyWritten $event) => str_starts_with($event->key, 'calendar:')
         && ! str_contains($event->key, ':all:'));
     Event::assertNotDispatched(KeyWritten::class, fn (KeyWritten $event) => str_contains($event->key, ':all:'));
 });

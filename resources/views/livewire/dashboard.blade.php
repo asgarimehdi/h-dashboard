@@ -76,21 +76,20 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->emptyScope = $accessibleIds === [];
-        $scopeKey = md5(implode(',', $accessibleIds));
-        $v = Cache::get('dashboard_version', 0);
+        $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
 
         // Global stats (not scoped) — 1 query
-        $globalStats = Cache::remember("dashboard:global:v{$v}", 300, function () {
+        $globalStats = app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', 'global', function () {
             return [
                 'totalUsers' => User::count(),
                 'totalRoles' => Role::count(),
             ];
-        });
+        }, 5, ['segment' => 'global']);
         $this->totalUsers = $globalStats['totalUsers'];
         $this->totalRoles = $globalStats['totalRoles'];
 
         // Scoped stats — consolidated with PostgreSQL FILTER
-        $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
+        $stats = app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'totalPersons' => 0,
@@ -151,10 +150,10 @@ return new class extends Component
                 'completedTodos' => (int) ($todoRow->completed_todos ?? 0),
                 'linkedTodos' => (int) ($linkedTodos->cnt ?? 0),
             ];
-        });
+        }, 5, ['segment' => 'stats']);
 
         // Today stats — 1 consolidated query
-        $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
+        $todayStats = app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'todayTickets' => 0,
@@ -184,10 +183,10 @@ return new class extends Component
                 'todayActivities' => ActivityLog::whereIn('user_id', $userIds)
                     ->where('created_at', '>=', $today)->count(),
             ];
-        });
+        }, 2, ['segment' => 'today']);
 
         // Ticket details — 1 consolidated query
-        $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
+        $details = app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'urgentTickets' => 0,
@@ -222,7 +221,7 @@ return new class extends Component
                 'overdueTickets' => (int) ($row->overdue ?? 0),
                 'avgResolutionDays' => (float) ($row->avg_days ?? 0),
             ];
-        });
+        }, 3, ['segment' => 'ticket_details']);
 
         $this->totalPersons = $stats['totalPersons'];
         $this->totalUnits = $stats['totalUnits'];
@@ -262,11 +261,10 @@ return new class extends Component
     // داده‌های نمودار تیکت‌ها — TTL 5 دقیقه
     public function getTicketChartDataProperty(): array
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
 
-        return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
 
             // Issue #736: the window is 30 days ending today, with every day
             // present (zeros included). The previous `ORDER BY day` +
@@ -282,34 +280,32 @@ return new class extends Component
                 ),
                 'series' => array_column($days, 'count'),
             ];
-        });
+        }, 5, ['segment' => 'ticket_chart']);
     }
 
     // داده‌های نمودار وضعیت تیکت‌ها — TTL 5 دقیقه
     public function getTicketStatusDataProperty(): array
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
 
-        return Cache::remember("dashboard:ticket_status:v{$v}:{$scopeKey}", 300, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
 
             return Ticket::whereIn('unit_id', $accessibleIds)
                 ->selectRaw('status, count(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status')
                 ->toArray();
-        });
+        }, 5, ['segment' => 'ticket_status']);
     }
 
     // آخرین فعالیت‌ها — TTL 2 دقیقه
     public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
 
-        return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             // #1057: include soft-deleted users in scope so their activity
             // stays in the audit trail; the unit predicate is unchanged.
             $userIds = User::query()
@@ -321,7 +317,7 @@ return new class extends Component
             return ActivityLog::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q)])
                 ->whereIn('user_id', $userIds)
                 ->latest()->take(10)->get();
-        });
+        }, 2, ['segment' => 'recent_activities']);
     }
 
     /**

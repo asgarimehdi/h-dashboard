@@ -9,7 +9,6 @@ use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Support\ScopeCacheKey;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Org-chart tree endpoints — extracted from HrController.
@@ -23,9 +22,11 @@ class OrgChartController extends Controller
     {
         $accessibleIds = $request->accessibleIds();
 
-        $data = Cache::remember(
-            $this->hrStatsCacheKey($accessibleIds, 'orgchart'),
-            now()->addMinutes(10),
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
+
+        $data = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
             function () use ($accessibleIds) {
                 $units = Unit::whereIn('id', $accessibleIds)
                     ->withCount(['person as personnel_count'])
@@ -68,7 +69,9 @@ class OrgChartController extends Controller
                 };
 
                 return collect($tree)->map($format)->values();
-            }
+            },
+            10,
+            ['segment' => 'orgchart']
         );
 
         return response()->json(['data' => $data]);
@@ -88,26 +91,27 @@ class OrgChartController extends Controller
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
         $scopeHash = ScopeCacheKey::hash($accessibleIds);
-        $version = Cache::get('hr_stats_version', 0);
-        $cacheKey = "hr:expandable:v{$version}:{$scopeHash}:{$initialLimit}";
 
-        $units = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds, $initialLimit) {
-            return Unit::whereIn('id', $accessibleIds)
-                ->withCount(['person as personnel_count', 'children as has_children'])
-                ->with('unitType:id,name')
-                ->orderBy('name')
-                ->limit($initialLimit)
-                ->get()
-                ->map(fn (Unit $u) => [
-                    'id' => $u->id,
-                    'name' => $u->name,
-                    'parent_id' => $u->parent_id,
-                    'unit_type' => $u->unitType?->name,
-                    'personnel_count' => $u->personnel_count,
-                    'has_children' => $u->has_children > 0,
-                    'level' => 1,
-                ]);
-        });
+        $units = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
+            function () use ($accessibleIds, $initialLimit) {
+                return Unit::whereIn('id', $accessibleIds)
+                    ->withCount(['person as personnel_count', 'children as has_children'])
+                    ->with('unitType:id,name')
+                    ->orderBy('name')
+                    ->limit($initialLimit)
+                    ->get()
+                    ->map(fn (Unit $u) => [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'parent_id' => $u->parent_id,
+                        'unit_type' => $u->unitType?->name,
+                        'personnel_count' => $u->personnel_count,
+                        'has_children' => $u->has_children > 0,
+                        'level' => 1,
+                    ]);
+            }, 10, ['segment' => 'expandable', 'initial_limit' => $initialLimit]);
 
         return response()->json([
             'data' => $units->values(),
@@ -190,13 +194,5 @@ class OrgChartController extends Controller
             }, 10, ['subtree' => $unitId]);
 
         return response()->json(['data' => $result]);
-    }
-
-    private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
-    {
-        $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = ScopeCacheKey::hash($accessibleIds);
-
-        return "hr:{$segment}:v{$version}:{$scopeHash}";
     }
 }

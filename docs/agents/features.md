@@ -255,7 +255,9 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 `CacheInvalidationService` uses driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter. Hot paths use `Cache::remember(...)` with the versioned key.
 
-**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, `global_search`, **`zabbix_devices`** (added with issue #698).
+**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, `global_search`, **`zabbix_devices`** (added with issue #698), `disease_maps`.
+
+A version key is built **only** through `CacheInvalidationService` (`getVersion()`/`cacheKey()`/`remember()`/`increment()`); no call site may construct `{ns}_version` by hand. Enforced by `tests/Feature/CacheVersionKeyGuardTest.php`.
 
 `PruneStaleCache::NAMESPACES` is the **single source of truth** — that exact `const` array lists every versioned namespace, and a new namespace must be added there so the audit and the tests see it. Since #981, `cache:prune-stale` is an honest **version audit**: it reports versions and deletes nothing — stale versioned keys become unreachable after a bump and expire by TTL, and `CacheInvalidationService::increment()` does not depend on this `const`.
 

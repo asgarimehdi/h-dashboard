@@ -538,7 +538,7 @@ class MapsUnitLivewireTest extends TestCase
         // accessible-region set. A scope-free key lets a payload written by a
         // broad-scope user be served to a narrower one on the next hit,
         // bypassing the query-time scope check.
-        $scopeKey = "md5(implode(',', \$accessibleRegionIds->all()))";
+        $scopeKey = '\\App\\Support\\ScopeCacheKey::hash($accessibleRegionIds->all())';
         $this->assertSame(
             2,
             substr_count($view, $scopeKey),
