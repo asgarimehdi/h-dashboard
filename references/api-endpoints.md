@@ -640,23 +640,24 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`; three of its jobs are blocking and the rest are informational (`mutation` no longer runs on PRs — manual `workflow_dispatch` only, #1012):
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`; three of its eight jobs are blocking (`lint`, `test`, `phpstan`) and the other five are informational (`continue-on-error: true`, including `mutation`, which runs on every PR):
 
 | Job key | Name | Gate | Timeout |
 |---|---|---|---|
 | `lint` | Code Style (Pint) | **blocking** | 5 min |
 | `test` | Tests & Coverage | **blocking** | 10 min |
+| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error: true` | 5 min |
+| `typecheck` | Typecheck (Playwright specs, informational) | `continue-on-error: true` | 10 min |
+| `e2e` | E2E Tests (Playwright) | `continue-on-error: true` | 35 min |
+| `mutation` | Mutation Testing | `continue-on-error: true` (informational); runs on every PR | 45 min |
 | `phpstan` | PHPStan Static Analysis | **blocking** | 10 min |
-| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error: true` | 10 min |
-| `e2e` | E2E Tests (Playwright) | `continue-on-error: true` | 30 min |
-| `mutation` | Mutation Testing | `continue-on-error: true`; manual-only (`workflow_dispatch`, #1012) | 30 min |
 | `test-php86` | PHP 8.6 Preview | `continue-on-error: true` | 10 min |
 
 - **`lint`** — `vendor/bin/pint --test` plus the tracked-`APP_KEY` guard (`php scripts/check-app-key-leak.php`).
-- **`test`** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
-- **`mutation`** — `--covered-only`, treat failures as informational. Gated to manual `workflow_dispatch` (#1012): it never runs on a PR.
+- **`test`** — PHP 8.5, PostGIS + Redis containers, rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
+- **`mutation`** — `--covered-only`, Composer-only (no Node/Vite build), runs on every PR; failures are informational because `continue-on-error: true`. `timeout-minutes: 45` is a cap, not the expected duration (~30 min typical).
 
-> Derivation, re-run instead of hand-counting — `yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml` → `lint, test, coverage-report, e2e, mutation, phpstan, test-php86`, and the blocking set is `yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml` → `lint, test, phpstan`.
+> Derivation, re-run instead of hand-counting — `yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml` → `lint, test, coverage-report, typecheck, e2e, mutation, phpstan, test-php86`, and the blocking set is `yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml` → `lint, test, phpstan`.
 
 ### Storage Permissions (gotcha)
 
