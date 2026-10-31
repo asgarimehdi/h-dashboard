@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Middleware\RequestId;
-use App\Http\Middleware\SafeRoleOrPermission;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ValidateUnitContext;
 use App\Jobs\SyncZabbixJob;
@@ -76,7 +75,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
-            'safe_role_or_permission' => SafeRoleOrPermission::class,
             'unit_context' => ValidateUnitContext::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,

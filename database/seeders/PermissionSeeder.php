@@ -41,8 +41,6 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage_org_chart', 'label' => 'مدیریت چارت سازمانی']);
         // سامانه ثبت بیماری (Discussion #1160، تصمیم ۱۷)
         Permission::query()->firstOrCreate(['name' => 'manage_diseases', 'label' => 'مدیریت بیماری‌ها و فیلدها']);
-        // Test permission for SafeRoleOrPermission middleware tests
-        Permission::firstOrCreate(['name' => 'test-permission', 'label' => 'تست مجوز']);
         // The admin ROLE — tests (TicketApiTest, TicketCommentPolicyTest, ...)
         // each had to firstOrCreate it; centralizing here keeps that convention
         // in one place. RoleSeeder re-syncs every permission onto this role;
