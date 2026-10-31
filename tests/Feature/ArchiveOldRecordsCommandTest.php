@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -211,5 +212,82 @@ class ArchiveOldRecordsCommandTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('activity_log_archives', 0);
+    }
+
+    /**
+     * #1305: the schedule's `withoutOverlapping()` lock is invisible to a manual
+     * run, so the command takes its own. With the lock already held it must do
+     * nothing at all — the double-archive race moved 120,000 rows twice.
+     */
+    public function test_archive_skips_when_another_run_holds_the_lock(): void
+    {
+        $user = User::factory()->create();
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subYears(2)])->save();
+
+        Cache::lock(ArchiveOldRecords::LOCK_KEY, 60)->get();
+
+        $this->artisan('data:archive', ['--months' => 12])
+            ->expectsOutputToContain('Another data:archive run is in progress')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('activity_logs', 1);
+        $this->assertDatabaseCount('activity_log_archives', 0);
+    }
+
+    /**
+     * #1305: the lock is released in `finally`, on every exit path — otherwise
+     * the first run would block every later run until the TTL expired.
+     */
+    public function test_archive_releases_its_lock_after_a_run(): void
+    {
+        $user = User::factory()->create();
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subYears(2)])->save();
+
+        $this->artisan('data:archive', ['--months' => 12])->assertExitCode(0);
+
+        // The second run reaches the archive logic, which proves the first
+        // released the lock instead of leaving it to expire.
+        $this->artisan('data:archive', ['--months' => 12])
+            ->expectsOutputToContain('Nothing to archive')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('activity_log_archives', 1);
+    }
+
+    /**
+     * #1305: the race happened per chunk, and every existing fixture here is
+     * 1–3 rows — one chunk. 1500 rows cross the 1000-row boundary, and the
+     * second run must not add a single duplicate.
+     */
+    public function test_archive_moves_more_than_one_chunk_without_duplicating(): void
+    {
+        $user = User::factory()->create();
+        $old = now()->subYears(2);
+
+        DB::table('activity_logs')->insert(
+            collect(range(1, 1500))->map(fn ($i) => [
+                'user_id' => $user->id,
+                'type' => 'login',
+                'description' => "old-{$i}",
+                'created_at' => $old,
+                'updated_at' => $old,
+            ])->all()
+        );
+
+        $this->artisan('data:archive', ['--months' => 12])->assertExitCode(0);
+        $this->artisan('data:archive', ['--months' => 12])->assertExitCode(0);
+
+        $this->assertDatabaseCount('activity_log_archives', 1500);
+        $this->assertDatabaseCount('activity_logs', 0);
     }
 }

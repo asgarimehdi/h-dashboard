@@ -5,11 +5,29 @@ namespace App\Console\Commands;
 use App\Models\ActivityLog;
 use App\Models\ActivityLogArchive;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class ArchiveOldRecords extends Command
 {
+    /**
+     * The schedule's `withoutOverlapping()` lock is only read on the
+     * `Schedule::run()` path, so a manual `php artisan data:archive` never sees
+     * it and two runs archive the same rows twice (#1305). This lock closes
+     * that path. Emergency manual runs release it with
+     * `Cache::lock(self::LOCK_KEY, 1)->forceRelease()`; there is deliberately
+     * no `--force` flag.
+     */
+    public const LOCK_KEY = 'command:data:archive';
+
+    /**
+     * Deliberately longer than the schedule's `withoutOverlapping(120)`, so a
+     * runner that slips past the schedule lock still meets this one.
+     */
+    public const LOCK_TTL_SECONDS = 6 * 60 * 60;
+
     protected $signature = 'data:archive {--months=12 : رکوردهای قدیمی‌تر از این تعداد ماه آرشیو شوند}
                                         {--dry-run : بدون انتقال، فقط اعتبارسنجی مسیر نوشتن}';
 
@@ -17,69 +35,83 @@ class ArchiveOldRecords extends Command
 
     public function handle(): int
     {
-        $months = (int) $this->option('months');
-        $cutoff = now()->subMonths($months);
-        $dryRun = (bool) $this->option('dry-run');
+        $lock = Cache::lock(self::LOCK_KEY, self::LOCK_TTL_SECONDS);
 
-        $query = ActivityLog::query()->where('created_at', '<', $cutoff);
-        $count = $query->count();
+        // A scheduled run's output goes to /dev/null, so log the skip as well.
+        if (! $lock->get()) {
+            $this->warn('Another data:archive run is in progress — skipping.');
+            Log::warning('data:archive skipped: another run holds '.self::LOCK_KEY);
 
-        $this->info("Archiving activity logs older than {$months} months (before {$cutoff->toDateTimeString()})...");
-        $this->line("  Found {$count} record(s) eligible for archival.");
-
-        if ($dryRun) {
-            $this->warn('  Dry run — validating the write path, then rolling back.');
-
-            // A dry run that only counts validates nothing about the write it is
-            // meant to protect: the json columns stayed broken for a year behind
-            // a --dry-run that returned before the insert. Exercise the real
-            // insert inside a transaction and throw it away (#870).
-            $this->validateWritePath($cutoff);
-
-            $this->info('Dry run complete — write path validated, nothing was moved.');
-
-            return 0;
+            return self::SUCCESS;
         }
 
-        if ($count === 0) {
-            $this->info('  Nothing to archive.');
+        try {
+            $months = (int) $this->option('months');
+            $cutoff = now()->subMonths($months);
+            $dryRun = (bool) $this->option('dry-run');
+
+            $query = ActivityLog::query()->where('created_at', '<', $cutoff);
+            $count = $query->count();
+
+            $this->info("Archiving activity logs older than {$months} months (before {$cutoff->toDateTimeString()})...");
+            $this->line("  Found {$count} record(s) eligible for archival.");
+
+            if ($dryRun) {
+                $this->warn('  Dry run — validating the write path, then rolling back.');
+
+                // A dry run that only counts validates nothing about the write it is
+                // meant to protect: the json columns stayed broken for a year behind
+                // a --dry-run that returned before the insert. Exercise the real
+                // insert inside a transaction and throw it away (#870).
+                $this->validateWritePath($cutoff);
+
+                $this->info('Dry run complete — write path validated, nothing was moved.');
+
+                return 0;
+            }
+
+            if ($count === 0) {
+                $this->info('  Nothing to archive.');
+                $this->info('Data archival complete.');
+
+                return 0;
+            }
+
+            $moved = 0;
+
+            // #870: insert-then-delete with no transaction. When the insert failed,
+            // rows already written were left in the archive while the delete never
+            // ran — a half-finished archive that the next run then double-counts.
+            // One transaction per chunk makes the pair atomic.
+            $query->orderBy('id')->chunkById(1000, function ($logs) use (&$moved) {
+                DB::transaction(function () use ($logs, &$moved) {
+                    /** @var ActivityLog $log */
+                    foreach ($logs as $log) {
+                        // Write through the model rather than ActivityLogArchive::insert().
+                        // The bulk insert passed the `array` casts straight to PDO —
+                        // Connection::prepareBindings() special-cases only
+                        // DateTimeInterface and bool, so the array reached Postgres
+                        // untouched and the whole chunk died with 22P02 /
+                        // "Array to string conversion". Letting the model's `array`
+                        // cast do the encoding fixes both json columns and any
+                        // future one in the same move.
+                        (new ActivityLogArchive)->forceFill($this->mapArchiveRow($log))->save();
+                    }
+
+                    $ids = $logs->pluck('id')->all();
+                    ActivityLog::whereIn('id', $ids)->delete();
+
+                    $moved += count($ids);
+                });
+            });
+
+            $this->line("  Archived {$moved} record(s) to activity_log_archives.");
             $this->info('Data archival complete.');
 
             return 0;
+        } finally {
+            $lock->release();
         }
-
-        $moved = 0;
-
-        // #870: insert-then-delete with no transaction. When the insert failed,
-        // rows already written were left in the archive while the delete never
-        // ran — a half-finished archive that the next run then double-counts.
-        // One transaction per chunk makes the pair atomic.
-        $query->orderBy('id')->chunkById(1000, function ($logs) use (&$moved) {
-            DB::transaction(function () use ($logs, &$moved) {
-                /** @var ActivityLog $log */
-                foreach ($logs as $log) {
-                    // Write through the model rather than ActivityLogArchive::insert().
-                    // The bulk insert passed the `array` casts straight to PDO —
-                    // Connection::prepareBindings() special-cases only
-                    // DateTimeInterface and bool, so the array reached Postgres
-                    // untouched and the whole chunk died with 22P02 /
-                    // "Array to string conversion". Letting the model's `array`
-                    // cast do the encoding fixes both json columns and any
-                    // future one in the same move.
-                    (new ActivityLogArchive)->forceFill($this->mapArchiveRow($log))->save();
-                }
-
-                $ids = $logs->pluck('id')->all();
-                ActivityLog::whereIn('id', $ids)->delete();
-
-                $moved += count($ids);
-            });
-        });
-
-        $this->line("  Archived {$moved} record(s) to activity_log_archives.");
-        $this->info('Data archival complete.');
-
-        return 0;
     }
 
     /**
