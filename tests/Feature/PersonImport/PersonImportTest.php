@@ -9,6 +9,7 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
@@ -481,6 +482,34 @@ class PersonImportTest extends TestCase
         $this->assertSame(0, $confirmResults['updated']);
         $this->assertSame([], $confirmResults['errors']);
         $this->assertSame(1, $confirmResults['created'] + $confirmResults['updated'] + $confirmResults['skipped']);
+
+        @unlink($file);
+    }
+
+    public function test_import_with_a_new_person_bumps_the_unit_hierarchy_version(): void
+    {
+        // Issue #1347, step 3: the import writes persons without model
+        // events, so its manual bump block must bump `unit_hierarchy` under
+        // the same gate as maps/gis (a create always touches map scope).
+        $data = $this->createTestData();
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = $cache->getVersion('unit_hierarchy');
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id]);
+        $import->setSelectedActions(['row_2' => 'create']);
+        Excel::import($import, $file);
+
+        $this->assertSame(1, $import->getImportResults()['created']);
+        $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
+        $this->assertSame($before + 1, $cache->getVersion('unit_hierarchy'));
 
         @unlink($file);
     }
