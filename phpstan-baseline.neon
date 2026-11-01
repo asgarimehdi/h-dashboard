@@ -3255,7 +3255,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
-			count: 5
+			count: 3
 			path: resources/views/livewire/notifications/bell.blade.php
 
 		-
@@ -4137,7 +4137,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 1
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-

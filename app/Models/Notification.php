@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Factories\NotificationFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -46,6 +47,22 @@ class Notification extends Model
                 $model->id = Str::uuid();
             }
         });
+
+        // Issue #1348: every Eloquent write to a notification bumps the
+        // `notifications` namespace the bell component reads, and the
+        // `tools_stats` namespace whose counts include notifications.
+        // Query-builder writes bypass these hooks — markAllAsRead() bumps
+        // explicitly, and the bell component and NotificationService bump
+        // their own query-builder paths.
+        $bump = function (): void {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('notifications');
+            $cache->increment('tools_stats');
+        };
+
+        static::created($bump);
+        static::updated($bump);
+        static::deleted($bump);
     }
 
     protected $fillable = [
@@ -87,6 +104,11 @@ class Notification extends Model
                 'is_read' => true,
                 'read_at' => now(),
             ]);
+
+            // Query-builder update fires no model event — bump explicitly
+            // (issue #1348), so the bell cache cannot stay stale. Read-state
+            // changes do not move the tools counts, so only `notifications`.
+            app(CacheInvalidationServiceInterface::class)->increment('notifications');
         }
     }
 }

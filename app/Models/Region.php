@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -26,6 +27,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Region extends Model
 {
     protected $fillable = ['name', 'type', 'parent_id', 'boundary_id'];
+
+    protected static function booted(): void
+    {
+        // Issue #1348 (gate correction C2): region names are rendered in the
+        // no-boundary map payload, so a Region write must bump
+        // `report_no_boundary`. Model events (decision ب).
+        $bump = function (): void {
+            app(CacheInvalidationServiceInterface::class)->increment('report_no_boundary');
+        };
+
+        static::created($bump);
+        static::updated($bump);
+        static::deleted($bump);
+    }
 
     // رابطه با والد (برای شهرستان‌ها، استان والد است)
     public function parent(): BelongsTo
