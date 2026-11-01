@@ -82,15 +82,18 @@ class SyncZabbixJob implements ShouldQueue
             ? $previous->consecutive_failures + 1
             : 1;
 
-        (new ZabbixSyncLog([
+        // Issue #1346: keep the row — its id is the dedupe key of the
+        // threshold alert, so the next episode alerts under a new key.
+        $syncLog = new ZabbixSyncLog([
             'success' => false,
             'consecutive_failures' => $streak,
             'error' => $error,
             'ran_at' => now(),
-        ]))->save();
+        ]);
+        $syncLog->save();
 
         if ($streak === ZabbixSyncLog::ALERT_THRESHOLD) {
-            $this->alertAdmins($error);
+            $this->alertAdmins($error, $syncLog->id);
         }
     }
 
@@ -101,7 +104,7 @@ class SyncZabbixJob implements ShouldQueue
      * threshold; further failures stay visible on the dashboard without
      * spamming, and any success resets the streak.
      */
-    private function alertAdmins(string $error): void
+    private function alertAdmins(string $error, int $syncLogId): void
     {
         foreach (User::query()->whereRelation('roles', 'name', 'admin')->pluck('id') as $userId) {
             NotificationService::send(
@@ -111,7 +114,9 @@ class SyncZabbixJob implements ShouldQueue
                 'خطای آخر: '.$error,
                 'o-bell',
                 'text-error',
-                '/dashboard'
+                '/dashboard',
+                null,
+                'zabbix:alert:'.$syncLogId,
             );
         }
     }

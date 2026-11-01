@@ -743,4 +743,81 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'user_id' => $this->user->id,
         ]);
     }
+
+    public function test_react_twice_notifies_once(): void
+    {
+        // Issue #1346: reacting twice with the same reaction is the same
+        // event — one notification row, keyed by comment + reactor + reaction.
+        $this->authAsUserA();
+        $comment = $this->makeComment(['body' => 'کامنت علی']);
+        $tokenC = $this->makeScopedReactor();
+
+        $url = "/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react";
+        $this->apiPost($url, ['reaction' => 'heart'], $tokenC)->assertStatus(200);
+        $this->apiPost($url, ['reaction' => 'heart'], $tokenC)->assertStatus(200);
+
+        $rows = Notification::query()
+            ->where('user_id', $this->user->id)
+            ->where('type', 'reaction')
+            ->get();
+
+        $this->assertCount(1, $rows);
+
+        $reactorId = TicketCommentReaction::query()
+            ->where('comment_id', $comment->id)
+            ->firstOrFail()
+            ->user_id;
+
+        $this->assertSame(
+            'reaction:'.$comment->id.':'.$reactorId.':heart',
+            $rows->first()->dedupe_key
+        );
+    }
+
+    public function test_unreact_and_react_follows_decision_a(): void
+    {
+        // Issue #1346, decision (الف): removing and re-adding the same
+        // reaction does NOT notify again while the first row is retained
+        // (7-day retention horizon) — one row, not two.
+        $this->authAsUserA();
+        $comment = $this->makeComment(['body' => 'کامنت علی']);
+        $tokenC = $this->makeScopedReactor();
+
+        $url = "/api/tickets/{$this->ticket->id}/comments/{$comment->id}/react";
+        $this->apiPost($url, ['reaction' => 'heart'], $tokenC)->assertStatus(200);
+        $this->apiDelete($url.'?reaction=heart', $tokenC)->assertStatus(200);
+        $this->apiPost($url, ['reaction' => 'heart'], $tokenC)->assertStatus(200);
+
+        $this->assertSame(
+            1,
+            Notification::query()
+                ->where('user_id', $this->user->id)
+                ->where('type', 'reaction')
+                ->count(),
+            'Re-adding the same reaction must not notify again while the first row is retained.'
+        );
+    }
+
+    /**
+     * A second user in the same unit, with a token, for the reaction tests.
+     */
+    private function makeScopedReactor(): string
+    {
+        $nCodeC = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCodeC, 'f_name' => 'سارا', 'l_name' => 'کریمی',
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $this->unit->id,
+        ]);
+        $userC = User::create(['n_code' => $nCodeC, 'password' => Hash::make('password')]);
+        $userC->assignRole('admin');
+        $userC->givePermissionTo(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets']);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        $userC->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        return $this->createApiToken($userC, ['tickets:read', 'tickets:write']);
+    }
 }
