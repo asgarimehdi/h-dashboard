@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Estekhdam;
 use App\Models\Person;
+use App\Models\Semat;
+use App\Models\Tahsil;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
@@ -311,6 +314,142 @@ class ReportsAdvancedAggregateParityTest extends TestCase
         $inactive = $this->reportDataWith('persons', ['statusFilter' => 'inactive']);
         $this->assertSame(0, $inactive['total'], 'everyone is active');
         $this->assertSame(2, array_sum($inactive['details']['byEstekhdam']), 'details ignore the status filter');
+    }
+
+    public function test_persons_report_query_budget_is_calibrated_to_seven_report_queries(): void
+    {
+        // Step-1 measurement on the pre-change checkout: 7 report queries
+        // (total, byDay, byUnit, eager units, three details lookups). Force
+        // a cold entry without resetting the `unit_hierarchy` version, as
+        // the tickets budget test does.
+        app(CacheInvalidationServiceInterface::class)->increment('report_persons');
+
+        $measured = [];
+        DB::listen(function ($query) use (&$measured): void {
+            $measured[] = $query->sql;
+        });
+
+        $data = $this->reportDataWith('persons');
+
+        $reportSql = array_merge(
+            $this->tableSql($measured, 'persons'),
+            $this->tableSql($measured, 'units'),
+            $this->tableSql($measured, 'estekhdams'),
+            $this->tableSql($measured, 'tahsils'),
+            $this->tableSql($measured, 'semats'),
+        );
+
+        $this->assertSame(7, count($reportSql), 'persons report ran '.count($reportSql)." queries:\n".implode("\n---\n", $reportSql));
+        $this->assertSame(2, $data['total']);
+    }
+
+    public function test_repeated_persons_report_reads_hit_the_cache_and_run_no_report_queries(): void
+    {
+        $this->reportDataWith('persons');
+
+        $sql = $this->captureSql(fn () => $this->reportDataWith('persons'));
+        $reportSql = array_merge(
+            $this->tableSql($sql, 'persons'),
+            $this->tableSql($sql, 'units'),
+            $this->tableSql($sql, 'estekhdams'),
+            $this->tableSql($sql, 'tahsils'),
+            $this->tableSql($sql, 'semats'),
+        );
+
+        $this->assertSame([], $reportSql, 'a cache hit must not run a report query');
+    }
+
+    public function test_persons_cache_keys_distinguish_ranges_units_and_statuses(): void
+    {
+        // Two 11-day windows with the same day count but different totals.
+        // `days` is never the sole distinguisher: from/to carry the range.
+        $recent = $this->reportDataWith('persons', [
+            'dateFrom' => $this->jalali(now()->subDays(10)),
+            'dateTo' => $this->jalali(now()),
+        ]);
+        $older = $this->reportDataWith('persons', [
+            'dateFrom' => $this->jalali(now()->subDays(30)),
+            'dateTo' => $this->jalali(now()->subDays(20)),
+        ]);
+        $this->assertSame(2, $recent['total']);
+        $this->assertSame(0, $older['total'], 'same day count, different range — must not reuse the entry');
+        $this->assertSame(2, array_sum($older['details']['byEstekhdam']), 'details ignore the date filter, per entry');
+
+        $root = $this->reportDataWith('persons', ['unitId' => $this->root->id]);
+        $child = $this->reportDataWith('persons', ['unitId' => $this->child->id]);
+        $this->assertSame(2, $root['total'], 'the root subtree includes the grandchild');
+        $this->assertSame(1, $child['total'], 'same range, different unit');
+
+        $inactive = $this->reportDataWith('persons', ['statusFilter' => 'inactive']);
+        $this->assertSame(0, $inactive['total'], 'everyone is active — same range, different status');
+        $this->assertSame(2, array_sum($inactive['details']['byEstekhdam']), 'details ignore the status filter, per entry');
+    }
+
+    public function test_person_writes_invalidate_the_cached_persons_report(): void
+    {
+        $this->assertSame(2, $this->reportDataWith('persons')['total']);
+
+        $this->assertCacheInvalidated('report_persons', fn () => Person::factory()->create([
+            'u_id' => $this->root->id,
+        ]));
+        $afterCreate = $this->reportDataWith('persons');
+        $this->assertSame(3, $afterCreate['total'], 'a created person is visible on the next read');
+        $this->assertSame(3, array_sum($afterCreate['details']['byEstekhdam']));
+
+        $created = Person::query()->latest('id')->firstOrFail();
+        $created->update(['u_id' => $this->foreign->id]);
+
+        $afterMove = $this->reportDataWith('persons');
+        $this->assertSame(2, $afterMove['total'], 'a person moved out of scope leaves the total');
+
+        Person::query()->where('u_id', $this->grandchild->id)->firstOrFail()->delete();
+
+        $this->assertSame(1, $this->reportDataWith('persons')['total'], 'a deleted person leaves the total');
+    }
+
+    public function test_estekhdam_rename_invalidates_the_cached_persons_report(): void
+    {
+        $type = Estekhdam::create(['name' => 'rename-me-estekhdam']);
+        Person::factory()->create(['u_id' => $this->root->id, 'e_id' => $type->id]);
+
+        $before = $this->reportDataWith('persons');
+        $this->assertArrayHasKey('rename-me-estekhdam', $before['details']['byEstekhdam']);
+
+        $this->assertCacheInvalidated('report_persons', fn () => $type->update(['name' => 'rename-me-estekhdam-renamed']));
+
+        $after = $this->reportDataWith('persons');
+        $this->assertArrayNotHasKey('rename-me-estekhdam', $after['details']['byEstekhdam'], 'the old label must not survive');
+        $this->assertArrayHasKey('rename-me-estekhdam-renamed', $after['details']['byEstekhdam']);
+    }
+
+    public function test_tahsil_rename_invalidates_the_cached_persons_report(): void
+    {
+        $type = Tahsil::create(['name' => 'rename-me-tahsil']);
+        Person::factory()->create(['u_id' => $this->root->id, 't_id' => $type->id]);
+
+        $before = $this->reportDataWith('persons');
+        $this->assertArrayHasKey('rename-me-tahsil', $before['details']['byTahsil']);
+
+        $this->assertCacheInvalidated('report_persons', fn () => $type->update(['name' => 'rename-me-tahsil-renamed']));
+
+        $after = $this->reportDataWith('persons');
+        $this->assertArrayNotHasKey('rename-me-tahsil', $after['details']['byTahsil'], 'the old label must not survive');
+        $this->assertArrayHasKey('rename-me-tahsil-renamed', $after['details']['byTahsil']);
+    }
+
+    public function test_semat_rename_invalidates_the_cached_persons_report(): void
+    {
+        $type = Semat::create(['name' => 'rename-me-semat']);
+        Person::factory()->create(['u_id' => $this->root->id, 's_id' => $type->id]);
+
+        $before = $this->reportDataWith('persons');
+        $this->assertArrayHasKey('rename-me-semat', $before['details']['bySemat']);
+
+        $this->assertCacheInvalidated('report_persons', fn () => $type->update(['name' => 'rename-me-semat-renamed']));
+
+        $after = $this->reportDataWith('persons');
+        $this->assertArrayNotHasKey('rename-me-semat', $after['details']['bySemat'], 'the old label must not survive');
+        $this->assertArrayHasKey('rename-me-semat-renamed', $after['details']['bySemat']);
     }
 
     // ------------------------------------------------------------------

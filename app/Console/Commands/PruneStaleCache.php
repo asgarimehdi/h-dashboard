@@ -27,7 +27,7 @@ class PruneStaleCache extends Command
      *
      * @var array<int, string>
      */
-    public const NAMESPACES = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_units', 'unit_hierarchy', 'calendar', 'zabbix_devices', 'global_search', 'disease_maps'];
+    public const NAMESPACES = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_persons', 'report_units', 'unit_hierarchy', 'calendar', 'zabbix_devices', 'global_search', 'disease_maps'];
 
     public function handle(CacheInvalidationServiceInterface $cache): int
     {
