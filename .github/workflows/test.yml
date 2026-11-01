@@ -611,8 +611,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          key: composer-vendor-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-vendor-${{ runner.os }}-
 
       - name: Install dependencies
         # The *locked* versions cap php at 8.5: nette/schema v1.3.6 (8.1 - 8.5) and
