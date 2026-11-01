@@ -257,9 +257,15 @@ return [
     | of Alpine in its bundle. This is useful for applications that are using
     | strict Content Security Policy (CSP) to protect against XSS attacks.
     |
+    | Issue #1352 (phase 2, PR 2): the CSP policy no longer carries
+    | `'unsafe-eval'`, so the CSP-safe build is REQUIRED — the standard
+    | build evaluates Alpine expressions with `new Function` and breaks
+    | under the policy. The default is therefore `true`; set
+    | `LIVEWIRE_CSP_SAFE=false` only together with restoring `'unsafe-eval'`
+    | in the policy, never alone.
     */
 
-    'csp_safe' => false,
+    'csp_safe' => env('LIVEWIRE_CSP_SAFE', true),
 
     /*
     |---------------------------------------------------------------------------
