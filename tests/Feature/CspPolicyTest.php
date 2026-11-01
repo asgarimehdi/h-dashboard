@@ -8,9 +8,12 @@ uses(TestCase::class);
 describe('CspPolicy', function () {
     it('embeds the nonce in script-src and style-src', function () {
         $csp = CspPolicy::for('NONCE123');
-        expect($csp)->toContain("script-src 'self' 'unsafe-eval' 'nonce-NONCE123'");
+        expect($csp)->toContain("script-src 'self' 'nonce-NONCE123'");
         expect($csp)->toContain("style-src 'self' 'nonce-NONCE123'");
-        expect($csp)->toContain("style-src-attr 'unsafe-inline'");
+        // #1352 PR 1: style-src-attr is gone with the migrated `style=` sites.
+        expect($csp)->not->toContain('style-src-attr');
+        // #1352 PR 2: unsafe-eval is gone with the CSP-safe Livewire build.
+        expect($csp)->not->toContain("'unsafe-eval'");
     });
 
     it('connect-src carries routing and geocoding origins from config', function () {

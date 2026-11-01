@@ -60,6 +60,12 @@ test('Content-Security-Policy-Report-Only header has correct directive set with 
     expect($directives['default-src'])->toContain("'self'");
     expect($directives['script-src'])->toContain("'self'");
     expect($directives['style-src'])->toContain("'self'");
+    // #1352 PR 2 (M2 pin): the single-source policy is pinned by test, not
+    // just by reading the literal — no `unsafe-inline` in script/style-src
+    // and no `unsafe-eval` anywhere in the emitted policy.
+    expect($directives['script-src'])->not->toContain("'unsafe-inline'");
+    expect($directives['style-src'])->not->toContain("'unsafe-inline'");
+    expect($directives['script-src'])->not->toContain("'unsafe-eval'");
     expect($directives['report-to'])->toContain('csp-endpoint');
 });
 
