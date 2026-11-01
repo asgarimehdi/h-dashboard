@@ -30,6 +30,7 @@ class SendNotificationJob implements ShouldQueue
         public string $color = 'text-info',
         public ?string $url = null,
         public ?array $data = null,
+        public ?string $dedupeKey = null,
     ) {}
 
     public function handle(): void
@@ -45,7 +46,9 @@ class SendNotificationJob implements ShouldQueue
             $this->color,
             $this->url,
             $this->data,
-            $queueUuid ? 'job:'.$queueUuid : null,
+            // Issue #1346: an explicit event key wins over the per-delivery
+            // job uuid — redispatches of the same event dedupe to one row.
+            $this->dedupeKey ?? ($queueUuid ? 'job:'.$queueUuid : null),
         );
     }
 
