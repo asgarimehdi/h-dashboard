@@ -10,7 +10,8 @@ describe('CspPolicy', function () {
         $csp = CspPolicy::for('NONCE123');
         expect($csp)->toContain("script-src 'self' 'unsafe-eval' 'nonce-NONCE123'");
         expect($csp)->toContain("style-src 'self' 'nonce-NONCE123'");
-        expect($csp)->toContain("style-src-attr 'unsafe-inline'");
+        // #1352 PR 1: style-src-attr is gone with the migrated `style=` sites.
+        expect($csp)->not->toContain('style-src-attr');
     });
 
     it('connect-src carries routing and geocoding origins from config', function () {

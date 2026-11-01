@@ -198,7 +198,7 @@ return new class extends Component
     {{-- نمودار توزیع بر اساس نوع --}}
     <x-card shadow class="mb-6">
         <h3 class="font-bold mb-4">توزیع بر اساس نوع واحد</h3>
-        <div id="typeChart" wire:ignore style="height: 300px;"></div>
+        <div id="typeChart" wire:ignore class="h-[300px]"></div>
     </x-card>
 
     {{-- جدول واحدها --}}
