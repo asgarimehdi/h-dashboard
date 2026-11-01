@@ -86,6 +86,7 @@ class Person extends Model
             $cache = app(CacheInvalidationServiceInterface::class);
             $cache->increment('hr_stats');
             $cache->increment('dashboard');
+            $cache->increment('report_persons');
 
             $uIdChanged = in_array('u_id', array_keys($model->getChanges()))
                 || $model->wasRecentlyCreated;
@@ -98,7 +99,7 @@ class Person extends Model
 
         static::deleted(function () {
             $cache = app(CacheInvalidationServiceInterface::class);
-            foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
+            foreach (['hr_stats', 'dashboard', 'maps', 'gis', 'report_persons'] as $namespace) {
                 $cache->increment($namespace);
             }
         });

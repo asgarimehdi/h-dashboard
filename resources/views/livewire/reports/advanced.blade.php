@@ -209,104 +209,24 @@ return new class extends Component
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        // Issue #1282 — tickets/todos go through the versioned cache below.
-        // The persons branch stays uncached and untouched on purpose: it has
-        // no `report_persons` namespace and no invalidation hook yet.
-        if ($this->reportType !== 'persons') {
-            return $this->rememberReport($accessibleIds);
-        }
-
-        $query = Person::whereIn('u_id', $accessibleIds);
-
-        // فیلتر تاریخ (ورودی شمسی)
-        if ($from = JalaliDateRange::parse($this->dateFrom)) {
-            $query->where('created_at', '>=', $from);
-        }
-        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
-            $query->where('created_at', '<=', $to);
-        }
-
-        // فیلتر واحد (سلسله‌مراتبی)
-        $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
-        if ($unitId) {
-            $descendantIds = Unit::descendantIds($unitId)->toArray();
-            $descendantIds[] = $unitId;
-            $query->whereIn('u_id', $descendantIds);
-        }
-
-        // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
-        // STATUS_OPTIONS کنار هم زندگی می‌کنند؛ todos ستون status ندارد و
-        // روی is_completed/end_at نگاشت می‌شود.
-        $this->applyStatusFilter($query);
-
-        $total = $query->count();
-
-        // Issue #736: materialise every day in the chosen range, zeros included,
-        // so a day with no rows is a zero rather than a missing column. The
-        // filtered $query is reused, so unit/status/date filters still apply.
-        $range = $this->dateRange();
-        $byDay = $range
-            ? array_map(
-                fn (array $row) => [
-                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
-                    'count' => $row['count'],
-                ],
-                DailySeries::between($range[0], $range[1])->counts($query->clone(), 'created_at')
-            )
-            : [];
-
-        $byUnit = $query->clone()
-            ->selectRaw('u_id, count(*) as count')
-            ->groupBy('u_id')
-            ->with('unit:id,name')
-            ->get()
-            ->mapWithKeys(fn ($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
-            ->toArray();
-
-        $details = [
-            'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-                ->whereIn('persons.u_id', $accessibleIds)
-                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                ->groupBy('name')
-                ->pluck('count', 'name')
-                ->toArray(),
-            'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-                ->whereIn('persons.u_id', $accessibleIds)
-                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                ->groupBy('name')
-                ->pluck('count', 'name')
-                ->toArray(),
-            'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-                ->whereIn('persons.u_id', $accessibleIds)
-                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                ->groupBy('name')
-                ->pluck('count', 'name')
-                ->toArray(),
-        ];
-
-        return [
-            'total' => $total,
-            'byDay' => $byDay,
-            'byUnit' => $byUnit,
-            'details' => $details,
-        ];
+        // Issue #1351 — all three branches go through the versioned cache
+        // below; the persons branch has its own `report_persons` namespace
+        // with invalidation hooks on Person and the three lookup models.
+        return $this->rememberReport($accessibleIds);
     }
 
     /**
-     * Issue #1282 — cache the whole tickets/todos payload behind the existing
-     * versioned namespace.
+     * Issue #1282 — cache the whole tickets/todos/persons payload behind the
+     * existing versioned namespaces (#1351 adds `report_persons`).
      *
      * The filters, the query and `Unit::descendantIds()` all run inside the
      * closure so a cache hit costs zero report queries. The key carries every
      * input that changes the payload: scope hash (namespace version handles
-     * Ticket/Todo writes), from/to, the effective unit, the normalized status,
+     * Ticket/Todo/Person writes), from/to, the effective unit, the normalized status,
      * and the hierarchy version for unit names and descendants.
      *
      * @param  array<int>  $accessibleIds
-     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>}
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>|array{byEstekhdam: array<string, int>, byTahsil: array<string, int>, bySemat: array<string, int>}}
      */
     private function rememberReport(array $accessibleIds): array
     {
@@ -317,11 +237,17 @@ return new class extends Component
 
         $cache = app(CacheInvalidationServiceInterface::class);
 
-        /** @var array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>} $data */
+        /** @var array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>|array{byEstekhdam: array<string, int>, byTahsil: array<string, int>, bySemat: array<string, int>}} $data */
         $data = $cache->remember(
-            $this->reportType === 'todos' ? 'report_todos' : 'report_tickets',
+            match ($this->reportType) {
+                'todos' => 'report_todos',
+                'persons' => 'report_persons',
+                default => 'report_tickets',
+            },
             ScopeCacheKey::hash($accessibleIds),
-            fn (): array => $this->buildReport($accessibleIds, $from, $to, $range, $unitId),
+            fn (): array => $this->reportType === 'persons'
+                ? $this->buildPersonsReport($accessibleIds, $from, $to, $range, $unitId)
+                : $this->buildReport($accessibleIds, $from, $to, $range, $unitId),
             10,
             [
                 'type' => $this->reportType,
@@ -416,6 +342,97 @@ return new class extends Component
             $total = $query->count();
             $details = [];
         }
+
+        return [
+            'total' => $total,
+            'byDay' => $byDay,
+            'byUnit' => $byUnit,
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Build the uncached persons payload (the cache-miss path) — issue #1351.
+     *
+     * The `details` lookups deliberately ignore the date/status filters
+     * while `total`/`byDay`/`byUnit` honour them; that inconsistency is
+     * pinned on purpose (see the parity test) and is preserved here, not
+     * "fixed" by the caching migration.
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  array{0: Carbon, 1: Carbon}|null  $range
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array{byEstekhdam: array<string, int>, byTahsil: array<string, int>, bySemat: array<string, int>}}
+     */
+    private function buildPersonsReport(array $accessibleIds, ?Carbon $from, ?Carbon $to, ?array $range, ?int $unitId): array
+    {
+        $query = Person::whereIn('u_id', $accessibleIds);
+
+        // فیلتر تاریخ (ورودی شمسی)
+        if ($from) {
+            $query->where('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->where('created_at', '<=', $to);
+        }
+
+        // فیلتر واحد (سلسله‌مراتبی)
+        if ($unitId) {
+            $descendantIds = Unit::descendantIds($unitId)->toArray();
+            $descendantIds[] = $unitId;
+            $query->whereIn('u_id', $descendantIds);
+        }
+
+        // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
+        // STATUS_OPTIONS کنار هم زندگی می‌کنند؛ todos ستون status ندارد و
+        // روی is_completed/end_at نگاشت می‌شود.
+        $this->applyStatusFilter($query);
+
+        $total = $query->count();
+
+        // Issue #736: materialise every day in the chosen range, zeros included,
+        // so a day with no rows is a zero rather than a missing column. The
+        // filtered $query is reused, so unit/status/date filters still apply.
+        $byDay = $range
+            ? array_map(
+                fn (array $row) => [
+                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                    'count' => $row['count'],
+                ],
+                DailySeries::between($range[0], $range[1])->counts($query->clone(), 'created_at')
+            )
+            : [];
+
+        $byUnit = $query->clone()
+            ->selectRaw('u_id, count(*) as count')
+            ->groupBy('u_id')
+            ->with('unit:id,name')
+            ->get()
+            ->mapWithKeys(fn ($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
+            ->toArray();
+
+        $details = [
+            'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+            'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+            'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+        ];
 
         return [
             'total' => $total,
