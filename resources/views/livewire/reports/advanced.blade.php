@@ -52,7 +52,7 @@ return new class extends Component
         if ($accessibleIds === []) {
             $this->units = [];
         } else {
-            $cacheKey = 'advanced_report:units:'.md5(implode(',', $accessibleIds));
+            $cacheKey = 'advanced_report:units:'.ScopeCacheKey::hash($accessibleIds);
             $this->units = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
                 return Unit::whereIn('id', $accessibleIds)
                     ->select('id', 'name', 'parent_id')
