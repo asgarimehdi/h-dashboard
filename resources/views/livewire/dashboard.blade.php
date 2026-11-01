@@ -480,7 +480,7 @@ return new class extends Component
                 <x-icon name="o-chart-bar" class="w-5 h-5 text-info" />
                 روند ایجاد تیکت‌ها (۳۰ روز اخیر)
             </h3>
-            <div id="ticketTrendChart" wire:ignore style="height: 250px;"></div>
+            <div id="ticketTrendChart" wire:ignore class="h-[250px]"></div>
         </x-card>
 
         {{-- نمودار وضعیت تیکت‌ها --}}
@@ -489,7 +489,7 @@ return new class extends Component
                 <x-icon name="o-chart-pie" class="w-5 h-5 text-warning" />
                 وضعیت تیکت‌ها
             </h3>
-            <div id="ticketStatusChart" wire:ignore style="height: 250px;"></div>
+            <div id="ticketStatusChart" wire:ignore class="h-[250px]"></div>
         </x-card>
     </div>
 
@@ -511,7 +511,7 @@ return new class extends Component
                         <span class="font-bold">{{ $completedTodos }} / {{ $totalTodos }} ({{ $todoPercent }}%)</span>
                     </div>
                     <div class="w-full bg-base-200 rounded-full h-3">
-                        <div class="bg-success h-3 rounded-full transition-all duration-500" style="width: {{ $todoPercent }}%"></div>
+                        <div id="todo-progress-fill" class="bg-success h-3 rounded-full transition-all duration-500"></div>
                     </div>
                 </div>
 
@@ -549,7 +549,7 @@ return new class extends Component
                         <span class="font-bold">{{ $linkedTodos }} / {{ $totalTodos }} ({{ $linkedPercent }}%)</span>
                     </div>
                     <div class="w-full bg-base-200 rounded-full h-3">
-                        <div class="bg-secondary h-3 rounded-full transition-all duration-500" style="width: {{ $linkedPercent }}%"></div>
+                        <div id="linked-progress-fill" class="bg-secondary h-3 rounded-full transition-all duration-500"></div>
                     </div>
                 </div>
 
@@ -666,6 +666,14 @@ return new class extends Component
     <script src="{{ asset('js/chart/highcharts.js') }}"></script>
     <script src="{{ asset('js/chart/accessibility.js') }}"></script>
     @endassets
+
+    {{-- Issue #1352: the progress-fill widths are data-driven, so they live in
+         this nonce'd block (rendered server-side) instead of `style=`
+         attributes, which `style-src-attr` no longer allows. --}}
+    <style nonce="{{ Vite::cspNonce() }}">
+        #todo-progress-fill { width: {{ $todoPercent }}%; }
+        #linked-progress-fill { width: {{ $linkedPercent }}%; }
+    </style>
 
     @script
     <script>

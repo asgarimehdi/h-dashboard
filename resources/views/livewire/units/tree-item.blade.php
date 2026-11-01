@@ -11,13 +11,15 @@
         
         {{-- خطوط راهنما --}}
         @if($level > 0)
-            <div class="relative" style="width: {{ $level * 28 }}px;">
+            {{-- Issue #1352: indent width is a level class (capped at 12 —
+                 deeper trees keep the 12-level indent) instead of `style=`. --}}
+            <div class="relative tree-indent-{{ min($level, 12) }}">
                 <div class="tree-line-leaf"></div>
                 @if(!$isLast)
                     <div class="tree-line-branch"></div>
                 @else
                     {{-- برای آخرین فرزند، خط عمودی را تا نیمه قطع می‌کنیم --}}
-                    <div class="tree-line-branch" style="bottom: auto; height: 25px;"></div>
+                    <div class="tree-line-branch tree-line-branch-half"></div>
                 @endif
                 <div class="tree-node-dot"></div>
             </div>

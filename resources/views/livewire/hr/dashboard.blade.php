@@ -137,19 +137,19 @@ return new class extends Component
          the hook below. --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <x-card shadow title="پرسنل به تفکیک واحد">
-            <div id="hrChartByUnit" class="w-full" style="height: {{ max(240, count($byUnit) * 28) }}px;"></div>
+            <div id="hrChartByUnit" class="w-full hr-chart"></div>
         </x-card>
 
         <x-card shadow title="پرسنل به تفکیک سمت">
-            <div id="hrChartBySemat" class="w-full" style="height: {{ max(240, count($bySemat) * 28) }}px;"></div>
+            <div id="hrChartBySemat" class="w-full hr-chart"></div>
         </x-card>
 
         <x-card shadow title="تحصیلات">
-            <div id="hrChartByTahsil" class="w-full" style="height: {{ max(240, count($byTahsil) * 32) }}px;"></div>
+            <div id="hrChartByTahsil" class="w-full hr-chart"></div>
         </x-card>
 
         <x-card shadow title="نوع استخدام">
-            <div id="hrChartByEstekhdam" class="w-full" style="height: {{ max(240, count($byEstekhdam) * 32) }}px;"></div>
+            <div id="hrChartByEstekhdam" class="w-full hr-chart"></div>
         </x-card>
     </div>
 
@@ -161,6 +161,15 @@ return new class extends Component
             <p class="text-sm text-base-content/50">همه واحدها پرسنل دارند 🎉</p>
         @endforelse
     </x-card>
+{{-- Issue #1352: chart heights scale with the row counts, so they live in this
+     nonce'd block (rendered server-side) instead of `style=` attributes. --}}
+<style nonce="{{ Vite::cspNonce() }}">
+    #hrChartByUnit { height: {{ max(240, count($byUnit) * 28) }}px; }
+    #hrChartBySemat { height: {{ max(240, count($bySemat) * 28) }}px; }
+    #hrChartByTahsil { height: {{ max(240, count($byTahsil) * 32) }}px; }
+    #hrChartByEstekhdam { height: {{ max(240, count($byEstekhdam) * 32) }}px; }
+</style>
+
 </div>
 
 @assets

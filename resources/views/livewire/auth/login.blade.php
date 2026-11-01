@@ -92,11 +92,18 @@ return new class extends Component
 
 {{--  stitch-inspired: woven art + animations, keeps maryUI theme + theme selector  --}}
 <div class="min-h-screen flex auth-layout stitch-bg">
+    {{-- Issue #1352: blob geometry/gradients live in this nonce'd block
+         instead of `style=` attributes. --}}
+    <style nonce="{{ Vite::cspNonce() }}">
+        .login-blob-a { top: -10%; right: -8%; width: 45%; height: 45%; background: linear-gradient(135deg, #F8B803, #FF750F); }
+        .login-blob-b { bottom: -15%; left: -8%; width: 40%; height: 40%; background: linear-gradient(135deg, #F0304E, #7C3AED); animation-delay: -6s; }
+        .login-blob-c { top: 35%; left: 35%; width: 35%; height: 35%; background: linear-gradient(135deg, #22D3EE, #F8B803); animation-delay: -12s; }
+    </style>
     {{-- Background blobs --}}
     <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div class="stitch-blob stitch-drift" style="top:-10%; right:-8%; width:45%; height:45%; background:linear-gradient(135deg,#F8B803,#FF750F);"></div>
-        <div class="stitch-blob stitch-drift" style="bottom:-15%; left:-8%; width:40%; height:40%; background:linear-gradient(135deg,#F0304E,#7C3AED); animation-delay:-6s;"></div>
-        <div class="stitch-blob stitch-drift" style="top:35%; left:35%; width:35%; height:35%; background:linear-gradient(135deg,#22D3EE,#F8B803); animation-delay:-12s;"></div>
+        <div class="stitch-blob stitch-drift login-blob-a"></div>
+        <div class="stitch-blob stitch-drift login-blob-b"></div>
+        <div class="stitch-blob stitch-drift login-blob-c"></div>
     </div>
 
     {{-- Brand / Art side --}}

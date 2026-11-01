@@ -8,8 +8,10 @@ namespace App\Support;
  * Phase 1 (enforcing behind `config('csp.enforcing')`):
  *   - `'unsafe-inline'` is gone from `script-src` and `style-src` (nonce carries
  *     them); `'unsafe-eval'` stays — conditionally, pending the CSP-safe build.
- *   - `style-src-attr 'unsafe-inline'` stays: 37 inline `style=` attributes +
- *     the popup strings still need it (phase 2).
+ * Phase 2 (#1352, PR 1): `style-src-attr 'unsafe-inline'` is gone — the 37
+ *   inline `style=` attributes were migrated to classes / nonce'd `<style>`
+ *   blocks / CSSOM assignments, and the one remaining `:style` binding is a
+ *   CSSOM assignment, not a style attribute.
  *   - `font-src 'self' data:` — `data:` is a phase-1 exception: the
  *     full-calendar bundle ships a data: font (see the baseline recorded by
  *     tests/e2e/security/csp.spec.ts) and enforcing without it would fail the
@@ -32,7 +34,6 @@ class CspPolicy
             "style-src 'self' 'nonce-{$nonce}' 'sha256-BBzkWIzm0YA2BW8GhdAiRj7WWVwUUNJkZzZ5sQBqj54=' 'sha256-C9H3lAsLru1Z0l4uwPBsvav9owaH3ui/wZpBqFhVa6o='",
             // shortcut: Leaflet Draw injects a <style> element at runtime; its
             // hash is pinned here for phase 1. Recompute on Leaflet Draw upgrade.
-            "style-src-attr 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
             'connect-src '.implode(' ', array_merge(["'self'"], $connectOrigins)),
             "font-src 'self' data:",
