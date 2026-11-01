@@ -538,18 +538,21 @@ class MapsUnitLivewireTest extends TestCase
         // accessible-region set. A scope-free key lets a payload written by a
         // broad-scope user be served to a narrower one on the next hit,
         // bypassing the query-time scope check.
-        $scopeKey = "md5(implode(',', \$accessibleRegionIds->all()))";
+        //
+        // #1290: the version and the key shape belong to
+        // CacheInvalidationService; the scope arrives as ScopeCacheKey::hash().
+        $scopeKey = '\App\Support\ScopeCacheKey::hash($accessibleRegionIds->all())';
         $this->assertSame(
             2,
             substr_count($view, $scopeKey),
             'Both region cache keys must be gated on the accessible-region scope.'
         );
 
-        // The pre-#1032 scope-free spellings must not survive a refactor back.
-        $this->assertStringNotContainsString("'unit_map:regions:v' . \$v, 300", $view);
-        $this->assertStringNotContainsString(
-            "'county_boundaries_v' . Cache::get('maps_version', 0) . '_' . md5(implode(',', \$this->selectedRegions))",
-            $view
-        );
+        // The hand-built version keys must not survive a refactor back.
+        $this->assertStringNotContainsString('Cache::', $view);
+        $this->assertStringNotContainsString("'unit_map:regions:v'", $view);
+        $this->assertStringNotContainsString("'county_boundaries_v'", $view);
+        $this->assertStringNotContainsString('maps_version', $view);
+        $this->assertStringContainsString('CacheInvalidationServiceInterface::class', $view);
     }
 }

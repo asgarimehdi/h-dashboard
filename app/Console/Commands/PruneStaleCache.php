@@ -16,6 +16,15 @@ class PruneStaleCache extends Command
      * New namespaces (e.g. `zabbix_devices`, issue #698) must be listed here so
      * `cache:prune-stale` — and its call-count test — stay in sync.
      *
+     * No call site may build a version key by hand (#1290): read through
+     * `getVersion()`/`cacheKey()`/`remember()`, never a raw `*_version` key.
+     * `tests/Feature/CacheVersionKeyGuardTest.php` pins that rule.
+     *
+     * Sharing contract: `hr_stats` backs `/api/hr/stats`, `/api/hr/vacancies`,
+     * `/api/hr/org-chart`, `/api/hr/org-chart/expandable`, `/api/hr/analytics/*`
+     * and the Livewire `hr.dashboard` page, because the two writers of that data
+     * (`Person` and `Unit`) bump this one namespace (#1290, decision A).
+     *
      * @var array<int, string>
      */
     public const NAMESPACES = ['hardware_stats', 'gis', 'maps', 'dashboard', 'hr_stats', 'report_todos', 'report_tickets', 'report_units', 'unit_hierarchy', 'calendar', 'zabbix_devices', 'global_search', 'disease_maps'];

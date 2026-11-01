@@ -3,9 +3,9 @@
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Mary\Traits\Toast;
@@ -101,11 +101,9 @@ return new class extends Component
         $accessService = app(AccessService::class);
         $accessibleIds = $accessService->accessibleUnitIds($user);
 
-        // Build cache key from accessible IDs + date range + user context + version (Issue #389)
-        $calendarVersion = Cache::get('calendar_version', 0);
-        $cacheKey = 'calendar:events:'.$user->id.':'.$calendarVersion.':'.md5(implode(',', $accessibleIds)).':'.($this->calendarStart ?? 'all').':'.($this->calendarEnd ?? 'all');
-
-        return Cache::remember($cacheKey, 120, function () use ($accessibleIds) {
+        // Build cache key from accessible IDs + date range + user context (Issue #389).
+        // Issue #1290: the service owns the version and hashes the extra axis.
+        return app(CacheInvalidationServiceInterface::class)->remember('calendar', \App\Support\ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds) {
             // Base query with date range filtering for performance.
             // Null-unit contract (#838): a null-unit todo belongs to its creator —
             // listed only to the creator, never to every calendar holder.
@@ -184,7 +182,11 @@ return new class extends Component
                 })->toArray();
 
             return array_merge($todoEvents, $ticketEvents);
-        });
+        }, 2, [
+            'user' => $user->id,
+            'start' => $this->calendarStart ?? 'all',
+            'end' => $this->calendarEnd ?? 'all',
+        ]);
     }
 
     public function openModal()
@@ -246,7 +248,7 @@ return new class extends Component
             'end_at' => $endDate ?? $startDate,
         ]);
 
-        Cache::increment('calendar_version');
+        app(CacheInvalidationServiceInterface::class)->increment('calendar');
 
         $this->dispatch('swal', ['title' => 'تاریخ وظیفه به‌روزرسانی شد', 'icon' => 'success']);
         $this->mount();
@@ -388,7 +390,7 @@ return new class extends Component
     private function invalidateEventCache(): void
     {
         // Version-based invalidation covers all users and date ranges (Issue #389)
-        Cache::increment('calendar_version');
+        app(CacheInvalidationServiceInterface::class)->increment('calendar');
     }
 
     public function delete(): void
