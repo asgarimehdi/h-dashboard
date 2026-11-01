@@ -1,32 +1,44 @@
 <?php
 
-use App\Models\{Ticket, ActivityLog, Notification};
-use App\Models\User;
-use App\Services\AccessService;
 use App\Jobs\ArchiveActivityLogsJob;
 use App\Jobs\CleanNotificationsJob;
+use App\Models\ActivityLog;
+use App\Models\Notification;
+use App\Models\Ticket;
+use App\Models\User;
 use Livewire\Component;
 use Mary\Traits\Toast;
-use Illuminate\Support\Facades\Cache;
 
-return new class extends Component {
-    use Toast;
+return new class extends Component
+{
     use \Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+    use Toast;
 
     public array $stats = [];
+
     public int $archiveDays = 30;
+
     public int $activityDays = 90;
+
     public int $notificationDays = 7;
+
     public bool $showHelpModal = false;
 
     public function mount(): void
     {
         $this->authorize('manage_users');
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
-        $cacheKey = 'tools:stats:' . md5(implode(',', $accessibleIds) . ':' . implode(',', $userIds));
+        $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
+        $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
 
-        $this->stats = Cache::remember($cacheKey, 60, function () use ($accessibleIds, $userIds) {
+        // Issue #1348: versioned read — 60 seconds is 1 minute. Both input
+        // lists ride in the extra as order-independent hashes (the raw lists
+        // arrive unordered, and serializing them would split one scope into
+        // many keys). Bump wiring: Ticket writes (provider), ActivityLog
+        // creation (provider), notification writes, invalidateStatsCache().
+        // Async window, accepted with the 1-minute bound: the purge jobs run
+        // after the bump + re-read, so the pre-job counts stay cached until
+        // the TTL lapses.
+        $this->stats = app(\App\Services\CacheInvalidationServiceInterface::class)->remember('tools_stats', \App\Support\ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds, $userIds) {
             return [
                 // Issue #929: archived tickets stay `completed`, so they are
                 // excluded here by `whereNull('archived_at')`, not by status.
@@ -45,7 +57,7 @@ return new class extends Component {
                 'total_activities' => ActivityLog::whereIn('user_id', $userIds)->count(),
                 'total_notifications' => Notification::whereIn('user_id', $userIds)->count(),
             ];
-        });
+        }, 1, ['units' => \App\Support\ScopeCacheKey::hash($accessibleIds), 'users' => \App\Support\ScopeCacheKey::hash($userIds)]);
     }
 
     public function archiveTickets(): void
@@ -64,7 +76,7 @@ return new class extends Component {
         // every status reader (label, API filter, open-ticket counts, inbox
         // guards) keeps its meaning. One-way by design (no restore UI) and
         // idempotent via `whereNull('archived_at')`.
-        $count = Ticket::whereIn('unit_id', app(AccessService::class)->accessibleUnitIds())
+        $count = Ticket::whereIn('unit_id', app(\App\Services\AccessService::class)->accessibleUnitIds())
             ->where('status', 'completed')
             ->whereNull('archived_at')
             ->where('completed_at', '<', now()->subDays($this->archiveDays))
@@ -89,7 +101,7 @@ return new class extends Component {
         // so an empty scope must NOT be dispatched — that is this repo's
         // fail-open trap in a new spelling: `[]` here would delete every unit's
         // logs instead of none.
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
 
         if ($accessibleIds === []) {
             $this->error('هیچ واحدی در دامنهٔ دسترسی شما نیست؛ پاک‌سازی انجام نشد.');
@@ -114,7 +126,7 @@ return new class extends Component {
         ]);
 
         // Issue #950 — see cleanActivities(). Same scope, same refusal on empty.
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
 
         if ($accessibleIds === []) {
             $this->error('هیچ واحدی در دامنهٔ دسترسی شما نیست؛ پاک‌سازی انجام نشد.');
@@ -130,10 +142,9 @@ return new class extends Component {
 
     private function invalidateStatsCache(): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-        $userIds = User::whereHas('person', fn($q) => $q->whereIn('u_id', $accessibleIds))->pluck('id')->toArray();
-        $cacheKey = 'tools:stats:' . md5(implode(',', $accessibleIds) . ':' . implode(',', $userIds));
-        Cache::forget($cacheKey);
+        // Issue #1348: a version bump replaces the old key-forget. The key
+        // is derived from the scope, so no list recomputation is needed.
+        app(\App\Services\CacheInvalidationServiceInterface::class)->increment('tools_stats');
     }
 };
 ?>

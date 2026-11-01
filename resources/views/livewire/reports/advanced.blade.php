@@ -13,12 +13,12 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Morilog\Jalali\Jalalian;
 
+// Versioned cache reads in this component go through CacheInvalidationService (#1348).
 return new class extends Component
 {
     use WithPagination;
@@ -52,14 +52,20 @@ return new class extends Component
         if ($accessibleIds === []) {
             $this->units = [];
         } else {
-            $cacheKey = 'advanced_report:units:'.md5(implode(',', $accessibleIds));
-            $this->units = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
+            // Issue #1348: versioned read on the shared `report_units`
+            // namespace (same writers as ReportController::units()). The
+            // distinguishing extra is load-bearing: without it this payload
+            // would share a key with the controller's differently-shaped
+            // payload for the same scope. The scope hash replaces the raw
+            // hand-rolled hash — this line is also #1349's fix, subsumed
+            // here while PR #1353 is still open. 300 seconds is 5 minutes.
+            $this->units = app(CacheInvalidationServiceInterface::class)->remember('report_units', ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds) {
                 return Unit::whereIn('id', $accessibleIds)
                     ->select('id', 'name', 'parent_id')
                     ->orderBy('name')
                     ->get()
                     ->toArray();
-            });
+            }, 5, ['site' => 'advanced_report_units']);
         }
     }
 

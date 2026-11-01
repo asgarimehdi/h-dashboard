@@ -2,8 +2,8 @@
 
 use App\Models\ActivityLog;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Support\JalaliDateRange;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -59,9 +59,16 @@ return new class extends Component
     private function getAccessibleUserIds(): array
     {
         $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
-        $cacheKey = 'activity_log:accessible_users:'.md5(implode(',', $accessibleUnitIds));
 
-        return Cache::remember($cacheKey, 300, function () use ($accessibleUnitIds) {
+        // Issue #1348: versioned read — 300 seconds is 5 minutes, and
+        // remember() takes minutes. Bump wiring lives in AppServiceProvider
+        // (User/Person/ActivityLog writes). Known gap, TTL-bound: user↔unit
+        // pivot syncs fire no model event. The distinguishing extra is
+        // load-bearing: this site and getTypeStats() share the `activity_log`
+        // namespace, and their scope hashes coincide whenever the unit-id
+        // list and the user-id list hold the same ids (the common
+        // single-unit case) — without it both payloads would share one key.
+        return app(CacheInvalidationServiceInterface::class)->remember('activity_log', \App\Support\ScopeCacheKey::hash($accessibleUnitIds), function () use ($accessibleUnitIds) {
             // #1057: an access list, not a display list — a soft-deleted user
             // in scope keeps their audit rows visible. Only the deletion state
             // is widened; the unit predicate stays exactly as it was, so an
@@ -71,7 +78,7 @@ return new class extends Component
                 ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleUnitIds))
                 ->pluck('id')
                 ->toArray();
-        });
+        }, 5, ['site' => 'accessible_users']);
     }
 
     #[Computed]
@@ -139,15 +146,14 @@ return new class extends Component
     public function getTypeStats(): array
     {
         $accessibleUserIds = $this->getAccessibleUserIds();
-        $cacheKey = 'activity_log:types:'.md5(implode(',', $accessibleUserIds));
 
-        return Cache::remember($cacheKey, 300, function () use ($accessibleUserIds) {
+        return app(CacheInvalidationServiceInterface::class)->remember('activity_log', \App\Support\ScopeCacheKey::hash($accessibleUserIds), function () use ($accessibleUserIds) {
             return ActivityLog::selectRaw('type, count(*) as count')
                 ->whereIn('user_id', $accessibleUserIds)
                 ->groupBy('type')
                 ->pluck('count', 'type')
                 ->toArray();
-        });
+        }, 5, ['site' => 'type_stats']);
     }
 }; ?>
 <div>

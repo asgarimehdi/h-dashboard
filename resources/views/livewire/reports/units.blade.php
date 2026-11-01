@@ -1,11 +1,11 @@
 <?php
 
-use Livewire\Component;
-use Livewire\WithPagination;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
+use Livewire\Component;
+use Livewire\WithPagination;
 
 return new class extends Component
 {
@@ -20,8 +20,11 @@ return new class extends Component
     public bool $emptyScope = false;
 
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public ?int $selectedUnitTypeId = null;
+
     public ?int $showOnlyNoBoundary = null;
 
     public function mount(): void
@@ -49,7 +52,12 @@ return new class extends Component
 
     public function getUnitTypesProperty()
     {
-        return Cache::remember('unit_types_all', 86400, fn() => UnitType::all());
+        // Issue #1348: versioned read — 86400 seconds is 1440 minutes, and
+        // remember() takes minutes. The key has no scope, so the scope hash
+        // is the fixed 'global' constant used by the other scopeless reads.
+        // A missed UnitType bump would stale this list for 24 hours, so the
+        // rename test for this site is load-bearing.
+        return app(CacheInvalidationServiceInterface::class)->remember('unit_types', 'global', fn () => UnitType::all(), 1440);
     }
 
     public function chartPayload(): array
@@ -58,7 +66,7 @@ return new class extends Component
 
         $query = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->when($this->showOnlyNoBoundary !== null, function ($q) {
                 if ($this->showOnlyNoBoundary == '1') {
                     $q->whereNull('boundary_id');
@@ -75,22 +83,22 @@ return new class extends Component
             ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
             ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
             ->whereIn('units.id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn ($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn ($q) => $q->whereNotNull('units.boundary_id'))
             ->groupBy('type_name')
             ->pluck('count', 'type_name')
             ->toArray();
 
         $noBoundary = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->whereNull('boundary_id')
             ->count();
 
         $withBoundary = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->whereNotNull('boundary_id')
             ->count();
 
@@ -101,19 +109,19 @@ return new class extends Component
         $unitsPage = Unit::query()
             ->with('unitType:id,name', 'region:id,name')
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn ($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn ($q) => $q->whereNotNull('units.boundary_id'))
             ->orderBy('name')
             ->paginate($this->perPage);
 
         $units = $unitsPage->getCollection()
-            ->map(fn($u) => [
+            ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'type' => $u->unitType?->name ?? '—',
                 'region' => $u->region?->name ?? '—',
-                'has_boundary' => !is_null($u->boundary_id),
+                'has_boundary' => ! is_null($u->boundary_id),
             ])
             ->all();
 
