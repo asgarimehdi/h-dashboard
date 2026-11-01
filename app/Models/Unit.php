@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\UnitAncestry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -160,12 +161,25 @@ class Unit extends Model
             }
         }
 
-        // Recursive closure to attach children
-        $attachChildren = function (Unit $unit) use (&$attachChildren, $childrenMap): void {
-            $unit->childrenRecursive = collect($childrenMap[$unit->id] ?? []);
-            foreach ($unit->childrenRecursive as $child) {
-                $attachChildren($child);
+        // Recursive closure to attach children. #1350: a parent_id cycle
+        // reachable from a root recursed forever here. The guard reuses the
+        // UnitAncestry contract: a per-path visited set seeded with the root,
+        // the MAX_DEPTH safety cap, and a silent cut — a repeated child is
+        // not attached, nothing is thrown, and no marker is emitted. The
+        // root itself attaches; only the back edge is cut. The CTE, the
+        // scope intersect, and the eager load are untouched.
+        $attachChildren = function (Unit $unit, array $visited, int $depth) use (&$attachChildren, $childrenMap): void {
+            $children = [];
+            foreach ($childrenMap[$unit->id] ?? [] as $child) {
+                if (isset($visited[$child->id]) || $depth + 1 >= UnitAncestry::MAX_DEPTH) {
+                    continue;
+                }
+                $nextVisited = $visited;
+                $nextVisited[$child->id] = true;
+                $attachChildren($child, $nextVisited, $depth + 1);
+                $children[] = $child;
             }
+            $unit->childrenRecursive = collect($children);
         };
 
         // Build root collection
@@ -177,7 +191,7 @@ class Unit extends Model
         }
 
         foreach ($roots as $root) {
-            $attachChildren($root);
+            $attachChildren($root, [$root->id => true], 0);
         }
 
         return $roots;
@@ -268,8 +282,8 @@ class Unit extends Model
      * UNION (not UNION ALL) is load-bearing: the set operator dedupes, so a
      * parent_id cycle terminates instead of recursing forever. UNION ALL on a
      * cyclic parent_id hangs the connection — parent_id is user-editable and
-     * not constrained by the database, so the web form's type guard is not the
-     * only possible writer.
+     * the units_parent_fk foreign key blocks dangling references, not cycles,
+     * so the web form's type guard is not the only possible writer.
      */
     protected static function recursiveDescendantQuery(array $ids): Collection
     {
