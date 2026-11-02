@@ -2,17 +2,20 @@
 
 namespace App\Providers;
 
+use App\Models\ActivityLog;
 use App\Models\Boundary;
 use App\Models\Disease;
 use App\Models\DiseaseCase;
 use App\Models\DiseaseFieldDef;
 use App\Models\Hardware;
 use App\Models\Patient;
+use App\Models\Person;
 use App\Models\Region;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\UnitPopulation;
+use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationService;
@@ -138,7 +141,7 @@ class AppServiceProvider extends ServiceProvider
         Todo::updated(fn () => $invalidate($todoNamespaces));
         Todo::deleted(fn () => $invalidate($todoNamespaces));
 
-        $ticketNamespaces = ['report_tickets', 'gis', 'calendar', 'dashboard'];
+        $ticketNamespaces = ['report_tickets', 'gis', 'calendar', 'dashboard', 'tools_stats'];
         Ticket::created(fn () => $invalidate($ticketNamespaces));
         Ticket::updated(fn () => $invalidate($ticketNamespaces));
         Ticket::deleted(fn () => $invalidate($ticketNamespaces));
@@ -150,6 +153,24 @@ class AppServiceProvider extends ServiceProvider
         Unit::created(fn () => $invalidate($unitNamespaces));
         Unit::updated(fn () => $invalidate($unitNamespaces));
         Unit::deleted(fn () => $invalidate($unitNamespaces));
+
+        // Issue #1348: the activity-log page caches its accessible-user list
+        // and type counts under `activity_log`, and the tools page caches its
+        // counts under `tools_stats`. User creation/deletion, a Person moving
+        // units (or being created/deleted), and any ActivityLog write must
+        // bump them. This wiring lives here — beside the Ticket/Unit wiring —
+        // so Person.php stays untouched for #1347. Known gap, accepted with
+        // the 5-minute TTL bound: user↔unit pivot syncs in Blade
+        // (users/index, kargozini/person) fire no model event.
+        User::created(fn () => $invalidate(['activity_log']));
+        User::deleted(fn () => $invalidate(['activity_log']));
+        Person::saved(function (Person $model) use ($invalidate): void {
+            if ($model->wasChanged('u_id') || $model->wasRecentlyCreated) {
+                $invalidate(['activity_log']);
+            }
+        });
+        Person::deleted(fn () => $invalidate(['activity_log']));
+        ActivityLog::created(fn () => $invalidate(['activity_log', 'tools_stats']));
 
         // Issue #1245: every disease-domain write invalidates the map layer.
         // Bulk `DB::table()` updates fire no model event — documented in

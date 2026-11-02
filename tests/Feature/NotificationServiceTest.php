@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Notification;
 use App\Models\Unit;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Services\NotificationService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -105,7 +106,8 @@ class NotificationServiceTest extends TestCase
     {
         ['user' => $user] = $this->createUserWithUnit();
 
-        Cache::put("notifications:user:{$user->id}", ['cached' => true]);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = $cache->getVersion('notifications');
 
         NotificationService::send(
             userId: $user->id,
@@ -113,7 +115,10 @@ class NotificationServiceTest extends TestCase
             title: 'عنوان'
         );
 
-        $this->assertNull(Cache::get("notifications:user:{$user->id}"));
+        // Issue #1348: the bell reads the versioned `notifications`
+        // namespace, so invalidation is a version bump, not a key forget.
+        // A fresh create bumps twice: the `created` hook and the service.
+        $this->assertSame($before + 2, $cache->getVersion('notifications'));
     }
 
     public function test_send_with_same_dedupe_key_creates_one_row(): void
@@ -198,19 +203,22 @@ class NotificationServiceTest extends TestCase
 
         NotificationService::send(userId: $user->id, type: 'test', title: 'عنوان', dedupeKey: 'event:9');
 
-        Cache::put("notifications:user:{$user->id}", ['cached' => true]);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = $cache->getVersion('notifications');
 
         NotificationService::send(userId: $user->id, type: 'test', title: 'عنوان', dedupeKey: 'event:9');
 
-        $this->assertNull(Cache::get("notifications:user:{$user->id}"));
+        // The deduped path fires no `created` event, so only the service
+        // increment lands.
+        $this->assertSame($before + 1, $cache->getVersion('notifications'));
     }
 
-    public function test_send_recovers_after_cache_forget_failure(): void
+    public function test_send_recovers_after_cache_increment_failure(): void
     {
         ['user' => $user] = $this->createUserWithUnit();
 
         $attempt = 0;
-        Cache::shouldReceive('forget')
+        Cache::shouldReceive('increment')
             ->andReturnUsing(function () use (&$attempt) {
                 $attempt++;
 
@@ -290,11 +298,14 @@ class NotificationServiceTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit();
         $unit = $user->units()->first();
 
-        Cache::put("notifications:user:{$user->id}", ['cached' => true]);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = $cache->getVersion('notifications');
 
         NotificationService::notifyUnit($unit->id, 'test', 'عنوان');
 
-        $this->assertNull(Cache::get("notifications:user:{$user->id}"));
+        // `insert()` fires no model events; the single afterCommit bump
+        // covers every recipient.
+        $this->assertSame($before + 1, $cache->getVersion('notifications'));
     }
 
     public function test_notify_unit_invalidates_bell_cache_after_commit(): void
@@ -302,11 +313,12 @@ class NotificationServiceTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit();
         $unit = $user->units()->first();
 
-        Cache::put("notifications:user:{$user->id}", ['cached' => true]);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = $cache->getVersion('notifications');
 
         DB::transaction(fn () => NotificationService::notifyUnit($unit->id, 'test', 'عنوان'));
 
-        $this->assertNull(Cache::get("notifications:user:{$user->id}"));
+        $this->assertSame($before + 1, $cache->getVersion('notifications'));
         $this->assertEquals(1, DB::table('notifications')->where('user_id', $user->id)->count());
     }
 

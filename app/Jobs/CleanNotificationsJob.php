@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -63,6 +64,14 @@ class CleanNotificationsJob implements ShouldQueue
         $deleted = Notification::whereIn('user_id', $userIds)
             ->where('created_at', '<', now()->subDays($this->days))
             ->delete();
+
+        // Issue #1348 (gate correction C3): the query-builder delete fires
+        // no model event, so bump the `notifications` namespace explicitly
+        // at the end of handle() — the bell cache must not wait out the
+        // one-minute TTL to notice the sweep. The tools counts move too.
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('notifications');
+        $cache->increment('tools_stats');
 
         Log::info("CleanNotificationsJob: deleted {$deleted} notifications older than {$this->days} days");
 

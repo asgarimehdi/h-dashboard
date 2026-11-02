@@ -1,9 +1,9 @@
 <?php
 
-use Livewire\Component;
 use App\Models\Unit;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
+use Livewire\Component;
 
 return new class extends Component
 {
@@ -11,9 +11,7 @@ return new class extends Component
 
     public bool $showHelpModal = false;
 
-    public function mount(): void
-    {
-    }
+    public function mount(): void {}
 
     /**
      * دریافت واحدهای فاقد مرز (Cached)
@@ -29,15 +27,20 @@ return new class extends Component
             return collect();
         }
 
-        $cacheKey = 'report:no_boundary:' . md5(implode(',', $accessibleIds));
+        // Issue #1348: versioned read — 300 seconds is 5 minutes. The extra
+        // carries the `unit_hierarchy` generation: Unit writes bump that
+        // namespace, which must invalidate this payload even though Unit
+        // writes do not bump `report_no_boundary` itself. UnitType/Region
+        // renames bump `report_no_boundary` directly (model events).
+        $cache = app(CacheInvalidationServiceInterface::class);
 
-        return Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
+        return $cache->remember('report_no_boundary', \App\Support\ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds) {
             return Unit::query()
                 ->whereIn('id', $accessibleIds)
                 ->whereNull('boundary_id')
                 ->with('unitType:id,name', 'region:id,name')
                 ->get();
-        });
+        }, 5, ['unit_hierarchy_generation' => $cache->getVersion('unit_hierarchy')]);
     }
 
     public function chartPayload(): array
@@ -45,7 +48,7 @@ return new class extends Component
         return $this->getUnitsWithoutBoundary()
             ->whereNotNull('lat')
             ->whereNotNull('lng')
-            ->map(fn($u) => [
+            ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'lat' => (float) $u->lat,
@@ -59,14 +62,14 @@ return new class extends Component
     public function getAllUnitsProperty()
     {
         return $this->getUnitsWithoutBoundary()
-            ->map(fn($u) => [
+            ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'lat' => $u->lat ? (float) $u->lat : null,
                 'lng' => $u->lng ? (float) $u->lng : null,
                 'type' => $u->unitType?->name ?? '—',
                 'region' => $u->region?->name ?? '—',
-                'has_coords' => !is_null($u->lat) && !is_null($u->lng),
+                'has_coords' => ! is_null($u->lat) && ! is_null($u->lng),
             ])
             ->toArray();
     }

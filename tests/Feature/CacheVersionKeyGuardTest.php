@@ -174,6 +174,35 @@ final class CacheVersionKeyGuardTest extends TestCase
         expect(array_values($duplicates))->toBe([], 'namespace تکراری در PruneStaleCache::NAMESPACES: '.implode(', ', $duplicates));
     }
 
+    public function test_no_raw_cache_calls_in_the_migrated_files(): void
+    {
+        // Issue #1348: the seven migrated sites must stay migrated. A raw
+        // Cache::remember/Cache::forget reintroduced in one of the six files
+        // reads/writes a key no version bump ever invalidates.
+        $files = [
+            'resources/views/livewire/activity-log/index.blade.php',
+            'resources/views/livewire/reports/advanced.blade.php',
+            'resources/views/livewire/reports/map-no-boundary.blade.php',
+            'resources/views/livewire/reports/units.blade.php',
+            'resources/views/livewire/tools/tools.blade.php',
+            'resources/views/livewire/notifications/bell.blade.php',
+        ];
+
+        $offenders = [];
+
+        foreach ($files as $path) {
+            $code = File::get(base_path($path));
+
+            foreach (['Cache::remember(', 'Cache::forget('] as $call) {
+                if (str_contains($code, $call)) {
+                    $offenders[] = "{$path} → {$call}";
+                }
+            }
+        }
+
+        expect($offenders)->toBe([], "فراخوانِ خامِ کش در فایل‌های مهاجرت‌شده:\n".implode("\n", $offenders));
+    }
+
     public function test_every_allowlist_entry_still_matches_its_file(): void
     {
         $stale = [];
