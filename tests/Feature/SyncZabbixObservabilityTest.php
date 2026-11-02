@@ -153,6 +153,66 @@ class SyncZabbixObservabilityTest extends TestCase
         $this->assertSame(0, $this->notificationsOfType('zabbix_sync')->where('user_id', $member->id)->count());
     }
 
+    public function test_alert_rows_carry_the_threshold_log_dedupe_key(): void
+    {
+        // Issue #1346: the alert for a streak carries the id of the log row
+        // that reached the threshold — the event identity, not the streak
+        // number (which repeats across episodes).
+        ['user' => $admin] = $this->createUserWithUnit(['kargozini']);
+        $admin->assignRole('admin');
+
+        $job = new SyncZabbixJob;
+        $job->failed(new RuntimeException('boom 1'));
+        $job->failed(new RuntimeException('boom 2'));
+        $job->failed(new RuntimeException('boom 3'));
+
+        $thresholdLog = ZabbixSyncLog::query()
+            ->where('consecutive_failures', ZabbixSyncLog::ALERT_THRESHOLD)
+            ->firstOrFail();
+
+        $notification = $this->notificationsOfType('zabbix_sync')
+            ->where('user_id', $admin->id)
+            ->firstOrFail();
+
+        $this->assertSame('zabbix:alert:'.$thresholdLog->id, $notification->dedupe_key);
+    }
+
+    public function test_new_streak_after_reset_alerts_again_with_a_new_key(): void
+    {
+        // Issue #1346: a fresh streak after a reset is a new episode with a
+        // new threshold log row, so it alerts again under a new key.
+        ['user' => $admin] = $this->createUserWithUnit(['kargozini']);
+        $admin->assignRole('admin');
+
+        $job = new SyncZabbixJob;
+        $job->failed(new RuntimeException('boom 1'));
+        $job->failed(new RuntimeException('boom 2'));
+        $job->failed(new RuntimeException('boom 3'));
+
+        $firstKey = $this->notificationsOfType('zabbix_sync')
+            ->where('user_id', $admin->id)
+            ->firstOrFail()
+            ->dedupe_key;
+
+        $zabbix = Mockery::mock(ZabbixService::class);
+        $zabbix->shouldReceive('getInterfaceTraffic')->andReturn([])->twice();
+        config(['services.zabbix.out_item_id' => '1', 'services.zabbix.in_item_id' => '2']);
+        $job->handle($zabbix);
+
+        $job->failed(new RuntimeException('boom 4'));
+        $job->failed(new RuntimeException('boom 5'));
+        $job->failed(new RuntimeException('boom 6'));
+
+        $keys = $this->notificationsOfType('zabbix_sync')
+            ->where('user_id', $admin->id)
+            ->pluck('dedupe_key')
+            ->all();
+
+        $this->assertCount(2, $keys);
+        $this->assertContains($firstKey, $keys);
+        $this->assertSame(2, count(array_unique($keys)));
+    }
+
     // -----------------------------------------------------------
     //  ویجت داشبورد
     // -----------------------------------------------------------

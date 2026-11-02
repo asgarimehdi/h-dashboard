@@ -477,7 +477,9 @@ class TicketCommentController extends Controller
                 'منشن در نظر',
                 'at-sign',
                 'text-blue-500',
-                route('tickets.inbox', $comment->ticket_id)
+                route('tickets.inbox', $comment->ticket_id),
+                null,
+                'mention:'.$comment->id,
             );
         }
     }
@@ -494,7 +496,9 @@ class TicketCommentController extends Controller
             'پاسخ به نظر',
             'message-circle',
             'text-green-500',
-            route('tickets.inbox', $reply->ticket_id)
+            route('tickets.inbox', $reply->ticket_id),
+            null,
+            'reply:'.$reply->id,
         );
     }
 
@@ -525,7 +529,9 @@ class TicketCommentController extends Controller
             'واکنش جدید',
             'smile',
             'text-yellow-500',
-            route('tickets.inbox', $comment->ticket_id)
+            route('tickets.inbox', $comment->ticket_id),
+            null,
+            'reaction:'.$comment->id.':'.$reactor->id.':'.$reaction,
         );
     }
 }
