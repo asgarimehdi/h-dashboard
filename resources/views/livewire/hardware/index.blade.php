@@ -555,16 +555,6 @@ return new class extends Component
             return;
         }
 
-        // #1026: write the audit BEFORE the mass delete. A mass delete fires no
-        // model `deleting` event, so without this the devices vanish with no
-        // trail and never reach the trash. Same writer and shape as the API.
-        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
-            $hardwares,
-            'bulk_delete',
-            null,
-            fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
-        );
-
         $scopedIds = $hardwares->pluck('id')->all();
 
         // Suppress the per-model observer during the mass delete so each device
@@ -572,9 +562,29 @@ return new class extends Component
         // mirrors HardwareController::bulkDelete().
         request()->attributes->set('suppress_audit', true);
         try {
-            Hardware::whereIn('id', $scopedIds)->delete();
+            $count = Hardware::whereIn('id', $scopedIds)->delete();
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            request()->attributes->remove('suppress_audit');
+            throw $e;
+        } catch (\Exception $e) {
+            request()->attributes->remove('suppress_audit');
+            $this->error('امکان حذف گروهی وجود ندارد.', position: 'toast-bottom');
+            return;
         } finally {
             request()->attributes->remove('suppress_audit');
+        }
+
+        // #1362: write the bulk_delete audit only AFTER the delete succeeds.
+        // #1026: parity with the API path — the mass delete bypasses Eloquent
+        // events, so this is the only place the trail can be reconciled with the
+        // outcome; writing it first left phantom rows on a failed delete.
+        if ($count > 0) {
+            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                $hardwares,
+                'bulk_delete',
+                null,
+                fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
+            );
         }
 
         // #1026: parity with the API path — listeners on HardwareUpdated and the
