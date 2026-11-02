@@ -635,6 +635,10 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         if ($this->touchesMapScope) {
             $cache->increment('maps');
             $cache->increment('gis');
+            // Issue #1347: same gate as maps/gis — the import writes persons
+            // without model events, so the manual block must bump
+            // `unit_hierarchy` too.
+            $cache->increment('unit_hierarchy');
         }
     }
 
