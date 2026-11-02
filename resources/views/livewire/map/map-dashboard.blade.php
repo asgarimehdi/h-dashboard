@@ -327,8 +327,8 @@ return new class extends Component
              no server round-trip. --}}
         <div id="disease-controls"
              x-show="activeLayers.includes('diseases')"
-             class="w-full flex flex-wrap items-end gap-2 border-t border-base-300 pt-2"
-             style="display: none;">
+             x-cloak
+             class="w-full flex flex-wrap items-end gap-2 border-t border-base-300 pt-2">
             <select id="disease-select"
                     x-model.number="disease.id"
                     @change="$nextTick(() => loadDiseaseLayer(true))"
@@ -413,6 +413,17 @@ return new class extends Component
             });
         }
     </script>
+{{-- Issue #1352: popup/marker geometry + the `x-cloak` hide rule live in this
+     nonce'd block instead of `style=` attributes (popup strings, the ticket
+     marker, and the initially-hidden disease panel). The `:style` legend
+     binding below is a CSSOM assignment, not a style attribute, and stays. --}}
+<style nonce="{{ Vite::cspNonce() }}">
+    [x-cloak] { display: none !important; }
+    .map-popup { min-width: 200px; font-family: inherit; }
+    .map-popup-narrow { min-width: 160px; font-family: inherit; }
+    .map-marker-diamond { width: 12px; height: 12px; transform: rotate(45deg); border: 2px solid white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+</style>
+
 </div>
 
 @assets
@@ -893,7 +904,7 @@ return new class extends Component
                 const rate = this.toRate(props.rate);
 
                 return `
-                    <div dir="rtl" style="min-width:200px;font-family:inherit;">
+                    <div dir="rtl" class="map-popup">
                         <strong>${this.escapeHtml(props.name)}</strong><br>
                         موارد: ${this.fa(Number(props.cases) || 0, 0)}<br>
                         جمعیت: ${props.population == null ? '—' : this.fa(Number(props.population), 0)}<br>
@@ -903,7 +914,7 @@ return new class extends Component
 
             diseaseUnitPopup(props) {
                 return `
-                    <div dir="rtl" style="min-width:160px;font-family:inherit;">
+                    <div dir="rtl" class="map-popup-narrow">
                         <strong>${this.escapeHtml(props.name)}</strong><br>
                         <span class="badge badge-primary badge-sm">${this.fa(Number(props.cases) || 0, 0)} مورد</span>
                     </div>`;
@@ -960,10 +971,16 @@ return new class extends Component
                             fillOpacity: 1,
                         });
                     } else if (type === 'ticket') {
+                        // Issue #1352: the diamond is a real element — Leaflet
+                        // 1.9.4 appends an HTMLElement `html` — so its dynamic
+                        // background is set via CSSOM, not a `style=` string.
+                        const diamond = document.createElement('div');
+                        diamond.className = 'map-marker-diamond';
+                        diamond.style.background = iconColor;
                         marker = L.marker([lat, lng], {
                             icon: L.divIcon({
                                 className: 'ticket-marker',
-                                html: `<div style="width:12px;height:12px;transform:rotate(45deg);background:${iconColor};border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                                html: diamond,
                                 iconSize: [12, 12],
                             })
                         });
@@ -1005,14 +1022,14 @@ return new class extends Component
 
                 if (type === 'unit') {
                     return `
-                        <div dir="rtl" style="min-width:200px;font-family:inherit;">
+                        <div dir="rtl" class="map-popup">
                             <strong>${escapeHtml(props.name)}</strong><br>
                             نوع: ${escapeHtml(this.getUnitTypeLabel(props.unit_type_id))}<br>
                             موقعیت: ${props.lat?.toFixed(6)}, ${props.lng?.toFixed(6)}
                         </div>`;
                 } else if (type === 'hardware') {
                     return `
-                        <div dir="rtl" style="min-width:200px;font-family:inherit;">
+                        <div dir="rtl" class="map-popup">
                             <strong>${escapeHtml(props.pc_name)}</strong><br>
                             نوع: ${escapeHtml(props.type || '—')}<br>
                             CPU: ${escapeHtml(props.cpu || '—')}<br>
@@ -1023,7 +1040,7 @@ return new class extends Component
                         </div>`;
                 } else if (type === 'ticket') {
                     return `
-                        <div dir="rtl" style="min-width:200px;font-family:inherit;">
+                        <div dir="rtl" class="map-popup">
                             <strong>${escapeHtml(props.title)}</strong><br>
                             کد: ${escapeHtml(props.ticket_code)}<br>
                             اولویت: ${escapeHtml(this.getPriorityLabel(props.priority))}<br>

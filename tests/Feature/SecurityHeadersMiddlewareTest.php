@@ -60,6 +60,8 @@ test('Content-Security-Policy-Report-Only header has correct directive set with 
     expect($directives['default-src'])->toContain("'self'");
     expect($directives['script-src'])->toContain("'self'");
     expect($directives['style-src'])->toContain("'self'");
+    // #1352 PR 1: style-src-attr was removed with the migrated `style=` sites.
+    expect($directives)->not->toHaveKey('style-src-attr');
     expect($directives['report-to'])->toContain('csp-endpoint');
 });
 

@@ -237,15 +237,15 @@ return new class extends Component
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <x-card shadow>
             <h3 class="font-bold mb-4">بر اساس تحصیلات</h3>
-            <div id="tahsilChart" wire:ignore style="height: 250px;"></div>
+            <div id="tahsilChart" wire:ignore class="h-[250px]"></div>
         </x-card>
         <x-card shadow>
             <h3 class="font-bold mb-4">بر اساس سمت</h3>
-            <div id="sematChart" wire:ignore style="height: 250px;"></div>
+            <div id="sematChart" wire:ignore class="h-[250px]"></div>
         </x-card>
         <x-card shadow>
             <h3 class="font-bold mb-4">بر اساس استخدام</h3>
-            <div id="estekhdamChart" wire:ignore style="height: 250px;"></div>
+            <div id="estekhdamChart" wire:ignore class="h-[250px]"></div>
         </x-card>
     </div>
 

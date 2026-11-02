@@ -209,5 +209,24 @@ return new class extends Component
             right: -23px;
             top: 21px;
         }
+        /* Issue #1352: half-height branch for the last child, and the
+           per-level indent widths (capped at 12 levels) — formerly `style=`
+           attributes in tree-node/tree-item. */
+        .tree-line-branch-half {
+            bottom: auto;
+            height: 25px;
+        }
+        .tree-indent-1 { width: 28px; }
+        .tree-indent-2 { width: 56px; }
+        .tree-indent-3 { width: 84px; }
+        .tree-indent-4 { width: 112px; }
+        .tree-indent-5 { width: 140px; }
+        .tree-indent-6 { width: 168px; }
+        .tree-indent-7 { width: 196px; }
+        .tree-indent-8 { width: 224px; }
+        .tree-indent-9 { width: 252px; }
+        .tree-indent-10 { width: 280px; }
+        .tree-indent-11 { width: 308px; }
+        .tree-indent-12 { width: 336px; }
     </style>
 </div>

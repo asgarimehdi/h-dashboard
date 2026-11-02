@@ -245,11 +245,11 @@ return new class extends Component
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <x-card shadow>
             <h3 class="font-bold mb-4">توزیع بر اساس وضعیت</h3>
-            <div id="statusChart" wire:ignore style="height: 250px;"></div>
+            <div id="statusChart" wire:ignore class="h-[250px]"></div>
         </x-card>
         <x-card shadow>
             <h3 class="font-bold mb-4">توزیع بر اساس واحد</h3>
-            <div id="unitChart" wire:ignore style="height: 250px;"></div>
+            <div id="unitChart" wire:ignore class="h-[250px]"></div>
         </x-card>
     </div>
 
