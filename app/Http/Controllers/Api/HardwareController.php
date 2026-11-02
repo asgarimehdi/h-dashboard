@@ -347,16 +347,6 @@ class HardwareController extends Controller
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
-        // #927: `changes` is a field-level diff list, `[{field, old, new}]` —
-        // this used to write $hw->getAttributes(), a column => value map, which
-        // no reader could render (the export threw a TypeError on it).
-        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
-            $hardwares,
-            'bulk_delete',
-            null,
-            fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
-        );
-
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
         // Suppress individual audit entries during bulk operations
@@ -365,6 +355,19 @@ class HardwareController extends Controller
             $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
         } finally {
             request()->attributes->remove('suppress_audit');
+        }
+
+        // #1362: write the bulk_delete audit only AFTER the delete succeeds. The
+        // batch delete bypasses Eloquent events, so this is the only place the trail
+        // can be reconciled with the outcome; writing it first left phantom rows on a
+        // failed delete. #927: `changes` is a field-level diff list [{field,old,new}].
+        if ($count > 0) {
+            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                $hardwares,
+                'bulk_delete',
+                null,
+                fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw),
+            );
         }
 
         app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
