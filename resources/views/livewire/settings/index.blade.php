@@ -202,37 +202,10 @@ return new class extends Component
             <x-button label="تست نما" icon="o-eye" wire:click="testCompactMode" class="btn-outline btn-sm" spinner />
             <x-button label="ذخیره تنظیمات" icon="o-check" wire:click="save" class="btn-primary" spinner />
         </div>
+
+        {{-- Inert data for the theme-poles listener in page-scripts.js.
+             Must sit INSIDE the root element: Livewire drops trailing
+             content after the root close tag (proven: the block placed
+             after </div> never reached the DOM). --}}
+        <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="theme-families-data">@json(['light' => \App\Support\ThemeFamilies::LIGHT, 'dark' => \App\Support\ThemeFamilies::DARK])</script>
     </div>
-
-@script
-<script>
-    // #1224 scenario 1: after saving new poles, an applied theme that is not
-    // one of them would make the toggle's icon and first click undefined
-    // (MaryUI only knows the two poles). Migrate it to the same-family pole.
-    $wire.on('theme-poles-saved', ({ lightTheme, darkTheme }) => {
-        const root = document.documentElement;
-        const current = root.getAttribute('data-theme')
-            || (localStorage.getItem('mary-theme') || '').replaceAll('"', '');
-
-        const lightThemes = @js(\App\Support\ThemeFamilies::LIGHT);
-        const darkThemes = @js(\App\Support\ThemeFamilies::DARK);
-        const poles = [lightTheme, darkTheme];
-
-        if (!current || poles.includes(current)) {
-            return;
-        }
-
-        const target = lightThemes.includes(current)
-            ? lightTheme
-            : (darkThemes.includes(current) ? darkTheme : lightTheme);
-
-        root.setAttribute('data-theme', target);
-        // MaryUI's $persist stores JSON, including the quotes — the head script
-        // and the storage listener both strip them with replaceAll('"').
-        localStorage.setItem('mary-theme', JSON.stringify(target));
-
-        // Keep the layout blobs and the HR charts in sync without a reload.
-        window.dispatchEvent(new CustomEvent('theme-changed', { detail: target, bubbles: true }));
-    });
-</script>
-@endscript

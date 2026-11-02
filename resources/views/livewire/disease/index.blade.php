@@ -708,39 +708,3 @@ return new class extends Component
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
 @endassets
 
-@script
-<script>
-    // Same page-scoped binding as `disease.create` (issue #1182): every date
-    // input carries `data-jdp-model` naming its Livewire property.
-    const initDiseaseCaseIndexJdp = () => {
-        if (typeof jalaliDatepicker === 'undefined') {
-            return;
-        }
-
-        jalaliDatepicker.startWatch({
-            time: false,
-            hasSecond: false,
-            format: 'YYYY/MM/DD',
-            separatorChars: { date: '/', between: ' ', time: ':' },
-        });
-
-        document.querySelectorAll('[data-jdp][data-jdp-model]').forEach(input => {
-            if (!input.dataset.jdpBound) {
-                input.dataset.jdpBound = '1';
-                input.addEventListener('jdp:change', event => {
-                    $wire.set(input.dataset.jdpModel, event.target.value);
-                });
-            }
-
-            const value = $wire.get(input.dataset.jdpModel);
-            if (value !== undefined && value !== null) {
-                input.value = value;
-            }
-        });
-    };
-
-    initDiseaseCaseIndexJdp();
-    document.addEventListener('livewire:navigated', initDiseaseCaseIndexJdp);
-    Livewire.hook('morphed', () => initDiseaseCaseIndexJdp());
-</script>
-@endscript

@@ -98,15 +98,29 @@ return new class extends Component
 
             <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
                 @foreach ($this->regions as $region)
-                    <x-toggle
-                        label="{{ $region['name'] }}"
-                        wire:key="region-{{ $region['id'] }}"
-                        x-on:click="toggleGeoJson({{ $region['id'] }})"
-                    />
+                    {{-- #1352 CSP-compat: the toggle is wrapped in a
+                         [data-region-id] div — resources/js/map-pages.js
+                         delegates clicks from #unitMenu. An x-on:click
+                         calling the toggleGeoJson global cannot run under
+                         the CSP build, and the toggle's root element does
+                         not forward a data attribute. --}}
+                    <div data-region-id="{{ $region['id'] }}">
+                        <x-toggle
+                            label="{{ $region['name'] }}"
+                            wire:key="region-{{ $region['id'] }}"
+                        />
+                    </div>
                 @endforeach
             </div>
         </div>
     </x-card>
+
+    {{-- #1352 CSP-compat: the region geometry is published in an inert JSON
+         block (never executes, no CSP exception needed) for
+         resources/js/map-pages.js. The old @script block cannot execute
+         under the CSP build at all — the parser rejects the IIFE wrapper
+         itself — so the geometry must not be handed to JS via @script. --}}
+    <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="county-regions-data">@json($this->regions)</script>
 </div>
 
 @assets
@@ -132,50 +146,3 @@ return new class extends Component
          evaluates new head assets before the navigation completes. --}}
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
 @endassets
-
-@script
-<script>
-    var geojsonLayers = {};
-    var allregions = {{ Js::from($this->regions) }};
-
-    // Issue #028 — attach to the live map the store owns. Calling onReady()
-    // (instead of waiting for a `window.map` a previous page may still own)
-    // also removes any script-ordering race with maps.map.
-    window.Alpine.store('map').onReady(function (map) {
-        window.toggleGeoJson = function(regionId) {
-            const region = allregions.find(r => r.id === regionId);
-            if (!region || !region.geojson) {
-                console.warn('No geojson found for region:', regionId);
-                return;
-            }
-
-            if (geojsonLayers[regionId]) {
-                map.removeLayer(geojsonLayers[regionId]);
-                delete geojsonLayers[regionId];
-            } else {
-                try {
-                    let data = typeof region.geojson === 'string'
-                        ? JSON.parse(region.geojson)
-                        : region.geojson;
-
-                    let newLayer = L.geoJSON(data, {
-                        style: {
-                            color: "orange",
-                            weight: 2,
-                            opacity: 0.8,
-                            fillOpacity: 0.1,
-                        }
-                    }).addTo(map);
-
-                    geojsonLayers[regionId] = newLayer;
-
-                    // Zoom to layer bounds
-                    map.fitBounds(newLayer.getBounds());
-                } catch (e) {
-                    console.error('Error parsing GeoJSON:', e);
-                }
-            }
-        };
-    });
-</script>
-@endscript

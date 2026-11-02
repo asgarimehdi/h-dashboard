@@ -385,10 +385,10 @@ test('#849: user table, unit picker and person search are unit-scoped', function
     // is not in the DOM at all. A scope assertion against a closed modal would
     // be vacuously true, so the modal is opened first and BOTH the positive and
     // the negative assertion run against the tree that is really rendered.
-    // (`flat:` is the picker's inline unit JSON — the only thing that emits it.
+    // (`picker-flat-data` is the picker's inert JSON block — the only thing that emits it.
     // A bare `toggle(` is NOT a safe probe: MaryUI's theme switcher renders
     // `@click="toggle()"` too.)
-    $component->assertDontSeeHtml('flat:')
+    $component->assertDontSeeHtml('picker-flat-data')
         ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
 
     // Unit picker (#1040: `allUnits`/`allUnitsTree` are `#[Computed]` now and
@@ -475,18 +475,18 @@ test('#1171: the unit tree renders only while the modal is open', function () {
         ->assertOk();
 
     // Closed: no tree node and no inline unit JSON either.
-    $component->assertDontSeeHtml('flat:')
+    $component->assertDontSeeHtml('picker-flat-data')
         ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
 
     // Open: the tree arrives, and it is scoped exactly as before.
     $component->set('unitModal', true)
-        ->assertSeeHtml('flat:')
+        ->assertSeeHtml('picker-flat-data')
         ->assertSeeHtml('@click="toggle('.$f['unitA']->id.')"')
         ->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
 
     // Closed again: the tree is dropped again.
     $component->set('unitModal', false)
-        ->assertDontSeeHtml('flat:')
+        ->assertDontSeeHtml('picker-flat-data')
         ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
 });
 
@@ -528,7 +528,7 @@ test('#1171: a 200-unit tree does not reach the closed page', function () {
 
     // Structurally: the closed page holds no tree and no inline unit JSON.
     $component->set('unitModal', false)
-        ->assertDontSeeHtml('flat:');
+        ->assertDontSeeHtml('picker-flat-data');
 });
 
 /**

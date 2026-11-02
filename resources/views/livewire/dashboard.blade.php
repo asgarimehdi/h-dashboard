@@ -370,18 +370,8 @@ return new class extends Component
 }; ?>
 <div
     @if($refreshInterval > 0)
-        x-data="{
-            interval: {{ $refreshInterval * 1000 }},
-            timer: null,
-            init() {
-                if (this.interval > 0) {
-                    this.timer = setInterval(() => $wire.refreshStats(), this.interval);
-                }
-            },
-            destroy() {
-                if (this.timer) { clearInterval(this.timer); this.timer = null; }
-            },
-        }"
+        x-data="dashboardRefresh"
+        data-interval="{{ $refreshInterval * 1000 }}"
     @endif
 >
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
@@ -471,6 +461,11 @@ return new class extends Component
             description="تعداد تیکت‌های بسته شده"
         />
     </div>
+
+    {{-- Inert data for the ticket charts in dashboard-charts.js.
+         Must sit INSIDE the root element: Livewire drops trailing
+         content after the root close tag (chunk-5 lesson). --}}
+    <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="dashboard-chart-data">@json(['trend' => $this->ticketChartData, 'status' => $this->ticketStatusData])</script>
 
     {{-- نمودارهای تعاملی --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
@@ -675,138 +670,4 @@ return new class extends Component
         #linked-progress-fill { width: {{ $linkedPercent }}%; }
     </style>
 
-    @script
-    <script>
-        const statusLabels = { 'created': 'جدید', 'accepted': 'پذیرفته شده', 'completed': 'تکمیل شده', 'forwarded': 'ارجاع شده', 'rejected': 'رد شده' };
-
-        // #1224: series colours follow the active theme family. daisyUI's
-        // `color-scheme` is the same light/dark signal App\Support\ThemeFamilies
-        // uses, so a newly enabled theme needs no entry here. The old hard-coded
-        // sky-500 line measured 2.74:1 on the light poles (below the 3:1
-        // non-text minimum); the pairs below clear 4:1 on every enabled theme.
-        const CHART_COLORS = {
-            light: {
-                trend: '#0284c7',
-                created: '#2563eb',
-                accepted: '#b45309',
-                completed: '#15803d',
-                forwarded: '#6d28d9',
-                rejected: '#b91c1c',
-                text: '#3f3f46'
-            },
-            dark: {
-                trend: '#38bdf8',
-                created: '#60a5fa',
-                accepted: '#fbbf24',
-                completed: '#4ade80',
-                forwarded: '#a78bfa',
-                rejected: '#f87171',
-                text: '#d4d4d8'
-            }
-        };
-
-        function chartPalette() {
-            const style = getComputedStyle(document.documentElement);
-            const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
-
-            return {
-                ...CHART_COLORS[scheme],
-                text: style.getPropertyValue('--color-base-content').trim() || CHART_COLORS[scheme].text
-            };
-        }
-
-        function waitForHighcharts(callback, attempts = 0) {
-            if (typeof window.Highcharts !== 'undefined') {
-                callback();
-                return;
-            }
-            if (attempts > 100) {
-                console.error('Highcharts failed to load');
-                return;
-            }
-            setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-        }
-
-        function destroyChart(container) {
-            if (!container || typeof Highcharts === 'undefined') {
-                return;
-            }
-            const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-            if (existing) {
-                existing.destroy();
-            }
-            container.innerHTML = '';
-        }
-
-        function renderTicketCharts() {
-            waitForHighcharts(() => {
-                const trendData = @json($this->ticketChartData);
-                const statusData = @json($this->ticketStatusData);
-                const palette = chartPalette();
-
-                const trendContainer = document.getElementById('ticketTrendChart');
-                const statusContainer = document.getElementById('ticketStatusChart');
-
-                if (!trendContainer || !statusContainer) {
-                    return;
-                }
-
-                destroyChart(trendContainer);
-                destroyChart(statusContainer);
-
-                Highcharts.chart(trendContainer, {
-                    chart: { type: 'areaspline', backgroundColor: 'transparent' },
-                    title: { text: null },
-                    credits: { enabled: false },
-                    xAxis: {
-                        categories: trendData.categories.length ? trendData.categories : ['بدون داده'],
-                        labels: { style: { fontSize: '10px' } }
-                    },
-                    yAxis: { title: { text: 'تعداد' }, min: 0, allowDecimals: false },
-                    plotOptions: {
-                        areaspline: {
-                            fillColor: {
-                                linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-                                stops: [[0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')], [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')]]
-                            },
-                            lineColor: palette.trend,
-                            marker: { enabled: false }
-                        }
-                    },
-                    series: [{ name: 'تیکت‌ها', data: trendData.series.length ? trendData.series : [0], color: palette.trend }],
-                    legend: { enabled: false }
-                });
-
-                const pieData = Object.keys(statusData).length
-                    ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: palette[key] || '#6b7280' }))
-                    : [{ name: 'بدون داده', y: 0, color: '#6b7280' }];
-
-                Highcharts.chart(statusContainer, {
-                    chart: { type: 'pie', backgroundColor: 'transparent' },
-                    title: { text: null },
-                    credits: { enabled: false },
-                    plotOptions: {
-                        pie: {
-                            innerSize: '55%',
-                            dataLabels: {
-                                enabled: true,
-                                format: '<b>{point.name}</b>: {point.y}',
-                                // Highcharts defaults to #333 with a white halo —
-                                // unreadable on the dark poles.
-                                style: { color: palette.text, textOutline: 'none' }
-                            }
-                        }
-                    },
-                    series: [{ name: 'تیکت‌ها', data: pieData }]
-                });
-            });
-        }
-
-        // Runs on full page load and Livewire wire:navigate
-        renderTicketCharts();
-
-        // maryUI x-theme-toggle dispatches this bubbling CustomEvent on switch.
-        window.addEventListener('theme-changed', renderTicketCharts);
-    </script>
-    @endscript
 </div>

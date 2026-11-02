@@ -86,15 +86,25 @@ class MapsMapLivewireTest extends TestCase
         $html = $component->html();
 
         $this->assertStringContainsString('x-data', $html, 'x-data lifecycle missing');
-        $this->assertStringContainsString('$store.map', $html, 'map store wiring missing');
         $this->assertStringContainsString('x-ref="map"', $html, 'map container ref missing');
-        $this->assertStringContainsString('invalidateSize', $html, 'invalidateSize missing');
-        $this->assertStringContainsString('resize', $html, 'resize listener missing');
-        $this->assertStringContainsString('styleModule', $html, 'style asset block missing');
 
         // The instance must be owned by the store, never by a window global:
         // a stale window.map survived SPA navigation and broke every host page.
         $this->assertStringNotContainsString('window.map = map', $html, 'window.map assignment must be gone');
+
+        // Issue #1352: the store wiring, the resize handling and the style
+        // asset block moved out of the template into resources/js/map-host.js
+        // (Alpine.data('mapHost')) and the view's @assets block. The pins
+        // follow the code; the contract (store-owned instance, resize kept,
+        // dark-mode style asset present) is unchanged.
+        $host = (string) file_get_contents(resource_path('js/map-host.js'));
+        $this->assertStringContainsString('$store.map', $host, 'map store wiring missing');
+        $this->assertStringContainsString('invalidateSize', $host, 'invalidateSize missing');
+        $this->assertStringContainsString('resize', $host, 'resize listener missing');
+
+        $view = (string) file_get_contents(resource_path('views/livewire/maps/map.blade.php'));
+        $this->assertStringContainsString('@assets', $view, 'style asset block missing');
+        $this->assertStringContainsString('.dark .leaflet-layer', $view, 'dark-mode map style missing');
     }
 
     // ==================== SPA re-render safe ====================

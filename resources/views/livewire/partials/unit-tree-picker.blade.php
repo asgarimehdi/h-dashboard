@@ -23,7 +23,7 @@
                 $out .= '<span class="w-5"></span>';
             }
             $nameEsc = htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8');
-            $out .= '<span class="text-sm flex-1 truncate rounded" :class="(isSelected('.$uid.') ? \'font-bold text-primary\' : \'\') + (isMatched('.$uid.') ? \'bg-warning/25\' : \'\')">'.$nameEsc.'</span>';
+            $out .= '<span class="text-sm flex-1 truncate rounded" :class="rowClass('.$uid.')">'.$nameEsc.'</span>';
             if ($type) {
                 $typeEsc = htmlspecialchars($type, ENT_QUOTES, 'UTF-8');
                 $out .= '<span class="text-[10px] opacity-50">'.$typeEsc.'</span>';
@@ -50,84 +50,22 @@
 @endphp
 
 <div
-    x-data="{
-        search: '',
-        open: {{ $alwaysOpen ? 'true' : 'false' }},
-        expanded: {},
-        matchedIds: [],
-        autoExpanded: [],
-        flat: {{ \Illuminate\Support\Js::from(collect($units)->map(fn ($u) => ['id' => $u['id'], 'name' => $u['name'], 'parent_id' => $u['parent_id'] ?? null])->values()->all()) }},
-        multiple: {{ ($multiple ?? false) ? 'true' : 'false' }},
-        alwaysOpen: {{ $alwaysOpen ? 'true' : 'false' }},
-        selected: $wire.{{ $modelEsc }},
-        isSelected(id) {
-            if (this.multiple) return Array.isArray(this.selected) && this.selected.map(Number).includes(Number(id));
-            return String(this.selected) === String(id);
-        },
-        toggle(id) {
-            if (this.multiple) {
-                const arr = Array.isArray(this.selected) ? this.selected : [];
-                const idx = arr.findIndex((x) => String(x) === String(id));
-                if (idx === -1) this.$wire.{{ $modelEsc }} = [...arr, Number(id)];
-                else this.$wire.{{ $modelEsc }} = arr.filter((x) => String(x) !== String(id));
-            } else {
-                this.$wire.{{ $modelEsc }} = Number(id);
-                if (!this.alwaysOpen) this.open = false;
-            }
-        },
-        toggleExpanded(id) {
-            this.expanded[id] = !this.expanded[id];
-        },
-        remove(id) {
-            if (this.multiple) {
-                this.$wire.{{ $modelEsc }} = (this.selected ?? []).filter((x) => String(x) !== String(id));
-            } else {
-                this.$wire.{{ $modelEsc }} = null;
-                if (!this.alwaysOpen) this.open = false;
-            }
-        },
-        nameOf(id) { return this.flat.find((u) => String(u.id) === String(id))?.name ?? '-'; },
-        isMatched(id) {
-            return this.matchedIds.some((m) => String(m) === String(id));
-        },
-        parentOf(id) {
-            const u = this.flat.find((x) => String(x.id) === String(id));
-            return u && u.parent_id !== null && u.parent_id !== undefined ? u.parent_id : null;
-        },
-        expandForSearch() {
-            // Undo auto-expansions from the previous query so manual state is preserved
-            this.autoExpanded.forEach((id) => { delete this.expanded[id]; });
-            this.autoExpanded = [];
-            this.matchedIds = [];
-            const s = this.search.trim().toLowerCase();
-            if (!s) return;
-            const matches = this.flat.filter((u) => u.name.toLowerCase().includes(s)).map((u) => u.id);
-            this.matchedIds = matches;
-            // Expand every ancestor chain of each match so results are actually visible
-            const ancestors = new Set();
-            matches.forEach((id) => {
-                const guard = new Set([Number(id)]);
-                let cur = id;
-                while (true) {
-                    const p = this.parentOf(cur);
-                    if (p === null || guard.has(Number(p))) break;
-                    guard.add(Number(p));
-                    ancestors.add(p);
-                    cur = p;
-                }
-            });
-            ancestors.forEach((id) => {
-                this.expanded[id] = true;
-                this.autoExpanded.push(id);
-            });
-        }
-    }"
-    x-init="$watch('search', () => expandForSearch()); $watch('$wire.{{ $modelEsc }}', value => selected = value)"
-    @if(! $alwaysOpen)
+    x-data="unitTreePicker"
+    data-model="{{ $modelEsc }}"
+    data-multiple="{{ ($multiple ?? false) ? 'true' : 'false' }}"
+    data-always-open="{{ $alwaysOpen ? 'true' : 'false' }}"
+    data-open="{{ $alwaysOpen ? 'true' : 'false' }}"
+        @if(! $alwaysOpen)
         @click.outside="open = false"
     @endif
     class="relative"
 >
+    {{-- #1352 CSP-compat: the flat unit list rides in an inert JSON block
+         scoped to this picker instance (the partial can be included twice
+         on one page, so no id). Js::from/@json in a data attribute does
+         not survive: Js::from emits a JSON.parse() expression, and @json
+         in an attribute is cut at the first raw quote. --}}
+    <script type="application/json" nonce="{{ Vite::cspNonce() }}" class="picker-flat-data">@json(collect($units)->map(fn ($u) => ['id' => $u['id'], 'name' => $u['name'], 'parent_id' => $u['parent_id'] ?? null])->values()->all())</script>
     @if(! empty($label))
         <label class="text-sm font-medium block mb-1">{{ $label }}</label>
     @endif
