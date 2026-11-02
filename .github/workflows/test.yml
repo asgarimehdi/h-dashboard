@@ -515,7 +515,11 @@ jobs:
       - name: Copy .env for the app (CI services)
         run: |
           cp .env.example .env
-          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=<redacted>; s/^REDIS_PASSWORD=<redacted>' .env
+          # CI services: postgres/postgres/secret + passwordless redis.
+          # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
+          # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
+          # ever printing the values.
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
           php artisan key:generate --force
 
       - name: Build .env.e2e (secret-safe)
@@ -535,7 +539,7 @@ jobs:
         run: grep -q '^APP_LOCALE=fa' .env.e2e
 
       - name: Verify the isolated e2e database exists
-        run: PGPASSWORD=<redacted> psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
 
       - name: Cache Playwright chromium (issue #1067)
         uses: actions/cache@v5
