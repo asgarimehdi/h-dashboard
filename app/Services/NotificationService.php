@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Notification;
 use App\Models\Notification as NotificationModel;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -70,8 +69,13 @@ class NotificationService
         // Issue #393: invalidate the bell component cache for the recipient.
         // Deliberately unconditional (also on the deduped path) and deliberately
         // not made non-fatal: a failed invalidation throws, and the retry hits
-        // the existing row again and repairs the stale cache.
-        Cache::forget("notifications:user:{$userId}");
+        // the existing row again and repairs the stale cache. Issue #1348:
+        // the invalidation is a version bump on the `notifications` namespace
+        // the bell reads, not a key forget — and on `tools_stats`, whose
+        // counts include this row.
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $cache->increment('notifications');
+        $cache->increment('tools_stats');
 
         return $notification;
     }
@@ -109,10 +113,13 @@ class NotificationService
         // defer the Redis round-trips behind afterCommit so they never run while
         // a transaction is open (and are dropped on rollback). Outside a
         // transaction afterCommit runs immediately, keeping the old behaviour.
-        DB::afterCommit(function () use ($userIds) {
-            foreach ($userIds as $userId) {
-                Cache::forget("notifications:user:{$userId}");
-            }
+        // Issue #1348: one version bump covers every recipient — the
+        // `notifications` namespace is global, not per-user — and the
+        // `tools_stats` counts move with these rows too.
+        DB::afterCommit(function () {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('notifications');
+            $cache->increment('tools_stats');
         });
     }
 }

@@ -1,13 +1,15 @@
 <?php
 
-use Livewire\Component;
 use App\Models\Notification;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
+use Livewire\Component;
 
 return new class extends Component
 {
     public $notifications = [];
+
     public int $unreadCount = 0;
+
     public bool $showDropdown = false;
 
     public function mount(): void
@@ -18,9 +20,10 @@ return new class extends Component
     public function loadNotifications(): void
     {
         $userId = auth()->id();
-        $cacheKey = 'notifications:user:' . $userId;
 
-        $cached = Cache::remember($cacheKey, 60, function () use ($userId) {
+        // Issue #1348: versioned read — 60 seconds is 1 minute. The scope
+        // hash is the user id: the payload is fully determined by it.
+        $cached = app(CacheInvalidationServiceInterface::class)->remember('notifications', (string) $userId, function () use ($userId) {
             $notifications = Notification::where('user_id', $userId)
                 ->select('id', 'type', 'title', 'body', 'icon', 'color', 'url', 'is_read', 'created_at')
                 ->latest()
@@ -32,7 +35,7 @@ return new class extends Component
                 ->count();
 
             return ['notifications' => $notifications, 'unreadCount' => $unreadCount];
-        });
+        }, 1);
 
         $this->notifications = $cached['notifications'];
         $this->unreadCount = $cached['unreadCount'];
@@ -40,7 +43,7 @@ return new class extends Component
 
     public function toggleDropdown(): void
     {
-        $this->showDropdown = !$this->showDropdown;
+        $this->showDropdown = ! $this->showDropdown;
     }
 
     public function markAsRead($id): void
@@ -48,7 +51,9 @@ return new class extends Component
         Notification::where('id', $id)
             ->where('user_id', auth()->id())
             ->update(['is_read' => true, 'read_at' => now()]);
-        Cache::forget('notifications:user:' . auth()->id());
+        // Query-builder update fires no model event — bump explicitly
+        // (issue #1348).
+        app(CacheInvalidationServiceInterface::class)->increment('notifications');
         $this->loadNotifications();
     }
 
@@ -57,10 +62,11 @@ return new class extends Component
         Notification::where('user_id', auth()->id())
             ->where('is_read', false)
             ->update(['is_read' => true, 'read_at' => now()]);
-        Cache::forget('notifications:user:' . auth()->id());
+        // Query-builder update fires no model event — bump explicitly
+        // (issue #1348).
+        app(CacheInvalidationServiceInterface::class)->increment('notifications');
         $this->loadNotifications();
     }
-
 }; ?>
 
 <div class="relative" wire:click.away="$set('showDropdown', false)">
