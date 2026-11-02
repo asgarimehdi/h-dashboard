@@ -218,6 +218,49 @@ class HardwareAuditObserverTest extends TestCase
         ]);
     }
 
+    public function test_deleting_listener_abort_writes_no_deleted_audit(): void
+    {
+        // Mechanism A (issue #1345): a `deleting` listener returning false
+        // aborts the delete. The audit row must not be written before the
+        // delete succeeds — the `deleting` hook wrote it first, leaving a
+        // phantom row for a delete that never happened.
+        $countDeleted = fn (): int => HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'deleted')
+            ->count();
+        $before = $countDeleted();
+
+        Hardware::deleting(fn () => false);
+
+        $this->assertFalse($this->hardware->delete());
+        $this->assertSame($before, $countDeleted());
+        $this->assertNotNull(Hardware::find($this->hardware->id));
+    }
+
+    public function test_failed_delete_exception_writes_no_deleted_audit(): void
+    {
+        // Mechanism B (issue #1345): a throwing `deleting` listener aborts
+        // the delete before `performDeleteOnModel`. This test proves the
+        // ORDER of writes (no audit row before the delete completes), not a
+        // real database-constraint failure — the listener fires first.
+        $countDeleted = fn (): int => HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'deleted')
+            ->count();
+        $before = $countDeleted();
+
+        Hardware::deleting(fn () => throw new RuntimeException('delete aborted'));
+
+        $thrown = false;
+        try {
+            $this->hardware->delete();
+        } catch (RuntimeException) {
+            $thrown = true;
+        }
+
+        $this->assertTrue($thrown, 'the deleting listener should abort the delete');
+        $this->assertSame($before, $countDeleted());
+        $this->assertNotNull(Hardware::find($this->hardware->id));
+    }
+
     public function test_force_deleted_records_force_deleted_audit(): void
     {
         // The Hardware model has no SoftDeletes, so forceDeleted is not auto-fired

@@ -75,8 +75,16 @@ class HardwareAuditObserver
 
     /**
      * Handle the Hardware "deleted" event.
+     *
+     * `deleted` fires from `performDeleteOnModel()` after the DELETE has
+     * succeeded. Using `deleting` wrote the audit row before the DELETE,
+     * leaving a phantom row whenever the delete was aborted or failed.
+     *
+     * Known trade-off (R1): if the audit INSERT itself fails after a
+     * successful DELETE, the hardware is gone without an audit row. Fixing
+     * that needs a transaction at every call site — out of scope for #1345.
      */
-    public function deleting(Hardware $hardware): void
+    public function deleted(Hardware $hardware): void
     {
         if ($this->shouldSuppress()) {
             return;
