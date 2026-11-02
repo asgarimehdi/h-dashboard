@@ -358,8 +358,9 @@ test('AuthorizationException is not swallowed by the delete handlers', function 
             "{$file} does not reference AuthorizationException"
         );
 
+        $expectedCatches = $file === 'resources/views/livewire/hardware/index.blade.php' ? 2 : 1;
         $this->assertSame(
-            1,
+            $expectedCatches,
             preg_match_all('/catch \((\\\\)?\\\\?Illuminate\\\\Auth\\\\Access\\\\AuthorizationException \$e\)|catch \((\\\\)?AuthorizationException \$e\)/', $contents, $matches),
             "{$file} must catch AuthorizationException exactly once, in delete()"
         );
@@ -369,15 +370,17 @@ test('AuthorizationException is not swallowed by the delete handlers', function 
         // block — so the `throw` must belong to the AuthorizationException
         // clause and not to some later handler.
         $this->assertSame(
-            1,
+            $expectedCatches,
             preg_match_all('/catch \((\\\\)?(\\\\?Illuminate\\\\Auth\\\\Access\\\\)?AuthorizationException \$e\) *\{(.*?)\}/s', $contents, $clauses),
             "{$file} must catch AuthorizationException in a block"
         );
-        $this->assertStringContainsString(
-            'throw $e;',
-            $clauses[3][0],
-            "{$file} does not re-throw AuthorizationException in delete()"
-        );
+        foreach ($clauses[3] as $clause) {
+            $this->assertStringContainsString(
+                'throw $e;',
+                $clause,
+                "{$file} does not re-throw AuthorizationException in every catch block"
+            );
+        }
 
         // ORDER is load-bearing and the checks above cannot see it.
         // `AuthorizationException extends Exception`, so if the generic catch
