@@ -115,8 +115,9 @@ class Hardware extends Model
         $cache = app(CacheInvalidationServiceInterface::class);
         $cache->increment('hardware_stats');
         $cache->increment('gis'); // Hardware changes affect GIS data
-        $cache->increment('maps'); // Hardware positions affect the map
-        $cache->increment('dashboard'); // Hardware counts feed the dashboard
+        // #1365: `dashboard` is deliberately NOT bumped — the dashboard renders no
+        // hardware data, so a bump only throws away its 2–5-minute cached segments.
+        // `maps` is likewise not bumped: hardware map data is served from `gis`.
     }
 
     public function person(): BelongsTo

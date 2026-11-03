@@ -441,13 +441,15 @@ class HardwareImportTest extends TestCase
         @unlink($file);
     }
 
-    public function test_import_bumps_each_hardware_cache_namespace_exactly_once(): void
+    public function test_import_bumps_hardware_cache_namespaces_exactly_once(): void
     {
         $data = $this->createTestData();
 
-        $namespaces = ['hardware_stats', 'gis', 'maps', 'dashboard'];
+        // #1365: hardware writes bump only `hardware_stats` and `gis`.
+        $namespaces = ['hardware_stats', 'gis'];
+        $untouched = ['maps', 'dashboard'];
         $before = [];
-        foreach ($namespaces as $namespace) {
+        foreach ([...$namespaces, ...$untouched] as $namespace) {
             $before[$namespace] = Cache::get($namespace.'_version', 0);
         }
 
@@ -472,6 +474,14 @@ class HardwareImportTest extends TestCase
                 $before[$namespace] + 1,
                 Cache::get($namespace.'_version', 0),
                 "{$namespace} must bump exactly once, not once per row."
+            );
+        }
+
+        foreach ($untouched as $namespace) {
+            $this->assertSame(
+                $before[$namespace],
+                Cache::get($namespace.'_version', 0),
+                "{$namespace} must not be bumped by hardware imports (#1365)."
             );
         }
 

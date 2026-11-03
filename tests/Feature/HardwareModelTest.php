@@ -143,22 +143,24 @@ class HardwareModelTest extends TestCase
         $this->assertGreaterThan(0, Cache::get('gis_version'));
     }
 
-    public function test_flush_stats_cache_increments_maps_version(): void
+    public function test_flush_stats_cache_does_not_touch_maps_version(): void
     {
-        Cache::put('maps_version', 0);
+        // Non-zero seed: distinguishes "not bumped" from "key never written".
+        Cache::put('maps_version', 5);
 
         Hardware::flushStatsCache();
 
-        $this->assertGreaterThan(0, Cache::get('maps_version'));
+        $this->assertSame(5, (int) Cache::get('maps_version'));
     }
 
-    public function test_flush_stats_cache_increments_dashboard_version(): void
+    public function test_flush_stats_cache_does_not_touch_dashboard_version(): void
     {
-        Cache::put('dashboard_version', 0);
+        // Non-zero seed: distinguishes "not bumped" from "key never written".
+        Cache::put('dashboard_version', 5);
 
         Hardware::flushStatsCache();
 
-        $this->assertGreaterThan(0, Cache::get('dashboard_version'));
+        $this->assertSame(5, (int) Cache::get('dashboard_version'));
     }
 
     public function test_hardware_save_triggers_stats_cache_flush(): void
@@ -177,6 +179,28 @@ class HardwareModelTest extends TestCase
         $hardware->delete();
 
         $this->assertGreaterThan(0, Cache::get('hardware_stats_version'));
+    }
+
+    public function test_hardware_update_does_not_touch_dashboard_version(): void
+    {
+        // Seed AFTER creation: the factory's Person write bumps `dashboard` too.
+        $hardware = $this->createHardware();
+        Cache::put('dashboard_version', 5);
+
+        $hardware->update(['comments' => 'after-seed']);
+
+        $this->assertSame(5, (int) Cache::get('dashboard_version'));
+    }
+
+    public function test_hardware_delete_does_not_touch_dashboard_version(): void
+    {
+        // Seed AFTER creation: the factory's Person write bumps `dashboard` too.
+        $hardware = $this->createHardware();
+        Cache::put('dashboard_version', 5);
+
+        $hardware->delete();
+
+        $this->assertSame(5, (int) Cache::get('dashboard_version'));
     }
 
     // --- Fillable attributes ---
