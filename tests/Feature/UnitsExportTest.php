@@ -574,6 +574,41 @@ class UnitsExportTest extends TestCase
         }
     }
 
+    public function test_export_order_terminates_when_a_cycle_is_reachable_from_a_root(): void
+    {
+        // In-memory only, like the root-less A<->B test above: a real cyclic
+        // row is a hazard for every walk over the tree, so the export's guard
+        // is proved without writing that corruption into the database.
+        //
+        // A single-valued parent_id graph cannot reach a cycle from a root,
+        // but `orderDepthFirst()` builds its children map keyed by id, so a
+        // collection carrying a repeated id under a second parent is the
+        // shape that re-entered walk() forever: R -> A -> B -> A.
+        $root = new Unit(['name' => 'ریشه']);
+        $root->id = 10;
+        $root->parent_id = null;
+
+        $a = new Unit(['name' => 'الف']);
+        $a->id = 20;
+        $a->parent_id = 10;
+
+        $b = new Unit(['name' => 'ب']);
+        $b->id = 30;
+        $b->parent_id = 20;
+
+        $repeated = new Unit(['name' => 'الف']);
+        $repeated->id = 20;
+        $repeated->parent_id = 30; // closes the cycle back onto A
+
+        $ordered = $this->invokeOrderDepthFirst(collect([$root, $a, $b, $repeated]));
+
+        $this->assertSame(
+            [10, 20, 30],
+            $ordered->pluck('id')->all(),
+            'A root-reachable cycle must terminate with each unit once, in root-first order.'
+        );
+    }
+
     /**
      * @param  Collection<int, Unit>  $units
      * @param  array<int, array{name: string, parent_id: int|null}>  $map

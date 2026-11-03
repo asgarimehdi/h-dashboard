@@ -151,14 +151,34 @@ class UnitsExportController extends Controller
     protected function walk(array $roots, array $children): Collection
     {
         $ordered = collect();
-        $stack = $roots;
+
+        // #1367: a cycle reachable from a root re-entered this stack forever.
+        // The guard reuses the UnitAncestry contract: each branch carries its
+        // own visited path and depth, and a repeated node or the MAX_DEPTH cap
+        // cuts that branch silently — nothing is thrown and nothing is marked.
+        // Acyclic ordering and child order are unchanged, and the orphan
+        // append in orderDepthFirst() still covers root-less cycles.
+        /** @var list<array{0: Unit, 1: array<int, true>, 2: int}> $stack */
+        $stack = array_map(fn (Unit $root): array => [$root, [$root->id => true], 0], $roots);
 
         while ($stack !== []) {
-            $unit = array_shift($stack);
+            /** @var array{0: Unit, 1: array<int, true>, 2: int} $entry */
+            $entry = array_shift($stack);
+            [$unit, $visited, $depth] = $entry;
             $ordered->push($unit);
 
+            if ($depth + 1 >= UnitAncestry::MAX_DEPTH) {
+                continue;
+            }
+
             foreach (array_reverse($children[$unit->id] ?? []) as $child) {
-                array_unshift($stack, $child);
+                if (isset($visited[$child->id])) {
+                    continue;
+                }
+
+                $nextVisited = $visited;
+                $nextVisited[$child->id] = true;
+                array_unshift($stack, [$child, $nextVisited, $depth + 1]);
             }
         }
 
