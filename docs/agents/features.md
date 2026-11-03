@@ -91,19 +91,25 @@ On corrupt `parent_id` (self-parent, A↔B cycle) the units export now names eac
 `"A"`/depth 0 and `"B > A"`/1, where the old walk repeated the unit (`"A > A"`, `"A > B > A"`).
 Acyclic paths are unchanged; do not "restore" the repeat.
 
-**Parked (downward) sites — current contract, deliberately untouched:**
+**Downward (descendant) walks — current contract:**
 
-- `OrgChartController::orgChart()` — root = parent null **or out of scope**, no visited set. A cycle
-  wholly inside the scope has no root, so it is **silently dropped** from the tree.
-- `OrgChartController::loadSubtree()` — the flat `Unit::subtree()` CTE is safe (`UNION` dedupes),
-  but the recursive `format()` can recurse forever when the requested unit sits **inside** a cycle.
-  Traced from code, not reproduced; parked for the gatekeeper's follow-up issue.
-- `UnitsExportController::orderDepthFirst()`/`walk()` — **no visited set**. Only root-less cycles
-  are saved, by the orphan-append; a cycle reachable from a root re-enters `walk` forever. `walk`
-  is not dead code (the ordering uses it), and must never be described as cycle-safe.
-- `unit.tree`'s `collectAllIds()` — global visited set, descendant direction, safe.
-- `Unit::buildTree()` — descendant CTE; `$attachChildren` can recurse forever when a root id is
-  inside a cycle. Parked with the rest.
+- `OrgChartController::orgChart()` — #1350 guard: per-path visited set seeded with each root, the
+  `UnitAncestry::MAX_DEPTH` (100) cap, and a silent cut. A repeated edge is dropped from `children`;
+  nothing is thrown and no marker is emitted, so acyclic payloads and child order are unchanged.
+- `OrgChartController::loadSubtree()` — same #1350 guard: the requested unit is seeded as visited and
+  `format()` drops repeats and depth-cap hits. The flat `Unit::subtree()` CTE is independently safe
+  (`UNION` dedupes). Acyclic payload/order unchanged.
+- `Unit::buildTree()` — #1350 guard on `$attachChildren` (per-path visited, `MAX_DEPTH`, silent cut),
+  pinned by `tests/Feature/UnitModelTest.php`.
+- `UnitsExportController::orderDepthFirst()`/`walk()` — the one remaining downward hole. Root-less
+  cycles are saved by the orphan-append at `orderDepthFirst():136-143` (`reject` the walk's `seen`
+  set, then ascending id), which is unchanged; cycles reachable from a root are guarded by this fix
+  (#1367): each stack branch carries its own visited path and depth, so the walk terminates, a
+  repeated node is dropped, and acyclic ordering is identical. `walk` is not dead code (the ordering
+  uses it).
+- `unit.tree`'s `collectAllIds()` — the protected Livewire method at
+  `resources/views/livewire/unit/tree.blade.php:330-355` (not a `UnitTreeService` method; no
+  `UnitTreeService::collectAllIds()` exists), with a global visited set; descendant direction, safe.
 
 ### Batched child loading (issue #722)
 
