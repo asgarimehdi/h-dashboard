@@ -293,10 +293,10 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    # #1352 (D8): the 60-minute diagnostic cap proved the cause was
-    # deterministic map failures x retries, not duration — the cap
-    # returns to 35 for landing.
-    timeout-minutes: 35
+    # #1352: the cap is 45 per the owner's 2026-11-03 decision — attempt 2
+    # of the rebased head was cancelled at the 35-minute cap (35:26), while
+    # attempt 1 finished green inside 35. Supersedes D8's return-to-35.
+    timeout-minutes: 45
     # Non-blocking ramp (issue #867): the suite has never run in CI, so the
     # first executions will surface real latent failures (the inert
     # waitForLivewire() wait, the self-skipping unit-map-boundary spec).
