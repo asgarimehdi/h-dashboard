@@ -164,7 +164,7 @@ return new class extends Component
 
 <div class="p-6" dir="rtl">
     @php $chart = $this->chartPayload(); @endphp
-    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+    {{-- Issue #1042: server-rendered chart aggregates. resources/js/report-charts.js reads
         this (morphed on every render) instead of firing a second method request
         per filter change. --}}
     <div id="todosChartData" class="hidden" data-chart='@json(['byStatus' => $chart['byStatus'], 'byUnit' => $chart['byUnit']])'></div>
@@ -321,88 +321,3 @@ return new class extends Component
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
 @endassets
 
-@script
-<script>
-    function waitForHighcharts(callback, attempts = 0) {
-        if (typeof window.Highcharts !== 'undefined') { callback(); return; }
-        if (attempts > 100) { console.error('Highcharts failed to load'); return; }
-        setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-    }
-
-    function destroyChart(id) {
-        const container = document.getElementById(id);
-        if (!container || typeof Highcharts === 'undefined') return;
-        const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-        if (existing) existing.destroy();
-        container.innerHTML = '';
-    }
-
-    function render() {
-        waitForHighcharts(() => {
-            // Issue #1042: read the server-rendered aggregates above — the
-            // inline @php already ran the payload for this render, so a second
-            // method request would just re-run it.
-            const el = document.getElementById('todosChartData');
-            const data = el ? JSON.parse(el.dataset.chart) : {};
-
-            // Status pie
-            destroyChart('statusChart');
-            const statusLabels = Object.keys(data.byStatus || {});
-            const statusValues = Object.values(data.byStatus || {});
-            const colors = ['#10b981', '#f59e0b', '#ef4444'];
-            if (statusLabels.length > 0) {
-                Highcharts.chart('statusChart', {
-                    chart: { type: 'pie' },
-                    title: { text: '' },
-                    series: [{ name: 'تعداد', data: statusLabels.map((l, i) => ({ name: l, y: statusValues[i], color: colors[i] })) }],
-                    credits: { enabled: false },
-                    plotOptions: { pie: { dataLabels: { enabled: true, format: '{point.name}: {y}' } } }
-                });
-            }
-
-            // Unit pie
-            destroyChart('unitChart');
-            const unitLabels = Object.keys(data.byUnit || {});
-            const unitValues = Object.values(data.byUnit || {});
-            const pieColors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
-            if (unitLabels.length > 0) {
-                Highcharts.chart('unitChart', {
-                    chart: { type: 'pie' },
-                    title: { text: '' },
-                    series: [{ name: 'تعداد', data: unitLabels.map((l, i) => ({ name: l, y: unitValues[i], color: pieColors[i % pieColors.length] })) }],
-                    credits: { enabled: false },
-                    plotOptions: { pie: { dataLabels: { enabled: true, format: '{point.name}: {y}' } } }
-                });
-            }
-        });
-    }
-
-    render();
-    // Issue #1042: the unit/status selects re-render through the DOM payload
-    // (morphed on each server render) instead of a second `chartPayload()`
-    // request. The date watchers stay because the Jalali datepicker writes the
-    // properties via `$wire.set`.
-    $wire.$watch('dateFrom', () => render());
-    $wire.$watch('dateTo', () => render());
-    Livewire.hook('morphed', ({ component }) => {
-        if (component.id === $wire.$id) render();
-    });
-
-    const initJdp = () => {
-        if (typeof jalaliDatepicker === 'undefined') return;
-        jalaliDatepicker.startWatch({ time: false, hasSecond: false, format: 'YYYY/MM/DD', separatorChars: { date: '/', between: ' ', time: ':' } });
-        const fromInput = document.getElementById('todo_date_from');
-        const toInput = document.getElementById('todo_date_to');
-        if (fromInput && !fromInput.dataset.jdpBound) {
-            fromInput.dataset.jdpBound = '1';
-            fromInput.addEventListener('jdp:change', e => $wire.set('dateFrom', e.target.value));
-        }
-        if (toInput && !toInput.dataset.jdpBound) {
-            toInput.dataset.jdpBound = '1';
-            toInput.addEventListener('jdp:change', e => $wire.set('dateTo', e.target.value));
-        }
-    };
-    initJdp();
-    document.addEventListener('livewire:navigated', initJdp);
-</script>
-@endscript

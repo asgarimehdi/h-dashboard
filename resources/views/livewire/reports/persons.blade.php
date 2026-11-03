@@ -252,8 +252,7 @@ return new class extends Component
     {{-- جدول --}}
     <x-card shadow>
         <h3 class="font-bold mb-4">لیست پرسنل</h3>
-        {{-- Issue #858: server-rendered chart aggregates. The @script below
-            reads this (morphed on every render) instead of firing a second
+        {{-- Issue #858: server-rendered chart aggregates. resources/js/report-charts.js reads this (morphed on every render) instead of firing a second
             method request per filter change. --}}
         <div id="personsChartData" class="hidden" data-chart='@json(['byTahsil' => $chart['byTahsil'], 'bySemat' => $chart['bySemat'], 'byEstekhdam' => $chart['byEstekhdam']])'></div>
         <div class="overflow-x-auto">
@@ -308,60 +307,3 @@ return new class extends Component
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
 @endassets
 
-@script
-<script>
-    function waitForHighcharts(callback, attempts = 0) {
-        if (typeof window.Highcharts !== 'undefined') { callback(); return; }
-        if (attempts > 100) { console.error('Highcharts failed to load'); return; }
-        setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-    }
-
-    function destroyChart(id) {
-        const container = document.getElementById(id);
-        if (!container || typeof Highcharts === 'undefined') return;
-        const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-        if (existing) existing.destroy();
-        container.innerHTML = '';
-    }
-
-    function renderPie(containerId, data) {
-        destroyChart(containerId);
-        const labels = Object.keys(data || {});
-        const values = Object.values(data || {});
-        if (labels.length > 0) {
-            const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6','#a855f7'];
-            Highcharts.chart(containerId, {
-                chart: { type: 'pie' },
-                title: { text: '' },
-                series: [{ name: 'تعداد', data: labels.map((l, i) => ({ name: l, y: values[i], color: colors[i % colors.length] })) }],
-                credits: { enabled: false },
-                plotOptions: { pie: { dataLabels: { enabled: true, format: '{point.name}: {y}' } } }
-            });
-        }
-    }
-
-    function render() {
-        waitForHighcharts(() => {
-            // Issue #858: read the server-rendered aggregates above — the
-            // inline @php already ran the payload for this render, so a
-            // second method request would just re-run it.
-            const el = document.getElementById('personsChartData');
-            const data = el ? JSON.parse(el.dataset.chart) : {};
-            renderPie('tahsilChart', data.byTahsil);
-            renderPie('sematChart', data.bySemat);
-            renderPie('estekhdamChart', data.byEstekhdam);
-        });
-    }
-
-    render();
-    // $watch fires when the reactive store patches (before Livewire morphs
-    // the fresh data-chart into the DOM), so re-render again after morph.
-    $wire.$watch('selectedUnitId', () => render());
-    $wire.$watch('selectedTahsilId', () => render());
-    $wire.$watch('selectedSematId', () => render());
-    $wire.$watch('selectedEstekhdamId', () => render());
-    Livewire.hook('morphed', ({ component }) => {
-        if (component.id === $wire.$id) render();
-    });
-</script>
-@endscript

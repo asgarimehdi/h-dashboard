@@ -273,9 +273,19 @@ class PageScriptSplittingTest extends TestCase
      * so both run AFTER the `@stack('scripts')` block and the rendered document
      * order says nothing about them. What pins the runtime order is the asset
      * sitting above the init in the same file — which is what this checks.
+     *
+     * Issue #1352: four of the six pages moved their init into
+     * resources/js/page-scripts.js, whose startJdpWatch() guards with
+     * `typeof jalaliDatepicker === 'undefined'` (no throw when the asset has
+     * not landed yet) and runs once per Livewire init/navigate. For those
+     * pages the order hazard is structurally gone, so the check pins the
+     * guard + the call in the module instead of the in-view order. Pages
+     * whose init stayed in the view keep the original same-file order check.
      */
     public function test_jalalidatepicker_is_loaded_before_the_init_that_uses_it(): void
     {
+        $module = (string) file_get_contents(resource_path('js/page-scripts.js'));
+
         foreach ($this->datePages() as $url => [, $view]) {
             $contents = (string) file_get_contents(resource_path('views/'.$view));
 
@@ -283,11 +293,28 @@ class PageScriptSplittingTest extends TestCase
             $initAt = strpos($contents, 'jalaliDatepicker.startWatch');
 
             $this->assertNotFalse($assetAt, "{$url}: the view never loads ".self::JALALI_DATEPICKER.'.');
-            $this->assertNotFalse($initAt, "{$url}: the view never calls jalaliDatepicker.startWatch().");
-            $this->assertLessThan(
-                $initAt,
-                $assetAt,
-                "{$url}: the jalalidatepicker asset must sit above the init in the view.",
+
+            if ($initAt !== false) {
+                $this->assertLessThan(
+                    $initAt,
+                    $assetAt,
+                    "{$url}: the jalalidatepicker asset must sit above the init in the view.",
+                );
+
+                continue;
+            }
+
+            // The init moved to the shared module: the guard is what keeps a
+            // late asset from throwing, and the call must still exist once.
+            $this->assertStringContainsString(
+                'typeof jalaliDatepicker',
+                $module,
+                "{$url}: the moved init must guard on the asset global.",
+            );
+            $this->assertSame(
+                1,
+                substr_count($module, 'jalaliDatepicker.startWatch('),
+                "{$url}: the moved init must call startWatch exactly once per run.",
             );
         }
     }

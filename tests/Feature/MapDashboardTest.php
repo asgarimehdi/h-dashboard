@@ -396,14 +396,16 @@ class MapDashboardTest extends TestCase
 
         $component->assertSee('mapDashboard');
         $component->assertSeeLivewire('maps.map');
-        $component->assertSee('onReady');
         $component->assertSee('toggleLayer');
         $component->assertSee('setFilter');
 
-        // loadLayers/renderGeoJSON live in the component's @script payload
-        // (wire:effects), which assertSee strips — assert on the raw html.
-        $html = $component->html();
-        $this->assertStringContainsString('loadLayers', $html);
-        $this->assertStringContainsString('renderGeoJSON', $html);
+        // Issue #1352: the layer/filter logic lives in
+        // resources/js/map-dashboard.js (Alpine.data('mapDashboard')) now —
+        // the template carries x-data plus data attributes only. The pins
+        // for the store handshake and the layer builders follow the module.
+        $module = (string) file_get_contents(resource_path('js/map-dashboard.js'));
+        $this->assertStringContainsString('onReady', $module);
+        $this->assertStringContainsString('loadLayers', $module);
+        $this->assertStringContainsString('renderGeoJSON', $module);
     }
 }

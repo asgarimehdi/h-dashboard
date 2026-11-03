@@ -66,7 +66,7 @@ return new class extends Component
 
         $query = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->when($this->showOnlyNoBoundary !== null, function ($q) {
                 if ($this->showOnlyNoBoundary == '1') {
                     $q->whereNull('boundary_id');
@@ -83,22 +83,22 @@ return new class extends Component
             ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
             ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
             ->whereIn('units.id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn ($q) => $q->whereNull('units.boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn ($q) => $q->whereNotNull('units.boundary_id'))
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
             ->groupBy('type_name')
             ->pluck('count', 'type_name')
             ->toArray();
 
         $noBoundary = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->whereNull('boundary_id')
             ->count();
 
         $withBoundary = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
             ->whereNotNull('boundary_id')
             ->count();
 
@@ -109,19 +109,19 @@ return new class extends Component
         $unitsPage = Unit::query()
             ->with('unitType:id,name', 'region:id,name')
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn ($q) => $q->whereNull('units.boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn ($q) => $q->whereNotNull('units.boundary_id'))
+            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
             ->orderBy('name')
             ->paginate($this->perPage);
 
         $units = $unitsPage->getCollection()
-            ->map(fn ($u) => [
+            ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'type' => $u->unitType?->name ?? '—',
                 'region' => $u->region?->name ?? '—',
-                'has_boundary' => ! is_null($u->boundary_id),
+                'has_boundary' => !is_null($u->boundary_id),
             ])
             ->all();
 
@@ -140,7 +140,7 @@ return new class extends Component
 
 <div class="p-6" dir="rtl">
     @php $chart = $this->chartPayload(); @endphp
-    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+    {{-- Issue #1042: server-rendered chart aggregates. resources/js/report-charts.js reads
         this (morphed on every render) instead of firing a second method request
         per filter change. --}}
     <div id="unitsChartData" class="hidden" data-chart='@json(['byType' => $chart['byType']])'></div>
@@ -260,62 +260,3 @@ return new class extends Component
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
 @endassets
 
-@script
-<script>
-    function waitForHighcharts(callback, attempts = 0) {
-        if (typeof window.Highcharts !== 'undefined') {
-            callback();
-            return;
-        }
-        if (attempts > 100) {
-            console.error('Highcharts failed to load');
-            return;
-        }
-        setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-    }
-
-    function destroyChart(id) {
-        const container = document.getElementById(id);
-        if (!container || typeof Highcharts === 'undefined') return;
-        const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-        if (existing) existing.destroy();
-        container.innerHTML = '';
-    }
-
-    function render() {
-        waitForHighcharts(() => {
-            // Issue #1042: read the server-rendered aggregates above — the
-            // inline @php already ran the payload for this render, so a second
-            // method request would just re-run it.
-            const el = document.getElementById('unitsChartData');
-            const data = el ? JSON.parse(el.dataset.chart) : {};
-            destroyChart('typeChart');
-            const labels = Object.keys(data.byType || {});
-            const values = Object.values(data.byType || {});
-            if (labels.length > 0) {
-                const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
-                Highcharts.chart('typeChart', {
-                    chart: { type: 'pie' },
-                    title: { text: '' },
-                    series: [{
-                        name: 'تعداد',
-                        data: labels.map((l, i) => ({ name: l, y: values[i], color: colors[i % colors.length] }))
-                    }],
-                    credits: { enabled: false },
-                    plotOptions: {
-                        pie: { dataLabels: { enabled: true, format: '{point.name}: {y}' } }
-                    }
-                });
-            }
-        });
-    }
-
-    render();
-    // Issue #1042: a filter change now re-renders through the DOM payload
-    // (morphed on every server render) instead of a second `chartPayload()`
-    // request, so re-render after morph rather than on each $watch.
-    Livewire.hook('morphed', ({ component }) => {
-        if (component.id === $wire.$id) render();
-    });
-</script>
-@endscript

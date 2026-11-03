@@ -46,38 +46,20 @@ return new class extends Component {
     Alpine fires destroy() before init() on SPA navigation, so release() tears
     the old map down before use() builds the new one. The container id and class
     are unchanged — the E2E map specs assert on #map and on clientWidth > 400.
+
+    The init()/destroy() logic lives in resources/js/map-host.js as an
+    Alpine.data() component (#1352 CSP-compat): the CSP-safe Alpine build
+    rejects method shorthand and function expressions in x-data object
+    literals, so the logic cannot live in the template. The template carries
+    only x-data="mapHost" plus data attributes for the server config.
 --}}
 <div>
-    <div x-data="{
-            init() {
-                $store.map.configure({
-                    view: {{ $setview }},
-                    zoom: {{ $zoom }},
-                    tileUrl: '{{ $map_tile_template }}',
-                });
-
-                // Keep the raw instance in a closure local — assigning it to
-                // this.map would put it back through Alpine's reactivity
-                // (see the note in map-store.js).
-                const map = $store.map.use(this.$refs.map);
-
-                if (map) {
-                    // Issue (map width): Leaflet captures dimensions at
-                    // construction, so a page/layout still settling (SPA
-                    // navigation, fonts, hidden containers) can lock in a
-                    // smaller width and render half-page.
-                    this._invalidate = () => map.invalidateSize();
-                    setTimeout(this._invalidate, 100);
-                    window.addEventListener('resize', this._invalidate);
-                }
-            },
-            destroy() {
-                if (this._invalidate) {
-                    window.removeEventListener('resize', this._invalidate);
-                }
-                $store.map.release(this.$refs.map);
-            },
-        }">
+    <div
+        x-data="mapHost"
+        data-view="{{ $setview }}"
+        data-zoom="{{ $zoom }}"
+        data-tile-url="{{ $map_tile_template }}"
+    >
         <div wire:ignore>
             <div id="map" x-ref="map" class="h-[80lvh] rounded"></div>
         </div>

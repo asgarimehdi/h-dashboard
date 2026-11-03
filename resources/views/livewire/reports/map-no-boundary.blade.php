@@ -48,7 +48,7 @@ return new class extends Component
         return $this->getUnitsWithoutBoundary()
             ->whereNotNull('lat')
             ->whereNotNull('lng')
-            ->map(fn ($u) => [
+            ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'lat' => (float) $u->lat,
@@ -62,14 +62,14 @@ return new class extends Component
     public function getAllUnitsProperty()
     {
         return $this->getUnitsWithoutBoundary()
-            ->map(fn ($u) => [
+            ->map(fn($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'lat' => $u->lat ? (float) $u->lat : null,
                 'lng' => $u->lng ? (float) $u->lng : null,
                 'type' => $u->unitType?->name ?? '—',
                 'region' => $u->region?->name ?? '—',
-                'has_coords' => ! is_null($u->lat) && ! is_null($u->lng),
+                'has_coords' => !is_null($u->lat) && !is_null($u->lng),
             ])
             ->toArray();
     }
@@ -133,6 +133,11 @@ return new class extends Component
         </div>
     </x-card>
     @endif
+
+    {{-- #1352 CSP-compat: the unit list is published in an inert JSON block
+         for resources/js/map-pages.js. The old @script block cannot execute
+         under the CSP build at all. --}}
+    <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="no-boundary-data">@json($this->allUnits)</script>
 </div>
 
 @assets
@@ -146,40 +151,3 @@ return new class extends Component
          evaluates new head assets before the navigation completes. --}}
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
 @endassets
-
-@script
-<script>
-    var markers = {};
-
-    // Issue #028 — bind to the live map the store owns instead of waiting for a
-    // `window.map` a previous page may still own.
-    window.Alpine.store('map').onReady(function (map) {
-        var noBoundaryUnits = {{ Js::from($this->allUnits) }};
-
-        noBoundaryUnits.forEach(function(unit) {
-            if (unit.has_coords && unit.lat && unit.lng) {
-                var marker = L.circleMarker([unit.lat, unit.lng], {
-                    radius: 8,
-                    fillColor: '#ef4444',
-                    color: '#fff',
-                    weight: 2,
-                    fillOpacity: 0.9
-                }).addTo(map);
-
-                marker.bindPopup('<strong>' + unit.name + '</strong><br>' + unit.type + '<br>' + unit.region);
-
-                if (!markers[unit.id]) {
-                    markers[unit.id] = [];
-                }
-                markers[unit.id].push(marker);
-            }
-        });
-
-        // Fit map to markers
-        var allLatLngs = Object.values(markers).flat().map(function(m) { return m.getLatLng(); });
-        if (allLatLngs.length > 0) {
-            map.fitBounds(allLatLngs, { padding: [30, 30] });
-        }
-    });
-</script>
-@endscript

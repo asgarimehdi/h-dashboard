@@ -9,12 +9,8 @@
 @endphp
 
 <div
-    x-data="{ helpSection: '{{ $helpSection }}' }"
-    x-init="
-        document.addEventListener('help-open', (e) => {
-            if (e.detail?.section) { helpSection = e.detail.section; }
-        });
-    "
+    x-data="helpModal"
+    data-section="{{ $helpSection }}"
 >
     <x-modal wire:model="{{ $wireModel }}" title="راهنما" separator>
         @if ($helpModalOpen)
@@ -83,7 +79,7 @@
                     <div><x-help-content:hr-dashboard /></div>
                 </template>
 
-                <div x-show="!['dashboard','hardware','hardware-import','persons-import','personnel','units','tickets','todos','reports','maps','settings','roles','permissions','users','activity-log','networks','wireless','tools','search','profile','hr-dashboard'].includes(helpSection)"
+                <div x-show="noHelpContent()"
                      class="text-center py-8 text-base-content/50">
                     <x-icon name="o-information-circle" class="w-12 h-12 mx-auto mb-4" />
                     <p class="text-lg font-medium">راهنمای این بخش در دسترس نیست</p>

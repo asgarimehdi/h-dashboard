@@ -26,6 +26,12 @@ use App\Services\ZabbixService;
 use App\Support\VendorRouteGuard;
 use App\View\Components\AccessibleMenuItem;
 use App\View\Components\AccessibleTable;
+use App\View\Components\CspChoicesOffline;
+use App\View\Components\CspFile;
+use App\View\Components\CspMain;
+use App\View\Components\CspMenuSub;
+use App\View\Components\CspModal;
+use App\View\Components\CspTable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Router;
@@ -90,8 +96,18 @@ class AppServiceProvider extends ServiceProvider
         // Deploys must run `view:clear` before `view:cache` — Blade keys a
         // compiled view on the source file's mtime, not on the alias table, so
         // a cache carried over from before this change keeps Mary's markup.
-        Blade::component('table', AccessibleTable::class);
+        Blade::component('table', CspTable::class);
         Blade::component('menu-item', AccessibleMenuItem::class);
+
+        // CSP-compat overrides (#1352): app-owned MaryUI components whose
+        // x-data literals the CSP-safe Alpine build cannot evaluate.
+        // CspTable replaces the AccessibleTable alias and inherits its
+        // ariaSort() — see each class docblock for the exact diff.
+        Blade::component('main', CspMain::class);
+        Blade::component('menu-sub', CspMenuSub::class);
+        Blade::component('modal', CspModal::class);
+        Blade::component('choices-offline', CspChoicesOffline::class);
+        Blade::component('file', CspFile::class);
 
         // Register help-content components dynamically with colon syntax
         $helpContents = [

@@ -197,8 +197,12 @@ class SettingsThemeTest extends TestCase
         $user->save();
         $this->actingAs($user);
 
+        // Issue #1352: the toggle is an Alpine.data component fed by data
+        // attributes (the old inline ternary cannot run under the CSP
+        // build). The saved poles must still reach the toggle element.
         Livewire::test('settings.index')
-            ->assertSeeHtml("matches ? 'luxury' : 'cupcake'");
+            ->assertSeeHtml('data-light-theme="cupcake"')
+            ->assertSeeHtml('data-dark-theme="luxury"');
     }
 
     public function test_the_header_toggle_falls_back_to_the_default_poles(): void
@@ -206,7 +210,9 @@ class SettingsThemeTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit();
         $this->actingAs($user);
 
+        // Issue #1352: same data-attribute surface as above, default poles.
         Livewire::test('settings.index')
-            ->assertSeeHtml("matches ? 'dark' : 'fantasy'");
+            ->assertSeeHtml('data-light-theme="fantasy"')
+            ->assertSeeHtml('data-dark-theme="dark"');
     }
 }

@@ -319,7 +319,7 @@ return new class extends Component
         <div class="relative">
             <livewire:maps.map wire:key="unit-page-map" />
 
-            <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu">
+            <div class="unit-menu bg-base-100/60 rounded-l-box" id="unitMenu" data-unit-toggles>
                 {{-- Search --}}
                 <div class="mb-3">
                     <input
@@ -332,12 +332,13 @@ return new class extends Component
 
                 {{-- Unit list --}}
                 @foreach ($units as $unit)
-                    <x-toggle
-                        right
-                        label="{{ $unit['name'] }}"
-                        wire:key="unit-{{ $unit['id'] }}"
-                        x-on:change="$event.target.checked ? toggleGeoJsonOn({{ $unit['id'] }}) : toggleGeoJsonOff({{ $unit['id'] }})"
-                    />
+                    <div data-unit-id="{{ $unit['id'] }}">
+                        <x-toggle
+                            right
+                            label="{{ $unit['name'] }}"
+                            wire:key="unit-{{ $unit['id'] }}"
+                        />
+                    </div>
                 @endforeach
 
                 @if (!empty($selectedRegions) && (!empty($selectedCenterTypes) || !empty($selectedSubTypes)) && empty($units))
@@ -374,116 +375,3 @@ return new class extends Component
          evaluates new head assets before the navigation completes. --}}
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
 @endassets
-
-@script
-<script>
-    var geojsonLayers = {};
-    // #1188: the geometry is NOT published here. This script runs once, on the
-    // first render, when no filter is picked yet — so this was always an empty
-    // array. The unit rows (with their geometry) arrive with the
-    // `units-updated` event and are handed to `allUnits` by its listener below.
-    var allUnits = [];
-    var countyLayers = {};
-    var activeToggles = {};
-
-    function clearAllLayers(map) {
-        Object.keys(geojsonLayers).forEach(function(id) {
-            map.removeLayer(geojsonLayers[id]);
-            delete geojsonLayers[id];
-        });
-    }
-
-    function clearCountyLayers(map) {
-        Object.keys(countyLayers).forEach(function(id) {
-            map.removeLayer(countyLayers[id]);
-            delete countyLayers[id];
-        });
-    }
-
-    function showCountyBoundaries(map, counties) {
-        clearCountyLayers(map);
-        counties.forEach(function(c) {
-            if (c.geojson && !countyLayers[c.id]) {
-                try {
-                    let data = typeof c.geojson === 'string' ? JSON.parse(c.geojson) : c.geojson;
-                    countyLayers[c.id] = L.geoJSON(data, {
-                        style: { color: "#3b82f6", weight: 2, opacity: 0.7, fillOpacity: 0.05 }
-                    }).addTo(map);
-                } catch (e) {
-                    console.error('Error adding county boundary:', e);
-                }
-            }
-        });
-    }
-
-    function showUnits(map, units) {
-        units.forEach(function(unit) {
-            if (unit.geojson && !geojsonLayers[unit.id]) {
-                try {
-                    let data = typeof unit.geojson === 'string' ? JSON.parse(unit.geojson) : unit.geojson;
-                    geojsonLayers[unit.id] = L.geoJSON(data, {
-                        style: { color: "orange", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
-                    }).addTo(map);
-                    activeToggles[unit.id] = true;
-                } catch (e) {
-                    console.error('Error adding GeoJSON:', e);
-                }
-            }
-        });
-    }
-
-    function syncToggleStates() {
-        document.querySelectorAll('[wire\\:key^="unit-"]').forEach(function(el) {
-            var input = el.querySelector('input[type="checkbox"]');
-            if (!input) return;
-            var key = el.getAttribute('wire:key');
-            var unitId = parseInt(key.replace('unit-', ''));
-            if (activeToggles[unitId]) {
-                input.checked = true;
-            }
-        });
-    }
-
-    // Issue #028 — bind to the live map the store owns. onReady() replaces the
-    // old `waitForMap`, whose "window.map exists" check a previous page's
-    // detached instance satisfied, and it also removes the script-ordering race
-    // with maps.map.
-    window.Alpine.store('map').onReady(function (map) {
-        window.toggleGeoJsonOn = function(unitId) {
-            const unit = allUnits.find(u => u.id === unitId);
-            if (!unit || !unit.geojson || geojsonLayers[unitId]) return;
-            activeToggles[unitId] = true;
-            try {
-                let data = typeof unit.geojson === 'string' ? JSON.parse(unit.geojson) : unit.geojson;
-                geojsonLayers[unitId] = L.geoJSON(data, {
-                    style: { color: "orange", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
-                }).addTo(map);
-                if (geojsonLayers[unitId].getBounds) {
-                    map.fitBounds(geojsonLayers[unitId].getBounds().pad(0.1));
-                }
-            } catch (e) {
-                console.error('Error parsing GeoJSON:', e);
-            }
-        };
-
-        window.toggleGeoJsonOff = function(unitId) {
-            delete activeToggles[unitId];
-            if (geojsonLayers[unitId]) {
-                map.removeLayer(geojsonLayers[unitId]);
-                delete geojsonLayers[unitId];
-            }
-        };
-
-        Livewire.on('county-boundaries-loaded', function({ counties }) {
-            showCountyBoundaries(map, counties);
-        });
-
-        Livewire.on('units-updated', function({ units }) {
-            clearAllLayers(map);
-            allUnits = units;
-            showUnits(map, allUnits);
-            requestAnimationFrame(syncToggleStates);
-        });
-    });
-</script>
-@endscript

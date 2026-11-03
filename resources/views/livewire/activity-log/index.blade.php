@@ -336,38 +336,3 @@ return new class extends Component
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
 @endassets
 
-@script
-<script>
-    const initActivityLogJdp = () => {
-        if (typeof jalaliDatepicker === 'undefined') {
-            return;
-        }
-
-        jalaliDatepicker.startWatch({
-            time: false,
-            hasSecond: false,
-            format: 'YYYY/MM/DD',
-            separatorChars: { date: '/', between: ' ', time: ':' },
-        });
-
-        const fromInput = document.getElementById('activity_log_date_from');
-        const toInput = document.getElementById('activity_log_date_to');
-
-        if (fromInput && !fromInput.dataset.jdpBound) {
-            fromInput.dataset.jdpBound = '1';
-            fromInput.addEventListener('jdp:change', e => {
-                $wire.set('dateFrom', e.target.value);
-            });
-        }
-        if (toInput && !toInput.dataset.jdpBound) {
-            toInput.dataset.jdpBound = '1';
-            toInput.addEventListener('jdp:change', e => {
-                $wire.set('dateTo', e.target.value);
-            });
-        }
-    };
-
-    initActivityLogJdp();
-    document.addEventListener('livewire:navigated', initActivityLogJdp);
-</script>
-@endscript

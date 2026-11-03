@@ -569,23 +569,28 @@ test('calendar eventContent does not return the raw html injection path', functi
 });
 
 test('calendar eventContent builds nodes with textContent instead of html', function () {
-    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+    // Issue #1352: the calendar init moved out of the Blade `@script` block
+    // into resources/js/todo-calendar.js. The shape assertions read the
+    // module verbatim; the Blade keeps the negative assertions below.
+    $module = file_get_contents(resource_path('js/todo-calendar.js'));
 
     // domNodes + textContent is the shape that cannot resurrect the bug: there
     // is no string left to escape correctly, so the class of defect cannot recur.
-    expect($view)->toContain('domNodes:');
-    expect($view)->toContain('textContent');
-    expect($view)->toContain('document.createElement');
+    expect($module)->toContain('domNodes:');
+    expect($module)->toContain('textContent');
+    expect($module)->toContain('document.createElement');
 });
 
 test('calendar completion toggle does not rely on an inline onclick handler', function () {
     $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+    $module = file_get_contents(resource_path('js/todo-calendar.js'));
 
     // The icon markup is static and carries no user data, but the inline
     // handler is exactly what the report-only CSP's 'unsafe-inline' allows.
     // Replacing it with addEventListener costs nothing while the lines are open.
+    // Issue #1352: the listener lives in the calendar module now.
     expect($view)->not->toContain('onclick=');
-    expect($view)->toContain('addEventListener');
+    expect($module)->toContain('addEventListener');
 });
 
 /**
@@ -773,15 +778,19 @@ test('calendar cache key is range-scoped and never falls back to all', function 
 });
 
 /**
- * The refetch guard lives in the Blade `datesSet` handler, so it is asserted
- * structurally here and smoke-tested in a browser in the PR (no JS test
- * harness exists in this suite). A bare unconditional call is exactly what
- * #1169 removed.
+ * The refetch guard lives in the `datesSet` handler in
+ * resources/js/todo-calendar.js (issue #1352 moved it out of the Blade
+ * `@script` block), so it is asserted structurally here and smoke-tested
+ * in a browser in the PR (no JS test harness exists in this suite). A bare
+ * unconditional call is exactly what #1169 removed.
  */
 test('calendar datesSet guards the refetch with the seeded window', function () {
-    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+    // Issue #1352: the handler moved out of the Blade `@script` block into
+    // resources/js/todo-calendar.js (same `datesSet: function (info)` shape,
+    // 4-space factory indent instead of the Blade's 12).
+    $module = file_get_contents(resource_path('js/todo-calendar.js'));
 
-    preg_match('/datesSet:\s*function\s*\(info\)\s*\{(?<body>.*?)\n\s{12}\},/s', $view, $matches);
+    preg_match('/datesSet:\s*function\s*\(info\)\s*\{(?<body>.*?)\n\s{4}\},/s', $module, $matches);
 
     expect($matches)->not->toBeEmpty();
 

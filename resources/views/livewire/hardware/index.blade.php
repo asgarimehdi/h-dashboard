@@ -713,10 +713,3 @@ return new class extends Component
     </x-card>
 </div>
 
-@script
-<script>
-    Livewire.on('download-export', (url) => {
-        window.location.href = url;
-    });
-</script>
-@endscript

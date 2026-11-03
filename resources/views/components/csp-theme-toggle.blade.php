@@ -13,30 +13,11 @@
 <div>
     <label
         for="{{ $uuid }}"
-        x-data="{
-            theme: $persist(window.matchMedia('(prefers-color-scheme: dark)').matches ? '{{ $darkTheme }}' : '{{ $lightTheme }}').as('mary-theme'),
-            class: $persist(window.matchMedia('(prefers-color-scheme: dark)').matches ? '{{ $darkClass }}' : '{{ $lightClass }}').as('mary-class'),
-            init() {
-                if (this.theme == '{{ $darkTheme }}') {
-                    this.$refs.sun.classList.add('swap-off');
-                    this.$refs.sun.classList.remove('swap-on');
-                    this.$refs.moon.classList.add('swap-on');
-                    this.$refs.moon.classList.remove('swap-off');
-                }
-                this.setToggle()
-            },
-            setToggle() {
-                document.documentElement.setAttribute('data-theme', this.theme)
-                document.documentElement.setAttribute('class', this.class)
-                this.$dispatch('theme-changed', this.theme)
-                this.$dispatch('theme-changed-class', this.class)
-            },
-            toggle() {
-                this.theme = this.theme == '{{ $lightTheme }}' ? '{{ $darkTheme }}' : '{{ $lightTheme }}'
-                this.class = this.theme == '{{ $lightTheme }}' ? '{{ $lightClass }}' : '{{ $darkClass }}'
-                this.setToggle()
-            }
-        }"
+        x-data="themeToggle"
+        data-light-theme="{{ $lightTheme }}"
+        data-dark-theme="{{ $darkTheme }}"
+        data-light-class="{{ $lightClass }}"
+        data-dark-class="{{ $darkClass }}"
         @mary-toggle-theme.window="toggle()"
         {{ $attributes->class("swap swap-rotate") }}
     >
