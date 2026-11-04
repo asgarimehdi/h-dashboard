@@ -162,6 +162,30 @@ class HrOrgChartPageTest extends TestCase
             ->assertSee('یک واحد را انتخاب کنید');
     }
 
+    public function test_org_chart_rejects_out_of_scope_unit_selection(): void
+    {
+        // Gate C2: $component must be assigned before its public props are
+        // read — the expert sketch discarded the result and left $component
+        // undefined.
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // $otherUnit lives on a sibling branch of the unit tree, outside the
+        // caller's scope. selectUnit re-checks `in_array($unitId, $accessibleIds)`
+        // (org-chart.blade.php:73); a missing entry aborts the handler before
+        // Query 1 and leaves selectedUnit null.
+        $otherUnit = Unit::create(['name' => 'واحد دیگر']);
+
+        $component = Livewire::test('hr.org-chart')
+            ->assertStatus(200)
+            ->call('selectUnit', $otherUnit->id);
+
+        // The placeholder text is rendered HTML, NOT the property value:
+        // selectedUnit is a Unit model or null. An out-of-scope selection sets
+        // neither.
+        $this->assertNull($component->get('selectedUnit'));
+    }
+
     public function test_empty_badge_on_zero_persons(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
