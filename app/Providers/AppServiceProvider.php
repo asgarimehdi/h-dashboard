@@ -190,7 +190,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Issue #1245: every disease-domain write invalidates the map layer.
         // Bulk `DB::table()` updates fire no model event — documented in
-        // docs/agents/features.md as the known limit of this hook.
+        // references/api-endpoints.md as the known limit of this hook.
         $diseaseNamespaces = ['disease_maps'];
 
         /** @var list<class-string<Model>> $diseaseModels */
