@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -459,5 +460,57 @@ class UnitTreeLivewireTest extends TestCase
         $expanded = array_map('intval', $component->get('expanded'));
         $this->assertContains($unit->id, $expanded);
         $this->assertCount(61, $expanded);
+    }
+
+    /**
+     * Gate C3: the caller's helper unit is U1 itself — nothing extra is synced
+     * to `user_units`, so the scope is exactly [U1]. Proving that first keeps
+     * the leak assertions below pinned to a real scope instead of an
+     * assumption.
+     *
+     * Gate C1: `loadExpandedChildren()` fills `lazyChildren` for EVERY expanded
+     * id (childless units as empty collections), so `lazyChildren` is NOT
+     * `[]` — the pin is that no key of U2 or its descendants appears in it.
+     */
+    public function test_expand_all_under_a_narrow_scope_does_not_leak_sibling_or_descendants(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        $scoped = array_map('intval', app(AccessService::class)->accessibleUnitIds());
+        $this->assertCount(1, $scoped);
+        $this->assertSame((int) $unit->id, $scoped[0]);
+
+        // U2 is a separate ROOT, so it is out of scope, and it owns a
+        // descendant of its own. expandAll() walks the scope-rooted
+        // rootUnits and intersects every childrenOfMany() batch with the
+        // scope, so neither branch can surface.
+        $outsider = Unit::create(['name' => 'واحد بیرونی', 'parent_id' => null]);
+        $grandchild = Unit::create(['name' => 'فرزند U2', 'parent_id' => $outsider->id]);
+
+        $component = Livewire::test('unit.tree')
+            ->call('expandAll');
+
+        // `expanded` holds string ids (collectAllIds() casts them) — compare
+        // as strings. Neither U2 nor its descendant appears.
+        $expanded = array_map('strval', array_values($component->get('expanded')));
+        $this->assertNotContains((string) $outsider->id, $expanded);
+        $this->assertNotContains((string) $grandchild->id, $expanded);
+
+        // The scope is exactly [U1] and U1 has no in-scope descendants, so the
+        // walk opens U1 and nothing else: any extra id would be a leak from
+        // some other branch.
+        $this->assertSame([(string) $scoped[0]], $expanded);
+
+        // No key of U2 or its descendants may appear in lazyChildren. U1's own
+        // (empty) children cache is a different thing — loadExpandedChildren()
+        // fills it for every expanded id.
+        $lazy = $component->get('lazyChildren');
+        $this->assertArrayNotHasKey($outsider->id, $lazy);
+        $this->assertArrayNotHasKey($grandchild->id, $lazy);
+
+        // rootUnits is scope-rooted: U1 only, never U2.
+        $rootIds = array_map('strval', $component->get('rootUnits')->pluck('id')->all());
+        $this->assertSame([(string) $scoped[0]], $rootIds);
     }
 }
