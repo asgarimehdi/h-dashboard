@@ -64,6 +64,13 @@ final class CacheVersionKeyGuardTest extends TestCase
             'groups' => ['version-literal'],
             'reason' => 'تنها جایی که جای‌نگهدار {ns}_version ساخته می‌شود؛ همین سرویس مالک کلید فیزیکی است.',
         ],
+        // Issue #1375 — «app_version» نامِ ثابتِ طرح‌وارهٔ `manifest.json` است
+        // (تصمیم Q3: نسخهٔ اپلیکیشن در زمان بک‌آپ). این یک کلیدِ نسخهٔ کش
+        // نیست، پس استثناست — و استثنا باید دلیل داشته باشد.
+        'app/Services/Backup/BackupService.php' => [
+            'groups' => ['version-literal'],
+            'reason' => 'کلید «app_version» در طرح‌وارهٔ مانیفست بک‌آپ، نامِ ثابتِ یک فیلد است نه کلید نسخهٔ کش.',
+        ],
     ];
 
     /**

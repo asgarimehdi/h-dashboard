@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.4.1",
+        "ext-zip": "*",
         "laravel/boost": "^2.10",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",

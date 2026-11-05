@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\HardwareExportController;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\TicketAttachmentController;
 use App\Models\User;
 use App\Services\ActivityLogService;
@@ -240,4 +241,19 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/tools', 'tools.tools')->name('tools');
         });
     }); // unit_context
+});
+
+// Issue #1375 — بک‌آپ و بازگردانی جداول.
+//
+// این گروه عمداً بیرون از گروه `auth`/`unit_context` بالا و «خودش» با
+// `auth` + `role:admin` بسته شده است: یک بک‌آپ کلِ یک جدول را می‌گیرد، نه
+// ردیف‌های یک واحد، پس «متنِ واحد» نباید جلویش را بگیرد.
+//
+// دانلود یک GET ساده است: Livewire نمی‌تواند فایل برگرداند، پس دکمه‌ها
+// `<a href>` هستند (نه `wire:click`) و پاسخ یک `BinaryFileResponse` است.
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::get('/settings/backup/{table}', [BackupController::class, 'table'])
+        ->name('settings.backup.table');
+    Route::get('/settings/backup', [BackupController::class, 'full'])
+        ->name('settings.backup.full');
 });
