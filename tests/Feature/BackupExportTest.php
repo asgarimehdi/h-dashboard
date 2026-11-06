@@ -58,6 +58,43 @@ test('an empty table exports an empty array', function () {
     expect($rows)->toBe([]);
 });
 
+test('two table exports in the same second do not write the same file', function () {
+    // The clock is frozen: both exports land in the same second, so a name
+    // built from the timestamp alone would be the same file twice.
+    $this->freezeTime();
+
+    $service = app(BackupService::class);
+
+    User::factory()->create(['id' => 701]);
+    $first = $service->exportTable('users');
+
+    User::factory()->create(['id' => 702]);
+    $second = $service->exportTable('users');
+
+    expect($first->path)->not->toBe($second->path);
+
+    // ... and the first archive still holds ITS snapshot.
+    expect($this->backupZipJson($first->path, 'users.json'))->toHaveCount(1);
+    expect($this->backupZipJson($second->path, 'users.json'))->toHaveCount(2);
+});
+
+test('two full exports in the same second do not write the same file', function () {
+    $this->freezeTime();
+
+    $service = app(BackupService::class);
+
+    User::factory()->create(['id' => 701]);
+    $first = $service->exportAll();
+
+    User::factory()->create(['id' => 702]);
+    $second = $service->exportAll();
+
+    expect($first->path)->not->toBe($second->path);
+
+    expect($this->backupZipJson($first->path, 'users.json'))->toHaveCount(1);
+    expect($this->backupZipJson($second->path, 'users.json'))->toHaveCount(2);
+});
+
 test('full export holds one json file per registered table plus the manifest', function () {
     $archive = app(BackupService::class)->exportAll();
 

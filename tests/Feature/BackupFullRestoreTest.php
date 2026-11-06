@@ -207,9 +207,11 @@ test('an archive that carries only some tables is refused as a full backup', fun
     $entries = $this->backupZipEntries($archive->path);
 
     // Two tables make the archive a FULL backup — but a full backup has to
-    // carry all 32 of them.
+    // carry all 32 of them. The name carries a random suffix: the backup
+    // directory is shared by the parallel test workers, and a fixed name
+    // would let one worker overwrite another one's archive.
     $partial = $this->backupMakeZip(
-        storage_path('app/private/backup/partial-full.zip'),
+        storage_path('app/private/backup/partial-full-'.Str::random(8).'.zip'),
         [
             'persons.json' => $entries['persons.json'],
             'users.json' => $entries['users.json'],

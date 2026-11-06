@@ -6,6 +6,7 @@ use App\Support\Backup\ApplicationVersion;
 use App\Support\Backup\BackupArchive;
 use App\Support\Backup\TableRegistry;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
@@ -46,7 +47,7 @@ class BackupService
 
         $rows = $this->readSnapshot([$table])[$table];
 
-        $filename = 'backup-'.$table.'-'.now()->format('Ymd-His').'.zip';
+        $filename = $this->archiveFilename('backup-'.$table);
         $path = $this->writeArchive($filename, [
             $table.'.json' => $this->encode($rows),
         ]);
@@ -80,7 +81,7 @@ class BackupService
             'tables' => $manifestTables,
         ]);
 
-        $filename = 'backup-full-'.now()->format('Ymd-His').'.zip';
+        $filename = $this->archiveFilename('backup-full');
         $path = $this->writeArchive($filename, $entries);
 
         return new BackupArchive($path, $filename, $manifestTables);
@@ -168,6 +169,21 @@ class BackupService
         }
 
         return $value;
+    }
+
+    /**
+     * The name of the archive file — a different file for every export.
+     *
+     * The timestamp alone is NOT a file name: two exports in the same second
+     * — two admins, or the parallel test workers that share this directory —
+     * would write the SAME path, and `ZipArchive::OVERWRITE` would replace
+     * the first archive with the second one. The first backup would be
+     * silently lost, and a reader could get the other export's data instead
+     * of its own. The random suffix makes every archive a file of its own.
+     */
+    private function archiveFilename(string $prefix): string
+    {
+        return $prefix.'-'.now()->format('Ymd-His').'-'.Str::random(8).'.zip';
     }
 
     /**
