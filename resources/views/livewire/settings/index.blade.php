@@ -1,19 +1,13 @@
 <?php
 
-use App\Models\User;
-use App\Services\ActivityLogService;
 use App\Support\ThemeFamilies;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
-use Livewire\WithFileUploads;
 use Mary\Traits\Toast;
 
 return new class extends Component
 {
     use Toast;
-    use WithFileUploads;
 
     public bool $browserNotifications = false;
 

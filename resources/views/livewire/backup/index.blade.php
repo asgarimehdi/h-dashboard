@@ -37,6 +37,12 @@ return new class extends Component
     public bool $restoreConfirmed = false;
 
     /**
+     * The help modal open flag. The `<x-help:modal>` entangles it, and
+     * without the property the modal renders visible on page load.
+     */
+    public bool $showHelpModal = false;
+
+    /**
      * Is the acting user an admin? The backup section and every backup
      * action are admin-only.
      */

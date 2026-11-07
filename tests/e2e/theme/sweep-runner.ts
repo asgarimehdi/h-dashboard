@@ -186,20 +186,24 @@ async function placeholderColor(page: Page, selector: string): Promise<string> {
 
 async function fireToast(page: Page, variant: string): Promise<void> {
   await page.evaluate((v) => {
-    const w = window as unknown as { toast: (payload: unknown) => void };
-    w.toast({
-      toast: {
-        type: v,
-        title: 'حذف شد',
-        description: 'سخت افزار PC-1 حذف شد',
-        position: 'toast-bottom',
-        icon: '',
-        css: `alert-${v}`,
-        timeout: 60000,
-        noProgress: true,
-        progressClass: null,
-      },
-    });
+    // #1377: `window.toast` is gone; dispatch the event the toaster listens for.
+    window.dispatchEvent(
+      new CustomEvent('mary-toast', {
+        detail: {
+          toast: {
+            type: v,
+            title: 'حذف شد',
+            description: 'سخت افزار PC-1 حذف شد',
+            position: 'toast-bottom',
+            icon: '',
+            css: `alert-${v}`,
+            timeout: 60000,
+            noProgress: true,
+            progressClass: null,
+          },
+        },
+      }),
+    );
   }, variant);
   await expect(page.locator(`.alert.alert-${variant}`)).toBeVisible();
 }
