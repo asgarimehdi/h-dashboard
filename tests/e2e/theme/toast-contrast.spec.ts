@@ -24,23 +24,33 @@ interface ContrastResult {
   after: number;
 }
 
-/** Trigger a real MaryUI toast (window.toast is installed by <x-toast />). */
+/**
+ * Trigger a real MaryUI toast.
+ *
+ * `window.toast` is undefined by design since #1377 — the toaster listens for
+ * the `mary-toast` event, and `globalToast.toast()` (resources/js/app-components.js)
+ * dispatches exactly this shape, so this path is the production one minus the
+ * `$this->js()` hop.
+ */
 async function fireToast(page: import('@playwright/test').Page, variant: string) {
   await page.evaluate((v) => {
-    const w = window as unknown as { toast: (p: unknown) => void };
-    w.toast({
-      toast: {
-        type: v,
-        title: 'حذف شد',
-        description: 'سخت افزار PC-1 حذف شد',
-        position: 'toast-bottom',
-        icon: '',
-        css: `alert-${v}`,
-        timeout: 60000,
-        noProgress: true,
-        progressClass: null,
-      },
-    });
+    window.dispatchEvent(
+      new CustomEvent('mary-toast', {
+        detail: {
+          toast: {
+            type: v,
+            title: 'حذف شد',
+            description: 'سخت افزار PC-1 حذف شد',
+            position: 'toast-bottom',
+            icon: '',
+            css: `alert-${v}`,
+            timeout: 60000,
+            noProgress: true,
+            progressClass: null,
+          },
+        },
+      }),
+    );
   }, variant);
 }
 

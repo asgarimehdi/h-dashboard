@@ -52,7 +52,7 @@
 @endphp
 </head>
 
-<body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
+<body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}" x-data="globalToast">
     {{-- #957: لینک پرش. `focus:absolute` لازم است چون `not-sr-only` حالتِ
          static می‌گذارد و بدون آن با هر بار فوکوس، کل صفحه یک خط پایین می‌رود. --}}
     <a href="#main-content"
@@ -324,6 +324,9 @@
                          routes/web.php. آخر گروه می‌ماند تا آیتم‌های IT پیوسته و بی‌جابه‌جایی بمانند. --}}
                     @can('manage_users')
                     <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
+                    @role('admin')
+                    <x-menu-item title="بک‌آپ جدول‌ها" icon="o-cloud-arrow-down" link="/tools/backup" wire:navigate />
+                    @endrole
                     @endcan
                 </x-menu-sub>
                 @endcanany

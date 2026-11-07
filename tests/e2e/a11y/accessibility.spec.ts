@@ -176,20 +176,25 @@ test.describe('announcement regions', () => {
     await page.waitForLoadState('networkidle');
 
     await page.evaluate(() => {
-      const w = window as unknown as { toast: (p: unknown) => void };
-      w.toast({
-        toast: {
-          type: 'success',
-          title: 'انجام شد',
-          description: 'تغییرات ذخیره شد',
-          position: 'toast-bottom',
-          icon: '',
-          css: 'alert-success',
-          timeout: 60000,
-          noProgress: true,
-          progressClass: null,
-        },
-      });
+      // #1377: `window.toast` is gone; the toaster listens for `mary-toast`,
+      // the event `globalToast.toast()` dispatches from `$this->js()`.
+      window.dispatchEvent(
+        new CustomEvent('mary-toast', {
+          detail: {
+            toast: {
+              type: 'success',
+              title: 'انجام شد',
+              description: 'تغییرات ذخیره شد',
+              position: 'toast-bottom',
+              icon: '',
+              css: 'alert-success',
+              timeout: 60000,
+              noProgress: true,
+              progressClass: null,
+            },
+          },
+        }),
+      );
     });
 
     const toast = page.locator('.toast').first();

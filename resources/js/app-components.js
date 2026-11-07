@@ -87,6 +87,24 @@ export function registerAppComponents(Alpine) {
   // listener is attached in plain JS: `@mary-toast.window="start(...)"`
   // would pass the payload through the parser. Title/description render
   // with x-text (plain text); the icon is static markup.
+  //
+  // #1377 — the `toast` function itself. MaryUI's Toast trait emits a BARE
+  // `toast({...})` JS expression from `$this->js(...)` (vendor/.../Toast.php:33),
+  // and the CSP-safe Livewire build resolves bare identifiers against the
+  // evaluator scope ONLY — never window (livewire.csp.js:5311-5322, closestDataStack
+  // at 2965). The old `window.toast` in the inline <script nonce> of
+  // csp-toast.blade.php was therefore invisible to Livewire's evaluator and
+  // every toast was silently dropped. This method lives on the layout-level
+  // Alpine data (`<body x-data="...">`), whose scope walks up to the nearest
+  // `_x_dataStack` ancestor — so it is reachable from ANY descendant Livewire
+  // component's `$this->js('toast({...})')`. The inline script is deleted;
+  // `window.toast` is undefined BY DESIGN (do not assert it is a function).
+  Alpine.data('globalToast', () => ({
+    toast(payload) {
+      window.dispatchEvent(new CustomEvent('mary-toast', { detail: payload }));
+    },
+  }));
+
   Alpine.data('cspToast', () => ({
     show: false,
     toast: {},
