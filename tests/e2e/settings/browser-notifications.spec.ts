@@ -73,11 +73,19 @@ async function stubNotification(page: Page, permission: 'granted' | 'denied') {
 /** Remove `Notification` entirely, the browser-without-support path. */
 async function removeNotification(page: Page) {
   await page.addInitScript(() => {
-    Object.defineProperty(window, 'Notification', {
-      configurable: true,
-      writable: true,
-      value: undefined,
-    });
+    const w = window as any;
+    try {
+      w.Notification = undefined;
+    } catch {
+      // Fall through to the property-descriptor form below.
+    }
+    if (typeof w.Notification !== 'undefined') {
+      Object.defineProperty(window, 'Notification', {
+        configurable: true,
+        writable: true,
+        value: undefined,
+      });
+    }
   });
 }
 
@@ -182,6 +190,26 @@ test.describe('browser notifications toggle — supported (#1379)', () => {
       expect(await page.evaluate(() => (window as any).__notificationRequests)).toBe(1);
       await expectNoCspViolations(page);
     });
+
+    test(`un-checking is a plain uncheck — no toast, no permission call (${label})`, async ({ page }) => {
+      await stubNotification(page, 'granted');
+      await setup(page, mode);
+
+      const toggle = await clickToggleOn(page);
+      await expect(toggle).toBeChecked();
+      await expect(page.locator('.toast')).toBeHidden();
+
+      const update = waitForLivewire(page);
+      await toggle.click();
+      await update;
+      await page.waitForLoadState('networkidle');
+
+      await expect(toggle).not.toBeChecked();
+      await expect(page.locator('.toast')).toBeHidden();
+      // The early return must not re-ask for permission or toast.
+      expect(await page.evaluate(() => (window as any).__notificationRequests)).toBe(1);
+      await expectNoCspViolations(page);
+    });
   }
 });
 
@@ -190,6 +218,11 @@ test.describe('browser notifications toggle — Notification absent (#1379)', ()
     test(`toggle flips back off + unsupported toast (${label})`, async ({ page }) => {
       await removeNotification(page);
       await setup(page, mode);
+
+      // Guard the stub itself: if the browser made `Notification`
+      // non-configurable the helper would silently do nothing and this case
+      // would exercise the supported path instead.
+      expect(await page.evaluate(() => typeof (window as any).Notification)).toBe('undefined');
 
       await clickToggleOn(page);
 
