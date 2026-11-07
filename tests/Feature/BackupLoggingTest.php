@@ -47,7 +47,7 @@ test('a backup is recorded in the activity log', function () {
     $admin = makeBackupAdmin();
 
     $this->actingAs($admin)
-        ->get(route('settings.backup.table', 'users'))
+        ->get(route('backup.table', 'users'))
         ->assertOk();
 
     $log = DB::table('activity_logs')->where('type', 'backup')->first();
@@ -61,7 +61,7 @@ test('a full backup is recorded in the activity log', function () {
     $admin = makeBackupAdmin();
 
     $this->actingAs($admin)
-        ->get(route('settings.backup.full'))
+        ->get(route('backup.full'))
         ->assertOk();
 
     $log = DB::table('activity_logs')->where('type', 'backup')->first();
@@ -81,7 +81,7 @@ test('a restore is recorded in the activity log', function () {
     );
 
     Livewire::actingAs($admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'users')
         ->set('restoreConfirmed', true)
@@ -105,7 +105,7 @@ test('the restore log is written after the tables were replaced', function () {
     // The backup writes a log — a full restore replaces `activity_logs`, so
     // this row is the one that proves the ORDER.
     $this->actingAs($admin)
-        ->get(route('settings.backup.full'))
+        ->get(route('backup.full'))
         ->assertOk();
 
     expect(DB::table('activity_logs')->count())->toBe(1);
@@ -116,7 +116,7 @@ test('the restore log is written after the tables were replaced', function () {
     );
 
     Livewire::actingAs($admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'full')
         ->set('restoreConfirmed', true)
@@ -144,7 +144,7 @@ test('the restore log has no actor when the admin account was replaced', functio
     );
 
     Livewire::actingAs($admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'full')
         ->set('restoreConfirmed', true)
@@ -173,7 +173,7 @@ test('the restore log keeps the actor when the admin account survived', function
     );
 
     Livewire::actingAs($admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'full')
         ->set('restoreConfirmed', true)

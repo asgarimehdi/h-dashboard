@@ -252,8 +252,16 @@ Route::middleware('auth')->group(function () {
 // دانلود یک GET ساده است: Livewire نمی‌تواند فایل برگرداند، پس دکمه‌ها
 // `<a href>` هستند (نه `wire:click`) و پاسخ یک `BinaryFileResponse` است.
 Route::middleware(['auth', 'role:admin'])->group(function () {
-    Route::get('/settings/backup/{table}', [BackupController::class, 'table'])
-        ->name('settings.backup.table');
-    Route::get('/settings/backup', [BackupController::class, 'full'])
-        ->name('settings.backup.full');
+    Route::get('/tools/backup/full', [BackupController::class, 'full'])
+        ->name('backup.full');
+    Route::get('/tools/backup/table/{table}', [BackupController::class, 'table'])
+        ->name('backup.table');
+});
+
+// #1377 — the backup page (Livewire) is admin-only too, but it lives in its
+// OWN group: a backup covers a WHOLE table, not the rows of one unit, so
+// the `unit_context` group must not gate it. The download routes above stay
+// where they are (they are plain GETs, not Livewire).
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::livewire('/tools/backup', 'backup.index')->name('backup');
 });
