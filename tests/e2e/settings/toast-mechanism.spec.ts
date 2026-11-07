@@ -167,12 +167,12 @@ test.describe('toast mechanism — settings save', () => {
     await page.goto('/settings');
     await page.waitForLoadState('networkidle');
 
-    // The compact-mode toggle is a live action that morphs the component
-    // before the measured save runs. It is the second toggle on purpose: the
-    // first one's `x-on:change` expression uses the `in` operator, which the
-    // CSP build's parser rejects (a pre-existing issue, out of scope for #1377).
+    // The browser-notifications toggle is a live action that morphs the
+    // component before the measured save runs. It is the first toggle on
+    // purpose: since #1379 its handler parses under the CSP build, so this
+    // exercises the strongest case (it used to throw on the `in` operator).
     const toggle = livewireUpdate(page);
-    await page.locator('input[type="checkbox"].toggle').nth(1).click();
+    await page.locator('input[type="checkbox"].toggle').nth(0).click();
     await toggle;
 
     await saveSettings(page);
