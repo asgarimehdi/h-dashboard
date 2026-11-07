@@ -796,6 +796,14 @@ test('cases index renders the theme selector', function () {
     Livewire::test('disease.index')->assertSeeHtml('theme-controller');
 });
 
+test('disease create renders the theme selector', function () {
+    Livewire::test('disease.create')->assertSeeHtml('theme-controller');
+});
+
+test('disease patients renders the theme selector', function () {
+    Livewire::test('disease.patients')->assertSeeHtml('theme-controller');
+});
+
 test('a case outside the unit scope cannot be deleted', function () {
     $disease = dc_disease('foreign-delete-disease');
     $foreignUnit = Unit::factory()->create();

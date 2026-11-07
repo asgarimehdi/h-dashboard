@@ -344,7 +344,11 @@ return new class extends Component
 }; ?>
 
 <div>
-    <x-header title="پروندهٔ بیماران" separator progress-indicator/>
+    <x-header title="پروندهٔ بیماران" separator progress-indicator>
+        <x-slot:actions>
+            <x-theme-selector/>
+        </x-slot:actions>
+    </x-header>
 
     <x-card shadow>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">

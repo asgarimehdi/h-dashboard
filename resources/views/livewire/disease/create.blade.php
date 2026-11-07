@@ -420,7 +420,11 @@ return new class extends Component
 }; ?>
 
 <div>
-    <x-header title="ثبت کیس بیماری" separator/>
+    <x-header title="ثبت کیس بیماری" separator>
+        <x-slot:actions>
+            <x-theme-selector/>
+        </x-slot:actions>
+    </x-header>
 
     {{-- Step 1 — patient by national code ───────────────────────────────── --}}
     <x-card shadow>
