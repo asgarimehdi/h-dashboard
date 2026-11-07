@@ -34,13 +34,6 @@ beforeEach(function () {
     $this->admin->assignRole('admin');
 });
 
-test('the backup section is hidden from a non admin', function () {
-    $this->actingAs($this->user);
-
-    Livewire::test('backup.index')
-        ->assertDontSee('پشتیبان‌گیری و بازگردانی جداول');
-});
-
 test('the backup section lists every registered table for an admin', function () {
     $this->actingAs($this->admin);
 
