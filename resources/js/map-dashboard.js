@@ -30,6 +30,82 @@
  */
 
 export function registerMapDashboard(Alpine) {
+    // Unit-details modal (#1383). The template's directive expressions are
+    // reduced to bare identifiers — and the `showUnitDetails` listener lives in
+    // init() — because the CSP-safe Alpine build's expression interpreter
+    // rejects multi-statement bodies, `?.`, `??`, arrow functions and template
+    // literals. Null-guarding and the server round-trip live here, in plain JS,
+    // where that parser never runs.
+    Alpine.data('unitDetailsModal', () => ({
+        unitId: null,
+        unitDetails: null,
+        loading: false,
+
+        init() {
+            // The event name is camelCase (`showUnitDetails`) and HTML
+            // lowercases attribute names, so an Alpine `@showUnitDetails.window`
+            // directive can never match it (it listens for `showunitdetails`).
+            // A plain window listener keeps the server's event name intact and
+            // stays outside the CSP expression parser entirely.
+            this.showUnitDetailsListener = (event) => {
+                this.openUnitDetails(event.detail[0].unitId);
+            };
+            window.addEventListener('showUnitDetails', this.showUnitDetailsListener);
+        },
+
+        destroy() {
+            window.removeEventListener('showUnitDetails', this.showUnitDetailsListener);
+        },
+
+        get unitName() {
+            return this.unitDetails ? this.unitDetails.name : '';
+        },
+
+        get unitType() {
+            return this.unitDetails ? this.unitDetails.type : '';
+        },
+
+        get unitLocation() {
+            if (!this.unitDetails) return '';
+            return (this.unitDetails.lat ?? '') + ', ' + (this.unitDetails.lng ?? '');
+        },
+
+        get unitChildrenCount() {
+            return this.unitDetails ? this.unitDetails.children_count : '';
+        },
+
+        get unitError() {
+            return this.unitDetails && this.unitDetails.error ? this.unitDetails.error : '';
+        },
+
+        openUnitDetails(unitId) {
+            this.unitId = unitId;
+            this.loading = true;
+            this.unitDetails = null;
+
+            const dialog = this.$refs.modal;
+            if (dialog && !dialog.open) {
+                this.$nextTick(() => dialog.showModal());
+            }
+
+            this.loadUnitDetails();
+        },
+
+        async loadUnitDetails() {
+            if (!this.unitId) return;
+
+            try {
+                this.unitDetails = await this.$wire.loadUnitDetails(this.unitId);
+            } catch (e) {
+                // Client-only fallback: a rejected request is not the server's
+                // 'Unit not found' contract, so it gets its own copy.
+                this.unitDetails = { error: 'خطا در دریافت جزئیات واحد' };
+            } finally {
+                this.loading = false;
+            }
+        },
+    }));
+
     Alpine.data('mapDashboard', () => {
         // The Leaflet instance and its layer groups live in closure locals,
         // never on the Alpine data object: Alpine proxies reactive data,
@@ -675,7 +751,7 @@ export function registerMapDashboard(Alpine) {
 
             onFeatureClick(type, props) {
                 if (type === 'unit') {
-                    this.$wire('unitSelected', props.id);
+                    this.$wire.dispatch('unitSelected', [props.id]);
                 }
             },
 
