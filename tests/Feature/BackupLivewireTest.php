@@ -30,7 +30,6 @@ beforeEach(function () {
     ]);
 
     $this->user = User::factory()->create(['password' => Hash::make('password')]);
-
     $this->admin = User::factory()->create(['password' => Hash::make('password')]);
     $this->admin->assignRole('admin');
 });
@@ -38,15 +37,15 @@ beforeEach(function () {
 test('the backup section is hidden from a non admin', function () {
     $this->actingAs($this->user);
 
-    Livewire::test('settings.index')
+    Livewire::test('backup.index')
         ->assertDontSee('پشتیبان‌گیری و بازگردانی جداول');
 });
 
 test('the backup section lists every registered table for an admin', function () {
     $this->actingAs($this->admin);
 
-    $component = Livewire::test('settings.index')
-        ->assertSee('پشتیبان‌گیری و بازگردانی جداول');
+    $component = Livewire::test('backup.index')
+        ->assertSee('بک‌آپ و بازگردانی جداول');
 
     foreach (app(TableRegistry::class)->tables() as $table) {
         $component->assertSee($table);
@@ -55,24 +54,24 @@ test('the backup section lists every registered table for an admin', function ()
 
 test('a non admin is refused the table download', function () {
     $this->actingAs($this->user)
-        ->get(route('settings.backup.table', 'users'))
+        ->get(route('backup.table', 'users'))
         ->assertForbidden();
 });
 
 test('a non admin is refused the full download', function () {
     $this->actingAs($this->user)
-        ->get(route('settings.backup.full'))
+        ->get(route('backup.full'))
         ->assertForbidden();
 });
 
 test('a guest is refused the table download', function () {
-    $this->get(route('settings.backup.table', 'users'))
+    $this->get(route('backup.table', 'users'))
         ->assertRedirect('/login');
 });
 
 test('an admin downloads the table backup as a zip', function () {
     $response = $this->actingAs($this->admin)
-        ->get(route('settings.backup.table', 'users'));
+        ->get(route('backup.table', 'users'));
 
     $response->assertOk();
     expect($response->headers->get('content-disposition'))->toContain('backup-users-');
@@ -80,7 +79,7 @@ test('an admin downloads the table backup as a zip', function () {
 
 test('an admin downloads the full backup as a zip', function () {
     $response = $this->actingAs($this->admin)
-        ->get(route('settings.backup.full'));
+        ->get(route('backup.full'));
 
     $response->assertOk();
     expect($response->headers->get('content-disposition'))->toContain('backup-full-');
@@ -88,16 +87,16 @@ test('an admin downloads the full backup as a zip', function () {
 
 test('an unknown table is not downloadable', function () {
     $this->actingAs($this->admin)
-        ->get(route('settings.backup.table', 'cache'))
+        ->get(route('backup.table', 'cache'))
         ->assertNotFound();
 });
 
 test('the download button is a plain link and not a livewire action', function () {
     $this->actingAs($this->admin);
 
-    $html = Livewire::test('settings.index')->html();
+    $html = Livewire::test('backup.index')->html();
 
-    expect($html)->toContain(route('settings.backup.table', 'users'));
+    expect($html)->toContain(route('backup.table', 'users'));
     expect($html)->not->toContain('wire:click="backupTable');
 });
 
@@ -110,7 +109,7 @@ test('a non admin cannot run the restore action', function () {
     );
 
     Livewire::actingAs($this->user)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'users')
         ->call('restoreBackup')
@@ -127,7 +126,7 @@ test('an admin restores a table from an uploaded zip', function () {
     );
 
     Livewire::actingAs($this->admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'users')
         ->call('restoreBackup')
@@ -142,7 +141,7 @@ test('a broken zip fails with a persian error and changes nothing', function () 
     $file = UploadedFile::fake()->createWithContent('broken.zip', 'this is not a zip');
 
     Livewire::actingAs($this->admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'users')
         ->call('restoreBackup')
@@ -154,11 +153,11 @@ test('a broken zip fails with a persian error and changes nothing', function () 
 test('the warning about the users table is shown when users is the target', function () {
     $this->actingAs($this->admin);
 
-    Livewire::test('settings.index')
+    Livewire::test('backup.index')
         ->set('restoreTarget', 'users')
         ->assertSee('نقش‌ها و توکن‌های کاربران بازگردانی نمی‌شوند');
 
-    Livewire::test('settings.index')
+    Livewire::test('backup.index')
         ->set('restoreTarget', 'tickets')
         ->assertDontSee('نقش‌ها و توکن‌های کاربران بازگردانی نمی‌شوند');
 });
@@ -172,17 +171,43 @@ test('the users restore only runs after the warning was confirmed', function () 
     );
 
     Livewire::actingAs($this->admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'users')
         ->call('restoreBackup')
         ->assertSet('restoreConfirmed', false);
 
     Livewire::actingAs($this->admin)
-        ->test('settings.index')
+        ->test('backup.index')
         ->set('backupFile', $file)
         ->set('restoreTarget', 'users')
         ->set('restoreConfirmed', true)
         ->call('restoreBackup')
         ->assertHasNoErrors();
+});
+
+test('non-admin does not see the backup menu item', function () {
+    $this->actingAs($this->user);
+
+    $html = $this->get('/dashboard')->assertOk()->getContent();
+
+    expect($html)->not->toContain('بک‌آپ جدول‌ها');
+});
+
+test('non-admin gets 403 on /tools/backup', function () {
+    $this->actingAs($this->user)
+        ->get('/tools/backup')
+        ->assertForbidden();
+});
+
+test('non-admin gets 403 on backup.table route', function () {
+    $this->actingAs($this->user)
+        ->get(route('backup.table', 'users'))
+        ->assertForbidden();
+});
+
+test('non-admin gets 403 on backup.full route', function () {
+    $this->actingAs($this->user)
+        ->get(route('backup.full'))
+        ->assertForbidden();
 });
