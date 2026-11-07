@@ -117,6 +117,7 @@ $permissionRoutes = [
     '/permissions' => 'permissions/index',
     '/roles' => 'roles/index',
     '/tools' => 'tools.tools',
+    '/tools/backup' => 'backup.index',
 ];
 
 foreach ($permissionRoutes as $route => $component) {

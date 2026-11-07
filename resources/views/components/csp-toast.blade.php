@@ -2,6 +2,11 @@
      vendor/robsontenorio/mary/src/View/Components/Toast.php, with a per-request
      CSP nonce on the inline <script> (the enforcing fact that forced the copy:
      nonce attributes cannot cross a vendor class-component heredoc).
+     #1377: that inline script is gone — `toast` now lives on the layout-level
+     Alpine.data `globalToast` (resources/js/app-components.js), reachable from
+     any Livewire component's `$this->js('toast({...})')` via the CSP
+     evaluator's ancestor scope walk (livewire.csp.js:5311-5322). `window.toast`
+     is undefined BY DESIGN.
      Upgrade condition: if Mary ever learns a `nonce` pass-through, delete this
      file and repoint <x-csp-toast/> to <x-toast/>. --}}
 @props(['position' => 'toast-top toast-end'])
@@ -40,30 +45,5 @@
         </div>
     </div>
 
-    <script nonce="{{ Vite::cspNonce() }}">
-        window.toast = function(payload){
-            window.dispatchEvent(new CustomEvent('mary-toast', {detail: payload}))
-        }
-
-        document.addEventListener('livewire:init', () => {
-            Livewire.hook('request', ({fail}) => {
-                fail(({status, content, preventDefault}) => {
-                    try {
-                        let result = JSON.parse(content);
-
-                        if (result?.toast && typeof window.toast === "function") {
-                            window.toast(result);
-                        }
-
-                        if ((result?.prevent_default ?? false) === true) {
-                            preventDefault();
-                        }
-                    } catch (e) {
-                        console.log(e)
-                    }
-                })
-            })
-        })
-    </script>
     @endpersist
 </div>

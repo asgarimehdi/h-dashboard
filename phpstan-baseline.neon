@@ -4557,7 +4557,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 48
+			count: 49
 			path: routes/web.php
 
 		-
