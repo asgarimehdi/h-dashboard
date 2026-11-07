@@ -103,6 +103,30 @@ export function registerAppComponents(Alpine) {
     toast(payload) {
       window.dispatchEvent(new CustomEvent('mary-toast', { detail: payload }));
     },
+
+    // #1379 — «اعلان مرورگر» toggle (livewire/settings/index.blade.php).
+    // The old logic lived in the `x-on:change` expression, where Livewire's
+    // CSP evaluator threw on `'Notification' in window` (tokenises `in`,
+    // never evaluates it) and on the arrow callbacks. Plain JS here is never
+    // CSP-parsed; the directive is a bare call.
+    //
+    // The notify helpers are Livewire component methods that only toast, so
+    // every failure path must also reset the bound property or the toggle
+    // stays ON after a denial / an unsupported browser.
+    toggleBrowserNotifications(checked) {
+      if (!checked) return; // user un-checked: plain uncheck, no toast
+      if (typeof Notification === 'undefined') {
+        this.$wire.set('browserNotifications', false);
+        this.$wire.notifyUnsupported();
+        return;
+      }
+      Notification.requestPermission().then((p) => {
+        if (p !== 'granted') {
+          this.$wire.set('browserNotifications', false);
+          this.$wire.notifyPermissionDenied();
+        }
+      });
+    },
   }));
 
   Alpine.data('cspToast', () => ({
