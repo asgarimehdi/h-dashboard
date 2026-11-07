@@ -153,7 +153,7 @@ return new class extends Component
                 <label class="flex items-center justify-between cursor-pointer">
                     <span>اعلان مرورگر</span>
                     <input type="checkbox" class="toggle toggle-primary" wire:model.live="browserNotifications"
-                           x-on:change="if($event.target.checked && 'Notification' in window) { Notification.requestPermission().then(p => { if(p !== 'granted') { $wire.set('browserNotifications', false); $wire.notifyPermissionDenied(); } }) } else if($event.target.checked && !('Notification' in window)) { $wire.set('browserNotifications', false); $wire.notifyUnsupported(); }" />
+                           x-on:change="toggleBrowserNotifications($event.target.checked)" />
                 </label>
             </div>
         </x-card>
