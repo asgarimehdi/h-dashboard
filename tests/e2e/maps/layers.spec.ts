@@ -177,3 +177,57 @@ test.describe('maps — issue #769 marker zoom after filter toggle', () => {
     expect(errors.filter((m) => m.includes('_latLngToNewLayerPoint'))).toHaveLength(0);
   });
 });
+
+test.describe('maps — issue #1386 layer/filter dispatch + SPA carry', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await page.goto('/map');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2500);
+  });
+
+  test('toggling the hardware layer updates the layers query param', async ({ page }) => {
+    await page.getByRole('button', { name: /سخت‌افزار/ }).click();
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.get('layers')?.includes('hardware'),
+      { timeout: 10000 },
+    );
+    expect(new URL(page.url()).searchParams.get('layers')).toContain('hardware');
+  });
+
+  test('changing the hardware filter updates filter_hardware', async ({ page }) => {
+    await page.getByRole('button', { name: /سخت‌افزار/ }).click();
+    await page.waitForSelector('select[x-model="filters.hardware_type"]', {
+      state: 'visible',
+      timeout: 10000,
+    });
+    await page.locator('select[x-model="filters.hardware_type"]').selectOption('laptop');
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.get('filter_hardware') === 'laptop',
+      { timeout: 10000 },
+    );
+    expect(new URL(page.url()).searchParams.get('filter_hardware')).toBe('laptop');
+  });
+
+  test('wire:navigate away and back carries the query string', async ({ page }) => {
+    await page.getByRole('button', { name: /سخت‌افزار/ }).click();
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.get('layers')?.includes('hardware'),
+      { timeout: 10000 },
+    );
+    const toggled = new URL(page.url()).searchParams.get('layers');
+
+    // The ticket menu is a collapsed <details>; its links are clipped out of
+    // the layout tree until the group is open, so click the summary first.
+    await page.locator('details > summary:has-text("مدیریت تیکت‌ها")').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('a:has-text("تیکت جدید")').first().click();
+    await page.waitForURL('**/tickets/new**', { timeout: 15000 });
+
+    await page.goto(`/map?layers=${toggled}`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2500);
+
+    expect(new URL(page.url()).searchParams.get('layers')).toBe(toggled);
+  });
+});

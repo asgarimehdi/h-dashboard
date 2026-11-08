@@ -15,11 +15,15 @@
  * - Blade interpolations (`$mapToken`, `url('/api/gis')`, center,
  *   zoom, disease from/to) become `data-*` attributes on the
  *   x-data element, read in `init()` from `this.$el.dataset`.
- * - `@this('event', ...)` becomes `this.$wire('event', ...)`:
+ * - `@this('event', ...)` becomes `this.$wire.dispatch('event', [payload])`:
  *   `@this` compiles to `window.Livewire.find(id)`, and calling
  *   the returned proxy dispatches the event; `$wire` is that same
- *   proxy. No listener for these three events exists in the repo;
- *   the dispatch itself is preserved.
+ *   proxy. The payload is wrapped in an array because the server
+ *   splats it into the handler (`SupportEvents::call`) — a bare
+ *   scalar throws (`Only arrays and Traversables can be unpacked`).
+ *   Listeners for `mapMoved`, `layerToggled`, `filterChanged` and
+ *   `unitSelected` exist in the component at
+ *   `resources/views/livewire/map/map-dashboard.blade.php:73-78`.
  *
  * Closure locals (`map`, `layerGroups`, `moveTimer`,
  * `diseasesPromise`) stay in the factory scope, one set per
@@ -813,12 +817,12 @@ export function registerMapDashboard(Alpine) {
 
                     this.loadLayers();
                 }
-                this.$wire('layerToggled', layer);
+                this.$wire.dispatch('layerToggled', [layer]);
             },
 
             setFilter(key, value) {
                 this.filters[key] = value;
-                this.$wire('filterChanged', this.filters);
+                this.$wire.dispatch('filterChanged', [this.filters]);
                 this.loadLayers();
             },
         };
