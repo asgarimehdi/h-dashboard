@@ -800,7 +800,8 @@ return new class extends Component
                 <div class="flex w-1/12">
                     <a href="/units/{{ $unit->id }}/map"
                        aria-label="نقشهٔ واحد"
-                       class="btn btn-ghost btn-sm text-primary">
+                       title="{{ $unit->boundary_id ? 'مرز تعریف شده' : 'بدون مرز' }}"
+                       class="btn btn-ghost btn-sm {{ $unit->boundary_id ? 'text-success' : 'text-base-content/50' }}">
                         <x-icon name="o-map" class="w-5 h-5"/>
                         <span class="hidden 2xl:inline">نقشه</span>
                     </a>
