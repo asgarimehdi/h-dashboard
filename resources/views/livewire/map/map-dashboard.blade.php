@@ -338,7 +338,7 @@ return new class extends Component
              class="w-full flex flex-wrap items-end gap-2 border-t border-base-300 pt-2">
             <select id="disease-select"
                     x-model.number="disease.id"
-                    @change="$nextTick(() => loadDiseaseLayer(true))"
+                    @change="loadDiseaseLayer(true)"
                     class="select select-sm w-48">
                 <option value="">انتخاب بیماری</option>
                 <template x-for="d in diseases" :key="d.id">
@@ -361,7 +361,7 @@ return new class extends Component
                 <template x-for="row in diseaseLegend" :key="row.label">
                     <span class="flex items-center gap-1">
                         <span class="inline-block w-3 h-3 rounded"
-                              :style="`background:${row.color}`"></span>
+                              :style="{ background: row.color }"></span>
                         <span x-text="row.label"></span>
                     </span>
                 </template>
