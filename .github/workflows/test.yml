@@ -570,6 +570,123 @@ jobs:
           grep -qE '[0-9]+ passed' csp-gate-list.log
           test "${EXECUTED}" -gt 0
 
+  smoke:
+    name: Smoke Tests (actions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # BLOCKING job (owner decision 2026-11-08): the ten main journeys in
+    # tests/e2e/smoke/actions-smoke.spec.ts must pass for a PR to merge — no
+    # `continue-on-error` (unlike the `e2e` job, which stays non-blocking per
+    # #867). It runs ONLY the smoke spec, so it adds ~2 minutes, not the
+    # full suite's ~30. This job must be added to the branch's required
+    # status checks (admin) for the "blocking" part to bite — the workflow
+    # alone cannot require itself (same caveat as `csp-enforcing` above).
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_e2e
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for the app (CI services)
+        run: |
+          cp .env.example .env
+          # CI services: postgres/postgres/secret + passwordless redis.
+          # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
+          # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
+          # ever printing the values.
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=<redacted>; s/^REDIS_PASSWORD=<redacted>' .env
+          php artisan key:generate --force
+
+      - name: Build .env.e2e (secret-safe)
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+
+      - name: Assert APP_LOCALE=fa in .env.e2e
+        run: grep -q '^APP_LOCALE=fa' .env.e2e
+
+      - name: Verify the isolated e2e database exists
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+
+      - name: Cache Playwright chromium (issue #1067)
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke suite (list reporter proves execution)
+        # Through scripts/e2e-test.sh ONLY (see the `e2e` job's comment).
+        # --workers=1: the suite is 10 tests / ~2 minutes sequential; the
+        # local parallel-workers flake (sidebar.spec.ts) is not worth
+        # re-proving here. --timeout=60000: OSM tile requests can hang and
+        # eat the 30s default on the map legs (seen locally on #1391).
+        run: bash scripts/e2e-test.sh tests/e2e/smoke/actions-smoke.spec.ts --workers=1 --timeout=60000 --reporter=list 2>&1 | tee smoke-list.log
+
+      - name: Assert the smoke suite really executed
+        run: |
+          EXECUTED=$(grep -cE '✓|✔|passed \(' smoke-list.log || true)
+          echo "smoke executed-test lines: ${EXECUTED}"
+          grep -qE '[0-9]+ passed' smoke-list.log
+          test "${EXECUTED}" -gt 0
+
   mutation:
     name: Mutation Testing
     # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
