@@ -228,3 +228,89 @@ test.describe('units — boundary map draw toolbar (#702)', () => {
     expect(last[1]).toBe(first[1]);
   });
 });
+
+
+
+test.describe('units — boundary map save button (#1391)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
+
+  /**
+   * Opens a unit's map page that has NO saved boundary yet — the draw path.
+   * Mirrors openUnitMapWithBoundary above, but looks for the (بدون مرز) badge.
+   */
+  async function openUnitMapWithoutBoundary(page: import('@playwright/test').Page) {
+    await page.goto('/units');
+    await page.waitForLoadState('domcontentloaded');
+
+    const candidateIds = await page.evaluate(() => {
+      const ids = new Set<number>();
+      document.querySelectorAll('a[href*="/map"]').forEach((a) => {
+        const m = a.getAttribute('href')?.match(/\/units\/(\d+)\/map/);
+        if (m) ids.add(Number(m[1]));
+      });
+      return Array.from(ids);
+    });
+
+    expect(candidateIds.length, 'expected at least one unit map link').toBeGreaterThan(0);
+
+    for (const id of candidateIds) {
+      await page.goto(`/units/${id}/map`);
+      await page.locator('#unitMap').waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator('.leaflet-draw-edit-edit').waitFor({ state: 'visible', timeout: 15000 });
+
+      const noBoundary = await page.locator('.badge', { hasText: 'بدون مرز' }).count();
+      if (noBoundary > 0) return id;
+    }
+
+    return null;
+  }
+
+  test('drawing a polygon and clicking ذخیره saves the boundary', async ({ page }) => {
+    const unitId = await openUnitMapWithoutBoundary(page);
+
+    test.skip(unitId === null, 'no seeded unit without a boundary in this environment');
+
+    // Draw a triangle with the toolbar polygon tool (same gesture as a user:
+    // click the tool, click three vertices, click the first vertex to close).
+    await page.locator('.leaflet-draw-draw-polygon').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('.leaflet-draw-draw-polygon').click();
+    await page.waitForTimeout(500);
+
+    const box = await page.locator('#unitMap').boundingBox();
+    if (!box) throw new Error('unit map has no bounding box');
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    for (const [x, y] of [
+      [cx - 60, cy - 40],
+      [cx + 60, cy - 40],
+      [cx + 60, cy + 40],
+    ] as const) {
+      await page.mouse.click(x, y);
+      await page.waitForTimeout(300);
+    }
+    await page.mouse.click(cx - 60, cy - 40);
+
+    // Precondition: the draw registered, so _mapGeojson carries the polygon.
+    await expect
+      .poll(async () => page.evaluate(() => (window as unknown as { _mapGeojson?: string | null })._mapGeojson))
+      .toBeTruthy();
+
+    // #1391 regression: before the fix the click never reached the server —
+    // the component captured at setup time was null and component?.call()
+    // silently no-op'd, so no Livewire update request ever fired. The update
+    // endpoint carries a hash segment (/livewire-<hash>/update), so match
+    // that shape rather than the bare /livewire/update path.
+    const update = page.waitForResponse(
+      (r) => /\/livewire[^/]*\/update/.test(r.url()) && r.request().method() === 'POST',
+      { timeout: 15000 },
+    );
+    await page.locator('#saveMapBoundaryBtn').click();
+    await update;
+
+    // saveBoundary dispatches boundaryUpdated, which reloads the page; the
+    // badge must flip to مرز تعریف شده.
+    await expect(page.locator('.badge', { hasText: 'مرز تعریف شده' })).toBeVisible({ timeout: 15000 });
+  });
+});
