@@ -391,19 +391,18 @@ return new class extends Component
     <livewire:maps.map wire:key="map-dashboard-page-map" />
 
     <!-- Unit Details Modal -->
-    <div x-data="{ unitId: null, unitDetails: null, loading: false }"
-         @showUnitDetails.window="unitId = $event.detail.unitId; loading = true; unitDetails = null; $nextTick(() => $refs.modal.showModal()); loadUnitDetails()">
+    <div x-data="unitDetailsModal">
         <dialog x-ref="modal" class="modal modal-bottom sm:modal-middle">
             <div class="modal-box">
                 <h3 class="font-bold text-lg mb-4">جزئیات واحد</h3>
                 <div x-show="loading" class="loading loading-spinner loading-lg"></div>
                 <div x-show="!loading && unitDetails" class="space-y-2">
-                    <div><strong>نام:</strong> <span x-text="unitDetails?.name"></span></div>
-                    <div><strong>نوع:</strong> <span x-text="unitDetails?.type"></span></div>
-                    <div><strong>موقعیت:</strong> <span x-text="(unitDetails?.lat ?? '') + ', ' + (unitDetails?.lng ?? '')"></span></div>
-                    <div><strong>زیرمجموعه‌ها:</strong> <span x-text="unitDetails?.children_count"></span></div>
+                    <div><strong>نام:</strong> <span x-text="unitName"></span></div>
+                    <div><strong>نوع:</strong> <span x-text="unitType"></span></div>
+                    <div><strong>موقعیت:</strong> <span x-text="unitLocation"></span></div>
+                    <div><strong>زیرمجموعه‌ها:</strong> <span x-text="unitChildrenCount"></span></div>
                 </div>
-                <div x-show="!loading && unitDetails && unitDetails.error" class="text-error" x-text="unitDetails?.error"></div>
+                <div x-show="!loading && unitDetails && unitDetails.error" class="text-error" x-text="unitError"></div>
                 <div class="modal-action mt-4">
                     <form method="dialog"><button class="btn">بستن</button></form>
                 </div>
@@ -411,15 +410,6 @@ return new class extends Component
         </dialog>
     </div>
 
-    <script nonce="{{ Vite::cspNonce() }}">
-        function loadUnitDetails() {
-            if (!this.unitId) return;
-            @this('loadUnitDetails', this.unitId).then(r => {
-                this.loading = false;
-                this.unitDetails = r;
-            });
-        }
-    </script>
 {{-- Issue #1352: popup/marker geometry + the `x-cloak` hide rule live in this
      nonce'd block instead of `style=` attributes (popup strings, the ticket
      marker, and the initially-hidden disease panel). The `:style` legend
