@@ -468,19 +468,22 @@ function setupUnitsEditMap() {
   if (!container || typeof L === 'undefined') {
     return;
   }
-  // Leaflet throws on a second L.map for the same element; setup
-  // re-runs on every navigation, so skip an initialised container.
-  if (container._leaflet_id) {
-    return;
-  }
   const { tileTemplate, geojson: initialGeojson } = readUnitMapData();
 
-  const component = (() => {
-    const root = container.closest('[wire\\:id]');
+  // #1391: resolve the Livewire component lazily, at call time, from the
+  // LIVE #unitMap element. The old code resolved it once at setup time;
+  // setup's first run happens in bootstrap's alpine:init handler, before
+  // the component is registered, so the closure kept null forever — and
+  // the _leaflet_id guard blocked every later run from re-resolving it.
+  // component?.call() then silently no-op'd: draw worked, save did
+  // nothing, no console error.
+  function resolveUnitMapComponent() {
+    const el = document.getElementById('unitMap');
+    const root = el ? el.closest('[wire\\:id]') : null;
     return root && typeof window.Livewire !== 'undefined'
       ? window.Livewire.find(root.getAttribute('wire:id'))
       : null;
-  })();
+  }
 
   function initUnitMap() {
     const unitMap = L.map('unitMap').setView([36.558188, 48.716125], 8);
@@ -637,6 +640,7 @@ function setupUnitsEditMap() {
   }
 
   window.saveMapBoundary = function () {
+    const component = resolveUnitMapComponent();
     if (window._mapGeojson) {
       component?.call('saveBoundary', window._mapGeojson);
     } else {
@@ -655,6 +659,15 @@ function setupUnitsEditMap() {
     window.Livewire.on('boundaryUpdated', function () {
       window.location.reload();
     });
+  }
+
+  // Leaflet throws on a second L.map for the same element, so only
+  // initialise an uninitialised container. The guard used to return from
+  // the whole setup here — which skipped the button binding above on
+  // every re-run (the button is replaced on navigate while #unitMap
+  // survives via wire:ignore), so the binding must run every time.
+  if (container._leaflet_id) {
+    return;
   }
 
   // Wait for the #unitMap DOM element to exist
