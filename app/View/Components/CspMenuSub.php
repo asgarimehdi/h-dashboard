@@ -57,7 +57,7 @@ class CspMenuSub extends Component
                 <li
                 @class(['menu-disabled' => $disabled, 'static!' => $horizontal])
                     x-data="maryMenuSub"
-                    data-show="@if(($submenuActive || $open) && !$horizontal) true @else false @endif"
+                    data-show="{{ ($submenuActive || $open) && !$horizontal ? 'true' : 'false' }}"
                 >
                     <details
                         :open="show"
