@@ -646,7 +646,7 @@ jobs:
           # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
           # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
           # ever printing the values.
-          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=<redacted>; s/^REDIS_PASSWORD=<redacted>' .env
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
           php artisan key:generate --force
 
       - name: Build .env.e2e (secret-safe)
