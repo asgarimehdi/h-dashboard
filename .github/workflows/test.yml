@@ -3,9 +3,11 @@ name: Tests
 on:
   pull_request:
     branches: [main, beta, test]
-  # Manual runs exist for the `mutation` job below, which is gated to this
-  # trigger (#1012): a manual run executes every job, so read the mutation
-  # job's own result, not the run's overall conclusion.
+  # The `mutation` job below runs on PRs too (re-enabled 2026-10-25,
+  # reversing the manual-only gate from #1012): it runs in parallel under
+  # E2E's ~30-minute shadow and gates nothing (`continue-on-error: true`).
+  # A manual run executes every job, so read the mutation job's own result,
+  # not the run's overall conclusion.
   workflow_dispatch:
 
 concurrency:
@@ -120,14 +122,7 @@ jobs:
       # or the built bundle — the build was never asserted on, only paid for.
       # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
-          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
-          # cache between parallel test processes and cross-pollutes their separate DBs.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+        run: bash scripts/build-env-testing.sh
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -298,7 +293,10 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # #1352: the cap is 45 per the owner's 2026-11-03 decision — attempt 2
+    # of the rebased head was cancelled at the 35-minute cap (35:26), while
+    # attempt 1 finished green inside 35. Supersedes D8's return-to-35.
+    timeout-minutes: 45
     # Non-blocking ramp (issue #867): the suite has never run in CI, so the
     # first executions will surface real latent failures (the inert
     # waitForLivewire() wait, the self-skipping unit-map-boundary spec).
@@ -446,19 +444,261 @@ jobs:
           grep -qE '[0-9]+ passed' e2e-list.log
           test "${EXECUTED}" -gt 0
 
+  csp-enforcing:
+    name: CSP Enforcing Gate (csp.spec.ts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Gate 2 (#1352, decision الف): a SEPARATE, BLOCKING job — no
+    # `continue-on-error` (unlike the `e2e` job above, which stays
+    # non-blocking per #867). It runs ONLY tests/e2e/security/csp.spec.ts
+    # with CSP_ENFORCING=true: the spec detects enforcing mode from the
+    # `content-security-policy` header and demands zero enforced violations.
+    # Flipping the whole suite to enforcing is the rollout step (Finding F1),
+    # not this gate. This job must be added to the branch's required status
+    # checks (admin) for the "blocking" part to bite — the workflow alone
+    # cannot require itself.
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_e2e
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for the app (CI services)
+        run: |
+          cp .env.example .env
+          # CI services: postgres/postgres/secret + passwordless redis.
+          # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
+          # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
+          # ever printing the values.
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+          php artisan key:generate --force
+
+      - name: Build .env.e2e (secret-safe)
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+
+      - name: Flip CSP_ENFORCING=true for this gate only
+        # Gate 2 (#1352, C3): the flip step the plan requires — it did not
+        # exist before this job. It touches the GENERATED .env.e2e only;
+        # .env.e2e.example stays `false`, so every other run stays
+        # report-only. Placed after the Build-.env.e2e step by design.
+        run: sed -i 's/^CSP_ENFORCING=.*/CSP_ENFORCING=true/' .env.e2e && grep -q '^CSP_ENFORCING=true' .env.e2e
+
+      - name: Assert APP_LOCALE=fa in .env.e2e
+        run: grep -q '^APP_LOCALE=fa' .env.e2e
+
+      - name: Verify the isolated e2e database exists
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+
+      - name: Cache Playwright chromium (issue #1067)
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run CSP spec in enforcing mode (list reporter proves execution)
+        # Through scripts/e2e-test.sh ONLY (see the `e2e` job's comment).
+        # --timeout=120000: the spec walks 7 pages with networkidle waits;
+        # it took 29.5s on a slow local VM, so the 30s default is marginal
+        # even before CI variance. The timeout is harness headroom, not a
+        # spec change.
+        run: bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
+
+      - name: Assert the gate spec really executed
+        run: |
+          EXECUTED=$(grep -cE '✓|✔|passed \(' csp-gate-list.log || true)
+          echo "csp gate executed-test lines: ${EXECUTED}"
+          grep -qE '[0-9]+ passed' csp-gate-list.log
+          test "${EXECUTED}" -gt 0
+
+  smoke:
+    name: Smoke Tests (actions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # BLOCKING job (owner decision 2026-11-08): the ten main journeys in
+    # tests/e2e/smoke/actions-smoke.spec.ts must pass for a PR to merge — no
+    # `continue-on-error` (unlike the `e2e` job, which stays non-blocking per
+    # #867). It runs ONLY the smoke spec, so it adds ~2 minutes, not the
+    # full suite's ~30. This job must be added to the branch's required
+    # status checks (admin) for the "blocking" part to bite — the workflow
+    # alone cannot require itself (same caveat as `csp-enforcing` above).
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_e2e
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy .env for the app (CI services)
+        run: |
+          cp .env.example .env
+          # CI services: postgres/postgres/secret + passwordless redis.
+          # This .env feeds BOTH the app and scripts/build-env-e2e.sh, which
+          # copies APP_KEY/DB_PASSWORD/REDIS_PASSWORD into .env.e2e without
+          # ever printing the values.
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/' .env
+          php artisan key:generate --force
+
+      - name: Build .env.e2e (secret-safe)
+        run: |
+          bash scripts/build-env-e2e.sh
+          sed -i -E 's/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=.*)<[^>]*>(.*)/\1\3/; s/^((REDIS_PASSWORD|DB_PASSWORD|DB_USERNAME)=)[[:space:]]*$/\1/' .env.e2e
+          grep -qE '^[^#]*<[^>]*>' .env.e2e && { echo "leftover <...> placeholder in .env.e2e"; exit 1; } || true
+
+      - name: Assert APP_LOCALE=fa in .env.e2e
+        run: grep -q '^APP_LOCALE=fa' .env.e2e
+
+      - name: Verify the isolated e2e database exists
+        run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
+
+      - name: Cache Playwright chromium (issue #1067)
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke suite (list reporter proves execution)
+        # Through scripts/e2e-test.sh ONLY (see the `e2e` job's comment).
+        # --workers=1: the suite is 10 tests / ~2 minutes sequential; the
+        # local parallel-workers flake (sidebar.spec.ts) is not worth
+        # re-proving here. --timeout=60000: OSM tile requests can hang and
+        # eat the 30s default on the map legs (seen locally on #1391).
+        run: bash scripts/e2e-test.sh tests/e2e/smoke/actions-smoke.spec.ts --workers=1 --timeout=60000 --reporter=list 2>&1 | tee smoke-list.log
+
+      - name: Assert the smoke suite really executed
+        run: |
+          EXECUTED=$(grep -cE '✓|✔|passed \(' smoke-list.log || true)
+          echo "smoke executed-test lines: ${EXECUTED}"
+          grep -qE '[0-9]+ passed' smoke-list.log
+          test "${EXECUTED}" -gt 0
+
   mutation:
     name: Mutation Testing
-    # Manual-only (#1012): the job is green, but each run is expensive
-    # (checkout, composer install and migrations before the single
-    # `pest --mutate` line below) and it used to spend ~23 minutes
-    # on every PR for a signal that gates nothing (`continue-on-error: true`).
-    # Re-enable on PRs by dropping this `if:`. The manual "Run workflow"
-    # button appears only once this trigger is on the default branch.
-    if: github.event_name == 'workflow_dispatch'
+    # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
+    # gate from #1012): each run is expensive (checkout, composer install
+    # and migrations before the single `pest --mutate` line below, ~30
+    # minutes as of 2026-10-28), but it runs in parallel with E2E and
+    # gates nothing (`continue-on-error: true`), so it adds no wall time.
+    # Cap 45 minutes (raised from 30 on 2026-10-28 after the job hit the
+    # 30-minute timeout on #1270 and #1271).
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # Non-blocking: the score is informational, so keeping this job off PRs
-    # removes no quality gate.
+    timeout-minutes: 45
+    # Non-blocking: the score is informational and gates nothing.
     continue-on-error: true
 
     services:
@@ -518,14 +758,7 @@ jobs:
       # or the built bundle — the build was never asserted on, only paid for.
       # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
-          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
-          # cache between parallel test processes and cross-pollutes their separate DBs.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+        run: bash scripts/build-env-testing.sh
 
       - name: Generate application key
         run: php artisan key:generate --env=testing
@@ -624,16 +857,24 @@ jobs:
         uses: actions/cache@v5
         with:
           path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          key: composer-vendor-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-vendor-${{ runner.os }}-
 
       - name: Install dependencies
-        # The lock predates PHP 8.6: three packages cap php at 8.5 — nette/schema
-        # and nette/utils (both on the production path, via league/commonmark) plus
-        # brianium/paratest (dev) — so a plain install cannot even resolve on 8.6,
-        # with or without dev dependencies. The preview installs the locked packages
-        # anyway — surfacing real 8.6 behaviour is the job's whole point. This flag
-        # exists ONLY in this job; it carries production weight, not just tooling.
+        # The *locked* versions cap php at 8.5: nette/schema v1.3.6 (8.1 - 8.5) and
+        # nette/utils v4.1.5 (8.2 - 8.5), both on the production path via
+        # league/commonmark -> league/config -> nette/schema -> nette/utils, plus
+        # brianium/paratest v7.20.0 (~8.3.0 || ~8.4.0 || ~8.5.0, dev) — so a plain
+        # install cannot even resolve on 8.6, with or without dev dependencies. The
+        # preview installs the locked packages anyway — surfacing real 8.6 behaviour
+        # is the job's whole point. Drop the flag once a plain install resolves on
+        # 8.6: nette is open upstream (nette/schema >=1.4.0 and nette/utils >=4.1.6
+        # allow 8.6 and sit inside today's ^1.2/^4.0, so a lock refresh clears both),
+        # while brianium/paratest needs >=7.25.0 (~8.4.0 || ~8.5.0 || ~8.6.0; 7.24.1
+        # still caps at 8.5) and that pulls phpunit ^13.3.4 (pest 5) — a test-stack
+        # major, not a bump. This flag exists ONLY in this job; it carries production
+        # weight, not just tooling.
         run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php
 
       # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
@@ -641,14 +882,7 @@ jobs:
       # or the built bundle — the build was never asserted on, only paid for.
       # The `e2e` job still builds: it drives a real browser.
       - name: Copy .env for testing
-        run: |
-          cp .env.example .env.testing
-          # Match the CI service containers (postgres: postgres/secret/h_dashboard_test, redis: no password).
-          # CACHE_STORE must be non-shared: Laravel 13 reads CACHE_STORE (not the legacy
-          # CACHE_DRIVER in .env.example); leaving it on redis shares spatie's permission
-          # cache between parallel test processes and cross-pollutes their separate DBs.
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=h_dashboard_test/; s/^DB_USERNAME=.*/DB_USERNAME=postgres/; s/^DB_PASSWORD=.*/DB_PASSWORD=secret/; s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=/; s/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env.testing
-          grep -q '^CACHE_STORE=' .env.testing || echo 'CACHE_STORE=array' >> .env.testing
+        run: bash scripts/build-env-testing.sh
 
       - name: Generate application key
         run: php artisan key:generate --env=testing

@@ -218,7 +218,7 @@ class TestAppKeyBootstrapTest extends TestCase
         // records the same trap. The FILE name proves the path argument
         // arrived; the COUNT proves all ten ran to completion.
         $this->assertMatchesRegularExpression(
-            '/Tests:\s+10 (passed|deprecated)/',
+            '/Tests:\s+12 (passed|deprecated)/',
             (string) $plain,
             $output
         );

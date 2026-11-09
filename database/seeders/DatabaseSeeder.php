@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             UnitTypeRelationshipSeeder::class,
             UnitSeeder::class,
             PersonsTableSeeder::class,
+            DiseaseSeeder::class,
         ]);
 
         // Demo login accounts (#1036). Deliberately detached from the batch

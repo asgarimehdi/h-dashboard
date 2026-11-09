@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\HardwareAudit;
+use App\Models\User;
 use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
 use Closure;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * The single writer for bulk hardware audit rows (#1026).
@@ -47,7 +49,8 @@ class HardwareBulkAuditWriter
         ?string $userAgent = null,
     ): void {
         $explicit = $source !== null;
-        $user = $explicit ? null : \Auth::user();
+        /** @var User|null $user */
+        $user = $explicit ? null : Auth::user();
         $request = $explicit ? null : request(); // actual request, not Request::capture()
         $resolvedUserAgent = $explicit ? $userAgent : $request?->userAgent();
 

@@ -20,12 +20,13 @@
 
 ### API Token Abilities (issue #690)
 
-Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise).
+Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise) — **except three intentionally exempt routes**: `POST /api/login` (public; it mints the token), `GET /api/user` and `POST /api/logout` (self-scoped; they act on the caller, not on a resource — logout by #1071, following the pre-existing `/api/user` precedent). A fourth exception is a decision, not an implementation detail: record it here and in `AGENTS.md`.
 
 Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:a,b` = ALL of them** (`CheckForAnyAbility` vs `CheckAbilities`).
 
 | Route group | Read (GET) | Write (POST/PUT/DELETE) |
 |---|---|---|
+| `/api/login`, `/api/user`, `/api/logout` | **none** — `POST /api/login` is public (no `auth:sanctum`); `GET /api/user` + `POST /api/logout` are `auth:sanctum` only (self-scoped; logout by #1071) | — |
 | `/api/units` | `ability:units:read` + `role_or_permission:organization` | `abilities:units:write` + `role_or_permission:organization` |
 | `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` + `role_or_permission:map\|bw` | — |
 | `/api/hardware/*` | `ability:hardware:read` + `role_or_permission:manage_hardware` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
@@ -36,6 +37,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 | `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | — (no write routes; the group is GET-only) |
 | `/api/notifications*` | `ability:notifications:read` | `abilities:notifications:write` (POST `{id}/read` and `read-all`, in their own group since #1002) |
 | `/api/gis*` | `ability:gis:read` + `role_or_permission:map\|bw` | — |
+| `/api/gis/diseases`, `/api/gis/disease-stats`, `/api/gis/disease-map` (#1245) | same `gis` group: `ability:gis:read` + `role_or_permission:map\|bw` | — (GET-only; no `manage_diseases`). Payloads are **aggregate-only and PII-free** — counts, rates and organizational names, never a patient identifier, name or dynamic field value. |
 
 - Mint a token with abilities: `$user->createToken('name', ['hardware:read'])->plainTextToken`.
 - Groups that also carry `role_or_permission:*` need **both** — token ability and Spatie permission — or the request is 403.
@@ -44,11 +46,15 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - Tokens are **scoped and revoked on password change** (#678) on **both** password-change paths: the self-service form (`resources/views/livewire/auth/changepassword.blade.php`) and an admin reset through `users.index`'s `updateUser()` (#1030) each `delete()` **all** of the account's Sanctum tokens — including `map-dashboard`, not just `flutter-app`, so the two paths stay in lockstep. The admin path is guarded on an actually-changed password: a profile/role edit that leaves the password untouched keeps every token alive. API tests use **real Bearer tokens** with explicit abilities, not bare `Sanctum::actingAs()` — pattern in `tests/Feature/ApiAbilityTest.php`.
 
 
-**Safe Role/Permission Middleware:** `SafeRoleOrPermission` is registered but **intentionally NOT used on hardware routes**. Hardware routes require full auth via `auth` + `role_or_permission:manage_hardware`.
+**Hardware routes require full auth:** `auth` + `role_or_permission:manage_hardware`. A guest-bypassing middleware alias used to sit here and was removed in #1287 — do not reintroduce a middleware that skips `auth()->check()` for guests; its test was pinning 200-for-guests.
 
 > **Gotcha:** `test_hardware_page_loads_without_auth` asserts **302 → /login** for guests — a security decision. Do NOT "fix" it back to 200 — that reopens the data leak.
 
 **Unit Context Middleware:** `ValidateUnitContext` ensures `session('current_unit_id')` is set before entering unit-scoped sections.
+
+### Patient registry write path (#1300)
+
+`App\Services\PatientService` is the patient registry's **only write path** — web/Livewire only; **no API route or token ability is added for patients (ADR 0002: no patient write API)**. Input is Jalali (`birth_date_jalali`); `create()` normalizes (digits + trim) *then* re-applies its `validationRules()` on the normalized copy, inserts only the five validated keys, and wraps insert + `ActivityLogService::created` audit in one transaction — a failed audit rolls the patient back. No unit scope (`patients` has no unit column). A PostgreSQL `23505` becomes a `ValidationException` under the `duplicate` key with a PII-free message; callers keep the friendly path (`duplicateMessage` + `duplicatePatientId` via lookup) in `disease/patients` and map errors onto `newPatient.<key>` in the case form.
 
 ### Security Headers
 
@@ -56,7 +62,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `Content-Security-Policy-Report-Only` — CSP in report-only mode (validate 1-2 weeks before enforcing)
+- `Content-Security-Policy` (enforcing) or `Content-Security-Policy-Report-Only` (default) — per-request nonce (`App\Support\CspPolicy::for($nonce)`); `'unsafe-inline'` is gone from `script-src`/`style-src`, `both `'unsafe-eval'` (phase 2 PR 2, #1352 — Livewire serves its CSP-safe build via `config('livewire.csp_safe')`) and `style-src-attr 'unsafe-inline'` (phase 2 PR 1, #1352, after the `style=` migration) are gone; `connect-src` carries the OSRM/Nominatim origins from `config/map.php`; switch via `config('csp.enforcing')` / `CSP_ENFORCING` (#1281, phase 1).
 - `Reporting-Endpoints: csp-endpoint="/csp-report"` — the Reporting API destination
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS)
 

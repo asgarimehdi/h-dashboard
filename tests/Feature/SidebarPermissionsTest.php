@@ -47,6 +47,11 @@ class SidebarPermissionsTest extends TestCase
         '/hr/org-chart' => ['manage_org_chart', 'view_hr_dashboard'],
         '/kargozini/persons' => ['kargozini', 'manage_personnel'],
         '/units' => ['organization'],
+        // Issue #1246 — four pages, one permission, same on the menu and the route.
+        '/disease' => ['manage_diseases'],
+        '/disease/create' => ['manage_diseases'],
+        '/disease/patients' => ['manage_diseases'],
+        '/disease/manage' => ['manage_diseases'],
         '/todo' => ['calendar'],
         '/roles' => ['manage_roles'],
         // Issue #897: /search stays visible to EVERY authenticated account
@@ -57,7 +62,7 @@ class SidebarPermissionsTest extends TestCase
         // lists every known permission: each holder sees it, and the
         // unrelated-permission loop below stays vacuous. When adding a new
         // permission to this map, append it here too.
-        '/search' => ['map', 'bw', 'manage_zabbix', 'manage_users', 'manage_hardware', 'manage_personnel', 'view_hr_dashboard', 'manage_org_chart', 'kargozini', 'organization', 'calendar', 'manage_roles'],
+        '/search' => ['map', 'bw', 'manage_zabbix', 'manage_users', 'manage_hardware', 'manage_personnel', 'view_hr_dashboard', 'manage_org_chart', 'kargozini', 'organization', 'calendar', 'manage_roles', 'manage_diseases'],
     ];
 
     protected function setUp(): void
@@ -207,6 +212,29 @@ class SidebarPermissionsTest extends TestCase
 
         $this->actingAs($manageUsersOnly)->get('/activity-log')->assertOk();
         $this->actingAs($manageUsersOnly)->get('/reports/units')->assertStatus(403);
+    }
+
+    public function test_merged_tools_group_keeps_each_items_gate(): void
+    {
+        $cases = [
+            'فقط manage_users' => [['manage_users'], ['/tools' => true, '/it/networks' => false, '/it/zabbix-devices' => false]],
+            'فقط map' => [['map'], ['/tools' => false, '/it/networks' => true, '/it/zabbix-devices' => false]],
+            'فقط manage_zabbix' => [['manage_zabbix'], ['/tools' => false, '/it/networks' => false, '/it/zabbix-devices' => true]],
+            'هر دو' => [['manage_users', 'map'], ['/tools' => true, '/it/networks' => true, '/it/zabbix-devices' => false]],
+            'هیچ‌کدام' => [['calendar'], ['/tools' => false, '/it/networks' => false, '/it/zabbix-devices' => false]],
+        ];
+
+        foreach ($cases as $label => [$permissions, $expected]) {
+            $html = $this->sidebarFor($permissions);
+            $groupExpected = $permissions !== ['calendar'];
+
+            $this->assertSame($groupExpected, str_contains($html, 'ابزارهای مدیریتی'),
+                "دیده‌شدن گروه «ابزارهای مدیریتی» برای «{$label}» اشتباه است.");
+            foreach ($expected as $href => $visible) {
+                $this->assertSame($visible, str_contains($html, 'href="'.$href.'"'),
+                    "دیده‌شدن «{$href}» برای «{$label}» اشتباه است.");
+            }
+        }
     }
 
     public function test_unit_manager_role_keeps_report_access(): void

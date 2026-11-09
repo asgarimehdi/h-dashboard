@@ -5,8 +5,8 @@ namespace App\Exports;
 use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Person;
 use App\Models\Unit;
-use App\Services\UnitTreeService;
 use App\Support\ExcelCell;
+use App\Support\UnitAncestry;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
@@ -61,16 +61,10 @@ class PersonsExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, W
     protected int $chunkSize = 500;
 
     /**
-     * Breadcrumb walker from the shared unit tree service (#756) — the same
-     * chain the tree UI and the units export resolve their hierarchy with.
-     */
-    protected UnitTreeService $unitTree;
-
-    /**
-     * Every unit keyed by id with `parent` linked in memory, built once on
-     * first row so mapping never walks back to the database.
+     * Every unit's `id => [name, parent_id]`, built once on first row so
+     * mapping never walks back to the database.
      *
-     * @var array<int, Unit>|null
+     * @var array<int, array{name: string, parent_id: int|null}>|null
      */
     protected ?array $unitsById = null;
 
@@ -78,7 +72,6 @@ class PersonsExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, W
     public function __construct(Builder $persons)
     {
         $this->persons = $persons;
-        $this->unitTree = new UnitTreeService;
     }
 
     /**
@@ -163,33 +156,33 @@ class PersonsExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, W
      * units export's «مسیر کامل» column (#756): every ancestor names the
      * path, joined with ' > ', and ancestors above the caller's scope still
      * appear (the tree page renders those, so nothing new leaks). Walking
-     * `UnitTreeService::ancestorChain()` over the in-memory index keeps the
-     * guarantee the class docblock makes: mapping a row never queries.
+     * `UnitAncestry::chain()` over the in-memory index keeps the guarantee the
+     * class docblock makes: mapping a row never queries.
      * A person whose unit is missing or gone reports '-' like every other
      * absent cell in this sheet.
      */
     protected function resolveUnitPath(Person $person): string
     {
         $units = $this->unitsById();
-        $unit = $units[(int) $person->u_id] ?? null;
+        $unitId = (int) $person->u_id;
 
-        if (! $unit instanceof Unit) {
+        if (! isset($units[$unitId])) {
             return '-';
         }
 
-        $chain = $this->unitTree->ancestorChain($unit, array_keys($units));
+        $chain = array_column(UnitAncestry::chain($unitId, $units, null), 'name');
 
-        return $chain->pluck('name')->push($unit->name)->implode(' > ');
+        return implode(' > ', [...$chain, $units[$unitId]['name']]);
     }
 
     /**
-     * All units keyed by id, with each `parent` relation pre-linked in
-     * memory. One query per export, not one per row or per hop — the same
-     * shape UnitsExportController's `hierarchyMap()` gives the units
-     * breadcrumb. The index deliberately covers every unit, not just the
-     * caller's scope, so `ancestorChain()` walks to the real root.
+     * Every unit's `id => [name, parent_id]`, in one query per export, not one
+     * per row or per hop — the same shape UnitsExportController's
+     * `hierarchyMap()` gives the units breadcrumb. Built once per export
+     * instance. The index deliberately covers every unit, not just the caller's
+     * scope, so the chain walks to the real root.
      *
-     * @return array<int, Unit>
+     * @return array<int, array{name: string, parent_id: int|null}>
      */
     protected function unitsById(): array
     {
@@ -197,19 +190,13 @@ class PersonsExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, W
             return $this->unitsById;
         }
 
-        /** @var array<int, Unit> $units */
         $units = [];
 
         foreach (Unit::query()->get(['id', 'name', 'parent_id']) as $unit) {
-            $units[(int) $unit->id] = $unit;
-        }
-
-        foreach ($units as $unit) {
-            if ($unit->parent_id !== null) {
-                // A parent_id pointing outside the index (impossible under
-                // the FK, guarded anyway) ends the chain instead of exploding.
-                $unit->setRelation('parent', $units[(int) $unit->parent_id] ?? null);
-            }
+            $units[(int) $unit->id] = [
+                'name' => $unit->name,
+                'parent_id' => $unit->parent_id,
+            ];
         }
 
         return $this->unitsById = $units;

@@ -1,10 +1,12 @@
 import { test, expect, login, logout, TEST_USER } from '../shared/fixtures';
 
+type Page = import('@playwright/test').Page;
+
 /**
  * Plan 002 — Navigation & Sidebar E2E
  *
  * The sidebar is the primary navigation surface: a MaryUI `x-menu activate-by-route`
- * inside a collapsible drawer (`#main-drawer`). It renders 10 collapsible sections
+ * inside a collapsible drawer (`#main-drawer`). It renders 9 collapsible sections
  * as native `<details>/<summary>` and each menu item as `<li><a wire:navigate>`.
  *
  * DOM facts (probed against the live app, NOT guessed):
@@ -21,7 +23,6 @@ const SECTION_TITLES = [
   'مدیریت سازمان',
   'کار با نقشه',
   'ابزارهای مدیریتی',
-  'ابزار مدیریتی',
   'سخت‌افزار',
   'گزارش‌ها',
   'مدیریت',
@@ -31,7 +32,7 @@ const SECTION_TITLES = [
 const STANDALONE_ITEMS = ['جستجوی کلی', 'صفحه اول', 'پروفایل من', 'تنظیمات'];
 
 test.describe('sidebar structure', () => {
-  test('renders all 8 collapsible sections', async ({ page }) => {
+  test('renders all 9 collapsible sections', async ({ page }) => {
     await login(page);
     const summaries = page.locator('.drawer-side summary');
 
@@ -123,6 +124,48 @@ test.describe('active state highlight', () => {
       await expect(page.locator(`.drawer-side a[href="${href}"][aria-current="page"]`)).toHaveCount(1);
     });
   }
+});
+
+test.describe('submenu open state (#1389)', () => {
+  // The بیماری‌ها submenu holds the current page on /disease, so its
+  // <details> must render open. Regression: CspMenuSub emitted
+  // data-show=" true " (whitespace from the @if form), which never equalled
+  // 'true' in maryMenuSub.init(), so every submenu initialised closed —
+  // on full load and after a wire:navigate swap alike. Assert the `open`
+  // PROPERTY, not only visibility: a collapsed <details> still gives its
+  // children a non-empty box in Chromium.
+  const diseaseDetails = (page: Page) =>
+    page.locator('.drawer-side summary', { hasText: 'بیماری‌ها' }).first().locator('..');
+
+  test('submenu of the current page is open on full load', async ({ page }) => {
+    await login(page);
+    await page.goto('/disease');
+    await page.waitForLoadState('domcontentloaded');
+
+    await expect(diseaseDetails(page)).toHaveJSProperty('open', true);
+  });
+
+  test('submenu stays open after a wire:navigate click', async ({ page }) => {
+    await login(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Arm a marker: it survives an SPA swap and vanishes on a full reload.
+    await page.evaluate(() => {
+      (window as unknown as { __probe?: string }).__probe = 'alive';
+    });
+
+    // No child is active on /dashboard, so open the submenu first.
+    await page.locator('.drawer-side summary', { hasText: 'بیماری‌ها' }).first().click();
+    await expect(diseaseDetails(page)).toHaveJSProperty('open', true);
+
+    await page.locator('.drawer-side a[href="/disease"]').first().click();
+    await page.waitForURL('**/disease');
+
+    // Still a swap, not a full reload — and the submenu stayed open.
+    expect(await page.evaluate(() => (window as unknown as { __probe?: string }).__probe)).toBe('alive');
+    await expect(diseaseDetails(page)).toHaveJSProperty('open', true);
+  });
 });
 
 test.describe('mobile drawer', () => {

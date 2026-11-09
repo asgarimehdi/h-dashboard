@@ -5,18 +5,20 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Services\DailySeries;
 use App\Support\JalaliDateRange;
+use App\Support\ScopeCacheKey;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Morilog\Jalali\Jalalian;
 
+// Versioned cache reads in this component go through CacheInvalidationService (#1348).
 return new class extends Component
 {
     use WithPagination;
@@ -50,14 +52,20 @@ return new class extends Component
         if ($accessibleIds === []) {
             $this->units = [];
         } else {
-            $cacheKey = 'advanced_report:units:'.md5(implode(',', $accessibleIds));
-            $this->units = Cache::remember($cacheKey, 300, function () use ($accessibleIds) {
+            // Issue #1348: versioned read on the shared `report_units`
+            // namespace (same writers as ReportController::units()). The
+            // distinguishing extra is load-bearing: without it this payload
+            // would share a key with the controller's differently-shaped
+            // payload for the same scope. The scope hash replaces the raw
+            // hand-rolled hash — this line is also #1349's fix, subsumed
+            // here while PR #1353 is still open. 300 seconds is 5 minutes.
+            $this->units = app(CacheInvalidationServiceInterface::class)->remember('report_units', ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds) {
                 return Unit::whereIn('id', $accessibleIds)
                     ->select('id', 'name', 'parent_id')
                     ->orderBy('name')
                     ->get()
                     ->toArray();
-            });
+            }, 5, ['site' => 'advanced_report_units']);
         }
     }
 
@@ -207,28 +215,177 @@ return new class extends Component
 
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = match ($this->reportType) {
-            'tickets' => Ticket::whereIn('unit_id', $accessibleIds),
-            'todos' => Todo::whereIn('unit_id', $accessibleIds),
-            'persons' => Person::whereIn('u_id', $accessibleIds),
-            default => Ticket::whereIn('unit_id', $accessibleIds),
-        };
+        // Issue #1351 — all three branches go through the versioned cache
+        // below; the persons branch has its own `report_persons` namespace
+        // with invalidation hooks on Person and the three lookup models.
+        return $this->rememberReport($accessibleIds);
+    }
+
+    /**
+     * Issue #1282 — cache the whole tickets/todos/persons payload behind the
+     * existing versioned namespaces (#1351 adds `report_persons`).
+     *
+     * The filters, the query and `Unit::descendantIds()` all run inside the
+     * closure so a cache hit costs zero report queries. The key carries every
+     * input that changes the payload: scope hash (namespace version handles
+     * Ticket/Todo/Person writes), from/to, the effective unit, the normalized status,
+     * and the hierarchy version for unit names and descendants.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>|array{byEstekhdam: array<string, int>, byTahsil: array<string, int>, bySemat: array<string, int>}}
+     */
+    private function rememberReport(array $accessibleIds): array
+    {
+        $from = JalaliDateRange::parse($this->dateFrom);
+        $to = JalaliDateRange::parse($this->dateTo, endOfDay: true);
+        $range = $this->dateRange();
+        $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+
+        /** @var array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>|array{byEstekhdam: array<string, int>, byTahsil: array<string, int>, bySemat: array<string, int>}} $data */
+        $data = $cache->remember(
+            match ($this->reportType) {
+                'todos' => 'report_todos',
+                'persons' => 'report_persons',
+                default => 'report_tickets',
+            },
+            ScopeCacheKey::hash($accessibleIds),
+            fn (): array => $this->reportType === 'persons'
+                ? $this->buildPersonsReport($accessibleIds, $from, $to, $range, $unitId)
+                : $this->buildReport($accessibleIds, $from, $to, $range, $unitId),
+            10,
+            [
+                'type' => $this->reportType,
+                'from' => $from?->toDateString(),
+                'to' => $to?->toDateString(),
+                'days' => $range ? (int) $range[0]->diffInDays($range[1]) + 1 : null,
+                'unit' => $unitId,
+                'status' => $this->statusFilter,
+                'hierarchy' => $cache->getVersion('unit_hierarchy'),
+            ],
+        );
+
+        return $data;
+    }
+
+    /**
+     * Build the uncached tickets/todos payload (the cache-miss path).
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  array{0: Carbon, 1: Carbon}|null  $range
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array<string, int>}
+     */
+    private function buildReport(array $accessibleIds, ?Carbon $from, ?Carbon $to, ?array $range, ?int $unitId): array
+    {
+        $query = $this->reportType === 'todos'
+            ? Todo::whereIn('unit_id', $accessibleIds)
+            : Ticket::whereIn('unit_id', $accessibleIds);
 
         // فیلتر تاریخ (ورودی شمسی)
-        if ($from = JalaliDateRange::parse($this->dateFrom)) {
+        if ($from) {
             $query->where('created_at', '>=', $from);
         }
-        if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
+        if ($to) {
             $query->where('created_at', '<=', $to);
         }
 
         // فیلتر واحد (سلسله‌مراتبی)
-        $unitId = $this->unitId ?? $this->parentUnitId ?? $this->rootUnitId;
         if ($unitId) {
             $descendantIds = Unit::descendantIds($unitId)->toArray();
             $descendantIds[] = $unitId;
-            $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
-            $query->whereIn($unitColumn, $descendantIds);
+            $query->whereIn('unit_id', $descendantIds);
+        }
+
+        // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
+        // STATUS_OPTIONS کنار هم زندگی می‌کنند؛ todos ستون status ندارد و
+        // روی is_completed/end_at نگاشت می‌شود.
+        $this->applyStatusFilter($query);
+
+        // Issue #736: materialise every day in the chosen range, zeros included,
+        // so a day with no rows is a zero rather than a missing column. The
+        // filtered $query is reused, so unit/status/date filters still apply.
+        $byDay = $range
+            ? array_map(
+                fn (array $row) => [
+                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                    'count' => $row['count'],
+                ],
+                DailySeries::between($range[0], $range[1])->counts($query->clone(), 'created_at')
+            )
+            : [];
+
+        $byUnit = (clone $query)
+            ->selectRaw('unit_id, count(*) as count')
+            ->groupBy('unit_id')
+            ->with('unit:id,name')
+            ->get()
+            ->mapWithKeys(fn ($item) => [$item->unit->name ?? 'نامشخص' => $item->count])
+            ->toArray();
+
+        if ($this->reportType === 'tickets') {
+            // Issue #1282 — total and the four detail buckets in one aggregate.
+            // Only the FILTER syntax comes from the dashboard: urgent/normal/low
+            // count every status here, and overdue binds PHP `now()`, not SQL
+            // `NOW()`.
+            $stats = (clone $query)->selectRaw(
+                'COUNT(*) AS total, '.
+                'COUNT(*) FILTER (WHERE tickets.priority = ?) AS urgent, '.
+                'COUNT(*) FILTER (WHERE tickets.priority = ?) AS normal, '.
+                'COUNT(*) FILTER (WHERE tickets.priority = ?) AS low, '.
+                'COUNT(*) FILTER (WHERE tickets.status IN (?, ?) AND tickets.deadline < ?) AS overdue',
+                ['urgent', 'normal', 'low', 'created', 'forwarded', now()],
+            )->toBase()->first();
+
+            $total = (int) ($stats->total ?? 0);
+            $details = [
+                'urgent' => (int) ($stats->urgent ?? 0),
+                'normal' => (int) ($stats->normal ?? 0),
+                'low' => (int) ($stats->low ?? 0),
+                'overdue' => (int) ($stats->overdue ?? 0),
+            ];
+        } else {
+            $total = $query->count();
+            $details = [];
+        }
+
+        return [
+            'total' => $total,
+            'byDay' => $byDay,
+            'byUnit' => $byUnit,
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Build the uncached persons payload (the cache-miss path) — issue #1351.
+     *
+     * The `details` lookups deliberately ignore the date/status filters
+     * while `total`/`byDay`/`byUnit` honour them; that inconsistency is
+     * pinned on purpose (see the parity test) and is preserved here, not
+     * "fixed" by the caching migration.
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  array{0: Carbon, 1: Carbon}|null  $range
+     * @return array{total: int, byDay: array<int, array{day: string, count: int}>, byUnit: array<string, int>, details: array{byEstekhdam: array<string, int>, byTahsil: array<string, int>, bySemat: array<string, int>}}
+     */
+    private function buildPersonsReport(array $accessibleIds, ?Carbon $from, ?Carbon $to, ?array $range, ?int $unitId): array
+    {
+        $query = Person::whereIn('u_id', $accessibleIds);
+
+        // فیلتر تاریخ (ورودی شمسی)
+        if ($from) {
+            $query->where('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->where('created_at', '<=', $to);
+        }
+
+        // فیلتر واحد (سلسله‌مراتبی)
+        if ($unitId) {
+            $descendantIds = Unit::descendantIds($unitId)->toArray();
+            $descendantIds[] = $unitId;
+            $query->whereIn('u_id', $descendantIds);
         }
 
         // فیلتر وضعیت — نوع‌آگاه (#915): هر گزینه و predicate‌اش در
@@ -241,7 +398,6 @@ return new class extends Component
         // Issue #736: materialise every day in the chosen range, zeros included,
         // so a day with no rows is a zero rather than a missing column. The
         // filtered $query is reused, so unit/status/date filters still apply.
-        $range = $this->dateRange();
         $byDay = $range
             ? array_map(
                 fn (array $row) => [
@@ -252,51 +408,37 @@ return new class extends Component
             )
             : [];
 
-        $unitColumn = $this->reportType === 'persons' ? 'u_id' : 'unit_id';
         $byUnit = $query->clone()
-            ->selectRaw("$unitColumn, count(*) as count")
-            ->groupBy($unitColumn)
+            ->selectRaw('u_id, count(*) as count')
+            ->groupBy('u_id')
             ->with('unit:id,name')
             ->get()
             ->mapWithKeys(fn ($item) => [$item->unit?->name ?? 'نامشخص' => $item->count])
             ->toArray();
 
-        $details = [];
-        if ($this->reportType === 'tickets') {
-            $details = [
-                'urgent' => (clone $query)->where('priority', 'urgent')->count(),
-                'normal' => (clone $query)->where('priority', 'normal')->count(),
-                'low' => (clone $query)->where('priority', 'low')->count(),
-                'overdue' => (clone $query)
-                    ->whereIn('status', ['created', 'forwarded'])
-                    ->where('deadline', '<', now())
-                    ->count(),
-            ];
-        } elseif ($this->reportType === 'persons') {
-            $details = [
-                'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                    ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-                    ->whereIn('persons.u_id', $accessibleIds)
-                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                    ->groupBy('name')
-                    ->pluck('count', 'name')
-                    ->toArray(),
-                'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                    ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-                    ->whereIn('persons.u_id', $accessibleIds)
-                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                    ->groupBy('name')
-                    ->pluck('count', 'name')
-                    ->toArray(),
-                'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
-                    ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-                    ->whereIn('persons.u_id', $accessibleIds)
-                    ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
-                    ->groupBy('name')
-                    ->pluck('count', 'name')
-                    ->toArray(),
-            ];
-        }
+        $details = [
+            'byEstekhdam' => Person::selectRaw('COALESCE(estekhdams.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+            'byTahsil' => Person::selectRaw('COALESCE(tahsils.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+            'bySemat' => Person::selectRaw('COALESCE(semats.name, ?) as name, COUNT(*) as count', ['نامشخص'])
+                ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+                ->whereIn('persons.u_id', $accessibleIds)
+                ->when($unitId, fn ($q) => $q->whereIn('persons.u_id', $descendantIds))
+                ->groupBy('name')
+                ->pluck('count', 'name')
+                ->toArray(),
+        ];
 
         return [
             'total' => $total,
@@ -317,7 +459,7 @@ return new class extends Component
     }
 }; ?>
 <div>
-    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+    {{-- Issue #1042: server-rendered chart aggregates. resources/js/report-charts.js reads
         this (morphed on every render) instead of firing a second method request
         per filter change. --}}
     <div id="advancedChartData" class="hidden" data-chart='@json(['byDay' => $this->reportData['byDay'], 'byUnit' => $this->reportData['byUnit'], 'details' => $this->reportData['details']])'></div>
@@ -438,12 +580,12 @@ return new class extends Component
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <x-card shadow>
             <h3 class="font-bold mb-4">روند روزانه</h3>
-            <div id="trendChart" wire:ignore style="height: 300px;"></div>
+            <div id="trendChart" wire:ignore class="h-[300px]"></div>
         </x-card>
 
         <x-card shadow>
             <h3 class="font-bold mb-4">توزیع بر اساس واحد</h3>
-            <div id="unitChart" wire:ignore style="height: 300px;"></div>
+            <div id="unitChart" wire:ignore class="h-[300px]"></div>
         </x-card>
     </div>
 
@@ -452,15 +594,15 @@ return new class extends Component
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         <x-card shadow>
             <h3 class="font-bold mb-4">توزيع بر اساس استخدام</h3>
-            <div id="estekhdamChart" wire:ignore style="height: 300px;"></div>
+            <div id="estekhdamChart" wire:ignore class="h-[300px]"></div>
         </x-card>
         <x-card shadow>
             <h3 class="font-bold mb-4">توزيع بر اساس تحصیلات</h3>
-            <div id="tahsilChart" wire:ignore style="height: 300px;"></div>
+            <div id="tahsilChart" wire:ignore class="h-[300px]"></div>
         </x-card>
         <x-card shadow>
             <h3 class="font-bold mb-4">توزيع بر اساس سمت</h3>
-            <div id="sematChart" wire:ignore style="height: 300px;"></div>
+            <div id="sematChart" wire:ignore class="h-[300px]"></div>
         </x-card>
     </div>
     @endif
@@ -479,142 +621,3 @@ return new class extends Component
 <script src="{{ asset('js/chart/accessibility.js') }}"></script>
 @endassets
 
-@script
-<script>
-    function waitForHighcharts(callback, attempts = 0) {
-        if (typeof window.Highcharts !== 'undefined') {
-            callback();
-            return;
-        }
-        if (attempts > 100) {
-            console.error('Highcharts failed to load');
-            return;
-        }
-        setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-    }
-
-    function destroyChartById(id) {
-        const container = document.getElementById(id);
-        if (!container || typeof Highcharts === 'undefined') {
-            return;
-        }
-        const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-        if (existing) {
-            existing.destroy();
-        }
-        container.innerHTML = '';
-    }
-
-    function renderCharts() {
-        waitForHighcharts(() => {
-            // Issue #1042: read the server-rendered aggregates above — the view
-            // already ran reportData for this render, so a second method request
-            // would just re-run it.
-            const el = document.getElementById('advancedChartData');
-            const reportData = el ? JSON.parse(el.dataset.chart) : {};
-
-            destroyChartById('trendChart');
-            destroyChartById('unitChart');
-            destroyChartById('estekhdamChart');
-            destroyChartById('tahsilChart');
-            destroyChartById('sematChart');
-
-            if (reportData.byDay && reportData.byDay.length > 0) {
-                Highcharts.chart('trendChart', {
-                    chart: { type: 'areaspline' },
-                    title: { text: '' },
-                    xAxis: { categories: reportData.byDay.map(d => d.day) },
-                    yAxis: { title: { text: 'تعداد' } },
-                    series: [{
-                        name: 'تعداد',
-                        data: reportData.byDay.map(d => d.count),
-                        color: '#6366f1',
-                        fillColor: { linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 }, stops: [[0, 'rgba(99,102,241,0.3)'], [1, 'rgba(99,102,241,0)']] }
-                    }],
-                    credits: { enabled: false }
-                });
-            }
-
-            const unitLabels = Object.keys(reportData.byUnit || {});
-            const unitValues = Object.values(reportData.byUnit || {});
-            if (unitLabels.length > 0) {
-                Highcharts.chart('unitChart', {
-                    chart: { type: 'pie' },
-                    title: { text: '' },
-                    series: [{ name: 'تعداد', data: unitLabels.map((label, i) => ({ name: label, y: unitValues[i] })) }],
-                    credits: { enabled: false }
-                });
-            }
-
-            const details = reportData.details || {};
-            const pieColors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
-
-            function renderPieChart(containerId, data) {
-                const labels = Object.keys(data || {});
-                const values = Object.values(data || {});
-                if (labels.length > 0) {
-                    Highcharts.chart(containerId, {
-                        chart: { type: 'pie' },
-                        title: { text: '' },
-                        series: [{
-                            name: 'تعداد',
-                            data: labels.map((label, i) => ({ name: label, y: values[i], color: pieColors[i % pieColors.length] }))
-                        }],
-                        credits: { enabled: false }
-                    });
-                }
-            }
-
-            renderPieChart('estekhdamChart', details.byEstekhdam);
-            renderPieChart('tahsilChart', details.byTahsil);
-            renderPieChart('sematChart', details.bySemat);
-        });
-    }
-
-    // Full page load + wire:navigate
-    renderCharts();
-
-    // Re-render after filter updates
-    // Issue #1042: the report-type and unit selects re-render through the DOM
-    // payload (morphed on each server render) instead of a second
-    // `chartPayload()` request. The date watchers stay because the Jalali
-    // datepicker writes the properties via `$wire.set`.
-    $wire.$watch('dateFrom', () => renderCharts());
-    $wire.$watch('dateTo', () => renderCharts());
-    Livewire.hook('morphed', ({ component }) => {
-        if (component.id === $wire.$id) renderCharts();
-    });
-
-    const initAdvancedReportJdp = () => {
-        if (typeof jalaliDatepicker === 'undefined') {
-            return;
-        }
-
-        jalaliDatepicker.startWatch({
-            time: false,
-            hasSecond: false,
-            format: 'YYYY/MM/DD',
-            separatorChars: { date: '/', between: ' ', time: ':' },
-        });
-
-        const fromInput = document.getElementById('advanced_report_date_from');
-        const toInput = document.getElementById('advanced_report_date_to');
-
-        if (fromInput && !fromInput.dataset.jdpBound) {
-            fromInput.dataset.jdpBound = '1';
-            fromInput.addEventListener('jdp:change', e => {
-                $wire.set('dateFrom', e.target.value);
-            });
-        }
-        if (toInput && !toInput.dataset.jdpBound) {
-            toInput.dataset.jdpBound = '1';
-            toInput.addEventListener('jdp:change', e => {
-                $wire.set('dateTo', e.target.value);
-            });
-        }
-    };
-
-    initAdvancedReportJdp();
-    document.addEventListener('livewire:navigated', initAdvancedReportJdp);
-</script>
-@endscript

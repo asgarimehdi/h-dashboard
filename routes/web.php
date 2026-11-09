@@ -3,10 +3,15 @@
 use App\Http\Controllers\Api\HardwareExportController;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
+use App\Http\Controllers\BackupController;
+use App\Http\Controllers\TicketAttachmentController;
+use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Session;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
@@ -38,6 +43,7 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 // Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
 Route::post('/logout', function () {
+    /** @var User|null $user */
     $user = Auth::user();
     $userId = Auth::id();
     $userName = $user?->name ?? 'نامشخص';
@@ -62,13 +68,6 @@ Route::post('/logout', function () {
 
     return redirect('/');
 })->name('logout');
-
-// Test route for SafeRoleOrPermission middleware
-if (app()->isLocal() || app()->environment('testing')) {
-    Route::middleware('safe_role_or_permission:test-permission')->get('/test-safe-route', function () {
-        return response('OK', 200);
-    })->name('test.safe-route');
-}
 
 // Protected routes here
 Route::middleware('auth')->group(function () {
@@ -125,6 +124,24 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/hr/org-chart', 'hr.org-chart')->name('hr.org-chart');
         });
 
+        // مدیریت بیماری‌ها و فیلدهایشان (Issue #1242، فاز ۲) — ورودی منو در
+        // فاز ۴ (#1246) آمد.
+        Route::middleware('role_or_permission:manage_diseases')->group(function () {
+            // Issue #1246، فاز ۴: دو صفحهٔ باقی‌مانده. گروه `unit_context` بیرونی
+            // است (بالاتر)، پس `ValidateUnitContext` خودکار اعمال می‌شود.
+            Route::livewire('/disease', 'disease.index')->name('disease.index');
+            Route::livewire('/disease/create', 'disease.create')->name('disease.create');
+
+            Route::livewire('/disease/manage', 'disease.manage')->name('disease.manage');
+        });
+
+        // پروندهٔ بیماران (Issue #1243، فاز ۲) — گروه جدا، نه تودرتو با
+        // `disease.manage`/`map` (nesting = AND). صفحه unit-scoped نیست؛
+        // دسترسی مستقیم فقط با همین پرمیژن است (اسپک §4.1). ورودی منو فاز ۴.
+        Route::middleware('role_or_permission:manage_diseases')->group(function () {
+            Route::livewire('/disease/patients', 'disease.patients')->name('disease.patients');
+        });
+
         Route::middleware('role_or_permission:map')->group(function () {
             Route::livewire('/maps/route', 'maps/route');
             Route::livewire('/maps/route2', 'maps/route2');
@@ -168,6 +185,12 @@ Route::middleware('auth')->group(function () {
             Route::middleware('role_or_permission:view_assigned_tickets')->group(function () {
                 Route::livewire('/inbox', 'tickets.inbox')->name('inbox');
             });
+            // Issue #1276 — attachments moved to the private `local` disk, so the
+            // only way to read one is this authenticated, unit-scoped route.
+            // `auth` + `unit_context` are inherited from the enclosing groups.
+            Route::get('/{ticket}/attachments/{attachment}', [TicketAttachmentController::class, 'show'])
+                ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets')
+                ->name('attachments.download');
         });
 
         Route::middleware('role_or_permission:manage_users')->group(function () {
@@ -218,4 +241,27 @@ Route::middleware('auth')->group(function () {
             Route::livewire('/tools', 'tools.tools')->name('tools');
         });
     }); // unit_context
+});
+
+// Issue #1375 — بک‌آپ و بازگردانی جداول.
+//
+// این گروه عمداً بیرون از گروه `auth`/`unit_context` بالا و «خودش» با
+// `auth` + `role:admin` بسته شده است: یک بک‌آپ کلِ یک جدول را می‌گیرد، نه
+// ردیف‌های یک واحد، پس «متنِ واحد» نباید جلویش را بگیرد.
+//
+// دانلود یک GET ساده است: Livewire نمی‌تواند فایل برگرداند، پس دکمه‌ها
+// `<a href>` هستند (نه `wire:click`) و پاسخ یک `BinaryFileResponse` است.
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::get('/tools/backup/full', [BackupController::class, 'full'])
+        ->name('backup.full');
+    Route::get('/tools/backup/table/{table}', [BackupController::class, 'table'])
+        ->name('backup.table');
+});
+
+// #1377 — the backup page (Livewire) is admin-only too, but it lives in its
+// OWN group: a backup covers a WHOLE table, not the rows of one unit, so
+// the `unit_context` group must not gate it. The download routes above stay
+// where they are (they are plain GETs, not Livewire).
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::livewire('/tools/backup', 'backup.index')->name('backup');
 });

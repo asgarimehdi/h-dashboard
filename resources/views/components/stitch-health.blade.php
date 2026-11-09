@@ -1,8 +1,13 @@
 <div {{ $attributes }}>
+    {{-- Issue #1352: `mix-blend-mode` lives in this nonce'd block instead of
+         `style=` attributes on the SVG groups. --}}
+    <style nonce="{{ Vite::cspNonce() }}">
+        .stitch-blend-hard-light { mix-blend-mode: hard-light; }
+    </style>
     <svg class="w-[448px] max-w-none" viewBox="0 0 440 376" fill="none" xmlns="http://www.w3.org/2000/svg">
 
         {{-- Outer medical cross backplate --}}
-        <g style="mix-blend-mode: hard-light">
+        <g class="stitch-blend-hard-light">
             <g transform="translate(120 20)">
                 <rect x="0" y="40" width="60" height="140" rx="14" fill="#7C3AED"/>
                 <rect x="20" y="20" width="20" height="180" rx="10" fill="#7C3AED"/>
@@ -32,7 +37,7 @@
         </g>
 
         {{-- Heart sheen --}}
-        <g style="mix-blend-mode: hard-light">
+        <g class="stitch-blend-hard-light">
             <path d="M163 92
                      C 133 92, 100 120, 100 166
                      C 100 176, 118 142, 172 108
@@ -69,7 +74,7 @@
         </g>
 
         {{-- Sparkles --}}
-        <g style="mix-blend-mode: hard-light">
+        <g class="stitch-blend-hard-light">
             <path d="M120 90l5 13 13 5-13 5-5 13-5-13-13-5 13-5z" fill="#22D3EE" opacity="0.8"/>
             <path d="M330 70l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#F8B803" opacity="0.9"/>
             <path d="M385 260l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#F0304E" opacity="0.7"/>

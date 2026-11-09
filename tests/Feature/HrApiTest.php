@@ -106,6 +106,70 @@ class HrApiTest extends TestCase
         $this->assertSame(count($ids), count(array_unique($ids)));
     }
 
+    public function test_org_chart_terminates_on_a_reachable_cycle(): void
+    {
+        // #1350: a cycle hanging off the root's subtree. Closing a cycle
+        // severs the entry link (a unit has one parent_id), so the cycle
+        // members fall out of the root's descendant scope and can never be
+        // entered by $format — the root rule admits only units with no
+        // in-scope parent, and every cycle member's parent is another cycle
+        // member. The guard on $format is therefore defense-in-depth; what
+        // this test pins is the observable contract: the endpoint terminates
+        // with the acyclic tree intact and the cycle members absent.
+        $x = Unit::create(['name' => 'ورودی', 'parent_id' => $this->unit->id]);
+        $a = Unit::create(['name' => 'الف', 'parent_id' => $x->id]);
+        $b = Unit::create(['name' => 'ب', 'parent_id' => $a->id]);
+        $a->update(['parent_id' => $b->id]);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart', $token);
+
+        $response->assertStatus(200);
+
+        $tree = $response->json('data');
+
+        $flatten = function (array $nodes) use (&$flatten): array {
+            $ids = [];
+            foreach ($nodes as $node) {
+                $ids[] = $node['id'];
+                $ids = array_merge($ids, $flatten($node['children']));
+            }
+
+            return $ids;
+        };
+
+        $ids = $flatten($tree);
+        $this->assertCount(1, $tree);
+        $this->assertSame($this->unit->id, $tree[0]['id']);
+        $this->assertCount(3, $ids);
+        $this->assertSame(count($ids), count(array_unique($ids)));
+        $this->assertNotContains($a->id, $ids);
+        $this->assertNotContains($b->id, $ids);
+
+        $xNode = collect($tree[0]['children'])->firstWhere('id', $x->id);
+        $this->assertNotNull($xNode);
+        $this->assertSame([], $xNode['children']);
+    }
+
+    public function test_org_chart_returns_empty_tree_for_a_pure_in_scope_cycle(): void
+    {
+        // #1350, decision (b): a scope holding only a cycle returns [] —
+        // fail-closed, the corrupt data shows nothing. The session unit is a
+        // cycle member, so the cycle is fully in scope (its descendantIds
+        // CTE terminates), yet neither member can be a root.
+        $a = Unit::create(['name' => 'الف']);
+        $b = Unit::create(['name' => 'ب', 'parent_id' => $a->id]);
+        $a->update(['parent_id' => $b->id]);
+
+        Session::put('current_unit_id', $a->id);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/org-chart', $token);
+
+        $response->assertStatus(200);
+        $this->assertSame([], $response->json('data'));
+    }
+
     public function test_stats_returns_aggregations(): void
     {
         $token = $this->createApiToken($this->user, ['hr:read']);
@@ -306,6 +370,92 @@ class HrApiTest extends TestCase
         $this->assertNotNull($leafNode);
         $this->assertFalse($leafNode['has_children']);
         $this->assertSame([], $leafNode['children']);
+    }
+
+    public function test_org_chart_subtree_terminates_on_a_two_node_cycle(): void
+    {
+        // #1350: the requested unit sits in an A<->B cycle. The subtree starts
+        // from A's children, so B formats, then A would format again forever.
+        // The guard seeds the requested unit as visited: B is emitted once,
+        // with the back edge cut, so it has no children left.
+        $a = Unit::create(['name' => 'الف', 'parent_id' => $this->unit->id]);
+        $b = Unit::create(['name' => 'ب', 'parent_id' => $a->id]);
+        $a->update(['parent_id' => $b->id]);
+
+        // The requested unit must be in scope: closing the cycle severs the
+        // root link, so the session unit becomes A itself.
+        Session::put('current_unit_id', $a->id);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$a->id}", $token);
+
+        $response->assertStatus(200);
+
+        $nodes = $response->json('data');
+        $this->assertCount(1, $nodes);
+        $this->assertSame($b->id, $nodes[0]['id']);
+        $this->assertFalse($nodes[0]['has_children']);
+        $this->assertSame([], $nodes[0]['children']);
+    }
+
+    public function test_org_chart_subtree_terminates_on_a_self_parent(): void
+    {
+        // #1350: a unit whose parent is itself is its own child. The subtree
+        // CTE returns it (the seed row is unfiltered), and $format would call
+        // itself forever. The requested unit is seeded as visited, so the
+        // result is empty.
+        $s = Unit::create(['name' => 'خودارجاع']);
+        $s->update(['parent_id' => $s->id]);
+
+        Session::put('current_unit_id', $s->id);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$s->id}", $token);
+
+        $response->assertStatus(200);
+        $this->assertSame([], $response->json('data'));
+    }
+
+    public function test_org_chart_subtree_terminates_on_a_reachable_cycle(): void
+    {
+        // #1350: the requested unit sits in a three-node cycle (A -> B -> C
+        // -> A), so the guard is exercised through two levels of depth: B
+        // formats, C formats, and the back edge to A is cut at C, which
+        // keeps no children and reports has_children false — the field's
+        // meaning is computed from the final children list.
+        $a = Unit::create(['name' => 'الف']);
+        $b = Unit::create(['name' => 'ب', 'parent_id' => $a->id]);
+        $c = Unit::create(['name' => 'ج', 'parent_id' => $b->id]);
+        $a->update(['parent_id' => $c->id]);
+
+        Session::put('current_unit_id', $a->id);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/org-chart/subtree/{$a->id}", $token);
+
+        $response->assertStatus(200);
+
+        $nodes = $response->json('data');
+
+        $flatten = function (array $nodes) use (&$flatten): array {
+            $ids = [];
+            foreach ($nodes as $node) {
+                $ids[] = $node['id'];
+                $ids = array_merge($ids, $flatten($node['children']));
+            }
+
+            return $ids;
+        };
+
+        $ids = $flatten($nodes);
+        $this->assertSame([$b->id, $c->id], $ids);
+
+        $bNode = collect($nodes)->firstWhere('id', $b->id);
+        $this->assertNotNull($bNode);
+        $cNode = collect($bNode['children'])->firstWhere('id', $c->id);
+        $this->assertNotNull($cNode);
+        $this->assertFalse($cNode['has_children']);
+        $this->assertSame([], $cNode['children']);
     }
 
     public function test_org_chart_subtree_child_of_out_of_scope_parent_is_not_a_key(): void

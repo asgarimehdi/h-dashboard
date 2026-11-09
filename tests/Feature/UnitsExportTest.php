@@ -483,12 +483,70 @@ class UnitsExportTest extends TestCase
     //  Slice 6 — cycle guard on user-editable parent_id
     // -----------------------------------------------------------
 
+    public function test_export_does_not_issue_a_query_per_row(): void
+    {
+        // The map walk is in-memory: adding units must not add queries. The
+        // bound is measured on the current code, not guessed.
+        ['user' => $user, 'unit' => $ministry] = $this->createUserWithUnit(['organization']);
+        $ministry->update(['unit_type_id' => 1, 'name' => 'وزارت شمارش', 'is_active' => true]);
+
+        foreach (range(1, 5) as $i) {
+            Unit::factory()->create([
+                'name' => "واحد شمارش {$i}",
+                'unit_type_id' => 2,
+                'parent_id' => $ministry->id,
+                'region_id' => 1,
+                'is_active' => true,
+            ]);
+        }
+
+        $this->actingAs($user);
+
+        $this->assertNoNPlusOne(fn () => $this->rowsFromRoute(), 7);
+    }
+
+    public function test_export_paths_for_self_parent_and_cycle_are_exact(): void
+    {
+        // User-editable parent_id can point at itself or form a cycle. These
+        // are the values produced today (traced from the walk, not previously
+        // pinned): the migration to the shared helper changes them on purpose.
+        $self = new Unit(['name' => 'الف']);
+        $self->id = 1;
+        $self->parent_id = 1;
+
+        $a = new Unit(['name' => 'الف']);
+        $a->id = 2;
+        $a->parent_id = 3;
+
+        $b = new Unit(['name' => 'ب']);
+        $b->id = 3;
+        $b->parent_id = 2;
+
+        $map = [
+            1 => ['name' => 'الف', 'parent_id' => 1],
+            2 => ['name' => 'الف', 'parent_id' => 3],
+            3 => ['name' => 'ب', 'parent_id' => 2],
+        ];
+
+        $hierarchy = $this->invokeBuildHierarchy(collect([$self, $a, $b]), $map);
+
+        // Decision ه (issue #1302): on corrupt data the chain is cut as soon as
+        // it would repeat a node, so a name appears once. This is the only
+        // intentional behaviour change, and only on self-parent/cyclic rows —
+        // acyclic paths are identical.
+        $this->assertSame(['path' => 'الف', 'depth' => 0, 'parent_name' => ''], $hierarchy[1]);
+        $this->assertSame(['path' => 'ب > الف', 'depth' => 1, 'parent_name' => 'ب'], $hierarchy[2]);
+        $this->assertSame(['path' => 'الف > ب', 'depth' => 1, 'parent_name' => 'الف'], $hierarchy[3]);
+    }
+
     public function test_export_survives_a_cyclic_parent_chain(): void
     {
-        // Built from in-memory models, not seeded rows: a real cyclic row hangs
-        // Unit::descendantIds(), whose WITH RECURSIVE ... UNION ALL never
-        // terminates on a cycle (pre-existing app-wide hazard — the reason the
-        // export needs its own guard). The guard under test is the export's.
+        // Built from in-memory models, not seeded rows: a real cyclic row is a
+        // hazard for every recursive walk over the tree (Unit::descendantIds()
+        // survives it only because its CTE uses UNION — see
+        // docs/agents/features.md), so the export's own guard is proved without
+        // writing that corruption into the database. The guard under test is
+        // the export's.
         $a = new Unit(['name' => 'الف']);
         $a->id = 1;
         $a->parent_id = 2;
@@ -514,6 +572,41 @@ class UnitsExportTest extends TestCase
             $this->assertNotEmpty($meta['path'], 'A cycle must still produce a breadcrumb.');
             $this->assertLessThanOrEqual(2, $meta['depth']);
         }
+    }
+
+    public function test_export_order_terminates_when_a_cycle_is_reachable_from_a_root(): void
+    {
+        // In-memory only, like the root-less A<->B test above: a real cyclic
+        // row is a hazard for every walk over the tree, so the export's guard
+        // is proved without writing that corruption into the database.
+        //
+        // A single-valued parent_id graph cannot reach a cycle from a root,
+        // but `orderDepthFirst()` builds its children map keyed by id, so a
+        // collection carrying a repeated id under a second parent is the
+        // shape that re-entered walk() forever: R -> A -> B -> A.
+        $root = new Unit(['name' => 'ریشه']);
+        $root->id = 10;
+        $root->parent_id = null;
+
+        $a = new Unit(['name' => 'الف']);
+        $a->id = 20;
+        $a->parent_id = 10;
+
+        $b = new Unit(['name' => 'ب']);
+        $b->id = 30;
+        $b->parent_id = 20;
+
+        $repeated = new Unit(['name' => 'الف']);
+        $repeated->id = 20;
+        $repeated->parent_id = 30; // closes the cycle back onto A
+
+        $ordered = $this->invokeOrderDepthFirst(collect([$root, $a, $b, $repeated]));
+
+        $this->assertSame(
+            [10, 20, 30],
+            $ordered->pluck('id')->all(),
+            'A root-reachable cycle must terminate with each unit once, in root-first order.'
+        );
     }
 
     /**

@@ -8,10 +8,12 @@ use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use ReflectionMethod;
+use RuntimeException;
 use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -383,10 +385,10 @@ test('#849: user table, unit picker and person search are unit-scoped', function
     // is not in the DOM at all. A scope assertion against a closed modal would
     // be vacuously true, so the modal is opened first and BOTH the positive and
     // the negative assertion run against the tree that is really rendered.
-    // (`flat:` is the picker's inline unit JSON — the only thing that emits it.
+    // (`picker-flat-data` is the picker's inert JSON block — the only thing that emits it.
     // A bare `toggle(` is NOT a safe probe: MaryUI's theme switcher renders
     // `@click="toggle()"` too.)
-    $component->assertDontSeeHtml('flat:')
+    $component->assertDontSeeHtml('picker-flat-data')
         ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
 
     // Unit picker (#1040: `allUnits`/`allUnitsTree` are `#[Computed]` now and
@@ -473,18 +475,18 @@ test('#1171: the unit tree renders only while the modal is open', function () {
         ->assertOk();
 
     // Closed: no tree node and no inline unit JSON either.
-    $component->assertDontSeeHtml('flat:')
+    $component->assertDontSeeHtml('picker-flat-data')
         ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
 
     // Open: the tree arrives, and it is scoped exactly as before.
     $component->set('unitModal', true)
-        ->assertSeeHtml('flat:')
+        ->assertSeeHtml('picker-flat-data')
         ->assertSeeHtml('@click="toggle('.$f['unitA']->id.')"')
         ->assertDontSeeHtml('@click="toggle('.$f['unitB']->id.')"');
 
     // Closed again: the tree is dropped again.
     $component->set('unitModal', false)
-        ->assertDontSeeHtml('flat:')
+        ->assertDontSeeHtml('picker-flat-data')
         ->assertDontSeeHtml('@click="toggle('.$f['unitA']->id.')"');
 });
 
@@ -526,7 +528,7 @@ test('#1171: a 200-unit tree does not reach the closed page', function () {
 
     // Structurally: the closed page holds no tree and no inline unit JSON.
     $component->set('unitModal', false)
-        ->assertDontSeeHtml('flat:');
+        ->assertDontSeeHtml('picker-flat-data');
 });
 
 /**
@@ -950,4 +952,124 @@ test('#1028: the n_code exists rule itself constrains u_id to the accessible uni
     $v = validator(['n_code' => $f['victim']->n_code], ['n_code' => [$rule]]);
     expect($v->passes())->toBeFalse();
     expect($v->errors()->has('n_code'))->toBeTrue();
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue #1277 — user create/edit must be atomic
+ * ---------------------------------------------------------------------------
+ * Each test arms a query listener that throws on the FIRST insert into the
+ * named table, so a partially written user can never be observed. The listener
+ * disarms itself after firing: Pest test files share one DB connection, and a
+ * listener left armed would fail every later insert in the process.
+ */
+function users1277BoomOnInsert(string $table): void
+{
+    $armed = true;
+
+    DB::listen(function ($query) use ($table, &$armed) {
+        $sql = strtolower(ltrim($query->sql));
+
+        if ($armed && str_starts_with($sql, 'insert') && str_contains($sql, $table)) {
+            $armed = false;
+
+            throw new RuntimeException('boom-'.$table);
+        }
+    });
+}
+
+test('#1277: a failed role sync leaves no user row behind on create', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    Person::create([
+        'n_code' => '1277000001',
+        'f_name' => 'نیمه',
+        'l_name' => 'ساخته',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    users1277BoomOnInsert('model_has_roles');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '1277000001')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('createUser'))->toThrow(RuntimeException::class);
+
+    expect(User::where('n_code', '1277000001')->exists())->toBeFalse();
+    expect(DB::table('model_has_roles')->count())->toBe(0);
+});
+
+test('#1277: a failed unit sync leaves no user row behind on create', function () {
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    Person::create([
+        'n_code' => '1277000002',
+        'f_name' => 'نیمه',
+        'l_name' => 'ساخته',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    users1277BoomOnInsert('user_units');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '1277000002')
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('createUser'))->toThrow(RuntimeException::class);
+
+    expect(User::where('n_code', '1277000002')->exists())->toBeFalse();
+    expect(DB::table('model_has_roles')->count())->toBe(0);
+});
+
+test('#1277: a failed unit sync on edit leaves password, role, unit and tokens untouched', function () {
+    $oldRole = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $newRole = Role::create(['name' => 'supervisor', 'label' => 'سرپرست']);
+    $child = Unit::create(['name' => 'واحد فرزند', 'parent_id' => $this->unit->id]);
+
+    $target = users1030Target($this->unit, '1277000003');
+    $target->assignRole($oldRole);
+    $tokenId = $target->createToken('flutter-app')->accessToken->id;
+
+    // A DIFFERENT in-scope unit must be submitted: syncing the same set writes
+    // nothing, so the listener would never fire.
+    users1277BoomOnInsert('user_units');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$newRole->id])
+        ->set('password', 'new-secret-123')
+        ->set('unit_ids', [$child->id])
+        ->call('updateUser'))->toThrow(RuntimeException::class);
+
+    expect(Hash::check('password', $target->fresh()->password))->toBeTrue();
+    expect($target->fresh()->hasRole($oldRole->name))->toBeTrue();
+    expect($target->fresh()->hasRole($newRole->name))->toBeFalse();
+    expect($target->fresh()->units()->pluck('units.id')->all())->toBe([$this->unit->id]);
+    $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
+});
+
+test('#1277: a failed role sync on a password reset leaves the old password and tokens alive', function () {
+    $oldRole = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $newRole = Role::create(['name' => 'supervisor', 'label' => 'سرپرست']);
+
+    $target = users1030Target($this->unit, '1277000004');
+    $target->assignRole($oldRole);
+    $tokenId = $target->createToken('flutter-app')->accessToken->id;
+
+    users1277BoomOnInsert('model_has_roles');
+
+    expect(fn () => Livewire::actingAs($this->admin)->test('users.index')
+        ->call('edit', $target->id)
+        ->set('role_ids', [$newRole->id])
+        ->set('password', 'new-secret-123')
+        ->call('updateUser'))->toThrow(RuntimeException::class);
+
+    expect(Hash::check('password', $target->fresh()->password))->toBeTrue();
+    expect($target->fresh()->hasRole($oldRole->name))->toBeTrue();
+    $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
 });

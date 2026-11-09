@@ -14,7 +14,6 @@ use App\Support\HardwareAuditChange;
 use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class HardwareController extends Controller
@@ -259,10 +258,9 @@ class HardwareController extends Controller
         // bumped on every hardware write (Hardware::flushStatsCache()), which
         // invalidates all previously cached scopes without flushing the whole
         // cache. Stale entries expire naturally via the 10-minute TTL.
-        $version = Cache::get('hardware_stats_version', 0);
-        $cacheKey = "hardware_stats:v{$version}:".ScopeCacheKey::hash($accessibleIds);
-
-        $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds) {
+        // Issue #1290: the version and the data key are built by the service,
+        // never by hand — `CacheVersionKeyGuardTest` pins that.
+        $data = app(CacheInvalidationServiceInterface::class)->remember('hardware_stats', ScopeCacheKey::hash($accessibleIds), function () use ($accessibleIds) {
             $baseQuery = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
                 ->whereIn('persons.u_id', $accessibleIds)
                 ->select('hardwares.*');
@@ -275,7 +273,7 @@ class HardwareController extends Controller
                     ->toArray(),
                 'shutdown' => (clone $baseQuery)->where('shutdown', true)->count(),
             ];
-        });
+        }, 10);
 
         return response()->json([
             'success' => true,
@@ -349,16 +347,6 @@ class HardwareController extends Controller
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
-        // #927: `changes` is a field-level diff list, `[{field, old, new}]` —
-        // this used to write $hw->getAttributes(), a column => value map, which
-        // no reader could render (the export threw a TypeError on it).
-        app(HardwareBulkAuditWriter::class)->batchInsertAudits(
-            $hardwares,
-            'bulk_delete',
-            null,
-            fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw)
-        );
-
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
 
         // Suppress individual audit entries during bulk operations
@@ -367,6 +355,19 @@ class HardwareController extends Controller
             $count = Hardware::whereIn('id', $accessibleHardwareIds)->delete();
         } finally {
             request()->attributes->remove('suppress_audit');
+        }
+
+        // #1362: write the bulk_delete audit only AFTER the delete succeeds. The
+        // batch delete bypasses Eloquent events, so this is the only place the trail
+        // can be reconciled with the outcome; writing it first left phantom rows on a
+        // failed delete. #927: `changes` is a field-level diff list [{field,old,new}].
+        if ($count > 0) {
+            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                $hardwares,
+                'bulk_delete',
+                null,
+                fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw),
+            );
         }
 
         app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {

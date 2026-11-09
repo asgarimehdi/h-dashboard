@@ -33,7 +33,11 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Issue #1276 — deliberately NOT served. `serve => true` registers
+            // the framework's public `/storage/{path}` route for this disk;
+            // attachments are only reachable through the authenticated
+            // tickets.attachments.download / api.tickets.attachments.download
+            // controllers. Do not re-add it.
             'throw' => false,
             'report' => false,
         ],

@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type Response } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -60,13 +60,27 @@ async function logout(page: Page) {
 }
 
 /**
- * Wait for Livewire request to complete
+ * Livewire v4 serves its update endpoint from `/livewire-<hash>/update`, where
+ * the hash is derived from APP_KEY — a literal `/livewire/update` never fires
+ * in this app. Match the shape, never the literal string.
  */
-async function waitForLivewire(page: Page) {
-  await page.waitForFunction(() => {
-    return !document.querySelector('.wire-loading') ||
-           document.querySelectorAll('.wire-loading[style*="display: none"]').length > 0;
-  }, { timeout: 15000 });
+const LIVE_UPDATE_PATH = /\/livewire[^/]*\/update$/;
+
+/**
+ * Arm a waiter for the next Livewire update response.
+ *
+ * `page.waitForResponse` only observes requests that start after it is called,
+ * so arm it BEFORE the interaction and await the returned promise after it:
+ *
+ *   const update = waitForLivewire(page);
+ *   await page.getByRole('button', { name: 'ذخیره' }).click();
+ *   await update;
+ */
+function waitForLivewire(page: Page, timeout = 15000): Promise<Response> {
+  return page.waitForResponse(
+    (response) => LIVE_UPDATE_PATH.test(new URL(response.url()).pathname),
+    { timeout },
+  );
 }
 
 /**

@@ -856,7 +856,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      * reported a change that was not one and every re-import wrote a bogus
      * diff. Normalising both sides to the same shape is what removes it.
      */
-    private function normalizeForComparison($value): ?string
+    private function normalizeForComparison($value): string
     {
         if ($value instanceof \DateTimeInterface) {
             return $value->format('Y-m-d');
@@ -872,11 +872,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         if (is_bool($value)) {
             return $value ? '1' : '0';
         }
-        // Handle boolean false/0 values that come from database
-        if ($value === false || $value === 0 || $value === '0') {
+        // Handle boolean 0 values that come from database
+        if ($value === 0 || $value === '0') {
             return '0';
         }
-        if ($value === true || $value === 1 || $value === '1') {
+        if ($value === 1 || $value === '1') {
             return '1';
         }
 

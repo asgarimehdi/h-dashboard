@@ -1,4 +1,4 @@
-import { test, expect, login, TEST_USER } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire, TEST_USER } from '../shared/fixtures';
 import { execSync } from 'child_process';
 
 /**
@@ -142,27 +142,36 @@ test.describe('daily window is materialised', () => {
       );
     };
 
+    const fromUpdate = waitForLivewire(page);
     await setRange('advanced_report_date_from', from);
+    await fromUpdate;
+
+    const toUpdate = waitForLivewire(page);
     await setRange('advanced_report_date_to', to);
-    await page.waitForTimeout(2500);
+    await toUpdate;
 
-    const categories = await page.evaluate(() => {
-      const chart = (window as any).Highcharts?.charts?.find(
-        (c: any) => c?.renderTo?.id === 'trendChart',
-      );
-      return chart ? (chart.xAxis[0].categories ?? []) : null;
-    });
-
-    expect(categories, 'the trend chart rendered').not.toBeNull();
+    // The axis is redrawn client-side after the response, so poll the chart
+    // rather than sleeping for a fixed 2.5s.
     // from..to inclusive is 7 days, and they are the 7 days that were picked.
-    expect(categories).toEqual([
-      '1403/10/01',
-      '1403/10/02',
-      '1403/10/03',
-      '1403/10/04',
-      '1403/10/05',
-      '1403/10/06',
-      '1403/10/07',
-    ]);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const chart = (window as any).Highcharts?.charts?.find(
+              (c: any) => c?.renderTo?.id === 'trendChart',
+            );
+            return chart ? (chart.xAxis[0].categories ?? null) : null;
+          }),
+        { timeout: 10000 },
+      )
+      .toEqual([
+        '1403/10/01',
+        '1403/10/02',
+        '1403/10/03',
+        '1403/10/04',
+        '1403/10/05',
+        '1403/10/06',
+        '1403/10/07',
+      ]);
   });
 });

@@ -105,11 +105,19 @@ test('dashboard with an active interval does not call $wire.mount()', function (
     $this->actingAs($this->user);
 
     // #1164: `mount` is a protected Livewire lifecycle method; the refresh
-    // timer must target refreshStats, never mount.
+    // timer must target refreshStats, never mount. Issue #1352: the timer
+    // lives in the dashboardRefresh Alpine.data factory
+    // (resources/js/app-components.js) now — the template only wires
+    // x-data plus the interval, so the target is pinned in the module.
     Livewire::test('dashboard')
         ->assertStatus(200)
         ->assertDontSee('$wire.mount()')
-        ->assertSee('refreshStats');
+        ->assertSeeHtml('x-data="dashboardRefresh"')
+        ->assertSeeHtml('data-interval="60000"');
+
+    $factory = (string) file_get_contents(resource_path('js/app-components.js'));
+    $this->assertStringContainsString('this.$wire.refreshStats()', $factory);
+    $this->assertStringNotContainsString('$wire.mount()', $factory);
 });
 
 test('refreshStats re-runs the aggregation after invalidation', function () {

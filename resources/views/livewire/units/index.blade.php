@@ -32,6 +32,16 @@ return new class extends Component
 
     public bool $can_receive_tickets = false;
 
+    /**
+     * «جمعیت تحت پوشش» for the CURRENT Gregorian year (#1246).
+     *
+     * Only base units may carry one. The year is `now()->year` — the Persian
+     * label is display only; a Jalali year must never reach `unit_populations`.
+     *
+     * @var int|string|null string because an empty form input arrives as ''
+     */
+    public $population = null;
+
     #[Locked]
     public ?int $editingId = null;
 
@@ -161,13 +171,13 @@ return new class extends Component
         $this->unitTypes = $this->getAllowedUnitTypes();
 
         if ($this->userUnitLevel === 'ministry') {
-            $this->provinces = Region::where('type', 'province')->get();
+            $this->provinces = Region::where('type', 'province')->get(['id', 'name']);
             $this->counties = $this->province_id
-                ? Region::where('type', 'county')->where('parent_id', $this->province_id)->get()
+                ? Region::where('type', 'county')->where('parent_id', $this->province_id)->get(['id', 'name'])
                 : collect();
         } elseif ($this->userUnitLevel === 'province') {
             $this->provinces = collect();
-            $this->counties = Region::where('type', 'county')->where('parent_id', $this->userRegionId)->get();
+            $this->counties = Region::where('type', 'county')->where('parent_id', $this->userRegionId)->get(['id', 'name']);
         } else {
             $this->provinces = collect();
             $this->counties = collect();
@@ -305,13 +315,34 @@ return new class extends Component
             ->when($this->userUnitLevel === 'province', function ($query) {
                 return $query->whereIn('region_id', Region::where('parent_id', $this->userRegionId)->pluck('id')->push($this->userRegionId));
             })
-            ->get();
+            ->get(['id', 'name']);
 
         if ($parentUnits->isEmpty() && $this->userUnitLevel === 'ministry') {
-            $parentUnits = Unit::where('unit_type_id', 1)->get();
+            $parentUnits = Unit::where('unit_type_id', 1)->get(['id', 'name']);
         }
 
         return $parentUnits;
+    }
+
+    /**
+     * Is the type currently selected in the form a base unit?
+     *
+     * The single source is `App\Support\BaseUnitTypes::IDS` (#1245) — the map
+     * layer reads the same constant, so the population UI and the map can
+     * never disagree about which units carry people. Do not add a second list.
+     */
+    public function isBaseUnitType(): bool
+    {
+        return in_array((int) $this->unit_type_id, \App\Support\BaseUnitTypes::IDS, true);
+    }
+
+    /**
+     * Bilingual year for the population label (decision ج): the Persian year
+     * is display only, the Gregorian year is what `unit_populations.year` stores.
+     */
+    public function populationYearLabel(): string
+    {
+        return \Morilog\Jalali\Jalalian::now()->getYear().' / '.now()->year;
     }
 
     public function saveUnit(): void
@@ -327,6 +358,10 @@ return new class extends Component
             'region_id' => 'nullable|exists:regions,id',
             'parent_id' => $this->unit_type_id == 1 ? 'nullable' : 'required|exists:units,id',
             'can_receive_tickets' => 'boolean',
+            // #1246: validated only where it can be written. Hiding the input
+            // in Blade is not the guard — the server must ignore the payload
+            // for a non-base unit.
+            'population' => $this->isBaseUnitType() ? 'nullable|integer|min:0' : 'nullable',
         ];
 
         if ($this->userUnitLevel === 'ministry') {
@@ -379,22 +414,72 @@ return new class extends Component
                 : false,
         ];
 
+        $unit = null;
+
         try {
             if ($this->editingId) {
-                Unit::findOrFail($this->editingId)->update($data);
+                $unit = Unit::findOrFail($this->editingId);
+                $unit->update($data);
                 $this->success("واحد '{$this->name}' به‌روزرسانی شد");
             } else {
-                Unit::create($data);
+                $unit = Unit::create($data);
                 $this->success("واحد '{$this->name}' ایجاد شد");
             }
         } catch (\Exception $e) {
             $this->error('خطا ', position: 'toast-bottom');
         }
 
+        // Only a stored unit may own a population row; a failed save must not
+        // write one against a half-built row.
+        if ($unit !== null) {
+            $this->syncPopulation($unit);
+        }
+
         app(\App\Services\AccessService::class)->clearAllCaches();
 
         $this->resetForm();
         $this->modal = false;
+    }
+
+    /**
+     * Write (or delete) the current-year population row for a saved unit.
+     *
+     * The server-side `isBaseUnitType()` check is the real guard: a client can
+     * submit `population` for a non-base unit, but it is ignored rather than
+     * rejected, matching the "field does not exist for this type" contract.
+     *
+     * An empty value deletes ONLY `now()->year` (decision ب) — older rows are
+     * the historical record and are never touched.
+     */
+    private function syncPopulation(Unit $unit): void
+    {
+        if (! $this->isBaseUnitType()) {
+            return;
+        }
+
+        $year = now()->year;
+        $empty = $this->population === null || $this->population === '';
+
+        if ($empty) {
+            $changed = \App\Models\UnitPopulation::query()
+                ->where('unit_id', $unit->id)
+                ->where('year', $year)
+                ->delete() > 0;
+        } else {
+            $row = \App\Models\UnitPopulation::query()->updateOrCreate(
+                ['unit_id' => $unit->id, 'year' => $year],
+                ['population' => (int) $this->population],
+            );
+            $changed = $row->wasRecentlyCreated || $row->wasChanged();
+        }
+
+        // `UnitPopulation` has no model events and the map caches aggregates
+        // under `disease_maps`, so this write has to invalidate it explicitly.
+        // (If a model event ever starts bumping it, delete this line — not the
+        // guard above.)
+        if ($changed) {
+            app(\App\Services\CacheInvalidationServiceInterface::class)->increment('disease_maps');
+        }
     }
 
     public function determineRegionId()
@@ -427,6 +512,17 @@ return new class extends Component
         $this->name = $unit->name;
         $this->description = $unit->description;
         $this->unit_type_id = $unit->unit_type_id;
+
+        // #1246: pre-fill from the CURRENT year only. A base unit with no row
+        // this year starts empty — an older year is not a fallback (decision 10:
+        // never read population from another row).
+        $this->population = $this->isBaseUnitType()
+            ? \App\Models\UnitPopulation::query()
+                ->where('unit_id', $unit->id)
+                ->where('year', now()->year)
+                ->value('population')
+            : null;
+
         $this->region_id = $unit->region_id;
         $this->parent_id = $unit->parent_id;
         $this->can_receive_tickets = (bool) $unit->can_receive_tickets;
@@ -598,7 +694,7 @@ return new class extends Component
 
     public function resetForm(): void
     {
-        $this->reset(['name', 'description', 'unit_type_id', 'region_id', 'province_id', 'parent_id', 'editingId', 'can_receive_tickets']);
+        $this->reset(['name', 'description', 'unit_type_id', 'region_id', 'province_id', 'parent_id', 'editingId', 'can_receive_tickets', 'population']);
         $this->loadDropdowns();
     }
 
@@ -704,7 +800,8 @@ return new class extends Component
                 <div class="flex w-1/12">
                     <a href="/units/{{ $unit->id }}/map"
                        aria-label="نقشهٔ واحد"
-                       class="btn btn-ghost btn-sm text-primary">
+                       title="{{ $unit->boundary_id ? 'مرز تعریف شده' : 'بدون مرز' }}"
+                       class="btn btn-ghost btn-sm {{ $unit->boundary_id ? 'text-success' : 'text-base-content/50' }}">
                         <x-icon name="o-map" class="w-5 h-5"/>
                         <span class="hidden 2xl:inline">نقشه</span>
                     </a>
@@ -773,6 +870,16 @@ return new class extends Component
 
             <x-select wire:model.live="parent_id" label="واحد بالادستی" :options="$this->parentUnits" option-value="id"
                       option-label="name" :required="$unit_type_id != 1" placeholder="انتخاب کنید"/>
+
+            {{-- #1246: only base units carry a population; the server ignores
+                 the field for every other type. --}}
+            @if($this->isBaseUnitType())
+                <div class="col-span-2">
+                    <x-input wire:model="population" type="number" min="0"
+                             label="جمعیت تحت پوشش (سال {{ $this->populationYearLabel() }})"
+                             hint="فقط برای واحدهای پایه؛ خالی گذاشتن یعنی جمعیت ثبت نشده." />
+                </div>
+            @endif
 
             <div class="col-span-2">
                 <x-toggle wire:model="can_receive_tickets" label="پذیرش تیکت"

@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 
 /**
  * Organization units list
@@ -33,8 +33,9 @@ test.describe('organization units', () => {
   test('search filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
     // زنجان is always in seeded unit names
+    const searchUpdate = waitForLivewire(page);
     await search.fill('زنجان');
-    await page.waitForTimeout(1500);
+    await searchUpdate;
     await expect(page.locator('table tbody')).toContainText('زنجان');
   });
 });

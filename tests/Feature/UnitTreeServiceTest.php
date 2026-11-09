@@ -201,3 +201,113 @@ test('ancestorChain terminates on a parent_id cycle', function () {
 
     expect($chain->pluck('id')->all())->toBe([$b->id]);
 });
+
+test('search eager-loads six ancestor hops so the chain walk stays query-free', function () {
+    // Six hops is the deepest chain in dev (#1285). A seven-unit chain puts
+    // every ancestor of the match behind `with('parent.parent…')`, so a
+    // query-free ancestorChain() proves the loader — not the walker — paid
+    // for the chain. The walk itself must stay untouched: PersonsExport
+    // depends on it never querying.
+    $scope = [];
+    $parentId = null;
+
+    for ($i = 0; $i <= 6; $i++) {
+        $unit = Unit::create([
+            'name' => "زنجیره جستجو {$i}",
+            'parent_id' => $parentId,
+        ]);
+        $scope[] = $unit->id;
+        $parentId = $unit->id;
+    }
+
+    $service = app(UnitTreeService::class);
+    $matches = collect();
+
+    // 1 units query + 6 parent hops. unit_type_id is null on every fixture
+    // unit, so the unitType eager never fires a query of its own. Measured
+    // (not assumed): 7 queries after the fix.
+    $this->assertQueryCount(7, function () use ($service, $scope, &$matches): void {
+        $matches = $service->search('زنجیره جستجو 6', $scope);
+    });
+
+    expect($matches)->toHaveCount(1);
+
+    // The discriminator: before the eager-load fix this walk lazily loaded
+    // five more parents. It must cost zero queries now. Walk order is root
+    // first, so the chain is u0..u5 — the match (u6) is excluded.
+    $this->assertQueryCount(0, function () use ($service, $matches, $scope): void {
+        $chain = $service->ancestorChain($matches->firstOrFail(), $scope);
+
+        expect($chain->pluck('id')->all())->toBe(array_slice($scope, 0, 6));
+    });
+});
+
+test('a seventh ancestor hop is the documented lazy fallback', function () {
+    // The eager-load is exactly six hops deep. With an eight-unit chain the
+    // seventh hop (u0) stays lazy: search pays one extra query, and the
+    // chain walk pays exactly one. This is the boundary the constant in
+    // UnitTreeService::search() documents — not a second code path.
+    $scope = [];
+    $parentId = null;
+
+    for ($i = 0; $i <= 7; $i++) {
+        $unit = Unit::create([
+            'name' => "مرز شش {$i}",
+            'parent_id' => $parentId,
+        ]);
+        $scope[] = $unit->id;
+        $parentId = $unit->id;
+    }
+
+    $service = app(UnitTreeService::class);
+    $matches = collect();
+
+    // 1 units + 6 eager parent hops (the eager cannot go deeper), then the
+    // walk's single lazy hop.
+    $this->assertQueryCount(7, function () use ($service, $scope, &$matches): void {
+        $matches = $service->search('مرز شش 7', $scope);
+    });
+
+    $this->assertQueryCount(1, function () use ($service, $matches, $scope): void {
+        $chain = $service->ancestorChain($matches->firstOrFail(), $scope);
+
+        expect($chain->pluck('id')->all())->toBe(array_slice($scope, 0, 7));
+    });
+});
+
+test('ancestorChain stops before an out-of-scope parent without querying', function () {
+    $root = Unit::create(['name' => 'ریشه پنهان']);
+    $mid = Unit::create(['name' => 'میانی مرزی', 'parent_id' => $root->id]);
+    $leaf = Unit::create(['name' => 'برگ مرزی', 'parent_id' => $mid->id]);
+
+    // A FRESH model: a match returned by search() already has its parent
+    // eager-loaded, which would make this assertion pass for the wrong
+    // reason (gate correction 5).
+    $fresh = Unit::query()->findOrFail($leaf->id);
+
+    $this->assertQueryCount(0, function () use ($fresh, $leaf): void {
+        $chain = app(UnitTreeService::class)->ancestorChain($fresh, [$leaf->id]);
+
+        expect($chain)->toBeEmpty()
+            // The scope check at line 213 runs before the relation access at
+            // line 217, so the out-of-scope parent is never loaded at all.
+            ->and($fresh->relationLoaded('parent'))->toBeFalse();
+    });
+});
+
+test('ancestorChain loads only the in-scope parent and never crosses the boundary', function () {
+    $root = Unit::create(['name' => 'ریشه پنهان']);
+    $mid = Unit::create(['name' => 'میانی مرزی', 'parent_id' => $root->id]);
+    $leaf = Unit::create(['name' => 'برگ مرزی', 'parent_id' => $mid->id]);
+
+    $fresh = Unit::query()->findOrFail($leaf->id);
+
+    // One query: the in-scope mid. Root is out of scope, so the walk breaks
+    // before touching mid->parent.
+    $this->assertQueryCount(1, function () use ($fresh, $mid, $leaf): void {
+        $chain = app(UnitTreeService::class)->ancestorChain($fresh, [$mid->id, $leaf->id]);
+
+        expect($chain->pluck('id')->all())->toBe([$mid->id])
+            ->and($chain->first()->relationLoaded('parent'))->toBeFalse();
+    });
+});

@@ -49,7 +49,7 @@ class HardwareAuditsExport implements FromQuery, WithCustomChunkSize, WithHeadin
     }
 
     /**
-     * @var array<int, string>
+     * @return array<int, string>
      */
     public function headings(): array
     {

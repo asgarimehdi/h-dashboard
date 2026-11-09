@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Middleware\RequestId;
-use App\Http\Middleware\SafeRoleOrPermission;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ValidateUnitContext;
 use App\Jobs\SyncZabbixJob;
@@ -38,21 +37,28 @@ return Application::configure(basePath: dirname(__DIR__))
         // Cache maintenance — hourly
         $schedule->command('cache:prune-stale')->hourly();
 
+        // Issue #1305: every writer below carries an explicit lock expiry. The
+        // default 1440 minutes *is* the whole interval of one daily run, so a
+        // crashed run would hold the lock right up to the next scheduled start.
+        // 60 minutes leaves the dailies ~23 hours to recover; 120 fits the
+        // weekly archive. `data:archive` also locks inside the command, which
+        // is what stops a manual run racing the scheduled one.
         // Recurring todos — daily at 02:00 Tehran time
-        $schedule->command('todos:generate-recurring')->dailyAt('02:00');
+        $schedule->command('todos:generate-recurring')->dailyAt('02:00')->withoutOverlapping(60);
 
         // Maintenance tasks — daily at 03:00 Tehran time
-        $schedule->command('maintenance:generate-due')->dailyAt('03:00');
+        $schedule->command('maintenance:generate-due')->dailyAt('03:00')->withoutOverlapping(60);
 
         // Data archival — weekly Monday 04:00 Tehran time
-        $schedule->command('data:archive')->weeklyOn(1, '04:00');
+        $schedule->command('data:archive')->weeklyOn(1, '04:00')->withoutOverlapping(120);
 
         // Report generation — daily at 06:00 Tehran time
         // Issue #1021: withoutOverlapping() so a slow run cannot stack on the
         // next one, matching the Zabbix entry below. This stays a command rather
-        // than `->job(new GenerateDailyReportsJob)`: the job's 600s $timeout is
-        // above the default redis connection's 90s retry_after, so dispatching it
-        // needs its queue connection pinned first (#1010).
+        // than `->job(new GenerateDailyReportsJob)`: the job's queue connection
+        // is already pinned (#1010), but `redis-reports` is consumed only by the
+        // documented reports worker (install-guid.md §11), so a deployment with
+        // just the default worker would never run it.
         $schedule->command('reports:generate-daily')
             ->dailyAt('06:00')
             ->withoutOverlapping();
@@ -70,7 +76,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
-            'safe_role_or_permission' => SafeRoleOrPermission::class,
             'unit_context' => ValidateUnitContext::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,

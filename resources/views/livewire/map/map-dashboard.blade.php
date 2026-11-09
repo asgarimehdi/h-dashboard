@@ -29,23 +29,25 @@ return new class extends Component
 
     #[Url(as: 'bbox')]
     public $bbox = null;
-    
+
     #[Url(as: 'layers')]
     public $layers = 'units';
-    
+
     #[Url(as: 'filter_hardware')]
     public $filterHardware = '';
-    
+
     #[Url(as: 'filter_priority')]
     public $filterPriority = '';
-    
+
     #[Url(as: 'filter_status')]
     public $filterStatus = '';
 
     public $mapCenterLat = 36.669343;
+
     public $mapCenterLng = 48.47163;
+
     public $mapZoom = 10;
-    
+
     /**
      * Bearer token for the page's own `/api/gis/*` fetches.
      *
@@ -57,6 +59,17 @@ return new class extends Component
     #[Locked]
     public $mapToken = '';
 
+    /**
+     * Disease layer period (#1246). Jalali `Y/m/d`, both ends inclusive.
+     *
+     * Defaults to the current Persian year (1 Farvardin → today), computed in
+     * `mount()` with the calendar, never hard-coded. The server re-parses and
+     * validates these; they are display defaults, not an authorization input.
+     */
+    public string $diseaseFrom = '';
+
+    public string $diseaseTo = '';
+
     protected $listeners = [
         'mapMoved' => 'onMapMoved',
         'layerToggled' => 'onLayerToggled',
@@ -67,6 +80,9 @@ return new class extends Component
     public function mount()
     {
         $this->resolveToken();
+
+        $this->diseaseFrom = \Morilog\Jalali\Jalalian::now()->getYear().'/01/01';
+        $this->diseaseTo = \Morilog\Jalali\Jalalian::now()->format('Y/m/d');
     }
 
     /**
@@ -190,7 +206,7 @@ return new class extends Component
         $this->layers = implode(',', $layers);
     }
 
-    /** @var array<string, string> $filterPropertyMap Explicit allowlist of client keys → component properties. */
+    /** @var array<string, string> Explicit allowlist of client keys → component properties. */
     private const FILTER_PROPERTY_MAP = [
         'hardware_type' => 'filterHardware',
         'ticket_priority' => 'filterPriority',
@@ -216,15 +232,15 @@ return new class extends Component
     {
         $accessibleIds = app(\App\Services\AccessService::class)->accessibleUnitIds();
 
-        if (!in_array($unitId, $accessibleIds)) {
+        if (! in_array($unitId, $accessibleIds)) {
             return ['error' => 'Unit not found'];
         }
 
         $unit = \App\Models\Unit::with(['children', 'unitType'])->withCount('children')->find($unitId);
-        if (!$unit) {
+        if (! $unit) {
             return ['error' => 'Unit not found'];
         }
-        
+
         return [
             'id' => $unit->id,
             'name' => $unit->name,
@@ -234,7 +250,6 @@ return new class extends Component
             'children_count' => $unit->children_count,
         ];
     }
-
 };
 ?>
 
@@ -243,6 +258,13 @@ return new class extends Component
     id="map-container"
     class="w-full relative"
     x-data="mapDashboard"
+    data-api-token="{{ $mapToken }}"
+    data-api-base="{{ url('/api/gis') }}"
+    data-center-lat="{{ $mapCenterLat }}"
+    data-center-lng="{{ $mapCenterLng }}"
+    data-zoom="{{ $mapZoom }}"
+    data-disease-from="{{ $diseaseFrom }}"
+    data-disease-to="{{ $diseaseTo }}"
 >
     <!-- Map Toolbar -->
     <div class="absolute top-4 left-4 right-4 z-10 flex flex-wrap gap-2 justify-between p-2 bg-base-100/90 backdrop-blur rounded-box shadow-lg">
@@ -266,6 +288,15 @@ return new class extends Component
                    :class="{ 'btn-primary': activeLayers.includes('tickets') }"
                    @click="toggleLayer('tickets')">
                 <i class="fa fa-ticket"></i> تیکت‌ها
+            </button>
+            {{-- #1246: aggregate-only disease layer. Same `map` gate as the rest
+                 of this page — `/api/gis/disease*` carries counts/rates, never
+                 patient data (decision 18). --}}
+            <button type="button" id="disease-layer-toggle"
+                   class="btn btn-xs btn-ghost gap-1"
+                   :class="{ 'btn-primary': activeLayers.includes('diseases') }"
+                   @click="toggleLayer('diseases')">
+                <i class="fa fa-virus"></i> بیماری‌ها
             </button>
         </div>
 
@@ -297,6 +328,47 @@ return new class extends Component
             </select>
         </div>
 
+        {{-- #1246: disease controls. Hidden until the layer is on; the row is
+             full-width so `flex-wrap` pushes it onto a second line instead of
+             squeezing the layer buttons. All state is Alpine — this panel does
+             no server round-trip. --}}
+        <div id="disease-controls"
+             x-show="activeLayers.includes('diseases')"
+             x-cloak
+             class="w-full flex flex-wrap items-end gap-2 border-t border-base-300 pt-2">
+            <select id="disease-select"
+                    x-model.number="disease.id"
+                    @change="loadDiseaseLayer(true)"
+                    class="select select-sm w-48">
+                <option value="">انتخاب بیماری</option>
+                <template x-for="d in diseases" :key="d.id">
+                    <option :value="d.id" x-text="d.name_fa"></option>
+                </template>
+            </select>
+
+            <input id="disease_date_from" data-jdp readonly value="{{ $diseaseFrom }}"
+                   class="input input-sm w-32" aria-label="از تاریخ" />
+            <input id="disease_date_to" data-jdp readonly value="{{ $diseaseTo }}"
+                   class="input input-sm w-32" aria-label="تا تاریخ" />
+
+            <span x-show="diseaseLoading" class="loading loading-spinner loading-xs"></span>
+            <span id="disease-error" x-show="diseaseError" class="text-error text-xs"
+                  x-text="diseaseError"></span>
+
+            <div id="disease-legend"
+                 x-show="diseaseLevel === 'region' && diseaseLegend.length"
+                 class="flex flex-wrap items-center gap-2 text-xs">
+                <template x-for="row in diseaseLegend" :key="row.label">
+                    <span class="flex items-center gap-1">
+                        <span class="inline-block w-3 h-3 rounded"
+                              :style="{ background: row.color }"></span>
+                        <span x-text="row.label"></span>
+                    </span>
+                </template>
+                <span class="text-base-content/60">نرخ در هر ۱۰٬۰۰۰ نفر</span>
+            </div>
+        </div>
+
         <!-- Stats Panel -->
         <div class="flex items-center gap-4 text-sm">
             <div class="badge badge-primary gap-1">
@@ -319,19 +391,18 @@ return new class extends Component
     <livewire:maps.map wire:key="map-dashboard-page-map" />
 
     <!-- Unit Details Modal -->
-    <div x-data="{ unitId: null, unitDetails: null, loading: false }"
-         @showUnitDetails.window="unitId = $event.detail.unitId; loading = true; unitDetails = null; $nextTick(() => $refs.modal.showModal()); loadUnitDetails()">
+    <div x-data="unitDetailsModal">
         <dialog x-ref="modal" class="modal modal-bottom sm:modal-middle">
             <div class="modal-box">
                 <h3 class="font-bold text-lg mb-4">جزئیات واحد</h3>
                 <div x-show="loading" class="loading loading-spinner loading-lg"></div>
                 <div x-show="!loading && unitDetails" class="space-y-2">
-                    <div><strong>نام:</strong> <span x-text="unitDetails?.name"></span></div>
-                    <div><strong>نوع:</strong> <span x-text="unitDetails?.type"></span></div>
-                    <div><strong>موقعیت:</strong> <span x-text="(unitDetails?.lat ?? '') + ', ' + (unitDetails?.lng ?? '')"></span></div>
-                    <div><strong>زیرمجموعه‌ها:</strong> <span x-text="unitDetails?.children_count"></span></div>
+                    <div><strong>نام:</strong> <span x-text="unitName"></span></div>
+                    <div><strong>نوع:</strong> <span x-text="unitType"></span></div>
+                    <div><strong>موقعیت:</strong> <span x-text="unitLocation"></span></div>
+                    <div><strong>زیرمجموعه‌ها:</strong> <span x-text="unitChildrenCount"></span></div>
                 </div>
-                <div x-show="!loading && unitDetails && unitDetails.error" class="text-error" x-text="unitDetails?.error"></div>
+                <div x-show="!loading && unitDetails && unitDetails.error" class="text-error" x-text="unitError"></div>
                 <div class="modal-action mt-4">
                     <form method="dialog"><button class="btn">بستن</button></form>
                 </div>
@@ -339,15 +410,17 @@ return new class extends Component
         </dialog>
     </div>
 
-    <script>
-        function loadUnitDetails() {
-            if (!this.unitId) return;
-            @this('loadUnitDetails', this.unitId).then(r => {
-                this.loading = false;
-                this.unitDetails = r;
-            });
-        }
-    </script>
+{{-- Issue #1352: popup/marker geometry + the `x-cloak` hide rule live in this
+     nonce'd block instead of `style=` attributes (popup strings, the ticket
+     marker, and the initially-hidden disease panel). The `:style` legend
+     binding below is a CSSOM assignment, not a style attribute, and stays. --}}
+<style nonce="{{ Vite::cspNonce() }}">
+    [x-cloak] { display: none !important; }
+    .map-popup { min-width: 200px; font-family: inherit; }
+    .map-popup-narrow { min-width: 160px; font-family: inherit; }
+    .map-marker-diamond { width: 12px; height: 12px; transform: rotate(45deg); border: 2px solid white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+</style>
+
 </div>
 
 @assets
@@ -362,275 +435,11 @@ return new class extends Component
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
 @endassets
 
-@script
-<script>
-    Alpine.data('mapDashboard', () => {
-        // The Leaflet instance and its layer groups live in closure locals,
-        // never on the Alpine data object: Alpine proxies reactive data,
-        // which breaks Leaflet's listener bookkeeping (issue #769). The map
-        // itself is owned by the shared maps.map component
-        // (Alpine.store('map')); this page only attaches its layers to it.
-        let map = null;
-        let layerGroups = {};
-        let moveTimer = null;
+@assets
+    {{-- #1246: the disease period pickers. Same `@assets` rationale as Leaflet
+         above — `jalalidatepicker` must exist before this page's Alpine
+         `init()` starts watching, and a pushed tag would arrive after Alpine
+         on `wire:navigate`. The CSS is global (`layouts/app.blade.php`). --}}
+    <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
+@endassets
 
-        return {
-            activeLayers: ['units'],
-            filters: {
-                hardware_type: '',
-                ticket_priority: '',
-                ticket_status: '',
-            },
-            stats: { units: 0, hardware: 0, open_tickets: 0 },
-            currentBbox: null,
-            apiToken: '{{ $mapToken }}',
-            apiBase: '{{ url('/api/gis') }}',
-            center: [{{ $mapCenterLat }}, {{ $mapCenterLng }}],
-            zoom: {{ $mapZoom }},
-
-            init() {
-                window.Alpine.store('map').onReady((readyMap) => {
-                    map = readyMap;
-                    map.setView(this.center, this.zoom);
-
-                    layerGroups = {
-                        units: L.layerGroup().addTo(map),
-                        hardware: L.layerGroup(),
-                        tickets: L.layerGroup(),
-                    };
-
-                    map.on('moveend', () => this.onMapMove());
-
-                    this.onMapMove();
-                });
-            },
-
-            onMapMove() {
-                if (!map) return;
-
-                clearTimeout(moveTimer);
-
-                moveTimer = setTimeout(() => {
-                    const bounds = map.getBounds();
-                    this.currentBbox = [
-                        bounds.getWest(),
-                        bounds.getSouth(),
-                        bounds.getEast(),
-                        bounds.getNorth()
-                    ].join(',');
-
-                    this.loadLayers();
-                }, 300);
-            },
-
-            async loadLayers() {
-                if (!this.currentBbox) return;
-
-                const bbox = this.currentBbox;
-                const headers = {
-                    'Authorization': 'Bearer ' + this.apiToken,
-                    'Accept': 'application/json',
-                };
-
-                if (this.activeLayers.includes('units')) {
-                    this.fetchAndRender(`${this.apiBase}/units?bbox=${bbox}`, layerGroups.units, 'unit', headers);
-                }
-                if (this.activeLayers.includes('hardware')) {
-                    let url = `${this.apiBase}/hardware?bbox=${bbox}`;
-                    if (this.filters.hardware_type) url += `&type=${this.filters.hardware_type}`;
-                    this.fetchAndRender(url, layerGroups.hardware, 'hardware', headers);
-                }
-                if (this.activeLayers.includes('tickets')) {
-                    let url = `${this.apiBase}/tickets?bbox=${bbox}`;
-                    if (this.filters.ticket_priority) url += `&priority=${this.filters.ticket_priority}`;
-                    if (this.filters.ticket_status) url += `&status=${this.filters.ticket_status}`;
-                    this.fetchAndRender(url, layerGroups.tickets, 'ticket', headers);
-                }
-
-                // Load stats
-                this.fetchStats(bbox, headers);
-            },
-
-            async fetchAndRender(url, layerGroup, type, headers) {
-                try {
-                    const response = await fetch(url, { headers });
-                    const data = await response.json();
-                    this.renderGeoJSON(data, layerGroup, type);
-                } catch (e) {
-                    console.error(`Failed to load ${type}:`, e);
-                }
-            },
-
-            async fetchStats(bbox, headers) {
-                try {
-                    const response = await fetch(`${this.apiBase}/stats?bbox=${bbox}`, { headers });
-                    const data = await response.json();
-                    this.stats = data;
-                } catch (e) {
-                    console.error('Failed to load stats:', e);
-                }
-            },
-
-            renderGeoJSON(geojson, layerGroup, type) {
-                if (!layerGroup) return;
-                layerGroup.clearLayers();
-
-                if (!geojson.features || geojson.features.length === 0) return;
-
-                geojson.features.forEach(feature => {
-                    if (!feature.geometry) return;
-
-                    const props = feature.properties;
-                    const coords = feature.geometry.coordinates;
-                    const lat = coords[1];
-                    const lng = coords[0];
-
-                    let marker;
-                    const iconColor = this.getIconColor(type, props);
-
-                    if (type === 'unit' || type === 'hardware') {
-                        // Perf: one lightweight SVG shape per point instead of a
-                        // divIcon DOM node + inner div (same look: white ring,
-                        // filled dot; class kept so the e2e count still works).
-                        marker = L.circleMarker([lat, lng], {
-                            className: type === 'unit' ? 'unit-marker' : 'hardware-marker',
-                            radius: type === 'unit' ? 8 : 6,
-                            color: '#ffffff',
-                            weight: 2,
-                            opacity: 1,
-                            fillColor: iconColor,
-                            fillOpacity: 1,
-                        });
-                    } else if (type === 'ticket') {
-                        marker = L.marker([lat, lng], {
-                            icon: L.divIcon({
-                                className: 'ticket-marker',
-                                html: `<div style="width:12px;height:12px;transform:rotate(45deg);background:${iconColor};border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                                iconSize: [12, 12],
-                            })
-                        });
-                    }
-
-                    if (marker) {
-                        // Lazy: popup HTML is only built when a point is opened.
-                        marker.bindPopup(() => this.createPopup(type, props));
-                        marker.on('click', () => this.onFeatureClick(type, props));
-                        marker.addTo(layerGroup);
-                    }
-                });
-            },
-
-            getIconColor(type, props) {
-                if (type === 'unit') {
-                    return '#3b82f6';
-                } else if (type === 'hardware') {
-                    return props.shutdown ? '#ef4444' : '#22c55e';
-                } else if (type === 'ticket') {
-                    const colors = {
-                        'urgent': '#ef4444',
-                        'high': '#f97316',
-                        'normal': '#eab308',
-                        'medium': '#3b82f6',
-                        'low': '#22c55e',
-                    };
-                    return colors[props.priority] || '#6b7280';
-                }
-                return '#6b7280';
-            },
-
-            createPopup(type, props) {
-                const escapeHtml = (str) => {
-                    const div = document.createElement('div');
-                    div.textContent = str ?? '';
-                    return div.innerHTML;
-                };
-
-                if (type === 'unit') {
-                    return `
-                        <div dir="rtl" style="min-width:200px;font-family:inherit;">
-                            <strong>${escapeHtml(props.name)}</strong><br>
-                            نوع: ${escapeHtml(this.getUnitTypeLabel(props.unit_type_id))}<br>
-                            موقعیت: ${props.lat?.toFixed(6)}, ${props.lng?.toFixed(6)}
-                        </div>`;
-                } else if (type === 'hardware') {
-                    return `
-                        <div dir="rtl" style="min-width:200px;font-family:inherit;">
-                            <strong>${escapeHtml(props.pc_name)}</strong><br>
-                            نوع: ${escapeHtml(props.type || '—')}<br>
-                            CPU: ${escapeHtml(props.cpu || '—')}<br>
-                            RAM: ${escapeHtml(props.ram || '—')}<br>
-                            وضعیت: ${props.shutdown ? 'شات‌داون' : 'فعال'}<br>
-                            واحد: ${escapeHtml(props.unit?.name || '—')}<br>
-                            شخص: ${escapeHtml(props.person?.name || '—')}
-                        </div>`;
-                } else if (type === 'ticket') {
-                    return `
-                        <div dir="rtl" style="min-width:200px;font-family:inherit;">
-                            <strong>${escapeHtml(props.title)}</strong><br>
-                            کد: ${escapeHtml(props.ticket_code)}<br>
-                            اولویت: ${escapeHtml(this.getPriorityLabel(props.priority))}<br>
-                            وضعیت: ${escapeHtml(props.status)}<br>
-                            واحد: ${escapeHtml(props.unit?.name || '—')}
-                        </div>`;
-                }
-                return '';
-            },
-
-            getUnitTypeLabel(typeId) {
-                const types = {
-                    1: 'وزارت بهداشت', 2: 'دانشگاه علوم پزشکی', 3: 'معاونت بهداشت',
-                    4: 'شبکه بهداشت', 5: 'مرکز خدمات جامع سلامت شهری',
-                    6: 'مرکز خدمات جامع سلامت شهری روستایی', 7: 'مرکز خدمات جامع سلامت روستایی',
-                    9: 'خانه بهداشت', 13: 'مرکز هاری', 18: 'خانه بهداشت کارگری', 20: 'خانه های کارگری',
-                };
-                return types[typeId] || 'نامشخص';
-            },
-
-            getPriorityLabel(priority) {
-                const labels = {
-                    'urgent': 'فوری', 'high': 'بالا', 'normal': 'عادی',
-                    'medium': 'متوسط', 'low': 'پایین',
-                };
-                return labels[priority] || priority;
-            },
-
-            getPriorityBadge(priority) {
-                const badges = {
-                    'urgent': 'badge-error', 'high': 'badge-warning', 'normal': 'badge-info',
-                    'medium': 'badge-primary', 'low': 'badge-success',
-                };
-                return badges[priority] || 'badge-ghost';
-            },
-
-            onFeatureClick(type, props) {
-                if (type === 'unit') {
-                    @this('unitSelected', props.id);
-                }
-            },
-
-            toggleLayer(layer) {
-                if (this.activeLayers.includes(layer)) {
-                    this.activeLayers = this.activeLayers.filter(l => l !== layer);
-                    layerGroups[layer]?.clearLayers();
-                    if (map && layerGroups[layer]) {
-                        map.removeLayer(layerGroups[layer]);
-                    }
-                } else {
-                    this.activeLayers.push(layer);
-                    if (map && layerGroups[layer] && !map.hasLayer(layerGroups[layer])) {
-                        layerGroups[layer].addTo(map);
-                    }
-                    this.loadLayers();
-                }
-                @this('layerToggled', layer);
-            },
-
-            setFilter(key, value) {
-                this.filters[key] = value;
-                @this('filterChanged', this.filters);
-                this.loadLayers();
-            },
-        };
-    });
-</script>
-@endscript

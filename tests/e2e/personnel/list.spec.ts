@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 
 /**
  * Personnel list
@@ -29,53 +29,63 @@ test.describe('personnel list', () => {
 
   test('search by name filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
+    const searchUpdate = waitForLivewire(page);
     await search.fill('عسگری');
-    await page.waitForTimeout(1500);
+    await searchUpdate;
     await expect(page.locator('table tbody')).toContainText('عسگری');
   });
 
   test('search by n_code filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
+    const searchUpdate = waitForLivewire(page);
     await search.fill('4411015056');
-    await page.waitForTimeout(1500);
+    await searchUpdate;
     await expect(page.locator('table tbody')).toContainText('4411015056');
   });
 
   test('filters panel opens', async ({ page }) => {
+    const filterPanel = waitForLivewire(page);
     await page.locator(FILTER_BTN).click();
-    await page.waitForTimeout(800);
+    await filterPanel;
     await expect(page.locator('body')).toContainText('پاک کردن فیلترها');
   });
 
   test('filter by semat narrows results', async ({ page }) => {
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
+    const filterPanel = waitForLivewire(page);
     await page.locator(FILTER_BTN).click();
-    await page.waitForTimeout(800);
+    await filterPanel;
+    const sematFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
-    await page.waitForTimeout(1500);
+    await sematFilter;
     const rows = await page.locator('table tbody tr').count();
     expect(rows).toBeGreaterThan(0);
     expect(rows).toBeLessThanOrEqual(20);
   });
 
   test('filter by tahsil narrows results', async ({ page }) => {
+    const filterPanel = waitForLivewire(page);
     await page.locator(FILTER_BTN).click();
-    await page.waitForTimeout(800);
+    await filterPanel;
+    const tahsilFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_t_id"]').selectOption({ index: 2 });
-    await page.waitForTimeout(1500);
+    await tahsilFilter;
     expect(await page.locator('table tbody tr').count()).toBe(0);
   });
 
   test('clear filters restores full list', async ({ page }) => {
+    const filterPanel = waitForLivewire(page);
     await page.locator(FILTER_BTN).click();
-    await page.waitForTimeout(800);
+    await filterPanel;
+    const sematFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
-    await page.waitForTimeout(1500);
+    await sematFilter;
     const filteredRows = await page.locator('table tbody tr').count();
     expect(filteredRows).toBeLessThanOrEqual(20);
 
+    const clearFilters = waitForLivewire(page);
     await page.locator('button:has-text("پاک کردن فیلترها")').first().click();
-    await page.waitForTimeout(1500);
+    await clearFilters;
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
     expect(await page.locator('table tbody tr').count()).toBe(20);
   });
@@ -90,8 +100,9 @@ test.describe('personnel list', () => {
     const before = new URL((await link.getAttribute('href'))!, page.url());
     expect(before.searchParams.get('search')).toBeNull();
 
+    const exportSearch = waitForLivewire(page);
     await page.locator('input[placeholder^="جستجو"]').first().fill('عسگری');
-    await page.waitForTimeout(1500);
+    await exportSearch;
 
     const after = new URL((await link.getAttribute('href'))!, page.url());
     expect(after.searchParams.get('search')).toBe('عسگری');
@@ -100,14 +111,17 @@ test.describe('personnel list', () => {
   test('export link is cleared by the reset-filters button', async ({ page }) => {
     const link = page.locator(`a[href*="/kargozini/persons/export"]`);
 
+    const filterPanel = waitForLivewire(page);
     await page.locator(FILTER_BTN).click();
-    await page.waitForTimeout(800);
+    await filterPanel;
+    const sematFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
-    await page.waitForTimeout(1500);
+    await sematFilter;
     expect(new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('filter_s_id')).toBeTruthy();
 
+    const clearFilters = waitForLivewire(page);
     await page.locator('button:has-text("پاک کردن فیلترها")').first().click();
-    await page.waitForTimeout(1500);
+    await clearFilters;
     expect(new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('filter_s_id')).toBeNull();
   });
 });

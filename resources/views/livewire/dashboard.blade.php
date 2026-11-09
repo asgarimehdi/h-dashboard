@@ -76,21 +76,22 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->emptyScope = $accessibleIds === [];
-        $scopeKey = md5(implode(',', $accessibleIds));
-        $v = Cache::get('dashboard_version', 0);
+        $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
+        // Issue #1290: version lookup and key shape are the service's job.
+        $cache = app(\App\Services\CacheInvalidationServiceInterface::class);
 
         // Global stats (not scoped) — 1 query
-        $globalStats = Cache::remember("dashboard:global:v{$v}", 300, function () {
+        $globalStats = $cache->remember('dashboard', 'global', function () {
             return [
                 'totalUsers' => User::count(),
                 'totalRoles' => Role::count(),
             ];
-        });
+        }, 5);
         $this->totalUsers = $globalStats['totalUsers'];
         $this->totalRoles = $globalStats['totalRoles'];
 
         // Scoped stats — consolidated with PostgreSQL FILTER
-        $stats = Cache::remember("dashboard:stats:v{$v}:{$scopeKey}", 300, function () use ($accessibleIds) {
+        $stats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'totalPersons' => 0,
@@ -151,10 +152,10 @@ return new class extends Component
                 'completedTodos' => (int) ($todoRow->completed_todos ?? 0),
                 'linkedTodos' => (int) ($linkedTodos->cnt ?? 0),
             ];
-        });
+        }, 5, ['segment' => 'stats']);
 
         // Today stats — 1 consolidated query
-        $todayStats = Cache::remember("dashboard:today:v{$v}:{$scopeKey}", 120, function () use ($accessibleIds) {
+        $todayStats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'todayTickets' => 0,
@@ -184,10 +185,10 @@ return new class extends Component
                 'todayActivities' => ActivityLog::whereIn('user_id', $userIds)
                     ->where('created_at', '>=', $today)->count(),
             ];
-        });
+        }, 2, ['segment' => 'today']);
 
         // Ticket details — 1 consolidated query
-        $details = Cache::remember("dashboard:ticket_details:v{$v}:{$scopeKey}", 180, function () use ($accessibleIds) {
+        $details = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
             if ($accessibleIds === []) {
                 return [
                     'urgentTickets' => 0,
@@ -222,7 +223,7 @@ return new class extends Component
                 'overdueTickets' => (int) ($row->overdue ?? 0),
                 'avgResolutionDays' => (float) ($row->avg_days ?? 0),
             ];
-        });
+        }, 3, ['segment' => 'ticket_details']);
 
         $this->totalPersons = $stats['totalPersons'];
         $this->totalUnits = $stats['totalUnits'];
@@ -262,53 +263,52 @@ return new class extends Component
     // داده‌های نمودار تیکت‌ها — TTL 5 دقیقه
     public function getTicketChartDataProperty(): array
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $scopeKey = \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds());
 
-        return Cache::remember("dashboard:ticket_chart:v{$v}:{$scopeKey}", 300, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)
+            ->remember('dashboard', $scopeKey, function () {
+                $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-            // Issue #736: the window is 30 days ending today, with every day
-            // present (zeros included). The previous `ORDER BY day` +
-            // `LIMIT 30` returned the *oldest* 30 days, so recent days were
-            // missing from the chart entirely.
-            $days = DailySeries::lastDays(self::TICKET_CHART_DAYS)
-                ->counts(Ticket::query()->whereIn('unit_id', $accessibleIds), 'created_at');
+                // Issue #736: the window is 30 days ending today, with every day
+                // present (zeros included). The previous `ORDER BY day` +
+                // `LIMIT 30` returned the *oldest* 30 days, so recent days were
+                // missing from the chart entirely.
+                $days = DailySeries::lastDays(self::TICKET_CHART_DAYS)
+                    ->counts(Ticket::query()->whereIn('unit_id', $accessibleIds), 'created_at');
 
-            return [
-                'categories' => array_map(
-                    fn (array $row) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($row['day']))->format('m/d'),
-                    $days
-                ),
-                'series' => array_column($days, 'count'),
-            ];
-        });
+                return [
+                    'categories' => array_map(
+                        fn (array $row) => \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($row['day']))->format('m/d'),
+                        $days
+                    ),
+                    'series' => array_column($days, 'count'),
+                ];
+            }, 5, ['segment' => 'ticket_chart']);
     }
 
     // داده‌های نمودار وضعیت تیکت‌ها — TTL 5 دقیقه
     public function getTicketStatusDataProperty(): array
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $scopeKey = \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds());
 
-        return Cache::remember("dashboard:ticket_status:v{$v}:{$scopeKey}", 300, function () {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        return app(\App\Services\CacheInvalidationServiceInterface::class)
+            ->remember('dashboard', $scopeKey, function () {
+                $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-            return Ticket::whereIn('unit_id', $accessibleIds)
-                ->selectRaw('status, count(*) as count')
-                ->groupBy('status')
-                ->pluck('count', 'status')
-                ->toArray();
-        });
+                return Ticket::whereIn('unit_id', $accessibleIds)
+                    ->selectRaw('status, count(*) as count')
+                    ->groupBy('status')
+                    ->pluck('count', 'status')
+                    ->toArray();
+            }, 5, ['segment' => 'ticket_status']);
     }
 
     // آخرین فعالیت‌ها — TTL 2 دقیقه
     public function getRecentActivitiesProperty(): \Illuminate\Database\Eloquent\Collection
     {
-        $v = Cache::get('dashboard_version', 0);
-        $scopeKey = md5(implode(',', app(AccessService::class)->accessibleUnitIds()));
+        $scopeKey = \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds());
 
-        return Cache::remember("dashboard:recent_activities:v{$v}:{$scopeKey}", 120, function () {
+        return app(\App\Services\CacheInvalidationServiceInterface::class)->remember('dashboard', $scopeKey, function () {
             $accessibleIds = app(AccessService::class)->accessibleUnitIds();
             // #1057: include soft-deleted users in scope so their activity
             // stays in the audit trail; the unit predicate is unchanged.
@@ -321,7 +321,7 @@ return new class extends Component
             return ActivityLog::with(['user' => fn ($q) => \App\Support\ActorLabel::eagerLoadActor($q)])
                 ->whereIn('user_id', $userIds)
                 ->latest()->take(10)->get();
-        });
+        }, 2, ['segment' => 'recent_activities']);
     }
 
     /**
@@ -370,18 +370,8 @@ return new class extends Component
 }; ?>
 <div
     @if($refreshInterval > 0)
-        x-data="{
-            interval: {{ $refreshInterval * 1000 }},
-            timer: null,
-            init() {
-                if (this.interval > 0) {
-                    this.timer = setInterval(() => $wire.refreshStats(), this.interval);
-                }
-            },
-            destroy() {
-                if (this.timer) { clearInterval(this.timer); this.timer = null; }
-            },
-        }"
+        x-data="dashboardRefresh"
+        data-interval="{{ $refreshInterval * 1000 }}"
     @endif
 >
     <x-header title="داشبورد مدیریت اطلاعات سلامت" separator progress-indicator>
@@ -472,6 +462,11 @@ return new class extends Component
         />
     </div>
 
+    {{-- Inert data for the ticket charts in dashboard-charts.js.
+         Must sit INSIDE the root element: Livewire drops trailing
+         content after the root close tag (chunk-5 lesson). --}}
+    <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="dashboard-chart-data">@json(['trend' => $this->ticketChartData, 'status' => $this->ticketStatusData])</script>
+
     {{-- نمودارهای تعاملی --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {{-- نمودار روند تیکت‌ها --}}
@@ -480,7 +475,7 @@ return new class extends Component
                 <x-icon name="o-chart-bar" class="w-5 h-5 text-info" />
                 روند ایجاد تیکت‌ها (۳۰ روز اخیر)
             </h3>
-            <div id="ticketTrendChart" wire:ignore style="height: 250px;"></div>
+            <div id="ticketTrendChart" wire:ignore class="h-[250px]"></div>
         </x-card>
 
         {{-- نمودار وضعیت تیکت‌ها --}}
@@ -489,7 +484,7 @@ return new class extends Component
                 <x-icon name="o-chart-pie" class="w-5 h-5 text-warning" />
                 وضعیت تیکت‌ها
             </h3>
-            <div id="ticketStatusChart" wire:ignore style="height: 250px;"></div>
+            <div id="ticketStatusChart" wire:ignore class="h-[250px]"></div>
         </x-card>
     </div>
 
@@ -511,7 +506,7 @@ return new class extends Component
                         <span class="font-bold">{{ $completedTodos }} / {{ $totalTodos }} ({{ $todoPercent }}%)</span>
                     </div>
                     <div class="w-full bg-base-200 rounded-full h-3">
-                        <div class="bg-success h-3 rounded-full transition-all duration-500" style="width: {{ $todoPercent }}%"></div>
+                        <div id="todo-progress-fill" class="bg-success h-3 rounded-full transition-all duration-500"></div>
                     </div>
                 </div>
 
@@ -549,7 +544,7 @@ return new class extends Component
                         <span class="font-bold">{{ $linkedTodos }} / {{ $totalTodos }} ({{ $linkedPercent }}%)</span>
                     </div>
                     <div class="w-full bg-base-200 rounded-full h-3">
-                        <div class="bg-secondary h-3 rounded-full transition-all duration-500" style="width: {{ $linkedPercent }}%"></div>
+                        <div id="linked-progress-fill" class="bg-secondary h-3 rounded-full transition-all duration-500"></div>
                     </div>
                 </div>
 
@@ -667,138 +662,12 @@ return new class extends Component
     <script src="{{ asset('js/chart/accessibility.js') }}"></script>
     @endassets
 
-    @script
-    <script>
-        const statusLabels = { 'created': 'جدید', 'accepted': 'پذیرفته شده', 'completed': 'تکمیل شده', 'forwarded': 'ارجاع شده', 'rejected': 'رد شده' };
+    {{-- Issue #1352: the progress-fill widths are data-driven, so they live in
+         this nonce'd block (rendered server-side) instead of `style=`
+         attributes, which `style-src-attr` no longer allows. --}}
+    <style nonce="{{ Vite::cspNonce() }}">
+        #todo-progress-fill { width: {{ $todoPercent }}%; }
+        #linked-progress-fill { width: {{ $linkedPercent }}%; }
+    </style>
 
-        // #1224: series colours follow the active theme family. daisyUI's
-        // `color-scheme` is the same light/dark signal App\Support\ThemeFamilies
-        // uses, so a newly enabled theme needs no entry here. The old hard-coded
-        // sky-500 line measured 2.74:1 on the light poles (below the 3:1
-        // non-text minimum); the pairs below clear 4:1 on every enabled theme.
-        const CHART_COLORS = {
-            light: {
-                trend: '#0284c7',
-                created: '#2563eb',
-                accepted: '#b45309',
-                completed: '#15803d',
-                forwarded: '#6d28d9',
-                rejected: '#b91c1c',
-                text: '#3f3f46'
-            },
-            dark: {
-                trend: '#38bdf8',
-                created: '#60a5fa',
-                accepted: '#fbbf24',
-                completed: '#4ade80',
-                forwarded: '#a78bfa',
-                rejected: '#f87171',
-                text: '#d4d4d8'
-            }
-        };
-
-        function chartPalette() {
-            const style = getComputedStyle(document.documentElement);
-            const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
-
-            return {
-                ...CHART_COLORS[scheme],
-                text: style.getPropertyValue('--color-base-content').trim() || CHART_COLORS[scheme].text
-            };
-        }
-
-        function waitForHighcharts(callback, attempts = 0) {
-            if (typeof window.Highcharts !== 'undefined') {
-                callback();
-                return;
-            }
-            if (attempts > 100) {
-                console.error('Highcharts failed to load');
-                return;
-            }
-            setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-        }
-
-        function destroyChart(container) {
-            if (!container || typeof Highcharts === 'undefined') {
-                return;
-            }
-            const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-            if (existing) {
-                existing.destroy();
-            }
-            container.innerHTML = '';
-        }
-
-        function renderTicketCharts() {
-            waitForHighcharts(() => {
-                const trendData = @json($this->ticketChartData);
-                const statusData = @json($this->ticketStatusData);
-                const palette = chartPalette();
-
-                const trendContainer = document.getElementById('ticketTrendChart');
-                const statusContainer = document.getElementById('ticketStatusChart');
-
-                if (!trendContainer || !statusContainer) {
-                    return;
-                }
-
-                destroyChart(trendContainer);
-                destroyChart(statusContainer);
-
-                Highcharts.chart(trendContainer, {
-                    chart: { type: 'areaspline', backgroundColor: 'transparent' },
-                    title: { text: null },
-                    credits: { enabled: false },
-                    xAxis: {
-                        categories: trendData.categories.length ? trendData.categories : ['بدون داده'],
-                        labels: { style: { fontSize: '10px' } }
-                    },
-                    yAxis: { title: { text: 'تعداد' }, min: 0, allowDecimals: false },
-                    plotOptions: {
-                        areaspline: {
-                            fillColor: {
-                                linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-                                stops: [[0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')], [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')]]
-                            },
-                            lineColor: palette.trend,
-                            marker: { enabled: false }
-                        }
-                    },
-                    series: [{ name: 'تیکت‌ها', data: trendData.series.length ? trendData.series : [0], color: palette.trend }],
-                    legend: { enabled: false }
-                });
-
-                const pieData = Object.keys(statusData).length
-                    ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: palette[key] || '#6b7280' }))
-                    : [{ name: 'بدون داده', y: 0, color: '#6b7280' }];
-
-                Highcharts.chart(statusContainer, {
-                    chart: { type: 'pie', backgroundColor: 'transparent' },
-                    title: { text: null },
-                    credits: { enabled: false },
-                    plotOptions: {
-                        pie: {
-                            innerSize: '55%',
-                            dataLabels: {
-                                enabled: true,
-                                format: '<b>{point.name}</b>: {point.y}',
-                                // Highcharts defaults to #333 with a white halo —
-                                // unreadable on the dark poles.
-                                style: { color: palette.text, textOutline: 'none' }
-                            }
-                        }
-                    },
-                    series: [{ name: 'تیکت‌ها', data: pieData }]
-                });
-            });
-        }
-
-        // Runs on full page load and Livewire wire:navigate
-        renderTicketCharts();
-
-        // maryUI x-theme-toggle dispatches this bubbling CustomEvent on switch.
-        window.addEventListener('theme-changed', renderTicketCharts);
-    </script>
-    @endscript
 </div>

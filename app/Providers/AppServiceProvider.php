@@ -2,10 +2,20 @@
 
 namespace App\Providers;
 
+use App\Models\ActivityLog;
+use App\Models\Boundary;
+use App\Models\Disease;
+use App\Models\DiseaseCase;
+use App\Models\DiseaseFieldDef;
 use App\Models\Hardware;
+use App\Models\Patient;
+use App\Models\Person;
+use App\Models\Region;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\UnitPopulation;
+use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationService;
@@ -16,7 +26,14 @@ use App\Services\ZabbixService;
 use App\Support\VendorRouteGuard;
 use App\View\Components\AccessibleMenuItem;
 use App\View\Components\AccessibleTable;
+use App\View\Components\CspChoicesOffline;
+use App\View\Components\CspFile;
+use App\View\Components\CspMain;
+use App\View\Components\CspMenuSub;
+use App\View\Components\CspModal;
+use App\View\Components\CspTable;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -79,8 +96,18 @@ class AppServiceProvider extends ServiceProvider
         // Deploys must run `view:clear` before `view:cache` — Blade keys a
         // compiled view on the source file's mtime, not on the alias table, so
         // a cache carried over from before this change keeps Mary's markup.
-        Blade::component('table', AccessibleTable::class);
+        Blade::component('table', CspTable::class);
         Blade::component('menu-item', AccessibleMenuItem::class);
+
+        // CSP-compat overrides (#1352): app-owned MaryUI components whose
+        // x-data literals the CSP-safe Alpine build cannot evaluate.
+        // CspTable replaces the AccessibleTable alias and inherits its
+        // ariaSort() — see each class docblock for the exact diff.
+        Blade::component('main', CspMain::class);
+        Blade::component('menu-sub', CspMenuSub::class);
+        Blade::component('modal', CspModal::class);
+        Blade::component('choices-offline', CspChoicesOffline::class);
+        Blade::component('file', CspFile::class);
 
         // Register help-content components dynamically with colon syntax
         $helpContents = [
@@ -130,16 +157,58 @@ class AppServiceProvider extends ServiceProvider
         Todo::updated(fn () => $invalidate($todoNamespaces));
         Todo::deleted(fn () => $invalidate($todoNamespaces));
 
-        $ticketNamespaces = ['report_tickets', 'gis', 'calendar', 'dashboard'];
+        $ticketNamespaces = ['report_tickets', 'gis', 'calendar', 'dashboard', 'tools_stats'];
         Ticket::created(fn () => $invalidate($ticketNamespaces));
         Ticket::updated(fn () => $invalidate($ticketNamespaces));
         Ticket::deleted(fn () => $invalidate($ticketNamespaces));
 
         // Invalidate units report + hierarchy + GIS + HR caches on Unit changes (Issues #340, #372, #391)
-        $unitNamespaces = ['report_units', 'unit_hierarchy', 'gis', 'hr_stats'];
+        // `disease_maps` belongs here too: `region_id`, `parent_id` and
+        // `is_active` change both the scope and the case attribution (#1245).
+        $unitNamespaces = ['report_units', 'unit_hierarchy', 'gis', 'hr_stats', 'disease_maps'];
         Unit::created(fn () => $invalidate($unitNamespaces));
         Unit::updated(fn () => $invalidate($unitNamespaces));
         Unit::deleted(fn () => $invalidate($unitNamespaces));
+
+        // Issue #1348: the activity-log page caches its accessible-user list
+        // and type counts under `activity_log`, and the tools page caches its
+        // counts under `tools_stats`. User creation/deletion, a Person moving
+        // units (or being created/deleted), and any ActivityLog write must
+        // bump them. This wiring lives here — beside the Ticket/Unit wiring —
+        // so Person.php stays untouched for #1347. Known gap, accepted with
+        // the 5-minute TTL bound: user↔unit pivot syncs in Blade
+        // (users/index, kargozini/person) fire no model event.
+        User::created(fn () => $invalidate(['activity_log']));
+        User::deleted(fn () => $invalidate(['activity_log']));
+        Person::saved(function (Person $model) use ($invalidate): void {
+            if ($model->wasChanged('u_id') || $model->wasRecentlyCreated) {
+                $invalidate(['activity_log']);
+            }
+        });
+        Person::deleted(fn () => $invalidate(['activity_log']));
+        ActivityLog::created(fn () => $invalidate(['activity_log', 'tools_stats']));
+
+        // Issue #1245: every disease-domain write invalidates the map layer.
+        // Bulk `DB::table()` updates fire no model event — documented in
+        // references/api-endpoints.md as the known limit of this hook.
+        $diseaseNamespaces = ['disease_maps'];
+
+        /** @var list<class-string<Model>> $diseaseModels */
+        $diseaseModels = [
+            Disease::class,
+            DiseaseCase::class,
+            DiseaseFieldDef::class,
+            Patient::class,
+            UnitPopulation::class,
+            Region::class,
+            Boundary::class,
+        ];
+
+        foreach ($diseaseModels as $model) {
+            $model::created(fn () => $invalidate($diseaseNamespaces));
+            $model::updated(fn () => $invalidate($diseaseNamespaces));
+            $model::deleted(fn () => $invalidate($diseaseNamespaces));
+        }
 
         // Issue #951: the vendored maryUI upload endpoint is not mounted. See
         // App\Support\VendorRouteGuard for why the route has to be stripped

@@ -11,9 +11,9 @@ Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` 
 | Command | Schedule | Class | Purpose |
 |---|---|---|---|
 | `cache:prune-stale` | hourly | `PruneStaleCache` | Resets all cache version counters (see **Cache Version Namespaces**) so stale versioned keys expire |
-| `todos:generate-recurring` | daily 02:00 | `GenerateRecurringTodos` | Creates recurring todo instances from `todos.recurrence_rule` templates |
-| `maintenance:generate-due` | daily 03:00 | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
-| `data:archive` | weekly (Mon 04:00) | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
+| `todos:generate-recurring` | daily 02:00, `->withoutOverlapping(60)` | `GenerateRecurringTodos` | Creates recurring todo instances from `todos.recurrence_rule` templates |
+| `maintenance:generate-due` | daily 03:00, `->withoutOverlapping(60)` | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
+| `data:archive` | weekly (Mon 04:00), `->withoutOverlapping(120)` + in-command lock | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
 | `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per unit, org-wide (no actor at 06:00 — see #836) |
 | `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
 
@@ -23,7 +23,7 @@ Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` 
 
 - `todos:generate-recurring` — reads `todos` where `recurrence_rule != 'none'` and `last_generated_at <= now()`. For each due template it creates a fresh instance (`recurrence_rule = 'none'`) and advances `last_generated_at` to `nextOccurrence()` (`daily`/`weekly`/`monthly` × `recurrence_interval`, based on `last_generated_at ?? start_at`). Recurrence fields added in `2026_08_29_000002_add_recurrence_fields_to_todos_table.php`.
 - `maintenance:generate-due` — reads `maintenance_schedules` where `next_due_at <= now()` (or null), creates a `Ticket` (`ticket_code = 'T-'.Str::random(8)`, `status = 'created'`) on the schedule's `unit_id`, then advances `last_generated_at` and `next_due_at` by the schedule frequency.
-- `data:archive` — chunks `activity_logs` older than `--months=12` (default), copies them to `activity_log_archives` (preserving `original_created_at`/`original_updated_at`) and deletes the originals. Supports `--dry-run`.
+- `data:archive` — chunks `activity_logs` older than `--months=12` (default), copies them to `activity_log_archives` (preserving `original_created_at`/`original_updated_at`) and deletes the originals. Supports `--dry-run`. Since #1305 it holds `Cache::lock('command:data:archive', 6h)` for the whole run: the schedule's `withoutOverlapping(120)` is only read on the `Schedule::run()` path, so a manual run would otherwise race a scheduled one and archive the same rows twice. A run that cannot take the lock warns, logs, and exits 0. Emergency manual runs release it with `Cache::lock('command:data:archive', 1)->forceRelease()` — there is deliberately no `--force` flag.
 - `reports:generate-daily` — iterates `AccessService::allUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`. **Org-wide by default, not actor-scoped** (#836): the 06:00 schedule runs with no authenticated user, so `accessibleUnitIds()` would be `[]` and the command would write nothing. `--unit=N` scopes a manual single-unit run.
 
 > All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
@@ -36,7 +36,7 @@ Other commands: `NormalizePersianText` (one-off Persian normalization), plus the
 
 ## API Reference
 
-All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope. Token route: `POST /api/login` (`n_code` + `password`, throttled). Session route: `POST /api/logout` returns `204`, requires `auth:sanctum` but **no ability** (like `/api/user` — a self-scoped action, #1071), and revokes **only the caller's current token** — other devices stay signed in, and reusing the revoked token is `401`.
+All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability** (issue #690) and filter by the user's organizational scope — **except three intentional exemptions**: `POST /api/login` is public (it mints the token; no `auth:sanctum`, no ability), and `GET /api/user` plus `POST /api/logout` require `auth:sanctum` but **no ability** because they are self-scoped (logout by #1071, following the pre-existing `/api/user` precedent). Token route: `POST /api/login` (`n_code` + `password`, throttled). Session route: `POST /api/logout` returns `204`, requires `auth:sanctum` but **no ability** (like `/api/user` — a self-scoped action, #1071), and revokes **only the caller's current token** — other devices stay signed in, and reusing the revoked token is `401`.
 
 **Abilities:** read groups use `ability:*` (Sanctum: ANY of the listed abilities), write groups use `abilities:*` (ALL) — `units:read|write`, `traffic:read`, `hardware:read|write`, `tickets:read|write`, `reports:read`, `persons:read|write`, `todos:read|todos:write`, `hr:read`, `notifications:read`, `gis:read`. Several write groups *also* require a Spatie `role_or_permission` (`organization`, `manage_hardware`, `manage_personnel`, `calendar`, `view_hr_dashboard`, `map`) — both must pass. The full per-route table lives in **AGENTS.md → "API Token Abilities"**; tokens are scoped and revoked on password change (#678), and API tests mint real Bearer tokens (`tests/Feature/ApiAbilityTest.php`).
 
@@ -261,7 +261,82 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 > The streak is derived by reading the previous row (`orderByDesc('id')->first()`), so run recording is **serial by nature** — parallelising it would let two runs compute the same streak value.
 
+### GIS Disease Layer (issue #1245)
+
+Three aggregate-only endpoints for the disease map (#1246 consumes them). They ride the existing
+`gis` group — `auth:sanctum` + `ability:gis:read` + `role_or_permission:map|bw` — and do **not**
+require `manage_diseases`.
+
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/gis/diseases` | Active diseases only (`id`, `name_fa`, `slug`), ordered by `sort`, `id`. Uncached. |
+| GET | `/api/gis/disease-stats` | Scope-wide `{cases, population, rate}` for the period, no envelope |
+| GET | `/api/gis/disease-map` | GeoJSON `FeatureCollection` for the period, region or unit layer |
+
+Parameters (shared by `disease-stats` and `disease-map`):
+
+| Param | Default | Notes |
+|---|---|---|
+| `disease` | — (required) | Any existing disease id. **Inactive diseases remain readable**: the catalogue hides them, but their historical cases must still chart. |
+| `from`, `to` | current Persian year | Jalali `Y/m/d` only, parsed strictly — an impossible date (`1405/12/30` in a non-leap year, month 13) is a `422`, never silently normalised. Inclusive. Esfand's length comes from the calendar. |
+| `zoom` | `0` | `0..22`. Below `9` → region choropleth, `9+` → unit markers. `meta.zoom_switch` carries the real value so the client never hard-codes it. |
+| `bbox` | — | `minLon,minLat,maxLon,maxLat`. Validated by the same normaliser the cache key uses; malformed → `422`. Region polygons filter with `ST_Intersects`, unit points with `lat`/`lng` between. |
+
+`disease-stats` response:
+
+```json
+{"cases": 34, "population": 42000, "rate": 8.1}
+```
+
+`rate = round(cases / population × 10000, 1)`; `null` when the population is missing or zero
+(never `0` — "no denominator" is not "zero rate"). `population` is the sum of each unit's latest
+recorded year; it is never read from an upper-layer row.
+
+`disease-map` response:
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "region:12",
+      "geometry": {"type": "Polygon", "coordinates": [[[48,36],[49,36],[49,37],[48,36]]]},
+      "properties": {"level": "county", "region_id": 12, "name": "…", "cases": 4, "population": 1000, "rate": 40.0, "class": 2}
+    }
+  ],
+  "meta": {"level": "mixed", "zoom_switch": 9, "classes": 5, "breaks": [2.0,4.0,6.0,8.0], "fallback_provinces": 1, "unmapped_cases": 0}
+}
+```
+
+- **Region mode** draws county polygons. A province whose counties lack boundaries falls back
+  **all-or-nothing** to one province polygon (cases summed, `level = "province"`); a province with
+  no boundary at all is dropped rather than centroided. `meta.level` is `county`, `province`,
+  `mixed` or `none`; `meta.fallback_provinces` counts provinces that actually fell back.
+- **Unit mode** draws one `Point` per accessible **base** unit (types `8, 9, 10, 18`) that is
+  active and has coordinates. Units without cases are present with `cases = 0` so the layer never
+  looks empty. `meta.breaks = []`, `meta.classes = 0`.
+- `class` is the quantile bucket (`0..count(breaks)`, `null` when `rate` is `null`); `meta.breaks`
+  are the 4 quantile boundaries (fewer when there are fewer distinct rates). Both are additive
+  fields, safe for an older client to ignore.
+- `meta.unmapped_cases` reports cases that sit on no drawn feature (subject unit with no region,
+  or a non-base unit) — they are surfaced, never guessed into a neighbouring polygon. `meta` is
+  computed before `bbox` filtering, so a viewport never changes it.
+- **PII:** the payload carries counts, rates and organizational names only. No patient id, national
+  code, name, birth date, gender, city or dynamic field value ever appears (decision 18).
+
+Cache: namespace `disease_maps`, TTL 60 minutes, keyed by scope hash + disease + Jalali range
+(+ `mode`/`bbox` for the layer). Seven disease-domain models (`Disease`, `DiseaseCase`,
+`DiseaseFieldDef`, `Patient`, `UnitPopulation`, `Region`, `Boundary`) plus `Unit` bump the
+namespace on `created`/`updated`/`deleted`, so a write makes stale entries unreachable instead of
+serving them. **Known limit:** a bulk `DB::table()` update/delete fires no model event and does not
+bump the namespace until the TTL expires. `cache:prune-stale` only audits versions — it deletes
+nothing.
+
+> The rest of `/api/gis/*` is not documented here (older drift, outside #1245's scope).
+
 ---
+
 
 ## UI Features
 
@@ -437,7 +512,9 @@ REDIS_PASSWORD=123
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=...
-TILE_SERVER_IP=tile.openstreetmap.org
+# Map tiles: only TILE_URL_TEMPLATE has any effect. TILE_SERVER_IP / TILE_SERVER_PORT /
+# TILE_SERVER_SCHEME are reserved — they build map.tile_url, which nothing consumes.
+TILE_URL_TEMPLATE=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
 
 ### Build Commands
@@ -563,23 +640,24 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`; three of its jobs are blocking and the rest are informational (`mutation` no longer runs on PRs — manual `workflow_dispatch` only, #1012):
+`.github/workflows/test.yml` runs on PRs to `main`/`beta`/`test`; three of its eight jobs are blocking (`lint`, `test`, `phpstan`) and the other five are informational (`continue-on-error: true`, including `mutation`, which runs on every PR):
 
 | Job key | Name | Gate | Timeout |
 |---|---|---|---|
 | `lint` | Code Style (Pint) | **blocking** | 5 min |
 | `test` | Tests & Coverage | **blocking** | 10 min |
+| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error: true` | 5 min |
+| `typecheck` | Typecheck (Playwright specs, informational) | `continue-on-error: true` | 10 min |
+| `e2e` | E2E Tests (Playwright) | `continue-on-error: true` | 35 min |
+| `mutation` | Mutation Testing | `continue-on-error: true` (informational); runs on every PR | 45 min |
 | `phpstan` | PHPStan Static Analysis | **blocking** | 10 min |
-| `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error: true` | 10 min |
-| `e2e` | E2E Tests (Playwright) | `continue-on-error: true` | 30 min |
-| `mutation` | Mutation Testing | `continue-on-error: true`; manual-only (`workflow_dispatch`, #1012) | 30 min |
 | `test-php86` | PHP 8.6 Preview | `continue-on-error: true` | 10 min |
 
 - **`lint`** — `vendor/bin/pint --test` plus the tracked-`APP_KEY` guard (`php scripts/check-app-key-leak.php`).
-- **`test`** — PHP 8.5, PostGIS + Redis containers, builds frontend (`npm ci && npm run build`), rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
-- **`mutation`** — `--covered-only`, treat failures as informational. Gated to manual `workflow_dispatch` (#1012): it never runs on a PR.
+- **`test`** — PHP 8.5, PostGIS + Redis containers, rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
+- **`mutation`** — `--covered-only`, Composer-only (no Node/Vite build), runs on every PR; failures are informational because `continue-on-error: true`. `timeout-minutes: 45` is a cap, not the expected duration (~30 min typical).
 
-> Derivation, re-run instead of hand-counting — `yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml` → `lint, test, coverage-report, e2e, mutation, phpstan, test-php86`, and the blocking set is `yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml` → `lint, test, phpstan`.
+> Derivation, re-run instead of hand-counting — `yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml` → `lint, test, coverage-report, typecheck, e2e, mutation, phpstan, test-php86`, and the blocking set is `yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml` → `lint, test, phpstan`.
 
 ### Storage Permissions (gotcha)
 

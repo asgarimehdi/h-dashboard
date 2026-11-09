@@ -23,7 +23,7 @@ class AppBrand extends Component
     {
         return <<<'HTML'
                 <a href="/" wire:navigate>
-                    <style>
+                    <style nonce="{{ Vite::cspNonce() }}">
                         .app-brand-icon {
                             background: linear-gradient(135deg, #6366f1, #06b6d4);
                         }

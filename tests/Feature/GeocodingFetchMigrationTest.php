@@ -84,22 +84,27 @@ class GeocodingFetchMigrationTest extends TestCase
 
     public function test_geocoding_call_uses_fetch_with_encoding_and_response_guards(): void
     {
+        // Issue #1352: the geocoding call moved out of the Blade `@script`
+        // block into resources/js/map-pages.js (an `@script` body cannot
+        // execute under the CSP build at all). The view must still carry no
+        // axios, and every guard assertion below reads the module verbatim.
         $view = (string) file_get_contents(resource_path('views/livewire/maps/route2.blade.php'));
+        $module = (string) file_get_contents(resource_path('js/map-pages.js'));
 
         expect($view)->not->toMatch(self::AXIOS_USAGE);
-        expect($view)->toContain('fetch(');
+        expect($module)->toContain('fetch(');
 
         // Manual query strings are where a library swap breaks silently: keep
         // the encoding delegated to URLSearchParams.
-        expect($view)->toContain('URLSearchParams');
-        expect($view)->toContain("set('q'");
-        expect($view)->toContain("set('format', 'json')");
-        expect($view)->toContain("set('limit', '1')");
+        expect($module)->toContain('URLSearchParams');
+        expect($module)->toContain("set('q'");
+        expect($module)->toContain("set('format', 'json')");
+        expect($module)->toContain("set('limit', '1')");
 
         // fetch does not reject on 4xx/5xx, and a JSON error body is not an
         // array — both must be handled instead of throwing into the catch.
-        expect($view)->toContain('response.ok');
-        expect($view)->toContain('Array.isArray');
+        expect($module)->toContain('response.ok');
+        expect($module)->toContain('Array.isArray');
     }
 
     /**

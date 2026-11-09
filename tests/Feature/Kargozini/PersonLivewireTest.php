@@ -942,34 +942,36 @@ class PersonLivewireTest extends TestCase
      * The page has TWO independent pickers — one for the list filter
      * (`filter_u_id`), one for the create/edit form (`u_id`) — and they must
      * stay independent: opening one modal must not render the other's tree.
-     * They are told apart by the model they bind to (`selected: $wire.<model>`
-     * in the picker's `x-data`), not by their node markup, which is identical.
+     * They are told apart by the model they bind to (`data-model="<model>"`
+     * on the picker's root — issue #1352 moved the binding out of the
+     * `x-data` literal into a data attribute), not by their node markup,
+     * which is identical.
      */
     public function test_the_two_unit_pickers_render_only_inside_their_own_modal(): void
     {
         $component = Livewire::test('kargozini.person')
             ->assertOk();
 
-        // Both modals closed: neither tree is in the DOM. `flat:` is the
-        // picker's inline unit JSON and the only thing that emits it — a bare
-        // `toggle(` is NOT a safe probe, MaryUI's theme switcher renders
-        // `@click="toggle()"` too.
-        $this->assertSame(0, substr_count($component->html(), 'flat:'));
+        // Both modals closed: neither tree is in the DOM. `picker-flat-data`
+        // is the picker's inert JSON block and the only thing that emits
+        // it — a bare `toggle(` is NOT a safe probe, MaryUI's theme
+        // switcher renders `@click="toggle()"` too.
+        $this->assertSame(0, substr_count($component->html(), 'picker-flat-data'));
 
         // Opening the FILTER modal brings the filter tree only.
         $component->set('filterUnitModal', true);
-        $this->assertSame(1, substr_count($component->html(), 'flat:'));
-        $component->assertSeeHtml('selected: $wire.filter_u_id')
-            ->assertDontSeeHtml('selected: $wire.u_id');
+        $this->assertSame(1, substr_count($component->html(), 'picker-flat-data'));
+        $component->assertSeeHtml('data-model="filter_u_id"')
+            ->assertDontSeeHtml('data-model="u_id"');
 
         // Opening the FORM modal as well brings the second tree.
         $component->set('unitModal', true);
-        $this->assertSame(2, substr_count($component->html(), 'flat:'));
-        $component->assertSeeHtml('selected: $wire.u_id');
+        $this->assertSame(2, substr_count($component->html(), 'picker-flat-data'));
+        $component->assertSeeHtml('data-model="u_id"');
 
         // Closing them again empties the DOM of both trees.
         $component->set('filterUnitModal', false)
             ->set('unitModal', false);
-        $this->assertSame(0, substr_count($component->html(), 'flat:'));
+        $this->assertSame(0, substr_count($component->html(), 'picker-flat-data'));
     }
 }

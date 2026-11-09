@@ -9,8 +9,10 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
@@ -199,6 +201,35 @@ class PersonImportTest extends TestCase
             'f_name' => 'علی',
             'l_name' => 'رضایی',
         ]);
+
+        @unlink($file);
+    }
+
+    public function test_bulk_import_bumps_the_persons_report_cache(): void
+    {
+        // #1351: the bulk path fires no model events, so the manual bump in
+        // flushPendingWrites is the only invalidation for `report_persons`.
+        // The confirm pass writes (the preview-only pass writes nothing and
+        // bumps nothing).
+        $data = $this->createTestData();
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $versionBefore = Cache::get('report_persons_version', 0);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id]);
+        $import->setSelectedActions([
+            'row_2' => 'create',
+        ]);
+        Excel::import($import, $file);
+
+        $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
+        $this->assertGreaterThan($versionBefore, Cache::get('report_persons_version', 0), 'the bulk import must bump report_persons');
 
         @unlink($file);
     }
@@ -481,6 +512,34 @@ class PersonImportTest extends TestCase
         $this->assertSame(0, $confirmResults['updated']);
         $this->assertSame([], $confirmResults['errors']);
         $this->assertSame(1, $confirmResults['created'] + $confirmResults['updated'] + $confirmResults['skipped']);
+
+        @unlink($file);
+    }
+
+    public function test_import_with_a_new_person_bumps_the_unit_hierarchy_version(): void
+    {
+        // Issue #1347, step 3: the import writes persons without model
+        // events, so its manual bump block must bump `unit_hierarchy` under
+        // the same gate as maps/gis (a create always touches map scope).
+        $data = $this->createTestData();
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "9876543210\tعلی\tرضایی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t".$data['unit']->id."\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = $cache->getVersion('unit_hierarchy');
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id]);
+        $import->setSelectedActions(['row_2' => 'create']);
+        Excel::import($import, $file);
+
+        $this->assertSame(1, $import->getImportResults()['created']);
+        $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
+        $this->assertSame($before + 1, $cache->getVersion('unit_hierarchy'));
 
         @unlink($file);
     }

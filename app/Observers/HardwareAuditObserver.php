@@ -6,6 +6,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Auth;
 
 class HardwareAuditObserver
@@ -49,10 +50,17 @@ class HardwareAuditObserver
     /**
      * Handle the Hardware "updated" event.
      *
-     * We use `updating` (fires BEFORE the model syncs its changes)
-     * because in `updated` the dirty attributes are already cleared.
+     * `updated` fires from `performUpdate()` after the UPDATE has succeeded and
+     * before `syncOriginal()`, so `getChanges()` holds this save's attributes
+     * and `getOriginal()` still holds the previous values. Using `updating`
+     * wrote the audit row before the UPDATE, leaving a phantom row whenever the
+     * save was aborted or failed.
+     *
+     * Known trade-off (R1): if the audit INSERT itself fails after a successful
+     * UPDATE, the data change persists without an audit row. Fixing that needs
+     * a transaction at every call site — out of scope for #1279.
      */
-    public function updating(Hardware $hardware): void
+    public function updated(Hardware $hardware): void
     {
         if ($this->shouldSuppress()) {
             return;
@@ -67,8 +75,16 @@ class HardwareAuditObserver
 
     /**
      * Handle the Hardware "deleted" event.
+     *
+     * `deleted` fires from `performDeleteOnModel()` after the DELETE has
+     * succeeded. Using `deleting` wrote the audit row before the DELETE,
+     * leaving a phantom row whenever the delete was aborted or failed.
+     *
+     * Known trade-off (R1): if the audit INSERT itself fails after a
+     * successful DELETE, the hardware is gone without an audit row. Fixing
+     * that needs a transaction at every call site — out of scope for #1345.
      */
-    public function deleting(Hardware $hardware): void
+    public function deleted(Hardware $hardware): void
     {
         if ($this->shouldSuppress()) {
             return;
@@ -111,25 +127,31 @@ class HardwareAuditObserver
             'action' => 'rollback',
             'changes' => $this->sanitizeChanges($rollbackChanges),
             'source' => $this->detectSource(),
-            'ip_address' => request()?->ip(),
+            'ip_address' => request()->ip(),
             // #886 (CWE-1236): user_agent is attacker-controlled; neutralise
             // '='-leading values at the source so the payload never persists.
-            'user_agent' => ExcelCell::escape(request()?->userAgent()),
+            'user_agent' => ExcelCell::escape(request()->userAgent()),
         ]);
     }
 
     /**
-     * Detect the source of the change (web, api, import, bulk).
+     * Resolve the current route in a way PHPStan treats as nullable regardless
+     * of the framework's (overly certain) inference for request()->route().
      */
+    protected function currentRoute(): ?Route
+    {
+        return request()->route();
+    }
+
     protected function detectSource(): string
     {
-        $route = request()->route();
+        $route = $this->currentRoute();
 
-        if ($route && $route->getName() === 'hardware.import') {
+        if ($route instanceof Route && $route->getName() === 'hardware.import') {
             return 'import';
         }
 
-        if ($route && str_starts_with($route->uri(), 'api/')) {
+        if ($route instanceof Route && str_starts_with($route->uri(), 'api/')) {
             return 'api';
         }
 
@@ -150,9 +172,9 @@ class HardwareAuditObserver
             'action' => $action,
             'changes' => $this->sanitizeChanges($changes),
             'source' => $source,
-            'ip_address' => $request?->ip(),
+            'ip_address' => $request->ip(),
             // #886 (CWE-1236): see recordRollbackAudit.
-            'user_agent' => ExcelCell::escape($request?->userAgent()),
+            'user_agent' => ExcelCell::escape($request->userAgent()),
         ]);
     }
 
@@ -185,7 +207,7 @@ class HardwareAuditObserver
      */
     protected function getChangedFields(Hardware $hardware): array
     {
-        $dirty = $hardware->getDirty();
+        $dirty = $hardware->getChanges();
         $original = $hardware->getOriginal();
 
         $changes = [];

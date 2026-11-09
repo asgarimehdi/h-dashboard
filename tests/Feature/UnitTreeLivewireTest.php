@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -426,5 +427,90 @@ class UnitTreeLivewireTest extends TestCase
             ->set('search', 'کاملا بیرونی');
 
         $this->assertNotContains($outsider->id, array_map('intval', $component->get('expanded')));
+    }
+
+    public function test_search_query_count_does_not_grow_with_distinct_parents(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // 30 DISTINCT parents, one matching leaf each: depth 2, 61 units.
+        // A single-match fixture would pass both before and after the fix
+        // (its chain shares one parent); the N+1 only shows up when every
+        // match hangs off a different branch.
+        for ($i = 0; $i < 30; $i++) {
+            $mid = Unit::create(['name' => "میانی جستجو {$i}", 'parent_id' => $unit->id]);
+            Unit::create(['name' => "برگ جستجو {$i}", 'parent_id' => $mid->id]);
+        }
+
+        // Count the SEARCH update only — the mount's own paint is covered by
+        // test_initial_paint_batches_one_query_per_level.
+        $component = Livewire::test('unit.tree');
+
+        // Measured: 5 = 3 search queries (units + 2 eager parent levels) +
+        // 1 batched childrenOfMany + 1 scope re-resolution on rehydrate.
+        // The same fixture cost 34 before the fix, so the cap discriminates.
+        $this->assertNoNPlusOne(function () use ($component): void {
+            $component->set('search', 'برگ جستجو');
+        }, 5);
+
+        // Every rendered node (root + 30 mids + 30 leaves) is expanded, so
+        // tree-node.blade.php reads the lazy cache and never calls
+        // hasChildren(); the count above stays a search+chain measurement.
+        $expanded = array_map('intval', $component->get('expanded'));
+        $this->assertContains($unit->id, $expanded);
+        $this->assertCount(61, $expanded);
+    }
+
+    /**
+     * Gate C3: the caller's helper unit is U1 itself — nothing extra is synced
+     * to `user_units`, so the scope is exactly [U1]. Proving that first keeps
+     * the leak assertions below pinned to a real scope instead of an
+     * assumption.
+     *
+     * Gate C1: `loadExpandedChildren()` fills `lazyChildren` for EVERY expanded
+     * id (childless units as empty collections), so `lazyChildren` is NOT
+     * `[]` — the pin is that no key of U2 or its descendants appears in it.
+     */
+    public function test_expand_all_under_a_narrow_scope_does_not_leak_sibling_or_descendants(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        $scoped = array_map('intval', app(AccessService::class)->accessibleUnitIds());
+        $this->assertCount(1, $scoped);
+        $this->assertSame((int) $unit->id, $scoped[0]);
+
+        // U2 is a separate ROOT, so it is out of scope, and it owns a
+        // descendant of its own. expandAll() walks the scope-rooted
+        // rootUnits and intersects every childrenOfMany() batch with the
+        // scope, so neither branch can surface.
+        $outsider = Unit::create(['name' => 'واحد بیرونی', 'parent_id' => null]);
+        $grandchild = Unit::create(['name' => 'فرزند U2', 'parent_id' => $outsider->id]);
+
+        $component = Livewire::test('unit.tree')
+            ->call('expandAll');
+
+        // `expanded` holds string ids (collectAllIds() casts them) — compare
+        // as strings. Neither U2 nor its descendant appears.
+        $expanded = array_map('strval', array_values($component->get('expanded')));
+        $this->assertNotContains((string) $outsider->id, $expanded);
+        $this->assertNotContains((string) $grandchild->id, $expanded);
+
+        // The scope is exactly [U1] and U1 has no in-scope descendants, so the
+        // walk opens U1 and nothing else: any extra id would be a leak from
+        // some other branch.
+        $this->assertSame([(string) $scoped[0]], $expanded);
+
+        // No key of U2 or its descendants may appear in lazyChildren. U1's own
+        // (empty) children cache is a different thing — loadExpandedChildren()
+        // fills it for every expanded id.
+        $lazy = $component->get('lazyChildren');
+        $this->assertArrayNotHasKey($outsider->id, $lazy);
+        $this->assertArrayNotHasKey($grandchild->id, $lazy);
+
+        // rootUnits is scope-rooted: U1 only, never U2.
+        $rootIds = array_map('strval', $component->get('rootUnits')->pluck('id')->all());
+        $this->assertSame([(string) $scoped[0]], $rootIds);
     }
 }

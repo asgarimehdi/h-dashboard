@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DiseaseMapController;
 use App\Http\Controllers\Api\GisController;
 use App\Http\Controllers\Api\HardwareAuditController;
 use App\Http\Controllers\Api\HardwareController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrafficController;
 use App\Http\Controllers\Api\UnitController;
+use App\Http\Controllers\TicketAttachmentController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -59,7 +61,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     // API logout — revoke ONLY the caller's current token (Issue #1071).
     //
     // No ability, exactly like `/api/user` above: this is a self-scoped
-    // action (#837), not a resource mutation. The revoke is conditional
+    // action (#1071), not a resource mutation. The revoke is conditional
     // because `statefulApi()` is on, so a session-cookie request reaches the
     // Sanctum guard as a `TransientToken`, which has no `delete()` method —
     // an unconditional call is a 500. Deliberately scoped to the current
@@ -137,6 +139,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
         Route::get('/tickets/{ticket}', [TicketController::class, 'show'])
             ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets');
+        // Issue #1276 — the web download route sits behind `unit_context`,
+        // which redirects a token-only (sessionless) request to
+        // `/select-context`, so the app gets its own authenticated route.
+        Route::get('/tickets/{ticket}/attachments/{attachment}', [TicketAttachmentController::class, 'show'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets')
+            ->name('api.tickets.attachments.download');
     });
 
     // Ticket API writes — abilities:tickets:write, no read ability required
@@ -266,5 +274,11 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
         Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');
         Route::get('/stats', [GisController::class, 'stats'])->name('api.gis.stats');
         Route::get('/clusters', [GisController::class, 'clusters'])->name('api.gis.clusters');
+
+        // Disease layer (issue #1245) — same gate as the rest of the group:
+        // `gis:read` + `map|bw`. Read-only aggregates, no `manage_diseases`.
+        Route::get('/diseases', [DiseaseMapController::class, 'diseases'])->name('api.gis.diseases');
+        Route::get('/disease-stats', [DiseaseMapController::class, 'stats'])->name('api.gis.disease-stats');
+        Route::get('/disease-map', [DiseaseMapController::class, 'map'])->name('api.gis.disease-map');
     });
 });

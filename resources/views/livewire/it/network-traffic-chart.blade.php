@@ -50,11 +50,11 @@ return new class extends Component {
 
 @assets
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
-<style>
+<style nonce="{{ Vite::cspNonce() }}">
     [x-cloak] { display: none !important; }
 </style>
 
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     // پاکسازی همه chartهای قبلی
     Highcharts.charts.forEach(chart => {
         if (chart) chart.destroy();

@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Cache\Events\KeyWritten;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Features\SupportTesting\Testable;
@@ -568,23 +569,28 @@ test('calendar eventContent does not return the raw html injection path', functi
 });
 
 test('calendar eventContent builds nodes with textContent instead of html', function () {
-    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+    // Issue #1352: the calendar init moved out of the Blade `@script` block
+    // into resources/js/todo-calendar.js. The shape assertions read the
+    // module verbatim; the Blade keeps the negative assertions below.
+    $module = file_get_contents(resource_path('js/todo-calendar.js'));
 
     // domNodes + textContent is the shape that cannot resurrect the bug: there
     // is no string left to escape correctly, so the class of defect cannot recur.
-    expect($view)->toContain('domNodes:');
-    expect($view)->toContain('textContent');
-    expect($view)->toContain('document.createElement');
+    expect($module)->toContain('domNodes:');
+    expect($module)->toContain('textContent');
+    expect($module)->toContain('document.createElement');
 });
 
 test('calendar completion toggle does not rely on an inline onclick handler', function () {
     $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+    $module = file_get_contents(resource_path('js/todo-calendar.js'));
 
     // The icon markup is static and carries no user data, but the inline
     // handler is exactly what the report-only CSP's 'unsafe-inline' allows.
     // Replacing it with addEventListener costs nothing while the lines are open.
+    // Issue #1352: the listener lives in the calendar module now.
     expect($view)->not->toContain('onclick=');
-    expect($view)->toContain('addEventListener');
+    expect($module)->toContain('addEventListener');
 });
 
 /**
@@ -728,30 +734,63 @@ test('initial calendar payload only contains todos inside the seeded month windo
  * render: a null range made every request share one cache entry holding
  * every row. `KeyWritten` is observed through the cache store itself, so the
  * assertion covers the key the component really wrote.
+ *
+ * #1290: the service hashes `extra` into the key, so the range is no longer
+ * readable in the key string. What must still hold is the property the old
+ * string asserted: a different range is a different entry, the same range is
+ * the same entry, and there is no range-free fallback.
  */
-test('initial calendar cache key is range-scoped and never falls back to all', function () {
+test('calendar cache key is range-scoped and never falls back to all', function () {
     $this->actingAs($this->user);
     $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
 
-    Event::fake([KeyWritten::class]);
+    $keys = [];
+    Event::listen(KeyWritten::class, function (KeyWritten $event) use (&$keys): void {
+        if (str_starts_with($event->key, 'calendar:')) {
+            $keys[] = $event->key;
+        }
+    });
 
-    Livewire::test('todo.todo');
+    $component = Livewire::test('todo.todo');
 
-    Event::assertDispatched(KeyWritten::class, fn (KeyWritten $event) => str_starts_with($event->key, 'calendar:events:')
-        && ! str_contains($event->key, ':all:'));
-    Event::assertNotDispatched(KeyWritten::class, fn (KeyWritten $event) => str_contains($event->key, ':all:'));
+    $octoberStart = '2026-10-01T00:00:00+03:30';
+    $octoberEnd = '2026-10-31T00:00:00+03:30';
+    $novemberStart = '2026-11-01T00:00:00+03:30';
+    $novemberEnd = '2026-11-30T00:00:00+03:30';
+
+    $component->call('fetchEvents', $octoberStart, $octoberEnd);
+    $october = end($keys);
+
+    $component->call('fetchEvents', $novemberStart, $novemberEnd);
+    $november = end($keys);
+
+    // A miss re-writes the same key for the same window (and only then — the
+    // version counter is untouched, so the key is identical).
+    Cache::flush();
+    $component->call('fetchEvents', $octoberStart, $octoberEnd);
+    $octoberAgain = end($keys);
+
+    expect($keys)->not->toBeEmpty()
+        ->and($october)->toBeString()->toStartWith('calendar:v')
+        ->and($november)->not->toBe($october)
+        ->and($octoberAgain)->toBe($october)
+        ->and(implode("\n", $keys))->not->toContain(':all:');
 });
 
 /**
- * The refetch guard lives in the Blade `datesSet` handler, so it is asserted
- * structurally here and smoke-tested in a browser in the PR (no JS test
- * harness exists in this suite). A bare unconditional call is exactly what
- * #1169 removed.
+ * The refetch guard lives in the `datesSet` handler in
+ * resources/js/todo-calendar.js (issue #1352 moved it out of the Blade
+ * `@script` block), so it is asserted structurally here and smoke-tested
+ * in a browser in the PR (no JS test harness exists in this suite). A bare
+ * unconditional call is exactly what #1169 removed.
  */
 test('calendar datesSet guards the refetch with the seeded window', function () {
-    $view = file_get_contents(resource_path('views/livewire/todo/todo.blade.php'));
+    // Issue #1352: the handler moved out of the Blade `@script` block into
+    // resources/js/todo-calendar.js (same `datesSet: function (info)` shape,
+    // 4-space factory indent instead of the Blade's 12).
+    $module = file_get_contents(resource_path('js/todo-calendar.js'));
 
-    preg_match('/datesSet:\s*function\s*\(info\)\s*\{(?<body>.*?)\n\s{12}\},/s', $view, $matches);
+    preg_match('/datesSet:\s*function\s*\(info\)\s*\{(?<body>.*?)\n\s{4}\},/s', $module, $matches);
 
     expect($matches)->not->toBeEmpty();
 

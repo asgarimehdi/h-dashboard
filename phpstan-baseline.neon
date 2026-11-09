@@ -31,18 +31,6 @@ parameters:
 			path: app/Console/Commands/GenerateRecurringTodos.php
 
 		-
-			message: '#^Cannot call method nextOccurrence\(\) on stdClass\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Console/Commands/GenerateRecurringTodos.php
-
-		-
-			message: '#^Cannot call method update\(\) on stdClass\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Console/Commands/GenerateRecurringTodos.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:chunk\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -63,12 +51,6 @@ parameters:
 		-
 			message: '#^Method App\\Exports\\HardwareAuditsExport\:\:__construct\(\) has parameter \$query with generic class Illuminate\\Database\\Eloquent\\Builder but does not specify its types\: TModel$#'
 			identifier: missingType.generics
-			count: 1
-			path: app/Exports/HardwareAuditsExport.php
-
-		-
-			message: '#^PHPDoc tag @var above a method has no effect\.$#'
-			identifier: varTag.misplaced
 			count: 1
 			path: app/Exports/HardwareAuditsExport.php
 
@@ -253,12 +235,6 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
 		-
-			message: '#^Call to function is_array\(\) with non\-empty\-array\<string, mixed\> will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\Api\\HardwareAuditController\:\:buildDiffSummary\(\) has parameter \$changes with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -279,12 +255,6 @@ parameters:
 		-
 			message: '#^Method App\\Http\\Controllers\\Api\\HardwareAuditController\:\:transformAudit\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Controllers/Api/HardwareAuditController.php
-
-		-
-			message: '#^Negated boolean expression is always false\.$#'
-			identifier: booleanNot.alwaysFalse
 			count: 1
 			path: app/Http/Controllers/Api/HardwareAuditController.php
 
@@ -343,12 +313,6 @@ parameters:
 			path: app/Http/Controllers/Api/HardwareExportController.php
 
 		-
-			message: '#^Method App\\Http\\Controllers\\Api\\HrAnalyticsController\:\:hrAnalyticsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Controllers/Api/HrAnalyticsController.php
-
-		-
 			message: '#^Access to an undefined property App\\Http\\Requests\\UnitScopedRequest\:\:\$estekhdam_id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -403,12 +367,6 @@ parameters:
 			path: app/Http/Controllers/Api/HrStatsController.php
 
 		-
-			message: '#^Method App\\Http\\Controllers\\Api\\HrStatsController\:\:hrStatsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Controllers/Api/HrStatsController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Unit\:\:\$has_children\.$#'
 			identifier: property.notFound
 			count: 1
@@ -424,12 +382,6 @@ parameters:
 			message: '#^Call to an undefined static method App\\Models\\Unit\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 3
-			path: app/Http/Controllers/Api/OrgChartController.php
-
-		-
-			message: '#^Method App\\Http\\Controllers\\Api\\OrgChartController\:\:hrStatsCacheKey\(\) has parameter \$accessibleIds with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
 			path: app/Http/Controllers/Api/OrgChartController.php
 
 		-
@@ -519,12 +471,6 @@ parameters:
 		-
 			message: '#^Method App\\Http\\Controllers\\Api\\TicketCommentController\:\:notifyMentions\(\) has parameter \$mentions with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: app/Http/Controllers/Api/TicketCommentController.php
-
-		-
-			message: '#^Offset 1 on array\{list\<string\>, list\<non\-empty\-string\>\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Http/Controllers/Api/TicketCommentController.php
 
@@ -637,24 +583,6 @@ parameters:
 			path: app/Http/Controllers/Api/UnitController.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:check\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Middleware/SafeRoleOrPermission.php
-
-		-
-			message: '#^Method App\\Http\\Middleware\\SafeRoleOrPermission\:\:handle\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: app/Http/Middleware/SafeRoleOrPermission.php
-
-		-
-			message: '#^Method App\\Http\\Middleware\\SafeRoleOrPermission\:\:handle\(\) has parameter \$permissions with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: app/Http/Middleware/SafeRoleOrPermission.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -727,12 +655,6 @@ parameters:
 			path: app/Imports/HardwareImport.php
 
 		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:normalizeForComparison\(\) never returns null so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
 			message: '#^Method App\\Imports\\HardwareImport\:\:parseBoolean\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
@@ -783,18 +705,6 @@ parameters:
 		-
 			message: '#^Property App\\Imports\\HardwareImport\:\:\$selectedActions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between mixed and false will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between mixed and true will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Imports/HardwareImport.php
 
@@ -907,12 +817,6 @@ parameters:
 			path: app/Imports/PersonImport.php
 
 		-
-			message: '#^Property App\\Imports\\PersonImport\:\:\$compareKey is never read, only written\.$#'
-			identifier: property.onlyWritten
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
 			message: '#^Property App\\Imports\\PersonImport\:\:\$estekhdams type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -1009,12 +913,6 @@ parameters:
 			path: app/Models/ActivityLog.php
 
 		-
-			message: '#^PHPDoc tag @property\-read for property App\\Models\\ActivityLog\:\:\$subject contains unknown class App\\Models\\Model\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Models/ActivityLog.php
-
-		-
 			message: '#^Property App\\Models\\ActivityLog\:\:\$casts type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -1055,18 +953,6 @@ parameters:
 			identifier: missingType.generics
 			count: 1
 			path: app/Models/Attachment.php
-
-		-
-			message: '#^Call to static method selectOne\(\) on an unknown class DB\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Models/Boundary.php
-
-		-
-			message: '#^Call to static method table\(\) on an unknown class DB\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Models/Boundary.php
 
 		-
 			message: '#^Method App\\Models\\Boundary\:\:getGeojsonAttribute\(\) has no return type specified\.$#'
@@ -1867,12 +1753,6 @@ parameters:
 			path: app/Observers/HardwareAuditObserver.php
 
 		-
-			message: '#^Left side of && is always true\.$#'
-			identifier: booleanAnd.leftAlwaysTrue
-			count: 2
-			path: app/Observers/HardwareAuditObserver.php
-
-		-
 			message: '#^Method App\\Observers\\HardwareAuditObserver\:\:getChangedFields\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -1895,18 +1775,6 @@ parameters:
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Observers/HardwareAuditObserver.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Http\\Request\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 4
-			path: app/Observers/HardwareAuditObserver.php
-
-		-
-			message: '#^PHPDoc type array\<class\-string, array\<class\-string\>\> of property App\\Providers\\EventServiceProvider\:\:\$listen is not covariant with PHPDoc type array\<string, array\<int, string\>\> of overridden property Illuminate\\Foundation\\Support\\Providers\\EventServiceProvider\:\:\$listen\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Providers/EventServiceProvider.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:user\(\)\.$#'
@@ -1953,12 +1821,6 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\HardwareAudit\:\:insert\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 1
-			path: app/Services/HardwareBulkAuditWriter.php
-
-		-
-			message: '#^Call to static method user\(\) on an unknown class Auth\.$#'
-			identifier: class.notFound
 			count: 1
 			path: app/Services/HardwareBulkAuditWriter.php
 
@@ -2071,12 +1933,6 @@ parameters:
 			path: app/Services/ZabbixService.php
 
 		-
-			message: '#^Variable \$unitColumn on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.variable
-			count: 1
-			path: app/Traits/HasOrganizationalScope.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2131,12 +1987,6 @@ parameters:
 			path: database/seeders/BoundarySeeder.php
 
 		-
-			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: database/seeders/CenterBoundarySeeder.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Estekhdam\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -2161,12 +2011,6 @@ parameters:
 			path: database/seeders/HardwareHistorySeeder.php
 
 		-
-			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: database/seeders/HardwareHistorySeeder.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\Hardware\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
@@ -2181,7 +2025,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Spatie\\Permission\\Models\\Permission\:\:firstOrCreate\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 18
+			count: 17
 			path: database/seeders/PermissionSeeder.php
 
 		-
@@ -3411,7 +3255,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Contracts\\Auth\\Factory\:\:id\(\)\.$#'
 			identifier: method.notFound
-			count: 5
+			count: 3
 			path: resources/views/livewire/notifications/bell.blade.php
 
 		-
@@ -3505,7 +3349,7 @@ parameters:
 			path: resources/views/livewire/profile/index.blade.php
 
 		-
-			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:20\:\:\$reportData\.$#'
+			message: '#^Access to an undefined property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:\$reportData\.$#'
 			identifier: property.notFound
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
@@ -3525,7 +3369,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Ticket\:\:whereIn\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
@@ -3541,25 +3385,25 @@ parameters:
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:20\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:20\:\:childUnits\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:childUnits\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:20\:\:grandChildUnits\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:grandChildUnits\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:20\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:reportData\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
@@ -3571,7 +3415,7 @@ parameters:
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:20\:\:\$units has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:\$units has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/reports/advanced.blade.php
@@ -3661,12 +3505,6 @@ parameters:
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:10\:\:parseJalaliDate\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: resources/views/livewire/reports/persons.blade.php
-
-		-
 			message: '#^Parameter \#1 \$carbon of static method Morilog\\Jalali\\Jalalian\:\:fromCarbon\(\) expects Carbon\\Carbon, Carbon\\CarbonInterface given\.$#'
 			identifier: argument.type
 			count: 2
@@ -3742,12 +3580,6 @@ parameters:
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/units\.blade\.php\:10\:\:getUnitTypesProperty\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
-			path: resources/views/livewire/reports/units.blade.php
-
-		-
-			message: '#^Strict comparison using \!\=\= between int and '''' will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 2
 			path: resources/views/livewire/reports/units.blade.php
 
 		-
@@ -3921,12 +3753,6 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\Todo\:\:create\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 1
-			path: resources/views/livewire/tickets/⚡create.blade.php
-
-		-
-			message: '#^Call to static method random\(\) on an unknown class Str\.$#'
-			identifier: class.notFound
 			count: 1
 			path: resources/views/livewire/tickets/⚡create.blade.php
 
@@ -4195,18 +4021,6 @@ parameters:
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Call to static method increment\(\) on an unknown class Cache\.$#'
-			identifier: class.notFound
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Expression on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.expr
-			count: 2
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:14\:\:closeModal\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
@@ -4323,7 +4137,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method App\\Models\\User\:\:whereHas\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 2
+			count: 1
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
@@ -4705,12 +4519,6 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$role_ids \(array\) on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.property
-			count: 2
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$role_ids type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -4723,21 +4531,9 @@ parameters:
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$unit_ids \(array\) on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.property
-			count: 3
-			path: resources/views/livewire/users/index.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$unit_ids type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
-			path: resources/views/livewire/users/index.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$user_permissions \(array\) on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.property
-			count: 2
 			path: resources/views/livewire/users/index.blade.php
 
 		-
@@ -4761,25 +4557,7 @@ parameters:
 		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Route\:\:livewire\(\)\.$#'
 			identifier: staticMethod.notFound
-			count: 44
-			path: routes/web.php
-
-		-
-			message: '#^Call to static method forget\(\) on an unknown class Session\.$#'
-			identifier: class.notFound
-			count: 1
-			path: routes/web.php
-
-		-
-			message: '#^Call to static method id\(\) on an unknown class Auth\.$#'
-			identifier: class.notFound
-			count: 1
-			path: routes/web.php
-
-		-
-			message: '#^Call to static method user\(\) on an unknown class Auth\.$#'
-			identifier: class.notFound
-			count: 1
+			count: 49
 			path: routes/web.php
 
 		-

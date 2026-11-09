@@ -138,8 +138,9 @@ test.describe('sortable table headers', () => {
 
     await header.focus();
     await expect(header).toBeFocused();
+    const sortUpdate = waitForLivewire(page);
     await page.keyboard.press('Enter');
-    await waitForLivewire(page);
+    await sortUpdate;
 
     await expect(header).toHaveAttribute('aria-sort', 'descending');
   });
@@ -149,8 +150,9 @@ test.describe('sortable table headers', () => {
     await expect(header).toHaveAttribute('aria-sort', 'none');
 
     await header.focus();
+    const sortUpdate = waitForLivewire(page);
     await page.keyboard.press('Space');
-    await waitForLivewire(page);
+    await sortUpdate;
 
     // Sorting an unsorted column starts ascending.
     await expect(header).toHaveAttribute('aria-sort', 'ascending');
@@ -159,8 +161,9 @@ test.describe('sortable table headers', () => {
 
   test('mouse sorting still works — the keyboard change did not replace it', async ({ page }) => {
     const header = page.locator('table thead th[aria-sort]').first();
+    const sortUpdate = waitForLivewire(page);
     await header.click();
-    await waitForLivewire(page);
+    await sortUpdate;
 
     await expect(header).toHaveAttribute('aria-sort', 'descending');
   });
@@ -173,20 +176,25 @@ test.describe('announcement regions', () => {
     await page.waitForLoadState('networkidle');
 
     await page.evaluate(() => {
-      const w = window as unknown as { toast: (p: unknown) => void };
-      w.toast({
-        toast: {
-          type: 'success',
-          title: 'انجام شد',
-          description: 'تغییرات ذخیره شد',
-          position: 'toast-bottom',
-          icon: '',
-          css: 'alert-success',
-          timeout: 60000,
-          noProgress: true,
-          progressClass: null,
-        },
-      });
+      // #1377: `window.toast` is gone; the toaster listens for `mary-toast`,
+      // the event `globalToast.toast()` dispatches from `$this->js()`.
+      window.dispatchEvent(
+        new CustomEvent('mary-toast', {
+          detail: {
+            toast: {
+              type: 'success',
+              title: 'انجام شد',
+              description: 'تغییرات ذخیره شد',
+              position: 'toast-bottom',
+              icon: '',
+              css: 'alert-success',
+              timeout: 60000,
+              noProgress: true,
+              progressClass: null,
+            },
+          },
+        }),
+      );
     });
 
     const toast = page.locator('.toast').first();

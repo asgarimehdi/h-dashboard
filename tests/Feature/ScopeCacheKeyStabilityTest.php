@@ -129,7 +129,7 @@ class ScopeCacheKeyStabilityTest extends TestCase
         $this->assertSame($first->json(), $second->json(), 'a reordered scope must not change the payload');
         $this->assertCount(
             1,
-            $this->cacheKeysWritten('hr:stats:'),
+            $this->cacheKeysWritten('hr_stats:'),
             'a reordered scope must not open a second cache entry for the same scope'
         );
         $this->assertSame(
@@ -187,6 +187,19 @@ class ScopeCacheKeyStabilityTest extends TestCase
                 if (str_contains($contents, $pattern)) {
                     $offenders[] = $file->getRelativePathname().' → '.$pattern;
                 }
+            }
+        }
+
+        // Issue #1349: the same hand-rolled hash lived in one Blade view
+        // (`advanced.blade.php:55`). The scan covers exactly that one file —
+        // the other `md5(implode(` sites in views belong to #1348 and must
+        // not turn this guard red.
+        $blade = base_path('resources/views/livewire/reports/advanced.blade.php');
+        $bladeContents = File::get($blade);
+
+        foreach (["md5(implode(',', \$accessibleIds))", 'md5(json_encode($accessibleIds))'] as $pattern) {
+            if (str_contains($bladeContents, $pattern)) {
+                $offenders[] = 'resources/views/livewire/reports/advanced.blade.php → '.$pattern;
             }
         }
 

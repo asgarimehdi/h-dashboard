@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 /**
  * Hardware list + filters
  * Probed DOM facts:
@@ -37,28 +37,29 @@ test.describe('hardware list & filters', () => {
     const totalBefore = await page.locator('.mary-table-pagination').innerText();
 
     // Use CSS selector targeting the Livewire wire:click directly
+    const filterUpdate = waitForLivewire(page);
     await page.locator('button[wire\\:click*="laptop"]').click();
     // Wait for Livewire network request to complete
-    await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    await filterUpdate;
     // Filtered results should have fewer records
     const totalAfter = await page.locator('.mary-table-pagination').innerText().catch(() => '');
     expect(totalAfter).not.toBe(totalBefore);
   });
 
   test('clear filters restores full list', async ({ page }) => {
+    const filterUpdate = waitForLivewire(page);
     await page.locator('button[wire\\:click*="laptop"]').click();
-    await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    await filterUpdate;
+    const clearUpdate = waitForLivewire(page);
     await page.locator('button[wire\\:click*="clearFilters"]').click();
-    await page.waitForResponse(resp => resp.url().includes('/livewire') && resp.status() === 200, { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    await clearUpdate;
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
   });
 
   test('advanced filter panel opens with نوع دستگاه field', async ({ page }) => {
+    const openFilters = waitForLivewire(page);
     await page.locator('button[wire\\:click*="showFilters"]').click();
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await openFilters;
     await expect(page.locator('body')).toContainText('نوع دستگاه');
     await expect(page.locator('body')).toContainText('سیستم عامل');
   });

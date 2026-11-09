@@ -1,11 +1,11 @@
 <?php
 
-use Livewire\Component;
-use Livewire\WithPagination;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Services\AccessService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\CacheInvalidationServiceInterface;
+use Livewire\Component;
+use Livewire\WithPagination;
 
 return new class extends Component
 {
@@ -20,8 +20,11 @@ return new class extends Component
     public bool $emptyScope = false;
 
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public ?int $selectedUnitTypeId = null;
+
     public ?int $showOnlyNoBoundary = null;
 
     public function mount(): void
@@ -49,7 +52,12 @@ return new class extends Component
 
     public function getUnitTypesProperty()
     {
-        return Cache::remember('unit_types_all', 86400, fn() => UnitType::all());
+        // Issue #1348: versioned read — 86400 seconds is 1440 minutes, and
+        // remember() takes minutes. The key has no scope, so the scope hash
+        // is the fixed 'global' constant used by the other scopeless reads.
+        // A missed UnitType bump would stale this list for 24 hours, so the
+        // rename test for this site is load-bearing.
+        return app(CacheInvalidationServiceInterface::class)->remember('unit_types', 'global', fn () => UnitType::all(), 1440);
     }
 
     public function chartPayload(): array
@@ -59,7 +67,7 @@ return new class extends Component
         $query = Unit::query()
             ->whereIn('id', $accessibleIds)
             ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '', function ($q) {
+            ->when($this->showOnlyNoBoundary !== null, function ($q) {
                 if ($this->showOnlyNoBoundary == '1') {
                     $q->whereNull('boundary_id');
                 } else {
@@ -69,7 +77,7 @@ return new class extends Component
 
         $total = $query->count();
 
-        $hasBoundaryFilter = $this->showOnlyNoBoundary !== null && $this->showOnlyNoBoundary !== '';
+        $hasBoundaryFilter = $this->showOnlyNoBoundary !== null;
 
         $byType = Unit::query()
             ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
@@ -132,7 +140,7 @@ return new class extends Component
 
 <div class="p-6" dir="rtl">
     @php $chart = $this->chartPayload(); @endphp
-    {{-- Issue #1042: server-rendered chart aggregates. The @script below reads
+    {{-- Issue #1042: server-rendered chart aggregates. resources/js/report-charts.js reads
         this (morphed on every render) instead of firing a second method request
         per filter change. --}}
     <div id="unitsChartData" class="hidden" data-chart='@json(['byType' => $chart['byType']])'></div>
@@ -198,7 +206,7 @@ return new class extends Component
     {{-- نمودار توزیع بر اساس نوع --}}
     <x-card shadow class="mb-6">
         <h3 class="font-bold mb-4">توزیع بر اساس نوع واحد</h3>
-        <div id="typeChart" wire:ignore style="height: 300px;"></div>
+        <div id="typeChart" wire:ignore class="h-[300px]"></div>
     </x-card>
 
     {{-- جدول واحدها --}}
@@ -252,62 +260,3 @@ return new class extends Component
 <script src="{{ asset('js/chart/highcharts.js') }}"></script>
 @endassets
 
-@script
-<script>
-    function waitForHighcharts(callback, attempts = 0) {
-        if (typeof window.Highcharts !== 'undefined') {
-            callback();
-            return;
-        }
-        if (attempts > 100) {
-            console.error('Highcharts failed to load');
-            return;
-        }
-        setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
-    }
-
-    function destroyChart(id) {
-        const container = document.getElementById(id);
-        if (!container || typeof Highcharts === 'undefined') return;
-        const existing = Highcharts.charts?.find(c => c && c.renderTo === container);
-        if (existing) existing.destroy();
-        container.innerHTML = '';
-    }
-
-    function render() {
-        waitForHighcharts(() => {
-            // Issue #1042: read the server-rendered aggregates above — the
-            // inline @php already ran the payload for this render, so a second
-            // method request would just re-run it.
-            const el = document.getElementById('unitsChartData');
-            const data = el ? JSON.parse(el.dataset.chart) : {};
-            destroyChart('typeChart');
-            const labels = Object.keys(data.byType || {});
-            const values = Object.values(data.byType || {});
-            if (labels.length > 0) {
-                const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
-                Highcharts.chart('typeChart', {
-                    chart: { type: 'pie' },
-                    title: { text: '' },
-                    series: [{
-                        name: 'تعداد',
-                        data: labels.map((l, i) => ({ name: l, y: values[i], color: colors[i % colors.length] }))
-                    }],
-                    credits: { enabled: false },
-                    plotOptions: {
-                        pie: { dataLabels: { enabled: true, format: '{point.name}: {y}' } }
-                    }
-                });
-            }
-        });
-    }
-
-    render();
-    // Issue #1042: a filter change now re-renders through the DOM payload
-    // (morphed on every server render) instead of a second `chartPayload()`
-    // request, so re-render after morph rather than on each $watch.
-    Livewire.hook('morphed', ({ component }) => {
-        if (component.id === $wire.$id) render();
-    });
-</script>
-@endscript

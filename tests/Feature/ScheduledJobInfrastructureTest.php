@@ -87,6 +87,34 @@ class ScheduledJobInfrastructureTest extends TestCase
     }
 
     /**
+     * #1305: the three writers that had no overlap guard. The expiry is pinned
+     * too: the default 1440 minutes is the entire interval of a daily run, so a
+     * crashed run would hold the lock until the next start.
+     */
+    public function test_the_three_writers_hold_a_bounded_overlap_lock(): void
+    {
+        $this->bootConsoleSchedule();
+
+        $events = $this->app->make(Schedule::class)->events();
+
+        $expected = [
+            'todos:generate-recurring' => 60,
+            'maintenance:generate-due' => 60,
+            'data:archive' => 120,
+        ];
+
+        foreach ($expected as $command => $minutes) {
+            $event = collect($events)->first(
+                fn ($event) => is_string($event->command) && str_contains($event->command, $command)
+            );
+
+            $this->assertNotNull($event, "{$command} must stay in the schedule");
+            $this->assertTrue($event->withoutOverlapping, "{$command} must not overlap itself");
+            $this->assertSame($minutes, $event->expiresAt, "{$command} must expire after {$minutes} minutes");
+        }
+    }
+
+    /**
      * App\Console\Kernel must not come back: the framework binds the base
      * console kernel, so a re-added subclass would again be a dead file that
      * a hand-resolved test could pass on.

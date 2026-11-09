@@ -10,8 +10,10 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Features\SupportTesting\Testable;
@@ -960,6 +962,187 @@ class UnitsIndexLivewireTest extends TestCase
         $component->set('unit_type_id', 1)
             ->assertDontSeeHtml('value="'.$allowedOne->id.'" >'.$allowedOne->name.'</option>')
             ->assertDontSeeHtml('value="'.$allowedTwo->id.'" >'.$allowedTwo->name.'</option>');
+    }
+
+    // ==================== #1291: selector queries carry only id/name ====================
+
+    /**
+     * Reduce a model collection to sorted `[id, name]` pairs.
+     *
+     * The five selector queries have no ORDER BY (deliberately unchanged by
+     * #1291), so option order is unspecified — compare as a set, never
+     * positionally.
+     *
+     * @param  Collection<int, Model>  $models
+     * @return array<int, array{0: int, 1: string}>
+     */
+    private function idNamePairs($models): array
+    {
+        return $models
+            ->map(fn ($model) => [(int) $model->id, (string) $model->name])
+            ->sortBy(fn (array $pair) => $pair[0])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Slice one MaryUI `<select>` out of the rendered page by its wire:model.
+     *
+     * Needed to count options per dropdown: the modal renders several selects,
+     * so a page-wide `<option>` count says nothing about the parent one.
+     */
+    private function selectHtml(string $html, string $wireModel): ?string
+    {
+        $needle = 'wire:model.live="'.$wireModel.'"';
+        $attributeOffset = strpos($html, $needle);
+
+        if ($attributeOffset === false) {
+            return null;
+        }
+
+        $tagStart = strrpos(substr($html, 0, $attributeOffset), '<select');
+        $tagEnd = strpos($html, '</select>', $attributeOffset);
+
+        if ($tagStart === false || $tagEnd === false) {
+            return null;
+        }
+
+        return substr($html, $tagStart, $tagEnd - $tagStart + strlen('</select>'));
+    }
+
+    /**
+     * Province/county selector lists must keep every option's id and name now
+     * that the queries select only `['id', 'name']` (#1291).
+     */
+    public function test_province_and_county_options_keep_their_ids_and_names(): void
+    {
+        // Province level: the caller's unit sits in region 1 (a province).
+        ['user' => $provinceUser, 'unit' => $provinceUnit] = $this->createUserWithUnit(['organization']);
+        $provinceUnit->update(['unit_type_id' => 2, 'region_id' => 1]);
+        $this->actingAs($provinceUser);
+
+        $provinceComponent = Livewire::test('units.index')
+            ->assertSet('userUnitLevel', 'province');
+
+        $this->assertSame([], $this->idNamePairs($provinceComponent->instance()->provinces));
+        $this->assertSame(
+            [[2, 'شهرستان الف'], [3, 'شهرستان ب']],
+            $this->idNamePairs($provinceComponent->instance()->counties),
+            'province-level counties must keep their ids and names'
+        );
+
+        // Ministry level: `determineUserLevel()` treats only unit id 1 as the
+        // ministry. setUp pins units_id_seq so the first factory unit is id 2,
+        // so the HQ has to be created explicitly and the sequence resynced
+        // (AGENTS.md: explicit ids ⇒ resync).
+        Unit::factory()->create(['id' => 1, 'unit_type_id' => 1, 'name' => 'وزارت']);
+        $this->resyncSequence('units');
+
+        ['user' => $ministryUser] = $this->createUserWithUnit(['organization']);
+        Person::where('n_code', $ministryUser->n_code)->update(['u_id' => 1]);
+        $this->actingAs($ministryUser->fresh());
+
+        // Gate #1291 item 4: assert the fixture really reached ministry level.
+        $ministryComponent = Livewire::test('units.index')
+            ->assertSet('userUnitLevel', 'ministry');
+
+        $this->assertSame(
+            [[1, 'استان تست']],
+            $this->idNamePairs($ministryComponent->instance()->provinces),
+            'ministry-level provinces must keep their ids and names'
+        );
+        $this->assertSame([], $this->idNamePairs($ministryComponent->instance()->counties));
+
+        // Selecting a province loads its counties.
+        $ministryComponent->set('province_id', 1);
+
+        $this->assertSame(
+            [[2, 'شهرستان الف'], [3, 'شهرستان ب']],
+            $this->idNamePairs($ministryComponent->instance()->counties),
+            'counties must keep their ids and names after the province is picked'
+        );
+    }
+
+    /**
+     * Parent-unit lists must keep every option's id and name, and the
+     * ministry fallback must still return exactly unit_type_id = 1.
+     */
+    public function test_parent_unit_options_keep_their_ids_and_names_and_the_ministry_fallback(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $networkOne = Unit::factory()->create(['unit_type_id' => 4, 'name' => 'شبکه الف']);
+        $networkTwo = Unit::factory()->create(['unit_type_id' => 4, 'name' => 'شبکه ب']);
+        $staffOne = Unit::factory()->create(['unit_type_id' => 22, 'name' => 'ستادی الف']);
+        $staffTwo = Unit::factory()->create(['unit_type_id' => 22, 'name' => 'ستادی ب']);
+        // Type 3 is not an allowed parent of type 5 — it must never leak in.
+        Unit::factory()->create(['unit_type_id' => 3, 'name' => 'معاونت غیرمجاز']);
+
+        $component = Livewire::test('units.index')->set('unit_type_id', 5);
+
+        $this->assertSame(
+            [[$networkOne->id, 'شبکه الف'], [$networkTwo->id, 'شبکه ب']],
+            $this->idNamePairs($component->instance()->parentUnits()),
+            'type 5 parents must keep their ids and names'
+        );
+
+        // Type 22 only allows type 22 (the seeded self-reference).
+        $component->set('unit_type_id', 22);
+
+        $this->assertSame(
+            [[$staffOne->id, 'ستادی الف'], [$staffTwo->id, 'ستادی ب']],
+            $this->idNamePairs($component->instance()->parentUnits()),
+            'type 22 parents must keep their ids and names'
+        );
+
+        // Ministry fallback: no allowed parent exists, so the list must be
+        // exactly the type-1 units — never the whole table.
+        Unit::factory()->create(['id' => 1, 'unit_type_id' => 1, 'name' => 'وزارت']);
+        $this->resyncSequence('units');
+        Unit::where('unit_type_id', 4)->delete();
+
+        Person::where('n_code', $user->n_code)->update(['u_id' => 1]);
+        $this->actingAs($user->fresh());
+
+        $fallback = Livewire::test('units.index')
+            ->assertSet('userUnitLevel', 'ministry')
+            ->set('unit_type_id', 5);
+
+        $this->assertSame(
+            [[1, 'وزارت']],
+            $this->idNamePairs($fallback->instance()->parentUnits()),
+            'the ministry fallback must return exactly unit_type_id = 1'
+        );
+    }
+
+    /**
+     * The rendered parent options must carry the same id/name text after the
+     * queries stop loading whole models — the "column dropped from the select"
+     * trap (#1291).
+     */
+    public function test_parent_unit_options_render_the_same_option_text(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $first = Unit::factory()->create(['unit_type_id' => 4, 'name' => 'شبکه رندر الف']);
+        $second = Unit::factory()->create(['unit_type_id' => 4, 'name' => 'شبکه رندر ب']);
+
+        $component = Livewire::test('units.index')->set('unit_type_id', 5);
+
+        foreach ([$first, $second] as $parent) {
+            $component->assertSeeHtml('value="'.$parent->id.'" >'.$parent->name.'</option>');
+        }
+
+        $select = $this->selectHtml($component->html(), 'parent_id');
+
+        $this->assertNotNull($select, 'the parent-unit <select> must be present in the modal');
+        $this->assertSame(
+            2 + 1,
+            substr_count($select, '<option'),
+            'one <option> per parent row, plus the placeholder'
+        );
     }
 
     /**

@@ -17,7 +17,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 ### Tech Stack
 
 - **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
-- **PHP 8.6 preview:** blocked by three locked packages that cap `require.php` at 8.5 — `nette/schema` and `nette/utils` (production path, via league/commonmark) and `brianium/paratest` (dev); the `test-php86` job installs with `--ignore-platform-req=php`.
+- **PHP 8.6 preview:** the *locked* versions cap `require.php` at 8.5 — `nette/schema` v1.3.6 (`8.1 - 8.5`) and `nette/utils` v4.1.5 (`8.2 - 8.5`), pulled in by `league/commonmark` → `league/config` → `nette/schema` → `nette/utils`, plus `brianium/paratest` v7.20.0 (`~8.3.0 || ~8.4.0 || ~8.5.0`, dev); so `test-php86` installs with `--ignore-platform-req=php`. Upstream is not blocking 8.6: `nette/schema` ≥1.4.0 and `nette/utils` ≥4.1.6 allow it inside today's `^1.2`/`^4.0`, while `brianium/paratest` ≥7.25.0 (`~8.4.0 || ~8.5.0 || ~8.6.0`) requires `phpunit ^13` (pest 5) — that test-stack major is the long pole, not nette. `composer.json`'s `^8.4.1` does not cap 8.6 (`>=8.4.1 <9.0.0`).
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
@@ -54,10 +54,12 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Sidebar link ↔ route gate must carry the same permissions** (`SidebarPermissionsTest` pins both directions). `role_or_permission` syntax is `a|b` = ANY — **not** Sanctum's comma form. Nested `middleware(['a','b'])` and nested permission groups are **AND**, not OR. → [access-control](docs/agents/access-control.md)
 - **Spatie `canAny()` returns `false` for an unknown permission name** — a gate on a permission missing from a deployment's DB silently 403s every non-admin. Before adding a *new* permission to a gate, seed it everywhere or reuse an existing one. → [access-control](docs/agents/access-control.md)
 - **A page on a read-union gate that also writes must authorize inside the component** (`$this->authorize('…')`), not only at the route — and must re-validate the *submitted* unit id, not just the stored one. → [access-control](docs/agents/access-control.md)
-- **`/api/*` needs `auth:sanctum` *and* a token ability** (`ability:a,b` = ANY, `abilities:a,b` = ALL); reads and writes are independent groups (#895); tokens are scoped and revoked on password change. → [api-auth](docs/agents/api-auth.md)
+- **`/api/*` needs `auth:sanctum` *and* a token ability** (`ability:a,b` = ANY, `abilities:a,b` = ALL); reads and writes are independent groups (#895); tokens are scoped and revoked on password change. Three intentional exemptions: `POST /login` (public — it mints the token), plus the self-scoped `GET /user` and `POST /logout` that act on the caller, not a resource — logout by #1071, following the pre-existing `/user` precedent. A fourth is a decision, not a detail. → [api-auth](docs/agents/api-auth.md)
+- **Disease map aggregates are PII-free by construction** — the three `GET /api/gis/disease*` endpoints ride the `gis` gate (`gis:read` + `map|bw`) and return counts/rates only, never patient identifiers, names or dynamic field values; no `manage_diseases` requirement. → [api-auth](docs/agents/api-auth.md)
 - **Controllers depend on `ZabbixClient`, never `ZabbixService`.** A failed `ZabbixResult` maps to **503**; the `catch (\Throwable)` wrapper is gone — do not restore it. The `ZabbixSyncLog` failure streak is serial — never parallelise run recording. → [zabbix](docs/agents/zabbix.md)
 - **The Leaflet instance is owned by `Alpine.store('map')`** — never `window.map`, never a "wait until a map exists" loop, never a Leaflet instance in Alpine reactive state. `maps/map.blade.php` is the only place allowed to call `L.map()`. → [maps](docs/agents/maps.md)
 - **`units.boundary_id` is `ON DELETE CASCADE`** — null it out (`$unit->update(['boundary_id' => null])`) **before** deleting the boundary row, or the unit and its subtree vanish (#702). `Boundary::geojson` is a **bare geometry** (no `Feature`, and MultiPolygon must be unwrapped) or `fitBounds` throws. → [maps](docs/agents/maps.md)
+- **The disease map layer is read-only and two-group** — it consumes `/api/gis/disease-map` GeoJSON plus the server's `class`/`meta.breaks`, and lives in `diseaseRegions`/`diseaseUnits` panes at `ZOOM_SWITCH=9`; never copy the `units/map` edit flow (`Boundary::geojson`, `_mapGeojson`, `saveMapBoundary`). → [maps](docs/agents/maps.md)
 - **`descendantIds` CTE uses `UNION`, not `UNION ALL`** — deliberate: `UNION` dedupes so a `parent_id` cycle terminates instead of hanging the connection. Do not "optimize" it back. → [features](docs/agents/features.md)
 - **Livewire components are single-file, referenced by dot-name; there is no `app/Livewire/*.php`.** A typed Livewire model parameter binds by the model's **route key** — `Person`'s is `n_code` — so prefer `int $id` + `findOrFail($id)` in component methods. **Livewire cannot return file downloads** — export buttons are plain `<a href>`, never `wire:click`. → [features](docs/agents/features.md)
 - **By-day charts use `DailySeries`** (`generate_series` + left-join the caller's own filtered query — fills empty days, keeps the picked range), and `['days' => $days]` belongs in the **cache key**. → [features](docs/agents/features.md)
@@ -72,6 +74,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **PHPStan baseline is line-keyed** — after editing baselined code, regenerate it and verify `git diff phpstan-baseline.neon` adds **0** entries; `Eloquent\Builder` has no larastan, so start chains `Model::query()->with([...])` and put IN-filters inside `where(Closure)`. → [testing](docs/agents/testing.md)
 - **A tracked env file carries no real `APP_KEY` (#953)** and the gitignored working `.env` **must** have one. `composer verify` fails fast if `.env` is missing — deliberate, not a bug. → [testing](docs/agents/testing.md)
 - **E2E only via `scripts/e2e-test.sh`** (swaps `.env`, fresh DB, `:8001`) and `.env.e2e` **must** set `APP_LOCALE=fa` — without it 11 Persian-text specs fail. Never point e2e at `h_dashboard`; the e2e DB is wiped every run. → [e2e](docs/agents/e2e.md)
+- **No external runtime load (script/style/font/tile/iframe/fetch) without a row in `docs/agents/offline.md`; local by default.** → [offline](docs/agents/offline.md)
 
 ---
 
@@ -128,7 +131,7 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs with **seven** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and four `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `test-php86`); an eighth job, `mutation`, is manual-only behind `workflow_dispatch` (#1012). The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
+`.github/workflows/test.yml` runs on PRs with **eight** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`); `mutation` runs on every PR too (Composer-only, no Node/Vite, 45-min timeout, ~30 min typical) and gates nothing. The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
 
 ---
 
@@ -155,6 +158,7 @@ When code fails or tests break, follow this order:
 | Testing & verification detail (Pest counts, PHPStan baseline, git hooks, CI job table) | `docs/agents/testing.md` |
 | E2E (Playwright setup, `.env.e2e`, helpers, failure table) | `docs/agents/e2e.md` |
 | Persian search & normalization (folding, ZWNJ, `LIKE`) | `docs/agents/search.md` |
+| Offline / external runtime dependencies (audit, tile host) | `docs/agents/offline.md` |
 | Data model detail | `references/data-model.md` |
 | API reference, scheduler details, deployment, performance | `references/api-endpoints.md` |
 

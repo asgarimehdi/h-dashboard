@@ -19,6 +19,7 @@ TRUSTED_PROXIES=
 TRUSTED_HOSTS=
 # ── Map / routing / geocoding servers ──
 # تایل/نقشه (OpenStreetMap)
+# فقط TILE_URL_TEMPLATE اثر دارد؛ سه متغیر زیر رزرو شده‌اند — map.tile_url مصرف‌کننده ندارد.
 TILE_SERVER_IP=tile.openstreetmap.org
 TILE_SERVER_PORT=
 TILE_SERVER_SCHEME=https

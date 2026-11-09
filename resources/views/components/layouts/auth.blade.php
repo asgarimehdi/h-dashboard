@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <title>{{ isset($title) ? $title.' - '.config('app.name') : config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>
+    <style nonce="{{ Vite::cspNonce() }}">
         [x-cloak] { display: none !important; }
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
@@ -19,7 +19,7 @@
 
 <body class="auth-layout min-h-screen font-sans antialiased stitch-bg">
     <!-- Stitch-style animated background JavaScript -->
-    <script>
+    <script nonce="{{ Vite::cspNonce() }}">
         // Create floating gradient blobs
         function createBlobs() {
             const container = document.querySelector('.stitch-blobs');

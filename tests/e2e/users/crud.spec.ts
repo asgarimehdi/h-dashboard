@@ -1,4 +1,4 @@
-import { test, expect, login, TEST_USER } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire, TEST_USER } from '../shared/fixtures';
 
 /**
  * Plan 004 — Users CRUD via the inline modal on /users (users.index).
@@ -63,9 +63,10 @@ test.describe('users CRUD (inline modal)', () => {
     await search.fill('عسگری');
     // Wait for search results dropdown to appear (reactive instead of waitForTimeout)
     await page.waitForSelector('div.max-h-40 div.p-2', { state: 'visible', timeout: 10000 });
+    const selectPerson = waitForLivewire(page);
     await page.locator('div.max-h-40 div.p-2', { hasText: 'مهدی عسگری' }).first().click();
     // Wait for Livewire to process the person selection
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 5000 });
+    await selectPerson;
 
     await page.locator('input[wire\\:model="password"]').fill(TEST_USER.password);
     await page.getByRole('button', { name: 'ذخیره' }).click();
@@ -123,25 +124,29 @@ test.describe('users CRUD (inline modal)', () => {
 
     // Accept the native confirm → soft delete.
     page.on('dialog', (dialog) => dialog.accept());
+    const deletion = waitForLivewire(page);
     await page.locator('button[wire\\:click^="delete("]').first().click();
     // Wait for Livewire to process the deletion
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await deletion;
     await expect(page.locator('table tbody')).not.toContainText(nCode);
 
     // Switch to the inactive filter — the user must be there now.
+    const inactiveFilter = waitForLivewire(page);
     await page.locator('select.select-bordered').selectOption('inactive');
     // Wait for Livewire filter to complete
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await inactiveFilter;
     await expect(page.locator('table tbody')).toContainText(nCode);
 
     // Restore → back to active (reverts the mutation in the same test).
+    const restore = waitForLivewire(page);
     await page.locator('button[wire\\:click^="restore("]').first().click();
     // Wait for Livewire to process the restore
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await restore;
 
+    const activeFilter = waitForLivewire(page);
     await page.locator('select.select-bordered').selectOption('active');
     // Wait for Livewire filter to complete
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await activeFilter;
     await expect(page.locator('table tbody')).toContainText(nCode);
   });
 });

@@ -86,6 +86,7 @@ class Person extends Model
             $cache = app(CacheInvalidationServiceInterface::class);
             $cache->increment('hr_stats');
             $cache->increment('dashboard');
+            $cache->increment('report_persons');
 
             $uIdChanged = in_array('u_id', array_keys($model->getChanges()))
                 || $model->wasRecentlyCreated;
@@ -93,12 +94,15 @@ class Person extends Model
             if ($uIdChanged) {
                 $cache->increment('maps');
                 $cache->increment('gis');
+                // Issue #1347: `loadSubtree` reads `unit_hierarchy`, and a
+                // person's unit membership is what its payload counts.
+                $cache->increment('unit_hierarchy');
             }
         });
 
         static::deleted(function () {
             $cache = app(CacheInvalidationServiceInterface::class);
-            foreach (['hr_stats', 'dashboard', 'maps', 'gis'] as $namespace) {
+            foreach (['hr_stats', 'dashboard', 'maps', 'gis', 'unit_hierarchy', 'report_persons'] as $namespace) {
                 $cache->increment($namespace);
             }
         });

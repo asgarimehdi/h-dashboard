@@ -113,7 +113,6 @@ return new class extends Component
 
         try {
             $import = new PersonImport;
-            $import->setCompareKey($this->compareKey);
             $import->setAccessibleUnitIds(app(AccessService::class)->accessibleUnitIds());
 
             Excel::import($import, $this->file->getRealPath());
@@ -713,7 +712,7 @@ return new class extends Component
     </div></div>
 
 @push('scripts')
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     document.addEventListener('livewire:init', () => {
         Livewire.on('persons-imported', () => {
             // Optionally refresh the persons table

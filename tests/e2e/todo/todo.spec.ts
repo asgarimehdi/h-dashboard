@@ -41,6 +41,7 @@ test.describe('todo calendar', () => {
     // Fill start date — input is readonly (Jalali date picker), so set value via JS
     // and trigger Livewire's wire:model.live binding
     const startDateInput = page.locator('input[data-jdp]').first();
+    const dateUpdate = waitForLivewire(page);
     await startDateInput.evaluate((el) => {
       const input = el as HTMLInputElement;
       // Set the native value
@@ -52,17 +53,18 @@ test.describe('todo calendar', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await page.waitForTimeout(300);
+    await dateUpdate;
 
     // Fill start time
     const startTimeInput = page.locator('input[type="time"]').first();
     await startTimeInput.fill('09:00');
 
     // Submit
+    const save = waitForLivewire(page);
     await page.getByRole('button', { name: 'ذخیره' }).click();
 
     // Wait for Livewire to complete and toast to appear
-    await waitForLivewire(page);
+    await save;
     await waitForToast(page, 'با موفقیت ذخیره شد');
   });
 

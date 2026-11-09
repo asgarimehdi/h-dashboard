@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 
 /**
  * Plan 007 — Units tree (chart)
@@ -28,8 +28,9 @@ test.describe('units tree (chart)', () => {
 
     // Click the first unit box (the clickable node showing a unit name).
     const node = page.locator('.tree-container [wire\\:click*="selectUnit"]').first();
+    const selection = waitForLivewire(page);
     await node.click();
-    await page.waitForTimeout(1000);
+    await selection;
 
     // Detail panel now shows the selected unit's ‌"نوع"/"کاربران" fields.
     await expect(page.locator('body')).toContainText(/نوع:|کاربران:/);

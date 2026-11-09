@@ -151,89 +151,107 @@ new class extends Component
             // fresh error bag — so it never guarded the write loop below, and
             // any holder of `create_ticket` (the lowest role) could store a
             // file of any type, up to Livewire's 12MB temporary-upload
-            // ceiling, into `public/storage/attachments`. Validate in the
-            // method that writes, same shape as `⚡inbox.blade.php:676-677`
-            // (`submitAction()`). The allowlist and the 5120KB cap are the
-            // ones this component already documents in `updatedFiles()` —
-            // deliberately NOT widened to docx/xlsx (out of scope for #873),
-            // and deliberately NOT pushed into `config/livewire.php`, where a
-            // global allowlist would break the two import components that
-            // legitimately take `mimes:xlsx,xls,csv`.
+            // ceiling. Validate in the method that writes, same shape as
+            // `⚡inbox.blade.php:676-677` (`submitAction()`). The allowlist and
+            // the 5120KB cap are the ones this component already documents in
+            // `updatedFiles()` — deliberately NOT widened to docx/xlsx (out of
+            // scope for #873), and deliberately NOT pushed into
+            // `config/livewire.php`, where a global allowlist would break the
+            // two import components that legitimately take `mimes:xlsx,xls,csv`.
+            // Issue #1276: the file lands on the private `local` disk now, not
+            // `public/storage`.
             'files' => 'nullable|array|max:5',
             'files.*' => 'file|mimes:jpg,jpeg,png,pdf,zip,rar|max:5120',
         ]);
 
-        $ticketCode = 'TK-' . strtoupper(Str::random(8));
+        $ticketCode = 'TK-' . strtoupper(\Illuminate\Support\Str::random(8));
 
-        $ticket = Ticket::create([
-            'ticket_code' => $ticketCode,
-            'user_id' => auth()->id(),
-            'unit_id' => $this->unit_id,
-            'subject' => $this->subject,
-            'content' => $this->content,
-            'priority' => $this->priority,
-            'status' => 'created',
-            'current_assignee_id' => null,
-            'task_id' => $this->task_id,
-        ]);
+        // #1303: هر نوشتنِ دیتابیس داخل یک تراکنش است، وگرنه شکستِ وسط زنجیره
+        // تیکت را می‌گذاشت و ارسال دوباره تیکت دوم می‌ساخت. فایل‌ها عمداً بیرون
+        // از تراکنش نوشته می‌شوند (I/O روی قفل نباشد) و در `catch` پاک می‌شوند.
+        $storedFiles = [];
 
-        // اگر وظیفه‌ای انتخاب نشده، وظیفه جدید ایجاد کن.
-        // #847 (تصمیم محصول، گزینهٔ ج): وظیفه باید در اسکوپ سازنده باشد.
-        // رفتار قبلی همیشه واحد مقصد را می‌نوشت، حتی وقتی آن واحد در
-        // `accessibleUnitIds()` سازنده نبود — یعنی تیکت به todoای در
-        // واحدی لینک می‌شد که خودِ آن todo هم بلافاصله از اسکوپ خواننده
-        // خارج می‌شد و در read-side مخفی می‌شد.
-        if (! $this->task_id) {
-            $destinationInScope = in_array(
-                $this->unit_id,
-                app(\App\Services\AccessService::class)->accessibleUnitIds(),
-                true
-            );
-
-            $todo = Todo::create([
-                'title' => $this->subject,
-                'start_at' => now(),
-                'end_at' => now()->addWeek(),
-                'is_completed' => false,
-                'unit_id' => $destinationInScope ? $this->unit_id : session('current_unit_id', auth()->user()->person?->u_id),
-            ]);
-            $ticket->update(['task_id' => $todo->id]);
-        }
-
-        // ثبت فعالیت
-        \App\Services\ActivityLogService::created(
-            $ticket,
-            "ایجاد تیکت {$ticketCode} به واحد " . $ticket->unit->name
-        );
-
-        // ارسال اعلان به کاربران واحد مقصد
-        \App\Services\NotificationService::notifyUnit(
-            $this->unit_id,
-            'ticket_created',
-            'تیکت جدید دریافت شد',
-            "تیکت #{$ticketCode} با موضوع: {$this->subject}",
-            '/tickets/inbox'
-        );
-
-        $initialActivity = $ticket->activities()->create([
-            'user_id' => auth()->id(),
-            'action' => 'created',
-            'description' => 'تیکت ایجاد شد و به واحد ' . $ticket->unit->name . ' اختصاص یافت.',
-            'to_unit_id' => $this->unit_id,
-            'is_internal' => false,
-        ]);
-
-        if ($this->files) {
+        try {
             foreach ($this->files as $file) {
-                $path = $file->store('attachments', 'public');
-                $ticket->attachments()->create([
-                    'user_id' => auth()->id(),
-                    'activity_id' => $initialActivity->id,
-                    'file_path' => $path,
+                $storedFiles[] = [
+                    'path' => $file->store('attachments', 'local'),
                     'file_name' => $file->getClientOriginalName(),
                     'file_size' => $file->getSize(),
-                ]);
+                ];
             }
+
+            \Illuminate\Support\Facades\DB::transaction(function () use ($ticketCode, $storedFiles) {
+                $ticket = Ticket::create([
+                    'ticket_code' => $ticketCode,
+                    'user_id' => auth()->id(),
+                    'unit_id' => $this->unit_id,
+                    'subject' => $this->subject,
+                    'content' => $this->content,
+                    'priority' => $this->priority,
+                    'status' => 'created',
+                    'current_assignee_id' => null,
+                    'task_id' => $this->task_id,
+                ]);
+
+                // اگر وظیفه‌ای انتخاب نشده، وظیفه جدید ایجاد کن.
+                // #847 (تصمیم محصول، گزینهٔ ج): وظیفه باید در اسکوپ سازنده باشد.
+                // رفتار قبلی همیشه واحد مقصد را می‌نوشت، حتی وقتی آن واحد در
+                // `accessibleUnitIds()` سازنده نبود — یعنی تیکت به todoای در
+                // واحدی لینک می‌شد که خودِ آن todo هم بلافاصله از اسکوپ خواننده
+                // خارج می‌شد و در read-side مخفی می‌شد.
+                if (! $this->task_id) {
+                    $destinationInScope = in_array(
+                        $this->unit_id,
+                        app(\App\Services\AccessService::class)->accessibleUnitIds(),
+                        true
+                    );
+
+                    $todo = Todo::create([
+                        'title' => $this->subject,
+                        'start_at' => now(),
+                        'end_at' => now()->addWeek(),
+                        'is_completed' => false,
+                        'unit_id' => $destinationInScope ? $this->unit_id : session('current_unit_id', auth()->user()->person?->u_id),
+                    ]);
+                    $ticket->update(['task_id' => $todo->id]);
+                }
+
+                // ثبت فعالیت
+                \App\Services\ActivityLogService::created(
+                    $ticket,
+                    "ایجاد تیکت {$ticketCode} به واحد " . $ticket->unit->name
+                );
+
+                // ارسال اعلان به کاربران واحد مقصد
+                \App\Services\NotificationService::notifyUnit(
+                    $this->unit_id,
+                    'ticket_created',
+                    'تیکت جدید دریافت شد',
+                    "تیکت #{$ticketCode} با موضوع: {$this->subject}",
+                    '/tickets/inbox'
+                );
+
+                $initialActivity = $ticket->activities()->create([
+                    'user_id' => auth()->id(),
+                    'action' => 'created',
+                    'description' => 'تیکت ایجاد شد و به واحد ' . $ticket->unit->name . ' اختصاص یافت.',
+                    'to_unit_id' => $this->unit_id,
+                    'is_internal' => false,
+                ]);
+
+                foreach ($storedFiles as $stored) {
+                    $ticket->attachments()->create([
+                        'user_id' => auth()->id(),
+                        'activity_id' => $initialActivity->id,
+                        'file_path' => $stored['path'],
+                        'file_name' => $stored['file_name'],
+                        'file_size' => $stored['file_size'],
+                    ]);
+                }
+            });
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete(array_filter(array_column($storedFiles, 'path')));
+            throw $e;
         }
 
         $this->success(

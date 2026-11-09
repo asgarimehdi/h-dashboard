@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\ActivityLog;
 use App\Models\User;
-use App\Services\AccessService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -33,7 +32,7 @@ class ArchiveActivityLogsJob implements ShouldQueue
 
     /**
      * @param  int  $days  حذف لاگ‌های قدیمی‌تر از این تعداد روز
-     * @param  array<int>  $unitIds  آی‌دی واحدها؛ خالی یعنی سراسری (`allUnitIds()`)
+     * @param  array<int>  $unitIds  آی‌دی واحدها؛ خالی یعنی سراسری (همهٔ کاربران زنده)
      */
     public function __construct(int $days = 90, array $unitIds = [])
     {
@@ -43,15 +42,17 @@ class ArchiveActivityLogsJob implements ShouldQueue
 
     public function handle(): int
     {
-        // Org-wide retention: an empty scope must NOT fall back to
-        // accessibleUnitIds(), which is request-scoped and therefore always
-        // `[]` on a real queue worker — the job would silently delete nothing
-        // (issue #836). A caller that wants a scoped run passes $unitIds.
-        $unitIds = $this->unitIds ?: app(AccessService::class)->allUnitIds();
-
-        $userIds = User::whereHas('person', fn ($q) => $q->whereIn('u_id', $unitIds))
-            ->pluck('id')
-            ->toArray();
+        // Org-wide retention (empty $unitIds) is every live user, including
+        // accounts whose person has no usable unit — and, if such a row could
+        // ever exist, accounts with no person row at all. Never resolve
+        // accessibleUnitIds() here: it is request-scoped and always [] on a
+        // worker, so the job would silently delete nothing (#836). A caller that
+        // wants a scoped run passes $unitIds (the Tools page does, #950).
+        $userIds = $this->unitIds === []
+            ? User::query()->pluck('id')->toArray()
+            : User::whereHas('person', fn ($q) => $q->whereIn('u_id', $this->unitIds))
+                ->pluck('id')
+                ->toArray();
 
         if (empty($userIds)) {
             Log::info('ArchiveActivityLogsJob: no users in scope, nothing archived');

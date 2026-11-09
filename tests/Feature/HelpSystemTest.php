@@ -96,6 +96,18 @@ it('ships the help modal body on the same response that opens it', function () {
         ->assertSee('نقشه‌های تعاملی و تحلیل مکانی');
 });
 
+it('opens the help modal with a server round-trip instead of a client-only assignment', function () {
+    $user = makeHelpUser();
+
+    // #1263: `$wire.showHelpModal = true` only mutates client state, so the
+    // server never re-renders and the body (gated by @if in #1166) stays out.
+    // $set() is a real Livewire action and commits the open flag.
+    Livewire::actingAs($user)->test('hardware.index')
+        ->assertOk()
+        ->assertSee('$set(\'showHelpModal\', true)', false)
+        ->assertDontSee('$wire.showHelpModal = true', false);
+});
+
 it('ships a materially smaller response while the help modal is closed', function () {
     $user = makeHelpUser();
 

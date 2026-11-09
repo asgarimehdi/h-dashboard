@@ -31,8 +31,8 @@
            map/map-dashboard, maps/county, maps/unit, maps/point,
            reports/map-no-boundary  -> leaflet core        (8 Leaflet pages total)
            activity-log/index, reports/advanced, reports/todos,
-           tickets/inbox, tickets/monitoring, todo/todo
-                                    -> jalalidatepicker   (6 date pages total)
+           tickets/inbox, tickets/monitoring, todo/todo, map/map-dashboard
+                                    -> jalalidatepicker   (7 date pages total)
          Two rules for whoever moves the next library:
          1. It goes on the HOST page, never inside `maps/map.blade.php` — the
             child's asset arrives with the child, after the page's Alpine
@@ -52,7 +52,7 @@
 @endphp
 </head>
 
-<body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}">
+<body class="min-h-screen font-sans antialiased stitch-bg {{ $compactMode ? 'compact-mode' : '' }}" x-data="globalToast">
     {{-- #957: لینک پرش. `focus:absolute` لازم است چون `not-sr-only` حالتِ
          static می‌گذارد و بدون آن با هر بار فوکوس، کل صفحه یک خط پایین می‌رود. --}}
     <a href="#main-content"
@@ -60,7 +60,7 @@
         رفتن به محتوای اصلی
     </a>
     <!-- Stitch-style animated background JavaScript -->
-    <script>
+    <script nonce="{{ Vite::cspNonce() }}">
         // Initialize theme from localStorage on load (runs before Alpine/Livewire)
         (function() {
             const savedTheme = localStorage.getItem('mary-theme')?.replaceAll('"', '');
@@ -272,6 +272,17 @@
                 </x-menu-sub>
                 @endcanany
 
+                {{-- بیماری‌ها (#1246) — گیت منو و گیت هر چهار روت یکی است:
+                     `role_or_permission:manage_diseases`. --}}
+                @can('manage_diseases')
+                <x-menu-sub title="بیماری‌ها" icon="o-heart">
+                    <x-menu-item title="ثبت کیس" icon="o-plus-circle" link="/disease/create" wire:navigate />
+                    <x-menu-item title="لیست کیس‌ها" icon="o-list-bullet" link="/disease" wire:navigate />
+                    <x-menu-item title="بیماران" icon="o-user-group" link="/disease/patients" wire:navigate />
+                    <x-menu-item title="مدیریت بیماری‌ها" icon="o-cog-6-tooth" link="/disease/manage" wire:navigate />
+                </x-menu-sub>
+                @endcan
+
                 {{-- کار با نقشه --}}
                 @can('map')
                 <x-menu-sub title="کار با نقشه" icon="o-map">
@@ -284,11 +295,14 @@
                 </x-menu-sub>
                 @endcan
 
-                {{-- ابزارهای مدیریتی (IT) — هر آیتم با همان گیتی که روتش دارد:
-                     شبکه/وایرلس → `map` یا `bw`، زبیکس → `manage_zabbix`، کش سرور → `op-cache`.
-                     قبلاً کل گروه زیر `bw` بود، پس دارنده‌ی `map` بدون `bw` صفحه‌ها را پنهان
-                     می‌دید و دارنده‌ی `bw` بدون `map` با ۴۰۳ روبه‌رو می‌شد. --}}
-                @canany(['map', 'bw', 'manage_zabbix', 'op-cache'])
+                {{-- ابزارهای مدیریتی (IT + ابزارها) — گیت گروه = اجتماع گیت‌های آیتم‌هاست،
+                     ولی هر آیتم گیتِ همان روت خودش را نگه می‌دارد تا هیچ آیتمِ بی‌دسترسی
+                     رندر نشود و هیچ دارندهٔ گیتی آیتمش را از دست ندهد:
+                     شبکه/وایرلس → `map` یا `bw`، زبیکس → `manage_zabbix`،
+                     کش سرور → `op-cache` (فقط local)، ابزارها (`/tools`) → `manage_users`.
+                     تاریخچه: قبلاً کل گروه زیر `bw` بود، پس دارندهٔ `map` بدون `bw`
+                     صفحه‌ها را پنهان می‌دید و دارندهٔ `bw` بدون `map` با ۴۰۳ روبه‌رو می‌شد. --}}
+                @canany(['map', 'bw', 'manage_zabbix', 'op-cache', 'manage_users'])
                 <x-menu-sub title="ابزارهای مدیریتی" icon="o-wrench-screwdriver">
                     @canany(['map', 'bw'])
                     <x-menu-item title="شبکه‌ها" icon="o-globe-alt" link="/it/networks" wire:navigate />
@@ -306,15 +320,16 @@
                     </a>
                     @endif
                     @endcan
+                    {{-- `/tools` پشت `manage_users` است، نه گیت گروه — همان گیت روتش در
+                         routes/web.php. آخر گروه می‌ماند تا آیتم‌های IT پیوسته و بی‌جابه‌جایی بمانند. --}}
+                    @can('manage_users')
+                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
+                    @role('admin')
+                    <x-menu-item title="بک‌آپ جدول‌ها" icon="o-cloud-arrow-down" link="/tools/backup" wire:navigate />
+                    @endrole
+                    @endcan
                 </x-menu-sub>
                 @endcanany
-
-                {{-- ابزارهای نرم‌افزاری — روت /tools پشت `manage_users` است، نه `bw`. --}}
-                @can('manage_users')
-                <x-menu-sub title="ابزار مدیریتی" icon="o-wrench">
-                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
-                </x-menu-sub>
-                @endcan
 
                 {{-- سخت‌افزار — /hardware و /maintenance هر دو پشت `manage_hardware`؛
                      قبلاً داخل گروه IT بودند و دارندگان manage_hardware بدون `bw` آن‌ها را نمی‌دیدند. --}}
@@ -385,10 +400,10 @@
          ولی بدون ناحیهٔ زنده هیچ صفحه‌خوانی متوجه باز شدنش نمی‌شود. زنده‌بودن
          باید روی ظرفی باشد که همیشه در DOM است، نه روی خودِ توست. --}}
     <div aria-live="polite" aria-atomic="true">
-        <x-toast />
+        <x-csp-toast />
     </div>
     <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> -->
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     // Register service worker for browser notifications
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});

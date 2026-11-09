@@ -10,6 +10,11 @@ use Illuminate\Support\Facades\Storage;
  * Issue #880 — recover attachment files that were leaked by the pre-#880
  * delete path (rows cascaded away, files left on the public disk forever).
  *
+ * Issue #1276 — the files live on the private `local` disk now, so this is
+ * also the only thing that can find the NEW orphans (a `store()` that fails
+ * before the row is inserted, #1303). Scanning `public` would report a clean
+ * run while every real orphan sat unseen on `local`.
+ *
  * Modelled on `data:archive` (`ArchiveOldRecords`): the same `--dry-run`
  * convention, the same "report, then act" output shape, and the same chunked
  * walk so a directory with a very large number of files does not load them all
@@ -23,7 +28,7 @@ class PruneOrphanAttachments extends Command
 {
     protected $signature = 'attachments:prune-orphans {--dry-run : فقط گزارش می‌دهد، بدون حذف فایل}';
 
-    protected $description = 'Delete attachment files on the public disk that no attachments row references';
+    protected $description = 'Delete attachment files on the private local disk that no attachments row references';
 
     /**
      * Files per walk chunk. Mirrors `data:archive`.
@@ -32,10 +37,10 @@ class PruneOrphanAttachments extends Command
 
     public function handle(): int
     {
-        $disk = Storage::disk('public');
+        $disk = Storage::disk('local');
         $dryRun = (bool) $this->option('dry-run');
 
-        $this->info('Scanning storage/app/public/attachments for unreferenced files...');
+        $this->info('Scanning storage/app/private/attachments for unreferenced files...');
 
         $orphans = [];
         $referenced = 0;
@@ -91,7 +96,7 @@ class PruneOrphanAttachments extends Command
 
         $deleted = 0;
         foreach (array_chunk($orphans, self::CHUNK) as $chunk) {
-            // The public disk sets `throw => false`, so a file removed between
+            // The local disk sets `throw => false`, so a file removed between
             // the scan and here is skipped rather than aborting the run.
             $disk->delete($chunk);
             $deleted += count($chunk);
@@ -104,7 +109,7 @@ class PruneOrphanAttachments extends Command
     }
 
     /**
-     * The directory the upload paths store into, on the `public` disk.
+     * The directory the upload paths store into, on the `local` disk.
      */
     private const DIRECTORY = 'attachments';
 

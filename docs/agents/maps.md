@@ -8,6 +8,10 @@
 
 ## Leaflet map lifecycle (issue #028)
 
+> **Tile template comes only from `TILE_URL_TEMPLATE`.** `TILE_SERVER_IP` / `TILE_SERVER_PORT` /
+> `TILE_SERVER_SCHEME` build `map.tile_url`, which has no consumer — changing them does nothing.
+> → `docs/agents/offline.md`.
+
 The Leaflet instance lives in a **module-scope variable in `resources/js/map-store.js`** (registered
 in `resources/js/bootstrap.js`) — **not** on `window.map`, and not inside the reactive Alpine store
 either. `Alpine.store('map')` holds the config, the callbacks, and the lifecycle API
@@ -71,3 +75,5 @@ why `invalidateSize()` and the `resize` listener are preserved.
 | `_mapGeojson` must be seeded on load | `saveMapBoundary()` calls `deleteBoundary()` whenever `_mapGeojson` is falsy, so a boundary that is never re-serialised on page load is destroyed by a plain "ذخیره" click. Call `updateGeojson()` right after loading the saved layer (issue #702) |
 | Playwright on map pages | Never `await networkidle` — Leaflet keeps fetching tiles so it never goes idle and the wait times out. Wait for `#unitMap` + `.leaflet-draw-edit-edit` instead |
 | Leaflet + Alpine reactivity | Never put a Leaflet instance (map or layers) in Alpine reactive state — `x-data` or `Alpine.store`. Alpine deep-wraps it in proxies and Leaflet's identity-based listener cleanup (`===` in `Marker.onRemove`) silently leaks `zoomanim` handlers; after `clearLayers()` the next zoom throws `_latLngToNewLayerPoint` and freezes markers (issue #769). Keep the instance in module scope / closure locals — see `resources/js/map-store.js` |
+| Disease layer is read-only GeoJSON | `/map`'s «بیماری‌ها» layer consumes `GET /api/gis/disease-map`, which already returns a standard `FeatureCollection` — never build one from `Boundary::geojson` (bare geometry, `MultiPolygon` unwrap) and never touch `_mapGeojson` / `saveMapBoundary`; those belong to the `units/map` edit flow (#702). Below the zoom switch `properties.level` is **`county` or `province`** (not `region`) and `meta.level` may be `mixed`/`none`; quantiles arrive as `properties.class` + `meta.breaks`, so the client must not re-derive them (#1245, #1246) |
+| Disease layer has two groups + two panes | `diseaseRegions` (pane z-index 410) and `diseaseUnits` (620) crossfade at `ZOOM_SWITCH=9`; the hidden pane gets `pointer-events: none` so its popups cannot be clicked. `LayerGroup.clearLayers()` is **not recursive** — clear both sibling groups explicitly on toggle-off; a parent group would only detach its children and keep their data (#1246) |

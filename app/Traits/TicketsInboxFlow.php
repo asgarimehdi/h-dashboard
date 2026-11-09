@@ -556,7 +556,7 @@ trait TicketsInboxFlow
 
             if ($this->completionFiles) {
                 foreach ($this->completionFiles as $file) {
-                    $path = $file->store('attachments', 'public');
+                    $path = $file->store('attachments', 'local');
                     $ticket->attachments()->create([
                         'user_id' => auth()->id(),
                         'activity_id' => $newActivity->id,

@@ -30,7 +30,13 @@ return new class extends Component {
             <div class="flex-1">
                 می‌توانید نقاط را جابجا کنید
             </div>
-            <x-toggle x-on:click="toggleRoutingContainer()" label="نمایش متنی مسیر"/>
+            {{-- #1352 CSP-compat: the toggle is wrapped in [data-route-toggle]
+                 — resources/js/map-pages.js binds its change event. The old
+                 x-on:click="toggleRoutingContainer()" global call cannot run
+                 under the CSP build. --}}
+            <div data-route-toggle>
+                <x-toggle label="نمایش متنی مسیر" />
+            </div>
         </div>
 
         <div class="relative">
@@ -41,6 +47,11 @@ return new class extends Component {
             </div>
         </div>
     </x-card>
+
+    {{-- #1352 CSP-compat: routing config published in an inert JSON block
+         for resources/js/map-pages.js. The old @script block cannot execute
+         under the CSP build at all. --}}
+    <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="route-data">@json(['waypoint1' => $waypoint1, 'waypoint2' => $waypoint2, 'routingUrl' => $routing_url])</script>
 </div>
 
 
@@ -64,53 +75,3 @@ return new class extends Component {
     <script src="{{ asset('js/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('js/leaflet/leaflet-routing-machine.min.js') }}"></script>
 @endassets
-
-@script
-<script>
-    // Issue #028 — bind to the live map the store owns. onReady() replaces the old
-    // `if (window.map)` guard, which a previous page's DETACHED instance satisfied,
-    // and it also removes the script-ordering race with maps.map. The routing
-    // control is now created against that live map, so it can never end up attached
-    // to a map that is about to be destroyed.
-    window.Alpine.store('map').onReady(function (map) {
-        function initRouting() {
-            var routingControl = L.Routing.control({
-                waypoints: [
-                    L.latLng({{ $waypoint1 }}),
-                    L.latLng({{ $waypoint2 }})
-                ],
-                router: L.Routing.osrmv1({
-                    serviceUrl: '{{ $routing_url }}/route/v1'
-                }),
-                lineOptions: {
-                    styles: [{ color: 'blue', weight: 5 }]
-                },
-                routeWhileDragging: true,
-                show: true,
-            }).addTo(map);
-
-            routingControl.on('routesfound', function (e) {
-                let route = e.routes[0];
-                document.getElementById('distance').textContent = (route.summary.totalDistance / 1000).toFixed(2);
-                document.getElementById('duration').textContent = Math.ceil(route.summary.totalTime / 60);
-            });
-
-            setTimeout(() => {
-                if (routingControl._container) {
-                    routingControl._container.style.display = 'none';
-                }
-            }, 200);
-
-            window.routingControl = routingControl;
-        }
-
-        initRouting();
-
-        window.toggleRoutingContainer = function() {
-            if (!window.routingControl || !window.routingControl._container) return;
-            let container = window.routingControl._container;
-            container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
-        };
-    });
-    </script>
-    @endscript

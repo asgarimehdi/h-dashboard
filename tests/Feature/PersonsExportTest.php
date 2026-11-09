@@ -641,6 +641,29 @@ class PersonsExportTest extends TestCase
         );
     }
 
+    public function test_export_unit_breadcrumb_keeps_ancestors_above_the_callers_scope(): void
+    {
+        // #756: the breadcrumb walks to the REAL root, so ancestors the caller
+        // cannot see still name the path — the same contract as the units
+        // export's «مسیر کامل» column.
+        $ministry = Unit::factory()->create(['name' => 'وزارت بالادست', 'parent_id' => null]);
+        $university = Unit::factory()->create(['name' => 'دانشگاه بالادست', 'parent_id' => $ministry->id]);
+
+        ['user' => $user, 'unit' => $leaf] = $this->createUserWithUnit(['kargozini']);
+        $leaf->update(['name' => 'واحد برگ', 'parent_id' => $university->id]);
+
+        $this->createPerson([
+            'n_code' => '0012345678', 'f_name' => 'مهدی', 'l_name' => 'عسگری', 'u_id' => $leaf->id,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->assertSame(
+            ['وزارت بالادست > دانشگاه بالادست > واحد برگ'],
+            $this->forCode($this->rowsFromRoute(), 'واحد سازمانی', '0012345678')
+        );
+    }
+
     public function test_export_writes_a_dash_for_a_missing_lookup_or_unit(): void
     {
         // The FKs are `onDelete('restrict')`, so a real row cannot be orphaned

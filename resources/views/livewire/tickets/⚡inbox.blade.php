@@ -539,13 +539,13 @@ new class extends Component
 
             @scope('cell_subject', $ticket)
             <span class="text-sm font-medium line-clamp-1 max-w-[150px]" title="{{ $ticket->subject }}">
-                {{ Str::limit($ticket->subject, 15, '...') }}
+                {{ \Illuminate\Support\Str::limit($ticket->subject, 15, '...') }}
             </span>
             @endscope
 
             @scope('cell_unit.name', $ticket)
             <span class="text-xs font-medium" title="{{ $ticket->unit->name }}">
-                {{ Str::limit($ticket->unit->name, 15, '...') }}
+                {{ \Illuminate\Support\Str::limit($ticket->unit->name, 15, '...') }}
             </span>
             @endscope
 
@@ -611,7 +611,7 @@ new class extends Component
                 @if($initialFiles->count() > 0)
                 <div class="mt-4 flex flex-wrap gap-2 border-t border-base-300 pt-4">
                     @foreach($initialFiles as $file)
-                    <x-button :label="$file->file_name" icon="o-paper-clip" link="{{ asset('storage/' . $file->file_path) }}"
+                    <x-button :label="$file->file_name" icon="o-paper-clip" link="{{ route('tickets.attachments.download', ['ticket' => $this->showingTicket->id, 'attachment' => $file->id]) }}"
                         class="btn-xs btn-outline" external target="_blank" />
                     @endforeach
                 </div>
@@ -636,7 +636,7 @@ new class extends Component
                             @if($activity->attachments->count() > 0)
                             <div class="flex gap-1 mt-2">
                                 @foreach($activity->attachments as $actFile)
-                                <x-ui.icon-button name="دانلود پیوست" icon="o-arrow-down-tray" link="{{ asset('storage/' . $actFile->file_path) }}"
+                                <x-ui.icon-button name="دانلود پیوست" icon="o-arrow-down-tray" link="{{ route('tickets.attachments.download', ['ticket' => $this->showingTicket->id, 'attachment' => $actFile->id]) }}"
                                     class="btn-xs btn-ghost text-primary" external target="_blank" />
                                 @endforeach
                             </div>
@@ -710,7 +710,7 @@ new class extends Component
     <script src="{{ asset('js/other/jalalidatepicker.min.js') }}"></script>
 @endassets
 
-<script>
+<script nonce="{{ Vite::cspNonce() }}">
     const initJdp = () => {
         jalaliDatepicker.startWatch();
 

@@ -1658,6 +1658,7 @@ class TicketsInboxLivewireTest extends TestCase
 
     public function test_file_uploads(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
@@ -1677,6 +1678,12 @@ class TicketsInboxLivewireTest extends TestCase
         $ticket->refresh();
         $this->assertSame('completed', $ticket->status);
         $this->assertGreaterThan(0, Attachment::where('ticket_id', $ticket->id)->count());
+
+        // Issue #1276 — the completion/refer note attachment also goes to the
+        // private disk; nothing is written to `public`.
+        $attachment = Attachment::where('ticket_id', $ticket->id)->firstOrFail();
+        Storage::disk('local')->assertExists($attachment->file_path);
+        $this->assertSame([], Storage::disk('public')->allFiles('attachments'));
     }
 
     // =====================================================================

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exports\UnitsExport;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
+use App\Support\UnitAncestry;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
@@ -65,8 +66,10 @@ class UnitsExportController extends Controller
     /**
      * Breadcrumb, depth and parent name for every exported unit.
      *
-     * `parent_id` is user-editable, so a bad edit can form a cycle. The visited
-     * set stops the upward walk instead of looping forever.
+     * `parent_id` is user-editable, so a bad edit can form a cycle. The walk —
+     * and its cycle/scope guard — lives in `UnitAncestry` (#1302); on a
+     * self-parent or a two-node cycle the chain is cut immediately, so the
+     * breadcrumb carries each name once instead of repeating the unit.
      *
      * @param  Collection<int, Unit>  $units
      * @param  array<int, array{name: string, parent_id: int|null}>  $map
@@ -77,20 +80,12 @@ class UnitsExportController extends Controller
         $hierarchy = [];
 
         foreach ($units as $unit) {
-            $chain = [];
-            $visited = [];
-            $parentId = $unit->parent_id;
-
-            while ($parentId !== null && isset($map[$parentId]) && ! isset($visited[$parentId])) {
-                $visited[$parentId] = true;
-                array_unshift($chain, $map[$parentId]['name']);
-                $parentId = $map[$parentId]['parent_id'];
-            }
+            $ancestors = array_column(UnitAncestry::chain((int) $unit->id, $map, null), 'name');
 
             $hierarchy[$unit->id] = [
-                'path' => implode(' > ', array_merge($chain, [$unit->name])),
-                'depth' => count($chain),
-                'parent_name' => $chain === [] ? '' : $chain[count($chain) - 1],
+                'path' => implode(' > ', [...$ancestors, $unit->name]),
+                'depth' => count($ancestors),
+                'parent_name' => $ancestors === [] ? '' : $ancestors[count($ancestors) - 1],
             ];
         }
 
@@ -156,14 +151,34 @@ class UnitsExportController extends Controller
     protected function walk(array $roots, array $children): Collection
     {
         $ordered = collect();
-        $stack = $roots;
+
+        // #1367: a cycle reachable from a root re-entered this stack forever.
+        // The guard reuses the UnitAncestry contract: each branch carries its
+        // own visited path and depth, and a repeated node or the MAX_DEPTH cap
+        // cuts that branch silently — nothing is thrown and nothing is marked.
+        // Acyclic ordering and child order are unchanged, and the orphan
+        // append in orderDepthFirst() still covers root-less cycles.
+        /** @var list<array{0: Unit, 1: array<int, true>, 2: int}> $stack */
+        $stack = array_map(fn (Unit $root): array => [$root, [$root->id => true], 0], $roots);
 
         while ($stack !== []) {
-            $unit = array_shift($stack);
+            /** @var array{0: Unit, 1: array<int, true>, 2: int} $entry */
+            $entry = array_shift($stack);
+            [$unit, $visited, $depth] = $entry;
             $ordered->push($unit);
 
+            if ($depth + 1 >= UnitAncestry::MAX_DEPTH) {
+                continue;
+            }
+
             foreach (array_reverse($children[$unit->id] ?? []) as $child) {
-                array_unshift($stack, $child);
+                if (isset($visited[$child->id])) {
+                    continue;
+                }
+
+                $nextVisited = $visited;
+                $nextVisited[$child->id] = true;
+                array_unshift($stack, [$child, $nextVisited, $depth + 1]);
             }
         }
 

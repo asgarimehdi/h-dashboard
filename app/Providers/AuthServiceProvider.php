@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Attachment;
 use App\Models\TicketComment;
+use App\Policies\AttachmentPolicy;
 use App\Policies\TicketCommentPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -15,6 +17,7 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
+        Attachment::class => AttachmentPolicy::class,
         TicketComment::class => TicketCommentPolicy::class,
     ];
 

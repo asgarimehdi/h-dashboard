@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 
 /**
  * Plan 005 — Tickets inbox
@@ -30,8 +30,9 @@ test.describe('tickets inbox', () => {
   test('switch view tabs ورودی/ارسالی changes content', async ({ page }) => {
     const before = await page.locator('table tbody tr').first().innerText();
 
+    const viewSwitch = waitForLivewire(page);
     await page.getByRole('button', { name: 'ارسالی‌ها' }).click();
-    await page.waitForTimeout(1200);
+    await viewSwitch;
 
     // Content re-renders (either rows differ or a pagination change).
     await expect(page.locator('table').first()).toBeVisible();
@@ -39,8 +40,9 @@ test.describe('tickets inbox', () => {
 
   test('status filter buttons switch the filter', async ({ page }) => {
     for (const label of ['همه', 'در انتظار', 'انجام', 'تکمیل']) {
+      const statusFilter = waitForLivewire(page);
       await page.getByRole('button', { name: label, exact: true }).first().click();
-      await page.waitForTimeout(800);
+      await statusFilter;
       await expect(page.locator('table').first()).toBeVisible();
     }
   });

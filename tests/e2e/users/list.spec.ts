@@ -1,4 +1,4 @@
-import { test, expect, login } from '../shared/fixtures';
+import { test, expect, login, waitForLivewire } from '../shared/fixtures';
 /**
  * Users list
  *
@@ -37,35 +37,40 @@ test.describe('users list', () => {
   test('search by name filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
     // عسگری is always present in seeded data (مهدی عسگری, the admin)
+    const searchUpdate = waitForLivewire(page);
     await search.fill('عسگری');
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await searchUpdate;
     await expect(page.locator('table tbody')).toContainText('عسگری');
   });
 
   test('search by n_code filters the list', async ({ page }) => {
     const search = page.locator('input[placeholder^="جستجو"]').first();
     // 0023548258 is a seeded user n_code (excluded user: admin is filtered out)
+    const searchUpdate = waitForLivewire(page);
     await search.fill('0023548258');
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await searchUpdate;
     await expect(page.locator('table tbody')).toContainText('0023548258');
   });
 
   test('status filter switches active/inactive', async ({ page }) => {
     const select = page.locator('select.select-bordered');
+    const inactive = waitForLivewire(page);
     await select.selectOption('inactive');
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await inactive;
     await expect(select).toHaveValue('inactive');
 
+    const active = waitForLivewire(page);
     await select.selectOption('active');
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await active;
     await expect(select).toHaveValue('active');
   });
 
   test('page size select reloads table', async ({ page }) => {
     const perPageSelect = page.locator('select.select-sm');
     await expect(perPageSelect).toBeVisible();
+    const pageSize = waitForLivewire(page);
     await perPageSelect.selectOption('10');
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await pageSize;
     await expect(page.locator('table').first()).toBeVisible();
     // After changing page size, pagination text should change
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
@@ -73,15 +78,17 @@ test.describe('users list', () => {
 
   test('pagination navigates to the next page', async ({ page }) => {
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش 1 تا');
+    const nextPage = waitForLivewire(page);
     await page.getByRole('button', { name: 'بعدی' }).click();
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await nextPage;
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش 21 تا');
   });
 
   test('expand row reveals permissions', async ({ page }) => {
     const chevron = page.locator('table tbody tr').first().locator('td').first().locator('svg');
+    const expand = waitForLivewire(page);
     await chevron.click();
-    await page.waitForFunction(() => !document.querySelector('.wire-loading'), { timeout: 10000 });
+    await expand;
     await expect(page.locator('text=دسترسی‌ها برای').first()).toBeVisible();
   });
 });

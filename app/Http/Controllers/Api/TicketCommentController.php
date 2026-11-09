@@ -444,7 +444,7 @@ class TicketCommentController extends Controller
 
         // `true` preserves the n_code keys notifyMentions() re-emits as the
         // notification body, and `array_slice` bounds the `whereIn` below.
-        $usernames = array_slice(array_unique($matches[1] ?? []), 0, self::MAX_MENTIONS, true);
+        $usernames = array_slice(array_unique($matches[1]), 0, self::MAX_MENTIONS, true);
 
         if ($usernames === []) {
             return [];
@@ -477,7 +477,9 @@ class TicketCommentController extends Controller
                 'منشن در نظر',
                 'at-sign',
                 'text-blue-500',
-                route('tickets.inbox', $comment->ticket_id)
+                route('tickets.inbox', $comment->ticket_id),
+                null,
+                'mention:'.$comment->id,
             );
         }
     }
@@ -494,7 +496,9 @@ class TicketCommentController extends Controller
             'پاسخ به نظر',
             'message-circle',
             'text-green-500',
-            route('tickets.inbox', $reply->ticket_id)
+            route('tickets.inbox', $reply->ticket_id),
+            null,
+            'reply:'.$reply->id,
         );
     }
 
@@ -525,7 +529,9 @@ class TicketCommentController extends Controller
             'واکنش جدید',
             'smile',
             'text-yellow-500',
-            route('tickets.inbox', $comment->ticket_id)
+            route('tickets.inbox', $comment->ticket_id),
+            null,
+            'reaction:'.$comment->id.':'.$reactor->id.':'.$reaction,
         );
     }
 }

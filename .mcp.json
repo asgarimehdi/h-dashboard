@@ -22,14 +22,10 @@
     },
     "github": {
       "type": "stdio",
-      "command": "npx",
+      "command": "bash",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-github",
-        "--env",
-        "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN}",
-        "--connect-timeout",
-        "60"
+        "-lc",
+        "exec docker run -i --rm --network host -e GITHUB_PERSONAL_ACCESS_TOKEN=\"$(gh auth token)\" ghcr.io/github/github-mcp-server"
       ]
     }
   }

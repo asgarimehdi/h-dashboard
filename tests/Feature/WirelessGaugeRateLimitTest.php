@@ -84,9 +84,11 @@ class WirelessGaugeRateLimitTest extends TestCase
 
     public function test_the_page_issues_one_multi_latest_request_per_cycle(): void
     {
-        // `@script` is not part of the initial render output, so the fetch has
-        // to be counted in the Blade source.
-        $source = $this->bladeSource('livewire/it/wireless.blade.php');
+        // Issue #1352: the poller moved out of the Blade `@script` block
+        // into resources/js/zabbix-gauges.js (an `@script` body cannot
+        // execute under the CSP build at all). The contract is unchanged —
+        // the fetch is counted in the module that now owns it.
+        $source = $this->jsSource('zabbix-gauges.js');
 
         // The only `fetch()` on the page is the single batched poller. If a
         // per-gauge fetch ever comes back, this count climbs with the device
@@ -120,7 +122,10 @@ class WirelessGaugeRateLimitTest extends TestCase
 
     public function test_the_gauge_subscribes_to_the_shared_state_instead(): void
     {
-        $source = $this->bladeSource('livewire/it/multi-gauge.blade.php');
+        // Issue #1352: the gauge factory (Alpine.data('signalGauge')) lives
+        // in resources/js/zabbix-gauges.js now; the Blade only carries
+        // x-data="signalGauge" plus data attributes.
+        $source = $this->jsSource('zabbix-gauges.js');
 
         $this->assertStringContainsString('window.zabbixGauges', $source);
         $this->assertStringContainsString('state.subscribers', $source);
@@ -128,7 +133,8 @@ class WirelessGaugeRateLimitTest extends TestCase
 
     public function test_a_refresh_cycle_stays_inside_the_api_user_budget(): void
     {
-        $source = $this->bladeSource('livewire/it/wireless.blade.php');
+        // Issue #1352: the poller lives in resources/js/zabbix-gauges.js now.
+        $source = $this->jsSource('zabbix-gauges.js');
 
         // One request now, one 30s later: 2 per minute regardless of how many
         // devices exist. The limiter allows 60/min, so the page can no longer
@@ -160,7 +166,8 @@ class WirelessGaugeRateLimitTest extends TestCase
 
         // One poller for the page either way — the request count is a property
         // of the page, not of the number of gauges on screen.
-        $source = $this->bladeSource('livewire/it/wireless.blade.php');
+        // Issue #1352: the poller lives in resources/js/zabbix-gauges.js now.
+        $source = $this->jsSource('zabbix-gauges.js');
         $this->assertSame(1, $this->countEndpointFetches($source));
     }
 
@@ -192,6 +199,22 @@ class WirelessGaugeRateLimitTest extends TestCase
         $source = file_get_contents(resource_path('views/'.$view));
 
         return (string) preg_replace('/\{\{--.*?--\}\}/s', '', $source);
+    }
+
+    /**
+     * Read a plain-JS module with its comments removed, so assertions only
+     * ever see executable code. Issue #1352 moved the page scripts that
+     * `@script` used to hold into modules; the counting helpers are
+     * surface-agnostic.
+     */
+    private function jsSource(string $module): string
+    {
+        $source = (string) file_get_contents(resource_path('js/'.$module));
+
+        $source = (string) preg_replace('#/\*.*?\*/#s', '', $source);
+        $source = (string) preg_replace('#(^\s*)//[^\n]*#m', '$1', $source);
+
+        return $source;
     }
 
     /**

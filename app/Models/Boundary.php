@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -38,14 +39,14 @@ class Boundary extends Model
         if ($this->relationLoaded('boundary') || array_key_exists('boundary', $this->getAttributes())) {
             $boundary = $this->getAttribute('boundary');
             if ($boundary) {
-                return \DB::selectOne('SELECT ST_AsGeoJSON(ST_GeomFromEWKB(decode(?, \'hex\'))) as geojson', [$boundary])->geojson ?? null;
+                return DB::selectOne('SELECT ST_AsGeoJSON(ST_GeomFromEWKB(decode(?, \'hex\'))) as geojson', [$boundary])->geojson ?? null;
             }
 
             return null;
         }
 
         // Fallback: query the database (this path triggers N+1 if used in a loop without eager loading)
-        return \DB::table('boundaries')
+        return DB::table('boundaries')
             ->where('id', $this->id)
             ->selectRaw('ST_AsGeoJSON(boundary) as geojson')
             ->value('geojson');

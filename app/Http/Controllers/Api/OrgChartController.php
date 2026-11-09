@@ -8,8 +8,8 @@ use App\Models\Unit;
 use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Support\ScopeCacheKey;
+use App\Support\UnitAncestry;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Org-chart tree endpoints — extracted from HrController.
@@ -22,10 +22,11 @@ class OrgChartController extends Controller
     public function orgChart(UnitScopedRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
+        $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
-        $data = Cache::remember(
-            $this->hrStatsCacheKey($accessibleIds, 'orgchart'),
-            now()->addMinutes(10),
+        $data = app(CacheInvalidationServiceInterface::class)->remember(
+            'hr_stats',
+            $scopeHash,
             function () use ($accessibleIds) {
                 $units = Unit::whereIn('id', $accessibleIds)
                     ->withCount(['person as personnel_count'])
@@ -57,18 +58,39 @@ class OrgChartController extends Controller
                     }
                 }
 
-                $format = function ($unit) use (&$format, $childrenByParent) {
+                // #1350: a parent_id cycle reachable from a root recursed
+                // forever here. The guard reuses the UnitAncestry contract:
+                // a per-path visited set seeded with the root, the MAX_DEPTH
+                // safety cap, and a silent cut — a repeated node is dropped
+                // from `children`, nothing is thrown, and no marker is
+                // emitted. Child order is unchanged: skipped children simply
+                // do not appear. The guard lives inside the cached closure,
+                // so cache keys, namespace, and TTL are untouched, and
+                // acyclic payloads are identical.
+                $format = function ($unit, array $visited, int $depth) use (&$format, $childrenByParent) {
+                    $children = [];
+                    foreach ($childrenByParent[$unit->id] ?? [] as $child) {
+                        if (isset($visited[$child->id]) || $depth + 1 >= UnitAncestry::MAX_DEPTH) {
+                            continue;
+                        }
+                        $nextVisited = $visited;
+                        $nextVisited[$child->id] = true;
+                        $children[] = $format($child, $nextVisited, $depth + 1);
+                    }
+
                     return [
                         'id' => $unit->id,
                         'name' => $unit->name,
                         'parent_id' => $unit->parent_id,
                         'personnel_count' => $unit->personnel_count,
-                        'children' => collect($childrenByParent[$unit->id] ?? [])->map($format)->values(),
+                        'children' => $children,
                     ];
                 };
 
-                return collect($tree)->map($format)->values();
-            }
+                return collect($tree)->map(fn ($unit) => $format($unit, [$unit->id => true], 0))->values();
+            },
+            10,
+            ['segment' => 'orgchart']
         );
 
         return response()->json(['data' => $data]);
@@ -88,10 +110,8 @@ class OrgChartController extends Controller
         $initialLimit = min((int) $request->get('initial_limit', 20), 100);
 
         $scopeHash = ScopeCacheKey::hash($accessibleIds);
-        $version = Cache::get('hr_stats_version', 0);
-        $cacheKey = "hr:expandable:v{$version}:{$scopeHash}:{$initialLimit}";
 
-        $units = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($accessibleIds, $initialLimit) {
+        $units = app(CacheInvalidationServiceInterface::class)->remember('hr_stats', $scopeHash, function () use ($accessibleIds, $initialLimit) {
             return Unit::whereIn('id', $accessibleIds)
                 ->withCount(['person as personnel_count', 'children as has_children'])
                 ->with('unitType:id,name')
@@ -107,7 +127,7 @@ class OrgChartController extends Controller
                     'has_children' => $u->has_children > 0,
                     'level' => 1,
                 ]);
-        });
+        }, 10, ['segment' => 'expandable', 'initial_limit' => $initialLimit]);
 
         return response()->json([
             'data' => $units->values(),
@@ -164,10 +184,21 @@ class OrgChartController extends Controller
                     }
                 });
 
-                $format = function (Unit $unit) use (&$format, $childrenByParent): array {
+                // #1350: same guard as orgChart() above — the UnitAncestry
+                // contract (per-path visited set, MAX_DEPTH cap, silent cut).
+                // The requested unit itself is seeded as visited, so a back
+                // edge to it (a two-node cycle, a self-parent) is dropped
+                // from the result. `has_children` is computed from the final
+                // children list, as before.
+                $format = function (Unit $unit, array $visited, int $depth) use (&$format, $childrenByParent): array {
                     $children = [];
                     foreach ($childrenByParent[$unit->id] ?? [] as $child) {
-                        $children[] = $format($child);
+                        if (isset($visited[$child->id]) || $depth + 1 >= UnitAncestry::MAX_DEPTH) {
+                            continue;
+                        }
+                        $nextVisited = $visited;
+                        $nextVisited[$child->id] = true;
+                        $children[] = $format($child, $nextVisited, $depth + 1);
                     }
 
                     return [
@@ -182,21 +213,19 @@ class OrgChartController extends Controller
                 };
 
                 $result = [];
+                $visited = [$unitId => true];
                 foreach ($childrenByParent[$unitId] ?? [] as $child) {
-                    $result[] = $format($child);
+                    if (isset($visited[$child->id])) {
+                        continue;
+                    }
+                    $childVisited = $visited;
+                    $childVisited[$child->id] = true;
+                    $result[] = $format($child, $childVisited, 0);
                 }
 
                 return $result;
             }, 10, ['subtree' => $unitId]);
 
         return response()->json(['data' => $result]);
-    }
-
-    private function hrStatsCacheKey(array $accessibleIds, string $segment = 'stats'): string
-    {
-        $version = Cache::get('hr_stats_version', 0);
-        $scopeHash = ScopeCacheKey::hash($accessibleIds);
-
-        return "hr:{$segment}:v{$version}:{$scopeHash}";
     }
 }
