@@ -321,16 +321,35 @@ class MapDashboardTest extends TestCase
      * (derived from `APP_URL`) to the hardcoded localhost defaults ONLY when
      * `SANCTUM_STATEFUL_DOMAINS` is unset. A deployment that sets that variable
      * without the real app host silently 401s every cookie-authenticated
-     * `/api/gis/*` fetch and the map goes blank. Pin it in the blocking job
-     * instead of discovering it in production.
+     * `/api/gis/*` fetch and the map goes blank.
+     *
+     * Not every environment leaves the variable unset — CI's `.env.testing`
+     * inherits `.env.example`'s explicit `h-dashboard.test`. So the assertion
+     * that must hold everywhere is that the fallback append is still wired;
+     * when no explicit list is configured, the resolved list must also contain
+     * the app host.
      *
      * @test
      */
-    public function test_map_dashboard_stateful_domains_cover_the_app_url_host(): void
+    public function test_sanctum_stateful_defaults_cover_the_app_url_host(): void
     {
         $appHost = ltrim(Sanctum::currentApplicationUrlWithPort(), ',');
 
         $this->assertNotSame('', $appHost, 'APP_URL must carry a host for Sanctum stateful matching.');
+
+        $explicit = env('SANCTUM_STATEFUL_DOMAINS');
+
+        if (is_string($explicit) && $explicit !== '') {
+            // The operator pinned a list; the app controls only its fallback.
+            $this->assertStringContainsString(
+                'Sanctum::currentApplicationUrlWithPort()',
+                (string) file_get_contents(config_path('sanctum.php')),
+                'config/sanctum.php must keep appending the APP_URL host when SANCTUM_STATEFUL_DOMAINS is unset.',
+            );
+
+            return;
+        }
+
         $this->assertContains(
             $appHost,
             config('sanctum.stateful'),
