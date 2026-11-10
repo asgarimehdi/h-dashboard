@@ -154,11 +154,24 @@ class RestoreService
      * Make the table hold exactly the rows of the file.
      *
      * @param  list<array<string, mixed>>  $rows
+     *
+     * @throws BackupValidationException
      */
     private function replaceRows(string $table, array $rows): void
     {
         $ids = [];
-        foreach ($rows as $row) {
+
+        foreach ($rows as $index => $row) {
+            // The id is the key of the replace: without it both the delete set
+            // and the upsert below are undefined. The validator catches a
+            // missing `id` column first, but this method is the last gate
+            // before the writes and has to fail closed on its own.
+            if (! array_key_exists('id', $row) || $row['id'] === null) {
+                throw new BackupValidationException(
+                    'ساختار فایل بک‌آپ نامعتبر است: ردیف شماره '.($index + 1)." جدول «{$table}» مقدار معتبری برای ستون «id» ندارد."
+                );
+            }
+
             $ids[] = $row['id'];
         }
 

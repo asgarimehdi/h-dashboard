@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Backup\BackupArchiveReader;
 use App\Services\Backup\BackupImportValidator;
 use App\Services\Backup\BackupService;
+use App\Support\Backup\BackupProblem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
@@ -116,6 +117,26 @@ test('a row with a column the table does not have is rejected', function () {
     expect($exception)->not->toBeNull();
     expect($exception->getMessage())->toContain('users');
     expect($exception->getMessage())->toContain('nope');
+});
+
+test('a row without the id column is reported as a missing column', function () {
+    User::factory()->create(['id' => 811]);
+
+    // The missing `id` key is the validator's FIRST gate: it reports the
+    // absent column instead of leaving the row to fail later in the restore.
+    $row = array_diff_key(backupRow('users'), ['id' => true]);
+    $caught = null;
+
+    try {
+        app(BackupImportValidator::class)->validateTable('users', [$row]);
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->not->toBeNull();
+    expect($caught->problems[0]->kind)->toBe(BackupProblem::KIND_MISSING_COLUMN);
+    expect($caught->problems[0]->column)->toBe('id');
+    expect($caught->getMessage())->toContain('id');
 });
 
 test('a full backup is validated against itself', function () {
