@@ -1917,13 +1917,68 @@ class TicketsInboxLivewireTest extends TestCase
         );
     }
 
+    // =====================================================================
+    // #1407 — no N+1 on the ACTIVITY ATTACHMENT axis
+    //
+    // The guard above holds the activity count fixed at 5→30 but seeds no
+    // attachment rows, so it cannot see a per-attachment-row load: the modal
+    // walks `$activity->attachments` (and would walk a nested actor on each
+    // file), and that cost is proportional to attachment rows, not to
+    // activities. Two fixtures with the SAME activity count and different
+    // attachment counts must therefore cost the same number of queries.
+    // =====================================================================
+
+    public function test_modal_query_count_does_not_grow_with_activity_attachments(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $bare = $this->createTicket();
+        $this->seedTicketActivities($bare->id, $user->id, 5);
+
+        $attached = $this->createTicket();
+        $this->seedTicketActivities($attached->id, $user->id, 5, attachmentsEach: 3);
+
+        // The FIRST mount in a process pays one-time cache fills the second
+        // never repeats — 6 queries on 7e19cc3c: the bell's list + unread
+        // count, the unit_tree CTE, the actor's person, and Spatie's
+        // permissions/roles. Warm them up outside the measured window, or the
+        // strict equality below measures process state, not the fixture.
+        $this->modalFlowQueryCount($bare->id);
+
+        // Open modal → one unrelated update; the update is where hydration used
+        // to strip the relations. Equal counts on both means no per-row load.
+        $this->assertSame(
+            $this->modalFlowQueryCount($bare->id),
+            $this->modalFlowQueryCount($attached->id),
+            'Attachments per activity reintroduced a lazy-load N+1 in the detail modal.'
+        );
+
+        // A query count alone cannot prove the section still renders — a bad
+        // eager load fails by rendering nothing, which costs 0 queries and
+        // would pass an equality check. Pin the heading AND a per-activity
+        // attachment link on the rendered HTML.
+        $attachment = Attachment::query()
+            ->where('ticket_id', $attached->id)
+            ->whereNotNull('activity_id')
+            ->firstOrFail();
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $attached->id)
+            ->assertSee('گردش فعالیت‌ها')
+            ->assertSee(route('tickets.attachments.download', ['ticket' => $attached->id, 'attachment' => $attachment->id]));
+    }
+
     /**
      * Insert `$count` activities with strictly decreasing timestamps so the
      * display order (`sortByDesc('created_at')`) is determined, not just the
      * `latest('id')` fetch order — a row-level tie would make newest-first
      * unfalsifiable.
+     *
+     * `$attachmentsEach` (#1407) additionally hangs that many attachment rows
+     * off every activity — the columns the modal's eager loads select.
      */
-    protected function seedTicketActivities(int $ticketId, int $userId, int $count): void
+    protected function seedTicketActivities(int $ticketId, int $userId, int $count, int $attachmentsEach = 0): void
     {
         $rows = collect(range(1, $count))
             ->map(fn (int $i): array => [
@@ -1938,6 +1993,26 @@ class TicketsInboxLivewireTest extends TestCase
             ->all();
 
         DB::table('task_activities')->insert($rows);
+
+        if ($attachmentsEach < 1) {
+            return;
+        }
+
+        DB::table('task_activities')->where('ticket_id', $ticketId)->pluck('id')
+            ->each(function (int $activityId) use ($ticketId, $userId, $attachmentsEach): void {
+                foreach (range(1, $attachmentsEach) as $i) {
+                    // `user_id` is NOT NULL (2026_01_02_000001) even though the
+                    // modal never selects it — an insert without it fails.
+                    Attachment::create([
+                        'user_id' => $userId,
+                        'ticket_id' => $ticketId,
+                        'activity_id' => $activityId,
+                        'file_path' => "attachments/activity-{$activityId}-{$i}.pdf",
+                        'file_name' => "پیوست فعالیت {$activityId}-{$i}.pdf",
+                        'file_size' => 1024,
+                    ]);
+                }
+            });
     }
 
     /**
