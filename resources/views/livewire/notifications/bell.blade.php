@@ -70,7 +70,7 @@ return new class extends Component
 }; ?>
 
 <div class="relative" wire:click.away="$set('showDropdown', false)">
-    <button wire:click="toggleDropdown" class="btn-ghost btn-sm relative"
+    <button wire:click="toggleDropdown" class="btn-ghost btn-sm btn-circle relative hover:text-primary hover:bg-primary/10 transition-colors"
             aria-label="{{ $unreadCount > 0 ? 'اعلان‌ها، '.$unreadCount.' خوانده‌نشده' : 'اعلان‌ها' }}">
         <x-icon name="o-bell" class="w-5 h-5" />
         @if($unreadCount > 0)
