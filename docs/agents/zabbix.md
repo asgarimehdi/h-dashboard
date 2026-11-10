@@ -27,7 +27,7 @@
 - At streak **exactly** `ZabbixSyncLog::ALERT_THRESHOLD` (= 3) it alerts every admin **once** through `NotificationService::send()` — in-app only, no email/webhook. Any success resets the streak, so further failures never re-fire the alert.
 - Dashboard banner: `getZabbixSyncStatusProperty()` on `/dashboard` reads the **latest row only** and renders `ok` / `stale` (old) / `failing` (streak), showing «نمایش از کش قدیمی» when the traffic cache outlived the last good sync.
 
-> Gotcha: the streak is computed by reading the previous row (`orderByDesc('id')->first()`), so it is **serial by nature** — do not parallelise or reorder run recording.
+> Lock contract: failure recording takes `SyncZabbixJob::STREAK_LOCK_KEY` (`pg_advisory_xact_lock`) around the read-compute-insert, so parallel workers are safe; the success path is lock-free.
 
 ### Zabbix connection test is real (issue #713)
 
@@ -45,4 +45,4 @@ One **batched** poll per `/it/wireless` page (a shared poll, in chunks of at mos
 |---|---|
 | `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` map a **failed `ZabbixResult`** to 503, never 500. Since #741 transport failures arrive as values from `ServiceZabbixClient`; the controllers' own `try/catch (\Throwable)` backstop also maps to 503 — keep both layers |
 | Controllers must depend on `ZabbixClient` | `App\Services\Zabbix\ZabbixClient` is the transport boundary (#741). Calling `ZabbixService` directly from a controller throws away the failure-as-value design and re-couples you to a live server |
-| `ZabbixSyncLog` streak is serial | The failure streak is computed by reading the previous row (`orderByDesc('id')->first()`), and `failed()` runs only after retries are exhausted — do not parallelise run recording or the streak inflates |
+| `ZabbixSyncLog` streak lock | Failure recording takes `SyncZabbixJob::STREAK_LOCK_KEY` (`pg_advisory_xact_lock`) around the read-compute-insert, so parallel workers are safe; `failed()` runs only after retries are exhausted |

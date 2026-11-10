@@ -7,9 +7,12 @@ use App\Models\Notification;
 use App\Models\ZabbixSyncLog;
 use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Mockery;
 use RuntimeException;
@@ -48,6 +51,7 @@ class SyncZabbixObservabilityTest extends TestCase
 
     protected function tearDown(): void
     {
+        DB::purge('zabbix_probe');
         Mockery::close();
         parent::tearDown();
     }
@@ -214,6 +218,95 @@ class SyncZabbixObservabilityTest extends TestCase
     }
 
     // -----------------------------------------------------------
+    //  #1402 — رکورد streak تحت قفل مشترک
+    // -----------------------------------------------------------
+
+    public function test_failure_recording_waits_for_the_streak_lock_instead_of_duplicating(): void
+    {
+        // Deterministic stand-in for two concurrent workers: hold the very
+        // key the production path takes, prove the recording blocks (and
+        // writes nothing), then release and prove it records once (#1402).
+        $holder = $this->probeConnection();
+        $holder->beginTransaction();
+        $holder->select('SELECT pg_advisory_xact_lock(?)', [SyncZabbixJob::STREAK_LOCK_KEY]);
+
+        DB::statement("SET lock_timeout = '250ms'");
+
+        try {
+            (new SyncZabbixJob)->failed(new RuntimeException('boom'));
+            $this->fail('recordFailure() did not wait for the streak lock');
+        } catch (QueryException) {
+            // Expected: SQLSTATE 55P03, "canceling statement due to lock timeout".
+            $this->assertSame(0, ZabbixSyncLog::query()->count());
+        } finally {
+            DB::statement('SET lock_timeout = 0');
+            $holder->rollBack(); // Releases the key.
+        }
+
+        (new SyncZabbixJob)->failed(new RuntimeException('boom'));
+
+        $this->assertSame(1, ZabbixSyncLog::query()->count());
+        $this->assertSame(1, ZabbixSyncLog::query()->latest('id')->first()?->consecutive_failures);
+    }
+
+    public function test_the_streak_lock_is_released_after_a_failed_insert(): void
+    {
+        // A rollback must release the advisory lock: pg_advisory_lock (session
+        // scope) would leak it on a worker that dies mid-job, leaving the probe
+        // at 0 and the queue stuck behind a dead key (#1402).
+        $failNextInsert = true;
+
+        DB::connection()->beforeExecuting(function (string $query) use (&$failNextInsert): void {
+            if ($failNextInsert && preg_match('/^insert\s+into\s+"?zabbix_sync_logs"?/i', $query)) {
+                $failNextInsert = false;
+
+                throw new RuntimeException('forced streak insert failure');
+            }
+        });
+
+        $thrown = null;
+
+        try {
+            (new SyncZabbixJob)->failed(new RuntimeException('boom'));
+        } catch (\Throwable $e) {
+            $thrown = $e;
+        }
+
+        $this->assertNotNull($thrown, 'the forced insert failure did not abort the recording');
+        $this->assertSame('forced streak insert failure', $thrown->getMessage());
+        $this->assertSame(0, ZabbixSyncLog::query()->count());
+
+        $probe = $this->probeConnection();
+        $acquired = $probe->selectOne(
+            'SELECT pg_try_advisory_xact_lock(?)::int AS acquired',
+            [SyncZabbixJob::STREAK_LOCK_KEY],
+        );
+
+        $this->assertSame(1, (int) $acquired->acquired, 'the streak lock outlived the rolled-back transaction');
+
+        (new SyncZabbixJob)->failed(new RuntimeException('boom'));
+
+        $this->assertSame(1, ZabbixSyncLog::query()->count());
+        $this->assertSame(1, ZabbixSyncLog::query()->latest('id')->first()?->consecutive_failures);
+    }
+
+    public function test_consecutive_failures_are_recorded_as_one_two_three(): void
+    {
+        $job = new SyncZabbixJob;
+        $job->failed(new RuntimeException('boom 1'));
+        $job->failed(new RuntimeException('boom 2'));
+        $job->failed(new RuntimeException('boom 3'));
+
+        $streaks = ZabbixSyncLog::query()
+            ->orderBy('id')
+            ->pluck('consecutive_failures')
+            ->map(fn ($value): int => (int) $value)
+            ->all();
+
+        $this->assertSame([1, 2, 3], $streaks);
+    }
+
+    // -----------------------------------------------------------
     //  ویجت داشبورد
     // -----------------------------------------------------------
 
@@ -284,6 +377,18 @@ class SyncZabbixObservabilityTest extends TestCase
     // -----------------------------------------------------------
     //  helpers
     // -----------------------------------------------------------
+
+    /**
+     * A second connection to the same database for lock probes. It writes
+     * nothing, so it cannot leak rows past the test (#1402).
+     */
+    protected function probeConnection(): Connection
+    {
+        config(['database.connections.zabbix_probe' => config('database.connections.pgsql')]);
+        DB::purge('zabbix_probe');
+
+        return DB::connection('zabbix_probe');
+    }
 
     /**
      * Notifications written by NotificationService for the given type.

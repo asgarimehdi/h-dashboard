@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -22,6 +23,9 @@ class SyncZabbixJob implements ShouldQueue
     public int $timeout = 30;
 
     public int $tries = 2;
+
+    /** #1402 — advisory key serialising failure recording across workers. */
+    public const STREAK_LOCK_KEY = 9140202;
 
     public function handle(ZabbixService $zabbix): void
     {
@@ -53,7 +57,8 @@ class SyncZabbixJob implements ShouldQueue
     /**
      * Runs only after the queue gives up (tries exhausted), so one job
      * failure produces exactly one failure row — retries do not inflate
-     * the consecutive-failure streak.
+     * the consecutive-failure streak. Concurrent recordings are serialised
+     * by STREAK_LOCK_KEY, so that contract also holds across workers.
      */
     public function failed(Throwable $exception): void
     {
@@ -77,20 +82,32 @@ class SyncZabbixJob implements ShouldQueue
 
     private function recordFailure(string $error): void
     {
-        $previous = ZabbixSyncLog::query()->orderByDesc('id')->first();
-        $streak = ($previous !== null && ! $previous->success)
-            ? $previous->consecutive_failures + 1
-            : 1;
+        /** @var array{0: ZabbixSyncLog, 1: int} $result */
+        $result = DB::transaction(function () use ($error): array {
+            // Serialize failure recording across workers (#1402). One
+            // transaction-scoped advisory lock, always taken first and released
+            // at commit: no row/table locks, so it cannot deadlock under the queue.
+            DB::select('SELECT pg_advisory_xact_lock(?)', [self::STREAK_LOCK_KEY]);
 
-        // Issue #1346: keep the row — its id is the dedupe key of the
-        // threshold alert, so the next episode alerts under a new key.
-        $syncLog = new ZabbixSyncLog([
-            'success' => false,
-            'consecutive_failures' => $streak,
-            'error' => $error,
-            'ran_at' => now(),
-        ]);
-        $syncLog->save();
+            $previous = ZabbixSyncLog::query()->orderByDesc('id')->first();
+            $streak = ($previous !== null && ! $previous->success)
+                ? $previous->consecutive_failures + 1
+                : 1;
+
+            // Issue #1346: keep the row — its id is the dedupe key of the
+            // threshold alert, so the next episode alerts under a new key.
+            $syncLog = new ZabbixSyncLog([
+                'success' => false,
+                'consecutive_failures' => $streak,
+                'error' => $error,
+                'ran_at' => now(),
+            ]);
+            $syncLog->save();
+
+            return [$syncLog, $streak];
+        });
+
+        [$syncLog, $streak] = $result;
 
         if ($streak === ZabbixSyncLog::ALERT_THRESHOLD) {
             $this->alertAdmins($error, $syncLog->id);
