@@ -1356,6 +1356,115 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outOfScope->id, 'action' => 'forwarded']);
     }
 
+    /**
+     * #1408: count the `count(*) as "aggregate" from "tickets"` queries a
+     * callback runs. The paginator emits exactly one per render, so the delta
+     * isolates the bulk-bar badge count.
+     */
+    private function ticketAggregateCounts(\Closure $callback): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $callback();
+
+        $counts = collect(DB::getQueryLog())
+            ->filter(fn (array $q) => str_contains($q['query'], 'count(*) as "aggregate" from "tickets"'))
+            ->count();
+
+        DB::disableQueryLog();
+
+        return $counts;
+    }
+
+    public function test_selected_count_runs_the_filter_once_per_filter_state(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created']);
+        $this->createTicket(['status' => 'created']);
+
+        $component = Livewire::test('tickets.inbox');
+
+        // Badge miss + the paginator's own aggregate.
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('toggleSelectAll')));
+        $component->assertSee('2 تیکت انتخاب شده');
+
+        // Same filter state: the badge is a cache hit, only the paginator counts.
+        $this->assertSame(1, $this->ticketAggregateCounts(fn () => $component->call('$refresh')));
+        $component->assertSee('2 تیکت انتخاب شده');
+    }
+
+    public function test_selected_count_recomputes_when_a_filter_changes(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created', 'subject' => 'alpha request']);
+        $this->createTicket(['status' => 'created', 'subject' => 'beta request']);
+
+        $component = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('toggleSelectAll')));
+
+        // A filter the pipeline reads changes the key: recompute + paginator.
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->set('search', 'alpha')));
+        $component->assertSee('1 تیکت انتخاب شده');
+
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->set('statusFilter', 'all')));
+
+        // `unitSearch` only feeds the destination-unit picker, not the count key.
+        $this->assertSame(1, $this->ticketAggregateCounts(fn () => $component->set('unitSearch', 'x')));
+    }
+
+    public function test_selected_count_invalidates_when_a_ticket_changes_mid_session(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created']);
+        $this->createTicket(['status' => 'created']);
+
+        $component = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('toggleSelectAll')));
+        $component->assertSee('2 تیکت انتخاب شده');
+
+        // Another session's create fires the model hooks, which bump
+        // `report_tickets` — the next render must not serve the old number.
+        $third = $this->createTicket(['status' => 'created']);
+
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('$refresh')));
+        $component->assertSee('3 تیکت انتخاب شده');
+
+        $third->update(['status' => 'completed']);
+
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('$refresh')));
+        $component->assertSee('2 تیکت انتخاب شده');
+    }
+
+    public function test_selected_count_is_scoped_per_user(): void
+    {
+        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->createTicket(['status' => 'created', 'unit' => $unitA, 'user' => $userA]);
+
+        ['user' => $userB, 'unit' => $unitB] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->createTicket(['status' => 'created', 'unit' => $unitB, 'user' => $userB]);
+
+        // No ticket writes between the two renders: a shared cache entry would
+        // show up as a hit (one aggregate instead of two).
+        $this->actingAs($userA);
+        Session::put('current_unit_id', $unitA->id);
+        $componentA = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $componentA->call('toggleSelectAll')));
+        $componentA->assertSee('1 تیکت انتخاب شده');
+
+        $this->actingAs($userB);
+        Session::put('current_unit_id', $unitB->id);
+        $componentB = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $componentB->call('toggleSelectAll')));
+        $componentB->assertSee('1 تیکت انتخاب شده');
+    }
+
     // =====================================================================
     // S12 — submitAction
     // =====================================================================

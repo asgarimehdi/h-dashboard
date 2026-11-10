@@ -235,10 +235,34 @@ new class extends Component
             return count($this->selectedTickets);
         }
 
-        $query = Ticket::query();
-        $this->applyInboxFilters($query);
+        // #1408: the aggregate is memoised under `report_tickets`, whose
+        // version is bumped by the Ticket model hooks (AppServiceProvider) and
+        // by this component's bulk writes. The 5-minute TTL is only a backstop
+        // for a future write path that bypasses both — it does not carry
+        // correctness today.
+        $unpicked = array_map('intval', $this->selectedTickets);
+        sort($unpicked);
 
-        return $query->whereNotIn('id', $this->selectedTickets)->count();
+        return (int) app(CacheInvalidationServiceInterface::class)->remember(
+            'report_tickets',
+            \App\Support\ScopeCacheKey::hash(app(AccessService::class)->accessibleUnitIds()),
+            function (): int {
+                $query = Ticket::query();
+                $this->applyInboxFilters($query);
+
+                return $query->whereNotIn('id', $this->selectedTickets)->count();
+            },
+            5,
+            [
+                'uid' => (int) Auth::id(),
+                'view' => $this->viewMode,
+                'status' => $this->statusFilter,
+                'from' => $this->dateFrom,
+                'to' => $this->dateTo,
+                'q' => $this->search,
+                'unpicked' => $unpicked,
+            ],
+        );
     }
 
     /**
@@ -484,9 +508,9 @@ new class extends Component
         {{-- نوار Bulk Actions — Issue #818: تکمیل دسته‌ای نیاز به manage_unit_tickets دارد --}}
         {{-- #1040: شمارنده و شرط نمایش از count سمت سرور می‌آیند؛ زیر «انتخاب همه»،
              selectedTickets فقط منهای دستی سطرها را حمل می‌کند و به‌تنهایی طول نداشته معنا ندارد. --}}
-        @if($this->selectedTicketsCount() > 0)
+        @if($this->selectedTicketsCount > 0)
         <div class="flex items-center gap-3 p-3 mb-4 bg-primary/10 rounded-xl border border-primary/20">
-            <span class="text-sm font-bold text-primary">{{ $this->selectedTicketsCount() }} تیکت انتخاب شده</span>
+            <span class="text-sm font-bold text-primary">{{ $this->selectedTicketsCount }} تیکت انتخاب شده</span>
             <div class="flex gap-2 mr-auto">
                 @can('manage_unit_tickets')
                 <x-button icon="o-check-circle" label="تکمیل دسته‌ای" wire:click="openBulkModal('complete')" class="btn-success btn-sm" spinner />
