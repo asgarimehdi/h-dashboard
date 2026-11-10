@@ -318,8 +318,14 @@ new class extends Component
 
         DB::transaction(function () use ($ticketIds, $now, $userId, $bulkNote) {
             // Issue #531: capture old statuses BEFORE the bulk update
-            $oldStatuses = Ticket::whereIn('id', $ticketIds)
-                ->pluck('status', 'id');
+            // #1409: one combined pre-read replaces the old-status pluck AND the
+            // per-branch re-fetch; ticket_code/task_id feed the batched log insert.
+            $ticketExtras = Ticket::whereIn('id', $ticketIds)
+                ->get(['id', 'status', 'ticket_code', 'task_id'])
+                ->keyBy('id');
+            $oldStatuses = $ticketExtras->pluck('status', 'id');
+            $ticketCodeMap = $ticketExtras->pluck('ticket_code', 'id');
+            $taskIdMap = $ticketExtras->pluck('task_id');
 
             if ($this->bulkAction === 'complete') {
                 // ۲. یک UPDATE برای همه
@@ -345,14 +351,26 @@ new class extends Component
                 ])->toArray();
                 TaskActivity::insert($activityRows);
 
-                // ActivityLogService - با استفاده از وضعیت قبل از آپدیت
-                $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status', 'task_id']);
-                $completedTaskIds = $tickets->pluck('task_id')->filter()->unique();
+                // #1409: one batched INSERT instead of one per ticket
+                $activityLogRows = $ticketIds->map(function ($id) use ($userId, $now, $oldStatuses, $ticketCodeMap) {
+                    return [
+                        'user_id' => $userId,
+                        'type' => 'updated',
+                        'subject_type' => 'App\Models\Ticket',
+                        'subject_id' => $id,
+                        'description' => 'تکمیل دسته‌ای تیکت ' . ($ticketCodeMap->get($id) ?? ''),
+                        'old_values' => json_encode(['status' => $oldStatuses->get($id)]),
+                        'new_values' => json_encode(['status' => 'completed']),
+                        'ip_address' => request()->ip(),
+                        'user_agent' => request()->userAgent(),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                })->toArray();
 
-                foreach ($tickets as $ticket) {
-                    $oldStatus = $oldStatuses->get($ticket->id, $ticket->status);
-                    \App\Services\ActivityLogService::updated($ticket, ['status' => $oldStatus], ['status' => 'completed'], "تکمیل دسته‌ای تیکت {$ticket->ticket_code}");
-                }
+                \App\Models\ActivityLog::query()->insert($activityLogRows);
+
+                $completedTaskIds = $taskIdMap->filter()->unique();
 
                 // Plan 005: Auto-complete parent tasks where all child tickets are completed
                 foreach ($completedTaskIds as $taskId) {
@@ -387,12 +405,24 @@ new class extends Component
                 ])->toArray();
                 TaskActivity::insert($activityRows);
 
-                // Issue #531: use actual old status instead of hardcoded 'accepted'
-                $tickets = Ticket::whereIn('id', $ticketIds)->get(['id', 'ticket_code', 'status']);
-                foreach ($tickets as $ticket) {
-                    $oldStatus = $oldStatuses->get($ticket->id, $ticket->status);
-                    \App\Services\ActivityLogService::updated($ticket, ['status' => $oldStatus], ['status' => 'forwarded'], "ارجاع دسته‌ای تیکت {$ticket->ticket_code}");
-                }
+                // #1409: one batched INSERT instead of one per ticket
+                $activityLogRows = $ticketIds->map(function ($id) use ($userId, $now, $oldStatuses, $ticketCodeMap) {
+                    return [
+                        'user_id' => $userId,
+                        'type' => 'updated',
+                        'subject_type' => 'App\Models\Ticket',
+                        'subject_id' => $id,
+                        'description' => 'ارجاع دسته‌ای تیکت ' . ($ticketCodeMap->get($id) ?? ''),
+                        'old_values' => json_encode(['status' => $oldStatuses->get($id)]),
+                        'new_values' => json_encode(['status' => 'forwarded']),
+                        'ip_address' => request()->ip(),
+                        'user_agent' => request()->userAgent(),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                })->toArray();
+
+                \App\Models\ActivityLog::query()->insert($activityLogRows);
             }
         });
 
