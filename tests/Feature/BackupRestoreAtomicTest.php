@@ -7,6 +7,7 @@ use App\Services\Backup\BackupService;
 use App\Services\Backup\RestoreService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -119,6 +120,62 @@ test('restoring one table does not touch the other tables', function () {
 
     expect(DB::table('persons')->count())->toBe($personsBefore);
     expect(DB::table('tahsils')->count())->toBe($lookupsBefore);
+});
+
+test('a file row with a null id is refused instead of failing in the database', function () {
+    $person = Person::factory()->create(['n_code' => '1234567890']);
+    User::factory()->create(['id' => 970, 'n_code' => $person->n_code]);
+
+    $archive = app(BackupService::class)->exportTable('users');
+    $rows = $this->backupZipJson($archive->path, 'users.json');
+    $rows[0]['id'] = null;
+
+    // A live row the file does NOT carry: if the guard were absent and the
+    // delete set were built with null, this is the row whose fate diverges.
+    User::factory()->create(['id' => 971]);
+
+    $before = json_encode(backupDbRows('users'));
+
+    $broken = $this->backupMakeZip(
+        storage_path('app/private/backup/null-id-'.Str::random(8).'.zip'),
+        ['users.json' => json_encode($rows)]
+    );
+
+    expect(fn () => app(RestoreService::class)->restoreArchive($broken))
+        ->toThrow(BackupValidationException::class);   // NOT QueryException
+
+    expect(json_encode(backupDbRows('users')))->toBe($before); // no delete, insert or update at all
+});
+
+test('a file row without an id key is refused before anything is written', function () {
+    $person = Person::factory()->create(['n_code' => '1234567890']);
+    User::factory()->create(['id' => 980, 'n_code' => $person->n_code]);
+
+    $archive = app(BackupService::class)->exportTable('users');
+    $rows = $this->backupZipJson($archive->path, 'users.json');
+
+    // The literal shape of the issue. The validator is the FIRST gate here
+    // (columnProblems reports the missing column); replaceRows() is the
+    // second, so this stays a domain error even if the validator regresses.
+    unset($rows[0]['id']);
+
+    $before = json_encode(backupDbRows('users'));
+
+    $broken = $this->backupMakeZip(
+        storage_path('app/private/backup/missing-id-'.Str::random(8).'.zip'),
+        ['users.json' => json_encode($rows)]
+    );
+
+    try {
+        app(RestoreService::class)->restoreArchive($broken);
+        $caught = null;
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->toBeInstanceOf(BackupValidationException::class);
+    expect($caught->getMessage())->toContain('users')->toContain('id');
+    expect(json_encode(backupDbRows('users')))->toBe($before);
 });
 
 test('a file that carries the same id twice is rejected', function () {
