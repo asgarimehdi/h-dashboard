@@ -633,9 +633,20 @@ export function registerMapDashboard(Alpine) {
                     if (!feature.geometry) return;
 
                     const props = feature.properties;
-                    const coords = feature.geometry.coordinates;
-                    const lat = coords[1];
-                    const lng = coords[0];
+                    // #1404: a malformed `coordinates` used to reach Leaflet as
+                    // [undefined, undefined] / [null, null] and throw (Invalid
+                    // LatLng, or a null-latlng TypeError on addTo), aborting
+                    // every feature after it in this payload. Skip just that one.
+                    const coords = Array.isArray(feature.geometry.coordinates)
+                        ? feature.geometry.coordinates
+                        : [];
+                    const [lng, lat] = coords;
+
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        console.warn(`[map-dashboard] skipped ${type} feature with unusable geometry.coordinates`, feature);
+
+                        return;
+                    }
 
                     let marker;
                     const iconColor = this.getIconColor(type, props);
