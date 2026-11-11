@@ -62,7 +62,7 @@ Counts come from `php artisan test <file> --list-tests` — the authoritative pe
 | `tests/Feature/TodoLivewireTest.php` | 31 | Todo Livewire component |
 | `tests/Feature/PersonsExportTest.php` | 36 | Personnel export (12 columns, filters, breadcrumb) |
 | `tests/Feature/UnitsExportTest.php` | 22 | Units Excel export (8 columns incl. «شهرستان») |
-| `tests/Feature/SyncZabbixObservabilityTest.php` | 10 | `zabbix_sync_logs` rows, streak, admin alert (#740) |
+| `tests/Feature/SyncZabbixObservabilityTest.php` | 8 | `zabbix_sync_logs` rows and the dashboard banner (#740) |
 | `tests/Unit/PersianNormalizerTest.php` | 11 | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 | `tests/Feature/SecurityHeadersMiddlewareTest.php` | 12 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
 | `tests/Feature/Jobs/JobsTest.php` | 12 | Archive / clean / generate jobs |

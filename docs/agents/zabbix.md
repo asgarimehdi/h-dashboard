@@ -21,13 +21,10 @@
 
 `zabbix_sync_logs` — one row per `SyncZabbixJob` run (`2026_09_30_000002_create_zabbix_sync_logs_table.php`), model `App\Models\ZabbixSyncLog`.
 
-- Columns: `success`, `consecutive_failures`, `error`, `ran_at` (indexed). `consecutive_failures` is **precomputed including the current row** (0 on a success row), so the threshold check and the widget are single-row reads.
-- `failed()` runs **only after the queue gives up** (tries exhausted) → one failure row per job failure; retries do **not** inflate the streak. `failed()` also calls `report($exception)`, so a dead log channel still records it.
+- Columns: `success`, `error`, `ran_at` (indexed).
+- `failed()` runs **only after the queue gives up** (tries exhausted) → one failure row per job failure; retries do **not** produce extra failure rows. `failed()` also calls `report($exception)`, so a dead log channel still records it. Concurrent workers can append two rows for the same outage, which is harmless because nothing derives a value from the rows.
 - **The unconfigured-skip is now a recorded failure**, not a silent warning: missing `services.zabbix.out_item_id`/`in_item_id` writes a failure row (previously a misconfigured deployment stayed silently broken for weeks).
-- At streak **exactly** `ZabbixSyncLog::ALERT_THRESHOLD` (= 3) it alerts every admin **once** through `NotificationService::send()` — in-app only, no email/webhook. Any success resets the streak, so further failures never re-fire the alert.
-- Dashboard banner: `getZabbixSyncStatusProperty()` on `/dashboard` reads the **latest row only** and renders `ok` / `stale` (old) / `failing` (streak), showing «نمایش از کش قدیمی» when the traffic cache outlived the last good sync.
-
-> Gotcha: the streak is computed by reading the previous row (`orderByDesc('id')->first()`), so it is **serial by nature** — do not parallelise or reorder run recording.
+- Dashboard banner: `getZabbixSyncStatusProperty()` on `/dashboard` reads the **latest row only** and renders `ok` / `stale` (old) / `failing` (last run failed), showing «نمایش از کش قدیمی» when the traffic cache outlived the last good sync.
 
 ### Zabbix connection test is real (issue #713)
 
@@ -45,4 +42,3 @@ One **batched** poll per `/it/wireless` page (a shared poll, in chunks of at mos
 |---|---|
 | `ZabbixService` errors | `TrafficController` and `MultiLatestValueController` map a **failed `ZabbixResult`** to 503, never 500. Since #741 transport failures arrive as values from `ServiceZabbixClient`; the controllers' own `try/catch (\Throwable)` backstop also maps to 503 — keep both layers |
 | Controllers must depend on `ZabbixClient` | `App\Services\Zabbix\ZabbixClient` is the transport boundary (#741). Calling `ZabbixService` directly from a controller throws away the failure-as-value design and re-couples you to a live server |
-| `ZabbixSyncLog` streak is serial | The failure streak is computed by reading the previous row (`orderByDesc('id')->first()`), and `failed()` runs only after retries are exhausted — do not parallelise run recording or the streak inflates |
