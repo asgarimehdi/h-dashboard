@@ -3,7 +3,11 @@
 namespace Tests\Feature;
 
 use App\Console\Commands\VerifyPreflight;
+use App\Support\Testing\ResolvedTestDatabase;
 use App\Support\Testing\TestDatabaseResolver;
+use PDO;
+use PDOException;
+use PDOStatement;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -64,6 +68,70 @@ class VerifyPreflightTest extends TestCase
         $this->artisan('verify:preflight')
             ->expectsOutputToContain('h_dashboard_test_absent] does not exist')
             ->expectsOutputToContain('CREATE DATABASE')
+            ->assertExitCode(VerifyPreflight::EXIT_PRECONDITION_FAILED);
+    }
+
+    public function test_it_fails_with_exit_code_two_when_the_database_read_fails_mid_probe(): void
+    {
+        // A connection that dies between opening and querying used to let a raw
+        // PDOException escape, which Symfony coerces to exit 1 — "your code is
+        // wrong" — instead of the contracted exit 2. The double is a real,
+        // connected PDO, so quote() still works; only the queries throw.
+        $this->withShellEnvironment([]);
+
+        $this->app->bind(VerifyPreflight::class, fn () => new class extends VerifyPreflight
+        {
+            protected function maintenanceConnection(ResolvedTestDatabase $target): PDO
+            {
+                // 'postgres' is hardcoded because MAINTENANCE_DATABASE is
+                // private by design — this is the same connection the command
+                // would open, with only query() replaced.
+                return new class('pgsql:host='.env('DB_HOST', '127.0.0.1').';port=5432;dbname=postgres', env('DB_USERNAME'), env('DB_PASSWORD')) extends PDO
+                {
+                    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
+                    {
+                        throw new PDOException('simulated: connection reset mid-probe');
+                    }
+                };
+            }
+        });
+
+        $this->artisan('verify:preflight')
+            ->expectsOutputToContain('Could not probe Postgres at')
+            ->expectsOutputToContain('Re-run composer verify')
+            ->assertExitCode(VerifyPreflight::EXIT_PRECONDITION_FAILED);
+    }
+
+    public function test_it_fails_with_exit_code_two_when_the_extension_check_fails_mid_probe(): void
+    {
+        // The database read survives, so the early "does not exist" return is
+        // cleared; the postgis read is the first statement to die. This pins
+        // the second catch and proves the early return was not swallowed into
+        // the first try.
+        $this->withShellEnvironment([]);
+
+        $this->app->bind(VerifyPreflight::class, fn () => new class extends VerifyPreflight
+        {
+            protected function maintenanceConnection(ResolvedTestDatabase $target): PDO
+            {
+                // 'postgres' is hardcoded because MAINTENANCE_DATABASE is
+                // private by design.
+                return new class('pgsql:host='.env('DB_HOST', '127.0.0.1').';port=5432;dbname=postgres', env('DB_USERNAME'), env('DB_PASSWORD')) extends PDO
+                {
+                    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
+                    {
+                        if (str_contains($query, 'pg_available_extensions')) {
+                            throw new PDOException('simulated: connection reset mid-probe');
+                        }
+
+                        return parent::query($query, $fetchMode, ...$fetchModeArgs);
+                    }
+                };
+            }
+        });
+
+        $this->artisan('verify:preflight')
+            ->expectsOutputToContain('Re-run composer verify')
             ->assertExitCode(VerifyPreflight::EXIT_PRECONDITION_FAILED);
     }
 

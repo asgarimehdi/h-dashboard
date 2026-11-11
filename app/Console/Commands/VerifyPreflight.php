@@ -113,11 +113,22 @@ class VerifyPreflight extends Command
 
         $quoted = $pdo->quote($target->database);
 
-        // query() returns false on failure — never null — so the nullsafe
-        // operator would be dead code that hides a real error.
-        $exists = (bool) $pdo
-            ->query("SELECT 1 FROM pg_database WHERE datname = {$quoted}")
-            ->fetchColumn();
+        // PHP 8's default ERRMODE makes a failed query throw PDOException instead
+        // of returning false — so a dead connection surfaces at query() itself,
+        // and the catch below is the real guard: the nullsafe operator would
+        // never fire a check on a result object here in the first place.
+        try {
+            $exists = (bool) $pdo
+                ->query("SELECT 1 FROM pg_database WHERE datname = {$quoted}")
+                ->fetchColumn();
+        } catch (PDOException $e) {
+            return [
+                'Could not probe Postgres at '.$target->describe().': '.$e->getMessage(),
+                'The connection opened and died inside the check — transient hiccup (auth',
+                'expiry, connection reset) or a server not fit to run the suite.',
+                'Re-run composer verify; a clean pass means the hiccup had passed.',
+            ];
+        }
 
         if (! $exists) {
             $create = 'psql -h '.escapeshellarg($target->host).' -U '.escapeshellarg($target->username)
@@ -131,7 +142,16 @@ class VerifyPreflight extends Command
             ];
         }
 
-        $postgis = $pdo->query("SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'")->fetchColumn();
+        try {
+            $postgis = $pdo->query("SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'")->fetchColumn();
+        } catch (PDOException $e) {
+            return [
+                'Could not probe Postgres at '.$target->describe().': '.$e->getMessage(),
+                'The connection opened and died inside the check — transient hiccup (auth',
+                'expiry, connection reset) or a server not fit to run the suite.',
+                'Re-run composer verify; a clean pass means the hiccup had passed.',
+            ];
+        }
 
         if (! $postgis) {
             return [
@@ -144,7 +164,7 @@ class VerifyPreflight extends Command
         return [];
     }
 
-    private function maintenanceConnection(ResolvedTestDatabase $target): PDO
+    protected function maintenanceConnection(ResolvedTestDatabase $target): PDO
     {
         $dsn = sprintf(
             'pgsql:host=%s;port=%d;dbname=%s',
