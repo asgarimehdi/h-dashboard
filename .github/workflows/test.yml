@@ -805,6 +805,14 @@ jobs:
           composer validate --strict --check-lock
           git diff --exit-code -- composer.lock
 
+      # Larastan boots bootstrap/app.php through the console kernel, so the
+      # analysed app needs an encryption key even though no test runs here.
+      # Q3(b) of #1433: only this job gets an .env; no services, no database.
+      - name: Provide an application key for the kernel boot
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress
 
