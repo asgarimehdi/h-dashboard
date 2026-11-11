@@ -252,14 +252,11 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 `zabbix_sync_logs` — one row per `SyncZabbixJob` run (migration `2026_09_30_000002_create_zabbix_sync_logs_table.php`), model `App\Models\ZabbixSyncLog`.
 
-- Columns: `success`, `consecutive_failures`, `error`, `ran_at` (indexed). `consecutive_failures` is **precomputed including the current row** (0 on a success row) so the threshold check and the dashboard widget are single-row reads.
-- `failed()` runs **only after the queue exhausts its tries**, so one job failure produces exactly one row — retries do not inflate the streak. It also calls `report($exception)` alongside `Log::error()`, so a dead log channel still records the failure.
+- Columns: `success`, `error`, `ran_at` (indexed).
+- `failed()` runs **only after the queue exhausts its tries**, so one job failure produces exactly one row — retries do not produce extra failure rows. It also calls `report($exception)` alongside `Log::error()`, so a dead log channel still records the failure.
 - **A missing item-id configuration is now a recorded failure**, not a warning nobody reads: with `services.zabbix.out_item_id`/`in_item_id` unset the job writes a failure row (before #740 a misconfigured deployment stayed silently broken for weeks).
-- At streak **exactly** `ZabbixSyncLog::ALERT_THRESHOLD` (= 3) it notifies **every admin user once** through `NotificationService::send()` — in-app only, no new email/webhook infrastructure. Further failures stay visible on the dashboard without re-firing; any success resets the streak to 0.
-- **Dashboard banner:** `getZabbixSyncStatusProperty()` reads the **latest row only** and renders `ok` / `stale` (last run old) / `failing` (streak), distinguishing «نمایش از کش قدیمی» from «داده ترافیک در دسترس نیست».
+- **Dashboard banner:** `getZabbixSyncStatusProperty()` reads the **latest row only** and renders `ok` / `stale` (last run old) / `failing` (last run failed), distinguishing «نمایش از کش قدیمی» from «داده ترافیک در دسترس نیست».
 - Tests: `tests/Feature/SyncZabbixObservabilityTest.php`.
-
-> The streak is derived by reading the previous row (`orderByDesc('id')->first()`), so run recording is **serial by nature** — parallelising it would let two runs compute the same streak value.
 
 ### GIS Disease Layer (issue #1245)
 
