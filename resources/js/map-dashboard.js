@@ -12,7 +12,7 @@
  * here verbatim and registers on `alpine:init` like every other
  * factory, with mechanical translations only:
  *
- * - Blade interpolations (`$mapToken`, `url('/api/gis')`, center,
+ * - Blade interpolations (`url('/api/gis')`, center,
  *   zoom, disease from/to) become `data-*` attributes on the
  *   x-data element, read in `init()` from `this.$el.dataset`.
  * - `@this('event', ...)` becomes `this.$wire.dispatch('event', [payload])`:
@@ -23,7 +23,7 @@
  *   scalar throws (`Only arrays and Traversables can be unpacked`).
  *   Listeners for `mapMoved`, `layerToggled`, `filterChanged` and
  *   `unitSelected` exist in the component at
- *   `resources/views/livewire/map/map-dashboard.blade.php:73-78`.
+ *   `resources/views/livewire/map/map-dashboard.blade.php:39-44`.
  *
  * Closure locals (`map`, `layerGroups`, `moveTimer`,
  * `diseasesPromise`) stay in the factory scope, one set per
@@ -140,7 +140,6 @@ export function registerMapDashboard(Alpine) {
             },
             stats: { units: 0, hardware: 0, open_tickets: 0 },
             currentBbox: null,
-            apiToken: '',
             apiBase: '',
             center: [0, 0],
             zoom: 8,
@@ -159,9 +158,8 @@ export function registerMapDashboard(Alpine) {
             init() {
                 // Server values arrive on data-* attributes of the
                 // x-data element (see the template); read them before
-                // the store callback uses center/zoom/token.
+                // the store callback uses center/zoom.
                 const ds = this.$el.dataset;
-                this.apiToken = ds.apiToken || '';
                 this.apiBase = ds.apiBase || '';
                 const lat = parseFloat(ds.centerLat ?? '');
                 const lng = parseFloat(ds.centerLng ?? '');
@@ -254,8 +252,11 @@ export function registerMapDashboard(Alpine) {
                 if (!this.currentBbox) return;
 
                 const bbox = this.currentBbox;
+                // Same-origin fetch: the web session cookie authenticates every
+                // `/api/gis/*` call (#1399). `Accept: application/json` keeps an
+                // unauthenticated response a JSON 401 envelope rather than an
+                // HTML login redirect.
                 const headers = {
-                    'Authorization': 'Bearer ' + this.apiToken,
                     'Accept': 'application/json',
                 };
 
@@ -284,8 +285,8 @@ export function registerMapDashboard(Alpine) {
             },
 
             apiHeaders() {
+                // No bearer token: the session cookie is the credential (#1399).
                 return {
-                    'Authorization': 'Bearer ' + this.apiToken,
                     'Accept': 'application/json',
                 };
             },
@@ -298,7 +299,10 @@ export function registerMapDashboard(Alpine) {
                 // is proxied, and every `await` would walk the proxy.
                 diseasesPromise = (async () => {
                     try {
-                        const response = await fetch(`${this.apiBase}/diseases`, { headers: this.apiHeaders() });
+                        const response = await fetch(`${this.apiBase}/diseases`, {
+                            headers: this.apiHeaders(),
+                            credentials: 'include',
+                        });
                         if (!response.ok) throw new Error(`diseases ${response.status}`);
 
                         const list = await response.json();
@@ -356,7 +360,10 @@ export function registerMapDashboard(Alpine) {
                 if (level === 'unit' && this.currentBbox) params.set('bbox', this.currentBbox);
 
                 try {
-                    const response = await fetch(`${this.apiBase}/disease-map?${params}`, { headers: this.apiHeaders() });
+                    const response = await fetch(`${this.apiBase}/disease-map?${params}`, {
+                        headers: this.apiHeaders(),
+                        credentials: 'include',
+                    });
                     if (!response.ok) throw new Error(`disease-map ${response.status}`);
 
                     const data = await response.json();
@@ -598,7 +605,7 @@ export function registerMapDashboard(Alpine) {
 
             async fetchAndRender(url, layerGroup, type, headers) {
                 try {
-                    const response = await fetch(url, { headers });
+                    const response = await fetch(url, { headers, credentials: 'include' });
                     const data = await response.json();
                     this.renderGeoJSON(data, layerGroup, type);
                 } catch (e) {
@@ -608,7 +615,7 @@ export function registerMapDashboard(Alpine) {
 
             async fetchStats(bbox, headers) {
                 try {
-                    const response = await fetch(`${this.apiBase}/stats?bbox=${bbox}`, { headers });
+                    const response = await fetch(`${this.apiBase}/stats?bbox=${bbox}`, { headers, credentials: 'include' });
                     const data = await response.json();
                     this.stats = data;
                 } catch (e) {
