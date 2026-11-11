@@ -7,6 +7,44 @@ use Illuminate\Http\Request;
 
 class ActivityLogService
 {
+    /**
+     * Keys that must never reach `old_values` / `new_values` (issue #1400).
+     *
+     * Credentials/tokens, direct identifiers, and the two dates that
+     * re-identify a person. Names are deliberately absent: they are the
+     * audit's useful content and the row already carries subject_type/id.
+     * The list is a policy, not a mirror of one model's columns.
+     *
+     * @var list<string>
+     */
+    private const DENIED_KEYS = [
+        // credentials / tokens
+        'password',
+        'password_confirmation',
+        'remember_token',
+        'api_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        // direct identifiers
+        'n_code',
+        'kod_melli',
+        'phone',
+        'email',
+        // dates that re-identify a person
+        'birth_date',
+        'hire_date',
+    ];
+
+    /**
+     * Write one audit row.
+     *
+     * `$oldValues` / `$newValues` must be an EXPLICIT, allowlisted delta —
+     * the keys you intend to audit, with scalar or nested-array values.
+     * Never pass a raw model array (`getAttributes()`, `getChanges()`,
+     * `toArray()`): it drags every column into the trail. Credential and
+     * identifier keys are stripped in write() (issue #1400) as a backstop,
+     * not as a licence to pass the raw array.
+     */
     public static function log(
         string $type,
         ?object $subject = null,
@@ -76,11 +114,43 @@ class ActivityLogService
             'subject_type' => $subject ? get_class($subject) : null,
             'subject_id' => $subject?->id,
             'description' => $description,
-            'old_values' => $oldValues,
-            'new_values' => $newValues,
+            'old_values' => self::sanitizeValues($oldValues),
+            'new_values' => self::sanitizeValues($newValues),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
+    }
+
+    /**
+     * Strip denied keys from one value set, at every depth.
+     *
+     * Arrays only — a caller that nests a model instance inside the payload
+     * is outside the documented contract (see log()/updated()).
+     *
+     * @param  array<array-key, mixed>|null  $values
+     * @return array<array-key, mixed>|null
+     */
+    private static function sanitizeValues(?array $values): ?array
+    {
+        return $values === null ? null : self::stripDenied($values);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $values
+     * @return array<array-key, mixed>
+     */
+    private static function stripDenied(array $values): array
+    {
+        $clean = [];
+        foreach ($values as $key => $value) {
+            if (is_string($key) && in_array(strtolower($key), self::DENIED_KEYS, true)) {
+                continue;
+            }
+
+            $clean[$key] = is_array($value) ? self::stripDenied($value) : $value;
+        }
+
+        return $clean;
     }
 
     public static function created(object $subject, string $description = ''): ActivityLog
@@ -90,6 +160,10 @@ class ActivityLogService
         return self::log('created', $subject, $description ?: "ایجاد {$name}");
     }
 
+    /**
+     * `$oldValues` / `$newValues` follow the log() contract: an explicit
+     * allowlisted delta, never a raw model array (issue #1400).
+     */
     public static function updated(object $subject, array $oldValues, array $newValues, string $description = ''): ActivityLog
     {
         $name = method_exists($subject, 'getTitle') ? $subject->getTitle() : class_basename($subject);

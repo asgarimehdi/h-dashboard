@@ -6,6 +6,10 @@
 | Split out of `AGENTS.md` on 2026-10-16; that file keeps the one-line rules and
 | the map of where each topic lives.
 
+## Activity log payload contract (issue #1400)
+
+`ActivityLogService::write()` is the single insert path (`log()`/`logAs()` call it; `created()`/`deleted()`/`login()`/`logout()`/`updated()` call `log()`). Callers pass **explicit allowlisted deltas**, never a raw model array (`getAttributes()`, `getChanges()`, `toArray()`) and never a national code/phone/email inside `description` — it is stored and rendered verbatim. `write()` strips `DENIED_KEYS` (passwords and tokens, `n_code`/`kod_melli`/`phone`/`email`, `birth_date`/`hire_date`) from both value sets, recursively, lowercased. A payload with only denied keys is stored as `[]`. The strip is forward-only: rows already in `activity_logs` / `activity_log_archives` are untouched, and a direct `ActivityLog::create()` bypasses it — which is why the service is the only allowed write path.
+
 ## Dead Routes & Components Removed (Phase 4)
 
 These components and routes were removed — do not recreate:
