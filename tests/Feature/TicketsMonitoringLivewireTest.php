@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attachment;
 use App\Models\Person;
 use App\Models\TaskActivity;
 use App\Models\Ticket;
@@ -13,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -745,5 +747,120 @@ class TicketsMonitoringLivewireTest extends TestCase
             ->set('search', $arabic)
             ->assertDontSee('T-MON-10')
             ->assertDontSee('T-MON-11');
+    }
+
+    // =====================================================================
+    // #1407 — no N+1 on the ACTIVITY ATTACHMENT axis (monitoring mirror)
+    //
+    // `⚡monitoring.blade.php` carries its OWN copy of the `showingTicket`
+    // computed with the same six eager-load keys, so it can regress alone and
+    // the inbox guard cannot see it. Two fixtures with the SAME activity count
+    // and different attachment counts must cost the same number of queries.
+    // =====================================================================
+
+    public function test_modal_query_count_does_not_grow_with_activity_attachments(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_all_tickets']);
+        $this->actingAs($user);
+
+        $bare = $this->makeTicket($unit);
+        $this->seedTicketActivities($bare->id, $user->id, 5);
+
+        $attached = $this->makeTicket($unit);
+        $this->seedTicketActivities($attached->id, $user->id, 5, attachmentsEach: 3);
+
+        // The FIRST mount in a process pays one-time cache fills the second
+        // never repeats (bell list + unread count, unit_tree, actor person,
+        // Spatie permissions/roles). Warm them up outside the measured window
+        // or the strict equality below measures process state, not the fixture.
+        $this->modalFlowQueryCount($bare->id);
+
+        // Open modal → one unrelated update; the update is where hydration used
+        // to strip the relations. Equal counts on both means no per-row load.
+        $this->assertSame(
+            $this->modalFlowQueryCount($bare->id),
+            $this->modalFlowQueryCount($attached->id),
+            'Attachments per activity reintroduced a lazy-load N+1 in the detail modal.'
+        );
+
+        // A query count alone cannot prove the section still renders — a bad
+        // eager load fails by rendering nothing, which costs 0 queries and
+        // would pass an equality check. Pin the heading AND a per-activity
+        // attachment link on the rendered HTML.
+        $attachment = Attachment::query()
+            ->where('ticket_id', $attached->id)
+            ->whereNotNull('activity_id')
+            ->firstOrFail();
+
+        Livewire::test('tickets.monitoring')
+            ->call('showTicket', $attached->id)
+            ->assertSee('گردش فعالیت‌ها')
+            ->assertSee(route('tickets.attachments.download', ['ticket' => $attached->id, 'attachment' => $attachment->id]));
+    }
+
+    /**
+     * Insert `$count` activities with strictly decreasing timestamps, plus
+     * `$attachmentsEach` attachment rows off each (#1407) — the inbox test's
+     * seed helper copied, because this class keeps its fixtures local.
+     * `user_id` is NOT NULL (2026_01_02_000001) even though the modal never
+     * selects it, so every row carries the author.
+     */
+    protected function seedTicketActivities(int $ticketId, int $userId, int $count, int $attachmentsEach = 0): void
+    {
+        $rows = collect(range(1, $count))
+            ->map(fn (int $i): array => [
+                'ticket_id' => $ticketId,
+                'user_id' => $userId,
+                'action' => 'created',
+                'description' => 'فعالیت تست شماره '.$i,
+                'is_internal' => false,
+                'created_at' => now()->subMinutes($count + 1 - $i),
+                'updated_at' => now()->subMinutes($count + 1 - $i),
+            ])
+            ->all();
+
+        DB::table('task_activities')->insert($rows);
+
+        if ($attachmentsEach < 1) {
+            return;
+        }
+
+        DB::table('task_activities')->where('ticket_id', $ticketId)->pluck('id')
+            ->each(function (int $activityId) use ($ticketId, $userId, $attachmentsEach): void {
+                foreach (range(1, $attachmentsEach) as $i) {
+                    Attachment::create([
+                        'user_id' => $userId,
+                        'ticket_id' => $ticketId,
+                        'activity_id' => $activityId,
+                        'file_path' => "attachments/activity-{$activityId}-{$i}.pdf",
+                        'file_name' => "پیوست فعالیت {$activityId}-{$i}.pdf",
+                        'file_size' => 1024,
+                    ]);
+                }
+            });
+    }
+
+    /**
+     * Query count of one whole wire round-trip: open the modal, then fire an
+     * unrelated update that re-renders it. Copy of the inbox helper pointed at
+     * `tickets.monitoring` — this class has no query-count utility of its own
+     * and the shared `assertQueryCount()` returns no number to compare.
+     */
+    protected function modalFlowQueryCount(int $ticketId): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        Livewire::test('tickets.monitoring')
+            ->call('showTicket', $ticketId)
+            // An unrelated change re-renders the open modal — the exact shape
+            // that lazy-loaded relations row-by-row before #1176.
+            ->set('search', 'هیچ‌وقت مطابق نیست');
+
+        DB::disableQueryLog();
+
+        return collect(DB::getQueryLog())
+            ->reject(fn (array $query): bool => Str::startsWith($query['query'], ['BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT']))
+            ->count();
     }
 }
