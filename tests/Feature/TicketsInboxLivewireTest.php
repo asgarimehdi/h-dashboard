@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Attachment;
 use App\Models\Person;
 use App\Models\TaskActivity;
@@ -1354,6 +1355,58 @@ class TicketsInboxLivewireTest extends TestCase
 
         $this->assertDatabaseHas('task_activities', ['ticket_id' => $forwardable->id, 'action' => 'forwarded']);
         $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outOfScope->id, 'action' => 'forwarded']);
+    }
+
+    // =====================================================================
+    // #1409 — bulk activity-log batch INSERT
+    // =====================================================================
+
+    public function test_bulk_complete_activity_log_batch_insert(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        // 5 tickets in varying pre-complete states
+        $tickets = collect(range(1, 5))->map(fn () => $this->createTicket(['status' => 'accepted']))->all();
+
+        $beforeCount = ActivityLog::count();
+
+        DB::enableQueryLog();
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', collect($tickets)->pluck('id')->toArray())
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        // 1. Exactly N new activity_log rows (N = tickets actually processed)
+        $afterCount = ActivityLog::count();
+        $this->assertSame($beforeCount + 5, $afterCount);
+
+        // 2. Each row has the correct shape (compare to per-ticket reference).
+        // Key by subject_id — ordering of `latest()` is not guaranteed to match
+        // $tickets, and all five rows share near-identical created_at (#1409 G4).
+        $logs = ActivityLog::latest()->take(5)->get()->keyBy('subject_id');
+        foreach ($tickets as $ticket) {
+            $log = $logs->get($ticket->id);
+            $this->assertNotNull($log, "Missing activity log for ticket {$ticket->id}");
+            $this->assertSame($user->id, $log->user_id);
+            $this->assertSame('updated', $log->type);
+            $this->assertSame('App\Models\Ticket', $log->subject_type);
+            $this->assertSame($ticket->id, $log->subject_id);
+            $this->assertSame('تکمیل دسته‌ای تیکت '.$ticket->ticket_code, $log->description);
+            $this->assertEquals(['status' => $ticket->status], $log->old_values); // pre-update status
+            $this->assertEquals(['status' => 'completed'], $log->new_values);
+            $this->assertNotNull($log->ip_address);
+            $this->assertNotNull($log->user_agent);
+        }
+
+        // 3. Only ONE INSERT statement reached activity_logs (the batch).
+        $inserts = collect(DB::getQueryLog())
+            ->filter(fn (array $q) => str_starts_with(strtolower($q['query']), 'insert into')
+                && str_contains($q['query'], 'activity_logs'))
+            ->count();
+        $this->assertSame(1, $inserts, 'Expected exactly one batched INSERT into activity_logs');
     }
 
     // =====================================================================
