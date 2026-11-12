@@ -3,11 +3,12 @@
 namespace App\Services\Zabbix;
 
 /**
- * The Zabbix transport boundary (#741): two read operations, both returning a
+ * The Zabbix transport boundary (#741): three operations, all returning a
  * typed {@see ZabbixResult} instead of throwing.
  *
- * Controllers depend on this interface and only map results to HTTP; the
- * connection layer itself is unit-testable with a stub, no Zabbix server.
+ * Controllers, queued jobs and console commands depend on this interface and
+ * only map results; the connection layer itself is unit-testable with a stub,
+ * no Zabbix server.
  */
 interface ZabbixClient
 {
@@ -23,4 +24,11 @@ interface ZabbixClient
      * @param  array<int, string>  $itemIds
      */
     public function latestValues(array $itemIds): ZabbixResult;
+
+    /**
+     * API reachability probe (`apiinfo.version`).
+     *
+     * @return ZabbixResult with data `['version' => string]` on success.
+     */
+    public function testConnection(): ZabbixResult;
 }

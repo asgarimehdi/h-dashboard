@@ -3,7 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\ZabbixSyncLog;
-use App\Services\ZabbixService;
+use App\Services\Zabbix\ZabbixClient;
+use App\Services\Zabbix\ZabbixResult;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,7 +22,7 @@ class SyncZabbixJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public function handle(ZabbixService $zabbix): void
+    public function handle(ZabbixClient $zabbix): void
     {
         $outItemId = config('services.zabbix.out_item_id');
         $inItemId = config('services.zabbix.in_item_id');
@@ -37,9 +38,21 @@ class SyncZabbixJob implements ShouldQueue
             return;
         }
 
-        $out = $zabbix->getInterfaceTraffic($outItemId);
-        $in = $zabbix->getInterfaceTraffic($inItemId);
-        $traffic = array_merge($out, $in);
+        $out = $zabbix->traffic($outItemId);
+        if ($out->failed()) {
+            $this->recordTransportFailure('out', $out);
+
+            return;
+        }
+
+        $in = $zabbix->traffic($inItemId);
+        if ($in->failed()) {
+            $this->recordTransportFailure('in', $in);
+
+            return;
+        }
+
+        $traffic = array_merge((array) $out->data(), (array) $in->data());
 
         Cache::put('zabbix_traffic_data', $traffic, now()->addMinutes(5));
 
@@ -81,5 +94,24 @@ class SyncZabbixJob implements ShouldQueue
             'error' => $error,
             'ran_at' => now(),
         ]))->save();
+    }
+
+    /**
+     * A failed traffic fetch is an ordinary value, not an exception, so it is
+     * recorded here rather than in failed(): one row per run and no retry —
+     * the next scheduler tick (5 minutes later) is the retry.
+     */
+    private function recordTransportFailure(string $direction, ZabbixResult $result): void
+    {
+        $error = sprintf(
+            'Zabbix %s traffic fetch failed (%s): %s',
+            $direction,
+            $result->failure() ?? 'error',
+            $result->message() ?? 'unknown error',
+        );
+
+        Log::error('SyncZabbixJob: '.$error);
+
+        $this->recordFailure($error);
     }
 }

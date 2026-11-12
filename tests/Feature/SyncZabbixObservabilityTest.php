@@ -4,7 +4,8 @@ namespace Tests\Feature;
 
 use App\Jobs\SyncZabbixJob;
 use App\Models\ZabbixSyncLog;
-use App\Services\ZabbixService;
+use App\Services\Zabbix\ZabbixClient;
+use App\Services\Zabbix\ZabbixResult;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -46,8 +47,11 @@ class SyncZabbixObservabilityTest extends TestCase
 
     protected function tearDown(): void
     {
-        Mockery::close();
+        // Parent first: the RefreshDatabase rollback must not be skipped when
+        // Mockery::close() reports an unmet expectation — an open test
+        // transaction deadlocks the next test's database preparation.
         parent::tearDown();
+        Mockery::close();
     }
 
     // -----------------------------------------------------------
@@ -56,8 +60,11 @@ class SyncZabbixObservabilityTest extends TestCase
 
     public function test_successful_run_records_a_success_row(): void
     {
-        $zabbix = Mockery::mock(ZabbixService::class);
-        $zabbix->shouldReceive('getInterfaceTraffic')->andReturn([])->twice();
+        $zabbix = Mockery::mock(ZabbixClient::class);
+        $zabbix->shouldReceive('traffic')->with('100')
+            ->andReturn(ZabbixResult::success([['x' => 1, 'y' => 1.5]]))->once();
+        $zabbix->shouldReceive('traffic')->with('200')
+            ->andReturn(ZabbixResult::success([['x' => 1, 'y' => 0.5]]))->once();
 
         (new SyncZabbixJob)->handle($zabbix);
 
@@ -65,6 +72,51 @@ class SyncZabbixObservabilityTest extends TestCase
             'success' => true,
         ]);
         $this->assertNotNull(ZabbixSyncLog::first()?->ran_at);
+
+        $this->assertSame(
+            [['x' => 1, 'y' => 1.5], ['x' => 1, 'y' => 0.5]],
+            Cache::get('zabbix_traffic_data')
+        );
+    }
+
+    public function test_failed_out_fetch_records_a_failure_row_and_caches_nothing(): void
+    {
+        // A transport failure is a value now, not an exception: the job must
+        // branch on it or it would cache an empty array and log a success (#1411).
+        $zabbix = Mockery::mock(ZabbixClient::class);
+        $zabbix->shouldReceive('traffic')->with('100')
+            ->andReturn(ZabbixResult::fail('connection', 'Zabbix API HTTP error: 503'))->once();
+        $zabbix->shouldNotReceive('traffic')->with('200');
+
+        (new SyncZabbixJob)->handle($zabbix);
+
+        $this->assertSame(1, ZabbixSyncLog::count());
+        $log = ZabbixSyncLog::firstOrFail();
+        $this->assertFalse($log->success);
+        $this->assertStringContainsString('connection', (string) $log->error);
+        $this->assertStringContainsString('Zabbix API HTTP error: 503', (string) $log->error);
+        $this->assertSame(0, ZabbixSyncLog::where('success', true)->count());
+        $this->assertTrue(Cache::missing('zabbix_traffic_data'));
+    }
+
+    public function test_failed_in_fetch_after_a_successful_out_does_not_cache_partial_data(): void
+    {
+        // Proves the branch sits after EACH call, not only after the first.
+        $zabbix = Mockery::mock(ZabbixClient::class);
+        $zabbix->shouldReceive('traffic')->with('100')
+            ->andReturn(ZabbixResult::success([['x' => 1, 'y' => 1.5]]))->once();
+        $zabbix->shouldReceive('traffic')->with('200')
+            ->andReturn(ZabbixResult::fail('timeout', 'timed out'))->once();
+
+        (new SyncZabbixJob)->handle($zabbix);
+
+        $this->assertSame(1, ZabbixSyncLog::count());
+        $log = ZabbixSyncLog::firstOrFail();
+        $this->assertFalse($log->success);
+        $this->assertStringContainsString('timeout', (string) $log->error);
+        $this->assertStringContainsString('timed out', (string) $log->error);
+        $this->assertSame(0, ZabbixSyncLog::where('success', true)->count());
+        $this->assertTrue(Cache::missing('zabbix_traffic_data'));
     }
 
     public function test_unconfigured_skip_records_a_failure_row(): void
@@ -72,7 +124,7 @@ class SyncZabbixObservabilityTest extends TestCase
         // Used to be a warning nobody read — now a visible failed run (#740).
         config(['services.zabbix.out_item_id' => null]);
 
-        (new SyncZabbixJob)->handle(Mockery::mock(ZabbixService::class));
+        (new SyncZabbixJob)->handle(Mockery::mock(ZabbixClient::class));
 
         $log = ZabbixSyncLog::first();
         $this->assertNotNull($log);

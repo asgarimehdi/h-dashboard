@@ -17,7 +17,7 @@ Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` 
 | `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per unit, org-wide (no actor at 06:00 — see #836) |
 | `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
 
-> `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
+> `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger for queue-level failures, records a failure row when a fetch returns a failed result as well as when item IDs are unset, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
 
 **Implemented-command details (was placeholder before 2026-08-29):**
 

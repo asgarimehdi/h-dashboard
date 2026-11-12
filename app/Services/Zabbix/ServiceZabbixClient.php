@@ -42,6 +42,15 @@ class ServiceZabbixClient implements ZabbixClient
         }
     }
 
+    public function testConnection(): ZabbixResult
+    {
+        try {
+            return ZabbixResult::success($this->zabbix->testApiConnection());
+        } catch (Throwable $e) {
+            return self::from($e);
+        }
+    }
+
     /**
      * Classify a transport exception into a failure kind.
      *

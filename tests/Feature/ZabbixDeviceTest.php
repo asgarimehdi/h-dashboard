@@ -416,6 +416,33 @@ test('connection test never throws when zabbix is unreachable', function () {
         ->and($result['message'])->not->toBe('');
 });
 
+test('connection test reports a values-fetch failure after a successful connection', function () {
+    // Pinning test: the old catch produced the same message, so this is green
+    // before and after the #1411 re-route. It covers the stage-2 failure path.
+    Http::fake([
+        '*' => Http::sequence()
+            ->push(['jsonrpc' => '2.0', 'id' => 1, 'result' => '6.0.0'], 200)
+            ->push('', 500),
+    ]);
+
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create([
+        'type' => 'network',
+        'out_item_id' => '12345',
+        'in_item_id' => '54321',
+    ]);
+
+    $component = Livewire::test('it.zabbix-devices')->call('testConnection', $device->id);
+    $component->assertStatus(200);
+
+    $result = $component->get('connectionResults')[$device->id] ?? null;
+    expect($result)->not->toBeNull()
+        ->and($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('اما خطا در دریافت مقادیر');
+});
+
 test('connection test reports success even without item IDs when api is reachable', function () {
     Http::fake([
         '*' => Http::response(['jsonrpc' => '2.0', 'id' => 1, 'result' => '6.0.0'], 200),
