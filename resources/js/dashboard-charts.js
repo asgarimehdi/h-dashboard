@@ -47,7 +47,13 @@ function componentFor(element) {
 
 /* ---------------- main dashboard: ticket charts ---------------- */
 
-const statusLabels = { created: 'جدید', accepted: 'پذیرفته شده', completed: 'تکمیل شده', forwarded: 'ارجاع شده', rejected: 'رد شده' };
+const statusLabels = {
+  created: 'جدید',
+  accepted: 'پذیرفته شده',
+  completed: 'تکمیل شده',
+  forwarded: 'ارجاع شده',
+  rejected: 'رد شده',
+};
 
 // #1224: series colours follow the active theme family. daisyUI's
 // `color-scheme` is the same light/dark signal App\Support\ThemeFamilies
@@ -143,7 +149,10 @@ function renderTicketCharts() {
         areaspline: {
           fillColor: {
             linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-            stops: [[0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')], [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')]],
+            stops: [
+              [0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')],
+              [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')],
+            ],
           },
           lineColor: palette.trend,
           marker: { enabled: false },
@@ -154,7 +163,11 @@ function renderTicketCharts() {
     });
 
     const pieData = Object.keys(statusData).length
-      ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: palette[key] || '#6b7280' }))
+      ? Object.entries(statusData).map(([key, val]) => ({
+          name: statusLabels[key] || key,
+          y: val,
+          color: palette[key] || '#6b7280',
+        }))
       : [{ name: 'بدون داده', y: 0, color: '#6b7280' }];
 
     Highcharts.chart(statusContainer, {
@@ -241,17 +254,19 @@ function renderHrBar(id, rows, color, palette) {
     legend: { enabled: false },
     credits: { enabled: false },
     tooltip: { style: { color: palette.text } },
-    series: [{
-      name: 'تعداد پرسنل',
-      data,
-      color,
-      dataLabels: {
-        enabled: true,
-        align: 'left',
-        format: '{y}',
-        style: { color: palette.text },
+    series: [
+      {
+        name: 'تعداد پرسنل',
+        data,
+        color,
+        dataLabels: {
+          enabled: true,
+          align: 'left',
+          format: '{y}',
+          style: { color: palette.text },
+        },
       },
-    }],
+    ],
   });
 }
 

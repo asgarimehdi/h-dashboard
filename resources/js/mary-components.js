@@ -30,7 +30,9 @@
  */
 
 function wireGet(wire, path) {
-  return String(path).split('.').reduce((obj, part) => (obj == null ? obj : obj[part]), wire);
+  return String(path)
+    .split('.')
+    .reduce((obj, part) => (obj == null ? obj : obj[part]), wire);
 }
 
 function wireSet(wire, path, value) {
@@ -132,7 +134,9 @@ export function registerMaryComponents(Alpine) {
         // silent no-op (proven by probe: Alpine.evaluate assigns
         // without error and without effect), so the backdrop, close,
         // and Escape writes must bypass the parser entirely.
-        const syncOpen = () => { this.open = !!wireGet(this.$wire, this.modelName); };
+        const syncOpen = () => {
+          this.open = !!wireGet(this.$wire, this.modelName);
+        };
         syncOpen();
         this.$watch(
           () => this.open,
@@ -146,7 +150,9 @@ export function registerMaryComponents(Alpine) {
         );
         this._morphOff = syncOnMorph(syncOpen);
 
-        const close = () => { wireSet(this.$wire, this.modelName, false); };
+        const close = () => {
+          wireSet(this.$wire, this.modelName, false);
+        };
         this.$el.addEventListener('click', (event) => {
           const target = event.target;
           const form = target instanceof Element ? target.closest('form') : null;
@@ -227,10 +233,13 @@ export function registerMaryComponents(Alpine) {
     },
 
     isPageFullSelected() {
-      return this.pageIds.length && [...this.selection]
-        .sort((a, b) => b - a)
-        .toString()
-        .includes([...this.pageIds].sort((a, b) => b - a).toString());
+      return (
+        this.pageIds.length &&
+        [...this.selection]
+          .sort((a, b) => b - a)
+          .toString()
+          .includes([...this.pageIds].sort((a, b) => b - a).toString())
+      );
     },
 
     toggleCheck(checked, content) {
@@ -360,9 +369,7 @@ export function registerMaryComponents(Alpine) {
     },
 
     get isSelectionEmpty() {
-      return this.isSingle
-        ? this.selection == null || this.selection == ''
-        : this.selection.length == 0;
+      return this.isSingle ? this.selection == null || this.selection == '' : this.selection.length == 0;
     },
 
     // The option value/label keys are server-rendered; the template
@@ -406,13 +413,13 @@ export function registerMaryComponents(Alpine) {
     },
 
     resize() {
-      this.$nextTick(() => { this.$refs.searchInput.style.width = (this.$refs.searchInput.value.length + 1) * 0.55 + 'rem'; });
+      this.$nextTick(() => {
+        this.$refs.searchInput.style.width = (this.$refs.searchInput.value.length + 1) * 0.55 + 'rem';
+      });
     },
 
     isActive(id) {
-      return this.isSingle
-        ? this.selection == id
-        : this.selection.includes(id);
+      return this.isSingle ? this.selection == id : this.selection.includes(id);
     },
 
     toggle(id, keepOpen = false) {
@@ -448,8 +455,9 @@ export function registerMaryComponents(Alpine) {
         }
       });
 
-      this.noResults = Array.from(this.$refs.choicesOptions.querySelectorAll('div > .hidden')).length
-        == Array.from(this.$refs.choicesOptions.querySelectorAll('[search-value]')).length;
+      this.noResults =
+        Array.from(this.$refs.choicesOptions.querySelectorAll('div > .hidden')).length ==
+        Array.from(this.$refs.choicesOptions.querySelectorAll('[search-value]')).length;
     },
 
     dispatchChangeEvent(detail) {
@@ -457,8 +465,9 @@ export function registerMaryComponents(Alpine) {
     },
 
     getFocusableElements() {
-      return Array.from(this.$refs.choicesOptions.querySelectorAll('[tabindex]:not([disabled])'))
-        .filter((el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
+      return Array.from(this.$refs.choicesOptions.querySelectorAll('[tabindex]:not([disabled])')).filter(
+        (el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden',
+      );
     },
 
     focusNext() {
@@ -486,7 +495,7 @@ export function registerMaryComponents(Alpine) {
     },
 
     placeholderClass() {
-      return (this.focused || !this.isSelectionEmpty) ? 'hidden' : '';
+      return this.focused || !this.isSelectionEmpty ? 'hidden' : '';
     },
 
     searchRequired() {
@@ -633,9 +642,11 @@ export function registerMaryComponents(Alpine) {
         this.$wire.upload(
           this.modelName,
           blob,
-          () => { },
-          () => { },
-          (event) => { this.progress = event.detail.progress; },
+          () => {},
+          () => {},
+          (event) => {
+            this.progress = event.detail.progress;
+          },
         );
       }, this.$el.dataset.cropMimeType || 'image/png');
     },

@@ -233,11 +233,13 @@ function initTodoCalendar() {
       const initial = firstPaint;
       firstPaint = false;
 
-      if (initial
-        && seededStart !== null
-        && seededEnd !== null
-        && Date.parse(info.startStr) === seededStart
-        && Date.parse(info.endStr) === seededEnd) {
+      if (
+        initial &&
+        seededStart !== null &&
+        seededEnd !== null &&
+        Date.parse(info.startStr) === seededStart &&
+        Date.parse(info.endStr) === seededEnd
+      ) {
         return;
       }
 
@@ -273,7 +275,7 @@ function registerGlobalListeners() {
   globalListenersRegistered = true;
 
   Livewire.on('calendar-updated', (...args) => {
-    const events = Array.isArray(args[0]) ? args[0] : (args[0]?.events || []);
+    const events = Array.isArray(args[0]) ? args[0] : args[0]?.events || [];
     if (window.calendarInstance && events.length) {
       window.calendarInstance.removeAllEvents();
       events.forEach((event) => window.calendarInstance.addEvent(event));

@@ -161,17 +161,14 @@ function registerGlobalListeners() {
       return;
     }
     const root = document.documentElement;
-    const current = root.getAttribute('data-theme')
-      || (localStorage.getItem('mary-theme') || '').replaceAll('"', '');
+    const current = root.getAttribute('data-theme') || (localStorage.getItem('mary-theme') || '').replaceAll('"', '');
     const lightThemes = families.light || [];
     const darkThemes = families.dark || [];
     const poles = [lightTheme, darkTheme];
     if (!current || poles.includes(current)) {
       return;
     }
-    const target = lightThemes.includes(current)
-      ? lightTheme
-      : (darkThemes.includes(current) ? darkTheme : lightTheme);
+    const target = lightThemes.includes(current) ? lightTheme : darkThemes.includes(current) ? darkTheme : lightTheme;
     root.setAttribute('data-theme', target);
     // MaryUI's $persist stores JSON, including the quotes — the head
     // script and the storage listener both strip them with
