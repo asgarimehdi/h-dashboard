@@ -24,7 +24,7 @@ function readStoredTheme(key) {
   if (raw == null) return null;
   try {
     return JSON.parse(raw);
-  } catch (e) {
+  } catch {
     // Legacy plain values: the pre-CSP inline script stripped quotes.
     return raw.replaceAll('"', '');
   }
@@ -70,7 +70,7 @@ export function registerAppComponents(Alpine) {
       try {
         localStorage.setItem('mary-theme', JSON.stringify(this.theme));
         localStorage.setItem('mary-class', JSON.stringify(this.class));
-      } catch (e) {
+      } catch {
         // Private mode / blocked storage must not break the toggle.
       }
       this.$dispatch('theme-changed', this.theme);
@@ -170,7 +170,9 @@ export function registerAppComponents(Alpine) {
       this.startTime = Date.now();
 
       // delay for DOM initiation
-      setTimeout(() => { this.show = true; }, 50);
+      setTimeout(() => {
+        this.show = true;
+      }, 50);
 
       this.startProgress();
       this.startCloseTimer();
@@ -269,7 +271,29 @@ export function registerAppComponents(Alpine) {
     },
 
     noHelpContent() {
-      return !['dashboard', 'hardware', 'hardware-import', 'persons-import', 'personnel', 'units', 'tickets', 'todos', 'reports', 'maps', 'settings', 'roles', 'permissions', 'users', 'activity-log', 'networks', 'wireless', 'tools', 'search', 'profile', 'hr-dashboard'].includes(this.helpSection);
+      return ![
+        'dashboard',
+        'hardware',
+        'hardware-import',
+        'persons-import',
+        'personnel',
+        'units',
+        'tickets',
+        'todos',
+        'reports',
+        'maps',
+        'settings',
+        'roles',
+        'permissions',
+        'users',
+        'activity-log',
+        'networks',
+        'wireless',
+        'tools',
+        'search',
+        'profile',
+        'hr-dashboard',
+      ].includes(this.helpSection);
     },
   }));
 
@@ -327,7 +351,9 @@ export function registerAppComponents(Alpine) {
         this.selected = this.$wire[this.modelName];
         this.$watch(
           () => this.$wire[this.modelName],
-          (value) => { this.selected = value; },
+          (value) => {
+            this.selected = value;
+          },
         );
       }
       this.$watch(
@@ -366,7 +392,9 @@ export function registerAppComponents(Alpine) {
       }
     },
 
-    nameOf(id) { return this.flat.find((u) => String(u.id) === String(id))?.name ?? '-'; },
+    nameOf(id) {
+      return this.flat.find((u) => String(u.id) === String(id))?.name ?? '-';
+    },
 
     isMatched(id) {
       return this.matchedIds.some((m) => String(m) === String(id));
@@ -383,7 +411,9 @@ export function registerAppComponents(Alpine) {
 
     expandForSearch() {
       // Undo auto-expansions from the previous query so manual state is preserved
-      this.autoExpanded.forEach((id) => { delete this.expanded[id]; });
+      this.autoExpanded.forEach((id) => {
+        delete this.expanded[id];
+      });
       this.autoExpanded = [];
       this.matchedIds = [];
       const s = this.search.trim().toLowerCase();

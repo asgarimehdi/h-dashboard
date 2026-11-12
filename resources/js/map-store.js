@@ -26,9 +26,7 @@ function isConnected(el) {
 }
 
 function containerOf(instance) {
-  return instance && typeof instance.getContainer === 'function'
-    ? instance.getContainer()
-    : null;
+  return instance && typeof instance.getContainer === 'function' ? instance.getContainer() : null;
 }
 
 function destroyInstance(instance) {
@@ -105,13 +103,10 @@ export function registerMapStore(Alpine) {
       const zoom = this.config.zoom ?? 8;
       instance = L.map(el).setView(view, zoom);
 
-      L.tileLayer(
-        this.config.tileUrl ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          attribution: this.config.attribution ?? '&copy; Health-Dashboard',
-          className: 'map-tiles',
-        },
-      ).addTo(instance);
+      L.tileLayer(this.config.tileUrl ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: this.config.attribution ?? '&copy; Health-Dashboard',
+        className: 'map-tiles',
+      }).addTo(instance);
 
       containerEl = el;
 

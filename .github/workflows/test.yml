@@ -66,6 +66,31 @@ jobs:
       - name: Check code style
         run: vendor/bin/pint --test
 
+  js-lint:
+    name: JS Lint & Format (ESLint + Prettier)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # `npm ci` also proves package.json and package-lock.json agree.
+        run: npm ci
+
+      - name: Lint resources/js
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
   test:
     name: Tests & Coverage
     runs-on: ubuntu-latest

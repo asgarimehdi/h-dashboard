@@ -52,7 +52,7 @@ function readCalendarData() {
   try {
     const parsed = JSON.parse(block.textContent || '{}');
     return { events: parsed.events || [], window: parsed.window || null };
-  } catch (e) {
+  } catch {
     return { events: [], window: null };
   }
 }
@@ -233,11 +233,13 @@ function initTodoCalendar() {
       const initial = firstPaint;
       firstPaint = false;
 
-      if (initial
-        && seededStart !== null
-        && seededEnd !== null
-        && Date.parse(info.startStr) === seededStart
-        && Date.parse(info.endStr) === seededEnd) {
+      if (
+        initial &&
+        seededStart !== null &&
+        seededEnd !== null &&
+        Date.parse(info.startStr) === seededStart &&
+        Date.parse(info.endStr) === seededEnd
+      ) {
         return;
       }
 
@@ -273,14 +275,14 @@ function registerGlobalListeners() {
   globalListenersRegistered = true;
 
   Livewire.on('calendar-updated', (...args) => {
-    const events = Array.isArray(args[0]) ? args[0] : (args[0]?.events || []);
+    const events = Array.isArray(args[0]) ? args[0] : args[0]?.events || [];
     if (window.calendarInstance && events.length) {
       window.calendarInstance.removeAllEvents();
       events.forEach((event) => window.calendarInstance.addEvent(event));
     }
   });
 
-  Livewire.hook('element.initialized', (el, component) => {
+  Livewire.hook('element.initialized', (el) => {
     if (el.id === 'start_date_picker' || el.id === 'end_date_picker') {
       setTimeout(() => {
         if (typeof jalaliDatepicker !== 'undefined') {

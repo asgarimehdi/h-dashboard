@@ -87,9 +87,7 @@ function setupCountyMap() {
       delete geojsonLayers[regionId];
     } else {
       try {
-        const data = typeof region.geojson === 'string'
-          ? JSON.parse(region.geojson)
-          : region.geojson;
+        const data = typeof region.geojson === 'string' ? JSON.parse(region.geojson) : region.geojson;
 
         const newLayer = L.geoJSON(data, {
           style: {
@@ -151,7 +149,9 @@ function setupRouteMap() {
   }
 
   const parseWaypoint = (value) => {
-    const parts = String(value || '').split(',').map(Number);
+    const parts = String(value || '')
+      .split(',')
+      .map(Number);
     if (parts.length !== 2 || parts.some((n) => !isFinite(n))) return null;
     return L.latLng(parts[0], parts[1]);
   };
@@ -161,7 +161,7 @@ function setupRouteMap() {
   const toggleRoutingContainer = () => {
     if (!routingControl || !routingControl._container) return;
     const container = routingControl._container;
-    container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
+    container.style.display = container.style.display === 'none' || container.style.display === '' ? 'block' : 'none';
   };
 
   // The toggle is wrapped in [data-route-toggle] (see the Blade
@@ -330,8 +330,8 @@ function setupRoute2Map() {
     }
     const startInput = document.getElementById('start-input');
     const endInput = document.getElementById('end-input');
-    const startPoint = parseCoordinates(startInput.value) || await geocode(startInput.value);
-    const endPoint = parseCoordinates(endInput.value) || await geocode(endInput.value);
+    const startPoint = parseCoordinates(startInput.value) || (await geocode(startInput.value));
+    const endPoint = parseCoordinates(endInput.value) || (await geocode(endInput.value));
     if (startPoint && endPoint) {
       routingControl.setWaypoints([startPoint, endPoint]);
       map.fitBounds([startPoint, endPoint]);
@@ -354,7 +354,7 @@ function setupRoute2Map() {
   const toggleRoutingContainer = () => {
     if (!routingControl || !routingControl._container) return;
     const container = routingControl._container;
-    container.style.display = (container.style.display === 'none' || container.style.display === '') ? 'block' : 'none';
+    container.style.display = container.style.display === 'none' || container.style.display === '' ? 'block' : 'none';
   };
 
   const toolbar = document.getElementById('route2-toolbar');
@@ -416,7 +416,9 @@ function setupMapNoBoundary() {
     });
 
     // Fit map to markers
-    const allLatLngs = Object.values(markers).flat().map((m) => m.getLatLng());
+    const allLatLngs = Object.values(markers)
+      .flat()
+      .map((m) => m.getLatLng());
     if (allLatLngs.length > 0) {
       map.fitBounds(allLatLngs, { padding: [30, 30] });
     }

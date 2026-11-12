@@ -101,9 +101,8 @@ function setupPointMap() {
     return;
   }
   const root = marker.closest('[wire\\:id]');
-  const component = root && typeof window.Livewire !== 'undefined'
-    ? window.Livewire.find(root.getAttribute('wire:id'))
-    : null;
+  const component =
+    root && typeof window.Livewire !== 'undefined' ? window.Livewire.find(root.getAttribute('wire:id')) : null;
   if (!component) {
     return;
   }
@@ -158,10 +157,12 @@ function setupPointMap() {
     // and every visible unit's ancestors stay visible so the connection
     // lines keep their parent markers.
     function visibleLocations() {
-      const selected = (group) => new Set(
-        [...document.querySelectorAll(`[data-filter-group="${group}"] input[type="checkbox"]:checked`)]
-          .map((cb) => Number(cb.value)),
-      );
+      const selected = (group) =>
+        new Set(
+          [...document.querySelectorAll(`[data-filter-group="${group}"] input[type="checkbox"]:checked`)].map((cb) =>
+            Number(cb.value),
+          ),
+        );
       const regions = selected('regions');
       const types = selected('types');
       if (!regions.size && !types.size) {
@@ -218,10 +219,7 @@ function setupPointMap() {
         const end = Math.min(mi + MARKER_CHUNK, locations.length);
         for (; mi < end; mi++) {
           const loc = locations[mi];
-          L.marker(
-            [loc.lat, loc.lng],
-            { icon: getIcon(loc.unit_type_id) },
-          )
+          L.marker([loc.lat, loc.lng], { icon: getIcon(loc.unit_type_id) })
             .bindPopup(loc.name)
             .addTo(markersLayer);
         }
@@ -241,7 +239,10 @@ function setupPointMap() {
           const [loc, parent] = linePairs[li];
           const color = lineColors[Math.min(depthOf(parent.id), lineColors.length - 1)];
           L.polyline(
-            [[loc.lat, loc.lng], [parent.lat, parent.lng]],
+            [
+              [loc.lat, loc.lng],
+              [parent.lat, parent.lng],
+            ],
             { color, weight: 2, opacity: 0.7, dashArray: '6 4', renderer: lineRenderer },
           ).addTo(linesLayer);
         }
@@ -458,7 +459,7 @@ function readUnitMapData() {
   try {
     const parsed = JSON.parse(block.textContent || '{}');
     return { tileTemplate: parsed.tileTemplate || '', geojson: parsed.geojson ?? null };
-  } catch (e) {
+  } catch {
     return { tileTemplate: '', geojson: null };
   }
 }
@@ -480,9 +481,7 @@ function setupUnitsEditMap() {
   function resolveUnitMapComponent() {
     const el = document.getElementById('unitMap');
     const root = el ? el.closest('[wire\\:id]') : null;
-    return root && typeof window.Livewire !== 'undefined'
-      ? window.Livewire.find(root.getAttribute('wire:id'))
-      : null;
+    return root && typeof window.Livewire !== 'undefined' ? window.Livewire.find(root.getAttribute('wire:id')) : null;
   }
 
   function initUnitMap() {
@@ -497,7 +496,7 @@ function setupUnitsEditMap() {
     window._drawnItems = drawnItems;
     unitMap.addLayer(drawnItems);
 
-    let existingLayer = null;
+    let existingLayer;
 
     if (initialGeojson) {
       try {
@@ -517,7 +516,7 @@ function setupUnitsEditMap() {
         //      boundary was not editable.
         // Normalise both: accept a bare geometry or a Feature, and unwrap
         // the single MultiPolygon to a plain Polygon so L.Edit.Poly works.
-        let geometry = (data && data.geometry) ? data.geometry : data;
+        let geometry = data && data.geometry ? data.geometry : data;
         if (geometry && geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
           geometry = {
             type: 'Polygon',
@@ -525,9 +524,12 @@ function setupUnitsEditMap() {
           };
         }
 
-        existingLayer = L.geoJSON({ type: 'Feature', properties: {}, geometry }, {
-          style: { color: '#f59e0b', weight: 3, opacity: 0.8, fillOpacity: 0.15 },
-        }).addTo(unitMap);
+        existingLayer = L.geoJSON(
+          { type: 'Feature', properties: {}, geometry },
+          {
+            style: { color: '#f59e0b', weight: 3, opacity: 0.8, fillOpacity: 0.15 },
+          },
+        ).addTo(unitMap);
 
         // #702: the draw toolbar's edit/remove tools only operate on layers
         // inside `drawnItems`. The saved boundary was added straight to the
@@ -615,7 +617,9 @@ function setupUnitsEditMap() {
           return;
         }
 
-        const pts = ring.map(function (ll) { return [ll.lng, ll.lat]; });
+        const pts = ring.map(function (ll) {
+          return [ll.lng, ll.lat];
+        });
         if (pts.length > 0) {
           const first = pts[0];
           const last = pts[pts.length - 1];
