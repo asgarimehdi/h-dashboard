@@ -252,3 +252,73 @@ test('a full restore leaves the sequences ready for the next create', function (
     expect($unit->id)->toBeGreaterThan(0);
     expect(DB::table('units')->where('id', $unit->id)->count())->toBe(1);
 });
+
+test('a full restore inserts a table larger than one chunk', function () {
+    $graph = seedBackupGraph();
+
+    // Put 3,000 hardware rows in the database through the per-table restore,
+    // then back the whole database up and restore it again. 3,000 × 22
+    // columns is 66,000 bind parameters: the full writer must batch them.
+    app(RestoreService::class)->restoreArchive($this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/full-wide-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        3_000,
+    ));
+
+    expect(DB::table('hardwares')->count())->toBe(3_000);
+
+    $archive = app(BackupService::class)->exportAll();
+    $manifest = $this->backupZipJson($archive->path, 'manifest.json');
+    $expectedRows = array_sum(array_column($manifest['tables'], 'rows'));
+
+    $result = app(RestoreService::class)->restoreArchive($archive->path);
+
+    expect($result->full)->toBeTrue();
+    expect($result->rowCount)->toBe($expectedRows);
+    expect(DB::table('hardwares')->count())->toBe(3_000);
+
+    // The graph is back, in one piece.
+    expect(DB::table('users')->where('id', 1001)->count())->toBe(1);
+    expect(DB::table('tickets')->where('id', 2001)->count())->toBe(1);
+    expect(DB::table('hardware_audits')
+        ->where('hardware_id', $graph['hardware']->id)
+        ->where('user_id', 1001)
+        ->count())->toBe(1);
+});
+
+test('a full backup accepts a parent in a later chunk and rejects a missing one', function () {
+    for ($index = 1; $index <= 600; $index++) {
+        Person::factory()->create(['n_code' => sprintf('1%09d', $index)]);
+    }
+
+    for ($index = 1; $index <= 600; $index++) {
+        User::factory()->create(['id' => 1000 + $index, 'n_code' => sprintf('1%09d', $index)]);
+    }
+
+    $archive = app(BackupService::class)->exportAll();
+
+    $result = app(RestoreService::class)->restoreArchive($archive->path);
+
+    expect($result->full)->toBeTrue();
+    expect(DB::table('persons')->count())->toBe(600);
+    expect(DB::table('users')->count())->toBe(600);
+
+    // One user now points at a person the file does not carry. The person
+    // sits 600 rows into the file — past the first 500-value chunk.
+    $entries = $this->backupZipEntries($archive->path);
+    $users = json_decode($entries['users.json'], true);
+    $users[0]['n_code'] = '0000000000';
+    $entries['users.json'] = json_encode($users);
+
+    $broken = $this->backupMakeZip(
+        storage_path('app/private/backup/full-missing-parent-'.Str::random(8).'.zip'),
+        $entries
+    );
+
+    expect(fn () => app(RestoreService::class)->restoreArchive($broken))
+        ->toThrow(BackupValidationException::class);
+
+    // Validation runs before the first write: nothing changed.
+    expect(DB::table('users')->count())->toBe(600);
+    expect(DB::table('users')->where('n_code', '0000000000')->count())->toBe(0);
+});

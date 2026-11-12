@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\BackupValidationException;
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\Backup\BackupService;
@@ -198,4 +199,76 @@ test('a file that carries the same id twice is rejected', function () {
         ->toThrow(BackupValidationException::class);
 
     expect(DB::table('users')->where('id', 960)->count())->toBe(1);
+});
+
+test('a table past the postgres parameter limit restores in chunks', function () {
+    Hardware::factory()->create();
+
+    // 3,000 rows × 22 columns = 66,000 bind parameters. One `upsert()` of the
+    // whole table is refused by Postgres (SQLSTATE 65535); the writer has to
+    // split it.
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/wide-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        3_000,
+    );
+
+    $result = app(RestoreService::class)->restoreArchive($path);
+
+    expect($result->rowCount)->toBe(3_000);
+    expect(DB::table('hardwares')->count())->toBe(3_000);
+
+    $row = DB::table('hardwares')->where('id', 3_000)->first();
+
+    expect($row)->not->toBeNull();
+    expect($row->pc_name)->not->toBeNull();
+    expect($row->n_code)->not->toBeNull();
+});
+
+test('the anti-join delete keeps rows from later chunks', function () {
+    Hardware::factory()->create();
+
+    // The database starts with 1..1,200.
+    app(RestoreService::class)->restoreArchive($this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/seed-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        1_200,
+    ));
+
+    // The file carries 1..1,000 except 500.
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/holed-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        999,
+        fn (int $index, array $row): array => array_merge($row, [
+            'id' => $index < 499 ? $index + 1 : $index + 2,
+        ]),
+    );
+
+    app(RestoreService::class)->restoreArchive($path);
+
+    expect(DB::table('hardwares')->count())->toBe(999);
+    expect(DB::table('hardwares')->whereIn('id', [999, 1000, 1200])->count())->toBe(2);
+    expect(DB::table('hardwares')->where('id', 999)->count())->toBe(1);
+    expect(DB::table('hardwares')->where('id', 1000)->count())->toBe(1);
+    expect(DB::table('hardwares')->where('id', 1200)->count())->toBe(0);
+    expect(DB::table('hardwares')->where('id', 500)->count())->toBe(0);
+});
+
+test('a rejected 3,000-row file leaves the table untouched', function () {
+    Hardware::factory()->create();
+
+    $before = json_encode(backupDbRows('hardwares'));
+
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/null-id-wide-'.Str::random(8).'.zip'),
+        'hardwares',
+        3_000,
+        fn (int $index, array $row): array => $index === 1_500 ? array_merge($row, ['id' => null]) : $row,
+    );
+
+    expect(fn () => app(RestoreService::class)->restoreArchive($path))
+        ->toThrow(BackupValidationException::class);
+
+    expect(json_encode(backupDbRows('hardwares')))->toBe($before);
 });
