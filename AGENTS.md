@@ -98,8 +98,9 @@ Each line is the whole rule; the link holds the detail and the evidence.
 ### Composer Scripts
 ```bash
 composer test         # ensure-test-app-key (only if .env.testing has none) + config:clear + route:clear + XDEBUG_MODE=off php artisan test
-composer verify       # .env existence check, then scripts/verify.sh (preflight + APP_KEY guard + view:clear + pint --test + phpstan + the suite)  ← run before push
-composer verify tests/Feature/TodoLivewireTest.php   # same gates, only the tests you name
+composer verify       # FULL gates: preflight + APP_KEY + view:clear + pint --test + phpstan + suite  ← run before push
+composer verify tests/Feature/TodoLivewireTest.php   # same FULL gates; only the *test* step is narrowed
+composer verify:fast <path>   # local TDD loop: Pint on <path> only, PHPStan skipped — NOT CI-equivalent
 composer dev          # concurrently: php artisan serve + queue:listen + npm run dev
 composer pint         # Pint --dirty --format agent (auto-staged PHP)
 composer phpstan      # phpstan analyse --no-progress

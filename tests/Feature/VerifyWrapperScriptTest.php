@@ -51,12 +51,19 @@ class VerifyWrapperScriptTest extends TestCase
     }
 
     /**
+     * @param  list<string>  $args
      * @return array{0: int, 1: string}
      */
-    private function runWrapper(): array
+    private function runWrapper(array $args = []): array
     {
         $command = 'PATH='.escapeshellarg($this->sandbox.'/bin').':$PATH '
-            .'bash '.escapeshellarg(base_path('scripts/verify.sh')).' 2>&1';
+            .'bash '.escapeshellarg(base_path('scripts/verify.sh'));
+
+        if ($args !== []) {
+            $command .= ' '.implode(' ', array_map('escapeshellarg', $args));
+        }
+
+        $command .= ' 2>&1';
 
         exec($command, $output, $exit);
 
@@ -247,5 +254,95 @@ class VerifyWrapperScriptTest extends TestCase
             $output,
             'the whole suite ran, so the path argument was dropped rather than forwarded'
         );
+    }
+
+    // ──────────────────────────────────────────────
+    // Issue #1416 — the local-only `verify:fast` TDD loop
+    // ──────────────────────────────────────────────
+
+    public function test_fast_mode_narrows_pint_to_the_named_path_and_skips_phpstan(): void
+    {
+        // A fast loop that quietly runs the full gates is the failure this
+        // exists to remove, so assert the narrowing itself: Pint sees exactly
+        // the named path and PHPStan never launches.
+        $this->stubPhp();
+
+        [$exit, $output] = $this->runWrapper(['--fast', 'tests/Feature/TodoLivewireTest.php']);
+
+        $calls = $this->calls();
+
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString('vendor/bin/pint --test tests/Feature/TodoLivewireTest.php', $calls);
+        $this->assertStringNotContainsString('phpstan analyse', $calls);
+        $this->assertStringContainsString('NOT CI-EQUIVALENT', $output);
+        $this->assertStringContainsString('PHPStan: SKIPPED', $output);
+    }
+
+    public function test_fast_mode_refuses_to_run_with_nothing_named(): void
+    {
+        // `--fast` with no path would silently be the full run, which is the
+        // exact confusion this flag exists to end. Exit 2 before anything boots.
+        $this->stubPhp();
+
+        [$exit, $output] = $this->runWrapper(['--fast']);
+
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('needs at least one path', $output);
+        $this->assertSame('', $this->calls(), 'nothing may run before the usage error');
+    }
+
+    public function test_fast_mode_still_runs_the_preflight_first(): void
+    {
+        // Narrowing the static gates must not move the safety gate: a bad
+        // database still stops the run before Pint or the suite.
+        $this->stubPhp(2);
+
+        [$exit] = $this->runWrapper(['--fast', 'tests/Feature/TodoLivewireTest.php']);
+
+        $calls = $this->calls();
+
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('artisan verify:preflight', $calls);
+        $this->assertStringNotContainsString('pint', $calls);
+        $this->assertStringNotContainsString('composer test', $calls);
+    }
+
+    public function test_the_default_invocation_keeps_whole_repo_pint_and_full_phpstan(): void
+    {
+        // The anti-drift half: adding a fast path must not narrow the default.
+        // The logged Pint line ends at `--test`; a path after it means the
+        // default gate silently became the fast one.
+        $this->stubPhp();
+
+        [$exit, $output] = $this->runWrapper(['tests/Feature/TodoLivewireTest.php']);
+
+        $calls = $this->calls();
+
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString("vendor/bin/pint --test\n", $calls);
+        $this->assertStringNotContainsString('pint --test tests/', $calls);
+        $this->assertStringContainsString('phpstan analyse --no-progress', $calls);
+        $this->assertStringContainsString('test -- tests/Feature/TodoLivewireTest.php', $calls);
+        $this->assertStringNotContainsString('NOT CI-EQUIVALENT', $output);
+    }
+
+    public function test_composer_json_exposes_verify_fast_without_touching_verify(): void
+    {
+        // Composer appends forwarded arguments to EVERY entry of a script
+        // array (#900), so the fast entry must be exactly the three safe
+        // entries: a bare `php artisan …` fourth entry would swallow the path.
+        $config = json_decode((string) file_get_contents(base_path('composer.json')), true);
+
+        $fast = $config['scripts']['verify:fast'] ?? null;
+
+        $this->assertIsArray($fast);
+        $this->assertCount(
+            3,
+            $fast,
+            'a fourth entry would receive the appended path argument (#900)'
+        );
+        $this->assertSame('Composer\\Config::disableProcessTimeout', $fast[0]);
+        $this->assertStringEndsWith('bash scripts/verify.sh --fast', (string) $fast[2]);
+        $this->assertStringEndsWith('bash scripts/verify.sh', (string) ($config['scripts']['verify'][2] ?? ''));
     }
 }

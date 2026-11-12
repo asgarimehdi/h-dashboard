@@ -79,6 +79,11 @@
             "@php -r \"file_exists('.env') || exit(1);\"",
             "bash scripts/verify.sh"
         ],
+        "verify:fast": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -r \"file_exists('.env') || exit(1);\"",
+            "bash scripts/verify.sh --fast"
+        ],
         "hooks:install": "bash scripts/install-hooks.sh",
         "phpstan": "phpstan analyse --no-progress",
         "phpstan-baseline": "phpstan analyse --generate-baseline",
