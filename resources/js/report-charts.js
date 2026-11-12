@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Highcharts report pages moved out of `@script` blocks (#1352, Step 3 / R3).
  *
@@ -49,14 +50,19 @@ const PIE_COLORS_7 = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#0
 const watchersRegistered = new Set();
 const hooksRegistered = new Set();
 
+/** @param {Element} element */
 function componentFor(element) {
   const root = element.closest('[wire\\:id]');
   if (!root || typeof window.Livewire === 'undefined') {
     return null;
   }
-  return window.Livewire.find(root.getAttribute('wire:id'));
+  return window.Livewire.find(/** @type {string} */ (root.getAttribute('wire:id')));
 }
 
+/**
+ * @param {() => void} callback
+ * @param {number} [attempts]
+ */
 function waitForHighcharts(callback, attempts = 0) {
   if (typeof window.Highcharts !== 'undefined') {
     callback();
@@ -69,6 +75,7 @@ function waitForHighcharts(callback, attempts = 0) {
   setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
 }
 
+/** @param {string} id */
 function destroyChart(id) {
   const container = document.getElementById(id);
   if (!container || typeof Highcharts === 'undefined') {
@@ -76,11 +83,16 @@ function destroyChart(id) {
   }
   const existing = Highcharts.charts?.find((c) => c && c.renderTo === container);
   if (existing) {
-    existing.destroy();
+    /** @type {any} */ (existing).destroy();
   }
   container.innerHTML = '';
 }
 
+/**
+ * @param {string} containerId
+ * @param {Record<string, any> | undefined} data
+ * @param {string[]} colors
+ */
 function renderPie(containerId, data, colors) {
   destroyChart(containerId);
   const labels = Object.keys(data || {});
@@ -98,9 +110,10 @@ function renderPie(containerId, data, colors) {
   }
 }
 
+/** @param {string} elementId */
 function readChartData(elementId) {
   const el = document.getElementById(elementId);
-  return el ? JSON.parse(el.dataset.chart) : {};
+  return el ? JSON.parse(/** @type {string} */ (el.dataset.chart)) : {};
 }
 
 function renderPersonsCharts() {
@@ -185,12 +198,14 @@ function renderAdvancedCharts() {
       Highcharts.chart('trendChart', {
         chart: { type: 'areaspline' },
         title: { text: '' },
-        xAxis: { categories: reportData.byDay.map((d) => d.day) },
+        xAxis: {
+          categories: /** @type {Array<{ day: string, count: number }>} */ (reportData.byDay).map((d) => d.day),
+        },
         yAxis: { title: { text: 'تعداد' } },
         series: [
           {
             name: 'تعداد',
-            data: reportData.byDay.map((d) => d.count),
+            data: /** @type {Array<{ day: string, count: number }>} */ (reportData.byDay).map((d) => d.count),
             color: '#6366f1',
             fillColor: {
               linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
@@ -228,6 +243,12 @@ const JDP_OPTIONS = {
   separatorChars: { date: '/', between: ' ', time: ':' },
 };
 
+/**
+ * @param {string} fromId
+ * @param {string} toId
+ * @param {string} fromModel
+ * @param {string} toModel
+ */
 function initJdpPair(fromId, toId, fromModel, toModel) {
   if (typeof jalaliDatepicker === 'undefined') {
     return;
@@ -245,12 +266,18 @@ function initJdpPair(fromId, toId, fromModel, toModel) {
     if (!input.dataset.jdpBound) {
       input.dataset.jdpBound = '1';
       input.addEventListener('jdp:change', (event) => {
-        componentFor(input)?.set(model, event.target.value);
+        componentFor(input)?.set(model, /** @type {HTMLInputElement} */ (event.target).value);
       });
     }
   });
 }
 
+/**
+ * @param {string} dataElementId
+ * @param {() => void} render
+ * @param {string[]} watchProps
+ * @param {[string, string, string, string] | null} [jdpPair]
+ */
 function registerPage(dataElementId, render, watchProps, jdpPair) {
   const el = document.getElementById(dataElementId);
   if (!el) {
