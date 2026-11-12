@@ -21,6 +21,9 @@ use Tests\TestCase;
  * The FK cascade happens in the database, AFTER Eloquent's model events have
  * run, so a hook on `Attachment` never fires on this path — the paths must be
  * collected in `Ticket::deleting`, while the rows are still readable.
+ *
+ * Issue #1421 adds the complementary model-level invariant: a DIRECT
+ * `$attachment->delete()` takes its file with it.
  */
 #[CoversNothing]
 class TicketAttachmentCleanupTest extends TestCase
@@ -37,7 +40,7 @@ class TicketAttachmentCleanupTest extends TestCase
     }
 
     /**
-     * Store a real file on the `public` disk and return its `file_path`.
+     * Store a real file on the `local` disk and return its `file_path`.
      */
     private function storeAttachmentFile(string $name): string
     {
@@ -164,7 +167,7 @@ class TicketAttachmentCleanupTest extends TestCase
 
     public function test_a_missing_file_on_disk_does_not_block_the_delete(): void
     {
-        // `config/filesystems.php` sets `throw => false` on the public disk, so
+        // `config/filesystems.php` sets `throw => false` on the local disk, so
         // a row whose file was already removed by hand must still delete.
         Storage::fake('local');
         Storage::fake('public');
@@ -237,5 +240,49 @@ class TicketAttachmentCleanupTest extends TestCase
         Storage::disk('local')->assertMissing($firstPath);
         Storage::disk('local')->assertExists($kept);
         $this->assertDatabaseHas('attachments', ['file_path' => $kept]);
+    }
+
+    public function test_deleting_an_attachment_row_deletes_its_file(): void
+    {
+        Storage::fake('local');
+
+        [, $ticket, $attachment, $path] = $this->createTicketWithAttachment('direct.pdf');
+
+        Storage::disk('local')->assertExists($path);
+
+        $attachment->delete();
+
+        Storage::disk('local')->assertMissing($path);
+        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+    }
+
+    public function test_deleting_an_attachment_row_with_a_missing_file_still_succeeds(): void
+    {
+        Storage::fake('local');
+
+        [, , $attachment, $path] = $this->createTicketWithAttachment('gone.pdf');
+        Storage::disk('local')->delete($path);
+
+        $attachment->delete();
+
+        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+    }
+
+    public function test_a_file_path_with_traversal_segments_is_not_deleted(): void
+    {
+        Storage::fake('local');
+
+        [, , $attachment] = $this->createTicketWithAttachment('report.pdf');
+
+        // The real bytes are at attachments/report.pdf; this path normalises to
+        // that file, but the guard must refuse it exactly like the download
+        // controller does.
+        $attachment->update(['file_path' => 'attachments/../attachments/report.pdf']);
+
+        $attachment->delete();
+
+        Storage::disk('local')->assertExists('attachments/report.pdf');
+        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
     }
 }
