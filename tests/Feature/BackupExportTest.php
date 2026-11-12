@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\Person;
+use App\Models\Unit;
 use App\Models\User;
 use App\Services\Backup\BackupService;
 use App\Support\Backup\TableRegistry;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
@@ -160,5 +162,151 @@ test('full export reads every table from one repeatable read snapshot', function
 
     foreach ($reads as $read) {
         expect($read['level'])->toBe(1, 'Every read of the full backup must happen inside the snapshot transaction.');
+    }
+});
+
+test('every entry of a full export is canonical compact json', function () {
+    User::factory()->create(['id' => 501, 'settings' => ['theme' => 'dark']]);
+    // A Persian name: proves the payload does not escape its characters to \uXXXX.
+    Unit::factory()->create(['name' => 'مرکز بهداشت شماره یک']);
+
+    $entries = $this->backupZipEntries(app(BackupService::class)->exportAll()->path);
+
+    expect($entries)->not->toBeEmpty();
+
+    foreach ($entries as $name => $payload) {
+        $canonical = json_encode(
+            json_decode($payload, true, 512, JSON_THROW_ON_ERROR),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        );
+
+        expect($canonical)->toBe($payload, "The entry «{$name}» is not canonical compact JSON.");
+    }
+});
+
+test('a full export holds the id ordered rows of every table', function () {
+    // Inserted out of id order on purpose: an exporter that reads heap order
+    // (no ORDER BY) returns 602 before 601 and fails the comparison below.
+    User::factory()->create(['id' => 602]);
+    User::factory()->create(['id' => 601]);
+
+    $archive = app(BackupService::class)->exportAll();
+    $entries = $this->backupZipEntries($archive->path);
+    $manifest = $this->backupZipJson($archive->path, 'manifest.json');
+
+    foreach (app(TableRegistry::class)->tables() as $table) {
+        $expected = array_map(
+            fn (object $row): array => (array) $row,
+            DB::table($table)->orderBy('id')->get()->all()
+        );
+
+        expect($entries)->toHaveKey($table.'.json');
+
+        expect(json_decode($entries[$table.'.json'], true, 512, JSON_THROW_ON_ERROR))
+            ->toEqual($expected, "The «{$table}» entry is not the id ordered table content.");
+
+        expect(collect($manifest['tables'])->firstWhere('table', $table)['rows'])
+            ->toBe(count($expected));
+    }
+
+    $users = json_decode($entries['users.json'], true, 512, JSON_THROW_ON_ERROR);
+
+    expect(array_column($users, 'id'))->toBe([601, 602]);
+});
+
+test('a table payload is encoded byte for byte in the pinned canonical form', function () {
+    Person::factory()->create(['n_code' => '1234567890']);
+    Person::factory()->create(['n_code' => '1234567891']);
+
+    DB::table('users')->insert([
+        [
+            'id' => 501,
+            'n_code' => '1234567890',
+            'password' => 'hash-one',
+            'deleted_at' => null,
+            'remember_token' => 'token',
+            'created_at' => '2026-01-02 03:04:05',
+            'updated_at' => '2026-01-02 03:04:05',
+            'settings' => '{"theme":"dark","path":"a/b"}',
+        ],
+        [
+            'id' => 502,
+            'n_code' => '1234567891',
+            'password' => 'hash-two',
+            'deleted_at' => '2026-02-03 04:05:06',
+            'remember_token' => null,
+            'created_at' => '2026-01-02 03:04:05',
+            'updated_at' => '2026-01-02 03:04:05',
+            'settings' => null,
+        ],
+    ]);
+
+    $payload = $this->backupZipEntries(app(BackupService::class)->exportTable('users')->path)['users.json'];
+
+    expect($payload)->toBe(
+        '[{"id":501,"n_code":"1234567890","password":"hash-one","deleted_at":null,'
+        .'"remember_token":"token","created_at":"2026-01-02 03:04:05","updated_at":"2026-01-02 03:04:05",'
+        .'"settings":"{\"theme\":\"dark\",\"path\":\"a/b\"}"},'
+        .'{"id":502,"n_code":"1234567891","password":"hash-two","deleted_at":"2026-02-03 04:05:06",'
+        .'"remember_token":null,"created_at":"2026-01-02 03:04:05","updated_at":"2026-01-02 03:04:05",'
+        .'"settings":null}]'
+    );
+});
+
+test('a failing table read leaves no temp file behind', function () {
+    $directory = storage_path('app/private/backup');
+    $before = glob($directory.'/*') ?: [];
+
+    // The first table is read and staged, the second one does not exist, so
+    // the export fails after it already wrote a temp file.
+    $this->app->instance(TableRegistry::class, new class extends TableRegistry
+    {
+        public function tables(): array
+        {
+            return ['hardwares', 'a_table_that_does_not_exist'];
+        }
+    });
+
+    expect(fn () => app(BackupService::class)->exportAll())->toThrow(QueryException::class);
+
+    expect(array_values(array_diff(glob($directory.'/*') ?: [], $before)))->toBe([]);
+});
+
+test('a failure while zipping the staged files leaves no partial archive behind', function () {
+    $directory = storage_path('app/private/backup');
+
+    if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+        throw new RuntimeException("The backup directory could not be created: {$directory}");
+    }
+
+    $filename = 'backup-full-20260101-000000-failuretest.zip';
+    $staged = $directory.'/'.$filename.'.users.json.part';
+
+    // The name is fixed so the test can look for it: drop any leftover first.
+    @unlink($directory.'/'.$filename);
+    @unlink($directory.'/'.$filename.'.part');
+
+    if (file_put_contents($staged, '[]') === false) {
+        throw new RuntimeException("The staged file could not be written: {$staged}");
+    }
+
+    try {
+        $writeArchive = new ReflectionMethod(BackupService::class, 'writeArchive');
+
+        // One staged entry exists, the second one does not: the zip cannot be
+        // completed, and neither the zip nor its `.part` may survive.
+        expect(fn () => $writeArchive->invoke(
+            app(BackupService::class),
+            $filename,
+            ['users.json' => $staged, 'units.json' => $directory.'/a-missing-staged-file.json.part'],
+            '{}'
+        ))->toThrow(RuntimeException::class);
+
+        expect(is_file($directory.'/'.$filename))->toBeFalse();
+        expect(is_file($directory.'/'.$filename.'.part'))->toBeFalse();
+    } finally {
+        @unlink($staged);
+        @unlink($directory.'/'.$filename);
+        @unlink($directory.'/'.$filename.'.part');
     }
 });
