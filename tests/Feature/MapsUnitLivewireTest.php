@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Boundary;
 use App\Models\Region;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
@@ -74,6 +75,18 @@ class MapsUnitLivewireTest extends TestCase
             ->firstWhere('name', 'units-updated');
 
         return $dispatch['params']['units'] ?? [];
+    }
+
+    /**
+     * The `county-boundaries-loaded` payload of the last request — the cached
+     * region geometry `maps/unit` hands to the map.
+     */
+    private function dispatchedCounties($test): array
+    {
+        $dispatch = collect($test->effects['dispatches'] ?? [])
+            ->firstWhere('name', 'county-boundaries-loaded');
+
+        return $dispatch['params']['counties'] ?? [];
     }
 
     // ==================== Auth / permissions ====================
@@ -554,5 +567,44 @@ class MapsUnitLivewireTest extends TestCase
         $this->assertStringNotContainsString("'county_boundaries_v'", $view);
         $this->assertStringNotContainsString('maps_version', $view);
         $this->assertStringContainsString('CacheInvalidationServiceInterface::class', $view);
+    }
+
+    // ==================== #1419: boundary writes invalidate the cached payload ====================
+
+    public function test_cached_county_boundaries_are_not_served_after_a_boundary_geometry_edit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $boundaryId = $this->createBoundary();
+        $region->update(['boundary_id' => $boundaryId]);
+
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+
+        Cache::flush();
+
+        // Warm the `maps` payload: without a Boundary hook this cached GeoJSON
+        // is served for the full 5-minute TTL after the row changes (#1419).
+        $warm = $this->dispatchedCounties(
+            Livewire::test('maps/unit')->set('selectedRegions', [$region->id])
+        );
+
+        $this->assertCount(1, $warm);
+        $this->assertSame([0, 0], json_decode($warm[0]['geojson'], true)['coordinates'][0][0][0]);
+
+        // Edit the region's boundary row through Eloquent — the writer a
+        // region-boundary editor (or any admin command) will use.
+        Boundary::query()->findOrFail($boundaryId)->update([
+            'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((2 2, 3 2, 3 3, 2 3, 2 2)))', 4326)"),
+        ]);
+
+        $after = $this->dispatchedCounties(
+            Livewire::test('maps/unit')->set('selectedRegions', [$region->id])
+        );
+
+        // Not merely "different": the new ring must be the one served.
+        $this->assertCount(1, $after);
+        $this->assertSame([2, 2], json_decode($after[0]['geojson'], true)['coordinates'][0][0][0]);
     }
 }

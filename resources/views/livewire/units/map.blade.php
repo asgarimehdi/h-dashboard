@@ -97,16 +97,17 @@ return new class extends Component {
         if (! $unit) return;
 
         if ($unit->boundary_id) {
-            DB::table('boundaries')
-                ->where('id', $unit->boundary_id)
-                ->update([
+            $boundary = \App\Models\Boundary::query()->find($unit->boundary_id);
+            if ($boundary) {
+                $boundary->update([
                     'boundary' => DB::raw("ST_GeomFromGeoJSON(" . DB::getPdo()->quote($geometry) . ")"),
                 ]);
+            }
         } else {
-            $boundaryId = DB::table('boundaries')->insertGetId([
+            $boundary = \App\Models\Boundary::create([
                 'boundary' => DB::raw("ST_GeomFromGeoJSON(" . DB::getPdo()->quote($geometry) . ")"),
             ]);
-            $unit->update(['boundary_id' => $boundaryId]);
+            $unit->update(['boundary_id' => $boundary->id]);
         }
 
         $this->success('مرز با موفقیت ذخیره شد.');
@@ -139,7 +140,7 @@ return new class extends Component {
         try {
             DB::transaction(function () use ($unit, $boundaryId): void {
                 $unit->update(['boundary_id' => null]);
-                DB::table('boundaries')->where('id', $boundaryId)->delete();
+                \App\Models\Boundary::destroy($boundaryId);
             });
         } catch (\Throwable $e) {
             report($e);

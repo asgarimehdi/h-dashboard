@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -22,6 +23,16 @@ class Boundary extends Model
     protected $table = 'boundaries';
 
     protected $fillable = ['boundary'];
+
+    protected static function booted(): void
+    {
+        // Boundary rows are the map geometry: any write must roll the `maps`
+        // namespace (maps/county and maps/unit cache the region polygons).
+        $bump = fn () => app(CacheInvalidationServiceInterface::class)->increment('maps');
+
+        static::saved($bump);
+        static::deleted($bump);
+    }
 
     /**
      * ارتباط با جدول unit

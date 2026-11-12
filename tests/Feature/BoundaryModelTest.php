@@ -8,6 +8,7 @@ use App\Models\Region;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -199,4 +200,26 @@ test('scopeWithinDistance finds units near a point using PostGIS', function () {
 
     expect($hits)->toContain('نزدیک')
         ->and(Unit::query()->withinDistance(5, 5, 1000)->count())->toBe(0);
+});
+
+// #1419: boundary rows ARE the map geometry — every write must roll `maps`
+// (maps/county and maps/unit cache region polygons for 5 minutes). `gis`
+// carries no boundary data, so it must not move.
+test('saving a boundary bumps the maps cache version', function () {
+    Cache::set('maps_version', 1);
+    Cache::set('gis_version', 1);
+
+    makeBoundary();
+
+    expect(Cache::get('maps_version'))->toBeGreaterThan(1)
+        ->and(Cache::get('gis_version'))->toBe(1);
+});
+
+test('deleting a boundary bumps the maps cache version', function () {
+    $b = makeBoundary();
+
+    Cache::set('maps_version', 1);
+    $b->delete();
+
+    expect(Cache::get('maps_version'))->toBeGreaterThan(1);
 });
