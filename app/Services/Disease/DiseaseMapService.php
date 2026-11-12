@@ -148,7 +148,10 @@ final class DiseaseMapService
     /**
      * County polygons with a per-province, all-or-nothing fallback:
      * a province whose counties are incomplete renders as ONE province polygon
-     * (never a centroid, never a half-empty county layer).
+     * (never a centroid, never a half-empty county layer). The enumeration is
+     * scope-aware: only regions holding an accessible unit (plus their parent
+     * province) are considered, and the fallback also covers "not every county
+     * is in scope".
      *
      * @param  array<int>  $accessibleIds
      * @param  array{minLon: float, minLat: float, maxLon: float, maxLat: float}|null  $bbox
@@ -166,12 +169,32 @@ final class DiseaseMapService
 
         $provinces = [];
         $countiesByProvince = [];
+        $scopedCountyCounts = [];
         $boundaryIds = [];
 
+        $unitRegions = DB::table('units')
+            ->select('region_id')
+            ->whereIn('id', $accessibleIds)
+            ->whereNotNull('region_id');
+
         $regions = DB::table('regions')
-            ->whereIn('type', ['province', 'county'])
-            ->orderBy('id')
-            ->get(['id', 'name', 'parent_id', 'type', 'boundary_id']);
+            ->whereIn('regions.type', ['province', 'county'])
+            ->where(function ($query) use ($unitRegions): void {
+                $query->whereIn('regions.id', $unitRegions)                  // the region the unit sits in
+                    ->orWhereIn('regions.id', DB::table('regions as c')      // the province of an in-scope county
+                        ->select('c.parent_id')
+                        ->where('c.type', 'county')
+                        ->whereIn('c.id', $unitRegions));
+            })
+            ->orderBy('regions.id')
+            ->get([
+                'regions.id',
+                'regions.name',
+                'regions.parent_id',
+                'regions.type',
+                'regions.boundary_id',
+                DB::raw("(SELECT COUNT(*) FROM regions c2 WHERE c2.parent_id = regions.id AND c2.type = 'county') AS county_total"),
+            ]);
 
         foreach ($regions as $region) {
             if ($region->boundary_id !== null) {
@@ -182,6 +205,7 @@ final class DiseaseMapService
                 $provinces[] = $region;
             } else {
                 $countiesByProvince[(int) $region->parent_id][] = $region;
+                $scopedCountyCounts[(int) $region->parent_id] = ($scopedCountyCounts[(int) $region->parent_id] ?? 0) + 1;
             }
         }
 
@@ -194,7 +218,9 @@ final class DiseaseMapService
 
         foreach ($provinces as $province) {
             $counties = $countiesByProvince[(int) $province->id] ?? [];
-            $allCountiesMapped = $counties !== [] && $this->everyBoundaryMapped($counties);
+            $allCountiesMapped = $counties !== []
+                && ($scopedCountyCounts[(int) $province->id] ?? 0) === (int) $province->county_total
+                && $this->everyBoundaryMapped($counties);
 
             if ($allCountiesMapped) {
                 foreach ($counties as $county) {
