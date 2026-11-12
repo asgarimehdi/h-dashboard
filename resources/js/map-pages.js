@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Host-page map logic (#1352 CSP-compat).
  *
@@ -25,6 +26,7 @@
  * attributes — never `x-on:click="someGlobal(...)"`.
  */
 
+/** @type {HTMLElement | null} */
 let countySetupEl = null;
 
 function setupCountyMap() {
@@ -50,6 +52,7 @@ function setupCountyMap() {
   }
   countySetupEl = block;
 
+  /** @type {any[]} */
   let regions = [];
   try {
     regions = JSON.parse(block.textContent || '[]');
@@ -58,7 +61,9 @@ function setupCountyMap() {
     return;
   }
 
+  /** @type {Record<string, any>} */
   const geojsonLayers = {};
+  /** @type {any} */
   let map = null;
 
   // Issue #028 — attach to the live map the store owns. onReady()
@@ -122,7 +127,9 @@ function setupCountyMap() {
   const menu = document.getElementById('unitMenu');
   if (menu) {
     menu.addEventListener('change', (event) => {
-      const item = event.target.closest?.('[data-region-id]');
+      const item = /** @type {HTMLElement | null} */ (
+        /** @type {HTMLElement} */ (event.target).closest?.('[data-region-id]')
+      );
       if (!item || !menu.contains(item)) return;
       const regionId = Number(item.dataset.regionId);
       if (window.toggleGeoJson) window.toggleGeoJson(regionId);
@@ -130,6 +137,7 @@ function setupCountyMap() {
   }
 }
 
+/** @type {HTMLElement | null} */
 let routeSetupEl = null;
 
 function setupRouteMap() {
@@ -140,6 +148,7 @@ function setupRouteMap() {
   if (!store) return;
   routeSetupEl = block;
 
+  /** @type {Record<string, any>} */
   let config = {};
   try {
     config = JSON.parse(block.textContent || '{}');
@@ -148,6 +157,7 @@ function setupRouteMap() {
     return;
   }
 
+  /** @param {any} value */
   const parseWaypoint = (value) => {
     const parts = String(value || '')
       .split(',')
@@ -156,6 +166,7 @@ function setupRouteMap() {
     return L.latLng(parts[0], parts[1]);
   };
 
+  /** @type {any} */
   let routingControl = null;
 
   const toggleRoutingContainer = () => {
@@ -185,10 +196,14 @@ function setupRouteMap() {
       show: true,
     }).addTo(map);
 
-    routingControl.on('routesfound', (e) => {
+    routingControl.on('routesfound', (/** @type {any} */ e) => {
       const route = e.routes[0];
-      document.getElementById('distance').textContent = (route.summary.totalDistance / 1000).toFixed(2);
-      document.getElementById('duration').textContent = Math.ceil(route.summary.totalTime / 60);
+      /** @type {HTMLElement} */ (document.getElementById('distance')).textContent = (
+        route.summary.totalDistance / 1000
+      ).toFixed(2);
+      /** @type {HTMLElement} */ (document.getElementById('duration')).textContent = /** @type {any} */ (
+        Math.ceil(route.summary.totalTime / 60)
+      );
     });
 
     setTimeout(() => {
@@ -199,6 +214,7 @@ function setupRouteMap() {
   });
 }
 
+/** @type {HTMLElement | null} */
 let route2SetupEl = null;
 
 function setupRoute2Map() {
@@ -209,6 +225,7 @@ function setupRoute2Map() {
   if (!store) return;
   route2SetupEl = block;
 
+  /** @type {Record<string, any>} */
   let config = {};
   try {
     config = JSON.parse(block.textContent || '{}');
@@ -217,6 +234,7 @@ function setupRoute2Map() {
     return;
   }
 
+  /** @param {any} input */
   const parseCoordinates = (input) => {
     if (!input) return null;
     const coords = input.split(',').map(Number);
@@ -232,6 +250,9 @@ function setupRoute2Map() {
    * Hand-written `'?q=' + query` is how a library swap breaks silently: an
    * address containing `&` or `#` would truncate the query, axios used to
    * encode it for us.
+   *
+   * @param {any} base
+   * @param {any} query
    */
   const geocodeSearchUrl = (base, query) => {
     const url = new URL(`${base}/search`);
@@ -245,6 +266,8 @@ function setupRoute2Map() {
    * Nominatim answers with an array of `{lat, lon}`. An error body (object or
    * string) is not an array, and `[].length > 0` on a non-array is
    * `undefined > 0` — false, but only by accident. Be explicit.
+   *
+   * @param {any} data
    */
   const parseGeocodeResponse = (data) => {
     if (!Array.isArray(data) || data.length === 0) {
@@ -262,6 +285,7 @@ function setupRoute2Map() {
     return L.latLng(lat, lon);
   };
 
+  /** @param {any} query */
   const geocode = async (query) => {
     if (!query) return null;
     try {
@@ -280,7 +304,9 @@ function setupRoute2Map() {
     return null;
   };
 
+  /** @type {any} */
   let routingControl = null;
+  /** @type {any} */
   let map = null;
 
   store.onReady((live) => {
@@ -300,13 +326,17 @@ function setupRoute2Map() {
       show: true,
     }).addTo(map);
 
-    routingControl.on('routesfound', (e) => {
+    routingControl.on('routesfound', (/** @type {any} */ e) => {
       const summary = e.routes[0].summary;
-      document.getElementById('distance').textContent = (summary.totalDistance / 1000).toFixed(2);
-      document.getElementById('duration').textContent = Math.ceil(summary.totalTime / 60);
+      /** @type {HTMLElement} */ (document.getElementById('distance')).textContent = (
+        summary.totalDistance / 1000
+      ).toFixed(2);
+      /** @type {HTMLElement} */ (document.getElementById('duration')).textContent = /** @type {any} */ (
+        Math.ceil(summary.totalTime / 60)
+      );
     });
 
-    routingControl.on('routingerror', (e) => {
+    routingControl.on('routingerror', (/** @type {any} */ e) => {
       console.error('Routing error:', e.error);
     });
 
@@ -328,8 +358,8 @@ function setupRoute2Map() {
       console.error('Routing control not initialized');
       return;
     }
-    const startInput = document.getElementById('start-input');
-    const endInput = document.getElementById('end-input');
+    const startInput = /** @type {HTMLInputElement} */ (document.getElementById('start-input'));
+    const endInput = /** @type {HTMLInputElement} */ (document.getElementById('end-input'));
     const startPoint = parseCoordinates(startInput.value) || (await geocode(startInput.value));
     const endPoint = parseCoordinates(endInput.value) || (await geocode(endInput.value));
     if (startPoint && endPoint) {
@@ -343,8 +373,8 @@ function setupRoute2Map() {
   const reverseRoute = () => {
     if (!routingControl) return;
     const currentWaypoints = routingControl.getWaypoints().slice().reverse();
-    const startInput = document.getElementById('start-input');
-    const endInput = document.getElementById('end-input');
+    const startInput = /** @type {HTMLInputElement} */ (document.getElementById('start-input'));
+    const endInput = /** @type {HTMLInputElement} */ (document.getElementById('end-input'));
     const temp = startInput.value;
     startInput.value = endInput.value;
     endInput.value = temp;
@@ -360,19 +390,24 @@ function setupRoute2Map() {
   const toolbar = document.getElementById('route2-toolbar');
   if (toolbar) {
     toolbar.addEventListener('click', (event) => {
-      const actionEl = event.target.closest?.('[data-action]');
+      const actionEl = /** @type {HTMLElement | null} */ (
+        /** @type {HTMLElement} */ (event.target).closest?.('[data-action]')
+      );
       if (!actionEl || !toolbar.contains(actionEl)) return;
       if (actionEl.dataset.action === 'search-route') void searchRoute();
       else if (actionEl.dataset.action === 'reverse-route') reverseRoute();
     });
     toolbar.addEventListener('change', (event) => {
-      const toggleEl = event.target.closest?.('[data-action="toggle-routing"]');
+      const toggleEl = /** @type {HTMLElement | null} */ (
+        /** @type {HTMLElement} */ (event.target).closest?.('[data-action="toggle-routing"]')
+      );
       if (!toggleEl || !toolbar.contains(toggleEl)) return;
       toggleRoutingContainer();
     });
   }
 }
 
+/** @type {HTMLElement | null} */
 let noBoundarySetupEl = null;
 
 function setupMapNoBoundary() {
@@ -383,6 +418,7 @@ function setupMapNoBoundary() {
   if (!store) return;
   noBoundarySetupEl = block;
 
+  /** @type {any[]} */
   let units = [];
   try {
     units = JSON.parse(block.textContent || '[]');
@@ -394,6 +430,7 @@ function setupMapNoBoundary() {
   // Issue #028 — bind to the live map the store owns instead of waiting for a
   // `window.map` a previous page may still own.
   store.onReady((map) => {
+    /** @type {Record<string, any>} */
     const markers = {};
 
     units.forEach((unit) => {
