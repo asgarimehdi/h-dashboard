@@ -458,7 +458,7 @@ function readUnitMapData() {
   try {
     const parsed = JSON.parse(block.textContent || '{}');
     return { tileTemplate: parsed.tileTemplate || '', geojson: parsed.geojson ?? null };
-  } catch (e) {
+  } catch {
     return { tileTemplate: '', geojson: null };
   }
 }
@@ -497,7 +497,7 @@ function setupUnitsEditMap() {
     window._drawnItems = drawnItems;
     unitMap.addLayer(drawnItems);
 
-    let existingLayer = null;
+    let existingLayer;
 
     if (initialGeojson) {
       try {

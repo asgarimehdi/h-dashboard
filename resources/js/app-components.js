@@ -24,7 +24,7 @@ function readStoredTheme(key) {
   if (raw == null) return null;
   try {
     return JSON.parse(raw);
-  } catch (e) {
+  } catch {
     // Legacy plain values: the pre-CSP inline script stripped quotes.
     return raw.replaceAll('"', '');
   }
@@ -69,7 +69,7 @@ export function registerAppComponents(Alpine) {
       try {
         localStorage.setItem('mary-theme', JSON.stringify(this.theme));
         localStorage.setItem('mary-class', JSON.stringify(this.class));
-      } catch (e) {
+      } catch {
         // Private mode / blocked storage must not break the toggle.
       }
       this.$dispatch('theme-changed', this.theme);

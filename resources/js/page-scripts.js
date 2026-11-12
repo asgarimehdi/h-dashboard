@@ -157,7 +157,7 @@ function registerGlobalListeners() {
     let families;
     try {
       families = JSON.parse(block.textContent || '{}');
-    } catch (e) {
+    } catch {
       return;
     }
     const root = document.documentElement;

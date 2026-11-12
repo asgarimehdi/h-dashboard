@@ -43,7 +43,7 @@ function wireSet(wire, path, value) {
 function sameValue(a, b) {
   try {
     return JSON.stringify(a) === JSON.stringify(b);
-  } catch (e) {
+  } catch {
     return a === b;
   }
 }
@@ -193,7 +193,7 @@ export function registerMaryComponents(Alpine) {
       this.isSelectable = ds.selectable === 'true';
       try {
         this.pageIds = JSON.parse(ds.pageIds || '[]');
-      } catch (e) {
+      } catch {
         this.pageIds = [];
       }
       if (this.modelName && this.$wire) {
@@ -312,7 +312,7 @@ export function registerMaryComponents(Alpine) {
       const optionsBlock = this.$el.querySelector('script.choices-options-data');
       try {
         this.options = JSON.parse((optionsBlock ? optionsBlock.textContent : '') || '[]');
-      } catch (e) {
+      } catch {
         this.options = [];
       }
       if (this.modelName && this.$wire) {
@@ -608,7 +608,7 @@ export function registerMaryComponents(Alpine) {
     cropSetup() {
       try {
         return JSON.parse(this.$el.dataset.cropSetup || '{}');
-      } catch (e) {
+      } catch {
         return {};
       }
     },

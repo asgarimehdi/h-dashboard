@@ -52,7 +52,7 @@ function readCalendarData() {
   try {
     const parsed = JSON.parse(block.textContent || '{}');
     return { events: parsed.events || [], window: parsed.window || null };
-  } catch (e) {
+  } catch {
     return { events: [], window: null };
   }
 }
@@ -280,7 +280,7 @@ function registerGlobalListeners() {
     }
   });
 
-  Livewire.hook('element.initialized', (el, component) => {
+  Livewire.hook('element.initialized', (el) => {
     if (el.id === 'start_date_picker' || el.id === 'end_date_picker') {
       setTimeout(() => {
         if (typeof jalaliDatepicker !== 'undefined') {

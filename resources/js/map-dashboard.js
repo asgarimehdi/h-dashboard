@@ -100,7 +100,7 @@ export function registerMapDashboard(Alpine) {
 
             try {
                 this.unitDetails = await this.$wire.loadUnitDetails(this.unitId);
-            } catch (e) {
+            } catch {
                 // Client-only fallback: a rejected request is not the server's
                 // 'Unit not found' contract, so it gets its own copy.
                 this.unitDetails = { error: 'خطا در دریافت جزئیات واحد' };
@@ -323,7 +323,7 @@ export function registerMapDashboard(Alpine) {
                             this.disease.id = this.diseases[0].id;
                             this.loadDiseaseLayer(true);
                         }
-                    } catch (error) {
+                    } catch {
                         this.diseaseError = 'بارگذاری فهرست بیماری‌ها ناموفق بود.';
                     } finally {
                         diseasesPromise = null;

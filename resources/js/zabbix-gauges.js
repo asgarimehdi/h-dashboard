@@ -170,7 +170,7 @@ export function setupZabbixPoller() {
   let itemIds = [];
   try {
     itemIds = JSON.parse(block.textContent || '[]');
-  } catch (e) {
+  } catch {
     itemIds = [];
   }
 
@@ -234,7 +234,7 @@ export function setupZabbixPoller() {
             } catch {
               errorMsg = text.substring(0, 100);
             }
-          } catch (e) {}
+          } catch { /* unreadable body — keep the HTTP status message */ }
           state.error = errorMsg;
           return;
         }

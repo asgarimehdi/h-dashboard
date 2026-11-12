@@ -110,10 +110,10 @@ function destroyChartEl(container) {
 function renderTicketCharts() {
   waitForHighcharts(() => {
     const block = document.getElementById('dashboard-chart-data');
-    let payload = {};
+    let payload;
     try {
       payload = block ? JSON.parse(block.textContent || '{}') : {};
-    } catch (e) {
+    } catch {
       payload = {};
     }
     const trendData = payload.trend || {};
