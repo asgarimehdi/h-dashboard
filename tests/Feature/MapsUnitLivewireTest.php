@@ -607,4 +607,53 @@ class MapsUnitLivewireTest extends TestCase
         $this->assertCount(1, $after);
         $this->assertSame([2, 2], json_decode($after[0]['geojson'], true)['coordinates'][0][0][0]);
     }
+
+    // ==================== #1437: region rename invalidates `maps` ====================
+
+    public function test_region_rename_refreshes_the_cached_region_toggles(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+        $old = $region->name;
+
+        Cache::flush();
+
+        // Warm `maps/unit` mount (`unit_map:regions`).
+        Livewire::test('maps/unit')->assertSee($old);
+
+        $region->update(['name' => 'شهرستان تازه']);
+
+        Livewire::test('maps/unit')
+            ->assertSee('شهرستان تازه')
+            ->assertDontSee($old);
+    }
+
+    public function test_region_rename_refreshes_the_cached_county_boundaries_payload(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $region->update(['boundary_id' => $this->createBoundary()]);
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+        $old = $region->name;
+
+        Cache::flush();
+
+        // Warm `maps/unit` selection (`county_boundaries`).
+        Livewire::test('maps/unit')->set('selectedRegions', [$region->id]);
+
+        $region->update(['name' => 'شهرستان تازه']);
+
+        $test = Livewire::test('maps/unit')->set('selectedRegions', [$region->id]);
+        $counties = collect($test->effects['dispatches'])
+            ->firstWhere('name', 'county-boundaries-loaded')['params']['counties'];
+
+        $names = array_column($counties, 'name');
+        $this->assertContains('شهرستان تازه', $names);
+        $this->assertNotContains($old, $names);
+    }
 }
