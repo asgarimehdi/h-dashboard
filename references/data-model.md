@@ -7,7 +7,7 @@
 ### Core Entities
 
 **Person** (`persons` table)
-- `n_code` (PK, string)
+- `id` (PK, bigint) — `n_code` is a unique `string(10)`, **not** the primary key
 - `f_name`, `l_name`
 - `u_id` (FK to `units.id`, nullable, `onDelete: set null` / `onUpdate: cascade` — added 2026-09-03)
 - `s_id` (FK to `semats.id`) — job title (note: the column is **`s_id`**, not `semat_id`)
@@ -17,7 +17,7 @@
 
 **Hardware** (`hardwares` table)
 - `id` (PK)
-- `n_code` (FK to `persons.n_code`)
+- `n_code` (logical FK to `persons.n_code`; no DB constraint)
 - `pc_name`, `type`, `os`, `ip_valid`, `ip_local`, `mac`
 - `net_type`, `switch`, `port`, `shutdown` (boolean)
 - `vlan`, `motherboard`, `cpu`, `ram`, `hdd`
