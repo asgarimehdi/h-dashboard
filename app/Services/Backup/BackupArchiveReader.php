@@ -34,50 +34,55 @@ class BackupArchiveReader
             throw new BackupValidationException('فایل بک‌آپ پیدا نشد.');
         }
 
-        $zip = new ZipArchive;
+        $zip = $this->newZipArchive();
 
         if ($zip->open($path) !== true) {
             throw new BackupValidationException('فایل انتخاب‌شده یک فایل zip معتبر نیست.');
         }
 
-        $tables = [];
-        $hasManifest = false;
+        try {
+            $tables = [];
+            $hasManifest = false;
 
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $name = (string) $zip->getNameIndex($index);
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $name = (string) $zip->getNameIndex($index);
 
-            if ($name === 'manifest.json') {
-                $hasManifest = true;
-                $this->assertValidJson((string) $zip->getFromIndex($index), $name);
+                if ($name === 'manifest.json') {
+                    $hasManifest = true;
+                    $this->assertValidJson((string) $zip->getFromIndex($index), $name);
 
-                continue;
+                    continue;
+                }
+
+                if (! str_ends_with($name, '.json')) {
+                    continue;
+                }
+
+                $table = substr($name, 0, -5);
+
+                if (! $this->registry->isRegistered($table)) {
+                    throw new BackupValidationException("جدول «{$table}» در رجیستری بک‌آپ نیست.");
+                }
+
+                $tables[$table] = $this->decode((string) $zip->getFromIndex($index), $name);
             }
 
-            if (! str_ends_with($name, '.json')) {
-                continue;
+            if ($tables === []) {
+                throw new BackupValidationException('فایل بک‌آپ هیچ جدولی ندارد.');
             }
 
-            $table = substr($name, 0, -5);
-
-            if (! $this->registry->isRegistered($table)) {
-                $zip->close();
-
-                throw new BackupValidationException("جدول «{$table}» در رجیستری بک‌آپ نیست.");
-            }
-
-            $tables[$table] = $this->decode((string) $zip->getFromIndex($index), $name);
+            return [
+                'tables' => $tables,
+                'full' => $hasManifest || count($tables) > 1,
+            ];
+        } finally {
+            $zip->close();
         }
+    }
 
-        $zip->close();
-
-        if ($tables === []) {
-            throw new BackupValidationException('فایل بک‌آپ هیچ جدولی ندارد.');
-        }
-
-        return [
-            'tables' => $tables,
-            'full' => $hasManifest || count($tables) > 1,
-        ];
+    protected function newZipArchive(): ZipArchive
+    {
+        return new ZipArchive;
     }
 
     /**

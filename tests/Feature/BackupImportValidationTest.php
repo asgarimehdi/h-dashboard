@@ -7,8 +7,10 @@ use App\Services\Backup\BackupArchiveReader;
 use App\Services\Backup\BackupImportValidator;
 use App\Services\Backup\BackupService;
 use App\Support\Backup\BackupProblem;
+use App\Support\Backup\TableRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -17,7 +19,31 @@ uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class, Int
 
 beforeEach(function () {
     $this->seedLookupTables();
+    File::ensureDirectoryExists(storage_path('app/private/backup'));
 });
+
+final class RecordingZipArchive extends ZipArchive
+{
+    public int $closes = 0;
+
+    public function close(): bool
+    {
+        $this->closes++;
+
+        return parent::close();
+    }
+}
+
+final class RecordingArchiveReader extends BackupArchiveReader
+{
+    /** @var list<RecordingZipArchive> */
+    public array $opened = [];
+
+    protected function newZipArchive(): ZipArchive
+    {
+        return $this->opened[] = new RecordingZipArchive;
+    }
+}
 
 /**
  * @return array<string, mixed>
@@ -171,8 +197,16 @@ test('a file that is not a zip is rejected', function () {
     $path = storage_path('app/private/backup/not-a-zip.zip');
     file_put_contents($path, 'this is not a zip');
 
-    expect(fn () => app(BackupArchiveReader::class)->read($path))
-        ->toThrow(BackupValidationException::class);
+    $caught = null;
+
+    try {
+        app(BackupArchiveReader::class)->read($path);
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->not->toBeNull()
+        ->and($caught->getMessage())->toBe('فایل انتخاب‌شده یک فایل zip معتبر نیست.');
 });
 
 test('an archive with broken json is rejected', function () {
@@ -181,8 +215,16 @@ test('an archive with broken json is rejected', function () {
         ['users.json' => '{not json']
     );
 
-    expect(fn () => app(BackupArchiveReader::class)->read($path))
-        ->toThrow(BackupValidationException::class);
+    $caught = null;
+
+    try {
+        app(BackupArchiveReader::class)->read($path);
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->not->toBeNull()
+        ->and($caught->getMessage())->toBe('محتوای «users.json» در فایل بک‌آپ JSON معتبر نیست.');
 });
 
 test('an archive with an unknown table is rejected', function () {
@@ -191,6 +233,54 @@ test('an archive with an unknown table is rejected', function () {
         ['evil_table.json' => '[]']
     );
 
-    expect(fn () => app(BackupArchiveReader::class)->read($path))
-        ->toThrow(BackupValidationException::class);
+    $caught = null;
+
+    try {
+        app(BackupArchiveReader::class)->read($path);
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->not->toBeNull()
+        ->and($caught->getMessage())->toBe('جدول «evil_table» در رجیستری بک‌آپ نیست.');
+});
+
+test('the archive handle is closed on every failed read', function (array $files, string $message) {
+    $path = $this->backupMakeZip(
+        storage_path('app/private/backup/reader-'.uniqid().'.zip'),
+        $files
+    );
+
+    $reader = new RecordingArchiveReader(new TableRegistry);
+    $caught = null;
+
+    try {
+        $reader->read($path);
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->not->toBeNull()
+        ->and($caught->getMessage())->toBe($message)
+        ->and($reader->opened)->toHaveCount(1)
+        ->and($reader->opened[0]->closes)->toBe(1);
+})->with([
+    'invalid manifest' => [['manifest.json' => '{not json'], 'محتوای «manifest.json» در فایل بک‌آپ JSON معتبر نیست.'],
+    'invalid table json' => [['users.json' => '{bad'], 'محتوای «users.json» در فایل بک‌آپ JSON معتبر نیست.'],
+    'non-array document' => [['users.json' => '{"a":1}'], 'محتوای «users.json» باید آرایه‌ای از ردیف‌ها باشد.'],
+    'non-object row' => [['users.json' => '[1,2,3]'], 'محتوای «users.json» باید آرایه‌ای از ردیف‌ها باشد.'],
+    'unregistered table' => [['evil_table.json' => '[]'], 'جدول «evil_table» در رجیستری بک‌آپ نیست.'],
+    'no tables' => [['notes.txt' => 'x'], 'فایل بک‌آپ هیچ جدولی ندارد.'],
+]);
+
+test('the archive handle is closed on success', function () {
+    $path = $this->backupMakeZip(
+        storage_path('app/private/backup/reader-'.uniqid().'.zip'),
+        ['users.json' => '[{"id":1}]']
+    );
+
+    $reader = new RecordingArchiveReader(new TableRegistry);
+
+    expect($reader->read($path))->toHaveKey('tables')
+        ->and($reader->opened[0]->closes)->toBe(1);
 });
