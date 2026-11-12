@@ -20,7 +20,7 @@
 
 ### API Token Abilities (issue #690)
 
-Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise) — **except three intentionally exempt routes**: `POST /api/login` (public; it mints the token), `GET /api/user` and `POST /api/logout` (self-scoped; they act on the caller, not on a resource — logout by #1071, following the pre-existing `/api/user` precedent). A fourth exception is a decision, not an implementation detail: record it here and in `AGENTS.md`.
+Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise) — **except three intentionally exempt routes**: `POST /api/login` (public; it mints the token), `GET /api/user` and `POST /api/logout` (self-scoped; they act on the caller, not on a resource — logout by #1071, following the pre-existing `/api/user` precedent).
 
 Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:a,b` = ALL of them** (`CheckForAnyAbility` vs `CheckAbilities`).
 
