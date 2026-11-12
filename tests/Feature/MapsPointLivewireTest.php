@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Unit;
+use App\Models\UnitType;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\UnitTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -56,6 +57,36 @@ class MapsPointLivewireTest extends TestCase
     }
 
     // ==================== Interaction tests ====================
+
+    public function test_unit_type_rename_invalidates_point_map_type_cache(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+
+        // #1439: the seeded names share prefixes (`… شهری` is a prefix of
+        // `… شهری روستایی`), so assertSee/assertDontSee on them would be
+        // vacuous or over-strict. Give every cached type a unique name.
+        // Look the rows up by name: the seeder runs per test, so the Postgres
+        // sequence (not transactional) gives them different ids each run.
+        $type5 = UnitType::where('name', 'مرکز خدمات جامع سلامت شهری')->firstOrFail();
+        UnitType::where('name', 'مرکز خدمات جامع سلامت شهری روستایی')->firstOrFail()
+            ->update(['name' => 'نام تازه شش']);
+        UnitType::where('name', 'مرکز خدمات جامع سلامت روستایی')->firstOrFail()
+            ->update(['name' => 'نام تازه هفت']);
+        $type5->update(['name' => 'نام تازه پنج']);
+
+        // Warm `point_map:types` with the first name.
+        Livewire::test('maps/point')->assertSee('نام تازه پنج');
+
+        $type5->update(['name' => 'نام دیگر پنج']);
+
+        // The rename must invalidate the `maps` namespace, so this mount
+        // serves the new name and no longer the stale one.
+        Livewire::test('maps/point')
+            ->assertSee('نام دیگر پنج')
+            ->assertDontSee('نام تازه پنج');
+    }
 
     public function test_add_point(): void
     {
