@@ -60,6 +60,7 @@ function syncOnMorph(syncFn) {
   return null;
 }
 
+/** @param {AlpineStatic} Alpine */
 export function registerMaryComponents(Alpine) {
   // Sidebar shell (CspMain). `collapsed` is read by MenuSub through
   // the Alpine scope chain, exactly as the original literal did.

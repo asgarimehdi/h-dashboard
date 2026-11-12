@@ -290,6 +290,30 @@ jobs:
         # above is what keeps the workflow run green (issue #865/#867 pattern).
         run: npm run typecheck
 
+  js-typecheck:
+    name: Typecheck (resources/js ratchet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # Also the lock-file consistency check (same reason as :283-285).
+        run: npm ci
+
+      - name: Typecheck the resources/js @ts-check set
+        # Not wrapped in `|| true`: a regression in an opted-in file must render
+        # this job red and visible.
+        run: npx tsc -p tsconfig.js.json --noEmit
+
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest

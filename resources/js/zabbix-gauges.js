@@ -45,6 +45,7 @@ function ensureGaugeState() {
 
 ensureGaugeState();
 
+/** @param {AlpineStatic} Alpine */
 export function registerSignalGauge(Alpine) {
   Alpine.data('signalGauge', () => ({
     signalItemId: '',

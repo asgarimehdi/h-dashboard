@@ -33,6 +33,7 @@
  * originals.
  */
 
+/** @param {AlpineStatic} Alpine */
 export function registerMapDashboard(Alpine) {
     // Unit-details modal (#1383). The template's directive expressions are
     // reduced to bare identifiers — and the `showUnitDetails` listener lives in

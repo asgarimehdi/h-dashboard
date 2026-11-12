@@ -30,6 +30,7 @@ function readStoredTheme(key) {
   }
 }
 
+/** @param {AlpineStatic} Alpine */
 export function registerAppComponents(Alpine) {
   // Theme toggle (components/csp-theme-toggle.blade.php). Persistence
   // matches the $persist format it replaces: JSON-stringified values

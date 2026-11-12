@@ -21,6 +21,7 @@
  * resolves across the `wire:ignore` boundary.
  */
 
+/** @param {AlpineStatic} Alpine */
 export function registerMapHost(Alpine) {
   Alpine.data('mapHost', () => ({
     _invalidate: null,

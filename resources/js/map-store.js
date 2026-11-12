@@ -64,6 +64,7 @@ function destroyInstance(instance) {
 let instance = null;
 let containerEl = null;
 
+/** @param {AlpineStatic} Alpine */
 export function registerMapStore(Alpine) {
   Alpine.store(MAP_ID, {
     config: {},

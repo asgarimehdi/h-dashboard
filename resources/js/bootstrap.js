@@ -1,3 +1,4 @@
+// @ts-check
 import { registerMapStore } from './map-store';
 import { registerMapHost } from './map-host';
 import { setupMapPages } from './map-pages';
