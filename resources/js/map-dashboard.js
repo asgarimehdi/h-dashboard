@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Map-dashboard Alpine component moved out of its `@script` block
  * (#1352, Step 3 / R3).
@@ -43,6 +44,7 @@ export function registerMapDashboard(Alpine) {
   // where that parser never runs.
   Alpine.data('unitDetailsModal', () => ({
     unitId: null,
+    /** @type {any} */
     unitDetails: null,
     loading: false,
 
@@ -52,14 +54,14 @@ export function registerMapDashboard(Alpine) {
       // directive can never match it (it listens for `showunitdetails`).
       // A plain window listener keeps the server's event name intact and
       // stays outside the CSP expression parser entirely.
-      this.showUnitDetailsListener = (event) => {
+      /** @type {any} */ (this).showUnitDetailsListener = (/** @type {any} */ event) => {
         this.openUnitDetails(event.detail[0].unitId);
       };
-      window.addEventListener('showUnitDetails', this.showUnitDetailsListener);
+      window.addEventListener('showUnitDetails', /** @type {any} */ (this).showUnitDetailsListener);
     },
 
     destroy() {
-      window.removeEventListener('showUnitDetails', this.showUnitDetailsListener);
+      window.removeEventListener('showUnitDetails', /** @type {any} */ (this).showUnitDetailsListener);
     },
 
     get unitName() {
@@ -83,6 +85,7 @@ export function registerMapDashboard(Alpine) {
       return this.unitDetails && this.unitDetails.error ? this.unitDetails.error : '';
     },
 
+    /** @param {any} unitId */
     openUnitDetails(unitId) {
       this.unitId = unitId;
       this.loading = true;
@@ -117,9 +120,13 @@ export function registerMapDashboard(Alpine) {
     // which breaks Leaflet's listener bookkeeping (issue #769). The map
     // itself is owned by the shared maps.map component
     // (Alpine.store('map')); this page only attaches its layers to it.
+    /** @type {any} */
     let map = null;
+    /** @type {Record<string, any>} */
     let layerGroups = {};
+    /** @type {any} */
     let moveTimer = null;
+    /** @type {any} */
     let diseasesPromise = null;
 
     // One definition of the region→unit boundary on the client. Mirrors
@@ -134,22 +141,28 @@ export function registerMapDashboard(Alpine) {
 
     return {
       activeLayers: ['units'],
+      /** @type {Record<string, string>} */
       filters: {
         hardware_type: '',
         ticket_priority: '',
         ticket_status: '',
       },
       stats: { units: 0, hardware: 0, open_tickets: 0 },
+      /** @type {string | null} */
       currentBbox: null,
       apiBase: '',
       center: [0, 0],
       zoom: 8,
 
       // Disease layer (#1246). `diseaseLevel` is 'region' | 'unit' | null.
+      /** @type {any[]} */
       diseases: [],
+      /** @type {Record<string, any>} */
       disease: { id: null, from: '', to: '' },
       diseaseError: '',
+      /** @type {any[]} */
       diseaseLegend: [],
+      /** @type {any[]} */
       diseaseBreaks: [],
       diseaseLevel: null,
       diseaseLoading: false,
@@ -225,7 +238,7 @@ export function registerMapDashboard(Alpine) {
 
           input.dataset.jdpBound = '1';
           input.addEventListener('jdp:change', () => {
-            this.disease[key] = input.value;
+            this.disease[key] = /** @type {HTMLInputElement} */ (input).value;
             this.loadDiseaseLayer(true);
           });
         });
@@ -381,7 +394,7 @@ export function registerMapDashboard(Alpine) {
 
           this.diseaseError = '';
           this.applyDiseaseLevel(level, data.features, data.meta || {});
-        } catch (error) {
+        } catch (/** @type {any} */ error) {
           if (requestId !== this.diseaseRequestId) return;
 
           // Keep the previous level on screen: a failed refresh must
@@ -394,6 +407,10 @@ export function registerMapDashboard(Alpine) {
         }
       },
 
+      /**
+       * @param {any[]} features
+       * @param {any} level
+       */
       featuresMatchLevel(features, level) {
         return features.every((feature) => {
           const featureLevel = feature?.properties?.level;
@@ -402,6 +419,11 @@ export function registerMapDashboard(Alpine) {
         });
       },
 
+      /**
+       * @param {any} level
+       * @param {any[]} features
+       * @param {Record<string, any>} meta
+       */
       applyDiseaseLevel(level, features, meta) {
         const isUnit = level === 'unit';
         const targetGroup = isUnit ? layerGroups.diseaseUnits : layerGroups.diseaseRegions;
@@ -446,6 +468,11 @@ export function registerMapDashboard(Alpine) {
         });
       },
 
+      /**
+       * @param {any[]} features
+       * @param {any} level
+       * @param {Record<string, any>} meta
+       */
       renderDiseaseFeatures(features, level, meta) {
         if (features.length === 0) {
           this.diseaseLegend = [];
@@ -492,7 +519,9 @@ export function registerMapDashboard(Alpine) {
         // `class` per feature and `breaks` for the legend, so there is
         // one quantile implementation, not two.
         const breaks = Array.isArray(meta.breaks)
-          ? meta.breaks.map((value) => this.toRate(value)).filter((value) => value !== null)
+          ? meta.breaks
+              .map((/** @type {any} */ value) => this.toRate(value))
+              .filter((/** @type {any} */ value) => value !== null)
           : [];
 
         this.diseaseBreaks = breaks;
@@ -502,7 +531,7 @@ export function registerMapDashboard(Alpine) {
           { type: 'FeatureCollection', features },
           {
             pane: 'diseaseRegionPane',
-            style: (feature) => {
+            style: (/** @type {any} */ feature) => {
               const rate = this.toRate(feature.properties.rate);
 
               return {
@@ -514,7 +543,7 @@ export function registerMapDashboard(Alpine) {
                 fillOpacity: rate === null ? 0.35 : 0.75,
               };
             },
-            onEachFeature: (feature, polygon) => {
+            onEachFeature: (/** @type {any} */ feature, /** @type {any} */ polygon) => {
               polygon.bindPopup(() => this.diseaseRegionPopup(feature.properties));
             },
           },
@@ -523,6 +552,10 @@ export function registerMapDashboard(Alpine) {
         layerGroups.diseaseRegions.addLayer(geoLayer);
       },
 
+      /**
+       * @param {any[]} breaks
+       * @param {any[]} features
+       */
       buildDiseaseLegend(breaks, features) {
         const hasRate = features.some((feature) => this.toRate(feature.properties.rate) !== null);
 
@@ -550,12 +583,14 @@ export function registerMapDashboard(Alpine) {
         return rows.slice(0, DISEASE_COLORS.length);
       },
 
+      /** @param {any} classIndex */
       diseaseColor(classIndex) {
         const index = Number.isInteger(Number(classIndex)) ? Number(classIndex) : 0;
 
         return DISEASE_COLORS[Math.min(Math.max(index, 0), DISEASE_COLORS.length - 1)];
       },
 
+      /** @param {any} value */
       toRate(value) {
         if (value === null || value === undefined || value === '' || value === '—') return null;
 
@@ -564,6 +599,10 @@ export function registerMapDashboard(Alpine) {
         return Number.isFinite(number) ? number : null;
       },
 
+      /**
+       * @param {any} value
+       * @param {number} [digits]
+       */
       fa(value, digits = 0) {
         return Number(value).toLocaleString('fa-IR', {
           minimumFractionDigits: digits,
@@ -571,6 +610,7 @@ export function registerMapDashboard(Alpine) {
         });
       },
 
+      /** @param {any} value */
       escapeHtml(value) {
         const div = document.createElement('div');
         div.textContent = value ?? '';
@@ -578,6 +618,7 @@ export function registerMapDashboard(Alpine) {
         return div.innerHTML;
       },
 
+      /** @param {Record<string, any>} props */
       diseaseRegionPopup(props) {
         const rate = this.toRate(props.rate);
 
@@ -590,6 +631,7 @@ export function registerMapDashboard(Alpine) {
                     </div>`;
       },
 
+      /** @param {Record<string, any>} props */
       diseaseUnitPopup(props) {
         return `
                     <div dir="rtl" class="map-popup-narrow">
@@ -598,6 +640,12 @@ export function registerMapDashboard(Alpine) {
                     </div>`;
       },
 
+      /**
+       * @param {string} url
+       * @param {any} layerGroup
+       * @param {string} type
+       * @param {Record<string, string>} headers
+       */
       async fetchAndRender(url, layerGroup, type, headers) {
         try {
           const response = await fetch(url, { headers, credentials: 'include' });
@@ -608,6 +656,10 @@ export function registerMapDashboard(Alpine) {
         }
       },
 
+      /**
+       * @param {string} bbox
+       * @param {Record<string, string>} headers
+       */
       async fetchStats(bbox, headers) {
         try {
           const response = await fetch(`${this.apiBase}/stats?bbox=${bbox}`, { headers, credentials: 'include' });
@@ -618,13 +670,18 @@ export function registerMapDashboard(Alpine) {
         }
       },
 
+      /**
+       * @param {any} geojson
+       * @param {any} layerGroup
+       * @param {string} type
+       */
       renderGeoJSON(geojson, layerGroup, type) {
         if (!layerGroup) return;
         layerGroup.clearLayers();
 
         if (!geojson.features || geojson.features.length === 0) return;
 
-        geojson.features.forEach((feature) => {
+        geojson.features.forEach((/** @type {any} */ feature) => {
           if (!feature.geometry) return;
 
           const props = feature.properties;
@@ -682,12 +739,17 @@ export function registerMapDashboard(Alpine) {
         });
       },
 
+      /**
+       * @param {string} type
+       * @param {Record<string, any>} props
+       */
       getIconColor(type, props) {
         if (type === 'unit') {
           return '#3b82f6';
         } else if (type === 'hardware') {
           return props.shutdown ? '#ef4444' : '#22c55e';
         } else if (type === 'ticket') {
+          /** @type {Record<string, string>} */
           const colors = {
             urgent: '#ef4444',
             high: '#f97316',
@@ -700,7 +762,12 @@ export function registerMapDashboard(Alpine) {
         return '#6b7280';
       },
 
+      /**
+       * @param {string} type
+       * @param {Record<string, any>} props
+       */
       createPopup(type, props) {
+        /** @param {any} str */
         const escapeHtml = (str) => {
           const div = document.createElement('div');
           div.textContent = str ?? '';
@@ -738,7 +805,9 @@ export function registerMapDashboard(Alpine) {
         return '';
       },
 
+      /** @param {any} typeId */
       getUnitTypeLabel(typeId) {
+        /** @type {Record<number, string>} */
         const types = {
           1: 'وزارت بهداشت',
           2: 'دانشگاه علوم پزشکی',
@@ -755,7 +824,9 @@ export function registerMapDashboard(Alpine) {
         return types[typeId] || 'نامشخص';
       },
 
+      /** @param {any} priority */
       getPriorityLabel(priority) {
+        /** @type {Record<string, string>} */
         const labels = {
           urgent: 'فوری',
           high: 'بالا',
@@ -766,7 +837,9 @@ export function registerMapDashboard(Alpine) {
         return labels[priority] || priority;
       },
 
+      /** @param {any} priority */
       getPriorityBadge(priority) {
+        /** @type {Record<string, string>} */
         const badges = {
           urgent: 'badge-error',
           high: 'badge-warning',
@@ -777,12 +850,17 @@ export function registerMapDashboard(Alpine) {
         return badges[priority] || 'badge-ghost';
       },
 
+      /**
+       * @param {string} type
+       * @param {Record<string, any>} props
+       */
       onFeatureClick(type, props) {
         if (type === 'unit') {
-          this.$wire.dispatch('unitSelected', [props.id]);
+          this.$wire.dispatch('unitSelected', /** @type {any} */ ([props.id]));
         }
       },
 
+      /** @param {string} layer */
       toggleLayer(layer) {
         const isDisease = layer === 'diseases';
 
@@ -841,12 +919,16 @@ export function registerMapDashboard(Alpine) {
 
           this.loadLayers();
         }
-        this.$wire.dispatch('layerToggled', [layer]);
+        this.$wire.dispatch('layerToggled', /** @type {any} */ ([layer]));
       },
 
+      /**
+       * @param {string} key
+       * @param {any} value
+       */
       setFilter(key, value) {
         this.filters[key] = value;
-        this.$wire.dispatch('filterChanged', [this.filters]);
+        this.$wire.dispatch('filterChanged', /** @type {any} */ ([this.filters]));
         this.loadLayers();
       },
     };
