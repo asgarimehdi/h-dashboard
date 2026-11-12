@@ -56,6 +56,13 @@ jobs:
       - name: Assert no tracked env file commits an APP_KEY
         run: php scripts/check-app-key-leak.php
 
+      - name: Assert .env.example ships the Persian locale
+        # Issue #1414: the canonical dev template must agree with the four
+        # sibling env templates, or a fresh clone boots English in an RTL app.
+        run: |
+          grep -q '^APP_LOCALE=fa' .env.example
+          grep -q '^APP_FALLBACK_LOCALE=en' .env.example
+
       - name: Check code style
         run: vendor/bin/pint --test
 
