@@ -1,7 +1,8 @@
-        {{-- Edit Modal --}}
-        @if($showEditModal && $editingId)
-            <x-modal wire:model="showEditModal" title="ویرایش سخت افزار" close-on-backdrop>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {{-- Edit Panel — inline like the create form (#1467) --}}
+        @if($editingId)
+            <div id="hardware-edit-panel" class="mb-4 p-4 bg-base-200 rounded-lg" wire:key="hardware-edit-{{ $editingId }}">
+                <h2 class="text-lg font-bold mb-3">ویرایش سخت افزار</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative">
                         <x-input wire:model="personSearch" label="کد ملی / نام پرسنل" placeholder="جستجو..." />
                         @if(count($personResults) > 0)
@@ -46,13 +47,13 @@
                             <span class="label-text">علامت</span>
                         </label>
                     </div>
-                    <div class="md:col-span-2">
+                    <div class="md:col-span-2 lg:col-span-3">
                         <x-input wire:model="comments" label="توضیحات" />
                     </div>
                 </div>
-                <x-slot:actions>
+                <div class="flex gap-2 mt-4">
                     <x-button wire:click="updateHardware" label="ذخیره" icon="o-check" class="btn-primary" spinner />
-                    <x-button @click="$wire.set('showEditModal', false); $wire.cancelEdit()" label="لغو" icon="o-x-mark" class="btn-ghost" />
-                </x-slot:actions>
-            </x-modal>
+                    <x-button wire:click="cancelEdit" label="لغو" icon="o-x-mark" class="btn-ghost" />
+                </div>
+            </div>
         @endif

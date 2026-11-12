@@ -56,8 +56,6 @@ return new class extends Component
 
     public bool $showForm = false;
 
-    public bool $showEditModal = false;
-
     public bool $showFilters = false;
 
     public bool $showColPanel = false;
@@ -306,7 +304,6 @@ return new class extends Component
         $this->resetForm();
         $this->editingId = null;
         $this->showForm = false;
-        $this->showEditModal = false;
     }
 
     public function startCreate(): void
@@ -314,7 +311,6 @@ return new class extends Component
         $this->resetValidation();
         $this->resetForm();
         $this->editingId = null;
-        $this->showEditModal = false;
         $this->showForm = true;
     }
 
@@ -373,7 +369,6 @@ return new class extends Component
         $this->clean_at = $hw->clean_at?->format('Y-m-d');
         $this->selectedPersonName = $hw->person ? trim($hw->person->f_name.' '.$hw->person->l_name) : null;
         $this->showForm = false;
-        $this->showEditModal = true;
     }
 
     public function updateHardware(): void
