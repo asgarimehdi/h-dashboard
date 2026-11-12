@@ -24,14 +24,16 @@ class UnitType extends Model
 
     protected static function booted(): void
     {
-        // Issue #1348: a UnitType write changes payloads cached under five
+        // Issue #1348: a UnitType write changes payloads cached under six
         // namespaces — `by_type` in report_units, `staffingRatio` labels in
         // hr_stats, unitType eager loads in unit_hierarchy, the map payload
-        // in report_no_boundary, and UnitType::all() in unit_types. Model
-        // events (decision ب), mirroring Person's bumps.
+        // in report_no_boundary, UnitType::all() in unit_types, and the
+        // `id`/`name` type lists in maps (unit_map:center_types and
+        // point_map:types, #1439). Model events (decision ب), mirroring
+        // Person's bumps.
         $bump = function (): void {
             $cache = app(CacheInvalidationServiceInterface::class);
-            foreach (['report_units', 'hr_stats', 'unit_hierarchy', 'report_no_boundary', 'unit_types'] as $namespace) {
+            foreach (['report_units', 'hr_stats', 'unit_hierarchy', 'report_no_boundary', 'unit_types', 'maps'] as $namespace) {
                 $cache->increment($namespace);
             }
         };
