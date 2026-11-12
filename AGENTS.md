@@ -94,6 +94,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
+- **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/` (CI `js-lint` blocks).
 
 ### Composer Scripts
 ```bash
@@ -131,7 +132,7 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs with **eight** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`); `mutation` runs on every PR too (Composer-only, no Node/Vite, 45-min timeout, ~30 min typical) and gates nothing. The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
+`.github/workflows/test.yml` runs on PRs with **eleven** jobs — six blocking (`lint`, `js-lint`, `test`, `csp-enforcing`, `smoke`, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`). Job table + yq derivations: [testing](docs/agents/testing.md). Coverage is CI-only.
 
 ---
 
