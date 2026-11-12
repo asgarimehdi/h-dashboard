@@ -135,11 +135,12 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | `DailySeries` needs explicit generics | `Eloquent\Builder` in a signature without a `TModel` produces `missingType.generics` at level 6. Annotate `@param EloquentBuilder<covariant Model>|QueryBuilder` — otherwise the fix gets buried in `phpstan-baseline.neon` |
 | A test must not assert a fixed cell address across a `latest('created_at')` export | `hardware_audits.created_at` is `timestamp(0)` on Postgres, so rows written in the same second tie and their order under `latest('created_at')` is undefined — Postgres decides by physical page layout, so the same test passes on an author machine and fails on CI (issue #886's escape test was red in #920/#923/#924, green in #921/#922, with no commit to blame). In an export test, resolve the column from `headings()` and find the row by its own content; never `getCell('F2')` to mean "the row this test created". Note `paginate()` has the same shape: with a count of 0 it never runs the ORDER BY, so a sort test that seeds nothing passes vacuously |
 
-## CI jobs (`.github/workflows/test.yml` — eleven jobs, six blocking, five informational)
+## CI jobs (`.github/workflows/test.yml` — twelve jobs, seven blocking, five informational)
 
 | Job key | Name | Gate |
 |---|---|---|
 | `lint` | Code Style (Pint) — `vendor/bin/pint --test` | **blocking** |
+| `js-lint` | JS Lint & Format (ESLint + Prettier) — `npm run lint` + `npm run format:check` | **blocking** |
 | `test` | Tests & Coverage — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov | **blocking** |
 | `phpstan` | PHPStan Static Analysis — `vendor/bin/phpstan analyse --no-progress` | **blocking** |
 | `js-typecheck` | Typecheck (resources/js ratchet) — `npx tsc -p tsconfig.js.json --noEmit` | **blocking** |
@@ -155,8 +156,8 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 > Derivation, re-run after any workflow change — no hand count:
 > ```bash
-> yq -r '.jobs | keys_unsorted | join(", ")' .github/workflows/test.yml              # lint, test, coverage-report, typecheck, js-typecheck, e2e, csp-enforcing, smoke, mutation, phpstan, test-php86
-> yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml   # lint, test, js-typecheck, csp-enforcing, smoke, phpstan
+> yq -r '.jobs | keys_unsorted | join(", ")' .github/workflows/test.yml              # lint, js-lint, test, coverage-report, typecheck, js-typecheck, e2e, csp-enforcing, smoke, mutation, phpstan, test-php86
+> yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml   # lint, js-lint, test, js-typecheck, csp-enforcing, smoke, phpstan
 > ```
 
 ## Derivable invariants (stamp hygiene, #983)

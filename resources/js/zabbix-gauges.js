@@ -39,7 +39,12 @@ function ensureGaugeState() {
   // built before the page poller, so creating it must be
   // idempotent on both sides.
   return (window.zabbixGauges = window.zabbixGauges || {
-    values: {}, error: null, loading: false, loaded: false, subscribers: [], timer: null,
+    values: {},
+    error: null,
+    loading: false,
+    loaded: false,
+    subscribers: [],
+    timer: null,
   });
 }
 
@@ -99,8 +104,13 @@ export function registerSignalGauge(Alpine) {
 
       // Until the first fetch completes, "no data found" is premature;
       // previously only "—" was shown in that state.
-      if (!this.error && state.loaded &&
-        this.signal === null && this.frequency === null && this.responseTime === null) {
+      if (
+        !this.error &&
+        state.loaded &&
+        this.signal === null &&
+        this.frequency === null &&
+        this.responseTime === null
+      ) {
         this.error = 'داده‌ای یافت نشد';
       }
     },
@@ -171,7 +181,7 @@ export function setupZabbixPoller() {
   let itemIds = [];
   try {
     itemIds = JSON.parse(block.textContent || '[]');
-  } catch (e) {
+  } catch {
     itemIds = [];
   }
 
@@ -208,9 +218,7 @@ export function setupZabbixPoller() {
 
       for (let offset = 0; offset < itemIds.length; offset += CHUNK) {
         const params = new URLSearchParams();
-        itemIds
-          .slice(offset, offset + CHUNK)
-          .forEach((id, index) => params.append(`item_ids[${index}]`, id));
+        itemIds.slice(offset, offset + CHUNK).forEach((id, index) => params.append(`item_ids[${index}]`, id));
 
         const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
 
@@ -235,7 +243,9 @@ export function setupZabbixPoller() {
             } catch {
               errorMsg = text.substring(0, 100);
             }
-          } catch (e) {}
+          } catch {
+            /* unreadable body — keep the HTTP status message */
+          }
           state.error = errorMsg;
           return;
         }
@@ -251,9 +261,7 @@ export function setupZabbixPoller() {
       // #703: a TypeError from fetch() means the request never
       // reached the server (network down / server offline), which
       // is the same "cannot reach the server" condition as a 503.
-      state.error = e instanceof TypeError
-        ? 'دسترسی به سرور مقدور نمی باشد'
-        : (e.message || 'خطا در دریافت');
+      state.error = e instanceof TypeError ? 'دسترسی به سرور مقدور نمی باشد' : e.message || 'خطا در دریافت';
     } finally {
       state.loading = false;
       state.loaded = true;
