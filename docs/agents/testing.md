@@ -33,6 +33,9 @@ which is worse than no hook. CI stays the only authority.
 - `composer verify` reproduces CI's **test job, not the coverage gate**: CI also runs
   `--parallel --coverage --min=80`, which needs pcov. Coverage is CI-only. It runs the
   suite **serially** like `composer test`.
+- `composer verify:fast <paths>` is the **local TDD loop**: Pint runs on the named
+  paths only and PHPStan is skipped, announced by a banner. It is not CI-equivalent
+  and never replaces the default before a push — `pre-push` still runs full PHPStan.
 - The preflight **exits 2** (distinct from 1) so callers can tell "your machine is
   wrong" from "your code is wrong". It resolves the effective test database from
   PHPUnit's own precedence — an exported `DB_DATABASE` (or a `DB_URL`) beats
