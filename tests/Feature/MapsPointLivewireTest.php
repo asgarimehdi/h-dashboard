@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Region;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\UnitTypeSeeder;
@@ -186,5 +187,27 @@ class MapsPointLivewireTest extends TestCase
         $component = Livewire::test('maps/point');
         $location = $component->get('location');
         $this->assertEmpty(collect($location)->firstWhere('id', $orphan->id));
+    }
+
+    // ==================== #1437: region rename invalidates `maps` ====================
+
+    public function test_region_rename_refreshes_the_cached_region_toggles(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+
+        // The point page excludes region id 1, so advance the sequence first.
+        Region::create(['name' => 'استان رزرو', 'type' => 'province']);
+        $region = Region::create(['name' => 'استان کهنه', 'type' => 'province']);
+
+        // Warm `maps/point` (`point_map:regions`).
+        Livewire::test('maps/point')->assertSee('استان کهنه');
+
+        $region->update(['name' => 'استان تازه']);
+
+        Livewire::test('maps/point')
+            ->assertSee('استان تازه')
+            ->assertDontSee('استان کهنه');
     }
 }

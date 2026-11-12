@@ -106,6 +106,37 @@ class CacheVersionMigration1348Test extends TestCase
         $this->assertSame($before + 3, $this->version('report_no_boundary'));
     }
 
+    // -----------------------------------------------------------
+    // #1437: Region names feed the `maps` namespace too
+    // -----------------------------------------------------------
+
+    public function test_region_writes_bump_maps(): void
+    {
+        $before = $this->version('maps');
+
+        $region = Region::create(['name' => 'Region A', 'type' => 'province']);
+        $this->assertSame($before + 1, $this->version('maps'));
+
+        $region->update(['name' => 'Region A Renamed']);
+        $this->assertSame($before + 2, $this->version('maps'));
+
+        $region->update(['type' => 'county']);
+        $this->assertSame($before + 2, $this->version('maps'));
+
+        $region->delete();
+        $this->assertSame($before + 3, $this->version('maps'));
+    }
+
+    public function test_region_non_name_update_does_not_bump_maps(): void
+    {
+        $region = Region::create(['name' => 'Region A', 'type' => 'province']);
+        $before = $this->version('maps');
+
+        $region->update(['type' => 'county']);
+
+        $this->assertSame($before, $this->version('maps'));
+    }
+
     public function test_notification_writes_bump_notifications_and_tools_stats(): void
     {
         ['user' => $user] = $this->createUserWithUnit();

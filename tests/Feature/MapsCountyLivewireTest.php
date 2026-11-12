@@ -138,4 +138,23 @@ class MapsCountyLivewireTest extends TestCase
             ->assertSee($region->name)
             ->assertSeeHtml('data-region-id="'.$region->id.'"');
     }
+
+    // ==================== #1437: region rename invalidates `maps` ====================
+
+    public function test_region_rename_refreshes_the_cached_county_list(): void
+    {
+        $region = $this->actingAsUserInRegionWithBoundary();
+        $old = $region->name;
+
+        // Warm `maps/county` (`county:regions_with_boundaries`).
+        Livewire::test('maps.county')->assertSee($old);
+
+        $region->update(['name' => 'شهرستان تغییر‌یافته']);
+
+        // The row is cached for five minutes: without the `maps` bump the next
+        // mount serves the pre-rename name until the TTL lapses (#1437).
+        Livewire::test('maps.county')
+            ->assertSee('شهرستان تغییر‌یافته')
+            ->assertDontSee($old);
+    }
 }
