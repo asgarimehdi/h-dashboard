@@ -66,10 +66,10 @@ class CacheVersionMigration1348Test extends TestCase
     // Wiring: model events bump their namespaces
     // -----------------------------------------------------------
 
-    public function test_unit_type_writes_bump_all_five_namespaces(): void
+    public function test_unit_type_writes_bump_all_six_namespaces(): void
     {
         $before = [];
-        foreach (['report_units', 'hr_stats', 'unit_hierarchy', 'report_no_boundary', 'unit_types'] as $ns) {
+        foreach (['report_units', 'hr_stats', 'unit_hierarchy', 'report_no_boundary', 'unit_types', 'maps'] as $ns) {
             $before[$ns] = $this->version($ns);
         }
 
@@ -90,6 +90,19 @@ class CacheVersionMigration1348Test extends TestCase
         foreach ($before as $ns => $v) {
             $this->assertSame($v + 3, $this->version($ns), "{$ns} must bump on UnitType delete");
         }
+    }
+
+    public function test_unit_type_description_only_write_bumps_maps(): void
+    {
+        $type = UnitType::create(['name' => 'Type Desc']);
+        $before = $this->version('maps');
+
+        // #1439: the maps bump is unconditional for the same reason as the
+        // other five namespaces — the cached payload only carries id/name, so
+        // gating on the changed column would buy nothing.
+        $type->update(['description' => 'description only']);
+
+        $this->assertSame($before + 1, $this->version('maps'), 'maps must bump on a UnitType description-only write');
     }
 
     public function test_region_writes_bump_report_no_boundary(): void

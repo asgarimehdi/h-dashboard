@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Boundary;
 use App\Models\Region;
 use App\Models\Unit;
+use App\Models\UnitType;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -138,6 +139,36 @@ class MapsUnitLivewireTest extends TestCase
     }
 
     // ==================== Scope filtering ====================
+
+    public function test_unit_type_rename_invalidates_unit_map_center_type_cache(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+
+        // #1439: unique names — the shipped type names share prefixes, which
+        // would make assertSee/assertDontSee vacuous or over-strict.
+        UnitType::find(5)->update(['name' => 'نام تازه پنج']);
+        UnitType::find(6)->update(['name' => 'نام تازه شش']);
+        UnitType::find(7)->update(['name' => 'نام تازه هفت']);
+
+        // Warm `unit_map:center_types` with the first name. The toggles only
+        // render once a region is selected, so select before reading.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->assertSee('نام تازه پنج');
+
+        UnitType::find(5)->update(['name' => 'نام دیگر پنج']);
+
+        // The rename must invalidate the `maps` namespace, so this mount
+        // serves the new name and no longer the stale one.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->assertSee('نام دیگر پنج')
+            ->assertDontSee('نام تازه پنج');
+    }
 
     public function test_scope_filtering(): void
     {
