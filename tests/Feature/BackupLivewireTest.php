@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -127,6 +128,30 @@ test('an admin restores a table from an uploaded zip', function () {
         ->assertHasNoErrors();
 
     expect(DB::table('users')->count())->toBe(count($rows));
+});
+
+test('an admin restores a 600-row table from an uploaded zip', function () {
+    Hardware::factory()->create();
+
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/livewire-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        600,
+    );
+
+    $file = UploadedFile::fake()->createWithContent(
+        'backup-hardwares.zip',
+        (string) file_get_contents($path)
+    );
+
+    Livewire::actingAs($this->admin)
+        ->test('backup.index')
+        ->set('backupFile', $file)
+        ->set('restoreTarget', 'hardwares')
+        ->call('restoreBackup')
+        ->assertHasNoErrors();
+
+    expect(DB::table('hardwares')->count())->toBe(600);
 });
 
 test('a broken zip fails with a persian error and changes nothing', function () {

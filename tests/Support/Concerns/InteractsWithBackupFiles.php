@@ -2,6 +2,8 @@
 
 namespace Tests\Support\Concerns;
 
+use App\Support\Backup\TableRegistry;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use ZipArchive;
 
@@ -80,6 +82,70 @@ trait InteractsWithBackupFiles
         }
 
         $zip->close();
+
+        return $path;
+    }
+
+    /**
+     * Build a large table archive without ever holding the rows in PHP memory
+     * (issue #1418).
+     *
+     * The rows are generated one at a time from a database template and
+     * written straight to a JSON temp file; `ZipArchive::addFile()` then adds
+     * that file to the archive. The optional mutator receives the zero-based
+     * index and the generated row, so a test can move one id or make one row
+     * invalid without building a 25,000-row PHP array.
+     *
+     * @param  (callable(int, array<string, mixed>): array<string, mixed>)|null  $mutate
+     */
+    protected function backupMakeGeneratedZip(string $path, string $table, int $rows, ?callable $mutate = null): string
+    {
+        $columns = app(TableRegistry::class)->columns($table);
+        $template = (array) (DB::table($table)->first() ?? []);
+
+        $json = tempnam(sys_get_temp_dir(), 'backup-json-');
+
+        if ($json === false) {
+            throw new RuntimeException("Cannot create a temp file for the {$table} archive.");
+        }
+
+        $handle = fopen($json, 'wb');
+
+        if ($handle === false) {
+            throw new RuntimeException("Cannot open the temp file for the {$table} archive.");
+        }
+
+        fwrite($handle, '[');
+
+        for ($index = 0; $index < $rows; $index++) {
+            $row = [];
+
+            foreach ($columns as $column) {
+                $row[$column] = $template[$column] ?? null;
+            }
+
+            $row['id'] = $index + 1;
+
+            if ($mutate !== null) {
+                $row = $mutate($index, $row);
+            }
+
+            if ($index > 0) {
+                fwrite($handle, ',');
+            }
+
+            fwrite($handle, json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        }
+
+        fwrite($handle, ']');
+        fclose($handle);
+
+        $zip = new ZipArchive;
+        $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFile($json, $table.'.json');
+        $zip->close();
+
+        @unlink($json);
 
         return $path;
     }

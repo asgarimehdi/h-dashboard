@@ -4,6 +4,7 @@ namespace App\Services\Backup;
 
 use App\Exceptions\BackupValidationException;
 use App\Support\Backup\BackupProblem;
+use App\Support\Backup\ForeignKey;
 use App\Support\Backup\TableRegistry;
 use Illuminate\Support\Facades\DB;
 
@@ -25,6 +26,21 @@ use Illuminate\Support\Facades\DB;
  * Every problem that was found is collected and reported as ONE Persian
  * error — a restore that stops at the first problem would send the user
  * through the same file again and again.
+ *
+ * ## Streaming (issue #1418)
+ *
+ * The checks used to receive the whole table as an array, which meant the
+ * archive was materialised (and re-scanned) in PHP memory. Each check now
+ * consumes an `iterable` once. The dedicated full-set structures that remain
+ * are O(distinct ids / distinct foreign-key values), never O(rows):
+ *
+ * - `$seen` — the duplicate-id set,
+ * - `$referenceValues` / `$referenceFirstId` — distinct child FK values and
+ *   the first row carrying each,
+ * - `$parentValues` — distinct parent values of a full backup,
+ * - `$liveParentValues` — distinct parent values of a per-table restore.
+ *
+ * The problem list itself is capped by {@see ValidationProblems}.
  */
 class BackupImportValidator
 {
@@ -32,6 +48,11 @@ class BackupImportValidator
      * How many values are compared with the database per query.
      */
     private const CHUNK_SIZE = 500;
+
+    /**
+     * How many single-column ids are staged per temp-table insert.
+     */
+    private const ID_CHUNK_SIZE = 5000;
 
     /**
      * How many blocking rows of one child table are reported.
@@ -43,151 +64,73 @@ class BackupImportValidator
     /**
      * Validate the rows of ONE table against the live database.
      *
-     * @param  list<array<string, mixed>>  $rows
+     * @param  BackupSource|list<array<string, mixed>>  $rows
      *
      * @throws BackupValidationException
      */
-    public function validateTable(string $table, array $rows): void
+    public function validateTable(string $table, BackupSource|array $rows): void
     {
         if (! $this->registry->isRegistered($table)) {
             throw new BackupValidationException("جدول «{$table}» در رجیستری بک‌آپ نیست.");
         }
 
-        $problems = $this->columnProblems($table, $rows);
-        $problems = array_merge($problems, $this->duplicateProblems($table, $rows));
-        $problems = array_merge($problems, $this->missingReferenceProblems($table, $rows));
-        $problems = array_merge($problems, $this->liveChildProblems($table, $rows));
+        $source = $rows instanceof BackupSource ? $rows : new ArrayBackupSource([$table => $rows]);
 
-        if ($problems !== []) {
-            throw BackupValidationException::fromProblems($problems);
-        }
-    }
+        $problems = new ValidationProblems;
 
-    /**
-     * Validate the tables of a FULL backup against each other.
-     *
-     * A full restore replaces every registered table, so the file has to hold
-     * the parents its children point at — the target database is irrelevant
-     * here, it is about to be replaced.
-     *
-     * @param  array<string, list<array<string, mixed>>>  $tables
-     *
-     * @throws BackupValidationException
-     */
-    public function validateFullBackup(array $tables): void
-    {
-        $problems = [];
-
-        foreach ($tables as $table => $rows) {
-            $problems = array_merge($problems, $this->columnProblems((string) $table, $rows));
-            $problems = array_merge($problems, $this->duplicateProblems((string) $table, $rows));
-        }
-
-        foreach ($tables as $table => $rows) {
-            $problems = array_merge($problems, $this->fileReferenceProblems((string) $table, $rows, $tables));
-        }
-
-        if ($problems !== []) {
-            throw BackupValidationException::fromProblems($problems);
-        }
-    }
-
-    /**
-     * The file has to carry exactly the columns of the table.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     * @return list<BackupProblem>
-     */
-    private function columnProblems(string $table, array $rows): array
-    {
-        $expected = $this->registry->columns($table);
-        $problems = [];
-
-        foreach ($rows as $row) {
-            $given = array_keys($row);
-
-            // A column the table does not have comes first: it is the actual
-            // mistake, while the missing columns are often its consequence.
-            foreach (array_diff($given, $expected) as $column) {
-                $problems[] = new BackupProblem(
-                    kind: BackupProblem::KIND_UNKNOWN_COLUMN,
-                    table: $table,
-                    rowId: $this->rowId($row),
-                    column: (string) $column,
-                    value: null,
-                    relatedTable: $table,
-                );
-            }
-
-            foreach (array_diff($expected, $given) as $column) {
-                $problems[] = new BackupProblem(
-                    kind: BackupProblem::KIND_MISSING_COLUMN,
-                    table: $table,
-                    rowId: $this->rowId($row),
-                    column: (string) $column,
-                    value: null,
-                    relatedTable: $table,
-                );
-            }
-        }
-
-        return $problems;
-    }
-
-    /**
-     * The file must not carry the same primary key twice — which of the two
-     * rows would win is undefined, so the file is refused instead of
-     * silently losing one of them.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     * @return list<BackupProblem>
-     */
-    private function duplicateProblems(string $table, array $rows): array
-    {
         $seen = [];
-        $problems = [];
+        /** @var array<int, array<string, mixed>> $referenceValues edge => (key => value) */
+        $referenceValues = [];
+        /** @var array<int, array<string, int|string|null>> $referenceFirstId edge => (key => row id) */
+        $referenceFirstId = [];
+        /** @var array<int, array<string, mixed>> $liveParentValues edge => (key => value) */
+        $liveParentValues = [];
 
-        foreach ($rows as $row) {
-            $id = $this->rowId($row);
+        $edges = $this->registry->foreignKeysOf($table);
+        $liveEdges = array_values(array_filter(
+            $this->registry->childForeignKeysOf($table),
+            fn (ForeignKey $edge): bool => $this->registry->isRegistered($edge->childTable)
+        ));
 
-            if ($id === null) {
-                continue;
+        // One pass: columns, duplicates, the child values this table points
+        // at, and the parent values its live children must resolve against.
+        foreach ($source->rows($table) as $row) {
+            $this->columnProblems($table, $row, $problems);
+            $this->accumulateDuplicate($table, $row, $seen, $problems);
+
+            foreach ($edges as $index => $edge) {
+                $value = $row[$edge->childColumn] ?? null;
+
+                if ($value === null) {
+                    continue;
+                }
+
+                $key = (string) $value;
+
+                if (array_key_exists($key, $referenceValues[$index] ?? [])) {
+                    continue;
+                }
+
+                $referenceValues[$index][$key] = $value;
+                $referenceFirstId[$index][$key] = $this->rowId($row);
             }
 
-            $key = (string) $id;
+            foreach ($liveEdges as $index => $edge) {
+                $value = $row[$edge->parentColumn] ?? null;
 
-            if (isset($seen[$key])) {
-                $problems[] = new BackupProblem(
-                    kind: BackupProblem::KIND_DUPLICATE_ROW,
-                    table: $table,
-                    rowId: $id,
-                    column: 'id',
-                    value: $id,
-                    relatedTable: $table,
-                );
+                if ($value === null) {
+                    continue;
+                }
 
-                continue;
+                $liveParentValues[$index][(string) $value] = $value;
             }
-
-            $seen[$key] = true;
         }
 
-        return $problems;
-    }
-
-    /**
-     * Every foreign-key value of the file has to exist in the target
-     * database.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     * @return list<BackupProblem>
-     */
-    private function missingReferenceProblems(string $table, array $rows): array
-    {
-        $problems = [];
-
-        foreach ($this->registry->foreignKeysOf($table) as $edge) {
-            $values = $this->distinctValues($rows, $edge->childColumn);
+        // The database checks run after the one pass: every whereIn chunk is
+        // additive (500 values at a time), and the live-child check is an
+        // anti-join against a staged temp table.
+        foreach ($edges as $index => $edge) {
+            $values = $referenceValues[$index] ?? [];
 
             if ($values === []) {
                 continue;
@@ -200,138 +143,263 @@ class BackupImportValidator
                     continue;
                 }
 
-                $problems[] = new BackupProblem(
+                $problems->add(new BackupProblem(
                     kind: BackupProblem::KIND_MISSING_REFERENCE,
                     table: $table,
-                    rowId: $this->firstRowId($rows, $edge->childColumn, $value),
+                    rowId: $referenceFirstId[$index][$key] ?? null,
                     column: $edge->childColumn,
                     value: $value,
                     relatedTable: $edge->parentTable,
-                );
+                ));
             }
         }
 
-        return $problems;
+        foreach ($liveEdges as $index => $edge) {
+            $this->liveChildProblems(
+                $table,
+                $edge,
+                array_values($liveParentValues[$index] ?? []),
+                $problems
+            );
+        }
+
+        $problems->throwIfAny();
+    }
+
+    /**
+     * Validate the tables of a FULL backup against each other.
+     *
+     * A full restore replaces every registered table, so the file has to hold
+     * the parents its children point at — the target database is irrelevant
+     * here, it is about to be replaced.
+     *
+     * Pass 1 per table: columns, duplicates, and the parent value sets.
+     * Pass 2 per child table: the reference checks against those sets.
+     *
+     * @param  BackupSource|array<string, list<array<string, mixed>>>  $tables
+     *
+     * @throws BackupValidationException
+     */
+    public function validateFullBackup(BackupSource|array $tables): void
+    {
+        $source = $tables instanceof BackupSource ? $tables : new ArrayBackupSource($tables);
+
+        $problems = new ValidationProblems;
+        $available = $source->tables();
+        $availableSet = array_flip($available);
+
+        /** @var array<string, array<string, true>> $parentColumns table => (column => true) */
+        $parentColumns = [];
+
+        foreach ($this->registry->foreignKeys() as $edge) {
+            $parentColumns[$edge->parentTable][$edge->parentColumn] = true;
+        }
+
+        /** @var array<string, array<string, true>> $seen table => id set */
+        $seen = [];
+        /** @var array<string, array<string, array<string, mixed>>> $parentValues table => column => (key => value) */
+        $parentValues = [];
+
+        foreach ($available as $table) {
+            $table = (string) $table;
+            $seen[$table] = [];
+
+            foreach ($source->rows($table) as $row) {
+                $this->columnProblems($table, $row, $problems);
+                $this->accumulateDuplicate($table, $row, $seen[$table], $problems);
+
+                foreach (array_keys($parentColumns[$table] ?? []) as $column) {
+                    $value = $row[$column] ?? null;
+
+                    if ($value === null) {
+                        continue;
+                    }
+
+                    $parentValues[$table][$column][(string) $value] = $value;
+                }
+            }
+        }
+
+        foreach ($available as $table) {
+            $table = (string) $table;
+
+            foreach ($this->registry->foreignKeysOf($table) as $edge) {
+                if (! isset($availableSet[$edge->parentTable])) {
+                    $problems->add(new BackupProblem(
+                        kind: BackupProblem::KIND_MISSING_TABLE,
+                        table: $table,
+                        rowId: null,
+                        column: $edge->childColumn,
+                        value: null,
+                        relatedTable: $edge->parentTable,
+                    ));
+
+                    continue;
+                }
+
+                $parents = $parentValues[$edge->parentTable][$edge->parentColumn] ?? [];
+
+                foreach ($source->rows($table) as $row) {
+                    $value = $row[$edge->childColumn] ?? null;
+
+                    if ($value === null) {
+                        continue;
+                    }
+
+                    if (isset($parents[(string) $value])) {
+                        continue;
+                    }
+
+                    $problems->add(new BackupProblem(
+                        kind: BackupProblem::KIND_MISSING_REFERENCE,
+                        table: $table,
+                        rowId: $this->rowId($row),
+                        column: $edge->childColumn,
+                        value: $value,
+                        relatedTable: $edge->parentTable,
+                    ));
+                }
+            }
+        }
+
+        $problems->throwIfAny();
+    }
+
+    /**
+     * The file has to carry exactly the columns of the table.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function columnProblems(string $table, array $row, ValidationProblems $problems): void
+    {
+        $expected = $this->registry->columns($table);
+        $given = array_keys($row);
+
+        // A column the table does not have comes first: it is the actual
+        // mistake, while the missing columns are often its consequence.
+        foreach (array_diff($given, $expected) as $column) {
+            $problems->add(new BackupProblem(
+                kind: BackupProblem::KIND_UNKNOWN_COLUMN,
+                table: $table,
+                rowId: $this->rowId($row),
+                column: (string) $column,
+                value: null,
+                relatedTable: $table,
+            ));
+        }
+
+        foreach (array_diff($expected, $given) as $column) {
+            $problems->add(new BackupProblem(
+                kind: BackupProblem::KIND_MISSING_COLUMN,
+                table: $table,
+                rowId: $this->rowId($row),
+                column: (string) $column,
+                value: null,
+                relatedTable: $table,
+            ));
+        }
+    }
+
+    /**
+     * The file must not carry the same primary key twice — which of the two
+     * rows would win is undefined, so the file is refused instead of
+     * silently losing one of them.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, true>  $seen
+     */
+    private function accumulateDuplicate(string $table, array $row, array &$seen, ValidationProblems $problems): void
+    {
+        $id = $this->rowId($row);
+
+        if ($id === null) {
+            return;
+        }
+
+        $key = (string) $id;
+
+        if (isset($seen[$key])) {
+            $problems->add(new BackupProblem(
+                kind: BackupProblem::KIND_DUPLICATE_ROW,
+                table: $table,
+                rowId: $id,
+                column: 'id',
+                value: $id,
+                relatedTable: $table,
+            ));
+
+            return;
+        }
+
+        $seen[$key] = true;
     }
 
     /**
      * The LIVE children of the target database have to stay valid against
      * the parent set the file brings (owner decision Q1-(b)).
      *
-     * @param  list<array<string, mixed>>  $rows
-     * @return list<BackupProblem>
+     * The parent values are staged in a transaction-local temp table and the
+     * check is an anti-join. A chunked `whereNotIn` would be WRONG: the first
+     * chunk deletes/decides without the values of the later ones.
+     *
+     * @param  list<mixed>  $parentValues
      */
-    private function liveChildProblems(string $table, array $rows): array
-    {
-        $problems = [];
+    private function liveChildProblems(
+        string $parentTable,
+        ForeignKey $edge,
+        array $parentValues,
+        ValidationProblems $problems
+    ): void {
+        $temp = '_backup_parents_'.bin2hex(random_bytes(6));
 
-        foreach ($this->registry->childForeignKeysOf($table) as $edge) {
-            if (! $this->registry->isRegistered($edge->childTable)) {
-                continue;
+        DB::statement('CREATE TEMP TABLE "'.$temp.'" (value text NOT NULL)');
+
+        try {
+            foreach (array_chunk($parentValues, self::ID_CHUNK_SIZE) as $chunk) {
+                DB::table($temp)->insert(
+                    array_map(
+                        fn (mixed $value): array => ['value' => (string) $value],
+                        $chunk
+                    )
+                );
             }
-
-            $parentValues = array_keys($this->distinctValues($rows, $edge->parentColumn));
 
             $blocking = DB::table($edge->childTable)
                 ->whereNotNull($edge->childColumn)
-                ->whereNotIn($edge->childColumn, $parentValues)
+                ->whereNotExists(function ($query) use ($temp, $edge): void {
+                    $query->selectRaw('1')
+                        ->from($temp)
+                        ->whereRaw(
+                            '"'.$temp.'".value = CAST("'.$edge->childTable.'"."'.$edge->childColumn.'" AS text)'
+                        );
+                })
                 ->limit(self::BLOCKING_ROW_LIMIT)
                 ->get(['id', $edge->childColumn]);
 
             foreach ($blocking as $row) {
-                $problems[] = new BackupProblem(
+                $problems->add(new BackupProblem(
                     kind: BackupProblem::KIND_ORPHAN_CHILD,
                     table: $edge->childTable,
                     rowId: (int) $row->id,
                     column: $edge->childColumn,
                     value: $row->{$edge->childColumn},
-                    relatedTable: $table,
-                );
+                    relatedTable: $parentTable,
+                ));
+            }
+        } finally {
+            try {
+                DB::statement('DROP TABLE IF EXISTS "'.$temp.'"');
+            } catch (\Throwable) {
+                // The transaction is already aborted; its rollback removes
+                // the temp table with it.
             }
         }
-
-        return $problems;
-    }
-
-    /**
-     * Every foreign-key value of the file has to exist in the file itself.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     * @param  array<string, list<array<string, mixed>>>  $tables
-     * @return list<BackupProblem>
-     */
-    private function fileReferenceProblems(string $table, array $rows, array $tables): array
-    {
-        $problems = [];
-
-        foreach ($this->registry->foreignKeysOf($table) as $edge) {
-            if (! array_key_exists($edge->parentTable, $tables)) {
-                $problems[] = new BackupProblem(
-                    kind: BackupProblem::KIND_MISSING_TABLE,
-                    table: $table,
-                    rowId: null,
-                    column: $edge->childColumn,
-                    value: null,
-                    relatedTable: $edge->parentTable,
-                );
-
-                continue;
-            }
-
-            $parentValues = $this->distinctValues($tables[$edge->parentTable], $edge->parentColumn);
-
-            foreach ($rows as $row) {
-                $value = $row[$edge->childColumn] ?? null;
-
-                if ($value === null) {
-                    continue;
-                }
-
-                if (isset($parentValues[(string) $value])) {
-                    continue;
-                }
-
-                $problems[] = new BackupProblem(
-                    kind: BackupProblem::KIND_MISSING_REFERENCE,
-                    table: $table,
-                    rowId: $this->rowId($row),
-                    column: $edge->childColumn,
-                    value: $value,
-                    relatedTable: $edge->parentTable,
-                );
-            }
-        }
-
-        return $problems;
-    }
-
-    /**
-     * The distinct, non-null values of a column.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     * @return array<string, mixed> value => value
-     */
-    private function distinctValues(array $rows, string $column): array
-    {
-        $values = [];
-
-        foreach ($rows as $row) {
-            $value = $row[$column] ?? null;
-
-            if ($value === null) {
-                continue;
-            }
-
-            $values[(string) $value] = $value;
-        }
-
-        return $values;
     }
 
     /**
      * The values of the parent table that exist in the target database.
      *
-     * @param  array<string, mixed>  $values
+     * @param  array<string, mixed>  $values  key => value
      * @return array<string, true>
      */
     private function existingValues(string $parentTable, string $parentColumn, array $values): array
@@ -349,22 +417,6 @@ class BackupImportValidator
         }
 
         return $existing;
-    }
-
-    /**
-     * The id of the first row that carries a value.
-     *
-     * @param  list<array<string, mixed>>  $rows
-     */
-    private function firstRowId(array $rows, string $column, mixed $value): int|string|null
-    {
-        foreach ($rows as $row) {
-            if (($row[$column] ?? null) === $value) {
-                return $this->rowId($row);
-            }
-        }
-
-        return null;
     }
 
     /**

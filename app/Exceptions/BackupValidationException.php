@@ -29,17 +29,18 @@ class BackupValidationException extends RuntimeException
     }
 
     /**
-     * @param  list<BackupProblem>  $problems
+     * @param  list<BackupProblem>  $problems  The retained problems (capped by the validator).
+     * @param  int|null  $total  Every problem found, including the ones not retained.
      */
-    public static function fromProblems(array $problems): self
+    public static function fromProblems(array $problems, ?int $total = null): self
     {
-        return new self(self::describe($problems), $problems);
+        return new self(self::describe($problems, $total), $problems);
     }
 
     /**
      * @param  list<BackupProblem>  $problems
      */
-    private static function describe(array $problems): string
+    private static function describe(array $problems, ?int $total = null): string
     {
         $lines = [];
 
@@ -55,7 +56,7 @@ class BackupValidationException extends RuntimeException
             };
         }
 
-        $rest = count($problems) - self::MESSAGE_LIMIT;
+        $rest = ($total ?? count($problems)) - self::MESSAGE_LIMIT;
 
         if ($rest > 0) {
             $lines[] = "و {$rest} مورد دیگر.";
