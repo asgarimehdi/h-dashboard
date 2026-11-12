@@ -24,6 +24,14 @@ use ZipArchive;
  * could catch a child row whose parent was written after the parent table was
  * read, and the resulting file would fail its own validation on the way
  * back in.
+ *
+ * The rows are STREAMED, not collected (issue #1436): each table is written
+ * to a staged `.json.part` file one 500-row page at a time and only zipped
+ * afterwards, so the memory a backup needs no longer grows with the size of
+ * the biggest table. Every staged file is removed when the export ends —
+ * successfully or not — and the archive itself is built as `.part` and only
+ * renamed into place once `ZipArchive::close()` succeeded, so neither a
+ * staged file nor a half-written archive is ever left behind.
  */
 class BackupService
 {
@@ -31,6 +39,11 @@ class BackupService
      * The manifest schema version (owner decision Q3-(a)).
      */
     private const MANIFEST_VERSION = 1;
+
+    /**
+     * The rows read per page, matching `BackupImportValidator::CHUNK_SIZE`.
+     */
+    private const CHUNK_SIZE = 500;
 
     public function __construct(private readonly TableRegistry $registry) {}
 
@@ -45,16 +58,25 @@ class BackupService
             throw new InvalidArgumentException("جدول «{$table}» در رجیستری بک‌آپ نیست.");
         }
 
-        $rows = $this->readSnapshot([$table])[$table];
-
         $filename = $this->archiveFilename('backup-'.$table);
-        $path = $this->writeArchive($filename, [
-            $table.'.json' => $this->encode($rows),
-        ]);
+        $temp = $this->backupDirectory().'/'.$filename.'.'.$table.'.json.part';
+        $rows = 0;
 
-        return new BackupArchive($path, $filename, [
-            ['table' => $table, 'rows' => count($rows)],
-        ]);
+        try {
+            $this->inSnapshot(function () use ($table, $temp, &$rows): void {
+                $rows = $this->streamTable($table, $temp);
+            });
+
+            $manifestTables = [['table' => $table, 'rows' => $rows]];
+
+            // A one-table archive stays a PER-TABLE archive: it carries no
+            // manifest, so the reader does not mistake it for a full backup.
+            $path = $this->writeArchive($filename, [$table.'.json' => $temp]);
+
+            return new BackupArchive($path, $filename, $manifestTables);
+        } finally {
+            $this->removeTempFiles([$temp]);
+        }
     }
 
     /**
@@ -63,71 +85,88 @@ class BackupService
     public function exportAll(): BackupArchive
     {
         $tables = $this->registry->tables();
-        $snapshot = $this->readSnapshot($tables);
+        $filename = $this->archiveFilename('backup-full');
+        $directory = $this->backupDirectory();
 
-        $entries = [];
+        /** @var array<string, string> $files entry name => staged file */
+        $files = [];
+        /** @var list<array{table: string, rows: int}> $manifestTables */
         $manifestTables = [];
 
-        foreach ($tables as $table) {
-            $rows = $snapshot[$table];
-            $entries[$table.'.json'] = $this->encode($rows);
-            $manifestTables[] = ['table' => $table, 'rows' => count($rows)];
+        try {
+            $this->inSnapshot(function () use ($tables, $directory, $filename, &$files, &$manifestTables): void {
+                foreach ($tables as $table) {
+                    $temp = $directory.'/'.$filename.'.'.$table.'.json.part';
+                    $files[$table.'.json'] = $temp;
+                    $manifestTables[] = ['table' => $table, 'rows' => $this->streamTable($table, $temp)];
+                }
+            });
+
+            $path = $this->writeArchive($filename, $files, $this->manifest($manifestTables));
+
+            return new BackupArchive($path, $filename, $manifestTables);
+        } finally {
+            $this->removeTempFiles(array_values($files));
         }
-
-        $entries['manifest.json'] = $this->encode([
-            'version' => self::MANIFEST_VERSION,
-            'exported_at' => now()->toIso8601String(),
-            'app_version' => ApplicationVersion::resolve(),
-            'tables' => $manifestTables,
-        ]);
-
-        $filename = $this->archiveFilename('backup-full');
-        $path = $this->writeArchive($filename, $entries);
-
-        return new BackupArchive($path, $filename, $manifestTables);
     }
 
     /**
-     * Read the given tables from ONE consistent snapshot.
+     * Run the read inside ONE consistent snapshot.
      *
-     * @param  list<string>  $tables
-     * @return array<string, list<array<string, mixed>>>
+     * The isolation level can only be set as the FIRST statement of a
+     * transaction, so it is set here — not inside the callback — and only
+     * when the caller did not open a transaction of its own.
+     *
+     * @param  callable(): void  $export
      */
-    private function readSnapshot(array $tables): array
+    private function inSnapshot(callable $export): void
     {
-        // The isolation level can only be set as the FIRST statement of a
-        // transaction, so it is set here — not inside the callback — and only
-        // when the caller did not open a transaction of its own.
         $isolated = DB::connection()->transactionLevel() === 0;
 
-        /** @var array<string, list<array<string, mixed>>> $snapshot */
-        $snapshot = DB::transaction(function () use ($tables, $isolated): array {
+        DB::transaction(function () use ($export, $isolated): void {
             if ($isolated) {
                 DB::statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
             }
 
-            $snapshot = [];
-            foreach ($tables as $table) {
-                $snapshot[$table] = $this->readRows($table);
-            }
-
-            return $snapshot;
+            $export();
         });
-
-        return $snapshot;
     }
 
     /**
-     * Every row of a table, as plain arrays.
+     * Write one table to a staged JSON file, one row at a time.
      *
-     * @return list<array<string, mixed>>
+     * `chunkById()` imposes `ORDER BY id`, so the rows are written in id
+     * order instead of the unspecified heap order of a plain `get()`.
+     *
+     * @return int the number of rows written
      */
-    private function readRows(string $table): array
+    private function streamTable(string $table, string $temp): int
     {
-        $rows = [];
+        $handle = fopen($temp, 'wb');
 
-        foreach (DB::table($table)->get() as $row) {
-            $rows[] = $this->normalizeRow($row);
+        if ($handle === false) {
+            throw new RuntimeException("فایل موقت بک‌آپ ساخته نشد: {$temp}");
+        }
+
+        $rows = 0;
+
+        try {
+            $this->writeTo($handle, '[');
+
+            DB::table($table)->chunkById(self::CHUNK_SIZE, function ($chunk) use ($handle, &$rows): void {
+                foreach ($chunk as $row) {
+                    if ($rows > 0) {
+                        $this->writeTo($handle, ',');
+                    }
+
+                    $this->writeTo($handle, $this->encode($this->normalizeRow($row)));
+                    $rows++;
+                }
+            });
+
+            $this->writeTo($handle, ']');
+        } finally {
+            fclose($handle);
         }
 
         return $rows;
@@ -187,9 +226,9 @@ class BackupService
     }
 
     /**
-     * @param  array<string, string>  $entries
+     * The directory the archives and their staged files live in.
      */
-    private function writeArchive(string $filename, array $entries): string
+    private function backupDirectory(): string
     {
         $directory = storage_path('app/private/backup');
 
@@ -197,20 +236,102 @@ class BackupService
             throw new RuntimeException("پوشهٔ بک‌آپ ساخته نشد: {$directory}");
         }
 
-        $path = $directory.'/'.$filename;
+        return $directory;
+    }
+
+    /**
+     * Zip the staged files into the final archive.
+     *
+     * The archive is written as `{$path}.part` and renamed only after a
+     * checked `close()`: a crash or a broken entry never leaves a readable,
+     * incomplete `*.zip` behind. A `null` manifest keeps the archive a
+     * per-table backup (the reader treats a manifest as the full-backup mark).
+     *
+     * @param  array<string, string>  $files  entry name => staged file path
+     */
+    private function writeArchive(string $filename, array $files, ?string $manifest = null): string
+    {
+        $path = $this->backupDirectory().'/'.$filename;
+        $partial = $path.'.part';
 
         $zip = new ZipArchive;
-        if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new RuntimeException("فایل بک‌آپ باز نشد: {$path}");
+
+        try {
+            if ($zip->open($partial, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException("فایل بک‌آپ باز نشد: {$path}");
+            }
+
+            foreach ($files as $name => $file) {
+                if (! is_file($file) || $zip->addFile($file, $name) !== true) {
+                    throw new RuntimeException("فایل موقت بک‌آپ به آرشیو اضافه نشد: {$file}");
+                }
+            }
+
+            if ($manifest !== null && $zip->addFromString('manifest.json', $manifest) !== true) {
+                throw new RuntimeException("مانیفست بک‌آپ به آرشیو اضافه نشد: {$path}");
+            }
+
+            if ($zip->close() !== true) {
+                throw new RuntimeException("فایل بک‌آپ بسته نشد: {$path}");
+            }
+        } catch (\Throwable $exception) {
+            // Close the zip object BEFORE dropping the file: its destructor
+            // would otherwise write the half-built archive back to disk.
+            try {
+                $zip->close();
+            } catch (\Throwable) {
+                // Nothing left to flush.
+            }
+
+            $this->removeTempFiles([$partial]);
+
+            throw $exception;
         }
 
-        foreach ($entries as $name => $contents) {
-            $zip->addFromString($name, $contents);
-        }
+        if (! rename($partial, $path)) {
+            $this->removeTempFiles([$partial]);
 
-        $zip->close();
+            throw new RuntimeException("فایل بک‌آپ نهایی نشد: {$path}");
+        }
 
         return $path;
+    }
+
+    /**
+     * The manifest document of a full backup.
+     *
+     * @param  list<array{table: string, rows: int}>  $manifestTables
+     */
+    private function manifest(array $manifestTables): string
+    {
+        return $this->encode([
+            'version' => self::MANIFEST_VERSION,
+            'exported_at' => now()->toIso8601String(),
+            'app_version' => ApplicationVersion::resolve(),
+            'tables' => $manifestTables,
+        ]);
+    }
+
+    /**
+     * @param  resource  $handle
+     */
+    private function writeTo($handle, string $contents): void
+    {
+        if (fwrite($handle, $contents) === false) {
+            throw new RuntimeException('نوشتن فایل موقت بک‌آپ شکست خورد.');
+        }
+    }
+
+    /**
+     * @param  list<string>  $paths
+     */
+    private function removeTempFiles(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
     }
 
     /**
