@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Todo calendar moved out of its `@script` block (#1352, Step 3 / R3).
  *
@@ -36,12 +37,13 @@
 
 let globalListenersRegistered = false;
 
+/** @param {HTMLElement} element */
 function componentFor(element) {
   const root = element.closest('[wire\\:id]');
   if (!root || typeof window.Livewire === 'undefined') {
     return null;
   }
-  return window.Livewire.find(root.getAttribute('wire:id'));
+  return window.Livewire.find(/** @type {string} */ (root.getAttribute('wire:id')));
 }
 
 function readCalendarData() {
@@ -131,6 +133,7 @@ function initTodoCalendar() {
     },
     selectable: true,
     editable: true,
+    /** @param {any} arg */
     eventContent: function (arg) {
       const type = arg.event.extendedProps.type || 'todo';
 
@@ -226,6 +229,7 @@ function initTodoCalendar() {
       return { domNodes: [row] };
     },
     events,
+    /** @param {any} info */
     datesSet: function (info) {
       // Issue #1169: the initial callback repeats the window the
       // server just rendered. Only that first callback is a no-op;
@@ -245,9 +249,11 @@ function initTodoCalendar() {
 
       component?.call('fetchEvents', info.startStr, info.endStr);
     },
+    /** @param {any} info */
     select: function (info) {
       component?.call('openCreateModal', info.startStr, info.endStr);
     },
+    /** @param {any} info */
     eventClick: function (info) {
       const type = info.event.extendedProps.type;
       if (type === 'ticket') {
@@ -256,6 +262,7 @@ function initTodoCalendar() {
         component?.call('editEvent', info.event.id.replace('todo-', ''));
       }
     },
+    /** @param {any} info */
     eventDrop: function (info) {
       const type = info.event.extendedProps.type;
       if (type === 'todo') {
@@ -278,7 +285,7 @@ function registerGlobalListeners() {
     const events = Array.isArray(args[0]) ? args[0] : args[0]?.events || [];
     if (window.calendarInstance && events.length) {
       window.calendarInstance.removeAllEvents();
-      events.forEach((event) => window.calendarInstance.addEvent(event));
+      events.forEach((/** @type {any} */ event) => window.calendarInstance.addEvent(event));
     }
   });
 
