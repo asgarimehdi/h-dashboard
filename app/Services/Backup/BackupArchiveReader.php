@@ -142,7 +142,6 @@ class BackupArchiveReader
     {
         return new ZipArchive;
     }
-    }
 
     /**
      * The document has to be JSON at all (used for the manifest only).
