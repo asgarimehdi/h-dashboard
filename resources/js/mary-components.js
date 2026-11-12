@@ -169,10 +169,13 @@ export function registerMaryComponents(Alpine) {
         this.$el.addEventListener('click', (event) => {
           const target = event.target;
           const form = target instanceof Element ? target.closest('form') : null;
-          if (!form || form.parentElement !== this.$el) {
+          if (!form) {
             return;
           }
-          const closeForm = this.$el.querySelector(':scope > form[method="dialog"]');
+          // × داخل `.modal-box` است (heredoc در CspModal)؛ backdrop فرزند
+          // مستقیم dialog است. `:scope >` این جست‌وجو را به جعبهٔ خودمان
+          // محدود می‌کند تا فرمِ یک مودال تودرتو هرگز مچ نشود.
+          const closeForm = this.$el.querySelector(':scope > .modal-box > form[method="dialog"]');
           if (form.classList.contains('modal-backdrop') || form === closeForm) {
             close();
           }
