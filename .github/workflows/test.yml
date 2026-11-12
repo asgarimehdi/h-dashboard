@@ -346,6 +346,9 @@ jobs:
         # this job red and visible.
         run: npx tsc -p tsconfig.js.json --noEmit
 
+      - name: Every resources/js file must opt in
+        run: test -z "$(grep -L '^// @ts-check' resources/js/*.js)"
+
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
