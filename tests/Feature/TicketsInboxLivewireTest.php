@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Attachment;
 use App\Models\Person;
 use App\Models\TaskActivity;
@@ -1356,6 +1357,167 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outOfScope->id, 'action' => 'forwarded']);
     }
 
+    /**
+     * #1408: count the `count(*) as "aggregate" from "tickets"` queries a
+     * callback runs. The paginator emits exactly one per render, so the delta
+     * isolates the bulk-bar badge count.
+     */
+    private function ticketAggregateCounts(\Closure $callback): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $callback();
+
+        $counts = collect(DB::getQueryLog())
+            ->filter(fn (array $q) => str_contains($q['query'], 'count(*) as "aggregate" from "tickets"'))
+            ->count();
+
+        DB::disableQueryLog();
+
+        return $counts;
+    }
+
+    public function test_selected_count_runs_the_filter_once_per_filter_state(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created']);
+        $this->createTicket(['status' => 'created']);
+
+        $component = Livewire::test('tickets.inbox');
+
+        // Badge miss + the paginator's own aggregate.
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('toggleSelectAll')));
+        $component->assertSee('2 تیکت انتخاب شده');
+
+        // Same filter state: the badge is a cache hit, only the paginator counts.
+        $this->assertSame(1, $this->ticketAggregateCounts(fn () => $component->call('$refresh')));
+        $component->assertSee('2 تیکت انتخاب شده');
+    }
+
+    public function test_selected_count_recomputes_when_a_filter_changes(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created', 'subject' => 'alpha request']);
+        $this->createTicket(['status' => 'created', 'subject' => 'beta request']);
+
+        $component = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('toggleSelectAll')));
+
+        // A filter the pipeline reads changes the key: recompute + paginator.
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->set('search', 'alpha')));
+        $component->assertSee('1 تیکت انتخاب شده');
+
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->set('statusFilter', 'all')));
+
+        // `unitSearch` only feeds the destination-unit picker, not the count key.
+        $this->assertSame(1, $this->ticketAggregateCounts(fn () => $component->set('unitSearch', 'x')));
+    }
+
+    public function test_selected_count_invalidates_when_a_ticket_changes_mid_session(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $this->createTicket(['status' => 'created']);
+        $this->createTicket(['status' => 'created']);
+
+        $component = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('toggleSelectAll')));
+        $component->assertSee('2 تیکت انتخاب شده');
+
+        // Another session's create fires the model hooks, which bump
+        // `report_tickets` — the next render must not serve the old number.
+        $third = $this->createTicket(['status' => 'created']);
+
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('$refresh')));
+        $component->assertSee('3 تیکت انتخاب شده');
+
+        $third->update(['status' => 'completed']);
+
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $component->call('$refresh')));
+        $component->assertSee('2 تیکت انتخاب شده');
+    }
+
+    public function test_selected_count_is_scoped_per_user(): void
+    {
+        ['user' => $userA, 'unit' => $unitA] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->createTicket(['status' => 'created', 'unit' => $unitA, 'user' => $userA]);
+
+        ['user' => $userB, 'unit' => $unitB] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->createTicket(['status' => 'created', 'unit' => $unitB, 'user' => $userB]);
+
+        // No ticket writes between the two renders: a shared cache entry would
+        // show up as a hit (one aggregate instead of two).
+        $this->actingAs($userA);
+        Session::put('current_unit_id', $unitA->id);
+        $componentA = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $componentA->call('toggleSelectAll')));
+        $componentA->assertSee('1 تیکت انتخاب شده');
+
+        $this->actingAs($userB);
+        Session::put('current_unit_id', $unitB->id);
+        $componentB = Livewire::test('tickets.inbox');
+        $this->assertSame(2, $this->ticketAggregateCounts(fn () => $componentB->call('toggleSelectAll')));
+        $componentB->assertSee('1 تیکت انتخاب شده');
+    }
+
+    // =====================================================================
+    // #1409 — bulk activity-log batch INSERT
+    // =====================================================================
+
+    public function test_bulk_complete_activity_log_batch_insert(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        // 5 tickets in varying pre-complete states
+        $tickets = collect(range(1, 5))->map(fn () => $this->createTicket(['status' => 'accepted']))->all();
+
+        $beforeCount = ActivityLog::count();
+
+        DB::enableQueryLog();
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', collect($tickets)->pluck('id')->toArray())
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        // 1. Exactly N new activity_log rows (N = tickets actually processed)
+        $afterCount = ActivityLog::count();
+        $this->assertSame($beforeCount + 5, $afterCount);
+
+        // 2. Each row has the correct shape (compare to per-ticket reference).
+        // Key by subject_id — ordering of `latest()` is not guaranteed to match
+        // $tickets, and all five rows share near-identical created_at (#1409 G4).
+        $logs = ActivityLog::latest()->take(5)->get()->keyBy('subject_id');
+        foreach ($tickets as $ticket) {
+            $log = $logs->get($ticket->id);
+            $this->assertNotNull($log, "Missing activity log for ticket {$ticket->id}");
+            $this->assertSame($user->id, $log->user_id);
+            $this->assertSame('updated', $log->type);
+            $this->assertSame('App\Models\Ticket', $log->subject_type);
+            $this->assertSame($ticket->id, $log->subject_id);
+            $this->assertSame('تکمیل دسته‌ای تیکت '.$ticket->ticket_code, $log->description);
+            $this->assertEquals(['status' => $ticket->status], $log->old_values); // pre-update status
+            $this->assertEquals(['status' => 'completed'], $log->new_values);
+            $this->assertNotNull($log->ip_address);
+            $this->assertNotNull($log->user_agent);
+        }
+
+        // 3. Only ONE INSERT statement reached activity_logs (the batch).
+        $inserts = collect(DB::getQueryLog())
+            ->filter(fn (array $q) => str_starts_with(strtolower($q['query']), 'insert into')
+                && str_contains($q['query'], 'activity_logs'))
+            ->count();
+        $this->assertSame(1, $inserts, 'Expected exactly one batched INSERT into activity_logs');
+    }
+
     // =====================================================================
     // S12 — submitAction
     // =====================================================================
@@ -1917,13 +2079,68 @@ class TicketsInboxLivewireTest extends TestCase
         );
     }
 
+    // =====================================================================
+    // #1407 — no N+1 on the ACTIVITY ATTACHMENT axis
+    //
+    // The guard above holds the activity count fixed at 5→30 but seeds no
+    // attachment rows, so it cannot see a per-attachment-row load: the modal
+    // walks `$activity->attachments` (and would walk a nested actor on each
+    // file), and that cost is proportional to attachment rows, not to
+    // activities. Two fixtures with the SAME activity count and different
+    // attachment counts must therefore cost the same number of queries.
+    // =====================================================================
+
+    public function test_modal_query_count_does_not_grow_with_activity_attachments(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $bare = $this->createTicket();
+        $this->seedTicketActivities($bare->id, $user->id, 5);
+
+        $attached = $this->createTicket();
+        $this->seedTicketActivities($attached->id, $user->id, 5, attachmentsEach: 3);
+
+        // The FIRST mount in a process pays one-time cache fills the second
+        // never repeats — 6 queries on 7e19cc3c: the bell's list + unread
+        // count, the unit_tree CTE, the actor's person, and Spatie's
+        // permissions/roles. Warm them up outside the measured window, or the
+        // strict equality below measures process state, not the fixture.
+        $this->modalFlowQueryCount($bare->id);
+
+        // Open modal → one unrelated update; the update is where hydration used
+        // to strip the relations. Equal counts on both means no per-row load.
+        $this->assertSame(
+            $this->modalFlowQueryCount($bare->id),
+            $this->modalFlowQueryCount($attached->id),
+            'Attachments per activity reintroduced a lazy-load N+1 in the detail modal.'
+        );
+
+        // A query count alone cannot prove the section still renders — a bad
+        // eager load fails by rendering nothing, which costs 0 queries and
+        // would pass an equality check. Pin the heading AND a per-activity
+        // attachment link on the rendered HTML.
+        $attachment = Attachment::query()
+            ->where('ticket_id', $attached->id)
+            ->whereNotNull('activity_id')
+            ->firstOrFail();
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $attached->id)
+            ->assertSee('گردش فعالیت‌ها')
+            ->assertSee(route('tickets.attachments.download', ['ticket' => $attached->id, 'attachment' => $attachment->id]));
+    }
+
     /**
      * Insert `$count` activities with strictly decreasing timestamps so the
      * display order (`sortByDesc('created_at')`) is determined, not just the
      * `latest('id')` fetch order — a row-level tie would make newest-first
      * unfalsifiable.
+     *
+     * `$attachmentsEach` (#1407) additionally hangs that many attachment rows
+     * off every activity — the columns the modal's eager loads select.
      */
-    protected function seedTicketActivities(int $ticketId, int $userId, int $count): void
+    protected function seedTicketActivities(int $ticketId, int $userId, int $count, int $attachmentsEach = 0): void
     {
         $rows = collect(range(1, $count))
             ->map(fn (int $i): array => [
@@ -1938,6 +2155,26 @@ class TicketsInboxLivewireTest extends TestCase
             ->all();
 
         DB::table('task_activities')->insert($rows);
+
+        if ($attachmentsEach < 1) {
+            return;
+        }
+
+        DB::table('task_activities')->where('ticket_id', $ticketId)->pluck('id')
+            ->each(function (int $activityId) use ($ticketId, $userId, $attachmentsEach): void {
+                foreach (range(1, $attachmentsEach) as $i) {
+                    // `user_id` is NOT NULL (2026_01_02_000001) even though the
+                    // modal never selects it — an insert without it fails.
+                    Attachment::create([
+                        'user_id' => $userId,
+                        'ticket_id' => $ticketId,
+                        'activity_id' => $activityId,
+                        'file_path' => "attachments/activity-{$activityId}-{$i}.pdf",
+                        'file_name' => "پیوست فعالیت {$activityId}-{$i}.pdf",
+                        'file_size' => 1024,
+                    ]);
+                }
+            });
     }
 
     /**

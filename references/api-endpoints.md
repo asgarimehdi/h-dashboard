@@ -17,7 +17,7 @@ Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` 
 | `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per unit, org-wide (no actor at 06:00 — see #836) |
 | `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
 
-> `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
+> `zabbix:sync` (`SyncZabbix`) still exists as a **manual** command but is **no longer scheduled** (plan 018, 2026-09-24): the schedule dispatches `SyncZabbixJob` with `->withoutOverlapping()`, so a slow Zabbix API can never block the scheduler. The job has `timeout = 30`, `tries = 2`, a `failed()` logger for queue-level failures, records a failure row when a fetch returns a failed result as well as when item IDs are unset, and skips itself when `services.zabbix.out_item_id`/`in_item_id` are unset.
 
 **Implemented-command details (was placeholder before 2026-08-29):**
 
@@ -252,14 +252,11 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 `zabbix_sync_logs` — one row per `SyncZabbixJob` run (migration `2026_09_30_000002_create_zabbix_sync_logs_table.php`), model `App\Models\ZabbixSyncLog`.
 
-- Columns: `success`, `consecutive_failures`, `error`, `ran_at` (indexed). `consecutive_failures` is **precomputed including the current row** (0 on a success row) so the threshold check and the dashboard widget are single-row reads.
-- `failed()` runs **only after the queue exhausts its tries**, so one job failure produces exactly one row — retries do not inflate the streak. It also calls `report($exception)` alongside `Log::error()`, so a dead log channel still records the failure.
+- Columns: `success`, `error`, `ran_at` (indexed).
+- `failed()` runs **only after the queue exhausts its tries**, so one job failure produces exactly one row — retries do not produce extra failure rows. It also calls `report($exception)` alongside `Log::error()`, so a dead log channel still records the failure.
 - **A missing item-id configuration is now a recorded failure**, not a warning nobody reads: with `services.zabbix.out_item_id`/`in_item_id` unset the job writes a failure row (before #740 a misconfigured deployment stayed silently broken for weeks).
-- At streak **exactly** `ZabbixSyncLog::ALERT_THRESHOLD` (= 3) it notifies **every admin user once** through `NotificationService::send()` — in-app only, no new email/webhook infrastructure. Further failures stay visible on the dashboard without re-firing; any success resets the streak to 0.
-- **Dashboard banner:** `getZabbixSyncStatusProperty()` reads the **latest row only** and renders `ok` / `stale` (last run old) / `failing` (streak), distinguishing «نمایش از کش قدیمی» from «داده ترافیک در دسترس نیست».
+- **Dashboard banner:** `getZabbixSyncStatusProperty()` reads the **latest row only** and renders `ok` / `stale` (last run old) / `failing` (last run failed), distinguishing «نمایش از کش قدیمی» from «داده ترافیک در دسترس نیست».
 - Tests: `tests/Feature/SyncZabbixObservabilityTest.php`.
-
-> The streak is derived by reading the previous row (`orderByDesc('id')->first()`), so run recording is **serial by nature** — parallelising it would let two runs compute the same streak value.
 
 ### GIS Disease Layer (issue #1245)
 

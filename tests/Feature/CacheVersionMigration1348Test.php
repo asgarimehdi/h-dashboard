@@ -66,10 +66,10 @@ class CacheVersionMigration1348Test extends TestCase
     // Wiring: model events bump their namespaces
     // -----------------------------------------------------------
 
-    public function test_unit_type_writes_bump_all_five_namespaces(): void
+    public function test_unit_type_writes_bump_all_six_namespaces(): void
     {
         $before = [];
-        foreach (['report_units', 'hr_stats', 'unit_hierarchy', 'report_no_boundary', 'unit_types'] as $ns) {
+        foreach (['report_units', 'hr_stats', 'unit_hierarchy', 'report_no_boundary', 'unit_types', 'maps'] as $ns) {
             $before[$ns] = $this->version($ns);
         }
 
@@ -92,6 +92,19 @@ class CacheVersionMigration1348Test extends TestCase
         }
     }
 
+    public function test_unit_type_description_only_write_bumps_maps(): void
+    {
+        $type = UnitType::create(['name' => 'Type Desc']);
+        $before = $this->version('maps');
+
+        // #1439: the maps bump is unconditional for the same reason as the
+        // other five namespaces — the cached payload only carries id/name, so
+        // gating on the changed column would buy nothing.
+        $type->update(['description' => 'description only']);
+
+        $this->assertSame($before + 1, $this->version('maps'), 'maps must bump on a UnitType description-only write');
+    }
+
     public function test_region_writes_bump_report_no_boundary(): void
     {
         $before = $this->version('report_no_boundary');
@@ -104,6 +117,37 @@ class CacheVersionMigration1348Test extends TestCase
 
         $region->delete();
         $this->assertSame($before + 3, $this->version('report_no_boundary'));
+    }
+
+    // -----------------------------------------------------------
+    // #1437: Region names feed the `maps` namespace too
+    // -----------------------------------------------------------
+
+    public function test_region_writes_bump_maps(): void
+    {
+        $before = $this->version('maps');
+
+        $region = Region::create(['name' => 'Region A', 'type' => 'province']);
+        $this->assertSame($before + 1, $this->version('maps'));
+
+        $region->update(['name' => 'Region A Renamed']);
+        $this->assertSame($before + 2, $this->version('maps'));
+
+        $region->update(['type' => 'county']);
+        $this->assertSame($before + 2, $this->version('maps'));
+
+        $region->delete();
+        $this->assertSame($before + 3, $this->version('maps'));
+    }
+
+    public function test_region_non_name_update_does_not_bump_maps(): void
+    {
+        $region = Region::create(['name' => 'Region A', 'type' => 'province']);
+        $before = $this->version('maps');
+
+        $region->update(['type' => 'county']);
+
+        $this->assertSame($before, $this->version('maps'));
     }
 
     public function test_notification_writes_bump_notifications_and_tools_stats(): void

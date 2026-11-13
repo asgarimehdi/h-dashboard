@@ -6,6 +6,10 @@
 | Split out of `AGENTS.md` on 2026-10-16; that file keeps the one-line rules and
 | the map of where each topic lives.
 
+## Activity log payload contract (issue #1400)
+
+`ActivityLogService::write()` is the single insert path (`log()`/`logAs()` call it; `created()`/`deleted()`/`login()`/`logout()`/`updated()` call `log()`). Callers pass **explicit allowlisted deltas**, never a raw model array (`getAttributes()`, `getChanges()`, `toArray()`) and never a national code/phone/email inside `description` — it is stored and rendered verbatim. `write()` strips `DENIED_KEYS` (passwords and tokens, `n_code`/`kod_melli`/`phone`/`email`, `birth_date`/`hire_date`) from both value sets, recursively, lowercased. A payload with only denied keys is stored as `[]`. The strip is forward-only: rows already in `activity_logs` / `activity_log_archives` are untouched, and a direct `ActivityLog::create()` bypasses it — which is why the service is the only allowed write path.
+
 ## Dead Routes & Components Removed (Phase 4)
 
 These components and routes were removed — do not recreate:
@@ -224,16 +228,18 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 | `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
 | `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command — **not dispatched by anything** (see the gotcha below); the 06:00 schedule runs the command inline (#1021) |
+| `ImportHardwareJob` | 600s | 1 | Hardware XLSX import on `redis-reports`. One attempt: a partially applied run cannot be replayed without duplicating rows (`hardwares` has no unique key on the compare column). One import per user at a time (#1194) |
+| `ImportPersonsJob` | 600s | 1 | Personnel XLSX import on `redis-reports`. Same one-attempt, one-per-user contract as `ImportHardwareJob` |
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
 | `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
-The two retention jobs accept a `$unitIds` array; **empty resolves `AccessService::allUnitIds()` (org-wide), NOT `accessibleUnitIds()`** (#836). `accessibleUnitIds()` reads `auth()`/`session()` and is therefore always `[]` in a scheduler or queue worker — every caller used to read that as "nothing to do" and exit successfully. `accessibleUnitIds()` is request-scoped UI code only. `GenerateDailyReportsJob` takes no scope of its own: it shells out to `reports:generate-daily`, which resolves the unit set itself. Those jobs have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when `services.zabbix.out_item_id` / `in_item_id` are not configured.
+The two retention jobs accept a `$unitIds` array; **empty resolves `AccessService::allUnitIds()` (org-wide), NOT `accessibleUnitIds()`** (#836). `accessibleUnitIds()` reads `auth()`/`session()` and is therefore always `[]` in a scheduler or queue worker — every caller used to read that as "nothing to do" and exit successfully. `accessibleUnitIds()` is request-scoped UI code only. `GenerateDailyReportsJob` takes no scope of its own: it shells out to `reports:generate-daily`, which resolves the unit set itself. Those jobs have `failed()` methods that `Log::error()`. `SyncZabbixJob` takes no unit scope and records a **failure row** when a fetch returns a failed result, as well as when `services.zabbix.out_item_id` / `in_item_id` are not configured.
 
 > Gotcha: `GenerateDailyReportsJob` has **no dispatch site on purpose** — the 06:00 schedule runs `reports:generate-daily` inline (#1021). The queue pin is **already in place** (#1010, closed by PR #1130): the job carries `#[Connection('redis-reports')]` (`app/Jobs/GenerateDailyReportsJob.php:18`), whose `retry_after` is 660s against its 600s `$timeout`; `install-guid.md` §11 documents the `h-dashboard-queue-reports` worker that consumes the `redis-reports` connection (`queues:reports` list); and `tests/Feature/Jobs/JobsTest.php:205,224,244` pins the invariant. What is still unsafe is dispatching it into a deployment running only the default `redis` worker — `queues:reports` would have no consumer. Confirm the reports worker is enabled before wiring `->job(new GenerateDailyReportsJob)` into `bootstrap/app.php`.
 
-> Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). `SyncZabbixJob::alertAdmins()` calls `NotificationService::send()` **directly and synchronously** — it does not dispatch the job. Read both before adding a second notification path.
+> Gotcha: `NotificationService::send()` is the **static** primitive — it creates the in-app notification row and invalidates the recipient's bell cache. `SendNotificationJob` is only the queued per-recipient wrapper around it and has **no static `send()` of its own** (its surface is `__construct` / `handle` / `failed`). Read both before adding a second notification path.
 
-> Gotcha: the optional `$dedupeKey` on `NotificationService::send()` is the **event identity, not a content hash** — retries/duplicates of one event pass the same key, different events pass different keys; a second send with the same `(user_id, dedupe_key)` returns the existing row (backed by the `notifications_user_dedupe_key_unique` index). Today only `SendNotificationJob` passes one (`job:{queue uuid}`); direct callers like `SyncZabbixJob::alertAdmins()` are still unkeyed (#1286 step 6 split).
+> Gotcha: the optional `$dedupeKey` on `NotificationService::send()` is the **event identity, not a content hash** — retries/duplicates of one event pass the same key, different events pass different keys; a second send with the same `(user_id, dedupe_key)` returns the existing row (backed by the `notifications_user_dedupe_key_unique` index). Today only `SendNotificationJob` passes one (`job:{queue uuid}`).
 
 ---
 
@@ -261,7 +267,7 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 `CacheInvalidationService` uses driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter. Hot paths use `Cache::remember(...)` with the versioned key.
 
-**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, `global_search`, **`zabbix_devices`** (added with issue #698), `disease_maps`.
+**Key namespaces:** all **19** in `PruneStaleCache::NAMESPACES` (`grep -n 'NAMESPACES' -A2 app/Console/Commands/PruneStaleCache.php`) — `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `report_todos`, `report_tickets`, `report_persons`, `report_units`, `unit_hierarchy`, `calendar`, `zabbix_devices` (added with issue #698), `global_search`, `disease_maps`, `activity_log`, `report_no_boundary`, `unit_types`, `tools_stats`, `notifications`.
 
 **The version key comes from the service and nowhere else.** A cache key is built with `remember()`/`cacheKey()` and a version read with `getVersion()`; a hand-written `Cache::get('…_version')` (or a literal `…:v{$v}`) bypasses invalidation and reads a counter nobody bumps (#1290). `tests/Feature/CacheVersionKeyGuardTest.php` enforces this over `app/` and `resources/views/`, and also pins that every namespace literal at a call site — plus the `*Namespaces` lists in `AppServiceProvider` — is registered here.
 

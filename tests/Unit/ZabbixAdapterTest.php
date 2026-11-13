@@ -21,44 +21,14 @@ covers(ZabbixResult::class);
  */
 class ZabbixAdapterTest extends TestCase
 {
-    /**
-     * A ZabbixService that throws the given exception instead of talking
-     * to anything (overrides both methods the adapter calls).
-     */
     private function throwingService(Throwable $e): ZabbixService
     {
-        return new class($e) extends ZabbixService
-        {
-            public function __construct(private readonly Throwable $e) {}
-
-            public function getInterfaceTraffic($itemId, $duration = 3600)
-            {
-                throw $this->e;
-            }
-
-            public function getLatestValues(array $itemIds): array
-            {
-                throw $this->e;
-            }
-        };
+        return new ThrowingZabbixService($e);
     }
 
     private function workingService(): ZabbixService
     {
-        return new class extends ZabbixService
-        {
-            public function __construct() {}
-
-            public function getInterfaceTraffic($itemId, $duration = 3600)
-            {
-                return [['x' => 1, 'y' => 2.5]];
-            }
-
-            public function getLatestValues(array $itemIds): array
-            {
-                return ['100' => 1.5, '200' => null];
-            }
-        };
+        return new WorkingZabbixService;
     }
 
     public function test_success_wraps_the_payload(): void
@@ -134,25 +104,122 @@ class ZabbixAdapterTest extends TestCase
         $this->assertSame('error', $client->traffic(100)->failure());
     }
 
+    public function test_test_connection_wraps_the_version_payload(): void
+    {
+        $client = new ServiceZabbixClient($this->workingService());
+
+        $result = $client->testConnection();
+
+        $this->assertTrue($result->isOk());
+        $this->assertSame(['version' => '6.0.0'], $result->data());
+        $this->assertNull($result->failure());
+    }
+
+    public function test_test_connection_classifies_connection_refused_as_connection(): void
+    {
+        $client = new ServiceZabbixClient($this->throwingService(
+            new RuntimeException('connection refused')
+        ));
+
+        $result = $client->testConnection();
+
+        $this->assertTrue($result->failed());
+        $this->assertSame('connection', $result->failure());
+    }
+
+    public function test_test_connection_classifies_a_timeout(): void
+    {
+        $client = new ServiceZabbixClient($this->throwingService(
+            new ConnectionException('cURL error 28: Operation timed out after 10001 milliseconds')
+        ));
+
+        $result = $client->testConnection();
+
+        $this->assertTrue($result->failed());
+        $this->assertSame('timeout', $result->failure());
+    }
+
     public function test_a_stub_client_satisfies_the_interface_contract(): void
     {
         // The shape controllers rely on: a stub can produce both outcomes
         // with no server, which is the whole point of the extraction (#741).
-        $stub = new class implements ZabbixClient
-        {
-            public function traffic(int|string $itemId, int $duration = 3600): ZabbixResult
-            {
-                return ZabbixResult::fail('timeout', 'stub timeout');
-            }
-
-            public function latestValues(array $itemIds): ZabbixResult
-            {
-                return ZabbixResult::success(['100' => 42.0]);
-            }
-        };
+        $stub = new StubZabbixClient;
 
         $this->assertTrue($stub->traffic(1)->failed());
         $this->assertSame('timeout', $stub->traffic(1)->failure());
         $this->assertSame(['100' => 42.0], $stub->latestValues(['100'])->data());
+        $this->assertSame(['version' => '6.0.0'], $stub->testConnection()->data());
+    }
+}
+
+/**
+ * A ZabbixService that throws the given exception instead of talking to
+ * anything (overrides every method the adapter calls).
+ *
+ * Named rather than anonymous on purpose: Pint's `php_unit_method_casing`
+ * rewrites `test*` methods in anonymous classes in test files, which would
+ * silently break the `testApiConnection()` override.
+ */
+class ThrowingZabbixService extends ZabbixService
+{
+    public function __construct(private readonly Throwable $e) {}
+
+    public function getInterfaceTraffic($itemId, $duration = 3600)
+    {
+        throw $this->e;
+    }
+
+    public function getLatestValues(array $itemIds): array
+    {
+        throw $this->e;
+    }
+
+    public function testApiConnection(): array
+    {
+        throw $this->e;
+    }
+}
+
+/**
+ * The happy-path double: every adapter call returns a canned payload.
+ */
+class WorkingZabbixService extends ZabbixService
+{
+    public function __construct() {}
+
+    public function getInterfaceTraffic($itemId, $duration = 3600)
+    {
+        return [['x' => 1, 'y' => 2.5]];
+    }
+
+    public function getLatestValues(array $itemIds): array
+    {
+        return ['100' => 1.5, '200' => null];
+    }
+
+    public function testApiConnection(): array
+    {
+        return ['version' => '6.0.0'];
+    }
+}
+
+/**
+ * A no-server client stub: one failure and one success, no transport.
+ */
+class StubZabbixClient implements ZabbixClient
+{
+    public function traffic(int|string $itemId, int $duration = 3600): ZabbixResult
+    {
+        return ZabbixResult::fail('timeout', 'stub timeout');
+    }
+
+    public function latestValues(array $itemIds): ZabbixResult
+    {
+        return ZabbixResult::success(['100' => 42.0]);
+    }
+
+    public function testConnection(): ZabbixResult
+    {
+        return ZabbixResult::success(['version' => '6.0.0']);
     }
 }

@@ -16,7 +16,7 @@ Uses **Spatie Permission** package:
   | Spelling | Why it fails open |
   |---|---|
   | `->when($accessibleIds, fn ($q) => …)` | `Conditionable::when()` runs the callback only for a **truthy** value, so `[]` drops the predicate — the #819 leak in five `/reports/*` components |
-  | `if (! empty($accessibleIds)) { $q->whereIn(…); }` | the predicate is simply never added — #839, all **8** sites in `PersonImport` / `HardwareImport` |
+  | `if (! empty($accessibleIds)) { $q->whereIn(…); }` | the predicate is simply never added — #839, all **8** sites in `PersonImport` / `HardwareImport` (as of #839) |
   | `if (! empty($accessibleIds) && ! in_array($id, $accessibleIds)) { reject }` | the **first conjunct is false**, so `&&` short-circuits and the row is **ACCEPTED** — the same bug with extra steps, and the most dangerous spelling because it *looks* like a scope check |
 
   `AccessibleUnitIds()` is legitimately `[]` for an account with no `user_units` row and no `person.u_id`, and such a user is deliberately allowed through `ValidateUnitContext`. **`[]` means "in scope of nothing", never "unrestricted".** Use a plain `->whereIn($column, $accessibleIds)` (or `->accessible($column)`) instead — an empty array compiles to `0 = 1`. The two-`when` form in `UnitsExportController` / `PersonsExportController` (`when($accessibleIds === [], whereRaw('1 = 0'))`) is also correct — but the unconditional one is one condition instead of two that must both stay right.
@@ -42,7 +42,7 @@ Uses **Spatie Permission** package:
 ### Guard (issue #1306)
 
 `tests/Feature/ScopeFailOpenGuardTest.php` scans `app/` and `resources/views/livewire/`
-(214 `.php` files today) and fails CI with `path:line`. Static scan, no database.
+(240 `.php` files today — `find app resources/views/livewire -name '*.php' | wc -l`) and fails CI with `path:line`. Static scan, no database.
 Comments and docblocks are stripped first, so the spellings may still be quoted in
 prose; the guard flags code, not documentation.
 

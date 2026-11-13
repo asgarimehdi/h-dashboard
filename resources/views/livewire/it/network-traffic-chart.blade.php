@@ -19,8 +19,11 @@ return new class extends Component {
 ?>
 
 <div wire:key="traffic-{{ $outItemId }}-{{ $inItemId }}"
-     x-data="initTrafficChart('{{ $outItemId }}', '{{ $inItemId }}', '{{ $title }}', {{ $initialDuration }})"
-     x-init="start($el)"
+     x-data="trafficChart"
+     data-out-item-id="{{ $outItemId }}"
+     data-in-item-id="{{ $inItemId }}"
+     data-title="{{ $title }}"
+     data-duration="{{ $initialDuration }}"
      class="relative">
 
     <div class="flex items-center gap-2 mb-2">
@@ -64,111 +67,5 @@ return new class extends Component {
     Highcharts.setOptions({
         accessibility: { enabled: false }
     });
-
-    window.initTrafficChart = function(outItemId, inItemId, chartTitle, initialDuration) {
-        return {
-            outItemId, inItemId, chartTitle,
-            duration: initialDuration,
-            loading: false,
-            error: null,
-            chart: null,
-            timer: null,
-
-            start(el) {
-                this.$nextTick(() => {
-                    const container = el.querySelector('[x-ref="container"]');
-                    if (!container) return;
-
-                    container.innerHTML = '';
-
-                    this.chart = Highcharts.chart(container, {
-                        chart: {
-                            type: 'spline',
-                            backgroundColor: 'transparent',
-                            animation: false
-                        },
-                        title: {
-                            text: this.chartTitle,
-                            style: { color: "var(--color-primary)" }
-                        },
-                        xAxis: { type: 'datetime' },
-                        yAxis: { title: { text: 'Mbps' } },
-                        tooltip: { valueSuffix: ' Mbps' },
-                        credits: { enabled: false },
-                        accessibility: { enabled: false },
-                        series: [{
-                            name: 'Outgoing',
-                            data: [],
-                            color: "var(--color-warning)"
-                        }, {
-                            name: 'Incoming',
-                            data: [],
-                            color: "var(--color-primary)"
-                        }]
-                    });
-
-                    this.load();
-                    // ۶۰ ثانیه، نه ۱۰: هر نمودار یک درخواست به `/api/zabbix/traffic`
-                    // می‌زند و این مسیر زیر `throttle:api-user` است (۶۰ درخواست در
-                    // دقیقه برای کل کاربر). با ۲۵ شبکه و چرخهٔ ۱۰ ثانیه‌ای یعنی
-                    // ۱۵۰ درخواست در دقیقه و ۴۲۹ قطعی. بازهٔ زمانی نمودار از ۳۰
-                    // دقیقه شروع می‌شود، پس تازه‌سازی دقیقه‌ای کافی است.
-                    this.timer = setInterval(() => this.load(), 60000);
-                });
-            },
-
-            reload() {
-                this.load(true);
-            },
-
-            async load(show = false) {
-                if (!this.chart) return;
-                if (show) this.loading = true;
-                this.error = null;
-
-                try {
-                    const url = `/api/zabbix/traffic?out_item_id=${this.outItemId}&in_item_id=${this.inItemId}&duration=${this.duration}`;
-                    const res = await fetch(url);
-
-                    // #703: 503 means Zabbix is unreachable — show the requested
-                    // friendly message, not a silent empty chart. Other statuses
-                    // keep their existing behaviour so real bugs stay visible.
-                    if (res.status === 503) {
-                        this.error = 'دسترسی به سرور مقدور نمی باشد';
-                        return;
-                    }
-
-                    const data = await res.json();
-
-                    if (this.chart && this.chart.series) {
-                        this.chart.series[0].setData(data.out || [], false);
-                        this.chart.series[1].setData(data.in || [], false);
-                        this.chart.redraw(false);
-                    }
-                } catch(e) {
-                    console.error(e);
-
-                    // #703: a TypeError means the request never reached the
-                    // server (offline / network down) — the same condition.
-                    if (e instanceof TypeError) {
-                        this.error = 'دسترسی به سرور مقدور نمی باشد';
-                        return;
-                    }
-
-                    this.error = 'خطا در دریافت داده‌های ترافیک';
-                } finally {
-                    if (show) this.loading = false;
-                }
-            },
-
-            destroy() {
-                clearInterval(this.timer);
-                if (this.chart) {
-                    this.chart.destroy();
-                    this.chart = null;
-                }
-            }
-        };
-    };
 </script>
 @endassets

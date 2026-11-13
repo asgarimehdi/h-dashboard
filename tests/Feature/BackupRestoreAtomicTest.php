@@ -1,12 +1,14 @@
 <?php
 
 use App\Exceptions\BackupValidationException;
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\User;
 use App\Services\Backup\BackupService;
 use App\Services\Backup\RestoreService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -121,6 +123,62 @@ test('restoring one table does not touch the other tables', function () {
     expect(DB::table('tahsils')->count())->toBe($lookupsBefore);
 });
 
+test('a file row with a null id is refused instead of failing in the database', function () {
+    $person = Person::factory()->create(['n_code' => '1234567890']);
+    User::factory()->create(['id' => 970, 'n_code' => $person->n_code]);
+
+    $archive = app(BackupService::class)->exportTable('users');
+    $rows = $this->backupZipJson($archive->path, 'users.json');
+    $rows[0]['id'] = null;
+
+    // A live row the file does NOT carry: if the guard were absent and the
+    // delete set were built with null, this is the row whose fate diverges.
+    User::factory()->create(['id' => 971]);
+
+    $before = json_encode(backupDbRows('users'));
+
+    $broken = $this->backupMakeZip(
+        storage_path('app/private/backup/null-id-'.Str::random(8).'.zip'),
+        ['users.json' => json_encode($rows)]
+    );
+
+    expect(fn () => app(RestoreService::class)->restoreArchive($broken))
+        ->toThrow(BackupValidationException::class);   // NOT QueryException
+
+    expect(json_encode(backupDbRows('users')))->toBe($before); // no delete, insert or update at all
+});
+
+test('a file row without an id key is refused before anything is written', function () {
+    $person = Person::factory()->create(['n_code' => '1234567890']);
+    User::factory()->create(['id' => 980, 'n_code' => $person->n_code]);
+
+    $archive = app(BackupService::class)->exportTable('users');
+    $rows = $this->backupZipJson($archive->path, 'users.json');
+
+    // The literal shape of the issue. The validator is the FIRST gate here
+    // (columnProblems reports the missing column); replaceRows() is the
+    // second, so this stays a domain error even if the validator regresses.
+    unset($rows[0]['id']);
+
+    $before = json_encode(backupDbRows('users'));
+
+    $broken = $this->backupMakeZip(
+        storage_path('app/private/backup/missing-id-'.Str::random(8).'.zip'),
+        ['users.json' => json_encode($rows)]
+    );
+
+    try {
+        app(RestoreService::class)->restoreArchive($broken);
+        $caught = null;
+    } catch (BackupValidationException $e) {
+        $caught = $e;
+    }
+
+    expect($caught)->toBeInstanceOf(BackupValidationException::class);
+    expect($caught->getMessage())->toContain('users')->toContain('id');
+    expect(json_encode(backupDbRows('users')))->toBe($before);
+});
+
 test('a file that carries the same id twice is rejected', function () {
     $person = Person::factory()->create(['n_code' => '1234567890']);
     User::factory()->create(['id' => 960, 'n_code' => $person->n_code]);
@@ -141,4 +199,76 @@ test('a file that carries the same id twice is rejected', function () {
         ->toThrow(BackupValidationException::class);
 
     expect(DB::table('users')->where('id', 960)->count())->toBe(1);
+});
+
+test('a table past the postgres parameter limit restores in chunks', function () {
+    Hardware::factory()->create();
+
+    // 3,000 rows × 22 columns = 66,000 bind parameters. One `upsert()` of the
+    // whole table is refused by Postgres (SQLSTATE 65535); the writer has to
+    // split it.
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/wide-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        3_000,
+    );
+
+    $result = app(RestoreService::class)->restoreArchive($path);
+
+    expect($result->rowCount)->toBe(3_000);
+    expect(DB::table('hardwares')->count())->toBe(3_000);
+
+    $row = DB::table('hardwares')->where('id', 3_000)->first();
+
+    expect($row)->not->toBeNull();
+    expect($row->pc_name)->not->toBeNull();
+    expect($row->n_code)->not->toBeNull();
+});
+
+test('the anti-join delete keeps rows from later chunks', function () {
+    Hardware::factory()->create();
+
+    // The database starts with 1..1,200.
+    app(RestoreService::class)->restoreArchive($this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/seed-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        1_200,
+    ));
+
+    // The file carries 1..1,000 except 500.
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/holed-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        999,
+        fn (int $index, array $row): array => array_merge($row, [
+            'id' => $index < 499 ? $index + 1 : $index + 2,
+        ]),
+    );
+
+    app(RestoreService::class)->restoreArchive($path);
+
+    expect(DB::table('hardwares')->count())->toBe(999);
+    expect(DB::table('hardwares')->whereIn('id', [999, 1000, 1200])->count())->toBe(2);
+    expect(DB::table('hardwares')->where('id', 999)->count())->toBe(1);
+    expect(DB::table('hardwares')->where('id', 1000)->count())->toBe(1);
+    expect(DB::table('hardwares')->where('id', 1200)->count())->toBe(0);
+    expect(DB::table('hardwares')->where('id', 500)->count())->toBe(0);
+});
+
+test('a rejected 3,000-row file leaves the table untouched', function () {
+    Hardware::factory()->create();
+
+    $before = json_encode(backupDbRows('hardwares'));
+
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/null-id-wide-'.Str::random(8).'.zip'),
+        'hardwares',
+        3_000,
+        fn (int $index, array $row): array => $index === 1_500 ? array_merge($row, ['id' => null]) : $row,
+    );
+
+    expect(fn () => app(RestoreService::class)->restoreArchive($path))
+        ->toThrow(BackupValidationException::class);
+
+    expect(json_encode(backupDbRows('hardwares')))->toBe($before);
 });

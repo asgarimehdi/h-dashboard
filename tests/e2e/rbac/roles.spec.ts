@@ -1,4 +1,4 @@
-import { test, expect, TEST_USER, ROLE_ACCOUNTS } from '../shared/fixtures';
+import { test, expect, TEST_USER, ROLE_ACCOUNTS, waitForLivewire } from '../shared/fixtures';
 import type { Page } from '@playwright/test';
 
 /**
@@ -106,6 +106,32 @@ test.describe('RBAC — forbidden direct navigation returns 403', () => {
     expect(resp!.status()).toBe(200);
     // the users list renders a table
     await expect(page.locator('table').first()).toBeVisible();
+  });
+});
+
+test.describe('RBAC — persistent role modal', () => {
+  test('has no × close form and survives Escape', async ({ page }) => {
+    await loginAs(page, ROLE_ACCOUNTS.admin);
+    await page.goto('/roles');
+
+    // Open the edit modal server-side; the create button assigns `$wire.modal`
+    // from an Alpine expression, which is not the path under test here.
+    const opened = waitForLivewire(page);
+    await page.locator('button[wire\\:click*="editRole"]').first().click();
+    await opened;
+
+    // Scope by the form field — an empty `dialog.modal` would also match the
+    // always-present help dialog.
+    const modal = page.locator('dialog.modal', {
+      has: page.locator('input[wire\\:model="name"]'),
+    });
+    await expect(modal).toHaveClass(/modal-open/);
+
+    // `persistent` means CspModal renders neither the × form nor the backdrop.
+    await expect(modal.locator('form[method="dialog"]')).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+    await expect(modal).toHaveClass(/modal-open/);
   });
 });
 

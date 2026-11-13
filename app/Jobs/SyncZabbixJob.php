@@ -2,10 +2,9 @@
 
 namespace App\Jobs;
 
-use App\Models\User;
 use App\Models\ZabbixSyncLog;
-use App\Services\NotificationService;
-use App\Services\ZabbixService;
+use App\Services\Zabbix\ZabbixClient;
+use App\Services\Zabbix\ZabbixResult;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -23,7 +22,7 @@ class SyncZabbixJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public function handle(ZabbixService $zabbix): void
+    public function handle(ZabbixClient $zabbix): void
     {
         $outItemId = config('services.zabbix.out_item_id');
         $inItemId = config('services.zabbix.in_item_id');
@@ -32,16 +31,28 @@ class SyncZabbixJob implements ShouldQueue
             // The unconfigured-skip used to be a warning nobody read, so a
             // misconfigured deployment stayed silently broken for weeks
             // (#740). It now records a failed run like any other — the
-            // dashboard shows it and the streak can fire the admin alert.
+            // dashboard shows it.
             Log::warning('SyncZabbixJob: Zabbix item IDs not configured. Skipping.');
             $this->recordFailure('Zabbix item IDs not configured');
 
             return;
         }
 
-        $out = $zabbix->getInterfaceTraffic($outItemId);
-        $in = $zabbix->getInterfaceTraffic($inItemId);
-        $traffic = array_merge($out, $in);
+        $out = $zabbix->traffic($outItemId);
+        if ($out->failed()) {
+            $this->recordTransportFailure('out', $out);
+
+            return;
+        }
+
+        $in = $zabbix->traffic($inItemId);
+        if ($in->failed()) {
+            $this->recordTransportFailure('in', $in);
+
+            return;
+        }
+
+        $traffic = array_merge((array) $out->data(), (array) $in->data());
 
         Cache::put('zabbix_traffic_data', $traffic, now()->addMinutes(5));
 
@@ -52,8 +63,8 @@ class SyncZabbixJob implements ShouldQueue
 
     /**
      * Runs only after the queue gives up (tries exhausted), so one job
-     * failure produces exactly one failure row — retries do not inflate
-     * the consecutive-failure streak.
+     * failure produces exactly one failure row — retries do not produce
+     * extra failure rows.
      */
     public function failed(Throwable $exception): void
     {
@@ -70,54 +81,37 @@ class SyncZabbixJob implements ShouldQueue
     {
         (new ZabbixSyncLog([
             'success' => true,
-            'consecutive_failures' => 0,
             'ran_at' => now(),
         ]))->save();
     }
 
     private function recordFailure(string $error): void
     {
-        $previous = ZabbixSyncLog::query()->orderByDesc('id')->first();
-        $streak = ($previous !== null && ! $previous->success)
-            ? $previous->consecutive_failures + 1
-            : 1;
-
-        // Issue #1346: keep the row — its id is the dedupe key of the
-        // threshold alert, so the next episode alerts under a new key.
-        $syncLog = new ZabbixSyncLog([
+        // Append-only: one row per run; nothing derives a value from
+        // prior rows, so a duplicate row for one outage is harmless.
+        (new ZabbixSyncLog([
             'success' => false,
-            'consecutive_failures' => $streak,
             'error' => $error,
             'ran_at' => now(),
-        ]);
-        $syncLog->save();
-
-        if ($streak === ZabbixSyncLog::ALERT_THRESHOLD) {
-            $this->alertAdmins($error, $syncLog->id);
-        }
+        ]))->save();
     }
 
     /**
-     * The alert channel decided in #740: an in-app notification for every
-     * admin user through the existing NotificationService — no new
-     * infrastructure (email/webhook). Sent once when the streak REACHES the
-     * threshold; further failures stay visible on the dashboard without
-     * spamming, and any success resets the streak.
+     * A failed traffic fetch is an ordinary value, not an exception, so it is
+     * recorded here rather than in failed(): one row per run and no retry —
+     * the next scheduler tick (5 minutes later) is the retry.
      */
-    private function alertAdmins(string $error, int $syncLogId): void
+    private function recordTransportFailure(string $direction, ZabbixResult $result): void
     {
-        foreach (User::query()->whereRelation('roles', 'name', 'admin')->pluck('id') as $userId) {
-            NotificationService::send(
-                (int) $userId,
-                'zabbix_sync',
-                'هشدار: sync زیبکس سه بار متوالی ناموفق بود',
-                'خطای آخر: '.$error,
-                'o-bell',
-                'text-error',
-                '/dashboard',
-                null,
-                'zabbix:alert:'.$syncLogId,
-            );
-        }
+        $error = sprintf(
+            'Zabbix %s traffic fetch failed (%s): %s',
+            $direction,
+            $result->failure() ?? 'error',
+            $result->message() ?? 'unknown error',
+        );
+
+        Log::error('SyncZabbixJob: '.$error);
+
+        $this->recordFailure($error);
     }
 }

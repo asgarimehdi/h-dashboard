@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Leaflet lifecycle owner (issue #028).
  *
@@ -21,16 +22,17 @@
 
 const MAP_ID = 'map';
 
+/** @param {Element | null} el */
 function isConnected(el) {
   return !!el && document.body.contains(el);
 }
 
+/** @param {any} instance */
 function containerOf(instance) {
-  return instance && typeof instance.getContainer === 'function'
-    ? instance.getContainer()
-    : null;
+  return instance && typeof instance.getContainer === 'function' ? instance.getContainer() : null;
 }
 
+/** @param {any} instance */
 function destroyInstance(instance) {
   try {
     // Drop handlers first: a removed instance that still reacts to window
@@ -61,15 +63,23 @@ function destroyInstance(instance) {
  * The store keeps only plain data (config, pending callbacks) and the
  * lifecycle API; get()/use()/onReady() hand out the raw instance.
  */
+/** @type {any} */
 let instance = null;
+/** @type {Element | null} */
 let containerEl = null;
 
+/** @param {AlpineStatic} Alpine */
 export function registerMapStore(Alpine) {
   Alpine.store(MAP_ID, {
+    /** @type {Record<string, any>} */
     config: {},
+    /** @type {Array<(map: any) => void>} */
     pending: [],
 
-    /** Called by the map component so late `use()` calls build the right map. */
+    /**
+     * Called by the map component so late `use()` calls build the right map.
+     * @param {Record<string, any>} [config]
+     */
     configure(config = {}) {
       this.config = { ...this.config, ...config };
     },
@@ -84,6 +94,7 @@ export function registerMapStore(Alpine) {
      * Return a Leaflet map bound to `el`, creating one when needed.
      * Returns null (with a warning) when `el` is not in the document — a loud
      * no-op, never a silent bind to the wrong map.
+     * @param {HTMLElement} el
      */
     use(el) {
       if (!isConnected(el)) {
@@ -104,13 +115,10 @@ export function registerMapStore(Alpine) {
       const zoom = this.config.zoom ?? 8;
       instance = L.map(el).setView(view, zoom);
 
-      L.tileLayer(
-        this.config.tileUrl ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          attribution: this.config.attribution ?? '&copy; Health-Dashboard',
-          className: 'map-tiles',
-        },
-      ).addTo(instance);
+      L.tileLayer(this.config.tileUrl ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: this.config.attribution ?? '&copy; Health-Dashboard',
+        className: 'map-tiles',
+      }).addTo(instance);
 
       containerEl = el;
 
@@ -122,6 +130,7 @@ export function registerMapStore(Alpine) {
      * Run `callback(instance)` with a live map: immediately when one exists,
      * otherwise as soon as the map component creates it. This removes the
      * script-ordering race between the host page and maps.map entirely.
+     * @param {(map: any) => void} callback
      */
     onReady(callback) {
       const live = this.get();
@@ -148,6 +157,8 @@ export function registerMapStore(Alpine) {
      * Destroy the instance. `el` guards against a late release from a page we
      * already navigated away from killing the NEW page's map; pass
      * { force: true } to destroy regardless.
+     * @param {HTMLElement | null} [el]
+     * @param {{ force?: boolean }} [options]
      */
     release(el, { force = false } = {}) {
       if (!instance) return;

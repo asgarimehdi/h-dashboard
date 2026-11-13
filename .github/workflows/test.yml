@@ -56,8 +56,40 @@ jobs:
       - name: Assert no tracked env file commits an APP_KEY
         run: php scripts/check-app-key-leak.php
 
+      - name: Assert .env.example ships the Persian locale
+        # Issue #1414: the canonical dev template must agree with the four
+        # sibling env templates, or a fresh clone boots English in an RTL app.
+        run: |
+          grep -q '^APP_LOCALE=fa' .env.example
+          grep -q '^APP_FALLBACK_LOCALE=en' .env.example
+
       - name: Check code style
         run: vendor/bin/pint --test
+
+  js-lint:
+    name: JS Lint & Format (ESLint + Prettier)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # `npm ci` also proves package.json and package-lock.json agree.
+        run: npm ci
+
+      - name: Lint resources/js
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
 
   test:
     name: Tests & Coverage
@@ -290,6 +322,33 @@ jobs:
         # above is what keeps the workflow run green (issue #865/#867 pattern).
         run: npm run typecheck
 
+  js-typecheck:
+    name: Typecheck (resources/js ratchet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # Also the lock-file consistency check (same reason as :283-285).
+        run: npm ci
+
+      - name: Typecheck the resources/js @ts-check set
+        # Not wrapped in `|| true`: a regression in an opted-in file must render
+        # this job red and visible.
+        run: npx tsc -p tsconfig.js.json --noEmit
+
+      - name: Every resources/js file must opt in
+        run: test -z "$(grep -L '^// @ts-check' resources/js/*.js)"
+
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
@@ -297,12 +356,19 @@ jobs:
     # of the rebased head was cancelled at the 35-minute cap (35:26), while
     # attempt 1 finished green inside 35. Supersedes D8's return-to-35.
     timeout-minutes: 45
-    # Non-blocking ramp (issue #867): the suite has never run in CI, so the
-    # first executions will surface real latent failures (the inert
-    # waitForLivewire() wait, the self-skipping unit-map-boundary spec).
-    # Ship continue-on-error:true now; promote to required only after two
-    # consecutive green runs AND the two collateral fixes land (separate PRs,
-    # preconditions for required status — see #867's git review).
+    # Non-blocking ramp (issue #867, redefined in #1469): the job stays
+    # green, but the assert step below is red whenever a test failed, was
+    # flaky, or never ran — so `continue-on-error` no longer hides the truth.
+    #
+    # COUNTER DEFINITION (machine-readable, #1469): two CONSECUTIVE `e2e`
+    # runs where failed == 0 AND flaky == 0 AND did_not_run == 0, read from
+    # the JSON artifact (e2e-results.json) — NOT from the job conclusion,
+    # which is always `success` while continue-on-error is on.
+    # Current counter: ONE — run 43397351827 (job 131791429148, this PR's
+    # head) measured 0 failed / 0 flaky / 0 did not run. Run #1466 measured
+    # 5 failed / 2 flaky / 6 did not run. The second precondition (the two
+    # collateral fixes land in separate PRs) is unchanged — see #867's git
+    # review.
     continue-on-error: true
 
     services:
@@ -422,27 +488,55 @@ jobs:
         # libraries — do not make this step conditional on cache-hit.
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E suite (list reporter proves execution)
+      - name: Run E2E suite (list + JSON reporters)
         # Through scripts/e2e-test.sh ONLY — never bare `npx playwright test`:
         # fixtures.ts needs tests/e2e/.run-state.json, which only this script
         # writes (migrate:fresh → pwd user → serve :8001 → test → restore).
         # The script swaps .env, so it must NEVER run in parallel with
-        # anything (not concurrency-safe). --reporter=list makes the log
-        # itself the proof that tests executed; the count assertion below
-        # turns the #865 trap (green with zero tests) into a hard failure.
-        # Output is tee'd to e2e-list.log so the next step can count real
-        # executions from the reporter stream itself.
-        run: bash scripts/e2e-test.sh --reporter=list 2>&1 | tee e2e-list.log
-
-      - name: Assert tests really executed
-        # A green job that executed zero tests is a failure, not a pass.
-        # The list reporter prints one line per executed test; the summary
-        # line looks like "  202 passed (3.5m)". Both must be present.
+        # anything (not concurrency-safe).
+        #
+        # `set -o pipefail` (#1469 §5a): without it the step's exit code was
+        # `tee`'s, so a red suite exited 0 and the job looked green even
+        # before `continue-on-error` entered the picture. The script already
+        # propagates Playwright's exit code; pipefail lets that reach the step.
+        #
+        # The JSON reporter (#1469 §5b) is the machine-readable source the next
+        # step reads: combined with `--reporter=list` Playwright suppresses the
+        # per-test `✓` lines (measured on 1.65), which is why the old
+        # `grep -cE '✓'` guard was replaced by JSON counts. `tee` keeps a human
+        # log and the artifact keeps the JSON.
         run: |
-          EXECUTED=$(grep -cE '✓|✔|passed \(' e2e-list.log || true)
-          echo "e2e executed-test lines: ${EXECUTED}"
-          grep -qE '[0-9]+ passed' e2e-list.log
-          test "${EXECUTED}" -gt 0
+          set -o pipefail
+          PLAYWRIGHT_JSON_OUTPUT_NAME=e2e-results.json \
+            bash scripts/e2e-test.sh --reporter=list --reporter=json 2>&1 | tee e2e-list.log
+
+      - name: Report E2E results (failed / flaky / did-not-run)
+        # #1469 §5: the job is `continue-on-error: true` (#867), so its
+        # conclusion is always `success` — this step is the visible truth.
+        # It reads Playwright's own JSON counts, writes the table to the job
+        # summary, annotates every failed test with file+line, and exits
+        # non-zero when failed > 0, flaky > 0, or did_not_run > 0 (a serial
+        # group that swallowed the tests behind a failure).
+        #
+        # `if: always()` so it still runs when the suite step died early; the
+        # script itself fails loudly when the JSON/log is missing, which keeps
+        # the #865 zero-tests guard ("green with no tests is red").
+        if: always()
+        run: php scripts/e2e-report.php e2e-results.json e2e-list.log
+
+      - name: Upload E2E report
+        # The counter in the `continue-on-error` comment above is defined from
+        # this artifact, not from the job conclusion. `if: always()` so a red
+        # or crashed run is diagnosable too.
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-results
+          path: |
+            e2e-results.json
+            e2e-list.log
+          retention-days: 7
+          if-no-files-found: warn
 
   csp-enforcing:
     name: CSP Enforcing Gate (csp.spec.ts)
@@ -804,6 +898,14 @@ jobs:
           test -f composer.lock
           composer validate --strict --check-lock
           git diff --exit-code -- composer.lock
+
+      # Larastan boots bootstrap/app.php through the console kernel, so the
+      # analysed app needs an encryption key even though no test runs here.
+      # Q3(b) of #1433: only this job gets an .env; no services, no database.
+      - name: Provide an application key for the kernel boot
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
 
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress

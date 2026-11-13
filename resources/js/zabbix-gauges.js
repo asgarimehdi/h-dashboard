@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Zabbix signal gauges + the shared wireless poller, moved out of
  * `@script` blocks (#1352, Step 3 / R3).
@@ -6,10 +7,13 @@
  * ---------------
  * No `@script` body can execute under the CSP-safe Alpine build (the
  * CSP expression parser cannot parse Livewire's IIFE wrapper). The
- * two bodies below are plain JS that only ever ran because `@script`
+ * bodies below are plain JS that only ever ran because `@script`
  * evaluated them outside the parser. They move here with mechanical
  * translations:
  *
+ * - The traffic chart's `x-data` called `initTrafficChart(...)` as a
+ *   global too — the same dead call, missed in the first wave and
+ *   fixed in #1469 (`registerTrafficChart`).
  * - The gauge template called the factory as a global function in
  *   its `x-data` (`window.signalGauge(...)`). Global-function calls
  *   in directives are DEAD under the CSP build (Step-1 global-call
@@ -39,12 +43,18 @@ function ensureGaugeState() {
   // built before the page poller, so creating it must be
   // idempotent on both sides.
   return (window.zabbixGauges = window.zabbixGauges || {
-    values: {}, error: null, loading: false, loaded: false, subscribers: [], timer: null,
+    values: {},
+    error: null,
+    loading: false,
+    loaded: false,
+    subscribers: [],
+    timer: null,
   });
 }
 
 ensureGaugeState();
 
+/** @param {AlpineStatic} Alpine */
 export function registerSignalGauge(Alpine) {
   Alpine.data('signalGauge', () => ({
     signalItemId: '',
@@ -56,12 +66,17 @@ export function registerSignalGauge(Alpine) {
     frequencyUnit: 'MHz',
     responseTimeUnit: 'ms',
     title: '',
+    /** @type {number | null} */
     signal: null,
+    /** @type {number | null} */
     frequency: null,
+    /** @type {number | null} */
     responseTime: null,
     loading: false,
+    /** @type {string | null} */
     error: null,
     circumference: 2 * Math.PI * 45,
+    /** @type {(() => void) | null} */
     bound: null,
 
     init() {
@@ -98,8 +113,13 @@ export function registerSignalGauge(Alpine) {
 
       // Until the first fetch completes, "no data found" is premature;
       // previously only "—" was shown in that state.
-      if (!this.error && state.loaded &&
-        this.signal === null && this.frequency === null && this.responseTime === null) {
+      if (
+        !this.error &&
+        state.loaded &&
+        this.signal === null &&
+        this.frequency === null &&
+        this.responseTime === null
+      ) {
         this.error = 'داده‌ای یافت نشد';
       }
     },
@@ -155,6 +175,157 @@ export function registerSignalGauge(Alpine) {
   }));
 }
 
+/**
+ * Traffic chart factory (#1469), the same migration as `signalGauge` above.
+ *
+ * The chart template called `initTrafficChart(...)` as a global in its
+ * `x-data`, which is DEAD under the CSP build (no `window` globals are
+ * visible to the expression parser: `Undefined variable: initTrafficChart`).
+ * No chart was created, no fetch ran, and `error` was never set — 25 blank
+ * charts on /it/networks, including the #703 friendly message. The factory is
+ * an `Alpine.data('trafficChart')` registration now; the item ids, the title
+ * and the initial duration move to `data-*` and are read in `init()`. The
+ * object shape — `start`/`reload`/`load`/`destroy` and the #703 mapping — is
+ * verbatim.
+ *
+ * @param {AlpineStatic} Alpine
+ */
+export function registerTrafficChart(Alpine) {
+  Alpine.data('trafficChart', () => ({
+    outItemId: '',
+    inItemId: '',
+    chartTitle: '',
+    duration: 3600,
+    loading: false,
+    /** @type {string | null} */
+    error: null,
+    /** @type {any} */
+    chart: null,
+    /** @type {ReturnType<typeof setInterval> | null} */
+    timer: null,
+
+    init() {
+      const ds = this.$el.dataset;
+      this.outItemId = ds.outItemId || '';
+      this.inItemId = ds.inItemId || '';
+      this.chartTitle = ds.title || 'Traffic';
+      const duration = parseInt(ds.duration ?? '', 10);
+      this.duration = Number.isFinite(duration) ? duration : 3600;
+
+      this.start();
+    },
+
+    start() {
+      this.$nextTick(() => {
+        const container = this.$refs.container;
+        if (!container) {
+          return;
+        }
+
+        container.innerHTML = '';
+
+        this.chart = Highcharts.chart(container, {
+          chart: {
+            type: 'spline',
+            backgroundColor: 'transparent',
+            animation: false,
+          },
+          title: {
+            text: this.chartTitle,
+            style: { color: 'var(--color-primary)' },
+          },
+          xAxis: { type: 'datetime' },
+          yAxis: { title: { text: 'Mbps' } },
+          tooltip: { valueSuffix: ' Mbps' },
+          credits: { enabled: false },
+          accessibility: { enabled: false },
+          series: [
+            {
+              name: 'Outgoing',
+              data: [],
+              color: 'var(--color-warning)',
+            },
+            {
+              name: 'Incoming',
+              data: [],
+              color: 'var(--color-primary)',
+            },
+          ],
+        });
+
+        this.load();
+        // ۶۰ ثانیه، نه ۱۰: هر نمودار یک درخواست به `/api/zabbix/traffic`
+        // می‌زند و این مسیر زیر `throttle:api-user` است (۶۰ درخواست در
+        // دقیقه برای کل کاربر). با ۲۵ شبکه و چرخهٔ ۱۰ ثانیه‌ای یعنی
+        // ۱۵۰ درخواست در دقیقه و ۴۲۹ قطعی. بازهٔ زمانی نمودار از ۳۰
+        // دقیقه شروع می‌شود، پس تازه‌سازی دقیقه‌ای کافی است.
+        this.timer = setInterval(() => this.load(), 60000);
+      });
+    },
+
+    reload() {
+      this.load(true);
+    },
+
+    /** @param {boolean} [show] */
+    async load(show = false) {
+      if (!this.chart) {
+        return;
+      }
+      if (show) {
+        this.loading = true;
+      }
+      this.error = null;
+
+      try {
+        const url = `/api/zabbix/traffic?out_item_id=${this.outItemId}&in_item_id=${this.inItemId}&duration=${this.duration}`;
+        const res = await fetch(url);
+
+        // #703: 503 means Zabbix is unreachable — show the requested
+        // friendly message, not a silent empty chart. Other statuses
+        // keep their existing behaviour so real bugs stay visible.
+        if (res.status === 503) {
+          this.error = 'دسترسی به سرور مقدور نمی باشد';
+          return;
+        }
+
+        const data = await res.json();
+
+        if (this.chart && this.chart.series) {
+          this.chart.series[0].setData(data.out || [], false);
+          this.chart.series[1].setData(data.in || [], false);
+          this.chart.redraw(false);
+        }
+      } catch (e) {
+        console.error(e);
+
+        // #703: a TypeError means the request never reached the
+        // server (offline / network down) — the same condition.
+        if (e instanceof TypeError) {
+          this.error = 'دسترسی به سرور مقدور نمی باشد';
+          return;
+        }
+
+        this.error = 'خطا در دریافت داده‌های ترافیک';
+      } finally {
+        if (show) {
+          this.loading = false;
+        }
+      }
+    },
+
+    destroy() {
+      if (this.timer) {
+        clearInterval(this.timer);
+      }
+      if (this.chart) {
+        this.chart.destroy();
+        this.chart = null;
+      }
+    },
+  }));
+}
+
 export function setupZabbixPoller() {
   // One request for all the page's gauges, instead of one per gauge.
   //
@@ -167,10 +338,11 @@ export function setupZabbixPoller() {
   if (!block) {
     return;
   }
+  /** @type {string[]} */
   let itemIds = [];
   try {
     itemIds = JSON.parse(block.textContent || '[]');
-  } catch (e) {
+  } catch {
     itemIds = [];
   }
 
@@ -188,7 +360,7 @@ export function setupZabbixPoller() {
   state.loaded = false;
 
   const publish = () => {
-    state.subscribers.slice().forEach((subscriber) => subscriber());
+    state.subscribers.slice().forEach((/** @type {() => void} */ subscriber) => subscriber());
   };
 
   const load = async () => {
@@ -201,15 +373,14 @@ export function setupZabbixPoller() {
 
     try {
       const token = localStorage.getItem('token');
+      /** @type {Record<string, string>} */
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       const values = {};
 
       for (let offset = 0; offset < itemIds.length; offset += CHUNK) {
         const params = new URLSearchParams();
-        itemIds
-          .slice(offset, offset + CHUNK)
-          .forEach((id, index) => params.append(`item_ids[${index}]`, id));
+        itemIds.slice(offset, offset + CHUNK).forEach((id, index) => params.append(`item_ids[${index}]`, id));
 
         const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
 
@@ -234,7 +405,9 @@ export function setupZabbixPoller() {
             } catch {
               errorMsg = text.substring(0, 100);
             }
-          } catch (e) {}
+          } catch {
+            /* unreadable body — keep the HTTP status message */
+          }
           state.error = errorMsg;
           return;
         }
@@ -250,9 +423,8 @@ export function setupZabbixPoller() {
       // #703: a TypeError from fetch() means the request never
       // reached the server (network down / server offline), which
       // is the same "cannot reach the server" condition as a 503.
-      state.error = e instanceof TypeError
-        ? 'دسترسی به سرور مقدور نمی باشد'
-        : (e.message || 'خطا در دریافت');
+      state.error =
+        e instanceof TypeError ? 'دسترسی به سرور مقدور نمی باشد' : /** @type {Error} */ (e).message || 'خطا در دریافت';
     } finally {
       state.loading = false;
       state.loaded = true;

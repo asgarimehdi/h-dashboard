@@ -3,13 +3,13 @@
 namespace Tests\Feature;
 
 use App\Jobs\SyncZabbixJob;
-use App\Models\Notification;
 use App\Models\ZabbixSyncLog;
-use App\Services\ZabbixService;
+use App\Services\Zabbix\ZabbixClient;
+use App\Services\Zabbix\ZabbixResult;
 use Database\Seeders\PermissionSeeder;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
 use Mockery;
 use RuntimeException;
@@ -20,9 +20,8 @@ covers(SyncZabbixJob::class);
 
 /**
  * #740 — the sync job's failures must be visible without reading logs:
- * a persistent row per run, a dashboard banner that tells healthy sync
- * apart from stale cache, and one in-app admin alert at three consecutive
- * failures.
+ * a persistent row per run and a dashboard banner that tells healthy sync
+ * apart from stale cache.
  */
 class SyncZabbixObservabilityTest extends TestCase
 {
@@ -48,8 +47,11 @@ class SyncZabbixObservabilityTest extends TestCase
 
     protected function tearDown(): void
     {
-        Mockery::close();
+        // Parent first: the RefreshDatabase rollback must not be skipped when
+        // Mockery::close() reports an unmet expectation — an open test
+        // transaction deadlocks the next test's database preparation.
         parent::tearDown();
+        Mockery::close();
     }
 
     // -----------------------------------------------------------
@@ -58,16 +60,63 @@ class SyncZabbixObservabilityTest extends TestCase
 
     public function test_successful_run_records_a_success_row(): void
     {
-        $zabbix = Mockery::mock(ZabbixService::class);
-        $zabbix->shouldReceive('getInterfaceTraffic')->andReturn([])->twice();
+        $zabbix = Mockery::mock(ZabbixClient::class);
+        $zabbix->shouldReceive('traffic')->with('100')
+            ->andReturn(ZabbixResult::success([['x' => 1, 'y' => 1.5]]))->once();
+        $zabbix->shouldReceive('traffic')->with('200')
+            ->andReturn(ZabbixResult::success([['x' => 1, 'y' => 0.5]]))->once();
 
         (new SyncZabbixJob)->handle($zabbix);
 
         $this->assertDatabaseHas('zabbix_sync_logs', [
             'success' => true,
-            'consecutive_failures' => 0,
         ]);
         $this->assertNotNull(ZabbixSyncLog::first()?->ran_at);
+
+        $this->assertSame(
+            [['x' => 1, 'y' => 1.5], ['x' => 1, 'y' => 0.5]],
+            Cache::get('zabbix_traffic_data')
+        );
+    }
+
+    public function test_failed_out_fetch_records_a_failure_row_and_caches_nothing(): void
+    {
+        // A transport failure is a value now, not an exception: the job must
+        // branch on it or it would cache an empty array and log a success (#1411).
+        $zabbix = Mockery::mock(ZabbixClient::class);
+        $zabbix->shouldReceive('traffic')->with('100')
+            ->andReturn(ZabbixResult::fail('connection', 'Zabbix API HTTP error: 503'))->once();
+        $zabbix->shouldNotReceive('traffic')->with('200');
+
+        (new SyncZabbixJob)->handle($zabbix);
+
+        $this->assertSame(1, ZabbixSyncLog::count());
+        $log = ZabbixSyncLog::firstOrFail();
+        $this->assertFalse($log->success);
+        $this->assertStringContainsString('connection', (string) $log->error);
+        $this->assertStringContainsString('Zabbix API HTTP error: 503', (string) $log->error);
+        $this->assertSame(0, ZabbixSyncLog::where('success', true)->count());
+        $this->assertTrue(Cache::missing('zabbix_traffic_data'));
+    }
+
+    public function test_failed_in_fetch_after_a_successful_out_does_not_cache_partial_data(): void
+    {
+        // Proves the branch sits after EACH call, not only after the first.
+        $zabbix = Mockery::mock(ZabbixClient::class);
+        $zabbix->shouldReceive('traffic')->with('100')
+            ->andReturn(ZabbixResult::success([['x' => 1, 'y' => 1.5]]))->once();
+        $zabbix->shouldReceive('traffic')->with('200')
+            ->andReturn(ZabbixResult::fail('timeout', 'timed out'))->once();
+
+        (new SyncZabbixJob)->handle($zabbix);
+
+        $this->assertSame(1, ZabbixSyncLog::count());
+        $log = ZabbixSyncLog::firstOrFail();
+        $this->assertFalse($log->success);
+        $this->assertStringContainsString('timeout', (string) $log->error);
+        $this->assertStringContainsString('timed out', (string) $log->error);
+        $this->assertSame(0, ZabbixSyncLog::where('success', true)->count());
+        $this->assertTrue(Cache::missing('zabbix_traffic_data'));
     }
 
     public function test_unconfigured_skip_records_a_failure_row(): void
@@ -75,12 +124,11 @@ class SyncZabbixObservabilityTest extends TestCase
         // Used to be a warning nobody read — now a visible failed run (#740).
         config(['services.zabbix.out_item_id' => null]);
 
-        (new SyncZabbixJob)->handle(Mockery::mock(ZabbixService::class));
+        (new SyncZabbixJob)->handle(Mockery::mock(ZabbixClient::class));
 
         $log = ZabbixSyncLog::first();
         $this->assertNotNull($log);
         $this->assertFalse($log->success);
-        $this->assertSame(1, $log->consecutive_failures);
         $this->assertStringContainsString('not configured', (string) $log->error);
     }
 
@@ -91,126 +139,7 @@ class SyncZabbixObservabilityTest extends TestCase
         $log = ZabbixSyncLog::first();
         $this->assertNotNull($log);
         $this->assertFalse($log->success);
-        $this->assertSame(1, $log->consecutive_failures);
         $this->assertSame('connection refused', $log->error);
-    }
-
-    public function test_a_success_resets_the_streak(): void
-    {
-        $job = new SyncZabbixJob;
-        $job->failed(new RuntimeException('boom'));
-        $job->failed(new RuntimeException('boom again'));
-
-        $zabbix = Mockery::mock(ZabbixService::class);
-        $zabbix->shouldReceive('getInterfaceTraffic')->andReturn([])->twice();
-        $job->handle($zabbix);
-
-        $job->failed(new RuntimeException('boom again'));
-
-        $this->assertSame(1, ZabbixSyncLog::query()->latest('id')->first()?->consecutive_failures);
-    }
-
-    // -----------------------------------------------------------
-    //  هشدار admin بعد از ۳ فیل متوالی
-    // -----------------------------------------------------------
-
-    public function test_three_consecutive_failures_notify_admins_once(): void
-    {
-        ['user' => $admin] = $this->createUserWithUnit(['kargozini']);
-        $admin->assignRole('admin');
-
-        $job = new SyncZabbixJob;
-        $job->failed(new RuntimeException('boom 1'));
-        $job->failed(new RuntimeException('boom 2'));
-
-        // Not before the threshold.
-        $this->assertSame(0, $this->notificationsOfType('zabbix_sync')->count());
-
-        $job->failed(new RuntimeException('boom 3'));
-
-        $adminNotifications = $this->notificationsOfType('zabbix_sync')
-            ->where('user_id', $admin->id)
-            ->count();
-        $this->assertSame(1, $adminNotifications);
-
-        // A fourth failure does not spam a second alert.
-        $job->failed(new RuntimeException('boom 4'));
-        $this->assertSame(
-            1,
-            $this->notificationsOfType('zabbix_sync')->where('user_id', $admin->id)->count()
-        );
-    }
-
-    public function test_non_admins_receive_no_alert(): void
-    {
-        ['user' => $member] = $this->createUserWithUnit(['kargozini']);
-
-        $job = new SyncZabbixJob;
-        $job->failed(new RuntimeException('boom 1'));
-        $job->failed(new RuntimeException('boom 2'));
-        $job->failed(new RuntimeException('boom 3'));
-
-        $this->assertSame(0, $this->notificationsOfType('zabbix_sync')->where('user_id', $member->id)->count());
-    }
-
-    public function test_alert_rows_carry_the_threshold_log_dedupe_key(): void
-    {
-        // Issue #1346: the alert for a streak carries the id of the log row
-        // that reached the threshold — the event identity, not the streak
-        // number (which repeats across episodes).
-        ['user' => $admin] = $this->createUserWithUnit(['kargozini']);
-        $admin->assignRole('admin');
-
-        $job = new SyncZabbixJob;
-        $job->failed(new RuntimeException('boom 1'));
-        $job->failed(new RuntimeException('boom 2'));
-        $job->failed(new RuntimeException('boom 3'));
-
-        $thresholdLog = ZabbixSyncLog::query()
-            ->where('consecutive_failures', ZabbixSyncLog::ALERT_THRESHOLD)
-            ->firstOrFail();
-
-        $notification = $this->notificationsOfType('zabbix_sync')
-            ->where('user_id', $admin->id)
-            ->firstOrFail();
-
-        $this->assertSame('zabbix:alert:'.$thresholdLog->id, $notification->dedupe_key);
-    }
-
-    public function test_new_streak_after_reset_alerts_again_with_a_new_key(): void
-    {
-        // Issue #1346: a fresh streak after a reset is a new episode with a
-        // new threshold log row, so it alerts again under a new key.
-        ['user' => $admin] = $this->createUserWithUnit(['kargozini']);
-        $admin->assignRole('admin');
-
-        $job = new SyncZabbixJob;
-        $job->failed(new RuntimeException('boom 1'));
-        $job->failed(new RuntimeException('boom 2'));
-        $job->failed(new RuntimeException('boom 3'));
-
-        $firstKey = $this->notificationsOfType('zabbix_sync')
-            ->where('user_id', $admin->id)
-            ->firstOrFail()
-            ->dedupe_key;
-
-        $zabbix = Mockery::mock(ZabbixService::class);
-        $zabbix->shouldReceive('getInterfaceTraffic')->andReturn([])->twice();
-        config(['services.zabbix.out_item_id' => '1', 'services.zabbix.in_item_id' => '2']);
-        $job->handle($zabbix);
-
-        $job->failed(new RuntimeException('boom 4'));
-        $job->failed(new RuntimeException('boom 5'));
-        $job->failed(new RuntimeException('boom 6'));
-
-        $keys = $this->notificationsOfType('zabbix_sync')
-            ->where('user_id', $admin->id)
-            ->pluck('dedupe_key')
-            ->all();
-
-        $this->assertCount(2, $keys);
-        $this->assertContains($firstKey, $keys);
-        $this->assertSame(2, count(array_unique($keys)));
     }
 
     // -----------------------------------------------------------
@@ -222,7 +151,7 @@ class SyncZabbixObservabilityTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['kargozini']);
         Cache::put('zabbix_traffic_data', [['x' => 1, 'y' => 1.0]], now()->addMinutes(5));
 
-        ZabbixSyncLog::create(['success' => true, 'consecutive_failures' => 0, 'ran_at' => now()]);
+        ZabbixSyncLog::create(['success' => true, 'ran_at' => now()]);
 
         $this->actingAs($user)
             ->get('/dashboard')
@@ -239,7 +168,6 @@ class SyncZabbixObservabilityTest extends TestCase
 
         ZabbixSyncLog::create([
             'success' => false,
-            'consecutive_failures' => 1,
             'error' => 'connection refused',
             'ran_at' => now(),
         ]);
@@ -248,6 +176,7 @@ class SyncZabbixObservabilityTest extends TestCase
             ->get('/dashboard')
             ->assertOk()
             ->assertSee('sync زیبکس ناموفق')
+            ->assertDontSee('بار متوالی')
             ->assertSee('نمایش از کش قدیمی')
             ->assertDontSee('sync زیبکس سالم');
     }
@@ -260,7 +189,6 @@ class SyncZabbixObservabilityTest extends TestCase
         // stopped running, which "success" alone would hide forever.
         ZabbixSyncLog::create([
             'success' => true,
-            'consecutive_failures' => 0,
             'ran_at' => now()->subMinutes(30),
         ]);
 
@@ -281,17 +209,18 @@ class SyncZabbixObservabilityTest extends TestCase
             ->assertDontSee('sync زیبکس');
     }
 
-    // -----------------------------------------------------------
-    //  helpers
-    // -----------------------------------------------------------
-
-    /**
-     * Notifications written by NotificationService for the given type.
-     *
-     * @return Builder
-     */
-    protected function notificationsOfType(string $type)
+    public function test_the_streak_column_is_gone_and_failure_rows_carry_no_streak(): void
     {
-        return Notification::query()->where('type', $type);
+        $this->assertFalse(Schema::hasColumn('zabbix_sync_logs', 'consecutive_failures'));
+
+        (new SyncZabbixJob)->failed(new RuntimeException('boom'));
+
+        $log = ZabbixSyncLog::query()->firstOrFail();
+
+        $this->assertSame(
+            ['id', 'success', 'error', 'ran_at'],
+            Schema::getColumnListing('zabbix_sync_logs')
+        );
+        $this->assertArrayNotHasKey('consecutive_failures', $log->getAttributes());
     }
 }

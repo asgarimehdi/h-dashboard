@@ -29,6 +29,30 @@ test.describe('hardware audit trail', () => {
     await expect(page.locator('body')).toContainText(/تاریخچه‌ای ثبت نشده است|ایجاد|ویرایش|حذف/);
   });
 
+  test('history modal × closes and persists the closed state', async ({ page }) => {
+    const historyBtn = page.locator('div.hidden.md\\:block button[wire\\:click*="loadHistory"]').first();
+    const opened = waitForLivewire(page);
+    await historyBtn.click();
+    await opened;
+
+    // /hardware also renders an always-present (closed) help dialog from
+    // _toolbar.blade.php, so scope by title instead of a bare `dialog.modal`.
+    const modal = page.locator('dialog.modal', { hasText: 'تاریخچه تغییرات' });
+    await expect(modal).toHaveClass(/modal-open/);
+
+    const closed = waitForLivewire(page);
+    await modal.locator('.modal-box > form[method="dialog"] button').click();
+    await closed;
+    await expect(page.locator('dialog.modal.modal-open')).toHaveCount(0);
+
+    // Reopening proves showHistoryModal really became false (audit-modal.blade.php
+    // renders under @if), not just that the dialog lost its class.
+    const reopened = waitForLivewire(page);
+    await historyBtn.click();
+    await reopened;
+    await expect(page.locator('dialog.modal', { hasText: 'تاریخچه تغییرات' })).toHaveClass(/modal-open/);
+  });
+
   test('history modal shows action filter chips', async ({ page }) => {
     const history = waitForLivewire(page);
     await page.locator('div.hidden.md\\:block button[wire\\:click*="loadHistory"]').first().click();

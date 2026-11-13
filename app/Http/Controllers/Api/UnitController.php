@@ -167,18 +167,25 @@ class UnitController extends Controller
             ], 422);
         }
 
-        // Invalidate AccessService cache as hierarchy is changing
-        app(AccessService::class)->clearAllCaches();
-
         try {
             $unit->delete();
         } catch (\Throwable $e) {
             // The RESTRICT FKs can still fire in the window between the count
             // above and this delete. Step 5 exists so a blocked delete is a
             // 422 with a reason rather than an uncaught 500, and an unhandled
-            // exception here would reintroduce exactly that.
+            // exception here would reintroduce exactly that. Log it: this
+            // branch is a race-window guard, so a user complaint is the only
+            // other evidence it ever fired.
+            report($e);
+
             return response()->json(['message' => 'Cannot delete unit.'], 422);
         }
+
+        // Invalidate AccessService cache as hierarchy is changing. Placement is
+        // the fix (#1403): the bump is only legitimate after a COMMITTED delete,
+        // and it stays outside the try so a cache-backend failure cannot be
+        // reported as "Cannot delete unit." for a delete that succeeded.
+        app(AccessService::class)->clearAllCaches();
 
         return response()->json(['success' => true]);
     }

@@ -19,7 +19,7 @@
         data-light-class="{{ $lightClass }}"
         data-dark-class="{{ $darkClass }}"
         @mary-toggle-theme.window="toggle()"
-        {{ $attributes->class("swap swap-rotate") }}
+        {{ $attributes->class("swap swap-rotate rounded-full hover:text-primary hover:bg-primary/10 transition-colors") }}
     >
         <input id="{{ $uuid }}" type="checkbox" class="theme-controller opacity-0" @click="toggle()" :value="theme" />
         <x-mary-icon x-ref="sun" name="o-sun" class="swap-on" />

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Dashboard + HR-dashboard Highcharts moved out of `@script` blocks
  * (#1352, Step 3 / R3).
@@ -35,19 +36,28 @@
 const themeListenersRegistered = new Set();
 const hrHooksRegistered = new Set();
 const hrOnRegistered = new Set();
+/** @type {any} */
 let hrChartData = null;
 
+/** @param {Element} element */
 function componentFor(element) {
   const root = element.closest('[wire\\:id]');
   if (!root || typeof window.Livewire === 'undefined') {
     return null;
   }
-  return window.Livewire.find(root.getAttribute('wire:id'));
+  return window.Livewire.find(/** @type {string} */ (root.getAttribute('wire:id')));
 }
 
 /* ---------------- main dashboard: ticket charts ---------------- */
 
-const statusLabels = { created: 'جدید', accepted: 'پذیرفته شده', completed: 'تکمیل شده', forwarded: 'ارجاع شده', rejected: 'رد شده' };
+/** @type {Record<string, string>} */
+const statusLabels = {
+  created: 'جدید',
+  accepted: 'پذیرفته شده',
+  completed: 'تکمیل شده',
+  forwarded: 'ارجاع شده',
+  rejected: 'رد شده',
+};
 
 // #1224: series colours follow the active theme family. daisyUI's
 // `color-scheme` is the same light/dark signal App\Support\ThemeFamilies
@@ -75,6 +85,7 @@ const CHART_COLORS = {
   },
 };
 
+/** @returns {Record<string, string>} */
 function chartPalette() {
   const style = getComputedStyle(document.documentElement);
   const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
@@ -84,6 +95,10 @@ function chartPalette() {
   };
 }
 
+/**
+ * @param {() => void} callback
+ * @param {number} [attempts]
+ */
 function waitForHighcharts(callback, attempts = 0) {
   if (typeof window.Highcharts !== 'undefined') {
     callback();
@@ -96,13 +111,14 @@ function waitForHighcharts(callback, attempts = 0) {
   setTimeout(() => waitForHighcharts(callback, attempts + 1), 50);
 }
 
+/** @param {HTMLElement} container */
 function destroyChartEl(container) {
   if (!container || typeof Highcharts === 'undefined') {
     return;
   }
   const existing = Highcharts.charts?.find((c) => c && c.renderTo === container);
   if (existing) {
-    existing.destroy();
+    /** @type {any} */ (existing).destroy();
   }
   container.innerHTML = '';
 }
@@ -110,10 +126,10 @@ function destroyChartEl(container) {
 function renderTicketCharts() {
   waitForHighcharts(() => {
     const block = document.getElementById('dashboard-chart-data');
-    let payload = {};
+    let payload;
     try {
       payload = block ? JSON.parse(block.textContent || '{}') : {};
-    } catch (e) {
+    } catch {
       payload = {};
     }
     const trendData = payload.trend || {};
@@ -143,7 +159,10 @@ function renderTicketCharts() {
         areaspline: {
           fillColor: {
             linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-            stops: [[0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')], [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')]],
+            stops: [
+              [0, Highcharts.color(palette.trend).setOpacity(0.3).get('rgba')],
+              [1, Highcharts.color(palette.trend).setOpacity(0.05).get('rgba')],
+            ],
           },
           lineColor: palette.trend,
           marker: { enabled: false },
@@ -154,7 +173,11 @@ function renderTicketCharts() {
     });
 
     const pieData = Object.keys(statusData).length
-      ? Object.entries(statusData).map(([key, val]) => ({ name: statusLabels[key] || key, y: val, color: palette[key] || '#6b7280' }))
+      ? Object.entries(statusData).map(([key, val]) => ({
+          name: statusLabels[key] || key,
+          y: val,
+          color: palette[key] || '#6b7280',
+        }))
       : [{ name: 'بدون داده', y: 0, color: '#6b7280' }];
 
     Highcharts.chart(statusContainer, {
@@ -193,7 +216,8 @@ function hrPalette() {
   const root = document.documentElement;
   const style = getComputedStyle(root);
   const scheme = (style.colorScheme || '').includes('dark') ? 'dark' : 'light';
-  const token = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+  const token = (/** @type {string} */ name, /** @type {string} */ fallback) =>
+    style.getPropertyValue(name).trim() || fallback;
   return {
     colors: HR_CHART_COLORS[scheme],
     text: token('--color-base-content', scheme === 'dark' ? '#d4d4d8' : '#3f3f46'),
@@ -201,6 +225,7 @@ function hrPalette() {
   };
 }
 
+/** @param {string} id */
 function destroyHrChart(id) {
   const container = document.getElementById(id);
   if (!container || typeof Highcharts === 'undefined') {
@@ -208,11 +233,17 @@ function destroyHrChart(id) {
   }
   const existing = Highcharts.charts?.find((c) => c && c.renderTo === container);
   if (existing) {
-    existing.destroy();
+    /** @type {any} */ (existing).destroy();
   }
   container.innerHTML = '';
 }
 
+/**
+ * @param {string} id
+ * @param {Array<{ name: string, total: number }> | undefined} rows
+ * @param {string} color
+ * @param {{ text: string, grid: string }} palette
+ */
 function renderHrBar(id, rows, color, palette) {
   destroyHrChart(id);
   const data = (rows || [])
@@ -241,17 +272,19 @@ function renderHrBar(id, rows, color, palette) {
     legend: { enabled: false },
     credits: { enabled: false },
     tooltip: { style: { color: palette.text } },
-    series: [{
-      name: 'تعداد پرسنل',
-      data,
-      color,
-      dataLabels: {
-        enabled: true,
-        align: 'left',
-        format: '{y}',
-        style: { color: palette.text },
+    series: [
+      {
+        name: 'تعداد پرسنل',
+        data,
+        color,
+        dataLabels: {
+          enabled: true,
+          align: 'left',
+          format: '{y}',
+          style: { color: palette.text },
+        },
       },
-    }],
+    ],
   });
 }
 
@@ -277,6 +310,7 @@ async function renderHrCharts() {
   paintHrCharts();
 }
 
+/** @param {() => void} fn */
 function waitForHighchartsHr(fn) {
   if (typeof Highcharts !== 'undefined') {
     return fn();

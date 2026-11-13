@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
@@ -10,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -128,6 +130,30 @@ test('an admin restores a table from an uploaded zip', function () {
     expect(DB::table('users')->count())->toBe(count($rows));
 });
 
+test('an admin restores a 600-row table from an uploaded zip', function () {
+    Hardware::factory()->create();
+
+    $path = $this->backupMakeGeneratedZip(
+        storage_path('app/private/backup/livewire-hardwares-'.Str::random(8).'.zip'),
+        'hardwares',
+        600,
+    );
+
+    $file = UploadedFile::fake()->createWithContent(
+        'backup-hardwares.zip',
+        (string) file_get_contents($path)
+    );
+
+    Livewire::actingAs($this->admin)
+        ->test('backup.index')
+        ->set('backupFile', $file)
+        ->set('restoreTarget', 'hardwares')
+        ->call('restoreBackup')
+        ->assertHasNoErrors();
+
+    expect(DB::table('hardwares')->count())->toBe(600);
+});
+
 test('a broken zip fails with a persian error and changes nothing', function () {
     $before = DB::table('users')->count();
 
@@ -141,6 +167,34 @@ test('a broken zip fails with a persian error and changes nothing', function () 
         ->assertHasNoErrors();
 
     expect(DB::table('users')->count())->toBe($before);
+});
+
+test('an archive with a null id is refused with a persian error and changes nothing', function () {
+    $archive = app(BackupService::class)->exportTable('users');
+    $rows = $this->backupZipJson($archive->path, 'users.json');
+    $rows[0]['id'] = null;
+
+    $broken = $this->backupMakeZip(
+        storage_path('app/private/backup/null-id-livewire-'.Str::random(8).'.zip'),
+        ['users.json' => json_encode($rows)]
+    );
+
+    $before = json_encode(DB::table('users')->orderBy('id')->get());
+
+    $file = UploadedFile::fake()->createWithContent(
+        'backup-users.zip',
+        (string) file_get_contents($broken)
+    );
+
+    Livewire::actingAs($this->admin)
+        ->test('backup.index')
+        ->set('backupFile', $file)
+        ->set('restoreTarget', 'users')
+        ->set('restoreConfirmed', true)
+        ->call('restoreBackup')
+        ->assertHasNoErrors();
+
+    expect(json_encode(DB::table('users')->orderBy('id')->get()))->toBe($before);
 });
 
 test('the warning about the users table is shown when users is the target', function () {

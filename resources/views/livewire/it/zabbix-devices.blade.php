@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\ZabbixDevice;
-use App\Services\ZabbixService;
+use App\Services\Zabbix\ZabbixClient;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
@@ -283,17 +283,18 @@ return new class extends Component
 
         $device = ZabbixDevice::query()->findOrFail($id);
 
-        try {
-            // مرحله ۱: تست اتصال واقعی به Zabbix API
-            $connectionInfo = app(ZabbixService::class)->testApiConnection();
-        } catch (\Throwable $e) {
+        // مرحله ۱: تست اتصال واقعی به Zabbix API
+        $connection = app(ZabbixClient::class)->testConnection();
+        if ($connection->failed()) {
             $this->connectionResults[$id] = [
                 'ok' => false,
-                'message' => 'خطا در اتصال به Zabbix: '.$e->getMessage(),
+                'message' => 'خطا در اتصال به Zabbix: '.$connection->message(),
             ];
 
             return;
         }
+
+        $version = $connection->data()['version'];
 
         // مرحله ۲: بررسی آیتم‌های دستگاه
         $itemIds = $device->itemIds();
@@ -301,41 +302,44 @@ return new class extends Component
         if ($itemIds === []) {
             $this->connectionResults[$id] = [
                 'ok' => true,
-                'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].') — شناسه آیتمی ثبت نشده است.',
+                'message' => 'اتصال برقرار (Zabbix '.$version.') — شناسه آیتمی ثبت نشده است.',
             ];
 
             return;
         }
 
-        try {
-            $values = app(ZabbixService::class)->getLatestValues($itemIds);
-
-            $missing = [];
-            foreach ($values as $itemId => $value) {
-                if ($value === null) {
-                    $missing[] = (string) $itemId;
-                }
-            }
-
-            if ($missing !== []) {
-                $this->connectionResults[$id] = [
-                    'ok' => false,
-                    'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].') اما آیتم یافت نشد: '.implode('، ', $missing),
-                ];
-
-                return;
-            }
-
-            $this->connectionResults[$id] = [
-                'ok' => true,
-                'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].')',
-            ];
-        } catch (\Throwable $e) {
+        $latest = app(ZabbixClient::class)->latestValues($itemIds);
+        if ($latest->failed()) {
             $this->connectionResults[$id] = [
                 'ok' => false,
-                'message' => 'اتصال برقرار (Zabbix '.$connectionInfo['version'].') اما خطا در دریافت مقادیر: '.$e->getMessage(),
+                'message' => 'اتصال برقرار (Zabbix '.$version.') اما خطا در دریافت مقادیر: '.$latest->message(),
             ];
+
+            return;
         }
+
+        $values = $latest->data();
+
+        $missing = [];
+        foreach ($values as $itemId => $value) {
+            if ($value === null) {
+                $missing[] = (string) $itemId;
+            }
+        }
+
+        if ($missing !== []) {
+            $this->connectionResults[$id] = [
+                'ok' => false,
+                'message' => 'اتصال برقرار (Zabbix '.$version.') اما آیتم یافت نشد: '.implode('، ', $missing),
+            ];
+
+            return;
+        }
+
+        $this->connectionResults[$id] = [
+            'ok' => true,
+            'message' => 'اتصال برقرار (Zabbix '.$version.')',
+        ];
     }
 
     // ── listing ───────────────────────────────────────────────────────────

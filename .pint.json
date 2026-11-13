@@ -6,8 +6,5 @@
         "trailing_comma_in_multiline": true,
         "single_quote": true,
         "concat_space": { "spacing": "one" }
-    },
-    "not-name": [
-        "*blade.php"
-    ]
+    }
 }

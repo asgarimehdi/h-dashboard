@@ -26,6 +26,7 @@
         "fakerphp/faker": "^1.23",
         "fruitcake/laravel-debugbar": "^4.0",
         "infection/infection": "^0.35.3",
+        "larastan/larastan": "3.14.0",
         "laravel/pail": "^1.2.5",
         "laravel/pint": "^1.27",
         "mockery/mockery": "^1.6",
@@ -77,6 +78,11 @@
             "Composer\\Config::disableProcessTimeout",
             "@php -r \"file_exists('.env') || exit(1);\"",
             "bash scripts/verify.sh"
+        ],
+        "verify:fast": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -r \"file_exists('.env') || exit(1);\"",
+            "bash scripts/verify.sh --fast"
         ],
         "hooks:install": "bash scripts/install-hooks.sh",
         "phpstan": "phpstan analyse --no-progress",

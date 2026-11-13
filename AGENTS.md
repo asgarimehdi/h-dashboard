@@ -54,9 +54,9 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Sidebar link ↔ route gate must carry the same permissions** (`SidebarPermissionsTest` pins both directions). `role_or_permission` syntax is `a|b` = ANY — **not** Sanctum's comma form. Nested `middleware(['a','b'])` and nested permission groups are **AND**, not OR. → [access-control](docs/agents/access-control.md)
 - **Spatie `canAny()` returns `false` for an unknown permission name** — a gate on a permission missing from a deployment's DB silently 403s every non-admin. Before adding a *new* permission to a gate, seed it everywhere or reuse an existing one. → [access-control](docs/agents/access-control.md)
 - **A page on a read-union gate that also writes must authorize inside the component** (`$this->authorize('…')`), not only at the route — and must re-validate the *submitted* unit id, not just the stored one. → [access-control](docs/agents/access-control.md)
-- **`/api/*` needs `auth:sanctum` *and* a token ability** (`ability:a,b` = ANY, `abilities:a,b` = ALL); reads and writes are independent groups (#895); tokens are scoped and revoked on password change. Three intentional exemptions: `POST /login` (public — it mints the token), plus the self-scoped `GET /user` and `POST /logout` that act on the caller, not a resource — logout by #1071, following the pre-existing `/user` precedent. A fourth is a decision, not a detail. → [api-auth](docs/agents/api-auth.md)
+- **`/api/*` needs `auth:sanctum` *and* a token ability** (`ability:a,b` = ANY, `abilities:a,b` = ALL); reads and writes are independent groups (#895); tokens are scoped and revoked on password change. Three intentional exemptions: `POST /login` (public — it mints the token), plus the self-scoped `GET /user` and `POST /logout` that act on the caller, not a resource — logout by #1071, following the pre-existing `/user` precedent. → [api-auth](docs/agents/api-auth.md)
 - **Disease map aggregates are PII-free by construction** — the three `GET /api/gis/disease*` endpoints ride the `gis` gate (`gis:read` + `map|bw`) and return counts/rates only, never patient identifiers, names or dynamic field values; no `manage_diseases` requirement. → [api-auth](docs/agents/api-auth.md)
-- **Controllers depend on `ZabbixClient`, never `ZabbixService`.** A failed `ZabbixResult` maps to **503**; the `catch (\Throwable)` wrapper is gone — do not restore it. The `ZabbixSyncLog` failure streak is serial — never parallelise run recording. → [zabbix](docs/agents/zabbix.md)
+- **Controllers, queued jobs and console commands depend on `ZabbixClient`, never `ZabbixService`.** Controllers map a failed `ZabbixResult` to **503**; `SyncZabbixJob` records a failure row; `zabbix:sync` exits 1. → [zabbix](docs/agents/zabbix.md)
 - **The Leaflet instance is owned by `Alpine.store('map')`** — never `window.map`, never a "wait until a map exists" loop, never a Leaflet instance in Alpine reactive state. `maps/map.blade.php` is the only place allowed to call `L.map()`. → [maps](docs/agents/maps.md)
 - **`units.boundary_id` is `ON DELETE CASCADE`** — null it out (`$unit->update(['boundary_id' => null])`) **before** deleting the boundary row, or the unit and its subtree vanish (#702). `Boundary::geojson` is a **bare geometry** (no `Feature`, and MultiPolygon must be unwrapped) or `fitBounds` throws. → [maps](docs/agents/maps.md)
 - **The disease map layer is read-only and two-group** — it consumes `/api/gis/disease-map` GeoJSON plus the server's `class`/`meta.breaks`, and lives in `diseaseRegions`/`diseaseUnits` panes at `ZOOM_SWITCH=9`; never copy the `units/map` edit flow (`Boundary::geojson`, `_mapGeojson`, `saveMapBoundary`). → [maps](docs/agents/maps.md)
@@ -89,17 +89,19 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Factories:** 15 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (the old "no `HasFactory`" gotcha was wrong, #983 — see [testing](docs/agents/testing.md)); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
+- **Factories:** 18 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (the old "no `HasFactory`" gotcha was wrong, #983 — see [testing](docs/agents/testing.md)); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
+- **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/`.
 
 ### Composer Scripts
 ```bash
 composer test         # ensure-test-app-key (only if .env.testing has none) + config:clear + route:clear + XDEBUG_MODE=off php artisan test
-composer verify       # .env existence check, then scripts/verify.sh (preflight + APP_KEY guard + view:clear + pint --test + phpstan + the suite)  ← run before push
-composer verify tests/Feature/TodoLivewireTest.php   # same gates, only the tests you name
+composer verify       # FULL gates: preflight + APP_KEY + view:clear + pint --test + phpstan + suite  ← run before push
+composer verify tests/Feature/TodoLivewireTest.php   # same FULL gates; only the *test* step is narrowed
+composer verify:fast <path>   # local TDD loop: Pint on <path> only, PHPStan skipped — NOT CI-equivalent
 composer dev          # concurrently: php artisan serve + queue:listen + npm run dev
 composer pint         # Pint --dirty --format agent (auto-staged PHP)
 composer phpstan      # phpstan analyse --no-progress
@@ -131,7 +133,7 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs with **eight** jobs — three blocking (`lint` Pint, `test` Pest + coverage ≥80%, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`); `mutation` runs on every PR too (Composer-only, no Node/Vite, 45-min timeout, ~30 min typical) and gates nothing. The job table + the yq derivation commands: [testing](docs/agents/testing.md). Coverage is CI-only.
+`.github/workflows/test.yml` runs on PRs with **twelve** jobs — seven blocking (`lint`, `js-lint`, `test`, `js-typecheck`, `csp-enforcing`, `smoke`, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`). Job table + yq derivations: [testing](docs/agents/testing.md). Coverage is CI-only.
 
 ---
 

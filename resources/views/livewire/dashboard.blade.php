@@ -336,14 +336,14 @@ return new class extends Component
      * the anonymous class line the PHPStan baseline is keyed on) stays
      * untouched.
      *
-     * @return array{state: string, time: string, failures: int, cache: bool}
+     * @return array{state: string, time: string, cache: bool}
      */
     public function getZabbixSyncStatusProperty(): array
     {
         $latest = DB::table('zabbix_sync_logs')->orderByDesc('id')->first();
 
         if ($latest === null) {
-            return ['state' => 'unknown', 'time' => '', 'failures' => 0, 'cache' => false];
+            return ['state' => 'unknown', 'time' => '', 'cache' => false];
         }
 
         $ranAt = strtotime((string) $latest->ran_at);
@@ -355,7 +355,6 @@ return new class extends Component
                 // Fresh = last success inside the 5-minute cache TTL.
                 'state' => ($ranAt !== false && $ranAt > time() - 300) ? 'ok' : 'stale',
                 'time' => $time,
-                'failures' => 0,
                 'cache' => $cache,
             ];
         }
@@ -363,7 +362,6 @@ return new class extends Component
         return [
             'state' => 'failing',
             'time' => $time,
-            'failures' => (int) $latest->consecutive_failures,
             'cache' => $cache,
         ];
     }
@@ -398,7 +396,7 @@ return new class extends Component
                 @if($zabbixSync['state'] === 'ok')
                     sync زیبکس سالم — آخرین: {{ $zabbixSync['time'] }}
                 @elseif($zabbixSync['state'] === 'failing')
-                    sync زیبکس ناموفق ({{ $zabbixSync['failures'] }} بار متوالی)
+                    sync زیبکس ناموفق
                     — {{ $zabbixSync['cache'] ? 'نمایش از کش قدیمی' : 'داده ترافیک در دسترس نیست' }}
                 @else
                     آخرین sync زیبکس قدیمی است — {{ $zabbixSync['time'] }}

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Boundary;
 use App\Models\Region;
 use App\Models\Unit;
+use App\Models\UnitType;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -76,6 +78,18 @@ class MapsUnitLivewireTest extends TestCase
         return $dispatch['params']['units'] ?? [];
     }
 
+    /**
+     * The `county-boundaries-loaded` payload of the last request — the cached
+     * region geometry `maps/unit` hands to the map.
+     */
+    private function dispatchedCounties($test): array
+    {
+        $dispatch = collect($test->effects['dispatches'] ?? [])
+            ->firstWhere('name', 'county-boundaries-loaded');
+
+        return $dispatch['params']['counties'] ?? [];
+    }
+
     // ==================== Auth / permissions ====================
 
     public function test_guest_302(): void
@@ -125,6 +139,36 @@ class MapsUnitLivewireTest extends TestCase
     }
 
     // ==================== Scope filtering ====================
+
+    public function test_unit_type_rename_invalidates_unit_map_center_type_cache(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+
+        // #1439: unique names — the shipped type names share prefixes, which
+        // would make assertSee/assertDontSee vacuous or over-strict.
+        UnitType::find(5)->update(['name' => 'نام تازه پنج']);
+        UnitType::find(6)->update(['name' => 'نام تازه شش']);
+        UnitType::find(7)->update(['name' => 'نام تازه هفت']);
+
+        // Warm `unit_map:center_types` with the first name. The toggles only
+        // render once a region is selected, so select before reading.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->assertSee('نام تازه پنج');
+
+        UnitType::find(5)->update(['name' => 'نام دیگر پنج']);
+
+        // The rename must invalidate the `maps` namespace, so this mount
+        // serves the new name and no longer the stale one.
+        Livewire::test('maps/unit')
+            ->set('selectedRegions', [$region->id])
+            ->assertSee('نام دیگر پنج')
+            ->assertDontSee('نام تازه پنج');
+    }
 
     public function test_scope_filtering(): void
     {
@@ -554,5 +598,93 @@ class MapsUnitLivewireTest extends TestCase
         $this->assertStringNotContainsString("'county_boundaries_v'", $view);
         $this->assertStringNotContainsString('maps_version', $view);
         $this->assertStringContainsString('CacheInvalidationServiceInterface::class', $view);
+    }
+
+    // ==================== #1419: boundary writes invalidate the cached payload ====================
+
+    public function test_cached_county_boundaries_are_not_served_after_a_boundary_geometry_edit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $boundaryId = $this->createBoundary();
+        $region->update(['boundary_id' => $boundaryId]);
+
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+
+        Cache::flush();
+
+        // Warm the `maps` payload: without a Boundary hook this cached GeoJSON
+        // is served for the full 5-minute TTL after the row changes (#1419).
+        $warm = $this->dispatchedCounties(
+            Livewire::test('maps/unit')->set('selectedRegions', [$region->id])
+        );
+
+        $this->assertCount(1, $warm);
+        $this->assertSame([0, 0], json_decode($warm[0]['geojson'], true)['coordinates'][0][0][0]);
+
+        // Edit the region's boundary row through Eloquent — the writer a
+        // region-boundary editor (or any admin command) will use.
+        Boundary::query()->findOrFail($boundaryId)->update([
+            'boundary' => DB::raw("ST_GeomFromText('MULTIPOLYGON(((2 2, 3 2, 3 3, 2 3, 2 2)))', 4326)"),
+        ]);
+
+        $after = $this->dispatchedCounties(
+            Livewire::test('maps/unit')->set('selectedRegions', [$region->id])
+        );
+
+        // Not merely "different": the new ring must be the one served.
+        $this->assertCount(1, $after);
+        $this->assertSame([2, 2], json_decode($after[0]['geojson'], true)['coordinates'][0][0][0]);
+    }
+
+    // ==================== #1437: region rename invalidates `maps` ====================
+
+    public function test_region_rename_refreshes_the_cached_region_toggles(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+        $old = $region->name;
+
+        Cache::flush();
+
+        // Warm `maps/unit` mount (`unit_map:regions`).
+        Livewire::test('maps/unit')->assertSee($old);
+
+        $region->update(['name' => 'شهرستان تازه']);
+
+        Livewire::test('maps/unit')
+            ->assertSee('شهرستان تازه')
+            ->assertDontSee($old);
+    }
+
+    public function test_region_rename_refreshes_the_cached_county_boundaries_payload(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+
+        $region = $this->seedRegionAndTypes();
+        $region->update(['boundary_id' => $this->createBoundary()]);
+        session(['current_unit_id' => $this->createUnitInRegion($region)->id]);
+        $old = $region->name;
+
+        Cache::flush();
+
+        // Warm `maps/unit` selection (`county_boundaries`).
+        Livewire::test('maps/unit')->set('selectedRegions', [$region->id]);
+
+        $region->update(['name' => 'شهرستان تازه']);
+
+        $test = Livewire::test('maps/unit')->set('selectedRegions', [$region->id]);
+        $counties = collect($test->effects['dispatches'])
+            ->firstWhere('name', 'county-boundaries-loaded')['params']['counties'];
+
+        $names = array_column($counties, 'name');
+        $this->assertContains('شهرستان تازه', $names);
+        $this->assertNotContains($old, $names);
     }
 }

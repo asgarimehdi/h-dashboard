@@ -1,3 +1,4 @@
+// @ts-check
 import { registerMapStore } from './map-store';
 import { registerMapHost } from './map-host';
 import { setupMapPages } from './map-pages';
@@ -7,7 +8,7 @@ import { setupPageScripts } from './page-scripts';
 import { setupReportCharts } from './report-charts';
 import { setupTodoCalendar } from './todo-calendar';
 import { setupDashboardCharts } from './dashboard-charts';
-import { registerSignalGauge, setupZabbixPoller } from './zabbix-gauges';
+import { registerSignalGauge, registerTrafficChart, setupZabbixPoller } from './zabbix-gauges';
 import { registerMapDashboard } from './map-dashboard';
 import { setupMapLayers } from './map-layers';
 
@@ -27,6 +28,7 @@ document.addEventListener('alpine:init', () => {
   registerAppComponents(window.Alpine);
   registerMaryComponents(window.Alpine);
   registerSignalGauge(window.Alpine);
+  registerTrafficChart(window.Alpine);
   registerMapDashboard(window.Alpine);
   // The store must exist before host-page setup subscribes to it;
   // this handler runs after registration, unlike a standalone

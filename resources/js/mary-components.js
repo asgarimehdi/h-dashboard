@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * MaryUI CSP-compat overrides (#1352, Step 2 / R5).
  *
@@ -29,21 +30,36 @@
  * is the same contract the unit tree picker already proves.
  */
 
+/**
+ * @param {any} wire
+ * @param {string} path
+ */
 function wireGet(wire, path) {
-  return String(path).split('.').reduce((obj, part) => (obj == null ? obj : obj[part]), wire);
+  return String(path)
+    .split('.')
+    .reduce((obj, part) => (obj == null ? obj : obj[part]), wire);
 }
 
+/**
+ * @param {any} wire
+ * @param {string} path
+ * @param {any} value
+ */
 function wireSet(wire, path, value) {
   const parts = String(path).split('.');
-  const last = parts.pop();
+  const last = /** @type {string} */ (parts.pop());
   const parent = parts.reduce((obj, part) => (obj == null ? obj : obj[part]), wire);
   if (parent != null) parent[last] = value;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 function sameValue(a, b) {
   try {
     return JSON.stringify(a) === JSON.stringify(b);
-  } catch (e) {
+  } catch {
     return a === b;
   }
 }
@@ -52,6 +68,7 @@ function sameValue(a, b) {
 // NOT Alpine-reactive, so `$watch(() => $wire.prop)` never re-fires;
 // the morph hook is the sync point for server-to-local updates.
 // Returns an unregister function (or null) for destroy().
+/** @param {() => void} syncFn */
 function syncOnMorph(syncFn) {
   if (window.Livewire && window.Livewire.hook) {
     const off = window.Livewire.hook('morph.updated', syncFn);
@@ -60,6 +77,7 @@ function syncOnMorph(syncFn) {
   return null;
 }
 
+/** @param {AlpineStatic} Alpine */
 export function registerMaryComponents(Alpine) {
   // Sidebar shell (CspMain). `collapsed` is read by MenuSub through
   // the Alpine scope chain, exactly as the original literal did.
@@ -101,7 +119,7 @@ export function registerMaryComponents(Alpine) {
 
     toggle() {
       // From parent Sidebar
-      if (this.collapsed) {
+      if (/** @type {any} */ (this).collapsed) {
         this.show = true;
         this.$dispatch('menu-sub-clicked');
         return;
@@ -132,48 +150,73 @@ export function registerMaryComponents(Alpine) {
         // silent no-op (proven by probe: Alpine.evaluate assigns
         // without error and without effect), so the backdrop, close,
         // and Escape writes must bypass the parser entirely.
-        const syncOpen = () => { this.open = !!wireGet(this.$wire, this.modelName); };
+        const syncOpen = () => {
+          this.open = !!wireGet(this.$wire, this.modelName);
+        };
         syncOpen();
-        this.$watch(
-          () => this.open,
-          (value) => {
-            if (value) {
-              this.$dispatch('open');
-            } else {
-              this.$dispatch('close');
-            }
-          },
-        );
-        this._morphOff = syncOnMorph(syncOpen);
+        this.$watch(/** @type {any} */ (() => this.open), (value) => {
+          this.toggleOpenClasses(!!value);
+          if (value) {
+            this.$dispatch('open');
+          } else {
+            this.$dispatch('close');
+          }
+        });
+        this.toggleOpenClasses(this.open);
+        /** @type {any} */ (this)._morphOff = syncOnMorph(syncOpen);
 
-        const close = () => { wireSet(this.$wire, this.modelName, false); };
+        const close = () => {
+          wireSet(this.$wire, this.modelName, false);
+        };
+        // #1469: the ✕ form sits in `dialog > .modal-box > form`, NOT as a
+        // direct child of the dialog — the first version matched the backdrop
+        // form only, so the ✕ did nothing (the modal stayed open, and its
+        // MaryUI button is `type="button"`, so the browser never submits the
+        // `method="dialog"` form either). Match the two close forms by
+        // identity and leave forms inside the modal body alone.
+        const closeForm = this.$el.querySelector(':scope > .modal-box > form[method="dialog"]');
         this.$el.addEventListener('click', (event) => {
           const target = event.target;
           const form = target instanceof Element ? target.closest('form') : null;
-          if (!form || form.parentElement !== this.$el) {
+          if (!form) {
             return;
           }
-          const closeForm = this.$el.querySelector(':scope > form[method="dialog"]');
           if (form.classList.contains('modal-backdrop') || form === closeForm) {
             close();
           }
         });
-        this._maryModalKeydown = (event) => {
+        /** @type {any} */ (this)._maryModalKeydown = (/** @type {KeyboardEvent} */ event) => {
           if (event.key === 'Escape' && this.open && !this.persistent) {
             close();
           }
         };
-        window.addEventListener('keydown', this._maryModalKeydown);
+        window.addEventListener('keydown', /** @type {any} */ (this)._maryModalKeydown);
       }
     },
 
     destroy() {
-      if (typeof this._morphOff === 'function') {
-        this._morphOff();
+      if (typeof (/** @type {any} */ (this)._morphOff) === 'function') {
+        /** @type {any} */ (this)._morphOff();
       }
-      if (typeof this._maryModalKeydown === 'function') {
-        window.removeEventListener('keydown', this._maryModalKeydown);
+      if (typeof (/** @type {any} */ (this)._maryModalKeydown) === 'function') {
+        window.removeEventListener('keydown', /** @type {any} */ (this)._maryModalKeydown);
       }
+      this.toggleOpenClasses(false);
+    },
+
+    /**
+     * #1469: the open classes are toggled here, in plain JS, because
+     * `x-bind:class` with a ternary string never re-runs on the CSP build —
+     * measured: flipping `open` removes `:open` and applies `inert`, while the
+     * class binding leaves the old classes in place, so a closed modal kept
+     * `modal-open` and stayed on screen. Same reason the close writes below
+     * bypass the parser.
+     *
+     * @param {boolean} open
+     */
+    toggleOpenClasses(open) {
+      this.$el.classList.toggle('modal-open', open);
+      this.$el.classList.toggle('!animate-none', open);
     },
   }));
 
@@ -181,8 +224,8 @@ export function registerMaryComponents(Alpine) {
   // selection is replaced by the guarded manual sync; every method is
   // verbatim from the vendor literal.
   Alpine.data('maryTable', () => ({
-    selection: [],
-    pageIds: [],
+    selection: /** @type {any} */ ([]),
+    pageIds: /** @type {any} */ ([]),
     isSelectable: false,
     colspanSize: 0,
     modelName: '',
@@ -193,7 +236,7 @@ export function registerMaryComponents(Alpine) {
       this.isSelectable = ds.selectable === 'true';
       try {
         this.pageIds = JSON.parse(ds.pageIds || '[]');
-      } catch (e) {
+      } catch {
         this.pageIds = [];
       }
       if (this.modelName && this.$wire) {
@@ -204,15 +247,12 @@ export function registerMaryComponents(Alpine) {
             this.selection = value ?? [];
           }
         };
-        this._morphOff = syncOnMorph(syncSelection);
-        this.$watch(
-          () => this.selection,
-          (value) => {
-            if (!sameValue(value, wireGet(this.$wire, this.modelName))) {
-              wireSet(this.$wire, this.modelName, value);
-            }
-          },
-        );
+        /** @type {any} */ (this)._morphOff = syncOnMorph(syncSelection);
+        this.$watch(/** @type {any} */ (() => this.selection), (value) => {
+          if (!sameValue(value, wireGet(this.$wire, this.modelName))) {
+            wireSet(this.$wire, this.modelName, value);
+          }
+        });
       }
 
       this.colspanSize = this.$refs.headers.childElementCount;
@@ -222,22 +262,31 @@ export function registerMaryComponents(Alpine) {
       }
     },
 
+    /** @param {any} key */
     isExpanded(key) {
       return this.selection.includes(key);
     },
 
     isPageFullSelected() {
-      return this.pageIds.length && [...this.selection]
-        .sort((a, b) => b - a)
-        .toString()
-        .includes([...this.pageIds].sort((a, b) => b - a).toString());
+      return (
+        this.pageIds.length &&
+        [...this.selection]
+          .sort((a, b) => b - a)
+          .toString()
+          .includes([...this.pageIds].sort((a, b) => b - a).toString())
+      );
     },
 
+    /**
+     * @param {any} checked
+     * @param {any} content
+     */
     toggleCheck(checked, content) {
       this.$dispatch('row-selection', { row: content, selected: checked });
       this.handleCheckAll();
     },
 
+    /** @param {any} checked */
     toggleCheckAll(checked) {
       this.$dispatch('row-selection-all', { selected: checked });
       if (checked) {
@@ -247,20 +296,21 @@ export function registerMaryComponents(Alpine) {
       }
     },
 
+    /** @param {any} key */
     toggleExpand(key) {
       if (this.selection.includes(key)) {
-        this.selection = this.selection.filter((i) => i !== key);
+        this.selection = this.selection.filter((/** @type {any} */ i) => i !== key);
       } else {
         this.selection.push(key);
       }
     },
 
     pushIds() {
-      this.selection.push(...this.pageIds.filter((i) => !this.selection.includes(i)));
+      this.selection.push(...this.pageIds.filter((/** @type {any} */ i) => !this.selection.includes(i)));
     },
 
     removeIds() {
-      this.selection = this.selection.filter((i) => !this.pageIds.includes(i));
+      this.selection = this.selection.filter((/** @type {any} */ i) => !this.pageIds.includes(i));
     },
 
     handleCheckAll() {
@@ -274,8 +324,8 @@ export function registerMaryComponents(Alpine) {
     },
 
     destroy() {
-      if (typeof this._morphOff === 'function') {
-        this._morphOff();
+      if (typeof (/** @type {any} */ (this)._morphOff) === 'function') {
+        /** @type {any} */ (this)._morphOff();
       }
     },
   }));
@@ -286,9 +336,9 @@ export function registerMaryComponents(Alpine) {
   // cross-scope read to get wrong. Getters are plain-JS getters here.
   Alpine.data('maryChoices', () => ({
     focused: false,
-    selection: null,
+    selection: /** @type {any} */ (null),
     id: '',
-    options: [],
+    options: /** @type {any[]} */ ([]),
     isSingle: false,
     isSearchable: false,
     isReadonly: false,
@@ -312,7 +362,7 @@ export function registerMaryComponents(Alpine) {
       const optionsBlock = this.$el.querySelector('script.choices-options-data');
       try {
         this.options = JSON.parse((optionsBlock ? optionsBlock.textContent : '') || '[]');
-      } catch (e) {
+      } catch {
         this.options = [];
       }
       if (this.modelName && this.$wire) {
@@ -323,22 +373,16 @@ export function registerMaryComponents(Alpine) {
             this.selection = value;
           }
         };
-        this._morphOff = syncOnMorph(syncSelection);
-        this.$watch(
-          () => this.selection,
-          (value) => {
-            if (!sameValue(value, wireGet(this.$wire, this.modelName))) {
-              wireSet(this.$wire, this.modelName, value);
-            }
-          },
-        );
+        /** @type {any} */ (this)._morphOff = syncOnMorph(syncSelection);
+        this.$watch(/** @type {any} */ (() => this.selection), (value) => {
+          if (!sameValue(value, wireGet(this.$wire, this.modelName))) {
+            wireSet(this.$wire, this.modelName, value);
+          }
+        });
       }
-      this.$watch(
-        () => this.selection,
-        () => {
-          this.$nextTick(() => this.renderSelectionSlots());
-        },
-      );
+      this.$watch(/** @type {any} */ (() => this.selection), () => {
+        this.$nextTick(() => this.renderSelectionSlots());
+      });
 
       // Fix weird issue when navigating back
       document.addEventListener('livewire:navigating', () => {
@@ -352,7 +396,7 @@ export function registerMaryComponents(Alpine) {
     get selectedOptions() {
       return this.isSingle
         ? this.options.filter((i) => i[this.optionValueKey()] == this.selection)
-        : this.selection.map((i) => this.options.filter((o) => o[this.optionValueKey()] == i)[0]);
+        : this.selection.map((/** @type {any} */ i) => this.options.filter((o) => o[this.optionValueKey()] == i)[0]);
     },
 
     get isAllSelected() {
@@ -360,9 +404,7 @@ export function registerMaryComponents(Alpine) {
     },
 
     get isSelectionEmpty() {
-      return this.isSingle
-        ? this.selection == null || this.selection == ''
-        : this.selection.length == 0;
+      return this.isSingle ? this.selection == null || this.selection == '' : this.selection.length == 0;
     },
 
     // The option value/label keys are server-rendered; the template
@@ -406,15 +448,20 @@ export function registerMaryComponents(Alpine) {
     },
 
     resize() {
-      this.$nextTick(() => { this.$refs.searchInput.style.width = (this.$refs.searchInput.value.length + 1) * 0.55 + 'rem'; });
+      this.$nextTick(() => {
+        this.$refs.searchInput.style.width = (this.$refs.searchInput.value.length + 1) * 0.55 + 'rem';
+      });
     },
 
+    /** @param {any} id */
     isActive(id) {
-      return this.isSingle
-        ? this.selection == id
-        : this.selection.includes(id);
+      return this.isSingle ? this.selection == id : this.selection.includes(id);
     },
 
+    /**
+     * @param {any} id
+     * @param {boolean} [keepOpen]
+     */
     toggle(id, keepOpen = false) {
       if (this.isReadonly || this.isDisabled) {
         return;
@@ -426,7 +473,7 @@ export function registerMaryComponents(Alpine) {
         this.search = '';
       } else {
         if (this.selection.includes(id)) {
-          this.selection = this.selection.filter((i) => i != id);
+          this.selection = this.selection.filter((/** @type {any} */ i) => i != id);
         } else {
           this.selection.push(id);
         }
@@ -448,17 +495,20 @@ export function registerMaryComponents(Alpine) {
         }
       });
 
-      this.noResults = Array.from(this.$refs.choicesOptions.querySelectorAll('div > .hidden')).length
-        == Array.from(this.$refs.choicesOptions.querySelectorAll('[search-value]')).length;
+      this.noResults =
+        Array.from(this.$refs.choicesOptions.querySelectorAll('div > .hidden')).length ==
+        Array.from(this.$refs.choicesOptions.querySelectorAll('[search-value]')).length;
     },
 
+    /** @param {any} detail */
     dispatchChangeEvent(detail) {
       this.$refs.searchInput.dispatchEvent(new CustomEvent('change-selection', { bubbles: true, detail }));
     },
 
     getFocusableElements() {
-      return Array.from(this.$refs.choicesOptions.querySelectorAll('[tabindex]:not([disabled])'))
-        .filter((el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
+      return Array.from(this.$refs.choicesOptions.querySelectorAll('[tabindex]:not([disabled])')).filter(
+        (el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden',
+      );
     },
 
     focusNext() {
@@ -486,7 +536,7 @@ export function registerMaryComponents(Alpine) {
     },
 
     placeholderClass() {
-      return (this.focused || !this.isSelectionEmpty) ? 'hidden' : '';
+      return this.focused || !this.isSelectionEmpty ? 'hidden' : '';
     },
 
     searchRequired() {
@@ -494,8 +544,8 @@ export function registerMaryComponents(Alpine) {
     },
 
     destroy() {
-      if (typeof this._morphOff === 'function') {
-        this._morphOff();
+      if (typeof (/** @type {any} */ (this)._morphOff) === 'function') {
+        /** @type {any} */ (this)._morphOff();
       }
     },
 
@@ -506,7 +556,9 @@ export function registerMaryComponents(Alpine) {
     renderSelectionSlots() {
       const uuid = this.$el.dataset.choicesId || '';
       this.$el.querySelectorAll('[data-selection-slot]').forEach((span) => {
-        const src = document.getElementById('selection-' + uuid + '-' + span.dataset.optionValue);
+        const src = document.getElementById(
+          'selection-' + uuid + '-' + /** @type {HTMLElement} */ (span).dataset.optionValue,
+        );
         if (src) {
           span.innerHTML = src.innerHTML;
         }
@@ -520,14 +572,14 @@ export function registerMaryComponents(Alpine) {
   // pass `$event` through the parser). Crop/save/revert are verbatim.
   Alpine.data('maryFile', () => ({
     progress: 0,
-    cropper: null,
+    cropper: /** @type {any} */ (null),
     justCropped: false,
     fileChanged: false,
-    imagePreview: null,
-    imageCrop: null,
-    originalImageUrl: null,
+    imagePreview: /** @type {any} */ (null),
+    imageCrop: /** @type {any} */ (null),
+    originalImageUrl: /** @type {any} */ (null),
     cropAfterChange: false,
-    file: null,
+    file: /** @type {any} */ (null),
     modelName: '',
 
     init() {
@@ -536,7 +588,7 @@ export function registerMaryComponents(Alpine) {
       this.cropAfterChange = ds.cropAfterChange === 'true';
       if (this.modelName && this.$wire) {
         this.file = wireGet(this.$wire, this.modelName);
-        this._morphOff = syncOnMorph(() => {
+        /** @type {any} */ (this)._morphOff = syncOnMorph(() => {
           this.file = wireGet(this.$wire, this.modelName);
         });
       }
@@ -544,23 +596,20 @@ export function registerMaryComponents(Alpine) {
       this.imageCrop = this.$refs.crop?.querySelector('img');
       this.originalImageUrl = this.imagePreview?.src;
 
-      this.$watch(
-        () => this.progress,
-        (value) => {
-          if (value == 100 && this.cropAfterChange && !this.justCropped) {
-            this.crop();
-          }
-        },
-      );
+      this.$watch(/** @type {any} */ (() => this.progress), (value) => {
+        if (value == 100 && this.cropAfterChange && !this.justCropped) {
+          this.crop();
+        }
+      });
 
-      this.$el.addEventListener('livewire-upload-progress', (event) => {
+      this.$el.addEventListener('livewire-upload-progress', (/** @type {any} */ event) => {
         this.progress = event.detail.progress;
       });
     },
 
     destroy() {
-      if (typeof this._morphOff === 'function') {
-        this._morphOff();
+      if (typeof (/** @type {any} */ (this)._morphOff) === 'function') {
+        /** @type {any} */ (this)._morphOff();
       }
     },
 
@@ -608,7 +657,7 @@ export function registerMaryComponents(Alpine) {
     cropSetup() {
       try {
         return JSON.parse(this.$el.dataset.cropSetup || '{}');
-      } catch (e) {
+      } catch {
         return {};
       }
     },
@@ -628,14 +677,16 @@ export function registerMaryComponents(Alpine) {
       this.imagePreview.src = this.cropper.getCroppedCanvas().toDataURL();
       this.imageCrop.src = this.imagePreview.src;
 
-      this.cropper.getCroppedCanvas().toBlob((blob) => {
+      this.cropper.getCroppedCanvas().toBlob((/** @type {any} */ blob) => {
         blob.name = this.$refs.file.files[0].name;
-        this.$wire.upload(
+        /** @type {any} */ (this.$wire).upload(
           this.modelName,
           blob,
-          () => { },
-          () => { },
-          (event) => { this.progress = event.detail.progress; },
+          () => {},
+          () => {},
+          (/** @type {any} */ event) => {
+            this.progress = event.detail.progress;
+          },
         );
       }, this.$el.dataset.cropMimeType || 'image/png');
     },

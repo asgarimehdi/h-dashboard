@@ -19,6 +19,17 @@ use Illuminate\Support\Facades\DB;
  * no superuser, no `Schema::disableForeignKeyConstraints()` anywhere in this
  * path: the order of the statements is what makes the restore legal.
  *
+ * ## Streaming (issue #1418)
+ *
+ * Rows are read from a {@see BackupSource} twice: once to stage the file's
+ * ids, once to write buffered chunks. Nothing here holds a whole table.
+ *
+ * The per-table delete cannot be `whereNotIn('id', $ids)`: Postgres refuses
+ * a statement with more than 65,535 bind parameters, and a chunked
+ * `whereNotIn` is a correctness bug (the first chunk would delete rows that
+ * belong to a later one). The ids are staged in a transaction-local temp
+ * table and the delete is an anti-join.
+ *
  * ## The `users` orphan consequence (owner decision Q2-(a))
  *
  * Replacing the `users` table replaces the ACCOUNTS, while the tables that
@@ -35,6 +46,25 @@ use Illuminate\Support\Facades\DB;
  */
 class RestoreService
 {
+    /**
+     * How many ids are staged per temp-table insert.
+     */
+    private const ID_CHUNK_SIZE = 5000;
+
+    /**
+     * How many bind parameters a write statement may carry.
+     *
+     * Postgres refuses a statement above 65,535 parameters. 60,000 leaves a
+     * margin, and the computed per-table cap protects a wide table whose
+     * 500-row chunk would exceed it.
+     */
+    private const PARAMETER_BUDGET = 60000;
+
+    /**
+     * The preferred number of rows per insert/upsert statement.
+     */
+    private const ROW_CHUNK_SIZE = 500;
+
     public function __construct(
         private readonly BackupArchiveReader $reader,
         private readonly BackupImportValidator $validator,
@@ -55,23 +85,22 @@ class RestoreService
      */
     public function restoreArchive(string $path, ?string $table = null): RestoreResult
     {
-        $archive = $this->reader->read($path);
+        $archive = $this->reader->inspect($path);
+        $source = new ArchiveBackupSource($this->reader, $path, $archive['tables']);
 
         if ($table !== null) {
-            if (! array_key_exists($table, $archive['tables'])) {
+            if (! in_array($table, $archive['tables'], true)) {
                 throw new BackupValidationException("جدول «{$table}» در فایل بک‌آپ نیست.");
             }
 
-            return $this->restoreTable($table, $archive['tables'][$table]);
+            return $this->restoreTable($table, $source);
         }
 
         if ($archive['full']) {
-            return $this->restoreFull($archive['tables']);
+            return $this->restoreFull($source);
         }
 
-        $table = (string) array_key_first($archive['tables']);
-
-        return $this->restoreTable($table, $archive['tables'][$table]);
+        return $this->restoreTable($archive['tables'][0], $source);
     }
 
     /**
@@ -80,22 +109,24 @@ class RestoreService
      * The rows that are not in the file are deleted, the rows that are in it
      * are inserted or updated — in one transaction.
      *
-     * @param  list<array<string, mixed>>  $rows
+     * @param  BackupSource|list<array<string, mixed>>  $rows
      *
      * @throws BackupValidationException
      */
-    public function restoreTable(string $table, array $rows): RestoreResult
+    public function restoreTable(string $table, BackupSource|array $rows): RestoreResult
     {
-        return DB::transaction(function () use ($table, $rows): RestoreResult {
-            $this->validator->validateTable($table, $rows);
+        $source = $rows instanceof BackupSource ? $rows : new ArrayBackupSource([$table => $rows]);
 
-            $this->replaceRows($table, $rows);
+        return DB::transaction(function () use ($table, $source): RestoreResult {
+            $this->validator->validateTable($table, $source);
+
+            $rowCount = $this->replaceRows($table, $source);
             $this->resyncSequence($table);
 
             return new RestoreResult(
                 full: false,
                 tables: [$table],
-                rowCount: count($rows),
+                rowCount: $rowCount,
             );
         });
     }
@@ -107,44 +138,42 @@ class RestoreService
      * and filled again in topological order (parents first), so no
      * constraint is ever violated — with the foreign keys switched on.
      *
-     * @param  array<string, list<array<string, mixed>>>  $tables
+     * @param  BackupSource|array<string, list<array<string, mixed>>>  $tables
      *
      * @throws BackupValidationException
      */
-    public function restoreFull(array $tables): RestoreResult
+    public function restoreFull(BackupSource|array $tables): RestoreResult
     {
-        return DB::transaction(function () use ($tables): RestoreResult {
-            $this->requireEveryRegisteredTable($tables);
-            $this->validator->validateFullBackup($tables);
+        $source = $tables instanceof BackupSource ? $tables : new ArrayBackupSource($tables);
+
+        return DB::transaction(function () use ($source): RestoreResult {
+            $this->requireEveryRegisteredTable($source->tables());
+            $this->validator->validateFullBackup($source);
 
             $order = $this->registry->topologicalOrder();
+            $available = array_flip($source->tables());
 
             foreach (array_reverse($order) as $table) {
                 DB::table($table)->delete();
             }
 
-            foreach ($order as $table) {
-                $rows = $tables[$table] ?? [];
+            $rowCount = 0;
 
-                if ($rows === []) {
+            foreach ($order as $table) {
+                if (! isset($available[$table])) {
                     continue;
                 }
 
-                DB::table($table)->insert($rows);
+                $rowCount += $this->insertRows($table, $source->rows($table));
             }
 
             foreach ($order as $table) {
                 $this->resyncSequence($table);
             }
 
-            $rowCount = 0;
-            foreach ($tables as $rows) {
-                $rowCount += count($rows);
-            }
-
             return new RestoreResult(
                 full: true,
-                tables: array_keys($tables),
+                tables: $source->tables(),
                 rowCount: $rowCount,
             );
         });
@@ -153,24 +182,145 @@ class RestoreService
     /**
      * Make the table hold exactly the rows of the file.
      *
-     * @param  list<array<string, mixed>>  $rows
+     * @return int The number of rows the file carried.
+     *
+     * @throws BackupValidationException
      */
-    private function replaceRows(string $table, array $rows): void
+    private function replaceRows(string $table, BackupSource $source): int
+    {
+        $temp = '_restore_ids_'.bin2hex(random_bytes(6));
+
+        // Transaction-local: the single-transaction guarantee is unchanged,
+        // and the table is dropped by the commit (or the rollback).
+        DB::statement(
+            'CREATE TEMP TABLE "'.$temp.'" ON COMMIT DROP '
+            .'AS SELECT id FROM "'.$table.'" WITH NO DATA'
+        );
+
+        try {
+            $this->stageIds($table, $source, $temp);
+
+            // An empty id set compiles to "NOT EXISTS over nothing", which is
+            // true for every row — the right answer for a file that carries
+            // no rows at all. Chunking this statement is NOT an option: the
+            // first chunk would remove rows that the later chunks keep.
+            DB::table($table)
+                ->whereRaw('NOT EXISTS (SELECT 1 FROM "'.$temp.'" WHERE "'.$temp.'".id = "'.$table.'".id)')
+                ->delete();
+
+            return $this->writeRows($table, $source);
+        } finally {
+            try {
+                DB::statement('DROP TABLE IF EXISTS "'.$temp.'"');
+            } catch (\Throwable) {
+                // The transaction is already aborted; its rollback removes
+                // the temp table with it.
+            }
+        }
+    }
+
+    /**
+     * Stage the file's ids in the transaction-local temp table.
+     *
+     * The id is the key of the replace: without it both the delete set and
+     * the upsert are undefined. The validator catches a missing `id` column
+     * first, but this method is the last gate before the writes and has to
+     * fail closed on its own.
+     *
+     * @throws BackupValidationException
+     */
+    private function stageIds(string $table, BackupSource $source, string $temp): void
     {
         $ids = [];
+        $index = 0;
+
+        foreach ($source->rows($table) as $row) {
+            if (! array_key_exists('id', $row) || $row['id'] === null) {
+                throw new BackupValidationException(
+                    'ساختار فایل بک‌آپ نامعتبر است: ردیف شماره '.($index + 1)." جدول «{$table}» مقدار معتبری برای ستون «id» ندارد."
+                );
+            }
+
+            $ids[] = ['id' => $row['id']];
+            $index++;
+
+            if (count($ids) >= self::ID_CHUNK_SIZE) {
+                DB::table($temp)->insert($ids);
+                $ids = [];
+            }
+        }
+
+        if ($ids !== []) {
+            DB::table($temp)->insert($ids);
+        }
+    }
+
+    /**
+     * Stream the rows into buffered upsert statements.
+     *
+     * @return int The number of rows written.
+     */
+    private function writeRows(string $table, BackupSource $source): int
+    {
+        $columns = $this->updatableColumns($table);
+        $chunkSize = $this->chunkSize($table);
+        $buffer = [];
+        $count = 0;
+
+        foreach ($source->rows($table) as $row) {
+            $buffer[] = $row;
+            $count++;
+
+            if (count($buffer) >= $chunkSize) {
+                DB::table($table)->upsert($buffer, ['id'], $columns);
+                $buffer = [];
+            }
+        }
+
+        if ($buffer !== []) {
+            DB::table($table)->upsert($buffer, ['id'], $columns);
+        }
+
+        return $count;
+    }
+
+    /**
+     * Insert the rows of one table of a full backup in bind-safe chunks.
+     *
+     * @param  iterable<int, array<string, mixed>>  $rows
+     * @return int The number of rows written.
+     */
+    private function insertRows(string $table, iterable $rows): int
+    {
+        $chunkSize = $this->chunkSize($table);
+        $buffer = [];
+        $count = 0;
+
         foreach ($rows as $row) {
-            $ids[] = $row['id'];
+            $buffer[] = $row;
+            $count++;
+
+            if (count($buffer) >= $chunkSize) {
+                DB::table($table)->insert($buffer);
+                $buffer = [];
+            }
         }
 
-        // An empty list compiles to `1 = 1`, which deletes every row — the
-        // right answer for a file that carries no rows at all.
-        DB::table($table)->whereNotIn('id', $ids)->delete();
-
-        if ($rows === []) {
-            return;
+        if ($buffer !== []) {
+            DB::table($table)->insert($buffer);
         }
 
-        DB::table($table)->upsert($rows, ['id'], $this->updatableColumns($table));
+        return $count;
+    }
+
+    /**
+     * How many rows of this table fit in one statement.
+     */
+    private function chunkSize(string $table): int
+    {
+        $columns = max(1, count($this->registry->columns($table)));
+
+        return max(1, min(self::ROW_CHUNK_SIZE, intdiv(self::PARAMETER_BUDGET, $columns)));
     }
 
     /**
@@ -190,13 +340,13 @@ class RestoreService
      * a different operation (a per-table restore) and must not be mistaken
      * for one.
      *
-     * @param  array<string, list<array<string, mixed>>>  $tables
+     * @param  list<string>  $tables
      *
      * @throws BackupValidationException
      */
     private function requireEveryRegisteredTable(array $tables): void
     {
-        $missing = array_values(array_diff($this->registry->tables(), array_keys($tables)));
+        $missing = array_values(array_diff($this->registry->tables(), $tables));
 
         if ($missing === []) {
             return;

@@ -643,7 +643,6 @@ class HardwareIndexLivewireTest extends TestCase
             ->call('editHardware', $hw->id)
             ->assertSet('editingId', $hw->id)
             ->assertSet('pc_name', 'Editable-PC')
-            ->assertSet('showEditModal', true)
             ->assertSet('showForm', false);
     }
 
@@ -662,7 +661,7 @@ class HardwareIndexLivewireTest extends TestCase
             ->set('pc_name', 'After-Update')
             ->call('updateHardware')
             ->assertHasNoErrors()
-            ->assertSet('showEditModal', false);
+            ->assertSet('editingId', null);
 
         $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'pc_name' => 'After-Update']);
     }

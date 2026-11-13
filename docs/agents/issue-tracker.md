@@ -14,7 +14,7 @@ scratch directory — see `.scratch/README.md` — not a queue.
   `direction`, `dependencies`, `bug`, …) and in the milestone
   `ممیزی اکتبر ۲۰۲۶ · <category>` (currently `· perf`, `· improve`,
   `· security`, `· direction`).
-- **Priority is `P1` / `P2` / `P3`** (High / Medium / Low), as a label.
+- **Priority is `P0` / `P1` / `P2` / `P3`** (Critical / High / Medium / Low), as a label.
 - **State is `ready`** («آماده اجرا», an agent may start), **`busy`** («some one
   working on it», do not start) and **`reviewed`** («یک ناظر بررسی کرده»).
 - The live label set is the source of truth:

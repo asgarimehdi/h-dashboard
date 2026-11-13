@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -435,5 +436,40 @@ class UnitsMapLivewireTest extends TestCase
         // Foreign boundary row untouched.
         $this->assertDatabaseHas('boundaries', ['id' => $boundaryId]);
         $this->assertEquals($boundaryId, $outsider->fresh()->boundary_id);
+    }
+
+    // ==================== #1419: boundary writes roll the `maps` namespace ====================
+
+    public function test_save_boundary_bumps_maps_cache(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        Cache::set('maps_version', 1);
+
+        // create path: Boundary insert + $unit->update(['boundary_id' => …])
+        Livewire::test('units.map', ['id' => $unit->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson());
+        $afterCreate = Cache::get('maps_version');
+        $this->assertGreaterThan(1, $afterCreate);
+
+        // in-place geometry update: the path that invalidated nothing before this fix
+        Livewire::test('units.map', ['id' => $unit->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson(49.0, 37.0));
+        $this->assertGreaterThan($afterCreate, Cache::get('maps_version'));
+    }
+
+    public function test_delete_boundary_bumps_maps_cache(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        Livewire::test('units.map', ['id' => $unit->id])
+            ->call('saveBoundary', $this->makePolygonGeoJson());   // setup, before measuring
+
+        Cache::set('maps_version', 1);
+        Livewire::test('units.map', ['id' => $unit->id])->call('deleteBoundary');
+
+        $this->assertGreaterThan(1, Cache::get('maps_version'));
     }
 }

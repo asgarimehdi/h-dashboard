@@ -9,10 +9,12 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
+use RuntimeException;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -272,6 +274,63 @@ class UnitApiTest extends TestCase
         $response->assertStatus(422);
         $this->assertDatabaseHas('units', ['id' => $target->id]);
         $this->assertDatabaseHas('user_units', ['user_id' => $staff->id, 'unit_id' => $target->id]);
+    }
+
+    /**
+     * #1403 — a delete that fails inside `delete()` must not bump the access
+     * cache versions. On beta the 422 below arrived with `unit_hierarchy` and
+     * `gis` already incremented, so every later reader paid a cold recompute
+     * for a hierarchy that never changed.
+     */
+    public function test_failed_delete_does_not_invalidate_access_caches(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Empty', 'parent_id' => $unit->id]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = [$cache->getVersion('unit_hierarchy'), $cache->getVersion('gis')];
+
+        // `impact()` already refuses every RESTRICT blocker before the delete, so
+        // a plain Ticket row never reaches the catch. Force the throw from the
+        // model event: it fires before any SQL, so the RefreshDatabase
+        // transaction stays usable (a real 23503 poisons it with 25P02).
+        Unit::deleting(fn () => throw new RuntimeException('forced delete failure'));
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Cannot delete unit.']);
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
+        $this->assertSame($before, [
+            $cache->getVersion('unit_hierarchy'),
+            $cache->getVersion('gis'),
+        ], 'a failed delete must not orphan the access caches (#1403)');
+    }
+
+    /**
+     * #1403 success-path guard: the reorder must not silence the invalidation.
+     * `assertGreaterThan`, not an exact delta — the observer inside delete() and
+     * the explicit call both bump (two increments today, before and after the
+     * fix), and that count is an implementation detail, not the contract.
+     */
+    public function test_successful_delete_still_invalidates_access_caches(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Empty', 'parent_id' => $unit->id]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $before = [$cache->getVersion('unit_hierarchy'), $cache->getVersion('gis')];
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(200)->assertJson(['success' => true]);
+        $this->assertDatabaseMissing('units', ['id' => $target->id]);
+        $this->assertGreaterThan($before[0], $cache->getVersion('unit_hierarchy'));
+        $this->assertGreaterThan($before[1], $cache->getVersion('gis'));
     }
 
     public function test_pagination_per_page_is_limited(): void

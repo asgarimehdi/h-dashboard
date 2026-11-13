@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * maps/map.blade.php component logic (#1352 CSP-compat).
  *
@@ -21,8 +22,10 @@
  * resolves across the `wire:ignore` boundary.
  */
 
+/** @param {AlpineStatic} Alpine */
 export function registerMapHost(Alpine) {
   Alpine.data('mapHost', () => ({
+    /** @type {(() => void) | null} */
     _invalidate: null,
 
     init() {

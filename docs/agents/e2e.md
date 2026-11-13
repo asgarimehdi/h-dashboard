@@ -8,7 +8,7 @@
 
 ## E2E Testing (Playwright)
 
-**46 spec files** in `tests/e2e/` (file count, verified 2026-10-18; for the test count run `npx playwright test --list` — a static `test(` grep undercounts loop-generated suites). Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
+**62 spec files** in `tests/e2e/` (`find tests/e2e -name '*.spec.ts' | wc -l`, on `beta @ 5c9f7fbd`, 2026-11-13) — **61 on an ordinary PR**, because `theme/sweep-35.spec.ts` is ignored unless `SWEEP_35=1` (`playwright.config.ts:21`). For the test count run `npx playwright test --list` — a static `test(` grep undercounts loop-generated suites. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
 
 > CI runs the suite in the e2e job of `.github/workflows/test.yml` (non-blocking ramp, `continue-on-error: true` until two consecutive green runs — see #867).
 
@@ -64,7 +64,7 @@ npx playwright test --reporter=list    # only if .env is already swapped and the
 ```bash
 npm run typecheck    # tsc --noEmit over tests/e2e/** + playwright.config.ts
 ```
-Playwright only transpiles the specs — it never type-checks them — so a type error used to surface at runtime, and with `retries: 2` in CI it could hide as a flake. `tsconfig.json` scopes the check to exactly the TypeScript that exists in this repo (`tests/e2e/**/*` + `playwright.config.ts`, `strict`, `noEmit`). **No ratchet/ceiling is in place** — the surface is clean; if it ever needs one, raise a documented max here instead of dropping `@ts-nocheck` into a spec. Wired **non-blocking** on purpose: the CI `typecheck` job is `continue-on-error: true` (same shape as `coverage-report` and `e2e`), so it never gates and never touches the blocking `lint`/`test`/`phpstan` jobs. `npm ci` in that job doubles as the lock-file consistency check.
+Playwright only transpiles the specs — it never type-checks them — so a type error used to surface at runtime, and with `retries: 2` in CI it could hide as a flake. `tsconfig.json` scopes the check to exactly the TypeScript that exists in this repo (`tests/e2e/**/*` + `playwright.config.ts`, `strict`, `noEmit`). **No ratchet/ceiling is in place for the e2e surface** — it is clean; if it ever needs one, raise a documented max here instead of dropping `@ts-nocheck` into a spec. `resources/js` has its own, separate ratchet (issue #1438): `tsconfig.js.json` + per-file `// @ts-check`, run by the blocking `js-typecheck` CI job — do not confuse the two signals. Wired **non-blocking** on purpose: the CI `typecheck` job is `continue-on-error: true` (same shape as `coverage-report` and `e2e`), so it never gates and never touches the blocking `lint`/`test`/`phpstan` jobs. `npm ci` in that job doubles as the lock-file consistency check.
 
 ### Common failure → cause
 | Symptom | Cause | Fix |
@@ -74,6 +74,7 @@ Playwright only transpiles the specs — it never type-checks them — so a type
 | `No tests found` even from `npx playwright test --list` | fixtures read `.run-state.json`, which only `scripts/e2e-test.sh` writes | run through the script; a bare invocation cannot even enumerate |
 | `Executable doesn't exist … chromium` | browser not installed | `npx playwright install chromium` |
 | `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard` (plain — migrations enable PostGIS) |
+| `unresolved Jalali label …` only between 20:30–24:00 UTC | chart labels are Tehran days but the label index was anchored on the UTC date (#1475) | anchor the index with `tehranDay(now)` (see `ticket-trend-window.spec.ts`) |
 | `.env` still the e2e one after a failed run | script aborted before restore | restore from `.env.dev.bak` manually (see cleanup above) |
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)

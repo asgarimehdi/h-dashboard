@@ -352,6 +352,44 @@ class DiseaseApiTest extends TestCase
         ];
     }
 
+    /**
+     * province P (boundary) → C1 (boundary, has an in-scope unit) + C2 (boundary, out of scope)
+     * province Z (boundary) → Z1 (boundary)                      ← whole branch out of scope, 1 case on Z1
+     *
+     * @return array{token: string, disease: Disease, root: Unit, units: array<string, Unit>, regions: array<string, Region>}
+     */
+    private function scopedRegionFixture(): array
+    {
+        ['unit' => $root] = $this->createUserWithUnit(['map']);
+        $token = $this->tokenForUnit($root);
+        $disease = Disease::factory()->create();
+
+        $this->ensureUnitType(9, 'خانه بهداشت');
+
+        $p = $this->region('province', null, $this->boundary($this->square(48, 36, 49, 37)));
+        $c1 = $this->region('county', $p, $this->boundary($this->square(48, 36, 48.5, 36.5)));
+        $c2 = $this->region('county', $p, $this->boundary($this->square(48.5, 36, 49, 36.5)));
+
+        $z = $this->region('province', null, $this->boundary($this->square(50, 36, 51, 37)));
+        $z1 = $this->region('county', $z, $this->boundary($this->square(50, 36, 50.5, 36.5)));
+
+        $unitC1 = $this->baseUnit($root, $c1, 'C1 base');
+
+        $zRoot = Unit::factory()->create();
+        $unitZ1 = $this->baseUnit($zRoot, $z1, 'Z1 base');
+
+        $this->caseOn('2026-04-01', $unitC1, $disease, $root);
+        $this->caseOn('2026-04-02', $unitZ1, $disease, $zRoot);
+
+        return [
+            'token' => $token,
+            'disease' => $disease,
+            'root' => $root,
+            'units' => compact('unitC1', 'unitZ1'),
+            'regions' => compact('p', 'c1', 'c2', 'z', 'z1'),
+        ];
+    }
+
     private function mapFor(array $fixture, array $query = []): TestResponse
     {
         $query = array_merge(['disease' => $fixture['disease']->id, 'zoom' => 8], $query);
@@ -554,6 +592,76 @@ class DiseaseApiTest extends TestCase
         $this->assertCount(0, $response->json('features'));
         $this->assertSame('none', $response->json('meta.level'));
         $this->assertSame(0, $response->json('meta.unmapped_cases'));
+    }
+
+    public function test_region_map_renders_only_in_scope_regions_and_falls_back(): void
+    {
+        $fixture = $this->scopedRegionFixture();
+
+        $response = $this->mapFor($fixture);
+        $features = $this->featuresByRegion($response);
+
+        $p = $fixture['regions']['p'];
+
+        // C2 is out of scope → no county layer for P.
+        $this->assertSame([$p->id], array_keys($features));
+        $this->assertSame('province', $features[$p->id]['properties']['level']);
+        $this->assertSame(1, $features[$p->id]['properties']['cases']);
+        $this->assertSame('province', $response->json('meta.level'));
+        $this->assertSame(1, $response->json('meta.fallback_provinces'));
+        $this->assertSame(0, $response->json('meta.unmapped_cases'));
+        // Out-of-scope province and county are never enumerated.
+        $this->assertArrayNotHasKey($fixture['regions']['z']->id, $features);
+        $this->assertArrayNotHasKey($fixture['regions']['z1']->id, $features);
+    }
+
+    public function test_region_map_draws_the_county_layer_when_every_county_is_in_scope(): void
+    {
+        $fixture = $this->scopedRegionFixture();
+        $this->baseUnit($fixture['root'], $fixture['regions']['c2'], 'C2 base');
+
+        $response = $this->mapFor($fixture);
+        $features = $this->featuresByRegion($response);
+
+        $c1 = $fixture['regions']['c1'];
+        $c2 = $fixture['regions']['c2'];
+
+        $this->assertSame([$c1->id, $c2->id], array_keys($features));
+        $this->assertSame('county', $response->json('meta.level'));
+        $this->assertSame(0, $response->json('meta.fallback_provinces'));
+    }
+
+    public function test_region_map_serializes_only_the_scoped_boundaries(): void
+    {
+        $fixture = $this->scopedRegionFixture();
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query;
+        });
+
+        $this->mapFor($fixture)->assertOk();
+
+        $regionQueries = array_values(array_filter(
+            $queries,
+            fn ($query): bool => str_contains($query->sql, 'from "regions"')
+        ));
+        $geometryQueries = array_values(array_filter(
+            $queries,
+            fn ($query): bool => str_contains($query->sql, 'ST_AsGeoJSON')
+        ));
+
+        $this->assertCount(1, $regionQueries, 'the region enumeration must stay ONE query');
+        $this->assertCount(1, $geometryQueries, 'the geometries must stay ONE batched query');
+
+        $p = $fixture['regions']['p'];
+        $c1 = $fixture['regions']['c1'];
+
+        // Z/Z1's boundary ids must be absent: 2 geometries, not 5.
+        $this->assertEqualsCanonicalizing(
+            [$p->boundary_id, $c1->boundary_id],
+            $geometryQueries[0]->bindings
+        );
     }
 
     // ---------------------------------------------------------------------

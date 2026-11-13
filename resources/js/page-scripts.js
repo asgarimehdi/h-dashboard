@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Page-level scripts moved out of `@script` blocks (#1352, Step 3 / R3).
  *
@@ -37,12 +38,13 @@ let globalListenersRegistered = false;
 let morphHookRegistered = false;
 const patientWatchersRegistered = new Set();
 
+/** @param {Element} element */
 function componentFor(element) {
   const root = element.closest('[wire\\:id]');
   if (!root || typeof window.Livewire === 'undefined') {
     return null;
   }
-  return window.Livewire.find(root.getAttribute('wire:id'));
+  return window.Livewire.find(/** @type {string} */ (root.getAttribute('wire:id')));
 }
 
 const JDP_OPTIONS = {
@@ -62,15 +64,17 @@ function startJdpWatch() {
 
 // Disease index + create (#1182): every date input carries
 // `data-jdp-model` naming its Livewire property.
+/** @param {boolean} jdpReady */
 function initDiseaseJdp(jdpReady) {
   if (!jdpReady) {
     return;
   }
-  document.querySelectorAll('[data-jdp][data-jdp-model]').forEach((input) => {
+  /** @type {NodeListOf<HTMLInputElement>} */
+  (document.querySelectorAll('[data-jdp][data-jdp-model]')).forEach((input) => {
     if (!input.dataset.jdpBound) {
       input.dataset.jdpBound = '1';
       input.addEventListener('jdp:change', (event) => {
-        componentFor(input)?.set(input.dataset.jdpModel, event.target.value);
+        componentFor(input)?.set(input.dataset.jdpModel, /** @type {HTMLInputElement} */ (event.target).value);
       });
     }
     const value = componentFor(input)?.get(input.dataset.jdpModel);
@@ -81,6 +85,7 @@ function initDiseaseJdp(jdpReady) {
 }
 
 // Activity log: two fixed date inputs.
+/** @param {boolean} jdpReady */
 function initActivityLogJdp(jdpReady) {
   if (!jdpReady) {
     return;
@@ -97,25 +102,26 @@ function initActivityLogJdp(jdpReady) {
     if (!input.dataset.jdpBound) {
       input.dataset.jdpBound = '1';
       input.addEventListener('jdp:change', (event) => {
-        componentFor(input)?.set(model, event.target.value);
+        componentFor(input)?.set(model, /** @type {HTMLInputElement} */ (event.target).value);
       });
     }
   });
 }
 
 // Disease patients: single birth-date input, mirrored both ways.
+/** @param {boolean} jdpReady */
 function initPatientJdp(jdpReady) {
   if (!jdpReady) {
     return;
   }
-  const input = document.getElementById('patient_birth_date');
+  const input = /** @type {HTMLInputElement | null} */ (document.getElementById('patient_birth_date'));
   if (!input) {
     return;
   }
   if (!input.dataset.jdpBound) {
     input.dataset.jdpBound = '1';
     input.addEventListener('jdp:change', (event) => {
-      componentFor(input)?.set('birth_date_jalali', event.target.value);
+      componentFor(input)?.set('birth_date_jalali', /** @type {HTMLInputElement} */ (event.target).value);
     });
   }
   const component = componentFor(input);
@@ -126,7 +132,7 @@ function initPatientJdp(jdpReady) {
       patientWatchersRegistered.add(id);
       component.$watch?.('formOpen', () => initPatientJdp(startJdpWatch()));
       component.$watch?.('birth_date_jalali', (value) => {
-        const el = document.getElementById('patient_birth_date');
+        const el = /** @type {HTMLInputElement | null} */ (document.getElementById('patient_birth_date'));
         if (el) {
           el.value = value ?? '';
         }
@@ -157,21 +163,18 @@ function registerGlobalListeners() {
     let families;
     try {
       families = JSON.parse(block.textContent || '{}');
-    } catch (e) {
+    } catch {
       return;
     }
     const root = document.documentElement;
-    const current = root.getAttribute('data-theme')
-      || (localStorage.getItem('mary-theme') || '').replaceAll('"', '');
+    const current = root.getAttribute('data-theme') || (localStorage.getItem('mary-theme') || '').replaceAll('"', '');
     const lightThemes = families.light || [];
     const darkThemes = families.dark || [];
     const poles = [lightTheme, darkTheme];
     if (!current || poles.includes(current)) {
       return;
     }
-    const target = lightThemes.includes(current)
-      ? lightTheme
-      : (darkThemes.includes(current) ? darkTheme : lightTheme);
+    const target = lightThemes.includes(current) ? lightTheme : darkThemes.includes(current) ? darkTheme : lightTheme;
     root.setAttribute('data-theme', target);
     // MaryUI's $persist stores JSON, including the quotes — the head
     // script and the storage listener both strip them with
