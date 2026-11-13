@@ -12,8 +12,14 @@
  */
 
 interface AlpineMagicProperties {
-    /** The component root element. */
+    /**
+     * The element that carries the directive being evaluated — on a handler
+     * bound to a child that child is `$el`, NOT the `x-data` root (measured in
+     * #1469: a click handler on the toggle's <input> saw the input's dataset).
+     */
     $el: HTMLElement;
+    /** The component root element (`x-data`). Read root-level `data-*` here. */
+    $root: HTMLElement;
     /**
      * `x-ref` lookups. Deliberately `any`: a ref's concrete type is decided by
      * the Blade template that carries `x-ref`, which tsc cannot see, and the
