@@ -191,7 +191,8 @@ after a hard load of each page:
   `tickets/⚡inbox.blade.php:258,314,401` do nothing. Recorded here, not fixed — phase 1
   touches no code.
 - **Automated guard:** `tests/Feature/NoExternalRuntimeAssetsTest.php` (issue #1307) pins the
-  table above — nine allowlist entries plus the two vendored defaults. It scans
+  table above — nine entries in `self::ALLOWLIST` plus the two in `self::VENDORED_DEFAULTS`
+  (count each const, not `grep -c "'path' =>"`, which also matches the `$found[]` push). It scans
   `resources/views`, `resources/js`, `resources/css` and `config`; a new external load
   outside the allowlist fails CI. It does not strip comments: the one commented literal is
   pinned as `kind=commented`, so uncommenting it also goes red.

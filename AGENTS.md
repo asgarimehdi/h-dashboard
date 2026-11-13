@@ -89,7 +89,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Modal:** `x-modal` with `close-on-backdrop`
 - **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Factories:** 15 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (the old "no `HasFactory`" gotcha was wrong, #983 — see [testing](docs/agents/testing.md)); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
+- **Factories:** 18 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (the old "no `HasFactory`" gotcha was wrong, #983 — see [testing](docs/agents/testing.md)); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
 - **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.

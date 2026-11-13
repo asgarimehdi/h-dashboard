@@ -228,6 +228,8 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 | `ArchiveActivityLogsJob` | 300s | 3 | Deletes activity logs older than N days |
 | `CleanNotificationsJob` | 300s | 3 | Deletes notifications older than N days |
 | `GenerateDailyReportsJob` | 600s | 2 | Runs `GenerateDailyReports` artisan command — **not dispatched by anything** (see the gotcha below); the 06:00 schedule runs the command inline (#1021) |
+| `ImportHardwareJob` | 600s | 1 | Hardware XLSX import on `redis-reports`. One attempt: a partially applied run cannot be replayed without duplicating rows (`hardwares` has no unique key on the compare column). One import per user at a time (#1194) |
+| `ImportPersonsJob` | 600s | 1 | Personnel XLSX import on `redis-reports`. Same one-attempt, one-per-user contract as `ImportHardwareJob` |
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
 | `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
 
@@ -265,7 +267,7 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 `CacheInvalidationService` uses driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter. Hot paths use `Cache::remember(...)` with the versioned key.
 
-**Key namespaces:** `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `unit_hierarchy`, `report_units`, `report_todos`, `report_tickets`, `calendar`, `global_search`, **`zabbix_devices`** (added with issue #698), `disease_maps`.
+**Key namespaces:** all **19** in `PruneStaleCache::NAMESPACES` (`grep -n 'NAMESPACES' -A2 app/Console/Commands/PruneStaleCache.php`) — `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `report_todos`, `report_tickets`, `report_persons`, `report_units`, `unit_hierarchy`, `calendar`, `zabbix_devices` (added with issue #698), `global_search`, `disease_maps`, `activity_log`, `report_no_boundary`, `unit_types`, `tools_stats`, `notifications`.
 
 **The version key comes from the service and nowhere else.** A cache key is built with `remember()`/`cacheKey()` and a version read with `getVersion()`; a hand-written `Cache::get('…_version')` (or a literal `…:v{$v}`) bypasses invalidation and reads a counter nobody bumps (#1290). `tests/Feature/CacheVersionKeyGuardTest.php` enforces this over `app/` and `resources/views/`, and also pins that every namespace literal at a call site — plus the `*Namespaces` lists in `AppServiceProvider` — is registered here.
 

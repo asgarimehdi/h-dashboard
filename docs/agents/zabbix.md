@@ -34,7 +34,7 @@
 
 ### Batched Zabbix polling (issue #722 sibling, `f002cfc`)
 
-One **batched** poll per `/it/wireless` page (a shared poll, in chunks of at most 90 items). `/it/networks` is different: one `network-traffic-chart` component per network, each fetching `/api/zabbix/traffic` on its own 60-second poll.
+One **batched** poll per `/it/wireless` page (a shared poll, in chunks of at most 100 items — `MultiLatestValueController`: `'item_ids' => 'required|array|max:100'`). `/it/networks` is different: one `network-traffic-chart` component per network, each fetching `/api/zabbix/traffic` on its own 60-second poll.
 
 ## Gotchas (transplanted from the former `## Gotchas Quick Reference`)
 

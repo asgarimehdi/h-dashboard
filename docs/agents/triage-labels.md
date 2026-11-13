@@ -28,7 +28,7 @@ label set instead of defining it; a role with no label is handled by a comment.
 
 ## The rest of the vocabulary
 
-- **Priority:** `P1` (High), `P2` (Medium), `P3` (Low)
+- **Priority:** `P0` (Critical), `P1` (High), `P2` (Medium), `P3` (Low)
 - **Kind of work:** `perf`, `improve`, `security`, `tests`, `docs`,
   `documentation`, `dx`, `bug`, `dependencies`, `direction`
 - **Area:** `api`, `hardware`, `hr`, `personnel`, `kargozini`,
@@ -36,7 +36,7 @@ label set instead of defining it; a role with no label is handled by a comment.
 - **State:** `ready`, `busy`, `reviewed`, `question`
 - **Test gaps:** `missing-test` (no coverage), `need-test` (feature/area lacks
   Pest coverage), `test-failure`
-- **Process:** `beta` (targeted at the beta branch), `github_actions`,
+- **Process:** `beta` (targeted at the beta branch), `theme-sweep` (#1227, run the report-only full 35-theme contrast sweep), `github_actions`,
   `enhancement`, `feature`, `good first issue`, `help wanted`, `invalid`,
   `wontfix`
 
