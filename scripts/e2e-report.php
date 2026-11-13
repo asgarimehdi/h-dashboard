@@ -46,21 +46,20 @@ function e2eReportFail(string $message): never
  * Report a path relative to the checkout, for the annotation/summary.
  *
  * Playwright's JSON `file` fields are relative to the config's `testDir`
- * (`tests/e2e`), while GitHub annotations want a checkout-relative path.
+ * (`tests/e2e`, pinned in playwright.config.ts), while GitHub annotations
+ * want a checkout-relative path. Absolute paths only need the cwd stripped.
  */
 function e2eReportRelative(string $path): string
 {
-    $root = getcwd();
+    if (str_starts_with($path, '/')) {
+        $root = getcwd();
 
-    if ($root !== false && str_starts_with($path, $root.DIRECTORY_SEPARATOR)) {
-        return substr($path, strlen($root) + 1);
+        return $root !== false && str_starts_with($path, $root.DIRECTORY_SEPARATOR)
+            ? substr($path, strlen($root) + 1)
+            : $path;
     }
 
-    if (! str_starts_with($path, '/') && ! is_file($path) && is_file('tests/e2e/'.$path)) {
-        return 'tests/e2e/'.$path;
-    }
-
-    return $path;
+    return str_starts_with($path, 'tests/') ? $path : 'tests/e2e/'.$path;
 }
 
 // ---- #865: a green job that executed zero tests is a failure, not a pass. ----
