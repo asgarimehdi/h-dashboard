@@ -90,6 +90,23 @@ export function registerAppComponents(Alpine) {
     },
 
     toggle() {
+      // #1469: the poles are read from the DOM at click time, not from the
+      // values cached in `init()`. The settings page re-renders its own
+      // `<x-theme-selector>` after a save, so the livewire morph swaps the
+      // `data-light-theme`/`data-dark-theme` attributes while the Alpine
+      // state keeps the pre-save pair — the first click then landed on a
+      // theme the user had just unselected (measured: 'fantasy' after
+      // saving cupcake/coffee).
+      //
+      // `$root`, not `$el`: the handler is on the <input>, and Alpine binds
+      // `$el` to the element carrying the directive, so `$el.dataset` has no
+      // poles here (measured). `$root` is the `x-data` <label>.
+      const ds = (this.$root ?? this.$el).dataset;
+      this.lightTheme = ds.lightTheme || this.lightTheme;
+      this.darkTheme = ds.darkTheme || this.darkTheme;
+      this.lightClass = ds.lightClass || this.lightClass;
+      this.darkClass = ds.darkClass || this.darkClass;
+
       this.theme = this.theme === this.lightTheme ? this.darkTheme : this.lightTheme;
       this.class = this.theme === this.lightTheme ? this.lightClass : this.darkClass;
       this.setToggle();

@@ -155,27 +155,32 @@ export function registerMaryComponents(Alpine) {
         };
         syncOpen();
         this.$watch(/** @type {any} */ (() => this.open), (value) => {
+          this.toggleOpenClasses(!!value);
           if (value) {
             this.$dispatch('open');
           } else {
             this.$dispatch('close');
           }
         });
+        this.toggleOpenClasses(this.open);
         /** @type {any} */ (this)._morphOff = syncOnMorph(syncOpen);
 
         const close = () => {
           wireSet(this.$wire, this.modelName, false);
         };
+        // #1469: the ✕ form sits in `dialog > .modal-box > form`, NOT as a
+        // direct child of the dialog — the first version matched the backdrop
+        // form only, so the ✕ did nothing (the modal stayed open, and its
+        // MaryUI button is `type="button"`, so the browser never submits the
+        // `method="dialog"` form either). Match the two close forms by
+        // identity and leave forms inside the modal body alone.
+        const closeForm = this.$el.querySelector(':scope > .modal-box > form[method="dialog"]');
         this.$el.addEventListener('click', (event) => {
           const target = event.target;
           const form = target instanceof Element ? target.closest('form') : null;
           if (!form) {
             return;
           }
-          // × داخل `.modal-box` است (heredoc در CspModal)؛ backdrop فرزند
-          // مستقیم dialog است. `:scope >` این جست‌وجو را به جعبهٔ خودمان
-          // محدود می‌کند تا فرمِ یک مودال تودرتو هرگز مچ نشود.
-          const closeForm = this.$el.querySelector(':scope > .modal-box > form[method="dialog"]');
           if (form.classList.contains('modal-backdrop') || form === closeForm) {
             close();
           }
@@ -196,6 +201,22 @@ export function registerMaryComponents(Alpine) {
       if (typeof (/** @type {any} */ (this)._maryModalKeydown) === 'function') {
         window.removeEventListener('keydown', /** @type {any} */ (this)._maryModalKeydown);
       }
+      this.toggleOpenClasses(false);
+    },
+
+    /**
+     * #1469: the open classes are toggled here, in plain JS, because
+     * `x-bind:class` with a ternary string never re-runs on the CSP build —
+     * measured: flipping `open` removes `:open` and applies `inert`, while the
+     * class binding leaves the old classes in place, so a closed modal kept
+     * `modal-open` and stayed on screen. Same reason the close writes below
+     * bypass the parser.
+     *
+     * @param {boolean} open
+     */
+    toggleOpenClasses(open) {
+      this.$el.classList.toggle('modal-open', open);
+      this.$el.classList.toggle('!animate-none', open);
     },
   }));
 

@@ -98,7 +98,10 @@ class WirelessGaugeRateLimitTest extends TestCase
             $this->countEndpointFetches($source),
             'The wireless page must call /api/zabbix/multi-latest exactly once per refresh cycle.'
         );
-        $this->assertSame(1, substr_count($source, 'setInterval('));
+        // #1469 §3 added a second, unrelated interval to this module (the
+        // /it/networks traffic charts), so count the wireless poller by its
+        // own scheduling expression instead of counting every setInterval.
+        $this->assertSame(1, substr_count($source, 'setInterval(load, REFRESH_MS)'));
     }
 
     public function test_the_gauge_no_longer_fetches_or_polls_on_its_own(): void
@@ -175,16 +178,32 @@ class WirelessGaugeRateLimitTest extends TestCase
 
     public function test_the_networks_charts_do_not_poll_faster_than_the_budget_allows(): void
     {
-        $source = $this->bladeSource('livewire/it/network-traffic-chart.blade.php');
+        // Issue #1469 §3: the chart's poller moved out of the Blade `x-data`
+        // expression into resources/js/zabbix-gauges.js (the CSP build cannot
+        // evaluate `initTrafficChart(...)` from an attribute), so the Blade
+        // carries x-data + data-* only and must schedule nothing itself.
+        $blade = $this->bladeSource('livewire/it/network-traffic-chart.blade.php');
 
-        $this->assertSame(1, substr_count($source, 'setInterval'));
-        $this->assertStringNotContainsString('10000', $source);
+        $this->assertStringNotContainsString('setInterval', $blade);
+        $this->assertStringContainsString('x-data="trafficChart"', $blade);
 
-        // 25 seeded networks × 1 request per cycle must stay under 60/min.
+        $source = $this->jsSource('zabbix-gauges.js');
+
+        // Exactly one traffic-chart poller, and it is the 60 s one — not the
+        // 10 s interval that pushed 25 × 6 = 150 requests/minute through the
+        // whole user's 60/min budget.
+        $this->assertSame(1, substr_count($source, 'setInterval(() => this.load(),'));
+
         preg_match('/setInterval\(\(\) => this\.load\(\), (\d+)\)/', $source, $matches);
         $this->assertNotEmpty($matches, 'Could not read the traffic chart poll interval.');
 
-        $requestsPerMinute = 25 * (int) ceil((int) $matches[1] / 60000);
+        $interval = (int) $matches[1];
+        $this->assertSame(60000, $interval, 'The traffic charts must poll once a minute, not faster.');
+
+        // 25 seeded networks × one request per cycle (60000 / interval cycles
+        // per minute) must stay under 60/min — this is the arithmetic that
+        // catches the old 10 s interval: ceil(60000 / 10000) = 6 → 150/min.
+        $requestsPerMinute = 25 * (int) ceil(60000 / $interval);
         $this->assertLessThanOrEqual(60, $requestsPerMinute);
     }
 

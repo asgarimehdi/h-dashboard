@@ -96,7 +96,8 @@ test.describe('custom theme poles', () => {
 
     // The toggle in the header now advertises the two new poles.
     const toggleHtml = await page.locator('.swap').first().evaluate((el) => el.outerHTML);
-    expect(toggleHtml).toContain("? 'coffee' : 'cupcake'");
+    expect(toggleHtml).toContain('data-light-theme="cupcake"');
+    expect(toggleHtml).toContain('data-dark-theme="coffee"');
   });
 
   test('the header toggle cycles between the two new poles', async ({ page }) => {
@@ -132,7 +133,8 @@ test.describe('custom theme poles', () => {
 
     // A second device would load the server-side poles (the toggle markup).
     const toggleHtml = await page.locator('.swap').first().evaluate((el) => el.outerHTML);
-    expect(toggleHtml).toContain("? 'coffee' : 'cupcake'");
+    expect(toggleHtml).toContain('data-light-theme="cupcake"');
+    expect(toggleHtml).toContain('data-dark-theme="coffee"');
   });
 
   test('a change in another tab reaches the layout storage listener', async ({ page, context }) => {
@@ -187,7 +189,8 @@ test.describe('custom theme poles', () => {
 
       // The toggle advertises the new pair.
       const toggleHtml = await page.locator('.swap').first().evaluate((el) => el.outerHTML);
-      expect(toggleHtml).toContain(`? '${dark}' : '${light}'`);
+      expect(toggleHtml).toContain(`data-light-theme="${light}"`);
+      expect(toggleHtml).toContain(`data-dark-theme="${dark}"`);
 
       await page.locator(TOGGLE).first().click({ force: true });
       await expect.poll(() => themeOf(page)).toBe(light);
@@ -239,7 +242,8 @@ test.describe('custom theme poles', () => {
 
     // No settings → the markup keeps the pre-issue poles.
     const html = await guest.locator('.swap').first().evaluate((el) => el.outerHTML);
-    expect(html).toContain("? 'dark' : 'fantasy'");
+    expect(html).toContain('data-light-theme="fantasy"');
+    expect(html).toContain('data-dark-theme="dark"');
 
     await toggle.click({ force: true });
     await expect.poll(() => themeOf(guest)).toBe('dark');

@@ -41,9 +41,9 @@ test.describe('hardware list & filters', () => {
     await page.locator('button[wire\\:click*="laptop"]').click();
     // Wait for Livewire network request to complete
     await filterUpdate;
-    // Filtered results should have fewer records
-    const totalAfter = await page.locator('.mary-table-pagination').innerText().catch(() => '');
-    expect(totalAfter).not.toBe(totalBefore);
+    // Filtered results should have fewer records. Auto-retrying: the response
+    // resolves before Livewire morphs the DOM, so a one-shot read races it.
+    await expect(page.locator('.mary-table-pagination')).not.toHaveText(totalBefore);
   });
 
   test('clear filters restores full list', async ({ page }) => {

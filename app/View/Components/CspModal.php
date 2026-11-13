@@ -12,19 +12,22 @@ use Illuminate\View\Component;
  * WHAT IS AND IS NOT MIRRORED
  * ---------------------------
  * `render()` is a verbatim copy of `Mary\View\Components\Modal::render()`
- * with exactly four differences: the `@entangle(...).live` `x-data`
+ * with exactly five differences: the `@entangle(...).live` `x-data`
  * literal becomes `x-data="maryModal"` (the open state is a plain
  * boolean synced from `$wire` after every Livewire morph in
  * `resources/js/mary-components.js`, because directive-expression
  * entangle evaluates to `undefined` under the CSP build — Step-1
  * entangle probe); the `$watch` `x-init` is gone (the watch lives in
- * the factory `init()`); the `:class` object literal becomes a
- * ternary (object literals are outside the proven directive subset);
- * and the three `$wire.model = false` close directives (close
- * button, backdrop button, Escape) are gone — a `$wire` member
- * assignment evaluated through the CSP parser is a silent no-op
- * (proven by probe), so the close writes are plain-JS listeners in
- * the factory. `x-trap` and the `:open` binding are unchanged.
+ * the factory `init()`); the `:class` binding is gone entirely — the
+ * `modal-open !animate-none` classes are toggled by the factory in
+ * plain JS, because a `:class` ternary string never re-runs on the
+ * CSP build (measured: `open` flips, `:open` updates, the class does
+ * not, so a closed dialog kept `modal-open` — #1469); and the three
+ * `$wire.model = false` close directives (close button, backdrop
+ * button, Escape) are gone — a `$wire` member assignment evaluated
+ * through the CSP parser is a silent no-op (proven by probe), so the
+ * close writes are plain-JS listeners in the factory. `x-trap` and the
+ * `:open` binding are unchanged.
  *
  * MAINTENANCE
  * -----------
@@ -60,7 +63,6 @@ class CspModal extends Component
                         x-data="maryModal"
                         data-model="{{ $attributes->wire('model')->value() }}"
                         data-persistent="{{ $persistent ? 'true' : 'false' }}"
-                        :class="open ? 'modal-open !animate-none' : ''"
                         :open="open"
                     @endif
 
