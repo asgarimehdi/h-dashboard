@@ -324,9 +324,9 @@ class HardwareTableLivewireTest extends TestCase
             ->all();
     }
 
-    // ==================== S7: editHardware opens edit modal ====================
+    // ==================== S7: editHardware opens inline panel ====================
 
-    public function test_edit_opens_modal(): void
+    public function test_edit_opens_inline_panel(): void
     {
         $data = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($data['user']);
@@ -335,9 +335,10 @@ class HardwareTableLivewireTest extends TestCase
 
         Livewire::test('hardware.index')
             ->call('editHardware', $hw->id)
-            ->assertSet('showEditModal', true)
             ->assertSet('editingId', $hw->id)
-            ->assertSet('pc_name', 'EditTestPC');
+            ->assertSet('pc_name', 'EditTestPC')
+            ->assertSee('id="hardware-edit-panel"', false)
+            ->assertSee('ویرایش سخت افزار');
     }
 
     // ==================== loadHistory ====================
