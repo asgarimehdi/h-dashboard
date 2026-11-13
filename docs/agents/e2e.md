@@ -74,6 +74,7 @@ Playwright only transpiles the specs — it never type-checks them — so a type
 | `No tests found` even from `npx playwright test --list` | fixtures read `.run-state.json`, which only `scripts/e2e-test.sh` writes | run through the script; a bare invocation cannot even enumerate |
 | `Executable doesn't exist … chromium` | browser not installed | `npx playwright install chromium` |
 | `database "h_dashboard_e2e" does not exist` | database never created | `CREATE DATABASE h_dashboard_e2e WITH OWNER=h_dashboard` (plain — migrations enable PostGIS) |
+| `unresolved Jalali label …` only between 20:30–24:00 UTC | chart labels are Tehran days but the label index was anchored on the UTC date (#1475) | anchor the index with `tehranDay(now)` (see `ticket-trend-window.spec.ts`) |
 | `.env` still the e2e one after a failed run | script aborted before restore | restore from `.env.dev.bak` manually (see cleanup above) |
 
 ### Key helpers (in `tests/e2e/shared/fixtures.ts`)
