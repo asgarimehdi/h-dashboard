@@ -223,8 +223,11 @@ test.describe('smoke — main journeys (actions, not just loads)', () => {
     const filterUpdate = waitForLivewire(page);
     await page.locator('button[wire\\:click*="laptop"]').click();
     await filterUpdate;
-    const totalAfter = await page.locator('.mary-table-pagination').innerText().catch(() => '');
-    expect(totalAfter).not.toBe(totalBefore);
+    // Auto-retrying, like tests/e2e/hardware/list-filters.spec.ts: the response
+    // resolves before Livewire morphs the DOM, so a one-shot innerText() read
+    // right behind it races the morph (attempt 0 read the unfiltered text and
+    // failed in CI; the retry passed).
+    await expect(page.locator('.mary-table-pagination')).not.toHaveText(totalBefore);
   });
 
   test('todo create via modal shows a success toast', async ({ page }) => {

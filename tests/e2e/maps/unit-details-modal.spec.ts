@@ -119,17 +119,17 @@ async function waitForUnitDetailsComponent(page: Page): Promise<void> {
 }
 
 /**
- * Click a unit marker that is genuinely the topmost element at its centre.
+ * Find a unit marker that is genuinely the topmost element at its centre.
  *
  * A bare `.unit-marker.first().click({ force: true })` is not deterministic:
  * `force` skips actionability but still dispatches at the element's centre, so
  * an overlay (the map toolbar spans the top strip, z-10) silently swallows the
  * click. Earlier specs change the unit set, so "first" can land under it. Pick
- * a marker that `elementFromPoint` resolves to, below the toolbar, and click
+ * a marker that `elementFromPoint` resolves to, below the toolbar, and return
  * those coordinates.
  */
-async function clickUnitMarker(page: Page): Promise<void> {
-  const point = await page.evaluate(() => {
+async function findClickableMarker(page: Page): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(() => {
     const map = document.querySelector('#map');
     if (!map) return null;
     const box = map.getBoundingClientRect();
@@ -150,9 +150,31 @@ async function clickUnitMarker(page: Page): Promise<void> {
 
     return null;
   });
+}
 
-  expect(point, 'an unobstructed unit marker must be visible on the map').not.toBeNull();
-  await page.mouse.click(point!.x, point!.y);
+/**
+ * Click a unit marker that is genuinely the topmost element at its centre.
+ *
+ * Polling, not a one-shot evaluate: on `wire:navigate` the map store re-inits
+ * and the markers are appended asynchronously after the units fetch, so a
+ * single read races them — CI attempt 0 found no unobstructed marker and
+ * failed, while the retry passed (issue #1469 §4's race class).
+ */
+async function clickUnitMarker(page: Page): Promise<void> {
+  await expect
+    .poll(() => findClickableMarker(page), {
+      timeout: 15000,
+      message: 'an unobstructed unit marker must be visible on the map',
+    })
+    .not.toBeNull();
+
+  const point = await findClickableMarker(page);
+
+  if (!point) {
+    throw new Error('an unobstructed unit marker must be visible on the map');
+  }
+
+  await page.mouse.click(point.x, point.y);
 }
 
 /**
