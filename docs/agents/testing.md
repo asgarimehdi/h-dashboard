@@ -48,7 +48,7 @@ which is worse than no hook. CI stays the only authority.
 
 Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test database `h_dashboard_test`.
 
-> **✅ Latest full-suite figure: 2478 passed, 2 risky** — from the `composer verify` run reported in PR #1115 (2026-10-17); this stamp is second-hand, so re-derive it before quoting it (rule below). **`composer test`** is the one-command way. It bakes in the three environment gotchas.
+> **✅ Latest full-suite figure:** re-derive with `composer test` and record the `Tests:` line **with the SHA, the date, the PHP version and the status word** (PHPUnit 12 reports `deprecated` instead of `passed` when a deprecation is raised during bootstrap — on PHP 8.5 with `pdo_mysql` loaded, `config/database.php:61` does exactly that). Last measured on `beta @ 5c9f7fbd` (+ this docs-only branch, which changes no PHP), 2026-11-13, PHP 8.5.12: `Tests: 2 risky, 3342 passed (12135 assertions)`, 695.81 s serial — 3,344 runner rows. **`composer test`** is the one-command way. It bakes in the three environment gotchas.
 >
 > Re-derive these numbers with the command this line names — run `composer test` and copy its `Tests:` summary verbatim; never re-stamp a figure you did not just produce. The 2026-10-16 stamp read `2303 passed, 2 risky, 6644 assertions` (~517s serial); the one before it read `1687 passed, 4268 assertions, ~289s serial` (2026-10-01) and had drifted by **+616 tests / +2376 assertions** before anyone noticed (#983).
 >
@@ -57,20 +57,20 @@ Pest is the test runner. Uses **Livewire 4.4**, separate PostgreSQL test databas
 > `2 risky` = tests with no assertions (reported, non-blocking). If a Pest run fails with `database "h_dashboard_test" does not exist` on a handful of tests while the rest pass, it is a transient Postgres hiccup — re-run the file, then the suite.
 
 ### Key test files
-Counts come from `php artisan test <file> --list-tests` — the authoritative per-file number. A plain `grep` for `test(`/`it(` **undercounts**, because PHPUnit-style classes declare tests as `public function test…` with neither wrapper.
+Counts are **method** counts; `php artisan test <file> --list-tests` prints one line per **runner** row (method × `#[DataProvider]` rows) and is the authoritative source. A plain grep is wrong in *both* directions: `test(` also matches `Livewire::test(` (46 vs 21 in `MaintenanceLivewireTest`), and `public function test` also matches stub methods named `testApiConnection()` (13 vs 10 in `ZabbixAdapterTest`). Re-derive with `php artisan test <file> --list-tests | grep -c ' - '` — never hand-count.
 
 | File | Tests | Purpose |
 |---|---|---|
 | `tests/Feature/ApiAbilityTest.php` | 66 | Real Bearer tokens per ability (#690) |
-| `tests/Feature/TodoLivewireTest.php` | 31 | Todo Livewire component |
-| `tests/Feature/PersonsExportTest.php` | 36 | Personnel export (12 columns, filters, breadcrumb) |
-| `tests/Feature/UnitsExportTest.php` | 22 | Units Excel export (8 columns incl. «شهرستان») |
-| `tests/Feature/SyncZabbixObservabilityTest.php` | 8 | `zabbix_sync_logs` rows and the dashboard banner (#740) |
+| `tests/Feature/TodoLivewireTest.php` | 37 | Todo Livewire component |
+| `tests/Feature/PersonsExportTest.php` | 39 | Personnel export (12 columns, filters, breadcrumb) |
+| `tests/Feature/UnitsExportTest.php` | 25 | Units Excel export (8 columns incl. «شهرستان») |
+| `tests/Feature/SyncZabbixObservabilityTest.php` | 10 | `zabbix_sync_logs` rows and the dashboard banner (#740) |
 | `tests/Unit/PersianNormalizerTest.php` | 11 | `normalizeForSearch`, `escapeLikeWildcards`, `normalizeForQuery` |
 | `tests/Feature/SecurityHeadersMiddlewareTest.php` | 12 | Headers incl. `Reporting-Endpoints`; CSP report bodies |
-| `tests/Feature/Jobs/JobsTest.php` | 12 | Archive / clean / generate jobs |
+| `tests/Feature/Jobs/JobsTest.php` | 21 | Archive / clean / generate jobs |
 | `tests/Feature/MaintenanceLivewireTest.php` | 21 | Maintenance schedule CRUD |
-| `tests/Unit/ZabbixAdapterTest.php` | 7 | `ZabbixResult` failure classification with a stub client (#741) |
+| `tests/Unit/ZabbixAdapterTest.php` | 10 | `ZabbixResult` failure classification with a stub client (#741) |
 | `tests/Feature/NotificationApiTest.php` | 6 | Notification API endpoints |
 
 > Per-file counts, not the suite total — use `composer test` output for anything you assert in CI.
@@ -124,7 +124,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | Cache keys collide across tests | Postgres sequences are non-transactional, so `RefreshDatabase` restarts ids at 1 every test. `AccessService` keys on `accessible_units:v{version}:{user_id}:{session_unit_id}:{md5(baseIds)}` — byte-identical across tests, so a stale answer leaks from one test into the next. Put the flush in the base `TestCase::setUp()`, not in a test class — the seeder bump happens in the child's `setUp()`, which runs after `parent::setUp()`, so one flush there covers every class and needs no ordering rule. Never flush inside a test method |
 | Parallel workers get their OWN database | Pest/Laravel creates `h_dashboard_test_test_{1..N}` per worker (`TestDatabases`), so workers do NOT share a database. Verified by listing the databases. If a parallel-only failure appears, suspect shared *in-process* state (cache keys, static properties), not the DB |
 | Testing a cache fix | Assert through the component or the service, never by poisoning a key and expecting it to be ignored — that tests your own poison, not the flush. A test that only passes in isolation is asserting `setUp`, not the fix; assert the behaviour a user sees |
-| Factories | **15 factories** exist under `database/factories/` — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` DOES use `HasFactory`** (`/** @use HasFactory<TicketFactory> */ use HasFactory, HasOrganizationalScope;`), so `Ticket::factory()` works and `TicketFactory` is live — **18** `Ticket::factory()` calls across `tests/Feature/TicketWorkflowTest.php` (14) and `tests/Feature/TicketStatusTransitionTest.php` (4). The row that used to claim otherwise was wrong and told agents to delete a working factory (#983). `Ticket::create([...])` (as in `TicketsInboxLivewireTest`) is still fine where a test wants explicit columns, not because the factory is dead. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
+| Factories | **18 factories** exist under `database/factories/` (`ls database/factories/*.php \| wc -l`) — do not hand-roll inserts or claim only `UserFactory` exists. **`Ticket` DOES use `HasFactory`** (`/** @use HasFactory<TicketFactory> */ use HasFactory, HasOrganizationalScope;`), so `Ticket::factory()` works and `TicketFactory` is live — **23** `Ticket::factory()` calls across five files (`tests/Feature/TicketWorkflowTest.php` 14, `tests/Feature/TicketStatusTransitionTest.php` 4, `tests/Feature/CacheVersionMigration1348Test.php` 2, `tests/Feature/ReportsAdvancedAggregateParityTest.php` 2, `tests/Feature/BackupFullRestoreTest.php` 1; `grep -rno 'Ticket::factory()' tests/ \| wc -l`) — re-derive, never hand-count. The row that used to claim otherwise was wrong and told agents to delete a working factory (#983). `Ticket::create([...])` (as in `TicketsInboxLivewireTest`) is still fine where a test wants explicit columns, not because the factory is dead. `created_at` is not fillable, so a back-dated ticket needs `forceFill(['created_at' => ...])->save()` |
 | An exported `DB_DATABASE` beats `phpunit.xml` | The `DB_*` `<env>` entries in `phpunit.xml` have no `force="true"`, so PHPUnit skips them when the variable already exists (`PhpHandler.php:140`). `DB_URL` is not in `phpunit.xml` at all and outranks everything. `php artisan verify:preflight` resolves the real value — read `.env` or `phpunit.xml` directly and you will check the wrong database |
 | `expectsOutputToContain` matches ONE line per expectation | `PendingCommand`'s buffered mock consumes a written line with the first substring that matches it, so two substrings on the same line can never both be asserted. Put each claim on its own output line |
 | `assertStringNotContainsString` returns void | Chaining `->and()` after it dies with "Call to a member function and() on null". Same for `assertMatchesRegularExpression` — use separate statements |
@@ -156,13 +156,13 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 
 > Derivation, re-run after any workflow change — no hand count:
 > ```bash
-> yq -r '.jobs | keys_unsorted | join(", ")' .github/workflows/test.yml              # lint, js-lint, test, coverage-report, typecheck, js-typecheck, e2e, csp-enforcing, smoke, mutation, phpstan, test-php86
+> yq -r '.jobs | keys | join(", ")' .github/workflows/test.yml              # lint, js-lint, test, coverage-report, typecheck, js-typecheck, e2e, csp-enforcing, smoke, mutation, phpstan, test-php86
 > yq -r '.jobs | to_entries | map(select(.value."continue-on-error" != true) | .key) | join(", ")' .github/workflows/test.yml   # lint, js-lint, test, js-typecheck, csp-enforcing, smoke, phpstan
 > ```
 
 ## Derivable invariants (stamp hygiene, #983)
 
-- `InteractsWithTestSetup` usage is counted by `grep -rlE 'use[^;]*InteractsWithTestSetup[^;]*;' tests/ | wc -l` (110 at the #983 stamp) — a bare `grep -rl 'InteractsWithTestSetup'` also matches the trait file itself and reads 111. Re-derive, never hand-count.
-- Every Feature test consumes the shared trait (see `tests/Feature/ApiAbilityTest.php` for the standard `setUp()` — `PermissionSeeder` + `seedLookupTables()`).
+- `InteractsWithTestSetup` usage is counted by `grep -rlE 'use[^;]*InteractsWithTestSetup[^;]*;' tests/ | wc -l` (**214** on `beta @ 5c9f7fbd`, 2026-11-13; the #983 stamp read 110) — a bare `grep -rl 'InteractsWithTestSetup'` also matches the trait file itself and reads 215. Re-derive, never hand-count.
+- **214 of the 268** `tests/Feature/**/*Test.php` files consume the shared trait; the other **54** do not (`AppKeyGuardWiringTest`, `LoginLivewireTest`, `Jobs/SendNotificationJobTest`, …), so "every Feature test" is not a rule — re-derive with `comm -23 <(find tests/Feature -name '*Test.php' | sort) <(grep -rlE 'use[^;]*InteractsWithTestSetup[^;]*;' tests/ | sort) | wc -l`. The standard `setUp()` lives in `tests/Feature/ApiAbilityTest.php` — `PermissionSeeder` + `seedLookupTables()`.
 - Hand-rolled lookup seeding is **ratcheted at 0** (#1044): `php scripts/find-hand-rolled-lookup-seeding.php`, wired into `composer verify` as step 3c. A test file containing `DB::table('tahsils'|'estekhdams'|'semats'|'radifs')->insert` must also consume `InteractsWithTestSetup` (or call `seedLookupTables()`), otherwise the guard exits 1. A file that legitimately needs an *extra* lookup row may keep an explicit insert as long as it uses the trait too. The trait's own contract is pinned by `tests/Feature/InteractsWithTestSetupTest.php`.
-- All **26** Eloquent models under `app/Models/` carry `@property` PHPDoc annotations (#671) — update the annotation when a column/cast changes; PHPStan level 6 + baseline depends on them.
+- All **31** Eloquent models under `app/Models/` (`ls app/Models/*.php | wc -l`) carry `@property` PHPDoc annotations (#671) — update the annotation when a column/cast changes; PHPStan level 6 + baseline depends on them.
