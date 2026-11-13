@@ -7,10 +7,13 @@
  * ---------------
  * No `@script` body can execute under the CSP-safe Alpine build (the
  * CSP expression parser cannot parse Livewire's IIFE wrapper). The
- * two bodies below are plain JS that only ever ran because `@script`
+ * bodies below are plain JS that only ever ran because `@script`
  * evaluated them outside the parser. They move here with mechanical
  * translations:
  *
+ * - The traffic chart's `x-data` called `initTrafficChart(...)` as a
+ *   global too — the same dead call, missed in the first wave and
+ *   fixed in #1469 (`registerTrafficChart`).
  * - The gauge template called the factory as a global function in
  *   its `x-data` (`window.signalGauge(...)`). Global-function calls
  *   in directives are DEAD under the CSP build (Step-1 global-call
@@ -167,6 +170,157 @@ export function registerSignalGauge(Alpine) {
       const at = state.subscribers.indexOf(this.bound);
       if (at !== -1) {
         state.subscribers.splice(at, 1);
+      }
+    },
+  }));
+}
+
+/**
+ * Traffic chart factory (#1469), the same migration as `signalGauge` above.
+ *
+ * The chart template called `initTrafficChart(...)` as a global in its
+ * `x-data`, which is DEAD under the CSP build (no `window` globals are
+ * visible to the expression parser: `Undefined variable: initTrafficChart`).
+ * No chart was created, no fetch ran, and `error` was never set — 25 blank
+ * charts on /it/networks, including the #703 friendly message. The factory is
+ * an `Alpine.data('trafficChart')` registration now; the item ids, the title
+ * and the initial duration move to `data-*` and are read in `init()`. The
+ * object shape — `start`/`reload`/`load`/`destroy` and the #703 mapping — is
+ * verbatim.
+ *
+ * @param {AlpineStatic} Alpine
+ */
+export function registerTrafficChart(Alpine) {
+  Alpine.data('trafficChart', () => ({
+    outItemId: '',
+    inItemId: '',
+    chartTitle: '',
+    duration: 3600,
+    loading: false,
+    /** @type {string | null} */
+    error: null,
+    /** @type {any} */
+    chart: null,
+    /** @type {ReturnType<typeof setInterval> | null} */
+    timer: null,
+
+    init() {
+      const ds = this.$el.dataset;
+      this.outItemId = ds.outItemId || '';
+      this.inItemId = ds.inItemId || '';
+      this.chartTitle = ds.title || 'Traffic';
+      const duration = parseInt(ds.duration ?? '', 10);
+      this.duration = Number.isFinite(duration) ? duration : 3600;
+
+      this.start();
+    },
+
+    start() {
+      this.$nextTick(() => {
+        const container = this.$refs.container;
+        if (!container) {
+          return;
+        }
+
+        container.innerHTML = '';
+
+        this.chart = Highcharts.chart(container, {
+          chart: {
+            type: 'spline',
+            backgroundColor: 'transparent',
+            animation: false,
+          },
+          title: {
+            text: this.chartTitle,
+            style: { color: 'var(--color-primary)' },
+          },
+          xAxis: { type: 'datetime' },
+          yAxis: { title: { text: 'Mbps' } },
+          tooltip: { valueSuffix: ' Mbps' },
+          credits: { enabled: false },
+          accessibility: { enabled: false },
+          series: [
+            {
+              name: 'Outgoing',
+              data: [],
+              color: 'var(--color-warning)',
+            },
+            {
+              name: 'Incoming',
+              data: [],
+              color: 'var(--color-primary)',
+            },
+          ],
+        });
+
+        this.load();
+        // ۶۰ ثانیه، نه ۱۰: هر نمودار یک درخواست به `/api/zabbix/traffic`
+        // می‌زند و این مسیر زیر `throttle:api-user` است (۶۰ درخواست در
+        // دقیقه برای کل کاربر). با ۲۵ شبکه و چرخهٔ ۱۰ ثانیه‌ای یعنی
+        // ۱۵۰ درخواست در دقیقه و ۴۲۹ قطعی. بازهٔ زمانی نمودار از ۳۰
+        // دقیقه شروع می‌شود، پس تازه‌سازی دقیقه‌ای کافی است.
+        this.timer = setInterval(() => this.load(), 60000);
+      });
+    },
+
+    reload() {
+      this.load(true);
+    },
+
+    /** @param {boolean} [show] */
+    async load(show = false) {
+      if (!this.chart) {
+        return;
+      }
+      if (show) {
+        this.loading = true;
+      }
+      this.error = null;
+
+      try {
+        const url = `/api/zabbix/traffic?out_item_id=${this.outItemId}&in_item_id=${this.inItemId}&duration=${this.duration}`;
+        const res = await fetch(url);
+
+        // #703: 503 means Zabbix is unreachable — show the requested
+        // friendly message, not a silent empty chart. Other statuses
+        // keep their existing behaviour so real bugs stay visible.
+        if (res.status === 503) {
+          this.error = 'دسترسی به سرور مقدور نمی باشد';
+          return;
+        }
+
+        const data = await res.json();
+
+        if (this.chart && this.chart.series) {
+          this.chart.series[0].setData(data.out || [], false);
+          this.chart.series[1].setData(data.in || [], false);
+          this.chart.redraw(false);
+        }
+      } catch (e) {
+        console.error(e);
+
+        // #703: a TypeError means the request never reached the
+        // server (offline / network down) — the same condition.
+        if (e instanceof TypeError) {
+          this.error = 'دسترسی به سرور مقدور نمی باشد';
+          return;
+        }
+
+        this.error = 'خطا در دریافت داده‌های ترافیک';
+      } finally {
+        if (show) {
+          this.loading = false;
+        }
+      }
+    },
+
+    destroy() {
+      if (this.timer) {
+        clearInterval(this.timer);
+      }
+      if (this.chart) {
+        this.chart.destroy();
+        this.chart = null;
       }
     },
   }));

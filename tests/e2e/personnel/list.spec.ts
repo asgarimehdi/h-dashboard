@@ -58,9 +58,11 @@ test.describe('personnel list', () => {
     const sematFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
     await sematFilter;
-    const rows = await page.locator('table tbody tr').count();
-    expect(rows).toBeGreaterThan(0);
-    expect(rows).toBeLessThanOrEqual(20);
+    // The response resolves before Livewire morphs the DOM, so every DOM read
+    // below polls until the morph lands instead of reading once.
+    const rows = page.locator('table tbody tr');
+    await expect.poll(() => rows.count()).toBeGreaterThan(0);
+    await expect.poll(() => rows.count()).toBeLessThanOrEqual(20);
   });
 
   test('filter by tahsil narrows results', async ({ page }) => {
@@ -70,7 +72,7 @@ test.describe('personnel list', () => {
     const tahsilFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_t_id"]').selectOption({ index: 2 });
     await tahsilFilter;
-    expect(await page.locator('table tbody tr').count()).toBe(0);
+    await expect(page.locator('table tbody tr')).toHaveCount(0);
   });
 
   test('clear filters restores full list', async ({ page }) => {
@@ -80,14 +82,13 @@ test.describe('personnel list', () => {
     const sematFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
     await sematFilter;
-    const filteredRows = await page.locator('table tbody tr').count();
-    expect(filteredRows).toBeLessThanOrEqual(20);
+    await expect.poll(() => page.locator('table tbody tr').count()).toBeLessThanOrEqual(20);
 
     const clearFilters = waitForLivewire(page);
     await page.locator('button:has-text("پاک کردن فیلترها")').first().click();
     await clearFilters;
     await expect(page.locator('.mary-table-pagination')).toContainText('نمایش');
-    expect(await page.locator('table tbody tr').count()).toBe(20);
+    await expect(page.locator('table tbody tr')).toHaveCount(20);
   });
 
   test('export link carries the active filters', async ({ page }) => {
@@ -97,19 +98,23 @@ test.describe('personnel list', () => {
     const link = page.locator(`a[href*="/kargozini/persons/export"]`);
     await expect(link).toHaveCount(1);
 
-    const before = new URL((await link.getAttribute('href'))!, page.url());
-    expect(before.searchParams.get('search')).toBeNull();
+    const hrefParam = async (name: string) =>
+      new URL((await link.getAttribute('href'))!, page.url()).searchParams.get(name);
+
+    expect(await hrefParam('search')).toBeNull();
 
     const exportSearch = waitForLivewire(page);
     await page.locator('input[placeholder^="جستجو"]').first().fill('عسگری');
     await exportSearch;
 
-    const after = new URL((await link.getAttribute('href'))!, page.url());
-    expect(after.searchParams.get('search')).toBe('عسگری');
+    await expect.poll(async () => hrefParam('search')).toBe('عسگری');
   });
 
   test('export link is cleared by the reset-filters button', async ({ page }) => {
     const link = page.locator(`a[href*="/kargozini/persons/export"]`);
+
+    const hrefParam = async (name: string) =>
+      new URL((await link.getAttribute('href'))!, page.url()).searchParams.get(name);
 
     const filterPanel = waitForLivewire(page);
     await page.locator(FILTER_BTN).click();
@@ -117,11 +122,11 @@ test.describe('personnel list', () => {
     const sematFilter = waitForLivewire(page);
     await page.locator('select[wire\\:model\\.live="filter_s_id"]').selectOption({ index: 1 });
     await sematFilter;
-    expect(new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('filter_s_id')).toBeTruthy();
+    await expect.poll(async () => hrefParam('filter_s_id')).toBeTruthy();
 
     const clearFilters = waitForLivewire(page);
     await page.locator('button:has-text("پاک کردن فیلترها")').first().click();
     await clearFilters;
-    expect(new URL((await link.getAttribute('href'))!, page.url()).searchParams.get('filter_s_id')).toBeNull();
+    await expect.poll(async () => hrefParam('filter_s_id')).toBeNull();
   });
 });

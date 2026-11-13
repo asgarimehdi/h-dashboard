@@ -51,6 +51,9 @@ test-results/
 blob-report/
 playwright/.cache/
 .server.pid
+# #1469 §5: the e2e job's machine-readable report + human log
+e2e-results.json
+e2e-list.log
 
 # Debug/log files
 install.log
