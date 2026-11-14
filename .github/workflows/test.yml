@@ -656,7 +656,9 @@ jobs:
         # it took 29.5s on a slow local VM, so the 30s default is marginal
         # even before CI variance. The timeout is harness headroom, not a
         # spec change.
-        run: bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts tests/e2e/settings/browser-notifications.spec.ts tests/e2e/settings/csp-probe.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
+        run: |
+          set -o pipefail
+          bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts tests/e2e/settings/browser-notifications.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
 
       - name: Assert the gate specs really executed
         run: |
@@ -665,6 +667,7 @@ jobs:
           grep -qE '[0-9]+ passed' csp-gate-list.log
           grep -q 'tests/e2e/settings/browser-notifications.spec.ts' csp-gate-list.log
           test "${EXECUTED}" -gt 0
+          if grep -q '✘' csp-gate-list.log; then echo "CSP gate: failing tests present in csp-gate-list.log"; exit 1; fi
 
   smoke:
     name: Smoke Tests (actions)
