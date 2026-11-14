@@ -226,4 +226,3 @@ test.describe('daily window is materialised', () => {
         '1403/10/07',
       ]);
   });
-});
