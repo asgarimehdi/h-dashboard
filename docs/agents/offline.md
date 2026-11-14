@@ -46,7 +46,7 @@ row carries `file:line` and local/external, never a general description.
 | 7 | `resources/js/map-store.js:108` | map tile (fallback) | literal `https://{s}.tile.openstreetmap.org/...` | **external, dead but risky** | `TILE_URL_TEMPLATE` (always set today; phase 2 removes the literal) |
 | 8 | `resources/views/livewire/maps/map.blade.php:12,56` | map tile | `tileUrl` handed to the store; OSM literal as the `config()` fallback | external by default | `TILE_URL_TEMPLATE` |
 | 9 | `resources/views/livewire/units/map.blade.php:229,234` | map tile | `config('map.tile_url_template')` | **external (OSM by default)** | `TILE_URL_TEMPLATE` |
-| 10 | `config/map.php:7-20` | definition | `TILE_SERVER_IP/PORT/SCHEME`, `tile_url` (no consumer), `tile_url_template` | source of truth | env |
+| 10 | `config/map.php:4-10` | definition | `tile_url_template` | source of truth | `TILE_URL_TEMPLATE` |
 | 11 | `resources/views/livewire/maps/route.blade.php:64-65,83` | JS + fetch | Leaflet/LRM local; OSRM `config('map.routing_url')`; dead OSM literal at `:13` | local/internal (OSM literal unused) | `ROUTING_SERVER_*` |
 | 12 | `resources/views/livewire/maps/route2.blade.php:97-98,156,181` | JS + fetch | Leaflet/LRM local; geocoding `config('map.geocoding_url')`; OSRM; dead OSM literal at `:19` | local/internal (OSM literal unused) | `GEOCODING_SERVER_*`, `ROUTING_SERVER_*` |
 | 13 | `resources/views/livewire/map/map-dashboard.blade.php:614,672,914,924` | fetch | `/api/gis/*` (same origin) | local | — |
@@ -109,14 +109,13 @@ grep -rnE "(src|href)=[\"'](https?:)?//" resources/views
 # 2) every external URL in shipped code (no vendor/build)
 grep -rnE "https?://" resources/views resources/js resources/css config
 
-# 3) tile consumers (skip bootstrap/cache — it is an artifact)
+# 3) tile consumers (skip bootstrap/cache — it is an artifact); a retired key here is a regression
 grep -rnE "tile_url_template|tile_url|tile_server" config resources app routes tests
 
-# 4) prove tile_url has no consumer
-#    NOTE: the plan's spelling `grep -rn "map[.]tile_url" ...` also matches
-#    `map.tile_url_template` (tile_url is a prefix of it) and is therefore NOT empty.
-#    Add a word boundary — underscores are word characters, so \b excludes _template:
-grep -rnE "map[.]tile_url\b" app resources routes tests config   # expected: empty
+# 4) retired tile keys stay retired (#1508 removed tile_server_ip/port/scheme and tile_url)
+#    NOTE: match `map.tile_url` with a word boundary — underscores are word characters,
+#    so \b excludes the live `map.tile_url_template` (tile_url is its prefix):
+grep -rnE "TILE_SERVER_|map[.]tile_url\b" config resources app routes tests .env*   # expected: empty
 
 # 5) network defaults inside vendored libraries
 grep -o -E "router[.]project-osrm[.]org|api[.]mapbox[.]com" public/js/leaflet/leaflet-routing-machine.min.js | sort -u
@@ -181,9 +180,10 @@ after a hard load of each page:
   tile is only reported; if CSP is ever enforced, `http` tiles and the geocoding fetch
   to `127.0.0.1:8088` are blocked. The exact header is pinned in
   `tests/Feature/SecurityHeadersMiddlewareTest.php:34` — changing it breaks the test.
-- **`TILE_SERVER_IP/PORT/SCHEME` are inert.** `config/map.php:10-14` builds `tile_url`
-  from them and nothing consumes it. Changing only `TILE_SERVER_IP` leaves every map on
-  OSM with no error. The only lever is `TILE_URL_TEMPLATE`.
+- **`TILE_SERVER_IP/PORT/SCHEME` and `tile_url` were inert and are retired (#1508).** They built
+  `map.tile_url`, which nothing consumed; changing only `TILE_SERVER_IP` left every map on
+  OSM with no error. `config/map.php` now carries only `tile_url_template`, whose single lever
+  is `TILE_URL_TEMPLATE`.
 - **`/op` CDN and the `Swal` bug need their own issues** (owner decision, 2026-10-28).
   `app.blade.php:402` really is a comment, yet `Swal.fire` is called at `:412` with no
   other provider anywhere in source or `public/build/assets`; the `swal` listener throws
@@ -205,8 +205,8 @@ attribution text) is closed — tracked as its own issue, not opened as of 2026-
 Nothing in phase 2 runs before that: not the `TILE_URL_TEMPLATE` change, not the
 `map-store.js` fallback removal, not the map e2e stub change.
 
-When it does start, the only real lever is `TILE_URL_TEMPLATE` — **not**
-`TILE_SERVER_IP/PORT/SCHEME` — and acceptance is "zero requests to
+When it does start, the only lever is `TILE_URL_TEMPLATE` (`TILE_SERVER_IP/PORT/SCHEME` were
+retired in #1508) — and acceptance is "zero requests to
 `tile.openstreetmap.org`", not "the map rendered". The preferred topology is a
 same-origin proxy (`TILE_URL_TEMPLATE=/tiles/{z}/{x}/{y}.png` with an nginx
 `proxy_pass`) so the future `img-src 'self'` CSP, HTTPS pages and HSTS

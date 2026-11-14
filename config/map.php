@@ -2,16 +2,6 @@
 
 return [
     // ── Tile / basemap server (سرور تایل / نقشه) ──
-    // Host may be an IP or hostname. Leave TILE_SERVER_PORT empty for the scheme default.
-    // Scheme is https for OpenStreetMap; use http + port 8080 on the on-prem tile server.
-    'tile_server_ip' => env('TILE_SERVER_IP', 'tile.openstreetmap.org'),
-    'tile_server_port' => env('TILE_SERVER_PORT'),
-    'tile_server_scheme' => env('TILE_SERVER_SCHEME', 'https'),
-    'tile_url' => rtrim(
-        env('TILE_SERVER_SCHEME', 'https').'://'.env('TILE_SERVER_IP', 'tile.openstreetmap.org')
-        .(env('TILE_SERVER_PORT') ? ':'.env('TILE_SERVER_PORT') : ''),
-        '/'
-    ),
     // Full tile URL template (the on-prem server uses /tile/{z}/{x}/{y}.png, OSM uses
     // https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png). Keep the {z}/{x}/{y} tokens.
     'tile_url_template' => env(
