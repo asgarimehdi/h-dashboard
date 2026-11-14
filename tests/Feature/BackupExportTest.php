@@ -8,6 +8,7 @@ use App\Support\Backup\TableRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -254,22 +255,35 @@ test('a table payload is encoded byte for byte in the pinned canonical form', fu
 });
 
 test('a failing table read leaves no temp file behind', function () {
-    $directory = storage_path('app/private/backup');
-    $before = glob($directory.'/*') ?: [];
+    // Paratest runs this file in 4 processes against ONE shared
+    // storage/app/private/backup, and a concurrent `exportAll()` stages its own
+    // `.part` files there — so the directory-wide diff below saw foreign files
+    // (the leftovers that broke CI all shared a single foreign run id) and
+    // failed at random. Give this test its own storage root: then the diff can
+    // only ever see files this export created.
+    $storageRoot = sys_get_temp_dir().'/h-dashboard-backup-'.getmypid().'-'.uniqid();
+    $this->app->useStoragePath($storageRoot);
 
-    // The first table is read and staged, the second one does not exist, so
-    // the export fails after it already wrote a temp file.
-    $this->app->instance(TableRegistry::class, new class extends TableRegistry
-    {
-        public function tables(): array
+    try {
+        $directory = storage_path('app/private/backup');
+        $before = glob($directory.'/*') ?: [];
+
+        // The first table is read and staged, the second one does not exist, so
+        // the export fails after it already wrote a temp file.
+        $this->app->instance(TableRegistry::class, new class extends TableRegistry
         {
-            return ['hardwares', 'a_table_that_does_not_exist'];
-        }
-    });
+            public function tables(): array
+            {
+                return ['hardwares', 'a_table_that_does_not_exist'];
+            }
+        });
 
-    expect(fn () => app(BackupService::class)->exportAll())->toThrow(QueryException::class);
+        expect(fn () => app(BackupService::class)->exportAll())->toThrow(QueryException::class);
 
-    expect(array_values(array_diff(glob($directory.'/*') ?: [], $before)))->toBe([]);
+        expect(array_values(array_diff(glob($directory.'/*') ?: [], $before)))->toBe([]);
+    } finally {
+        File::deleteDirectory($storageRoot);
+    }
 });
 
 test('a failure while zipping the staged files leaves no partial archive behind', function () {
