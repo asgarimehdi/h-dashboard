@@ -27,12 +27,12 @@ test.describe('daily window is materialised', () => {
     ).trim();
 
     // A throwaway account whose unit is created after `migrate:fresh --seed`
-    // owns no todos at all. That is the only scope where "a day with zero rows"
-    // is a fact instead of a draw: TodoSeeder only writes days of the *current*
-    // month, so from the 14th onward a 14-day window can be fully covered and
-    // "some day is zero" turned into a calendar-dependent coin flip (#1485).
-    // On an empty scope a plain GROUP BY returns no days at all, so a full
-    // window of zeros is the decisive proof that the days are materialised.
+    // owns no todos and no tickets. On an empty scope a plain GROUP BY returns
+    // no days at all, so a full window of zeros is the decisive proof that the
+    // window materialised the days, not the rows — and it does not depend on
+    // how the seed happened to fall. (`TodoSeeder` spreads 50 todos over the
+    // last 60 days and skips Fridays — TodoSeeder.php:29, :90, :97-99 — and the
+    // ticket seed geometry is described next to the ticket tests below.)
     const nCode = `8${Date.now().toString().slice(-7)}${String(
       Math.floor(Math.random() * 100),
     ).padStart(2, '0')}`;
@@ -71,6 +71,16 @@ test.describe('daily window is materialised', () => {
     expect(points).toBeGreaterThan(0);
   });
 
+  /**
+   * Ticket seed geometry (TicketSeeder.php:51, :60, :74-75): 50 tickets dated
+   * `now()->subMonths(3)` + rand(0, 90) days, so the last seeded day lands
+   * between today-2 and today+1. On ~75% of calendar dates that leaves the tail
+   * of a 7/30-day window outside the seed and a zero day is structural, but
+   * from March to May every day of both windows is reachable and a lucky draw
+   * can fill them (worst case ~1 in 518 runs for days=7). Never assert
+   * `some(count === 0)` on 7/30 here — the zero-fill contract is pinned by the
+   * 365-day window and the empty scope below instead.
+   */
   test('GET /api/reports/tickets returns a full window of days', async ({ request }) => {
     const response = await request.get('/api/reports/tickets', {
       headers: { Authorization: `Bearer ${token}` },
@@ -80,9 +90,7 @@ test.describe('daily window is materialised', () => {
     const body = await response.json();
 
     expect(body.by_day).toHaveLength(30);
-    // Zero-filled days exist, not only the days that have rows.
     expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
-    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
 
     // Ascending, oldest first.
     const days = body.by_day.map((d: any) => d.day);
@@ -98,6 +106,40 @@ test.describe('daily window is materialised', () => {
     const body = await response.json();
 
     expect(body.by_day).toHaveLength(7);
+    const days = body.by_day.map((d: any) => d.day);
+    expect(new Set(days).size).toBe(7);
+    expect(days).toEqual([...days].sort());
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+  });
+
+  test('GET /api/reports/tickets?days=30 on an empty scope returns thirty zeros', async ({ request }) => {
+    // Same proof as the todos block: a plain GROUP BY over zero rows returns no
+    // days at all, so a full window of zeros shows the window materialised the
+    // days, not the rows.
+    const empty = await request.get('/api/reports/tickets?days=30', {
+      headers: { Authorization: `Bearer ${emptyScopeToken}` },
+    });
+    expect(empty.ok()).toBeTruthy();
+    const body = await empty.json();
+    expect(body.by_day).toHaveLength(30);
+    expect(body.by_day.every((d: any) => d.count === 0)).toBeTruthy();
+    expect(body.total).toBe(0);
+  });
+
+  test('GET /api/reports/tickets?days=365 keeps a zero for a day with no tickets', async ({ request }) => {
+    const response = await request.get('/api/reports/tickets?days=365', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+    // 365 is DailySeries::MAX_DAYS and TicketSeeder can only reach 91 days back
+    // (TicketSeeder.php:51,60), so empty days exist whatever the date. The sum is
+    // `<= total`, not `=== total`: the seed's window can end one day AFTER today
+    // on ~8.5% of dates, and a future-dated ticket is counted by `total` but sits
+    // outside a window that ends today (ReportController.php:125 vs :128).
+    expect(body.by_day).toHaveLength(365);
+    expect(body.total).toBeGreaterThan(0);
+    expect(body.by_day.reduce((n: number, d: any) => n + d.count, 0)).toBeLessThanOrEqual(body.total);
     expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
   });
 
@@ -130,14 +172,15 @@ test.describe('daily window is materialised', () => {
     expect(days).toEqual([...days].sort());
     expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
 
-    // Deliberately NOT asserting a zero-count day on the seeded window:
-    // `TodoSeeder` scatters 50 random todos over the current month's days
-    // 1..28, so every day of a narrow window can legitimately have rows.
-    // That randomness failed this test on unrelated branches (run 43564479894,
-    // 2026-11-14) and the retries reuse the same seeded database, so it
-    // reported `failed`, not `flaky`. The zero-fill contract is pinned on the
-    // empty scope above and on a window that cannot be fully covered — see
-    // the next test.
+    // Deliberately NOT asserting a zero-count day on the seeded window: the
+    // zero-fill contract is pinned on the empty scope above, which does not
+    // depend on the seed geometry. `TodoSeeder` now spreads 50 todos over the
+    // last 60 days and skips Fridays (TodoSeeder.php:29, :90, :97-99), so a
+    // 7+ day window does contain a zero day — but that is the seeder's shape,
+    // not this endpoint's contract. The pre-#1495 seeder (current month, days
+    // 1..28) made this a calendar-dependent coin flip and failed run
+    // 43564479894; retries reuse the same seeded database, so it was reported
+    // `failed`, not `flaky`.
   });
 
   test('GET /api/reports/todos?days=365 keeps a zero for a day with no todos', async ({ request }) => {
