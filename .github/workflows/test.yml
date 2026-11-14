@@ -4,10 +4,10 @@ on:
   pull_request:
     branches: [main, beta, test]
   # The `mutation` job below runs on PRs too (re-enabled 2026-10-25,
-  # reversing the manual-only gate from #1012): it runs in parallel under
-  # E2E's ~30-minute shadow and gates nothing (`continue-on-error: true`).
-  # A manual run executes every job, so read the mutation job's own result,
-  # not the run's overall conclusion.
+  # reversing the manual-only gate from #1012) and blocks since #1502
+  # (`--min=41`): it runs in parallel with E2E, so while green it adds no
+  # wall time. A manual run executes every job, so read the mutation job's
+  # own result, not the run's overall conclusion.
   workflow_dispatch:
 
 concurrency:
@@ -788,16 +788,18 @@ jobs:
   mutation:
     name: Mutation Testing
     # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
-    # gate from #1012): each run is expensive (checkout, composer install
-    # and migrations before the single `pest --mutate` line below, ~30
-    # minutes as of 2026-10-28), but it runs in parallel with E2E and
-    # gates nothing (`continue-on-error: true`), so it adds no wall time.
+    # gate from #1012) and blocks since #1502: each run is expensive
+    # (checkout, composer install and migrations before the single
+    # `pest --mutate` line below, ~30 minutes as of 2026-10-28), but it
+    # runs in parallel with E2E, so while it is green it adds no wall time.
+    # `--min=41` is a ratchet on the measured beta floor (41.84%,
+    # 359/858 mutants on 46f9cbc): raise it as coverage lands, never lower
+    # it without an open tracking issue.
     # Cap 45 minutes (raised from 30 on 2026-10-28 after the job hit the
     # 30-minute timeout on #1270 and #1271).
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Non-blocking: the score is informational and gates nothing.
-    continue-on-error: true
+    # Blocking: a score below the threshold fails this job and the PR.
 
     services:
       postgres:
@@ -866,9 +868,10 @@ jobs:
 
       - name: Run mutation tests
         # @covers declarations scope mutations to tested code.
-        # No --min threshold: the job is informational (continue-on-error: true)
-        # and reports the mutation score without blocking PRs.
-        run: ./vendor/bin/pest --mutate --parallel --covered-only
+        # `--min=41` is a ratchet on the measured beta floor (41.84% on
+        # 46f9cbc, #1502). The `=` is load-bearing: a bare `--min 41` is
+        # swallowed by Pest's coverage plugin, the gate never arms.
+        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=41
 
   phpstan:
     name: PHPStan Static Analysis
@@ -919,8 +922,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Informational only: PHP 8.6 is pre-release (RC3 2026-10-08, GA 2026-11-19).
-    # Same precedent as the mutation job — never blocks a merge; it surfaces
-    # 8.6 incompatibilities and deprecations while there is still time to fix them.
+    # It never blocks a merge; it surfaces 8.6 incompatibilities and
+    # deprecations while there is still time to fix them.
     continue-on-error: true
 
     services:
