@@ -89,8 +89,34 @@ test.describe('daily window is materialised', () => {
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
 
+    // Materialised, not sparse: a day without todos must be a zero row, so a
+    // correct response always carries one entry per day of the window. A gap
+    // would shorten the series, which `toHaveLength` and the strictly
+    // increasing (duplicate-free) day list both catch.
     expect(body.by_day).toHaveLength(14);
-    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+
+    const days = body.by_day.map((d: any) => d.day);
+    expect(days).toEqual([...days].sort());
+    expect(new Set(days).size).toBe(14);
+
+    // The zero-count witness needs a day the seed cannot have filled. TodoSeeder
+    // spreads 50 todos over the days of the CURRENT month that are not in the
+    // future, and from mid-month on that span covers this whole 14-day window —
+    // so "some day is zero" flipped with the seeder's RNG and failed the job on
+    // 2026-11-14 with all 14 days populated. A 90-day window always reaches past
+    // the month start, where the seed writes nothing. The same contract is also
+    // pinned deterministically in
+    // `ReportsByDayRangeTest::test_todos_by_day_fills_empty_days`.
+    const wide = await request.get('/api/reports/todos?days=90', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(wide.ok()).toBeTruthy();
+    const wideBody = await wide.json();
+
+    expect(wideBody.by_day).toHaveLength(90);
+    expect(wideBody.by_day.some((d: any) => d.count === 0)).toBeTruthy();
   });
 
   test('GET /api/reports/tickets?days=0 is rejected', async ({ request }) => {
