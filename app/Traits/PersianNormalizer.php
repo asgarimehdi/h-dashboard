@@ -118,7 +118,7 @@ trait PersianNormalizer
      * expression, so a plain column index cannot serve it.
      *
      * The expression is therefore mirrored in GIN trigram indexes by
-     * `2026_10_20_000001_add_folded_trgm_indexes_to_tickets_search.php` (and,
+     * `2026_10_20_000002_add_folded_trgm_indexes_to_tickets_search.php` (and,
      * for other tickets-era call sites, by their own migrations). Those indexes
      * must be recreated whenever `charMap()`/`digitMap()` change: the index is
      * keyed on this exact expression, so a changed map leaves it silently
