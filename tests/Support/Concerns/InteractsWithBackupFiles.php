@@ -4,6 +4,8 @@ namespace Tests\Support\Concerns;
 
 use App\Support\Backup\TableRegistry;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use RuntimeException;
 use ZipArchive;
 
@@ -17,6 +19,51 @@ use ZipArchive;
  */
 trait InteractsWithBackupFiles
 {
+    /**
+     * Root of this test's private storage path, when one is in use.
+     */
+    protected ?string $isolatedStorageRoot = null;
+
+    /**
+     * Point `storage_path()` at a directory only this test can see.
+     *
+     * Every backup test writes into the same real
+     * `storage/app/private/backup` directory, and CI runs the suite in four
+     * parallel workers. A test that asserts "the export left no file behind"
+     * by globbing that directory therefore also sees the files another worker
+     * is staging at the same moment — the PHP 8.6 preview job failed exactly
+     * that way, with three `*.json.part` files staged by a concurrent export
+     * (`BackupExportTest`, `a failing table read leaves no temp file behind`).
+     *
+     * Isolating the storage root leaves the export under test as the only
+     * writer, which is race-free and a stricter check than diffing a shared
+     * directory.
+     */
+    protected function useIsolatedBackupStorage(): void
+    {
+        // Resolved BEFORE the override, so the root sits under the real
+        // storage tree (`storage/framework/testing` is gitignored).
+        $root = storage_path('framework/testing/backup-'.Str::random(12));
+
+        File::ensureDirectoryExists($root.'/app/private/backup');
+
+        $this->isolatedStorageRoot = $root;
+        $this->app->useStoragePath($root);
+    }
+
+    /**
+     * Remove this test's private storage root, if it has one.
+     */
+    protected function removeIsolatedBackupStorage(): void
+    {
+        if ($this->isolatedStorageRoot === null) {
+            return;
+        }
+
+        File::deleteDirectory($this->isolatedStorageRoot);
+        $this->isolatedStorageRoot = null;
+    }
+
     /**
      * Every entry of a zip: entry name => raw contents.
      *
