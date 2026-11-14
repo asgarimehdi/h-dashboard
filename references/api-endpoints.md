@@ -647,7 +647,7 @@ PHP-only: read the gates before assuming a red CI check does not block a merge
 
 - **`lint`** — `vendor/bin/pint --test` plus the tracked-`APP_KEY` guard (`php scripts/check-app-key-leak.php`).
 - **`test`** — PHP 8.5, PostGIS + Redis containers, rewrites `.env.testing` to match containers (`postgres/secret/h_dashboard_test`, **`CACHE_STORE=array`**), `key:generate --env=testing`, `migrate --env=testing`, clears config/routes/views, then `./vendor/bin/pest --parallel --coverage --min=80 --coverage-clover=coverage.xml` → Codecov, followed by two assertions that the suite really ran (a non-zero `Tests:` summary and no test file reporting zero tests).
-- **`mutation`** — `--covered-only`, Composer-only (no Node/Vite build), runs on every PR; failures are informational because `continue-on-error: true`. `timeout-minutes: 45` is a cap, not the expected duration (~30 min typical).
+- **`mutation`** — `--covered-only`, `--min=41`, Composer-only (no Node/Vite build), runs on every PR; the score threshold makes it blocking since #1502, while still running in parallel with E2E. `timeout-minutes: 45` is a cap, not the expected duration (~30 min typical).
 
 ### Storage Permissions (gotcha)
 
