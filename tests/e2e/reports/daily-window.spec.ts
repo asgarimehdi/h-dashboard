@@ -155,7 +155,6 @@ test.describe('daily window is materialised', () => {
     expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
     expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
   });
-  });
 
   test('GET /api/reports/tickets?days=0 is rejected', async ({ request }) => {
     const response = await request.get('/api/reports/tickets?days=0', {
@@ -238,3 +237,4 @@ test.describe('daily window is materialised', () => {
         '1403/10/07',
       ]);
   });
+});
