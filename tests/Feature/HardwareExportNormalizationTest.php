@@ -171,8 +171,12 @@ class HardwareExportNormalizationTest extends TestCase
         expect($src)->toContain('use App\Traits\PersianNormalizer;');
         expect($src)->toContain('use PersianNormalizer;');
         expect(substr_count($src, 'normalizeForQuery'))->toBeGreaterThanOrEqual(2);
-        // #815: the hook-less lookup columns (unit/semat) fold the column instead.
-        expect($src)->toContain('foldSeparatorsSql');
+        // #1482: the searched person/unit/semat columns are stored folded
+        // generated columns (built from foldSeparatorsSql() in the migration),
+        // so no query site folds the column any more — it only folds the term.
+        expect($src)->toContain('f_name_folded');
+        expect($src)->toContain('name_folded');
+        expect($src)->not->toContain('self::foldSeparatorsSql');
         expect($src)->toContain('foldedTerm');
     }
 }

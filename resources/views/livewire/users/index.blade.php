@@ -546,12 +546,12 @@ return new class extends Component
                 });
             })
             ->when($this->search, function (Builder $q) {
-                // Fold both the column (CONCAT) and the term for Persian char equivalence.
+                // The column side is the stored folded copy (#1482), so the
+                // predicate is indexable; only the term is folded here.
                 $term = \App\Traits\PersianNormalizer::foldedTerm($this->search);
-                $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
 
-                $q->whereHas('person', function ($query) use ($term, $foldedConcat) {
-                    $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
+                $q->whereHas('person', function ($query) use ($term) {
+                    $query->where('full_name_folded', 'LIKE', "%{$term}%")
                         ->orWhere('n_code', 'like', "%{$term}%");
                 });
             })
@@ -588,7 +588,6 @@ return new class extends Component
         }
 
         $term = \App\Traits\PersianNormalizer::foldedTerm($this->person_search);
-        $foldedConcat = \App\Traits\PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)");
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         return Person::query()
@@ -602,8 +601,8 @@ return new class extends Component
             ->where(function ($query) use ($accessibleIds) {
                 $query->whereIn('u_id', $accessibleIds);
             })
-            ->where(function ($query) use ($term, $foldedConcat) {
-                $query->whereRaw("{$foldedConcat} LIKE ?", ["%{$term}%"])
+            ->where(function ($query) use ($term) {
+                $query->where('full_name_folded', 'LIKE', "%{$term}%")
                     ->orWhere('n_code', 'like', "%{$term}%");
             })
             ->limit(20)

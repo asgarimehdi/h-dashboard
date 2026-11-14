@@ -138,6 +138,10 @@ class BackupService
      * `chunkById()` imposes `ORDER BY id`, so the rows are written in id
      * order instead of the unspecified heap order of a plain `get()`.
      *
+     * The selected columns come from the registry, which excludes generated
+     * columns: they are derived data and PostgreSQL rejects an explicit value
+     * for them on restore (`TableRegistry::columns()`).
+     *
      * @return int the number of rows written
      */
     private function streamTable(string $table, string $temp): int
@@ -148,12 +152,13 @@ class BackupService
             throw new RuntimeException("فایل موقت بک‌آپ ساخته نشد: {$temp}");
         }
 
+        $columns = $this->registry->columns($table);
         $rows = 0;
 
         try {
             $this->writeTo($handle, '[');
 
-            DB::table($table)->chunkById(self::CHUNK_SIZE, function ($chunk) use ($handle, &$rows): void {
+            DB::table($table)->select($columns)->chunkById(self::CHUNK_SIZE, function ($chunk) use ($handle, &$rows): void {
                 foreach ($chunk as $row) {
                     if ($rows > 0) {
                         $this->writeTo($handle, ',');

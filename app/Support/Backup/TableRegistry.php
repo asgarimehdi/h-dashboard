@@ -239,7 +239,13 @@ class TableRegistry
     }
 
     /**
-     * The column names of a table, in declaration order.
+     * The column names of a table that a backup may carry, in declaration
+     * order.
+     *
+     * Generated columns are excluded: PostgreSQL computes them and refuses an
+     * explicit value on `INSERT`/`UPDATE` (SQLSTATE 428C9), so a backup that
+     * carried them could not be restored. They are derived data — the restore
+     * recomputes them from the base columns.
      *
      * @return list<string>
      */
@@ -252,6 +258,7 @@ class TableRegistry
         $rows = DB::select(
             'SELECT column_name FROM information_schema.columns'
             .' WHERE table_schema = current_schema() AND table_name = ?'
+            ." AND is_generated = 'NEVER'"
             .' ORDER BY ordinal_position',
             [$table]
         );
