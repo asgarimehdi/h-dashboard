@@ -18,10 +18,30 @@ import { execSync } from 'child_process';
 
 test.describe('daily window is materialised', () => {
   let token: string;
+  let emptyScopeToken: string;
 
   test.beforeAll(async () => {
     token = execSync(
       `php tests/e2e/create-token.php ${TEST_USER.nCode} "reports:read"`,
+      { cwd: process.cwd(), encoding: 'utf-8' },
+    ).trim();
+
+    // A throwaway account whose unit is created after `migrate:fresh --seed`
+    // owns no todos at all. That is the only scope where "a day with zero rows"
+    // is a fact instead of a draw: TodoSeeder only writes days of the *current*
+    // month, so from the 14th onward a 14-day window can be fully covered and
+    // "some day is zero" turned into a calendar-dependent coin flip (#1485).
+    // On an empty scope a plain GROUP BY returns no days at all, so a full
+    // window of zeros is the decisive proof that the days are materialised.
+    const nCode = `8${Date.now().toString().slice(-7)}${String(
+      Math.floor(Math.random() * 100),
+    ).padStart(2, '0')}`;
+    execSync(
+      `php tests/e2e/create-pwd-user.php ${nCode} ${TEST_USER.password} "E2E-empty-${nCode}"`,
+      { cwd: process.cwd(), encoding: 'utf-8' },
+    );
+    emptyScopeToken = execSync(
+      `php tests/e2e/create-token.php ${nCode} "reports:read"`,
       { cwd: process.cwd(), encoding: 'utf-8' },
     ).trim();
   });
@@ -82,6 +102,19 @@ test.describe('daily window is materialised', () => {
   });
 
   test('GET /api/reports/todos?days=14 fills empty days too', async ({ request }) => {
+    // An empty scope still has to come back as a materialised window of 14
+    // days: a plain GROUP BY over zero rows returns no days at all.
+    const empty = await request.get('/api/reports/todos?days=14', {
+      headers: { Authorization: `Bearer ${emptyScopeToken}` },
+    });
+
+    expect(empty.ok()).toBeTruthy();
+    const emptyBody = await empty.json();
+
+    expect(emptyBody.by_day).toHaveLength(14);
+    expect(emptyBody.by_day.every((d: any) => d.count === 0)).toBeTruthy();
+
+    // The seeded scope keeps the same shape, ascending and oldest first.
     const response = await request.get('/api/reports/todos?days=14', {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -90,7 +123,8 @@ test.describe('daily window is materialised', () => {
     const body = await response.json();
 
     expect(body.by_day).toHaveLength(14);
-    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
+    const days = body.by_day.map((d: any) => d.day);
+    expect(days).toEqual([...days].sort());
   });
 
   test('GET /api/reports/tickets?days=0 is rejected', async ({ request }) => {
