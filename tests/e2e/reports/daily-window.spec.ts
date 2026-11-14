@@ -122,6 +122,29 @@ test.describe('daily window is materialised', () => {
     expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
   });
 
+  test('GET /api/reports/todos crosses a month boundary and still fills empty days', async ({ request }) => {
+    // 40 days is wider than any month, so the window always reaches into the
+    // previous month — and `TodoSeeder` only seeds the CURRENT month (random
+    // days, never future). That guarantees at least one day with no rows.
+    // A 14-day window cannot: from the 14th onward it stays inside the seeded
+    // month, where 50 random draws over 14 days leave no gap ~70% of the time,
+    // so this test failed on CI intermittently (issue #1483 PR run).
+    const response = await request.get('/api/reports/todos?days=40', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+
+    expect(body.by_day).toHaveLength(40);
+    // Zero-filled days exist, not only the days that have rows.
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
+  });
+    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+  });
+
   test('GET /api/reports/tickets?days=0 is rejected', async ({ request }) => {
     const response = await request.get('/api/reports/tickets?days=0', {
       headers: { Authorization: `Bearer ${token}` },
