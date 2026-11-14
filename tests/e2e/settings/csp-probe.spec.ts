@@ -1,17 +1,20 @@
 import { test, expect, login } from '../shared/fixtures';
 
 /**
- * TEMPORARY probe v2 for the #1496 false-green — do NOT merge, delete after use.
+ * TEMPORARY probe v3 for the #1496 false-green — do NOT merge, delete after use.
  *
- * Probe v1 (head 909e077c) found: the blocked hash changes between CI runs
- * (YlgfM6Tz… → lGBgJqS8…) while staying constant within a run, so hash-pinning
- * cannot fix it; the 3 decorative blob DIVs are CSSOM-styled (innocent); no
- * style mutation was observed on /settings and no captured string hashed to
- * the blocked value. v1 had two holes: it only recorded STYLE-tag insertions
- * (not transient DIVs styled while detached) and its records reset on every
- * navigation (a /login violation would be lost). v2 patches setAttribute to
- * capture the EXACT raw style string, records every added node, and persists
- * records in sessionStorage across navigations.
+ * Probe v2 (head 56688e91) narrowed it down: exactly ONE violation per test
+ * attempt, firing during login() (on /login or /dashboard — NOT on /settings),
+ * directive style-src-elem, blocked inline, sample empty, sourceFile
+ * livewire.min.js. The blocked hash changes every CI run (YlgfM6Tz… →
+ * lGBgJqS8… → Cy08wxh4…), so hash-pinning cannot fix it. Ruled out by hashing:
+ * nprogress style (wHM+htXdtkideW9K), view-transition styles, auth-layout
+ * <style> (WyPFsodU…), Livewire wire:loading style (BBzkWIzm, allowlisted),
+ * app-brand (C9H3lAsL, allowlisted). v3 intercepts every <style> element
+ * appended to the document (covers Livewire's injectStyles AND its
+ * wire:navigate head-merge, which moves server-rendered <style> elements into
+ * the live head) and records each one's nonce + full text, persisted in
+ * sessionStorage across navigations.
  */
 
 test('probe: runtime styles on /settings', async ({ page }) => {
@@ -26,8 +29,11 @@ test('probe: runtime styles on /settings', async ({ page }) => {
         // Storage unavailable — the live arrays below still carry the data.
       }
     };
-    if (!w.__probeSetAttr) {
+    if (!w.__probePatched) {
+      w.__probePatched = true;
       w.__probeSetAttr = [];
+      w.__probeAppendedStyles = [];
+      w.__probeCsp = [];
       const origSetAttr = Element.prototype.setAttribute;
       Element.prototype.setAttribute = function (name: string, value: string) {
         if (name === 'style') {
@@ -42,10 +48,29 @@ test('probe: runtime styles on /settings', async ({ page }) => {
         }
         return origSetAttr.call(this, name, value);
       };
-    }
-    if (!w.__probeAdded) {
-      w.__probeAdded = [];
-      w.__probeCsp = [];
+      const recordStyleNode = (n: any, how: string) => {
+        if (!n || n.nodeType !== 1) return;
+        const styles = n.tagName === 'STYLE' ? [n] : [...(n.querySelectorAll?.('style') ?? [])];
+        for (const s of styles) {
+          const rec = {
+            at: how,
+            nonce: s.getAttribute('nonce'),
+            text: s.textContent,
+          };
+          w.__probeAppendedStyles.push(rec);
+          store(rec);
+        }
+      };
+      const origAppend = Node.prototype.appendChild;
+      Node.prototype.appendChild = function (n: any) {
+        recordStyleNode(n, 'appendChild');
+        return origAppend.call(this, n);
+      };
+      const origInsert = Node.prototype.insertBefore;
+      Node.prototype.insertBefore = function (n: any, ref: any) {
+        recordStyleNode(n, 'insertBefore');
+        return origInsert.call(this, n, ref);
+      };
       document.addEventListener('securitypolicyviolation', (e: any) => {
         const rec = {
           directive: e.effectiveDirective,
@@ -55,31 +80,6 @@ test('probe: runtime styles on /settings', async ({ page }) => {
         };
         w.__probeCsp.push(rec);
         store({ at: 'csp-event', ...rec });
-      });
-      const observer = new MutationObserver((records) => {
-        for (const r of records) {
-          if (r.type === 'attributes' && r.attributeName === 'style') {
-            const el = r.target as HTMLElement;
-            const rec = { at: 'attr-mutation', tag: el.tagName, value: el.getAttribute('style') };
-            w.__probeAdded.push(rec);
-            store(rec);
-          }
-          if (r.type === 'childList') {
-            r.addedNodes.forEach((n: any) => {
-              if (n.nodeType === 1) {
-                const rec = { at: 'added', tag: n.tagName, html: n.outerHTML.slice(0, 300) };
-                w.__probeAdded.push(rec);
-                store(rec);
-              }
-            });
-          }
-        }
-      });
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['style'],
-        childList: true,
-        subtree: true,
       });
     }
   });
@@ -93,12 +93,13 @@ test('probe: runtime styles on /settings', async ({ page }) => {
 
   const dump = async (label: string) => {
     const d = await page.evaluate(() => ({
-      styled: [...document.querySelectorAll('[style]')].map(
-        (e: any) => `${e.tagName} :: ${e.getAttribute('style')}`,
-      ),
+      headStyles: [...document.querySelectorAll('style')].map((s: any) => ({
+        nonce: s.getAttribute('nonce'),
+        text: s.textContent,
+      })),
+      appendedStyles: (window as any).__probeAppendedStyles ?? [],
       setAttr: (window as any).__probeSetAttr ?? [],
-      added: ((window as any).__probeAdded ?? []).slice(-40),
-      stored: JSON.parse(sessionStorage.getItem('__probeRecords') ?? '[]').slice(-60),
+      stored: JSON.parse(sessionStorage.getItem('__probeRecords') ?? '[]'),
       cspEvents: (window as any).__probeCsp ?? [],
     }));
     console.log(`[probe:${label}] ${JSON.stringify(d)}`);
