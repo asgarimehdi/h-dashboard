@@ -17,6 +17,14 @@ uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class, Int
 
 beforeEach(function () {
     $this->seedLookupTables();
+
+    // The "leaves no temp file behind" tests glob the backup directory, so it
+    // must belong to this test alone: four parallel workers share the real one.
+    $this->useIsolatedBackupStorage();
+});
+
+afterEach(function () {
+    $this->removeIsolatedBackupStorage();
 });
 
 test('table export returns exactly the seeded rows with every column', function () {
