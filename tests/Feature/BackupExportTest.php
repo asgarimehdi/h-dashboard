@@ -4,6 +4,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\Backup\BackupService;
+use App\Services\Backup\RestoreService;
 use App\Support\Backup\TableRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,6 +49,29 @@ test('table export keeps soft deleted rows', function () {
     expect($rows)->toHaveCount(1);
     expect($rows[0]['id'])->toBe(601);
     expect($rows[0]['deleted_at'])->not->toBeNull();
+});
+
+test('the export omits generated columns and the restore recomputes them', function () {
+    $unit = Unit::create(['name' => 'مرکز آزمون']);
+    Person::factory()->create(['u_id' => $unit->id]);
+
+    $foldedBefore = DB::table('persons')->value('f_name_folded');
+    $rows = $this->backupZipJson(app(BackupService::class)->exportTable('persons')->path, 'persons.json');
+
+    $columns = app(TableRegistry::class)->columns('persons');
+
+    // A generated column cannot be written back: PostgreSQL refuses a
+    // non-DEFAULT value with SQLSTATE 428C9. It is derived data, so the backup
+    // and the column list both leave it out.
+    expect($columns)->not->toContain('f_name_folded');
+    expect($columns)->not->toContain('full_name_folded');
+    expect(array_keys($rows[0]))->toEqualCanonicalizing($columns);
+
+    // ... and nothing is lost: the restore writes the base columns and
+    // PostgreSQL recomputes the fold for every row.
+    app(RestoreService::class)->restoreTable('persons', $rows);
+
+    expect(DB::table('persons')->value('f_name_folded'))->toBe($foldedBefore);
 });
 
 test('an empty table exports an empty array', function () {
@@ -196,9 +220,14 @@ test('a full export holds the id ordered rows of every table', function () {
     $manifest = $this->backupZipJson($archive->path, 'manifest.json');
 
     foreach (app(TableRegistry::class)->tables() as $table) {
+        // The registry's column list is the backup's contract: every column
+        // PostgreSQL accepts on a write. Generated columns are excluded — the
+        // database refuses an explicit value for them (#1482).
+        $columns = app(TableRegistry::class)->columns($table);
+
         $expected = array_map(
             fn (object $row): array => (array) $row,
-            DB::table($table)->orderBy('id')->get()->all()
+            DB::table($table)->select($columns)->orderBy('id')->get()->all()
         );
 
         expect($entries)->toHaveKey($table.'.json');

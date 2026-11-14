@@ -18,7 +18,15 @@ class TodoSeeder extends Seeder
         }
 
         $now = Carbon::now();
-        $startOfMonth = $now->copy()->startOfMonth();
+
+        // Spread over the last 60 days instead of the current month. The
+        // daily-window specs (tests/e2e/reports/daily-window.spec.ts, issue
+        // #736) assert that a day with no rows is present inside the last
+        // 7/14/30 days; a month-only spread left no zero day at all from the
+        // 14th of the month onward, because the whole window then sat inside
+        // the seeded days 1..28 — the spec was red on 2026-11-14 for that
+        // reason alone.
+        $earliest = $now->copy()->subDays(59)->startOfDay();
 
         // 50 Persian todo titles
         $titles = [
@@ -79,11 +87,14 @@ class TodoSeeder extends Seeder
         $todosCreated = 0;
 
         while ($todosCreated < $totalTodos) {
-            $day = rand(0, 27); // First 28 days of month
-            $date = $startOfMonth->copy()->addDays($day);
+            $date = $earliest->copy()->addDays(rand(0, 59));
 
-            // Don't create future todos
-            if ($date->isFuture()) {
+            // No todos on Fridays (the Persian weekend). The weekly gap is what
+            // guarantees a zero day inside ANY window of 7 days or more, so the
+            // zero-fill assertions hold on every calendar date instead of only
+            // when the random spread happens to leave a hole. Always skippable:
+            // 8-9 of the 60 candidate days are Fridays, so the loop terminates.
+            if ($date->isFriday()) {
                 continue;
             }
 

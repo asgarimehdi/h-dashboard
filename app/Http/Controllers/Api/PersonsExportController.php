@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Exports\PersonsExport;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Person;
+use App\Models\Unit;
+use App\Support\HardwareFilters;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Routing\Controller;
@@ -83,22 +85,41 @@ class PersonsExportController extends Controller
         $query->where(function (Builder $outer) use ($terms): void {
             foreach ($terms as $term) {
                 $foldedTerm = self::foldedTerm($term);
-                $outer->where(function (Builder $termQuery) use ($foldedTerm): void {
-                    // whereHas first: it is declared on the Eloquent builder and
-                    // returns $this, so the OR group below keeps its type. The
-                    // orWhereRaw() calls are forwarded to the query builder and
-                    // would degrade the chain's type mid-expression.
-                    $termQuery->whereHas('unit', function (Builder $unitQuery) use ($foldedTerm): void {
-                        $unitQuery->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$foldedTerm}%"]);
-                    });
+
+                // Patch B (#1482): PostgreSQL only builds a BitmapOr when every
+                // OR arm is an indexable predicate on `persons` itself. The unit
+                // arm used to be `whereHas('unit')` — an EXISTS semi-join — so
+                // the export sequential-scanned persons even though the unit
+                // subplan was indexed. Resolving the matching unit ids into an
+                // `IN` arm keeps every arm indexable. The list is capped so a
+                // one-character term cannot build a huge parameter list; past
+                // the cap the semi-join is the correct fallback. An empty list
+                // stays an `IN` arm too: Laravel compiles `whereIn([])` to
+                // `0 = 1`, which the planner folds away and which therefore
+                // still leaves the remaining arms BitmapOr-able — falling back
+                // to `whereHas` there would re-introduce the Seq Scan for the
+                // common "name term, no unit match" search.
+                $unitIds = Unit::query()
+                    ->where('name_folded', 'LIKE', "%{$foldedTerm}%")
+                    ->pluck('id')
+                    ->all();
+
+                $outer->where(function (Builder $termQuery) use ($foldedTerm, $unitIds): void {
+                    if (count($unitIds) <= HardwareFilters::JOIN_ARM_CAP) {
+                        $termQuery->whereIn('u_id', $unitIds);
+                    } else {
+                        $termQuery->whereHas('unit', function (Builder $unitQuery) use ($foldedTerm): void {
+                            $unitQuery->where('name_folded', 'LIKE', "%{$foldedTerm}%");
+                        });
+                    }
 
                     // n_code is numeric only — a plain LIKE is enough. The name
-                    // columns are folded the same way the unit column is, so a
-                    // row written by any path that skipped the model's saving
-                    // hook still matches (#815).
+                    // columns are the stored folded copies (#1482), maintained by
+                    // PostgreSQL on every write path, including the ones that
+                    // skip the model's saving hook (#815).
                     $termQuery->orWhere('n_code', 'LIKE', "%{$foldedTerm}%")
-                        ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$foldedTerm}%"])
-                        ->orWhereRaw(self::foldSeparatorsSql("CONCAT(l_name, ' ', f_name)").' LIKE ?', ["%{$foldedTerm}%"]);
+                        ->orWhere('full_name_folded', 'LIKE', "%{$foldedTerm}%")
+                        ->orWhere('full_name_rev_folded', 'LIKE', "%{$foldedTerm}%");
                 });
             }
         });
