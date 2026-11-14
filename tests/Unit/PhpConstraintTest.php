@@ -6,21 +6,19 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 /*
- * Issue #1062. Three locked packages cap `require.php` below 8.6:
- *   - nette/schema  v1.3.6, `8.1 - 8.5` (production, via league/commonmark
- *                   -> league/config -> nette/schema -> nette/utils)
- *   - nette/utils   v4.1.5, `8.2 - 8.5` (production, same chain)
+ * Issue #1062. One locked package still caps `require.php` below 8.6:
  *   - brianium/paratest v7.20.0, `~8.3.0 || ~8.4.0 || ~8.5.0` (dev)
  * so the `test-php86` preview job can only install with
- * `--ignore-platform-req=php` — a flag that therefore carries production
- * weight, not just tooling.
+ * `--ignore-platform-req=php` — a flag that therefore carries weight beyond
+ * tooling.
  *
- * That is the *locked* versions, not upstream (#1295): nette/schema >=1.4.0
- * and nette/utils >=4.1.6 allow 8.6 and sit inside today's `^1.2`/`^4.0`, so
- * a lock refresh clears both production blockers, while brianium/paratest
- * needs >=7.25.0 (`~8.4.0 || ~8.5.0 || ~8.6.0`; 7.24.1 still caps at 8.5),
- * which requires `phpunit ^13.3.4` (pest 5) — the long pole, and a test-stack
- * major migration rather than a bump.
+ * The nette production pair used to be here (#1295): nette/schema >=1.4.0 and
+ * nette/utils >=4.1.6 allow 8.6 and sit inside today's `^1.2`/`^4.0`, and the
+ * #1506 lock refresh landed exactly those (v1.4.0 `8.1 - 8.6`, v4.1.6
+ * `8.2 - 8.6`) — clearing the last production blockers.
+ * brianium/paratest needs >=7.25.0 (`~8.4.0 || ~8.5.0 || ~8.6.0`; 7.24.1
+ * still caps at 8.5), which requires `phpunit ^13.3.4` (pest 5) — the long
+ * pole, and a test-stack major migration rather than a bump.
  *
  * `dragonmantank/cron-expression` is NOT one of them: its
  * `^8.2|^8.3|^8.4|^8.5` still admits 8.6, because `^8.5` means
@@ -57,11 +55,9 @@ function php86BlockingPackages(string $lockPath): array
     return $blocking;
 }
 
-test('exactly three locked packages block PHP 8.6', function () {
+test('exactly one locked package blocks PHP 8.6', function () {
     expect(php86BlockingPackages(base_path('composer.lock')))->toBe([
         'brianium/paratest' => 'dev',
-        'nette/schema' => 'production',
-        'nette/utils' => 'production',
     ]);
 });
 
