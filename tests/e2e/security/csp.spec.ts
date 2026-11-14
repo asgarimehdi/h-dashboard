@@ -25,6 +25,7 @@ const PAGES = [
   '/reports/tickets',
   '/maps/route2',
   '/units',
+  '/settings',
 ];
 
 async function collectCspViolations(page: import('@playwright/test').Page) {

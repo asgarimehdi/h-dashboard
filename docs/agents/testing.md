@@ -144,7 +144,7 @@ XDEBUG_MODE=off php artisan test tests/Feature/TodoApiTest.php
 | `test` | Tests & Coverage — PHP 8.5, PostGIS + Redis containers, `./vendor/bin/pest --parallel --coverage --min=80` → Codecov | **blocking** |
 | `phpstan` | PHPStan Static Analysis — `vendor/bin/phpstan analyse --no-progress` | **blocking** |
 | `js-typecheck` | Typecheck (resources/js ratchet) — `npx tsc -p tsconfig.js.json --noEmit` | **blocking** |
-| `csp-enforcing` | CSP Enforcing Gate (csp.spec.ts) | **blocking** |
+| `csp-enforcing` | CSP Enforcing Gate (csp.spec.ts + browser-notifications.spec.ts) | **blocking** |
 | `smoke` | Smoke Tests (actions) | **blocking** |
 | `coverage-report` | Coverage Report (Blade-aware, informational) | `continue-on-error` |
 | `typecheck` | Typecheck (Playwright specs, informational) | `continue-on-error` |
