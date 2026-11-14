@@ -60,7 +60,9 @@ not a retry in this one.
   `search_docs` / Context7 for anything framework- or version-dependent. This repo
   pins unusual versions (Laravel 13.35, Livewire 4.4, spatie/permission 8.3).
 - **`improve`** (shadcn) — installed and available, **not run** in this session. Use
-  it on request for a read-only codebase audit that writes plans under `plans/`.
+  it on request for a read-only codebase audit that publishes each plan as its own
+  GitHub Issue (`docs/agents/issue-tracker.md`); there is no local `plans/` directory —
+  it was removed in `88fac479` (2026-09-20).
   It must never edit source code itself.
 
 ## 6. CodeGraph-first

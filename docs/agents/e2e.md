@@ -8,7 +8,7 @@
 
 ## E2E Testing (Playwright)
 
-**62 spec files** in `tests/e2e/` (`find tests/e2e -name '*.spec.ts' | wc -l`, on `beta @ 5c9f7fbd`, 2026-11-13) — **61 on an ordinary PR**, because `theme/sweep-35.spec.ts` is ignored unless `SWEEP_35=1` (`playwright.config.ts:21`). For the test count run `npx playwright test --list` — a static `test(` grep undercounts loop-generated suites. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
+**64 spec files** in `tests/e2e/` (`find tests/e2e -name '*.spec.ts' | wc -l`, on `beta @ 7325b6ec`, 2026-11-14) — **63 on an ordinary PR**, because `theme/sweep-35.spec.ts` is ignored unless `SWEEP_35=1` (`playwright.config.ts:21`). For the test total run `npx playwright test --list` under a live e2e env — a static `test(` grep undercounts loop-generated suites, and the list needs the run-state env, so no absolute test count is recorded here. Covers auth, navigation, RBAC, CRUD for users/tickets/personnel/units/hardware, reports, maps, dashboard, settings, search, activity log, tools, org chart, and the IT/Zabbix pages.
 
 > CI runs the suite in the e2e job of `.github/workflows/test.yml` (non-blocking ramp, `continue-on-error: true` until two consecutive green runs — see #867).
 
