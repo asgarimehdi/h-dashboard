@@ -132,7 +132,7 @@ codegraph status .
 
 ### CI/CD
 
-`.github/workflows/test.yml` runs on PRs with **twelve** jobs — seven blocking (`lint`, `js-lint`, `test`, `js-typecheck`, `csp-enforcing`, `smoke`, `phpstan`) and five `continue-on-error` (`coverage-report`, `typecheck`, `e2e`, `mutation`, `test-php86`). Job table + yq derivations: [testing](docs/agents/testing.md). Coverage is CI-only.
+`.github/workflows/test.yml` runs on PRs with **twelve** jobs — eight blocking (`lint`, `js-lint`, `test`, `js-typecheck`, `e2e`, `csp-enforcing`, `smoke`, `phpstan`) and four `continue-on-error` (`coverage-report`, `typecheck`, `mutation`, `test-php86`). Job table + yq derivations: [testing](docs/agents/testing.md). Coverage is CI-only.
 
 ---
 

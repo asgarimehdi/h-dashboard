@@ -369,7 +369,6 @@ jobs:
     # 5 failed / 2 flaky / 6 did not run. The second precondition (the two
     # collateral fixes land in separate PRs) is unchanged — see #867's git
     # review.
-    continue-on-error: true
 
     services:
       postgres:
