@@ -17,7 +17,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 ### Tech Stack
 
 - **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
-- **PHP 8.6 preview:** the *locked* versions cap `require.php` at 8.5 — `nette/schema` v1.3.6 (`8.1 - 8.5`) and `nette/utils` v4.1.5 (`8.2 - 8.5`), pulled in by `league/commonmark` → `league/config` → `nette/schema` → `nette/utils`, plus `brianium/paratest` v7.20.0 (`~8.3.0 || ~8.4.0 || ~8.5.0`, dev); so `test-php86` installs with `--ignore-platform-req=php`. Upstream is not blocking 8.6: `nette/schema` ≥1.4.0 and `nette/utils` ≥4.1.6 allow it inside today's `^1.2`/`^4.0`, while `brianium/paratest` ≥7.25.0 (`~8.4.0 || ~8.5.0 || ~8.6.0`) requires `phpunit ^13` (pest 5) — that test-stack major is the long pole, not nette. `composer.json`'s `^8.4.1` does not cap 8.6 (`>=8.4.1 <9.0.0`).
+- **PHP 8.6 preview:** locked versions cap `require.php` at 8.5 — `nette/schema` v1.3.6 (`8.1 - 8.5`) and `nette/utils` v4.1.5 (`8.2 - 8.5`), pulled in by `league/commonmark` → `league/config` → `nette/schema` → `nette/utils`, plus `brianium/paratest` v7.20.0 (`~8.3.0 || ~8.4.0 || ~8.5.0`, dev); so `test-php86` installs with `--ignore-platform-req=php`. Upstream isn't blocking 8.6: `nette/schema` ≥1.4.0 and `nette/utils` ≥4.1.6 allow it inside today's `^1.2`/`^4.0`, while `brianium/paratest` ≥7.25.0 (`~8.4.0 || ~8.5.0 || ~8.6.0`) requires `phpunit ^13` (pest 5) — that test-stack major is the long pole, not nette.
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
@@ -25,8 +25,6 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 - **E2E Testing:** Playwright (Chromium, `tests/e2e/`, `npx playwright test`)
 - **Code Quality:** PHPStan level 6 with baseline, Laravel Pint (enforced in CI + pre-commit hook)
-
-> **Detailed data model & relationships:** `references/data-model.md` — API endpoints, scheduler, deployment, performance: `references/api-endpoints.md`
 
 ---
 
@@ -75,6 +73,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **A tracked env file carries no real `APP_KEY` (#953)** and the gitignored working `.env` **must** have one. `composer verify` fails fast if `.env` is missing — deliberate, not a bug. → [testing](docs/agents/testing.md)
 - **E2E only via `scripts/e2e-test.sh`** (swaps `.env`, fresh DB, `:8001`) and `.env.e2e` **must** set `APP_LOCALE=fa` — without it 11 Persian-text specs fail. Never point e2e at `h_dashboard`; the e2e DB is wiped every run. → [e2e](docs/agents/e2e.md)
 - **No external runtime load (script/style/font/tile/iframe/fetch) without a row in `docs/agents/offline.md`; local by default.** → [offline](docs/agents/offline.md)
+- **Every `Blade::component()` alias to `App\View\Components` and every render heredoc needs a `MaryUiMirrorTest` contract, or the suite fails** — `NON_MIRRORS` declares the app-owned exceptions. → [features](docs/agents/features.md)
 
 ---
 

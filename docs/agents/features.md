@@ -275,6 +275,28 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 > Performance patterns, caching strategies, and optimization details: `references/api-endpoints.md` (Performance section).
 
+## maryUI component mirrors (#1480)
+
+`AppServiceProvider::boot()` re-registers seven maryUI aliases to app-owned components in `app/View/Components/` — accessibility (#957), CSP-safe Alpine (#1352), or both. Each mirror copies the vendor `render()` heredoc plus a **declared transform**: the ordered ops in `MaryUiMirrorTest::MIRRORS` are applied to the vendored heredoc and the result must be line-identical to the mirror's heredoc. `AppBrand` is the only app heredoc with no vendor counterpart, declared in `NON_MIRRORS`. A structural difference (an inline `x-data` literal replaced by a named factory plus `data-*`) is legal only for a removing op backed by `js_requires` literals in `resources/js/mary-components.js` — the test checks the attributes and the factory's `dataset` reads in both directions.
+
+| Blade alias | App component | Vendor class (locked mary 2.9.10) | Alpine factory | Contract delta | Introduced by |
+|---|---|---|---|---|---|
+| `table` | `CspTable` | `Table.php` | `maryTable` | `<th>` gains `aria-sort`/`tabindex`/two `@keydown`; `@entangle` literal → factory + 3 `data-*`; two `\|\|` → ternaries | #957, #1352 |
+| `menu-item` | `AccessibleMenuItem` | `MenuItem.php` | — | 3-line `aria-current` guard before the href block | #957 |
+| `main` | `CspMain` | `Main.php` | `marySidebar` | `x-data` literal → factory + 3 `data-*`; `@menu-sub-clicked` handler | #1352 |
+| `menu-sub` | `CspMenuSub` | `MenuSub.php` | `maryMenuSub` | `x-data` literal → factory + `data-show` | #1352 |
+| `modal` | `CspModal` | `Modal.php` | `maryModal` | `@entangle`/`x-init`/`:class`/Escape block → factory + 2 `data-*`; close buttons drop their `$wire` writes | #1352, #1469 |
+| `choices-offline` | `CspChoicesOffline` | `ChoicesOffline.php` | `maryChoices` | outer `{focused, selection}` literal removed; inner literal → factory + 10 `data-*`; options JSON `<script>`; `x-html` slot → plain-JS copy; four expressions → methods | #1352 |
+| `file` | `CspFile` | `File.php` | `maryFile` | `@entangle` literal → factory + 4 `data-*`; `x-on:livewire-upload-progress` listener dropped; three `&&` → ternaries; `:style` template literal → `progressStyle()` | #1352 |
+
+**Re-sync checklist after any `robsontenorio/mary` upgrade:**
+
+1. Run `composer test -- --filter='MaryUiMirrorTest'` — never upgrade mary and trust a suite you did not re-run.
+2. Each failure names the mirror and the first divergent line; a vendor line with no op is markup maryUI changed.
+3. Edit the mirror to match — or add the op to `MIRRORS` when the change is deliberate — and update `js_requires` if a factory literal moved.
+4. Confirm `git diff phpstan-baseline.neon` adds **0** entries and `composer verify -- tests/Feature/MaryUiMirrorTest.php` is green.
+5. Update the locked version in this table, then `view:clear` → `view:cache` on deploy.
+
 ## Gotchas (transplanted from the former `## Gotchas Quick Reference`)
 
 | Gotcha | Details |

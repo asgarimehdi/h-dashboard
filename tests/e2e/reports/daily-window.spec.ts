@@ -81,7 +81,7 @@ test.describe('daily window is materialised', () => {
     expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
   });
 
-  test('GET /api/reports/todos?days=14 fills empty days too', async ({ request }) => {
+  test('GET /api/reports/todos?days=14 returns the whole window, oldest first', async ({ request }) => {
     const response = await request.get('/api/reports/todos?days=14', {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -89,8 +89,37 @@ test.describe('daily window is materialised', () => {
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
 
+    // The window decides the shape, never the rows: 14 entries, one per day,
+    // no duplicate and no gap.
     expect(body.by_day).toHaveLength(14);
+    const days = body.by_day.map((d: any) => d.day);
+    expect(new Set(days).size).toBe(14);
+    expect(days).toEqual([...days].sort());
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+
+    // Deliberately NOT asserting a zero-count day on this window: `TodoSeeder`
+    // scatters 50 random todos over the current month's days 1..today, so every
+    // day of a narrow window can legitimately have rows. That randomness failed
+    // this test on unrelated branches (run 43564479894, 2026-11-14) and the
+    // retries reuse the same seeded database, so it reported `failed`, not
+    // `flaky`. The zero-fill contract is pinned on a window that cannot be
+    // fully covered — see the next test.
+  });
+
+  test('GET /api/reports/todos?days=365 keeps a zero for a day with no todos', async ({ request }) => {
+    const response = await request.get('/api/reports/todos?days=365', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+
+    // 365 is `DailySeries::MAX_DAYS`, so this also pins the cap. A year-long
+    // window always reaches days before the seeded month, where no todo can
+    // exist — those days must come back as `0`, not as a gap.
+    expect(body.by_day).toHaveLength(365);
     expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
   });
 
   test('GET /api/reports/tickets?days=0 is rejected', async ({ request }) => {
