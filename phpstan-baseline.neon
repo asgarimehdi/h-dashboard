@@ -2449,24 +2449,6 @@ parameters:
 			path: resources/views/livewire/maps/county.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$location has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/maps/point.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$regions has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/maps/point.blade.php
-
-		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maps/point\.blade\.php\:10\:\:\$types has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/maps/point.blade.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Region\:\:\$geojson\.$#'
 			identifier: property.notFound
 			count: 1

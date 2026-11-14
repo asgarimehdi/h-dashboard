@@ -106,6 +106,16 @@ test.describe('maps — issue #769 marker zoom after filter toggle', () => {
       zoomanim: ((window as any).Alpine.store('map').get()._events?.zoomanim || []).length,
     }));
 
+    // #776/#1481: filtering is client-side from the published block, so a
+    // toggle must not round-trip. A `POST /livewire/update` here means the
+    // marker set went back through the Livewire snapshot.
+    const livewireUpdates: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && new URL(req.url()).pathname.includes('/livewire/update')) {
+        livewireUpdates.push(req.url());
+      }
+    });
+
     await page.locator('.controls-panel input[type="checkbox"]').first().check();
     await page.waitForFunction(
       (n) => document.querySelectorAll('#map .leaflet-marker-icon').length !== n,
@@ -113,6 +123,8 @@ test.describe('maps — issue #769 marker zoom after filter toggle', () => {
       { timeout: 30000 },
     );
     await page.waitForTimeout(1000);
+
+    expect(livewireUpdates, '#776: a filter toggle must re-render locally, never round-trip').toHaveLength(0);
 
     const after = await page.evaluate(() => {
       const map = (window as any).Alpine.store('map').get();
