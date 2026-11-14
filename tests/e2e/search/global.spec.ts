@@ -5,8 +5,10 @@ import { test, expect, login, waitForLivewire } from '../shared/fixtures';
  * Probed DOM facts:
  * - /search: input placeholder "حداقل ۲ کاراکتر وارد کنید..." (wire:model.live.debounce.300ms="query")
  * - Empty state: "جستجو در تیکت‌ها..." + "حداقل ۲ کاراکتر تایپ کنید"
- * - <2 chars → no search (empty hint remains); ≥2 chars → result sections
- *   (تیکت‌ها / کاربران / واحدها / کارهای روزانه) + "N نتیجه یافت شد"
+ * - <2 CHARACTERS → no search (empty hint remains); ≥2 characters → result
+ *   sections (تیکت‌ها / کاربران / واحدها / کارهای روزانه) + "N نتیجه یافت شد"
+ *   The floor counts characters, not bytes: one Persian letter is 2 bytes
+ *   but 1 character (issue #1483).
  * - No results → "نتیجه‌ای یافت نشد"
  */
 
@@ -22,11 +24,22 @@ test.describe('global search', () => {
     await expect(page.locator('body')).toContainText('حداقل ۲ کاراکتر');
   });
 
-  test('search triggers with a single character (min-2 is a placeholder hint, not enforced)', async ({ page }) => {
+  test('single character does not search, two characters do (the guard counts characters, not bytes)', async ({ page }) => {
     const input = page.locator('input[placeholder^="حداقل"]');
-    const search = waitForLivewire(page);
+
+    // One Persian letter is 2 bytes but 1 character — the byte-counting guard
+    // used to let this through (issue #1483).
+    const singleChar = waitForLivewire(page);
     await input.fill('م');
-    await search;
+    await singleChar;
+    await expect(page.locator('body')).toContainText('جستجو در تیکت‌ها، کاربران، واحدها و کارهای روزانه');
+    await expect(page.locator('body')).not.toContainText('نتیجه یافت شد');
+
+    // عسگری is always present in seeded data (مهدی عسگری, the admin), so this
+    // two-character query must still search.
+    const twoChars = waitForLivewire(page);
+    await input.fill('عس');
+    await twoChars;
     await expect(page.locator('body')).toContainText('نتیجه یافت شد');
   });
 
