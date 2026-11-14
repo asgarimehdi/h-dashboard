@@ -544,9 +544,10 @@ jobs:
     timeout-minutes: 20
     # Gate 2 (#1352, decision الف): a SEPARATE, BLOCKING job — no
     # `continue-on-error` (unlike the `e2e` job above, which stays
-    # non-blocking per #867). It runs ONLY tests/e2e/security/csp.spec.ts
-    # with CSP_ENFORCING=true: the spec detects enforcing mode from the
-    # `content-security-policy` header and demands zero enforced violations.
+    # non-blocking per #867). It runs tests/e2e/security/csp.spec.ts and
+    # tests/e2e/settings/browser-notifications.spec.ts with CSP_ENFORCING=true:
+    # the specs detect enforcing mode from the `content-security-policy`
+    # header and demand zero enforced violations.
     # Flipping the whole suite to enforcing is the rollout step (Finding F1),
     # not this gate. This job must be added to the branch's required status
     # checks (admin) for the "blocking" part to bite — the workflow alone
@@ -649,19 +650,20 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run CSP spec in enforcing mode (list reporter proves execution)
+      - name: Run CSP specs in enforcing mode (list reporter proves execution)
         # Through scripts/e2e-test.sh ONLY (see the `e2e` job's comment).
-        # --timeout=120000: the spec walks 7 pages with networkidle waits;
+        # --timeout=120000: the specs walk 8 pages with networkidle waits;
         # it took 29.5s on a slow local VM, so the 30s default is marginal
         # even before CI variance. The timeout is harness headroom, not a
         # spec change.
-        run: bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
+        run: bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts tests/e2e/settings/browser-notifications.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
 
-      - name: Assert the gate spec really executed
+      - name: Assert the gate specs really executed
         run: |
           EXECUTED=$(grep -cE '✓|✔|passed \(' csp-gate-list.log || true)
           echo "csp gate executed-test lines: ${EXECUTED}"
           grep -qE '[0-9]+ passed' csp-gate-list.log
+          grep -q 'tests/e2e/settings/browser-notifications.spec.ts' csp-gate-list.log
           test "${EXECUTED}" -gt 0
 
   smoke:
