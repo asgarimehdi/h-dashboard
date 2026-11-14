@@ -233,7 +233,7 @@ class BackupService
     /**
      * The directory the archives and their staged files live in.
      */
-    private function backupDirectory(): string
+    protected function backupDirectory(): string
     {
         $directory = storage_path('app/private/backup');
 

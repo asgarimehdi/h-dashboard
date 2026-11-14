@@ -283,22 +283,43 @@ test('a table payload is encoded byte for byte in the pinned canonical form', fu
 });
 
 test('a failing table read leaves no temp file behind', function () {
-    $directory = storage_path('app/private/backup');
-    $before = glob($directory.'/*') ?: [];
+    // A directory of its own: the shared backup directory also receives the
+    // staged files of backup tests running in other parallel workers, so a
+    // directory-wide glob here would intermittently see their `.part` files.
+    $directory = sys_get_temp_dir().'/backup-failing-read-'.bin2hex(random_bytes(6));
+
+    if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+        throw new RuntimeException("The backup directory could not be created: {$directory}");
+    }
 
     // The first table is read and staged, the second one does not exist, so
     // the export fails after it already wrote a temp file.
-    $this->app->instance(TableRegistry::class, new class extends TableRegistry
+    $registry = new class extends TableRegistry
     {
         public function tables(): array
         {
             return ['hardwares', 'a_table_that_does_not_exist'];
         }
-    });
+    };
 
-    expect(fn () => app(BackupService::class)->exportAll())->toThrow(QueryException::class);
+    $service = new class($registry, $directory) extends BackupService
+    {
+        public function __construct(TableRegistry $registry, private readonly string $directory)
+        {
+            parent::__construct($registry);
+        }
 
-    expect(array_values(array_diff(glob($directory.'/*') ?: [], $before)))->toBe([]);
+        protected function backupDirectory(): string
+        {
+            return $this->directory;
+        }
+    };
+
+    expect(fn () => $service->exportAll())->toThrow(QueryException::class);
+
+    expect(glob($directory.'/*') ?: [])->toBe([]);
+
+    @rmdir($directory);
 });
 
 test('a failure while zipping the staged files leaves no partial archive behind', function () {
