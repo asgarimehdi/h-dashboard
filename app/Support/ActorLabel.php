@@ -91,6 +91,6 @@ final class ActorLabel
         // a select() without it renders a soft-deleted creator under their real
         // name on one surface and «کاربر غیرفعال» on the next.
         $query->select(['id', 'n_code', 'deleted_at']);
-        $query->with('person:f_name,l_name');
+        $query->with('person:n_code,f_name,l_name');
     }
 }
