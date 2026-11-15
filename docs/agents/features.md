@@ -289,6 +289,8 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 | `choices-offline` | `CspChoicesOffline` | `ChoicesOffline.php` | `maryChoices` | outer `{focused, selection}` literal removed; inner literal → factory + 10 `data-*`; options JSON `<script>`; `x-html` slot → plain-JS copy; four expressions → methods | #1352 |
 | `file` | `CspFile` | `File.php` | `maryFile` | `@entangle` literal → factory + 4 `data-*`; `x-on:livewire-upload-progress` listener dropped; three `&&` → ternaries; `:style` template literal → `progressStyle()` | #1352 |
 
+**لینک فعال سایدبار (#1531):** آیتم والدی که فرزندانش ورودی مستقل دارند باید `:exact="true"` بگیرد (`/users`، `/disease`، `/tools`)؛ `SidebarActiveLinkTest` این رفتار را از رندر واقعی سایدبار می‌سنجد، نه از متن Blade.
+
 **Re-sync checklist after any `robsontenorio/mary` upgrade:**
 
 1. Run `composer test -- --filter='MaryUiMirrorTest'` — never upgrade mary and trust a suite you did not re-run.

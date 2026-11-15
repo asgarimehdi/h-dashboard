@@ -2,20 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\View\Components\AccessibleMenuItem;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 /**
  * #996 — روی هر صفحه دقیقاً یک لینک سایدبار فعال است، و همان لینکی است که
- * کاربر روی آن ایستاده. قاعده با شبیه‌سازی request واقعی سنجیده می‌شود تا لیست
- * رگرسیون از کد جدا نشود.
+ * کاربر روی آن ایستاده.
+ *
+ * #1531 — رفتار از رندر واقعی سایدبار سنجیده می‌شود، نه از یک ستون `exact` در
+ * همین فایل. ستون `exact` می‌توانست سبز شود بدون اینکه Blade عوض شده باشد؛
+ * رندر همان چیزی است که کاربر می‌بیند.
  */
 class SidebarActiveLinkTest extends TestCase
 {
@@ -23,28 +26,29 @@ class SidebarActiveLinkTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * همهٔ لینک‌های سایدبار → آیا `:exact` دارد؟
-     * (باید با app.blade.php یکی بماند؛ تست drift در انتهای فایل همین را تضمین می‌کند.)
+     * همهٔ لینک‌های سایدبار — فقط فهرست، بدون ادعای `exact`. تست drift انتهای
+     * فایل همین فهرست را با DOM سایدبار یکی می‌کند.
      *
-     * @var array<string, bool>
+     * @var array<int, string>
      */
     private const LINKS = [
-        '/search' => false, '/dashboard' => false,
-        '/kargozini/estekhdams' => false, '/kargozini/radifs' => false,
-        '/kargozini/tahsils' => false, '/kargozini/semats' => false,
-        '/tickets/new' => false, '/tickets/new?category=bug' => false,
-        '/tickets/new?category=support' => false, '/tickets/inbox' => false,
-        '/monitoring' => false, '/todo' => false, '/units' => false,
-        '/kargozini/persons' => false, '/hr-dashboard' => false, '/hr/org-chart' => false,
-        '/map' => false, '/maps/unit' => false, '/maps/route' => false,
-        '/maps/route2' => false, '/maps/county' => false, '/maps/point' => false,
-        '/it/networks' => false, '/it/wireless' => false, '/it/zabbix-devices' => false,
-        '/tools' => false, '/hardware' => false, '/maintenance' => false,
-        '/reports/units' => false, '/reports/persons' => false, '/reports/todos' => false,
-        '/reports/map-no-boundary' => false, '/reports/tickets' => false,
-        '/activity-log' => false, '/users' => true, '/roles' => false,
-        '/permissions' => false, '/profile' => false,
-        '/users/changepassword' => false, '/settings' => false,
+        '/search', '/dashboard',
+        '/kargozini/estekhdams', '/kargozini/radifs',
+        '/kargozini/tahsils', '/kargozini/semats',
+        '/tickets/new', '/tickets/new?category=bug',
+        '/tickets/new?category=support', '/tickets/inbox',
+        '/monitoring', '/todo', '/units',
+        '/kargozini/persons', '/hr-dashboard', '/hr/org-chart',
+        '/disease', '/disease/create', '/disease/patients', '/disease/manage',
+        '/map', '/maps/unit', '/maps/route',
+        '/maps/route2', '/maps/county', '/maps/point',
+        '/it/networks', '/it/wireless', '/it/zabbix-devices',
+        '/tools', '/tools/backup', '/hardware', '/maintenance',
+        '/reports/units', '/reports/persons', '/reports/todos',
+        '/reports/map-no-boundary', '/reports/tickets',
+        '/activity-log', '/users', '/roles',
+        '/permissions', '/profile',
+        '/users/changepassword', '/settings',
     ];
 
     protected function setUp(): void
@@ -52,6 +56,18 @@ class SidebarActiveLinkTest extends TestCase
         parent::setUp();
         $this->seed(PermissionSeeder::class);
         $this->withoutVite();
+
+        // `manage_diseases` گروه بیماری‌ها و `admin` آیتم بک‌آپ را رندر می‌کند؛
+        // بدون این دو، تست drift آن لینک‌ها را در DOM نمی‌بیند.
+        ['user' => $user] = $this->createUserWithUnit([
+            'map', 'bw', 'manage_zabbix', 'manage_users', 'manage_hardware',
+            'manage_personnel', 'view_hr_dashboard', 'manage_org_chart',
+            'kargozini', 'organization', 'calendar', 'manage_roles',
+            'create_ticket', 'view_assigned_tickets', 'view_all_tickets',
+            'manage_diseases',
+        ], 'admin');
+
+        $this->actingAs($user);
     }
 
     /**
@@ -67,6 +83,15 @@ class SidebarActiveLinkTest extends TestCase
             '/maps/county' => ['/maps/county', '/maps/county'],
             '/maps/unit' => ['/maps/unit', '/maps/unit'],
             '/users/changepassword' => ['/users/changepassword', '/users/changepassword'],
+            // #1531 — والد و فرزندانش هر دو ورودی سایدبار دارند
+            '/disease' => ['/disease', '/disease'],
+            '/disease/create' => ['/disease/create', '/disease/create'],
+            '/disease/manage' => ['/disease/manage', '/disease/manage'],
+            '/disease/patients' => ['/disease/patients', '/disease/patients'],
+            '/tools' => ['/tools', '/tools'],
+            '/tools/backup' => ['/tools/backup', '/tools/backup'],
+            // ردیف مرزی: فرزند بدون ورودی مستقل → والد
+            '/tools/backup/full' => ['/tools/backup', '/tools/backup'],
             // صفحه‌ای که صفر هایلایت داشت
             '/dashboard' => ['/dashboard', '/dashboard'],
             // کوئری صفحهٔ جاری نباید هایلایت را بشکند (Livewire #[Url])
@@ -76,6 +101,7 @@ class SidebarActiveLinkTest extends TestCase
             '/monitoring?priority=high' => ['/monitoring', '/monitoring'],
             // صفحات فرزند بدون آیتم مستقل → والد
             '/units/chart' => ['/units', '/units'],
+            '/units/export' => ['/units', '/units'],
             '/units/7/map' => ['/units', '/units'],
             // میان‌برهای کوئری‌دار: صفحهٔ واقعی همان /tickets/new است
             '/tickets/new?category=bug' => ['/tickets/new', '/tickets/new'],
@@ -87,21 +113,87 @@ class SidebarActiveLinkTest extends TestCase
     #[DataProvider('pageProvider')]
     public function test_exactly_the_link_for_this_page_is_active(string $page, string $expected): void
     {
-        $this->app->instance('request', Request::create(url($page), 'GET'));
+        $this->assertSame(
+            [$expected],
+            $this->renderedActiveLinks($page),
+            "روی {$page} باید دقیقاً «{$expected}» فعال باشد."
+        );
+    }
 
-        $active = [];
+    /**
+     * #1531 — هیچ روت GETای نباید دو ورودی سایدبار را همزمان فعال کند.
+     * همین هارنس، شش مسیر را پیش از فیکس پیدا می‌کرد.
+     */
+    public function test_no_get_route_activates_two_sidebar_links(): void
+    {
+        $offenders = [];
 
-        foreach (self::LINKS as $link => $exact) {
-            if ((new AccessibleMenuItem(link: $link, exact: $exact))->routeMatches()) {
-                $active[] = $link;
+        foreach (Route::getRoutes()->getRoutes() as $route) {
+            if (! in_array('GET', $route->methods(), true)) {
+                continue;
+            }
+
+            $uri = $route->uri();
+
+            // زیرساخت و API سایدبار ندارند (هش livewire هر نصب متفاوت است).
+            if (Str::startsWith($uri, ['api/', 'livewire', '_boost/', 'storage/'])) {
+                continue;
+            }
+
+            // `/` فقط به `/dashboard` ریدایرکت می‌شود و صفحه‌ای رندر نمی‌کند.
+            if ($uri === '/') {
+                continue;
+            }
+
+            $path = '/'.(string) preg_replace('/\{[^}]+\}/', '1', $uri);
+            $active = $this->renderedActiveLinks($path);
+
+            if (count($active) > 1) {
+                $offenders[$uri] = $active;
             }
         }
 
-        $this->assertSame(
-            [$expected],
-            $active,
-            "روی {$page} باید دقیقاً «{$expected}» فعال باشد."
-        );
+        $this->assertSame([], $offenders, 'این روت‌ها بیش از یک لینک سایدبار را فعال می‌کنند.');
+    }
+
+    /**
+     * لینک‌هایی که سایدبار واقعاً روی این صفحه فعال رندر می‌کند.
+     *
+     * @return array<int, string>
+     */
+    private function renderedActiveLinks(string $page): array
+    {
+        $this->app->instance('request', Request::create(url($page), 'GET'));
+
+        return $this->activeLinksIn(Blade::render('<x-layouts.app>محتوا</x-layouts.app>'));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function activeLinksIn(string $html): array
+    {
+        $dom = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML(str_replace('<!DOCTYPE html>', '', $html));
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath($dom);
+        $nodes = $xpath->query('//nav[@aria-label="منوی اصلی"]//a[contains(@class, "mary-active-menu")]');
+
+        if ($nodes === false) {
+            return [];
+        }
+
+        $active = [];
+
+        foreach ($nodes as $node) {
+            if ($node instanceof \DOMElement) {
+                $active[] = $node->getAttribute('href');
+            }
+        }
+
+        return $active;
     }
 
     /**
@@ -112,14 +204,7 @@ class SidebarActiveLinkTest extends TestCase
      */
     public function test_the_link_list_matches_the_rendered_sidebar(): void
     {
-        ['user' => $user] = $this->createUserWithUnit([
-            'map', 'bw', 'manage_zabbix', 'manage_users', 'manage_hardware',
-            'manage_personnel', 'view_hr_dashboard', 'manage_org_chart',
-            'kargozini', 'organization', 'calendar', 'manage_roles',
-            'create_ticket', 'view_assigned_tickets', 'view_all_tickets',
-        ]);
-        $this->actingAs($user);
-        Session::put('current_unit_id', $user->units()->first()->id);
+        $this->app->instance('request', Request::create(url('/dashboard'), 'GET'));
 
         $html = Blade::render('<x-layouts.app>محتوا</x-layouts.app>');
 
@@ -132,17 +217,25 @@ class SidebarActiveLinkTest extends TestCase
 
         $rendered = [];
 
-        foreach ($xpath->query('//nav[@aria-label="منوی اصلی"]//a[contains(@class, "my-0.5")]') as $a) {
-            $href = $a->getAttribute('href');   // MaryUI هربار `$this->link` را خام می‌ریزد
-            if (str_starts_with($href, '/') && ! str_contains($href, '?')) {
-                $rendered[] = $href;
+        $nodes = $xpath->query('//nav[@aria-label="منوی اصلی"]//a[contains(@class, "my-0.5")]');
+
+        if ($nodes !== false) {
+            foreach ($nodes as $a) {
+                if (! $a instanceof \DOMElement) {
+                    continue;
+                }
+
+                $href = $a->getAttribute('href');   // MaryUI هربار `$this->link` را خام می‌ریزد
+                if (str_starts_with($href, '/') && ! str_contains($href, '?')) {
+                    $rendered[] = $href;
+                }
             }
         }
 
         $rendered = array_values(array_unique($rendered));
         sort($rendered);
 
-        $declared = array_values(array_filter(array_keys(self::LINKS), fn ($l) => ! str_contains($l, '?')));
+        $declared = array_values(array_filter(self::LINKS, fn ($l) => ! str_contains($l, '?')));
         sort($declared);
 
         $this->assertSame($declared, $rendered, 'لیست لینک‌های تست با آیتم‌های واقعی سایدبار یکی نیست.');
