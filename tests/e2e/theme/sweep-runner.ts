@@ -72,6 +72,7 @@ export const SURFACES = [
   'dashboard trend line',
   'dashboard pie slice',
   'hr chart axis text',
+  'hr chart value label',
   'hr chart bar',
   'stitch background',
   'dark: utilities',
@@ -432,6 +433,20 @@ export async function sweepTheme(page: Page, theme: string, recorder: SweepRecor
     await measureText(page, 'hr chart axis text', '#hrChartByUnit .highcharts-axis-labels text', {
       colorProperty: 'fill',
     })
+  );
+  // #1530: the bar-end value labels must stay readable on the card. This is a
+  // regression net, not a detector — the halo that made them black smudges hid
+  // behind the glyph, so `measureText` (which samples the card) passed anyway.
+  // The structural gate lives in tests/e2e/hr/dashboard-charts.spec.ts.
+  recorder.add(
+    theme,
+    'hr chart value label',
+    await measureText(
+      page,
+      'hr chart value label',
+      '#hrChartByUnit .highcharts-data-label text',
+      { colorProperty: 'fill' }
+    )
   );
   // Highcharts 12 paints bars as .highcharts-point (path/rect depending on the
   // renderer) — the bare `rect` selector timed out in the baseline run.

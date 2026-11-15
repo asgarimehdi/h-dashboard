@@ -270,7 +270,19 @@ function renderHrBar(id, rows, color, palette) {
           enabled: true,
           align: 'left',
           format: '{y}',
-          style: { color: palette.text },
+          // #1530: the label sits on the card, outside the bar, so the
+          // `textOutline: '1px contrast'` default has nothing to protect. Worse,
+          // `getContrast()` understands only hex/rgb/named, so the oklch
+          // `--color-base-content` falls back to #000000 and `applyTextOutline`
+          // doubles it to a 2px black halo — a smudge behind 11px bold digits.
+          // Pin all three inherited defaults explicitly instead of relying on
+          // Highcharts' deep merge; `12px` matches `xAxis.labels`.
+          style: {
+            color: palette.text,
+            textOutline: 'none',
+            fontWeight: 'normal',
+            fontSize: '12px',
+          },
         },
       },
     ],

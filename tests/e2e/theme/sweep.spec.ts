@@ -3,8 +3,9 @@ import { installThemeHelpers, BLOCKING_THEMES, VIEWPORT } from './theme-helpers'
 import { SURFACES, SweepRecorder, sweepTheme } from './sweep-runner';
 
 /**
- * #1224 / #1227 — measured health sweep: every SURFACES cell (33, including the
- * #1226 per-variant badge probes) × the blocking theme set.
+ * #1224 / #1227 — measured health sweep: every SURFACES cell (34, including the
+ * #1226 per-variant badge probes and the #1530 HR value-label row) × the
+ * blocking theme set.
  *
  * The blocking set is the pre-#1227 seven (regression lock) plus `WATCH_THEMES`
  * (themes the full 35-theme matrix flagged ❌/🧱). The full 35-theme matrix lives
