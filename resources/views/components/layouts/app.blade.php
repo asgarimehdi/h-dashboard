@@ -15,6 +15,12 @@
          be linked globally below (~11.5 KB of parser-blocking CSS in the hot
          path for three pages that use them). Their pages push them now. --}}
     @stack('styles')
+    {{-- Alpine's `x-cloak` rule lives in resources/css/app.css (#1532), NOT in
+         a nonce'd `<style>` block: Livewire's `wire:navigate` head-merge parses
+         the new page with DOMParser, which strips the nonce, so the block is
+         blocked by `style-src-elem` with a per-run hash — the exact ruling that
+         moved the dashboard widths out of `<style>` in #1496. Do not move it
+         back here. --}}
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 

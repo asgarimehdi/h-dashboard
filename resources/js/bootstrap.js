@@ -11,6 +11,7 @@ import { setupDashboardCharts } from './dashboard-charts';
 import { registerSignalGauge, registerTrafficChart, setupZabbixPoller } from './zabbix-gauges';
 import { registerMapDashboard } from './map-dashboard';
 import { setupMapLayers } from './map-layers';
+import { registerAuthBanner } from './api-fetch';
 
 // The Leaflet lifecycle store (issue #028) is registered on `alpine:init`, not
 // at module evaluation time: window.Alpine does not exist yet when this module
@@ -23,6 +24,7 @@ import { setupMapLayers } from './map-layers';
 // store would then register too late and every x-data init() would find no
 // store, leaving maps silently blank.
 document.addEventListener('alpine:init', () => {
+  registerAuthBanner(window.Alpine);
   registerMapStore(window.Alpine);
   registerMapHost(window.Alpine);
   registerAppComponents(window.Alpine);

@@ -34,6 +34,8 @@
  * originals.
  */
 
+import { ApiAuthError, apiFetch, isAuthFailed } from './api-fetch';
+
 /** @param {AlpineStatic} Alpine */
 export function registerMapDashboard(Alpine) {
   // Unit-details modal (#1383). The template's directive expressions are
@@ -259,6 +261,10 @@ export function registerMapDashboard(Alpine) {
 
       async loadLayers() {
         if (!this.currentBbox) return;
+        // #1532: a 401/403 on any cookie-authenticated call is terminal for
+        // the page — retrying cannot make Sanctum trust this host. The banner
+        // is the only UI; panning must not fire another six doomed requests.
+        if (isAuthFailed()) return;
 
         const bbox = this.currentBbox;
         // Same-origin fetch: the web session cookie authenticates every
@@ -302,15 +308,15 @@ export function registerMapDashboard(Alpine) {
 
       async loadDiseases() {
         if (this.diseases.length > 0) return;
+        if (isAuthFailed()) return;
         if (diseasesPromise) return diseasesPromise;
 
         // Promise kept in a closure local: an Alpine-reactive Promise
         // is proxied, and every `await` would walk the proxy.
         diseasesPromise = (async () => {
           try {
-            const response = await fetch(`${this.apiBase}/diseases`, {
+            const response = await apiFetch(`${this.apiBase}/diseases`, {
               headers: this.apiHeaders(),
-              credentials: 'include',
             });
             if (!response.ok) throw new Error(`diseases ${response.status}`);
 
@@ -332,7 +338,11 @@ export function registerMapDashboard(Alpine) {
               this.disease.id = this.diseases[0].id;
               this.loadDiseaseLayer(true);
             }
-          } catch {
+          } catch (/** @type {any} */ error) {
+            // #1532: the shared banner owns the auth message; no per-layer
+            // copy, and no retry — `loadLayers()` is latched off too.
+            if (error instanceof ApiAuthError) return;
+
             this.diseaseError = 'بارگذاری فهرست بیماری‌ها ناموفق بود.';
           } finally {
             diseasesPromise = null;
@@ -345,6 +355,7 @@ export function registerMapDashboard(Alpine) {
       async loadDiseaseLayer(force = false) {
         if (!map || !this.activeLayers.includes('diseases')) return;
         if (!this.disease.id) return;
+        if (isAuthFailed()) return;
 
         const level = map.getZoom() >= DISEASE_ZOOM_SWITCH ? 'unit' : 'region';
 
@@ -369,9 +380,8 @@ export function registerMapDashboard(Alpine) {
         if (level === 'unit' && this.currentBbox) params.set('bbox', this.currentBbox);
 
         try {
-          const response = await fetch(`${this.apiBase}/disease-map?${params}`, {
+          const response = await apiFetch(`${this.apiBase}/disease-map?${params}`, {
             headers: this.apiHeaders(),
-            credentials: 'include',
           });
           if (!response.ok) throw new Error(`disease-map ${response.status}`);
 
@@ -396,6 +406,10 @@ export function registerMapDashboard(Alpine) {
           this.applyDiseaseLevel(level, data.features, data.meta || {});
         } catch (/** @type {any} */ error) {
           if (requestId !== this.diseaseRequestId) return;
+
+          // #1532: auth failure is the shared banner's story, not a layer
+          // error — it must not also paint `diseaseError`.
+          if (error instanceof ApiAuthError) return;
 
           // Keep the previous level on screen: a failed refresh must
           // not blank the map.
@@ -648,10 +662,18 @@ export function registerMapDashboard(Alpine) {
        */
       async fetchAndRender(url, layerGroup, type, headers) {
         try {
-          const response = await fetch(url, { headers, credentials: 'include' });
+          const response = await apiFetch(url, { headers });
+
+          // #1532: never parse a non-GIS body into `renderGeoJSON` — the
+          // `{"message":"Unauthenticated."}` envelope used to clear the layer
+          // and make a 401 look like an empty viewport.
+          if (!response.ok) throw new Error(`${type} ${response.status}`);
+
           const data = await response.json();
           this.renderGeoJSON(data, layerGroup, type);
         } catch (e) {
+          if (e instanceof ApiAuthError) return;
+
           console.error(`Failed to load ${type}:`, e);
         }
       },
@@ -662,10 +684,14 @@ export function registerMapDashboard(Alpine) {
        */
       async fetchStats(bbox, headers) {
         try {
-          const response = await fetch(`${this.apiBase}/stats?bbox=${bbox}`, { headers, credentials: 'include' });
+          const response = await apiFetch(`${this.apiBase}/stats?bbox=${bbox}`, { headers });
+          if (!response.ok) throw new Error(`stats ${response.status}`);
+
           const data = await response.json();
           this.stats = data;
         } catch (e) {
+          if (e instanceof ApiAuthError) return;
+
           console.error('Failed to load stats:', e);
         }
       },

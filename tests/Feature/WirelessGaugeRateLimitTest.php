@@ -241,10 +241,13 @@ class WirelessGaugeRateLimitTest extends TestCase
      *
      * Deliberately matches the call, not the bare URL, so a PHPDoc or `//`
      * comment that merely *mentions* the endpoint cannot inflate the count.
+     *
+     * `apiFetch()` (#1532) is the shared cookie-authenticated wrapper — it is
+     * still exactly one network call, so it counts as a call site.
      */
     private function countEndpointFetches(string $source): int
     {
-        return preg_match_all('/fetch\(\s*[`\'"]\/api\/zabbix\/multi-latest/', $source);
+        return preg_match_all('/(?:api)?fetch\(\s*[`\'"]\/api\/zabbix\/multi-latest/i', $source);
     }
 
     private function flushZabbixCache(): void

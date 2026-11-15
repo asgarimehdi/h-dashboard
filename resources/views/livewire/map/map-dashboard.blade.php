@@ -279,6 +279,12 @@ return new class extends Component
         </div>
     </div>
 
+    {{-- #1532: one banner for the whole page when `/api/gis/*` answers 401 —
+         never one per layer. The map itself stays interactive. --}}
+    <x-api-auth-banner
+        message="دسترسی به داده‌های نقشه برقرار نشد؛ دوباره وارد شوید."
+        class="absolute top-20 left-1/2 -translate-x-1/2 z-20 w-auto max-w-lg" />
+
     <!-- Map Element: the shared maps.map component owns the Leaflet instance
          (Alpine.store('map')); this page only attaches its layers via onReady. -->
     <livewire:maps.map wire:key="map-dashboard-page-map" />

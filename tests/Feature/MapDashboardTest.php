@@ -315,45 +315,80 @@ class MapDashboardTest extends TestCase
     }
 
     /**
-     * Issue #1399 — deployment trap regression pin.
+     * Issue #1399 → #1532 — deployment trap regression pin.
      *
-     * `config/sanctum.php` appends `Sanctum::currentApplicationUrlWithPort()`
-     * (derived from `APP_URL`) to the hardcoded localhost defaults ONLY when
-     * `SANCTUM_STATEFUL_DOMAINS` is unset. A deployment that sets that variable
-     * without the real app host silently 401s every cookie-authenticated
-     * `/api/gis/*` fetch and the map goes blank.
+     * `config/sanctum.php` used to append the `APP_URL` host ONLY when
+     * `SANCTUM_STATEFUL_DOMAINS` was unset. Every deployment that served the
+     * app from any other host or port (sad1:8000, a LAN IP, a second port)
+     * therefore 401'd every cookie-authenticated `/api/*` fetch and the map —
+     * plus the Zabbix charts — went blank. `.env.example` pins the variable
+     * explicitly, so the `APP_URL` fallback was unreachable in practice.
      *
-     * Not every environment leaves the variable unset — CI's `.env.testing`
-     * inherits `.env.example`'s explicit `h-dashboard.test`. So the assertion
-     * that must hold everywhere is that the fallback append is still wired;
-     * when no explicit list is configured, the resolved list must also contain
-     * the app host.
+     * The list is merged now: the request host Sanctum resolves per request
+     * (`Sanctum::$currentRequestHostPlaceholder`) and the `APP_URL` host are
+     * always present, and env can only ADD origins. Both env shapes are
+     * evaluated straight from the config file — the cached `config()` value
+     * cannot tell us what an env-pinned deployment would resolve to.
      *
      * @test
      */
-    public function test_sanctum_stateful_defaults_cover_the_app_url_host(): void
+    public function test_sanctum_stateful_always_covers_the_app_url_and_request_hosts(): void
     {
         $appHost = ltrim(Sanctum::currentApplicationUrlWithPort(), ',');
 
         $this->assertNotSame('', $appHost, 'APP_URL must carry a host for Sanctum stateful matching.');
 
-        $explicit = env('SANCTUM_STATEFUL_DOMAINS');
+        $originalEnv = $_ENV['SANCTUM_STATEFUL_DOMAINS'] ?? null;
+        $originalServer = $_SERVER['SANCTUM_STATEFUL_DOMAINS'] ?? null;
 
-        if (is_string($explicit) && $explicit !== '') {
-            // The operator pinned a list; the app controls only its fallback.
-            $this->assertStringContainsString(
-                'Sanctum::currentApplicationUrlWithPort()',
-                (string) file_get_contents(config_path('sanctum.php')),
-                'config/sanctum.php must keep appending the APP_URL host when SANCTUM_STATEFUL_DOMAINS is unset.',
+        try {
+            // Shape 1: an operator pinned a list. The list may name any
+            // origins it likes; the request host and APP_URL host must survive
+            // the merge anyway.
+            $_ENV['SANCTUM_STATEFUL_DOMAINS'] = 'operator-pinned.test';
+            $_SERVER['SANCTUM_STATEFUL_DOMAINS'] = 'operator-pinned.test';
+
+            /** @var array{stateful: array<int, string>} $pinned */
+            $pinned = require config_path('sanctum.php');
+
+            $this->assertContains(
+                Sanctum::$currentRequestHostPlaceholder,
+                $pinned['stateful'],
+                'A pinned SANCTUM_STATEFUL_DOMAINS must not drop the placeholder for the host the app is served from (#1532).',
             );
+            $this->assertContains(
+                $appHost,
+                $pinned['stateful'],
+                "A pinned SANCTUM_STATEFUL_DOMAINS must not drop the APP_URL host ({$appHost}) (#1532).",
+            );
+            $this->assertContains('operator-pinned.test', $pinned['stateful'], 'Extra origins from env must still be allowlisted.');
+            $this->assertNotContains('', $pinned['stateful'], 'Empty entries would make Str::is match every host.');
 
-            return;
+            // Shape 2: the variable is unset — the localhost defaults plus both
+            // host-derived entries.
+            unset($_ENV['SANCTUM_STATEFUL_DOMAINS'], $_SERVER['SANCTUM_STATEFUL_DOMAINS']);
+
+            /** @var array{stateful: array<int, string>} $fallback */
+            $fallback = require config_path('sanctum.php');
+
+            $this->assertContains(
+                Sanctum::$currentRequestHostPlaceholder,
+                $fallback['stateful'],
+                'The default stateful list must carry the per-request host placeholder (#1532).',
+            );
+            $this->assertContains($appHost, $fallback['stateful'], "The default stateful list must carry the APP_URL host ({$appHost}).");
+        } finally {
+            if ($originalEnv === null) {
+                unset($_ENV['SANCTUM_STATEFUL_DOMAINS']);
+            } else {
+                $_ENV['SANCTUM_STATEFUL_DOMAINS'] = $originalEnv;
+            }
+
+            if ($originalServer === null) {
+                unset($_SERVER['SANCTUM_STATEFUL_DOMAINS']);
+            } else {
+                $_SERVER['SANCTUM_STATEFUL_DOMAINS'] = $originalServer;
+            }
         }
-
-        $this->assertContains(
-            $appHost,
-            config('sanctum.stateful'),
-            "SANCTUM_STATEFUL_DOMAINS must include the app host ({$appHost}) or cookie-authenticated /api/gis/* fetches 401.",
-        );
     }
 }
