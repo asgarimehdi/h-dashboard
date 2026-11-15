@@ -4,10 +4,10 @@ on:
   pull_request:
     branches: [main, beta, test]
   # The `mutation` job below runs on PRs too (re-enabled 2026-10-25,
-  # reversing the manual-only gate from #1012): it runs in parallel under
-  # E2E's ~30-minute shadow and gates nothing (`continue-on-error: true`).
-  # A manual run executes every job, so read the mutation job's own result,
-  # not the run's overall conclusion.
+  # reversing the manual-only gate from #1012) and blocks since #1502
+  # (`--min=41`): it runs in parallel with E2E, so while green it adds no
+  # wall time. A manual run executes every job, so read the mutation job's
+  # own result, not the run's overall conclusion.
   workflow_dispatch:
 
 concurrency:
@@ -29,6 +29,28 @@ jobs:
         with:
           php-version: '8.5'
           tools: composer:latest
+
+      # Issue #1506. No CI step audited the dependencies, so an advisory
+      # affecting a reachable runtime path surfaced only on a machine where
+      # somebody remembered to run `composer audit`. It runs before
+      # `composer install` because `--locked` needs only composer.lock — no
+      # dependency code, script or plugin executes first — and it runs in
+      # `lint` for the same reason the APP_KEY guard below does: that is the
+      # cheapest blocking job, so a vulnerable lock fails a PR in seconds.
+      #
+      # The script, not the exit code, decides: `composer audit` exits 1 for an
+      # advisory AND for a hard error (invalid lock, unreachable advisory DB),
+      # and its `--ignore-severity` filter never matches a null severity
+      # (Composer applies it only to string severities) and accepts an unknown
+      # value silently. critical/high/null block; medium/low are reported.
+      - name: 'Audit PHP dependencies (blocking: critical/high)'
+        run: |
+          set +e
+          composer audit --locked --format=json --no-interaction --abandoned=report > composer-audit.json
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+          php scripts/dependency-audit-gate.php composer-audit.json
 
       - name: Cache Composer download cache
         uses: actions/cache@v5
@@ -80,6 +102,15 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      # Issue #1506 — the JS half of the dependency gate. `--package-lock-only`
+      # reads package-lock.json and works without node_modules, so this runs
+      # before `npm ci`. npm's `--audit-level=high` IS the policy on this side:
+      # it sets the failure threshold and still prints moderate/low, and npm has
+      # no null severity (Composer spells the report-only tier `medium`, npm
+      # `moderate`).
+      - name: 'Audit JS dependencies (blocking: high/critical)'
+        run: npm audit --package-lock-only --audit-level=high
 
       - name: Install dependencies
         # `npm ci` also proves package.json and package-lock.json agree.
@@ -369,7 +400,6 @@ jobs:
     # 5 failed / 2 flaky / 6 did not run. The second precondition (the two
     # collateral fixes land in separate PRs) is unchanged — see #867's git
     # review.
-    continue-on-error: true
 
     services:
       postgres:
@@ -544,9 +574,10 @@ jobs:
     timeout-minutes: 20
     # Gate 2 (#1352, decision الف): a SEPARATE, BLOCKING job — no
     # `continue-on-error` (unlike the `e2e` job above, which stays
-    # non-blocking per #867). It runs ONLY tests/e2e/security/csp.spec.ts
-    # with CSP_ENFORCING=true: the spec detects enforcing mode from the
-    # `content-security-policy` header and demands zero enforced violations.
+    # non-blocking per #867). It runs tests/e2e/security/csp.spec.ts and
+    # tests/e2e/settings/browser-notifications.spec.ts with CSP_ENFORCING=true:
+    # the specs detect enforcing mode from the `content-security-policy`
+    # header and demand zero enforced violations.
     # Flipping the whole suite to enforcing is the rollout step (Finding F1),
     # not this gate. This job must be added to the branch's required status
     # checks (admin) for the "blocking" part to bite — the workflow alone
@@ -649,20 +680,24 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run CSP spec in enforcing mode (list reporter proves execution)
+      - name: Run CSP specs in enforcing mode (list reporter proves execution)
         # Through scripts/e2e-test.sh ONLY (see the `e2e` job's comment).
-        # --timeout=120000: the spec walks 7 pages with networkidle waits;
+        # --timeout=120000: the specs walk 8 pages with networkidle waits;
         # it took 29.5s on a slow local VM, so the 30s default is marginal
         # even before CI variance. The timeout is harness headroom, not a
         # spec change.
-        run: bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
+        run: |
+          set -o pipefail
+          bash scripts/e2e-test.sh tests/e2e/security/csp.spec.ts tests/e2e/settings/browser-notifications.spec.ts --timeout=120000 --reporter=list 2>&1 | tee csp-gate-list.log
 
-      - name: Assert the gate spec really executed
+      - name: Assert the gate specs really executed
         run: |
           EXECUTED=$(grep -cE '✓|✔|passed \(' csp-gate-list.log || true)
           echo "csp gate executed-test lines: ${EXECUTED}"
           grep -qE '[0-9]+ passed' csp-gate-list.log
+          grep -q 'tests/e2e/settings/browser-notifications.spec.ts' csp-gate-list.log
           test "${EXECUTED}" -gt 0
+          if grep -q '✘' csp-gate-list.log; then echo "CSP gate: failing tests present in csp-gate-list.log"; exit 1; fi
 
   smoke:
     name: Smoke Tests (actions)
@@ -784,16 +819,18 @@ jobs:
   mutation:
     name: Mutation Testing
     # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
-    # gate from #1012): each run is expensive (checkout, composer install
-    # and migrations before the single `pest --mutate` line below, ~30
-    # minutes as of 2026-10-28), but it runs in parallel with E2E and
-    # gates nothing (`continue-on-error: true`), so it adds no wall time.
+    # gate from #1012) and blocks since #1502: each run is expensive
+    # (checkout, composer install and migrations before the single
+    # `pest --mutate` line below, ~30 minutes as of 2026-10-28), but it
+    # runs in parallel with E2E, so while it is green it adds no wall time.
+    # `--min=41` is a ratchet on the measured beta floor (41.84%,
+    # 359/858 mutants on 46f9cbc): raise it as coverage lands, never lower
+    # it without an open tracking issue.
     # Cap 45 minutes (raised from 30 on 2026-10-28 after the job hit the
     # 30-minute timeout on #1270 and #1271).
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Non-blocking: the score is informational and gates nothing.
-    continue-on-error: true
+    # Blocking: a score below the threshold fails this job and the PR.
 
     services:
       postgres:
@@ -862,9 +899,10 @@ jobs:
 
       - name: Run mutation tests
         # @covers declarations scope mutations to tested code.
-        # No --min threshold: the job is informational (continue-on-error: true)
-        # and reports the mutation score without blocking PRs.
-        run: ./vendor/bin/pest --mutate --parallel --covered-only
+        # `--min=41` is a ratchet on the measured beta floor (41.84% on
+        # 46f9cbc, #1502). The `=` is load-bearing: a bare `--min 41` is
+        # swallowed by Pest's coverage plugin, the gate never arms.
+        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=41
 
   phpstan:
     name: PHPStan Static Analysis
@@ -915,8 +953,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Informational only: PHP 8.6 is pre-release (RC3 2026-10-08, GA 2026-11-19).
-    # Same precedent as the mutation job — never blocks a merge; it surfaces
-    # 8.6 incompatibilities and deprecations while there is still time to fix them.
+    # It never blocks a merge; it surfaces 8.6 incompatibilities and
+    # deprecations while there is still time to fix them.
     continue-on-error: true
 
     services:
@@ -964,19 +1002,16 @@ jobs:
             composer-vendor-${{ runner.os }}-
 
       - name: Install dependencies
-        # The *locked* versions cap php at 8.5: nette/schema v1.3.6 (8.1 - 8.5) and
-        # nette/utils v4.1.5 (8.2 - 8.5), both on the production path via
-        # league/commonmark -> league/config -> nette/schema -> nette/utils, plus
-        # brianium/paratest v7.20.0 (~8.3.0 || ~8.4.0 || ~8.5.0, dev) — so a plain
-        # install cannot even resolve on 8.6, with or without dev dependencies. The
-        # preview installs the locked packages anyway — surfacing real 8.6 behaviour
-        # is the job's whole point. Drop the flag once a plain install resolves on
-        # 8.6: nette is open upstream (nette/schema >=1.4.0 and nette/utils >=4.1.6
-        # allow 8.6 and sit inside today's ^1.2/^4.0, so a lock refresh clears both),
-        # while brianium/paratest needs >=7.25.0 (~8.4.0 || ~8.5.0 || ~8.6.0; 7.24.1
-        # still caps at 8.5) and that pulls phpunit ^13.3.4 (pest 5) — a test-stack
-        # major, not a bump. This flag exists ONLY in this job; it carries production
-        # weight, not just tooling.
+        # The *locked* versions cap php at 8.5: brianium/paratest v7.20.0
+        # (~8.3.0 || ~8.4.0 || ~8.5.0, dev) is the only one left — nette/schema
+        # v1.4.0 (8.1 - 8.6) and nette/utils v4.1.6 (8.2 - 8.6) cleared with the
+        # #1506 lock refresh — so a plain install cannot resolve on 8.6, with or
+        # without dev dependencies. The preview installs the locked packages
+        # anyway — surfacing real 8.6 behaviour is the job's whole point. Drop the
+        # flag once a plain install resolves on 8.6: brianium/paratest needs
+        # >=7.25.0 (~8.4.0 || ~8.5.0 || ~8.6.0) and that pulls phpunit ^13.3.4
+        # (pest 5) — a test-stack major, not a bump. This flag exists ONLY in this
+        # job.
         run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php
 
       # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls

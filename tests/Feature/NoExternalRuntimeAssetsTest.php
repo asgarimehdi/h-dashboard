@@ -99,7 +99,7 @@ final class NoExternalRuntimeAssetsTest extends TestCase
             'host' => 'tile.openstreetmap.org',
             'expected' => 1,
             'kind' => 'config-default',
-            'reason' => 'پیش‌فرضِ TILE_URL_TEMPLATE، تنها اهرم واقعیِ مقصد کاشی؛ فقط literal کد در :19 شمرده می‌شود، نه کامنت :16.',
+            'reason' => 'پیش‌فرضِ TILE_URL_TEMPLATE، تنها اهرم واقعیِ مقصد کاشی؛ فقط literal کد در :9 شمرده می‌شود، نه کامنت :6.',
         ],
         [
             'path' => 'config/queue.php',
@@ -185,8 +185,8 @@ final class NoExternalRuntimeAssetsTest extends TestCase
             $rows["{$group} relative css url"] = [$group, 'background: url(/img/x.png)', false];
         }
 
-        // config/map.php:16 is a comment literal directly above the counted
-        // :19 literal — no comment stripping, so the regex must not match it.
+        // config/map.php:6 is a comment literal above the counted :9 literal
+        // (lines 7-8 sit between them) — no comment stripping, so the regex must not match it.
         $rows['config-default commented literal'] = ['config-default', '// https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', false];
         $rows['load-call relative fetch'] = ['load-call', "fetch('/api/x')", false];
         $rows['tile-layer variable'] = ['tile-layer', 'L.tileLayer(mapTileTemplate)', false];

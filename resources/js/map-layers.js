@@ -12,14 +12,16 @@
  * `@script` evaluated them outside the parser; they move here with
  * mechanical translations:
  *
- * - `maps/point`: `$wire.get('location')` becomes
- *   `Livewire.find()` resolved from the `[data-point-map]` marker
- *   on the component root. The checkbox bindings use a dataset
- *   guard (the chunk-5 `jdpBound` pattern) so re-running setup on
- *   the same DOM never stacks duplicate listeners. The canvas
- *   `lineRenderer` is reset per `onReady` (the original got a
- *   fresh one per `@script` evaluation); the icon cache stays
- *   module-level (icons are map-independent).
+ * - `maps/point`: the marker set is published in an inert JSON block
+ *   (`#point-locations-data`, #1481) and read inside the existing
+ *   `store.onReady` — never through the Livewire snapshot, which
+ *   used to carry the whole payload. `[data-point-map]` stays as the
+ *   page guard. The checkbox bindings use a dataset guard (the
+ *   chunk-5 `jdpBound` pattern) so re-running setup on the same DOM
+ *   never stacks duplicate listeners. The canvas `lineRenderer` is
+ *   reset per `onReady` (the original got a fresh one per `@script`
+ *   evaluation); the icon cache stays module-level (icons are
+ *   map-independent).
  * - `maps/unit`: the four layer-state dicts reset on every
  *   `onReady` (the original got fresh state per `@script`
  *   evaluation; stale entries would make `showUnits` skip units
@@ -104,14 +106,6 @@ function setupPointMap() {
   if (!marker || typeof window.Alpine === 'undefined') {
     return;
   }
-  const root = marker.closest('[wire\\:id]');
-  const component =
-    root && typeof window.Livewire !== 'undefined'
-      ? window.Livewire.find(/** @type {string} */ (root.getAttribute('wire:id')))
-      : null;
-  if (!component) {
-    return;
-  }
 
   // The store is registered on `alpine:init`; `livewire:init` can fire
   // first (map-pages.js guard, same shape) — the alpine:init setup
@@ -134,12 +128,18 @@ function setupPointMap() {
     let lineRenderer = L.canvas({ padding: 0.5 });
     lineRenderer.addTo(map);
 
-    // The locations already crossed the wire once, inside this
-    // component's Livewire snapshot — read them from the component
-    // instead of embedding a second copy of the payload in the page
-    // (issue #776).
+    // #1481: the marker set arrives in an inert JSON block published by
+    // the host page — it no longer crosses the wire inside the Livewire
+    // snapshot. Read it here, once per map ready.
     /** @type {any[]} */
-    const allLocations = component.get('location') ?? [];
+    let allLocations = [];
+    try {
+      const block = document.getElementById('point-locations-data');
+      allLocations = JSON.parse(block?.textContent || '[]');
+    } catch (e) {
+      console.error('[map] point locations are not valid JSON', e);
+      return;
+    }
     const byId = new Map(allLocations.map((l) => [l.id, l]));
 
     // Perf: memoised depth (was: a full re-scan per node — O(N·depth)).

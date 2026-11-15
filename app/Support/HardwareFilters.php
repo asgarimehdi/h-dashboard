@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Hardware;
+use App\Models\Person;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -50,6 +51,19 @@ class HardwareFilters
     private const NORMALIZED_TEXT_FIELDS = ['os', 'cpu', 'ram', 'hdd', 'net_type'];
 
     /**
+     * Largest `n_code` list the general search will pre-resolve into an `IN`
+     * arm before falling back to the semi-join (#1482).
+     *
+     * Patch B: PostgreSQL builds a BitmapOr on the outer relation only when
+     * every OR arm is indexable there; `whereHas('person')` compiles to an
+     * EXISTS semi-join, so the hardware scan stays sequential even when its
+     * subplan is fully indexed (126.7 ms vs 3.1 ms with 800 codes in the
+     * spike). The cap keeps a one-character term from building a 50k-element
+     * parameter list — past it the semi-join is the cheaper shape.
+     */
+    public const JOIN_ARM_CAP = 5000;
+
+    /**
      * Apply every supplied filter. Keys match the request/Livewire parameter
      * names: search, type, os, cpu, ram, hdd, shutdown, net_type, mark, person,
      * unit, semat.
@@ -79,6 +93,10 @@ class HardwareFilters
     /**
      * General search across hardware columns and the owner's full name.
      *
+     * The person arm is pre-resolved into an `IN` list instead of a semi-join:
+     * see {@see self::JOIN_ARM_CAP}. The hardware columns stay BARE — they are
+     * normalized by the model's `saving` hook and already trigram-indexed.
+     *
      * @param  Builder<Hardware>  $query
      */
     public static function applySearch(Builder $query, mixed $term): void
@@ -89,18 +107,38 @@ class HardwareFilters
 
         $term = self::foldedTerm((string) $term);
 
-        $query->where(function (Builder $q) use ($term) {
+        $codes = Person::query()
+            ->where(fn (Builder $person) => $person
+                ->where('f_name_folded', 'LIKE', "%{$term}%")
+                ->orWhere('l_name_folded', 'LIKE', "%{$term}%")
+                ->orWhere('full_name_folded', 'LIKE', "%{$term}%"))
+            ->pluck('n_code')
+            ->all();
+
+        $query->where(function (Builder $q) use ($term, $codes) {
             $q->where('hardwares.pc_name', 'LIKE', "%{$term}%")
                 ->orWhere('hardwares.n_code', 'LIKE', "%{$term}%")
                 ->orWhere('hardwares.ip_valid', 'LIKE', "%{$term}%")
                 ->orWhere('hardwares.ip_local', 'LIKE', "%{$term}%")
                 ->orWhere('hardwares.mac', 'LIKE', "%{$term}%")
-                ->orWhere('hardwares.comments', 'LIKE', "%{$term}%")
-                ->orWhereHas('person', function (Builder $person) use ($term) {
-                    $person->whereRaw(self::foldSeparatorsSql('f_name').' LIKE ?', ["%{$term}%"])
-                        ->orWhereRaw(self::foldSeparatorsSql('l_name').' LIKE ?', ["%{$term}%"])
-                        ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$term}%"]);
-                });
+                ->orWhere('hardwares.comments', 'LIKE', "%{$term}%");
+
+            // An empty list still goes through `orWhereIn()`: Laravel compiles
+            // `whereIn([])` to `0 = 1`, the planner folds the constant away and
+            // the hardware arms stay BitmapOr-able. Falling back to `whereHas`
+            // on empty would re-introduce the outer sequential scan for the
+            // common "no person matches this term" search.
+            if (count($codes) <= self::JOIN_ARM_CAP) {
+                $q->orWhereIn('hardwares.n_code', $codes);
+
+                return;
+            }
+
+            $q->orWhereHas('person', function (Builder $person) use ($term) {
+                $person->where('f_name_folded', 'LIKE', "%{$term}%")
+                    ->orWhere('l_name_folded', 'LIKE', "%{$term}%")
+                    ->orWhere('full_name_folded', 'LIKE', "%{$term}%");
+            });
         });
     }
 
@@ -156,6 +194,9 @@ class HardwareFilters
     /**
      * Owner name / national code, matching the full name too.
      *
+     * Compares the stored folded columns (#1482), which are generated from
+     * `foldSeparatorsSql()` at write time, so the OR is indexable as a whole.
+     *
      * @param  Builder<Hardware>  $query
      */
     public static function applyPerson(Builder $query, mixed $term): void
@@ -167,16 +208,15 @@ class HardwareFilters
         $term = self::foldedTerm((string) $term);
 
         $query->whereHas('person', function (Builder $person) use ($term) {
-            $person->whereRaw(self::foldSeparatorsSql('f_name').' LIKE ?', ["%{$term}%"])
-                ->orWhereRaw(self::foldSeparatorsSql('l_name').' LIKE ?', ["%{$term}%"])
-                ->orWhereRaw('n_code LIKE ?', ["%{$term}%"])
-                ->orWhereRaw(self::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$term}%"]);
+            $person->where('f_name_folded', 'LIKE', "%{$term}%")
+                ->orWhere('l_name_folded', 'LIKE', "%{$term}%")
+                ->orWhere('n_code', 'LIKE', "%{$term}%")
+                ->orWhere('full_name_folded', 'LIKE', "%{$term}%");
         });
     }
 
     /**
-     * Unit name (via `persons.u_id` → `units`). Folds the column because
-     * `Unit` has no normalization hook.
+     * Unit name (via `persons.u_id` → `units`).
      *
      * @param  Builder<Hardware>  $query
      */
@@ -189,13 +229,12 @@ class HardwareFilters
         $term = self::foldedTerm((string) $term);
 
         $query->whereHas('person.unit', function (Builder $unit) use ($term) {
-            $unit->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
+            $unit->where('name_folded', 'LIKE', "%{$term}%");
         });
     }
 
     /**
-     * Job-title name (via `persons.s_id` → `semats`). Folds the column because
-     * `Semat` has no normalization hook.
+     * Job-title name (via `persons.s_id` → `semats`).
      *
      * @param  Builder<Hardware>  $query
      */
@@ -208,7 +247,7 @@ class HardwareFilters
         $term = self::foldedTerm((string) $term);
 
         $query->whereHas('person.semat', function (Builder $semat) use ($term) {
-            $semat->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$term}%"]);
+            $semat->where('name_folded', 'LIKE', "%{$term}%");
         });
     }
 

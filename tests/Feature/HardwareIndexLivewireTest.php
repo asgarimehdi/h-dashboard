@@ -690,10 +690,15 @@ class HardwareIndexLivewireTest extends TestCase
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
-        Livewire::test('hardware.index')
+        $component = Livewire::test('hardware.index')
             ->set('selected', [])
             ->call('bulkMark', true);
-        // Should not throw, just show toast error
+
+        // toast یک JS effect است، نه HTML رندرشده
+        $expression = $component->effects['xjs'][0]['expression'] ?? '';
+        $toast = json_decode(substr($expression, strlen('toast('), -1), true);
+
+        $this->assertSame('هیچ ردیفی انتخاب نشده است.', $toast['toast']['title'] ?? null);
     }
 
     public function test_bulk_mark_updates_selected(): void
@@ -796,10 +801,15 @@ class HardwareIndexLivewireTest extends TestCase
         $this->actingAs($data['user']);
         Session::put('current_unit_id', $data['unit']->id);
 
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkDelete-Empty-PC',
+        ]);
+
         Livewire::test('hardware.index')
             ->set('selected', [])
             ->call('bulkDelete');
-        // Should not throw
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw->id]);
     }
 
     public function test_clear_selection(): void

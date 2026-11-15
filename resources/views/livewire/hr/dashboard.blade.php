@@ -97,19 +97,6 @@ return new class extends Component
             ->toArray();
     }
 
-    /**
-     * Chart data for the JS layer (Highcharts) — called from the blade view
-     * via $wire.chartPayload() so charts re-render without inlining PHP.
-     */
-    public function chartPayload(): array
-    {
-        return [
-            'byUnit' => $this->byUnit,
-            'bySemat' => $this->bySemat,
-            'byTahsil' => $this->byTahsil,
-            'byEstekhdam' => $this->byEstekhdam,
-        ];
-    }
 };
 ?>
 
@@ -152,6 +139,15 @@ return new class extends Component
             <div id="hrChartByEstekhdam" class="w-full hr-chart"></div>
         </x-card>
     </div>
+
+    {{-- Inert chart data for dashboard-charts.js (#1499). Inside the root element:
+         Livewire drops trailing content after the root close tag. Same shape as
+         #dashboard-chart-data (#1352) and the #1042 reports' `data-chart`.
+         The array is built as a variable first: Blade's json directive splits
+         its argument on commas, so an inline four-pair array loses its tail.
+         (The reports' three-pair arrays only survive by coincidence.) --}}
+    @php $hrChart = ['byUnit' => $byUnit, 'bySemat' => $bySemat, 'byTahsil' => $byTahsil, 'byEstekhdam' => $byEstekhdam]; @endphp
+    <div id="hr-chart-data" class="hidden" data-chart='@json($hrChart)'></div>
 
     {{-- Vacancies --}}
     <x-card shadow title="واحدهای بدون پرسنل (Vacancies)" class="mt-4">

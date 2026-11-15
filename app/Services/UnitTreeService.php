@@ -163,10 +163,14 @@ class UnitTreeService
      * Scope-restricted units whose name matches the term.
      *
      * Both sides of the comparison are folded: the term through
-     * `foldedTerm()`, the column through `foldSeparatorsSql()`. Normalizing the
-     * term alone is not enough — the stored text keeps its original code
-     * points, so "حرفه‌ای" (with a ZWNJ) stays invisible to a search for
-     * "حرفه ای" and "آموزش" to a search for "اموزش" (issue #705).
+     * `foldedTerm()`, the column through the stored `name_folded` generated
+     * column (#1482). Normalizing the term alone is not enough — the stored
+     * text keeps its original code points, so "حرفه‌ای" (with a ZWNJ) stays
+     * invisible to a search for "حرفه ای" and "آموزش" to a search for "اموزش"
+     * (issue #705).
+     *
+     * `units` is small (834 rows on the reference DB), so a sequential scan is
+     * the right plan; the win is that the fold is no longer evaluated per row.
      *
      * @param  array<int>  $accessibleIds
      * @return Collection<int, Unit>
@@ -186,7 +190,7 @@ class UnitTreeService
             ->with(['unitType', 'parent.parent.parent.parent.parent.parent'])
             ->where(function ($query) use ($accessibleIds, $folded) {
                 $query->whereIn('id', $accessibleIds);
-                $query->whereRaw(self::foldSeparatorsSql('name').' LIKE ?', ["%{$folded}%"]);
+                $query->where('name_folded', 'LIKE', "%{$folded}%");
             })
             ->get();
     }

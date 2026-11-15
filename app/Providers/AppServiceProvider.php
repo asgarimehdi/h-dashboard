@@ -25,7 +25,6 @@ use App\Services\Zabbix\ZabbixClient;
 use App\Services\ZabbixService;
 use App\Support\VendorRouteGuard;
 use App\View\Components\AccessibleMenuItem;
-use App\View\Components\AccessibleTable;
 use App\View\Components\CspChoicesOffline;
 use App\View\Components\CspFile;
 use App\View\Components\CspMain;
@@ -82,7 +81,7 @@ class AppServiceProvider extends ServiceProvider
         // `tabindex`, and it is built inside the vendor component's own render()
         // heredoc — no call-site attribute can reach it. Re-registering the
         // alias is the only faithful fix; `<x-table>` keeps working unchanged
-        // because AccessibleTable extends Mary's Table.
+        // because CspTable extends Mary's Table through AccessibleTable.
         //
         // #957 (step 2, second half): the sidebar marks the current page with a
         // CSS class only, so a screen reader reports no location at all.

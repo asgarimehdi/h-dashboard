@@ -10,6 +10,7 @@ use Database\Seeders\UnitTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Session;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -29,6 +30,55 @@ class MapsPointLivewireTest extends TestCase
         $this->seedLookupTables();
 
         Cache::flush();
+    }
+
+    /**
+     * Parse the marker set published in the inert JSON block.
+     *
+     * #1481: `$location` is no longer a public property — the block is the
+     * only carrier, so these tests must read it from the rendered HTML.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function publishedLocations(Testable $component): array
+    {
+        preg_match('/id="point-locations-data"[^>]*>(.*?)<\/script>/s', $component->html(), $m);
+
+        return json_decode($m[1] ?? '[]', true) ?? [];
+    }
+
+    /**
+     * Bulk-insert located child units under $parent.
+     *
+     * Raw inserts on purpose: 2,000+ factory rows would dominate the suite's
+     * runtime, and the page only needs rows the scope CTE can find.
+     *
+     * @return array{first: int, last: int}
+     */
+    private function seedLocatedUnits(int $parentId, int $count, string $prefix = 'واحد دارای موقعیت'): array
+    {
+        $now = now();
+        $rows = [];
+
+        for ($i = 1; $i <= $count; $i++) {
+            $rows[] = [
+                'name' => $prefix.' '.$i,
+                'parent_id' => $parentId,
+                'lat' => 35 + ($i / 10000),
+                'lng' => 51 + ($i / 10000),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            Unit::insert($chunk);
+        }
+
+        return [
+            'first' => (int) Unit::where('parent_id', $parentId)->min('id'),
+            'last' => (int) Unit::where('parent_id', $parentId)->max('id'),
+        ];
     }
 
     // ==================== Page load / auth ====================
@@ -101,7 +151,7 @@ class MapsPointLivewireTest extends TestCase
         $component = Livewire::test('maps/point')
             ->assertStatus(200);
 
-        $location = $component->get('location');
+        $location = $this->publishedLocations($component);
         $ids = array_column($location, 'id');
         $this->assertContains($unit->id, $ids);
     }
@@ -117,7 +167,7 @@ class MapsPointLivewireTest extends TestCase
 
         // Verify it's in the results
         $component1 = Livewire::test('maps/point');
-        $location1 = $component1->get('location');
+        $location1 = $this->publishedLocations($component1);
         $found = collect($location1)->firstWhere('id', $unit->id);
         $this->assertEquals(35.6892, (float) $found['lat']);
         $this->assertEquals(51.3890, (float) $found['lng']);
@@ -127,7 +177,7 @@ class MapsPointLivewireTest extends TestCase
         Cache::flush();
 
         $component2 = Livewire::test('maps/point');
-        $location2 = $component2->get('location');
+        $location2 = $this->publishedLocations($component2);
         $found = collect($location2)->firstWhere('id', $unit->id);
         $this->assertEquals(36.0, (float) $found['lat']);
         $this->assertEquals(52.0, (float) $found['lng']);
@@ -144,7 +194,7 @@ class MapsPointLivewireTest extends TestCase
 
         // Confirm it's present
         $component1 = Livewire::test('maps/point');
-        $location1 = $component1->get('location');
+        $location1 = $this->publishedLocations($component1);
         $this->assertNotEmpty(collect($location1)->firstWhere('id', $unit->id));
 
         // Remove coordinates (delete the point)
@@ -152,7 +202,7 @@ class MapsPointLivewireTest extends TestCase
         Cache::flush();
 
         $component2 = Livewire::test('maps/point');
-        $location2 = $component2->get('location');
+        $location2 = $this->publishedLocations($component2);
         $this->assertEmpty(collect($location2)->firstWhere('id', $unit->id));
     }
 
@@ -170,7 +220,7 @@ class MapsPointLivewireTest extends TestCase
 
         // Unit without coordinates should not appear in location
         $component = Livewire::test('maps/point');
-        $location = $component->get('location');
+        $location = $this->publishedLocations($component);
         $this->assertEmpty(collect($location)->firstWhere('id', $unit->id));
     }
 
@@ -194,7 +244,7 @@ class MapsPointLivewireTest extends TestCase
         Cache::flush();
 
         $component = Livewire::test('maps/point');
-        $location = $component->get('location');
+        $location = $this->publishedLocations($component);
         $ids = array_column($location, 'id');
         $this->assertContains($unit->id, $ids);
         $this->assertContains($child->id, $ids);
@@ -216,7 +266,7 @@ class MapsPointLivewireTest extends TestCase
         Cache::flush();
 
         $component = Livewire::test('maps/point');
-        $location = $component->get('location');
+        $location = $this->publishedLocations($component);
         $this->assertEmpty(collect($location)->firstWhere('id', $orphan->id));
     }
 
@@ -240,5 +290,129 @@ class MapsPointLivewireTest extends TestCase
         Livewire::test('maps/point')
             ->assertSee('استان تازه')
             ->assertDontSee('استان کهنه');
+    }
+
+    // ==================== #1481: payload out of the snapshot, bound disclosed ====================
+
+    public function test_snapshot_stays_light_with_more_than_the_cap(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+
+        // The factory unit carries coordinates; null them so the marker set is
+        // exactly the seeded children.
+        $unit->update(['lat' => null, 'lng' => null]);
+
+        // Lowest id among the children, so it lands inside the published slice.
+        $uniqueName = 'واحد یکتای باند 1481';
+        Unit::create([
+            'name' => $uniqueName,
+            'parent_id' => $unit->id,
+            'lat' => 34.5,
+            'lng' => 50.5,
+        ]);
+        $this->seedLocatedUnits($unit->id, 2049);
+
+        $component = Livewire::test('maps/point')->assertOk();
+        $snapshotJson = (string) json_encode($component->snapshot);
+
+        // No per-marker property — the array must not travel in the snapshot.
+        $this->assertArrayNotHasKey('location', $component->snapshot['data']);
+        $this->assertStringNotContainsString($uniqueName, $snapshotJson);
+
+        // ...and it IS published, so the absence above means "moved", not
+        // "lost": the block is the carrier now.
+        $this->assertStringContainsString($uniqueName, $component->html());
+
+        // ~3 kB measured for this page's non-marker payload ($types +
+        // $regions + meta); the old public $location snapshot measured
+        // 158,261 B on the dev database. 8,000 leaves room for env noise,
+        // not for a relapse.
+        $this->assertLessThan(8000, strlen($snapshotJson), 'the snapshot payload grew — a marker array slipped back into public state');
+    }
+
+    public function test_cap_is_ordered_and_disclosed(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+        $unit->update(['lat' => null, 'lng' => null]);
+
+        $range = $this->seedLocatedUnits($unit->id, 2001);
+
+        $component = Livewire::test('maps/point')->assertOk();
+        $locations = $this->publishedLocations($component);
+        $ids = array_column($locations, 'id');
+
+        // A deterministic slice, not just "a" slice: ordered by id, the first
+        // 2,000 rows win and the highest id — the 2,001st row — is the one
+        // that is dropped.
+        $this->assertCount(2000, $locations);
+        $this->assertEquals($range['first'], $ids[0]);
+        $this->assertEquals($range['first'] + 1999, $ids[1999]);
+        $this->assertNotContains($range['last'], $ids);
+
+        // And the bound is disclosed with the real numbers.
+        $html = $component->html();
+        $this->assertStringContainsString('data-point-truncation', $html);
+        $this->assertStringContainsString('2,000', $html);
+        $this->assertStringContainsString('2,001', $html);
+    }
+
+    public function test_no_indicator_below_the_cap(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+        $unit->update(['lat' => null, 'lng' => null]);
+
+        $this->seedLocatedUnits($unit->id, 3);
+
+        $component = Livewire::test('maps/point')->assertOk();
+
+        $this->assertCount(3, $this->publishedLocations($component));
+        $this->assertStringNotContainsString('data-point-truncation', $component->html());
+    }
+
+    public function test_locations_published_once(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+
+        $unit->update(['lat' => 35.6892, 'lng' => 51.3890]);
+
+        $component = Livewire::test('maps/point')->assertOk();
+        $html = $component->html();
+
+        // Exactly one carrier (the county shape): the inert block, never
+        // also the snapshot.
+        $this->assertSame(1, substr_count($html, 'id="point-locations-data"'));
+        $this->assertCount(1, $this->publishedLocations($component));
+        $this->assertStringNotContainsString('"location"', (string) json_encode($component->snapshot));
+    }
+
+    public function test_parent_outside_scope_is_published_for_the_line(): void
+    {
+        // An ancestor of the session unit: outside the accessible set, but its
+        // marker is what the child's connection line points at.
+        $parent = Unit::create([
+            'name' => 'والد بیرون از دامنه',
+            'lat' => 34.0,
+            'lng' => 50.0,
+        ]);
+
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['map']);
+        $this->actingAs($user);
+        Session::put('current_unit_id', $unit->id);
+
+        $unit->update(['parent_id' => $parent->id, 'lat' => 35.0, 'lng' => 51.0]);
+
+        $component = Livewire::test('maps/point')->assertOk();
+        $ids = array_column($this->publishedLocations($component), 'id');
+
+        $this->assertContains($unit->id, $ids);
+        $this->assertContains($parent->id, $ids);
     }
 }

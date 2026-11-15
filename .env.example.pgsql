@@ -19,10 +19,6 @@ TRUSTED_PROXIES=
 TRUSTED_HOSTS=
 # ── Map / routing / geocoding servers ──
 # تایل/نقشه (OpenStreetMap)
-# فقط TILE_URL_TEMPLATE اثر دارد؛ سه متغیر زیر رزرو شده‌اند — map.tile_url مصرف‌کننده ندارد.
-TILE_SERVER_IP=tile.openstreetmap.org
-TILE_SERVER_PORT=
-TILE_SERVER_SCHEME=https
 # قالب کامل آدرس تایل (OSM)
 TILE_URL_TEMPLATE=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 # مسیریابی (OSRM)
@@ -109,7 +105,7 @@ VITE_HOST=localhost
 VITE_PORT=5173
 #OCTANE_SERVER=frankenphp
 
-CACHE_DRIVER=redis
+CACHE_STORE=redis
 SESSION_DRIVER=redis
 QUEUE_CONNECTION=redis
 

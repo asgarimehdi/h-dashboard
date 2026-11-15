@@ -58,6 +58,47 @@ test('search page starts with empty state', function () {
         ->assertSet('results.units', []);
 });
 
+test('single persian letter does not search, and the public method stays guarded', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('search.index')
+        ->set('query', 'ا')             // 1 character / 2 bytes
+        ->assertSet('hasSearched', false)
+        ->assertSet('results', ['tickets' => [], 'todos' => [], 'users' => [], 'units' => []]);
+
+    // Snapshot-reachable public method: the second guard must not run the search either.
+    $component->call('search')
+        ->assertSet('hasSearched', false)
+        ->assertSet('results.units', []);
+});
+
+test('two persian letters still search', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('search.index')->set('query', 'تس');
+
+    expect($component->get('hasSearched'))->toBeTrue()
+        ->and($component->get('results.units.0.name'))->toBe('واحد تست');
+});
+
+test('single ascii letter still does not search', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('search.index')
+        ->set('query', 'a')
+        ->assertSet('hasSearched', false)
+        ->assertSet('results.units', []);
+});
+
+test('whitespace-only query does not search', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('search.index')
+        ->set('query', '  ')
+        ->assertSet('hasSearched', false)
+        ->assertSet('results.units', []);
+});
+
 test('search page filters tickets by query', function () {
     $this->actingAs($this->user);
     $this->user->givePermissionTo('view_all_tickets');

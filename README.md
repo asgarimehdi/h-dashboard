@@ -23,7 +23,7 @@ Health Dashboard is a Laravel application for managing hospital/healthcare cente
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Laravel 13, PHP 8.5 |
+| Backend | Laravel 13, PHP 8.4 |
 | Frontend | Livewire 4, MaryUI (DaisyUI 5), Tailwind CSS 4, Alpine.js |
 | Database | PostgreSQL 16 (PostGIS) |
 | Cache/Queue | Redis |
@@ -33,7 +33,7 @@ Health Dashboard is a Laravel application for managing hospital/healthcare cente
 
 ### Quick Start
 
-**Prerequisites:** Docker, PHP 8.5, Composer, Node.js 24+
+**Prerequisites:** Docker, PHP 8.4, Composer, Node.js 24+
 
 ```bash
 # 1. Clone
@@ -108,7 +108,7 @@ composer test
 
 ### نصب و راه‌اندازی
 
-پیش‌نیاز: Docker، PHP 8.5، Composer، Node.js 24+
+پیش‌نیاز: Docker، PHP 8.4، Composer، Node.js 24+
 
 ```bash
 # ۱. کلون کردن مخزن

@@ -18,12 +18,11 @@
  *   so a theme switch after a morph paints the fresh payload —
  *   the same direction the #1042 report pattern already chose
  *   (the original re-used the init-time literal).
- * - HR: `await $wire.chartPayload()` becomes
- *   `component.call('chartPayload')` on the component resolved
- *   from a chart container's enclosing `[wire:id]` root.
- *   `$wire.$on('$refresh')` is kept when the component object
- *   offers `$on`; the `morphed` hook (same id guard as the
- *   reports) covers the refresh path regardless.
+ * - HR: the chart payload is an inert JSON block (`#hr-chart-data`)
+ *   rendered inside the component root, next to the chart containers.
+ *   The `morphed` hook re-reads that block only — never the server.
+ *   A request inside a `morphed` hook re-morphs and loops (#1499):
+ *   the morph wipes the chart SVG, so the repaint itself is mandatory.
  * - Both `theme-changed` window listeners are once-guarded: the
  *   module re-runs setup on every navigation, while the originals
  *   registered once per `@script` evaluation.
@@ -35,18 +34,8 @@
 
 const themeListenersRegistered = new Set();
 const hrHooksRegistered = new Set();
-const hrOnRegistered = new Set();
 /** @type {any} */
 let hrChartData = null;
-
-/** @param {Element} element */
-function componentFor(element) {
-  const root = element.closest('[wire\\:id]');
-  if (!root || typeof window.Livewire === 'undefined') {
-    return null;
-  }
-  return window.Livewire.find(/** @type {string} */ (root.getAttribute('wire:id')));
-}
 
 /* ---------------- main dashboard: ticket charts ---------------- */
 
@@ -300,13 +289,27 @@ function paintHrCharts() {
   renderHrBar('hrChartByEstekhdam', hrChartData.byEstekhdam, palette.colors[3], palette);
 }
 
-async function renderHrCharts() {
-  const anchor = document.getElementById('hrChartByUnit');
-  const component = anchor ? componentFor(anchor) : null;
-  if (!component) {
+/** @returns {Record<string, any> | null} */
+function readHrChartData() {
+  const block = document.getElementById('hr-chart-data');
+  if (!block) {
+    return null;
+  }
+  try {
+    return JSON.parse(block.getAttribute('data-chart') || '{}');
+  } catch {
+    return null;
+  }
+}
+
+// Repaint from the server-rendered block — never from the server. A `morphed`
+// hook that makes a request re-morphs and loops (#1499).
+function renderHrCharts() {
+  const data = readHrChartData();
+  if (!data) {
     return;
   }
-  hrChartData = await component.call('chartPayload');
+  hrChartData = data;
   paintHrCharts();
 }
 
@@ -324,21 +327,14 @@ function setupHrCharts() {
     return;
   }
   waitForHighchartsHr(renderHrCharts);
-  const component = componentFor(anchor);
   const id = anchor.closest('[wire\\:id]')?.getAttribute('wire:id');
-  if (component && id) {
-    if (!hrOnRegistered.has(id)) {
-      hrOnRegistered.add(id);
-      component.$on?.('$refresh', () => renderHrCharts());
-    }
-    if (!hrHooksRegistered.has(id) && typeof window.Livewire !== 'undefined') {
-      hrHooksRegistered.add(id);
-      Livewire.hook('morphed', ({ component: morphed }) => {
-        if (morphed.id === id) {
-          renderHrCharts();
-        }
-      });
-    }
+  if (id && !hrHooksRegistered.has(id) && typeof window.Livewire !== 'undefined') {
+    hrHooksRegistered.add(id);
+    Livewire.hook('morphed', ({ component: morphed }) => {
+      if (morphed.id === id) {
+        renderHrCharts();
+      }
+    });
   }
   if (!themeListenersRegistered.has('hr')) {
     themeListenersRegistered.add('hr');

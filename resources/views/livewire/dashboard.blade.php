@@ -504,7 +504,7 @@ return new class extends Component
                         <span class="font-bold">{{ $completedTodos }} / {{ $totalTodos }} ({{ $todoPercent }}%)</span>
                     </div>
                     <div class="w-full bg-base-200 rounded-full h-3">
-                        <div id="todo-progress-fill" class="bg-success h-3 rounded-full transition-all duration-500"></div>
+                        <div id="todo-progress-fill" :style="{ width: '{{ $todoPercent }}%' }" class="bg-success h-3 rounded-full transition-all duration-500"></div>
                     </div>
                 </div>
 
@@ -542,7 +542,7 @@ return new class extends Component
                         <span class="font-bold">{{ $linkedTodos }} / {{ $totalTodos }} ({{ $linkedPercent }}%)</span>
                     </div>
                     <div class="w-full bg-base-200 rounded-full h-3">
-                        <div id="linked-progress-fill" class="bg-secondary h-3 rounded-full transition-all duration-500"></div>
+                        <div id="linked-progress-fill" :style="{ width: '{{ $linkedPercent }}%' }" class="bg-secondary h-3 rounded-full transition-all duration-500"></div>
                     </div>
                 </div>
 
@@ -660,12 +660,11 @@ return new class extends Component
     <script src="{{ asset('js/chart/accessibility.js') }}"></script>
     @endassets
 
-    {{-- Issue #1352: the progress-fill widths are data-driven, so they live in
-         this nonce'd block (rendered server-side) instead of `style=`
-         attributes, which `style-src-attr` no longer allows. --}}
-    <style nonce="{{ Vite::cspNonce() }}">
-        #todo-progress-fill { width: {{ $todoPercent }}%; }
-        #linked-progress-fill { width: {{ $linkedPercent }}%; }
-    </style>
+    {{-- Issue #1352 / #1496: the progress-fill widths are data-driven. They are
+         set via object `:style` (CSSOM, CSP-exempt — same precedent as
+         map-dashboard) instead of a nonce'd `<style>` block: the nonce does
+         not survive wire:navigate (the head-merge parses the new page with
+         DOMParser, which strips it), so the block violated `style-src-elem`
+         with a per-run hash. Do not move the widths back into `<style>`. --}}
 
 </div>

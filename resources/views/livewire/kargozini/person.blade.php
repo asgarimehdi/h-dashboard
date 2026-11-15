@@ -337,7 +337,8 @@ return new class extends Component
             ->withAggregate('unit', 'name');
 
         if (! empty($this->search)) {
-            // Fold both the column and the term for Persian char equivalence.
+            // The column side is the stored folded copy (#1482), so the
+            // predicates are indexable; only the term is folded here.
             // Each whitespace-separated term must match (AND); within a term,
             // any of n_code / "first last" / "last first" / unit name counts.
             $terms = array_values(array_filter(explode(' ', PersianNormalizer::normalizeForSearch($this->search)), fn ($t) => $t !== ''));
@@ -348,12 +349,10 @@ return new class extends Component
                     $q->where(function ($tq) use ($foldedTerm) {
                         // n_code is numeric only - keep raw LIKE
                         $tq->where('n_code', 'LIKE', "%{$foldedTerm}%")
-                            // Fold CONCAT columns for Persian equivalence
-                            ->orWhereRaw(PersianNormalizer::foldSeparatorsSql("CONCAT(f_name, ' ', l_name)").' LIKE ?', ["%{$foldedTerm}%"])
-                            ->orWhereRaw(PersianNormalizer::foldSeparatorsSql("CONCAT(l_name, ' ', f_name)").' LIKE ?', ["%{$foldedTerm}%"])
-                            // Fold unit name column
+                            ->orWhere('full_name_folded', 'LIKE', "%{$foldedTerm}%")
+                            ->orWhere('full_name_rev_folded', 'LIKE', "%{$foldedTerm}%")
                             ->orWhereHas('unit', function ($uq) use ($foldedTerm) {
-                                $uq->whereRaw(PersianNormalizer::foldSeparatorsSql('name').' LIKE ?', ["%{$foldedTerm}%"]);
+                                $uq->where('name_folded', 'LIKE', "%{$foldedTerm}%");
                             });
                     });
                 }

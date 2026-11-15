@@ -6,58 +6,36 @@ use Closure;
 use Illuminate\Contracts\View\View;
 
 /**
- * Table with the accessibility affordances maryUI does not ship (#957, step 2).
- *
- * WHY THIS EXISTS
- * ---------------
- * `<x-table>` is a maryUI component, so its markup lives in vendor/ and cannot be
- * edited from the app. Its sortable header rendered as a bare `<th>` with an
- * `@click` and nothing else: no `aria-sort`, so no screen reader ever said
- * "sorted ascending", and no `tabindex`, so the sort control was unreachable by
- * keyboard at all. The `<th>` is inside maryUI's own `render()` heredoc and
- * receives no `$attributes`, so there is no call-site change that can add these —
- * the only faithful fix is an app-owned component registered over the alias.
+ * MaryUI Table with the accessibility affordances maryUI does not ship (#957,
+ * step 2) and CSP-safe selection state (#1352).
  *
  * WHAT IS AND IS NOT MIRRORED
  * ---------------------------
- * `render()` is a verbatim copy of `Mary\View\Components\Table::render()` with exactly
- * one difference: the sortable `<th>` gains `aria-sort`, `tabindex="0"`, and the
- * two `@keydown` bindings. Everything else — `x-data`, `wire:key`s, `@scope`
- * slots, expandable/selectable branches, pagination — is untouched on purpose, so
- * the 15 call sites behave exactly as before.
+ * `render()` is a verbatim copy of `Mary\View\Components\Table::render()` with
+ * two groups of differences only:
+ *
+ *  - the sortable `<th>` gains `aria-sort`, `tabindex="0"`, and the two
+ *    `@keydown` bindings (#957) — `ariaSort()` is inherited from
+ *    `AccessibleTable`, not duplicated;
+ *  - the `@entangle` `x-data` literal becomes `x-data="maryTable"` plus three
+ *    `data-*` attributes, and the two `||` class expressions become ternaries
+ *    (#1352), because the CSP-safe Alpine build cannot evaluate
+ *    directive-expression entangle, method shorthand, or `||` in a binding.
+ *    The selection sync lives in `resources/js/mary-components.js`.
+ *
+ * Everything else — `wire:key`s, `@scope` slots, expandable/selectable
+ * branches, pagination — is untouched on purpose, so the 15 call sites behave
+ * exactly as before.
  *
  * MAINTENANCE
  * -----------
  * Re-sync this file against `vendor/robsontenorio/mary/src/View/Components/Table.php`
- * after any `robsontenorio/mary` upgrade, and keep the `mary-active-menu`-style
- * coupling in mind for sibling components. AccessibilityInfrastructureTest pins
- * both the new contract and the sort payload the click handler still sends.
+ * after any `robsontenorio/mary` upgrade; `tests/Feature/MaryUiMirrorTest.php`
+ * declares the exact transform and fails on any unexplained line.
  *
  * Registered in AppServiceProvider::boot(); a deployment must clear the compiled
  * Blade cache (`php artisan view:cache` after `view:clear`) or the alias change
  * will not reach already-compiled views.
- */
-/**
- * MaryUI Table with CSP-safe selection state (#1352), building on
- * AccessibleTable (#957).
- *
- * WHAT IS AND IS NOT MIRRORED
- * ---------------------------
- * `render()` is a verbatim copy of `AccessibleTable::render()` —
- * including the `aria-sort`/`tabindex`/`@keydown` header affordances
- * — with exactly three differences: the `@entangle` `x-data` literal
- * becomes `x-data="maryTable"` (the selection is synced manually
- * from `$wire` in `resources/js/mary-components.js`, because
- * directive-expression entangle evaluates to `undefined` under the
- * CSP build); and the two `||` class expressions become ternaries
- * (`||` in a directive is outside the proven subset). `ariaSort()`
- * is inherited, not duplicated.
- *
- * MAINTENANCE
- * -----------
- * Re-sync against AccessibleTable/vendor Table.php after any
- * `robsontenorio/mary` upgrade. Registered in
- * AppServiceProvider::boot() (replacing the AccessibleTable alias).
  */
 class CspTable extends AccessibleTable
 {

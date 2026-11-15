@@ -4,10 +4,12 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\Backup\BackupService;
+use App\Services\Backup\RestoreService;
 use App\Support\Backup\TableRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\Support\Concerns\InteractsWithBackupFiles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -16,6 +18,14 @@ uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class, Int
 
 beforeEach(function () {
     $this->seedLookupTables();
+
+    // The "leaves no temp file behind" tests glob the backup directory, so it
+    // must belong to this test alone: four parallel workers share the real one.
+    $this->useIsolatedBackupStorage();
+});
+
+afterEach(function () {
+    $this->removeIsolatedBackupStorage();
 });
 
 test('table export returns exactly the seeded rows with every column', function () {
@@ -47,6 +57,29 @@ test('table export keeps soft deleted rows', function () {
     expect($rows)->toHaveCount(1);
     expect($rows[0]['id'])->toBe(601);
     expect($rows[0]['deleted_at'])->not->toBeNull();
+});
+
+test('the export omits generated columns and the restore recomputes them', function () {
+    $unit = Unit::create(['name' => 'مرکز آزمون']);
+    Person::factory()->create(['u_id' => $unit->id]);
+
+    $foldedBefore = DB::table('persons')->value('f_name_folded');
+    $rows = $this->backupZipJson(app(BackupService::class)->exportTable('persons')->path, 'persons.json');
+
+    $columns = app(TableRegistry::class)->columns('persons');
+
+    // A generated column cannot be written back: PostgreSQL refuses a
+    // non-DEFAULT value with SQLSTATE 428C9. It is derived data, so the backup
+    // and the column list both leave it out.
+    expect($columns)->not->toContain('f_name_folded');
+    expect($columns)->not->toContain('full_name_folded');
+    expect(array_keys($rows[0]))->toEqualCanonicalizing($columns);
+
+    // ... and nothing is lost: the restore writes the base columns and
+    // PostgreSQL recomputes the fold for every row.
+    app(RestoreService::class)->restoreTable('persons', $rows);
+
+    expect(DB::table('persons')->value('f_name_folded'))->toBe($foldedBefore);
 });
 
 test('an empty table exports an empty array', function () {
@@ -195,9 +228,14 @@ test('a full export holds the id ordered rows of every table', function () {
     $manifest = $this->backupZipJson($archive->path, 'manifest.json');
 
     foreach (app(TableRegistry::class)->tables() as $table) {
+        // The registry's column list is the backup's contract: every column
+        // PostgreSQL accepts on a write. Generated columns are excluded — the
+        // database refuses an explicit value for them (#1482).
+        $columns = app(TableRegistry::class)->columns($table);
+
         $expected = array_map(
             fn (object $row): array => (array) $row,
-            DB::table($table)->orderBy('id')->get()->all()
+            DB::table($table)->select($columns)->orderBy('id')->get()->all()
         );
 
         expect($entries)->toHaveKey($table.'.json');
@@ -254,22 +292,35 @@ test('a table payload is encoded byte for byte in the pinned canonical form', fu
 });
 
 test('a failing table read leaves no temp file behind', function () {
-    $directory = storage_path('app/private/backup');
-    $before = glob($directory.'/*') ?: [];
+    // Paratest runs this file in 4 processes against ONE shared
+    // storage/app/private/backup, and a concurrent `exportAll()` stages its own
+    // `.part` files there — so the directory-wide diff below saw foreign files
+    // (the leftovers that broke CI all shared a single foreign run id) and
+    // failed at random. Give this test its own storage root: then the diff can
+    // only ever see files this export created.
+    $storageRoot = sys_get_temp_dir().'/h-dashboard-backup-'.getmypid().'-'.uniqid();
+    $this->app->useStoragePath($storageRoot);
 
-    // The first table is read and staged, the second one does not exist, so
-    // the export fails after it already wrote a temp file.
-    $this->app->instance(TableRegistry::class, new class extends TableRegistry
-    {
-        public function tables(): array
+    try {
+        $directory = storage_path('app/private/backup');
+        $before = glob($directory.'/*') ?: [];
+
+        // The first table is read and staged, the second one does not exist, so
+        // the export fails after it already wrote a temp file.
+        $this->app->instance(TableRegistry::class, new class extends TableRegistry
         {
-            return ['hardwares', 'a_table_that_does_not_exist'];
-        }
-    });
+            public function tables(): array
+            {
+                return ['hardwares', 'a_table_that_does_not_exist'];
+            }
+        });
 
-    expect(fn () => app(BackupService::class)->exportAll())->toThrow(QueryException::class);
+        expect(fn () => app(BackupService::class)->exportAll())->toThrow(QueryException::class);
 
-    expect(array_values(array_diff(glob($directory.'/*') ?: [], $before)))->toBe([]);
+        expect(array_values(array_diff(glob($directory.'/*') ?: [], $before)))->toBe([]);
+    } finally {
+        File::deleteDirectory($storageRoot);
+    }
 });
 
 test('a failure while zipping the staged files leaves no partial archive behind', function () {

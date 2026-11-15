@@ -20,9 +20,21 @@ return new class extends Component
 
     public bool $showHelpModal = false;
 
+    /**
+     * Shortest query (in CHARACTERS, not bytes) that triggers a search.
+     * `strlen()` counted bytes, so one Persian letter (2 bytes) passed (#1483).
+     * Measured after trim(): whitespace is not a search term.
+     */
+    private const MIN_SEARCH_LENGTH = 2;
+
+    private function hasSearchableQuery(): bool
+    {
+        return mb_strlen(trim($this->query)) >= self::MIN_SEARCH_LENGTH;
+    }
+
     public function updatedQuery(): void
     {
-        if (strlen($this->query) < 2) {
+        if (! $this->hasSearchableQuery()) {
             $this->results = ['tickets' => [], 'todos' => [], 'users' => [], 'units' => []];
             $this->hasSearched = false;
 
@@ -33,7 +45,7 @@ return new class extends Component
 
     public function search(): void
     {
-        if (strlen($this->query) < 2) {
+        if (! $this->hasSearchableQuery()) {
             return;
         }
 

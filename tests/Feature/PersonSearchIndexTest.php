@@ -20,8 +20,13 @@ use Tests\TestCase;
  * `concat()` is STABLE (not IMMUTABLE), so the planner can never fold
  * `((f_name || ' ' || l_name))` and `CONCAT(f_name, ' ', l_name)` into the same
  * expression tree — every keystroke sequential-scanned `persons`. The three
- * unfolded call sites are swapped to `||`; the folded sites (wrapped in
- * `foldSeparatorsSql()`) stay as they are because no index can serve them.
+ * unfolded call sites are swapped to `||`.
+ *
+ * Issue #1482 later moved the FOLDED sites off the per-row expression and onto
+ * stored generated columns (`f_name_folded`, `l_name_folded`,
+ * `full_name_folded`, `full_name_rev_folded`) with plain trigram indexes, so
+ * those sites are indexable too. The three tripwires below are the UNFOLDED
+ * sites, which keep the bare-column expression indexes.
  *
  * The swap is only safe because `f_name` and `l_name` are NOT NULL: `||` is
  * NULL-propagating, while `concat()` treats NULL as an empty string. Both the

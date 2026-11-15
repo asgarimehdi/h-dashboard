@@ -18,10 +18,30 @@ import { execSync } from 'child_process';
 
 test.describe('daily window is materialised', () => {
   let token: string;
+  let emptyScopeToken: string;
 
   test.beforeAll(async () => {
     token = execSync(
       `php tests/e2e/create-token.php ${TEST_USER.nCode} "reports:read"`,
+      { cwd: process.cwd(), encoding: 'utf-8' },
+    ).trim();
+
+    // A throwaway account whose unit is created after `migrate:fresh --seed`
+    // owns no todos and no tickets. On an empty scope a plain GROUP BY returns
+    // no days at all, so a full window of zeros is the decisive proof that the
+    // window materialised the days, not the rows — and it does not depend on
+    // how the seed happened to fall. (`TodoSeeder` spreads 50 todos over the
+    // last 60 days and skips Fridays — TodoSeeder.php:29, :90, :97-99 — and the
+    // ticket seed geometry is described next to the ticket tests below.)
+    const nCode = `8${Date.now().toString().slice(-7)}${String(
+      Math.floor(Math.random() * 100),
+    ).padStart(2, '0')}`;
+    execSync(
+      `php tests/e2e/create-pwd-user.php ${nCode} ${TEST_USER.password} "E2E-empty-${nCode}"`,
+      { cwd: process.cwd(), encoding: 'utf-8' },
+    );
+    emptyScopeToken = execSync(
+      `php tests/e2e/create-token.php ${nCode} "reports:read"`,
       { cwd: process.cwd(), encoding: 'utf-8' },
     ).trim();
   });
@@ -51,6 +71,16 @@ test.describe('daily window is materialised', () => {
     expect(points).toBeGreaterThan(0);
   });
 
+  /**
+   * Ticket seed geometry (TicketSeeder.php:51, :60, :74-75): 50 tickets dated
+   * `now()->subMonths(3)` + rand(0, 90) days, so the last seeded day lands
+   * between today-2 and today+1. On ~75% of calendar dates that leaves the tail
+   * of a 7/30-day window outside the seed and a zero day is structural, but
+   * from March to May every day of both windows is reachable and a lucky draw
+   * can fill them (worst case ~1 in 518 runs for days=7). Never assert
+   * `some(count === 0)` on 7/30 here — the zero-fill contract is pinned by the
+   * 365-day window and the empty scope below instead.
+   */
   test('GET /api/reports/tickets returns a full window of days', async ({ request }) => {
     const response = await request.get('/api/reports/tickets', {
       headers: { Authorization: `Bearer ${token}` },
@@ -60,9 +90,7 @@ test.describe('daily window is materialised', () => {
     const body = await response.json();
 
     expect(body.by_day).toHaveLength(30);
-    // Zero-filled days exist, not only the days that have rows.
     expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
-    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
 
     // Ascending, oldest first.
     const days = body.by_day.map((d: any) => d.day);
@@ -78,10 +106,57 @@ test.describe('daily window is materialised', () => {
     const body = await response.json();
 
     expect(body.by_day).toHaveLength(7);
+    const days = body.by_day.map((d: any) => d.day);
+    expect(new Set(days).size).toBe(7);
+    expect(days).toEqual([...days].sort());
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+  });
+
+  test('GET /api/reports/tickets?days=30 on an empty scope returns thirty zeros', async ({ request }) => {
+    // Same proof as the todos block: a plain GROUP BY over zero rows returns no
+    // days at all, so a full window of zeros shows the window materialised the
+    // days, not the rows.
+    const empty = await request.get('/api/reports/tickets?days=30', {
+      headers: { Authorization: `Bearer ${emptyScopeToken}` },
+    });
+    expect(empty.ok()).toBeTruthy();
+    const body = await empty.json();
+    expect(body.by_day).toHaveLength(30);
+    expect(body.by_day.every((d: any) => d.count === 0)).toBeTruthy();
+    expect(body.total).toBe(0);
+  });
+
+  test('GET /api/reports/tickets?days=365 keeps a zero for a day with no tickets', async ({ request }) => {
+    const response = await request.get('/api/reports/tickets?days=365', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+    // 365 is DailySeries::MAX_DAYS and TicketSeeder can only reach 91 days back
+    // (TicketSeeder.php:51,60), so empty days exist whatever the date. The sum is
+    // `<= total`, not `=== total`: the seed's window can end one day AFTER today
+    // on ~8.5% of dates, and a future-dated ticket is counted by `total` but sits
+    // outside a window that ends today (ReportController.php:125 vs :128).
+    expect(body.by_day).toHaveLength(365);
+    expect(body.total).toBeGreaterThan(0);
+    expect(body.by_day.reduce((n: number, d: any) => n + d.count, 0)).toBeLessThanOrEqual(body.total);
     expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
   });
 
-  test('GET /api/reports/todos?days=14 fills empty days too', async ({ request }) => {
+  test('GET /api/reports/todos?days=14 returns the whole window, oldest first', async ({ request }) => {
+    // An empty scope still has to come back as a materialised window of 14
+    // days: a plain GROUP BY over zero rows returns no days at all.
+    const empty = await request.get('/api/reports/todos?days=14', {
+      headers: { Authorization: `Bearer ${emptyScopeToken}` },
+    });
+
+    expect(empty.ok()).toBeTruthy();
+    const emptyBody = await empty.json();
+
+    expect(emptyBody.by_day).toHaveLength(14);
+    expect(emptyBody.by_day.every((d: any) => d.count === 0)).toBeTruthy();
+
+    // The seeded scope keeps the same shape, ascending and oldest first.
     const response = await request.get('/api/reports/todos?days=14', {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -89,7 +164,58 @@ test.describe('daily window is materialised', () => {
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
 
+    // The window decides the shape, never the rows: 14 entries, one per day,
+    // no duplicate and no gap.
     expect(body.by_day).toHaveLength(14);
+    const days = body.by_day.map((d: any) => d.day);
+    expect(new Set(days).size).toBe(14);
+    expect(days).toEqual([...days].sort());
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+
+    // Deliberately NOT asserting a zero-count day on the seeded window: the
+    // zero-fill contract is pinned on the empty scope above, which does not
+    // depend on the seed geometry. `TodoSeeder` now spreads 50 todos over the
+    // last 60 days and skips Fridays (TodoSeeder.php:29, :90, :97-99), so a
+    // 7+ day window does contain a zero day — but that is the seeder's shape,
+    // not this endpoint's contract. The pre-#1495 seeder (current month, days
+    // 1..28) made this a calendar-dependent coin flip and failed run
+    // 43564479894; retries reuse the same seeded database, so it was reported
+    // `failed`, not `flaky`.
+  });
+
+  test('GET /api/reports/todos?days=365 keeps a zero for a day with no todos', async ({ request }) => {
+    const response = await request.get('/api/reports/todos?days=365', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+
+    // 365 is `DailySeries::MAX_DAYS`, so this also pins the cap. A year-long
+    // window always reaches days before the seeded month, where no todo can
+    // exist — those days must come back as `0`, not as a gap.
+    expect(body.by_day).toHaveLength(365);
+    expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
+  });
+
+  test('GET /api/reports/todos crosses a month boundary and still fills empty days', async ({ request }) => {
+    // 40 days is wider than any month, so the window always reaches into the
+    // previous month — and `TodoSeeder` only seeds the CURRENT month (random
+    // days, never future). That guarantees at least one day with no rows.
+    // A 14-day window cannot: from the 14th onward it stays inside the seeded
+    // month, where 50 random draws over 14 days leave no gap ~70% of the time,
+    // so this test failed on CI intermittently (issue #1483 PR run).
+    const response = await request.get('/api/reports/todos?days=40', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+
+    expect(body.by_day).toHaveLength(40);
+    // Zero-filled days exist, not only the days that have rows.
+    expect(body.by_day.every((d: any) => typeof d.count === 'number')).toBeTruthy();
     expect(body.by_day.some((d: any) => d.count === 0)).toBeTruthy();
   });
 
