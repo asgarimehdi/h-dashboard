@@ -308,29 +308,11 @@ export function registerAppComponents(Alpine) {
     },
 
     noHelpContent() {
-      return ![
-        'dashboard',
-        'hardware',
-        'hardware-import',
-        'persons-import',
-        'personnel',
-        'units',
-        'tickets',
-        'todos',
-        'reports',
-        'maps',
-        'settings',
-        'roles',
-        'permissions',
-        'users',
-        'activity-log',
-        'networks',
-        'wireless',
-        'tools',
-        'search',
-        'profile',
-        'hr-dashboard',
-      ].includes(this.helpSection);
+      // #1535: the section list is rendered from config('help.sections') as
+      // `data-sections` on the modal root; keep no second list here.
+      const sections = (this.$el.dataset.sections || '').split(',');
+
+      return !sections.includes(this.helpSection);
     },
   }));
 

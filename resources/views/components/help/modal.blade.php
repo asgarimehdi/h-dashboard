@@ -6,78 +6,24 @@
     // view's data. Livewire shares the rendering instance as $__livewire, which
     // lets us read the open flag without touching the call sites.
     $helpModalOpen = data_get($__livewire ?? null, $wireModel, false);
+    // #1535: one registry. The section list lives in config/help.php; the same
+    // list is handed to Alpine below so `noHelpContent()` cannot drift from it.
+    $helpSections = config('help.sections');
 @endphp
 
 <div
     x-data="helpModal"
     data-section="{{ $helpSection }}"
+    data-sections="{{ implode(',', $helpSections) }}"
 >
     <x-modal wire:model="{{ $wireModel }}" title="راهنما" separator>
         @if ($helpModalOpen)
             <div class="space-y-6 text-right" dir="rtl">
-                <template x-if="helpSection === 'dashboard'">
-                    <div><x-help-content:dashboard /></div>
-                </template>
-                <template x-if="helpSection === 'hardware'">
-                    <div><x-help-content:hardware /></div>
-                </template>
-                <template x-if="helpSection === 'hardware-import'">
-                    <div><x-help-content:hardware-import /></div>
-                </template>
-                <template x-if="helpSection === 'persons-import'">
-                    <div><x-help-content:persons-import /></div>
-                </template>
-                <template x-if="helpSection === 'personnel'">
-                    <div><x-help-content:personnel /></div>
-                </template>
-                <template x-if="helpSection === 'units'">
-                    <div><x-help-content:units /></div>
-                </template>
-                <template x-if="helpSection === 'tickets'">
-                    <div><x-help-content:tickets /></div>
-                </template>
-                <template x-if="helpSection === 'todos'">
-                    <div><x-help-content:todos /></div>
-                </template>
-                <template x-if="helpSection === 'reports'">
-                    <div><x-help-content:reports /></div>
-                </template>
-                <template x-if="helpSection === 'maps'">
-                    <div><x-help-content:maps /></div>
-                </template>
-                <template x-if="helpSection === 'settings'">
-                    <div><x-help-content:settings /></div>
-                </template>
-                <template x-if="helpSection === 'roles'">
-                    <div><x-help-content:roles /></div>
-                </template>
-                <template x-if="helpSection === 'permissions'">
-                    <div><x-help-content:permissions /></div>
-                </template>
-                <template x-if="helpSection === 'users'">
-                    <div><x-help-content:users /></div>
-                </template>
-                <template x-if="helpSection === 'activity-log'">
-                    <div><x-help-content:activity-log /></div>
-                </template>
-                <template x-if="helpSection === 'networks'">
-                    <div><x-help-content:networks /></div>
-                </template>
-                <template x-if="helpSection === 'wireless'">
-                    <div><x-help-content:wireless /></div>
-                </template>
-                <template x-if="helpSection === 'tools'">
-                    <div><x-help-content:tools /></div>
-                </template>
-                <template x-if="helpSection === 'search'">
-                    <div><x-help-content:search /></div>
-                </template>
-                <template x-if="helpSection === 'profile'">
-                    <div><x-help-content:profile /></div>
-                </template>
-                <template x-if="helpSection === 'hr-dashboard'">
-                    <div><x-help-content:hr-dashboard /></div>
-                </template>
+                @foreach ($helpSections as $helpSectionName)
+                    <template x-if="helpSection === '{{ $helpSectionName }}'">
+                        <div>@include("components.help.content.{$helpSectionName}")</div>
+                    </template>
+                @endforeach
 
                 <div x-show="noHelpContent()"
                      class="text-center py-8 text-base-content/50">
