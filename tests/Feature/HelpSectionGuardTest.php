@@ -214,7 +214,13 @@ final class HelpSectionGuardTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            "data-sections=\"{{ implode(',', \$helpSections) }}"",
+            'data-sections="{{ implode',
+            $modal,
+            'مودال باید همان لیست را با data-sections به Alpine بدهد.',
+        );
+
+        $this->assertStringContainsString(
+            '$helpSections) }}"',
             $modal,
             'مودال باید همان لیست را با data-sections به Alpine بدهد.',
         );
