@@ -192,7 +192,7 @@ truth for the first three):
 
 **Sweep policy is two-layer.** The blocking job (`sweep.spec.ts`, seven themes plus
 `WATCH_THEMES`, 34 cells each) runs on every PR and must stay under the 30-minute E2E cap. The
-full **35 × 34 = 1190** matrix runs in `sweep-35.spec.ts` from `.github/workflows/theme-sweep-35.yml`
+full **35 × 36 = 1260** matrix runs in `sweep-35.spec.ts` from `.github/workflows/theme-sweep-35.yml`
 (dispatch, weekly schedule, or a PR labelled `theme-sweep`, 45-minute cap) — a hard lock
 since #1231 (any ❌ fails the job), table in the job summary + artifact. A theme the full run
 flags earns a place in `WATCH_THEMES` (and the per-PR lock) only when its non-badge cells all
