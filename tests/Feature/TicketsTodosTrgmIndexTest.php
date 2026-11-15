@@ -330,7 +330,7 @@ class TicketsTodosTrgmIndexTest extends TestCase
         ];
 
         $this->artisan('migrate:rollback', [
-            '--path' => 'database/migrations/2026_10_20_000001_add_folded_trgm_indexes_to_tickets_search.php',
+            '--path' => 'database/migrations/2026_10_20_000002_add_folded_trgm_indexes_to_tickets_search.php',
         ])->assertSuccessful();
 
         foreach ($folded as $index) {
