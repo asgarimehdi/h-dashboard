@@ -48,6 +48,12 @@ test.describe('CSP audit (#1281)', () => {
   let enforcing: boolean;
 
   test.beforeEach(async ({ page }) => {
+    // Collect from the very first document: the post-login redirect is a
+    // Livewire SPA navigation, and its head-merge is where a nonce'd `<style>`
+    // block loses the nonce (#1532 — DOMParser strips it, so the block trips
+    // `style-src-elem` with a per-run hash). Listening only inside the test
+    // body misses that document entirely.
+    await collectCspViolations(page);
     await login(page);
     const media = await page.request.get('/login');
     const csp = media.headers();
@@ -55,9 +61,15 @@ test.describe('CSP audit (#1281)', () => {
   });
 
   test('no violations on key pages', async ({ page }) => {
-    await collectCspViolations(page);
-
     const violations: CspViolation[] = [];
+
+    // Whatever the login flow itself produced, before the first `goto` resets
+    // the per-document collector.
+    const duringLogin: Omit<CspViolation, 'page'>[] = await page.evaluate(() => (window as any).__csp ?? []);
+    for (const v of duringLogin) {
+      violations.push({ ...v, page: 'login' });
+    }
+
     for (const path of PAGES) {
       await page.goto(path, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1500); // Highcharts / Alpine async init

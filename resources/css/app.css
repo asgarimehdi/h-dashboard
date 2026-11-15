@@ -68,6 +68,16 @@
 }
 
 /* ------------------ */
+/* Alpine's `x-cloak` contract (#1532): one rule for every page — the
+   API-auth banner and every other initially-hidden panel rely on it, and only
+   the auth layout used to define it. It belongs in this stylesheet, not in a
+   nonce'd `<style>` block: Livewire's `wire:navigate` head-merge parses the new
+   page with DOMParser, which strips the nonce, so a block here violates
+   `style-src-elem` with a per-run hash (same ruling as #1496). */
+[x-cloak] {
+    display: none !important;
+}
+
 @font-face {
     font-family: "Vazirmatn";
     src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
