@@ -108,34 +108,9 @@ class AppServiceProvider extends ServiceProvider
         Blade::component('choices-offline', CspChoicesOffline::class);
         Blade::component('file', CspFile::class);
 
-        // Register help-content components dynamically with colon syntax
-        $helpContents = [
-            'dashboard',
-            'hardware',
-            'hardware-import',
-            'persons-import',
-            'personnel',
-            'units',
-            'tickets',
-            'todos',
-            'reports',
-            'maps',
-            'settings',
-            'roles',
-            'permissions',
-            'users',
-            'activity-log',
-            'networks',
-            'wireless',
-            'tools',
-            'search',
-            'profile',
-            'hr-dashboard',
-        ];
-
-        foreach ($helpContents as $content) {
-            Blade::component("components.help.content.{$content}", "help-content:{$content}");
-        }
+        // Help sections live in `config/help.php` and are included directly by
+        // `components/help/modal.blade.php`; no `help-content:` alias is
+        // registered here (#1535 — one registry, not four).
 
         // Register Hardware Audit observer for field-level change tracking
         // (single unified audit source — replaces the old HardwareHistory observer)

@@ -32,8 +32,6 @@ final class HelpSectionGuardTest extends TestCase
 
     private const HELP_CONTENT_DIR = 'resources/views/components/help/content';
 
-    private const APP_PROVIDER = 'app/Providers/AppServiceProvider.php';
-
     private const APP_COMPONENTS = 'resources/js/app-components.js';
 
     private const CALL_SITE = '/<x-help:(modal|button)\b[^>]*>/';
@@ -46,7 +44,7 @@ final class HelpSectionGuardTest extends TestCase
     /** 20 distinct button sections; `todos` has content but no live button. */
     private const BUTTON_SECTIONS = 20;
 
-    /** The four content lists must each hold exactly 21 sections. */
+    /** The registry must hold exactly 21 sections. */
     private const CONTENT_SECTIONS = 21;
 
     /**
@@ -182,33 +180,64 @@ final class HelpSectionGuardTest extends TestCase
     }
 
     /**
-     * A5 — four hand-maintained content lists agree with the content directory.
+     * A5 — the single registry agrees with the content directory, and both
+     * readers read from it instead of keeping their own lists.
      *
-     * The fifth list (the HelpSystemTest data provider) is derived from the
-     * directory, so it cannot drift from its own definition and is not parsed
-     * here: a reformat would break the guard, not a stale section.
+     * #1535 Phase 0 deleted the three hand-maintained lists this test used to
+     * pin ($helpContents, the modal x-if chain, noHelpContent()). What remains
+     * is one registry, config/help.php, and two readers: the modal iterates it
+     * (and hands the same list to Alpine via data-sections) and noHelpContent()
+     * reads it from the dataset. A drift between the registry and the content
+     * directory, or a reader that stops reading the registry, fails here.
      */
-    public function test_a5_all_four_content_lists_match_the_content_directory(): void
+    public function test_a5_registry_and_readers_match_the_content_directory(): void
     {
         $contents = $this->contentSections();
 
         $this->assertCount(self::CONTENT_SECTIONS, $contents);
 
-        $lists = [
-            'AppServiceProvider::$helpContents' => $this->providerSections(),
-            'modal.blade.php x-if chain' => $this->modalSections(),
-            'app-components.js noHelpContent()' => $this->jsNoHelpContentSections(),
-        ];
+        $registered = config('help.sections');
+        sort($registered);
 
-        foreach ($lists as $label => $sections) {
-            sort($sections);
+        $this->assertSame(
+            $contents,
+            $registered,
+            'config/help.php با فایل‌های محتوا یکی نیست.',
+        );
 
-            $this->assertSame(
-                $contents,
-                $sections,
-                $label.' با فایل‌های محتوا یکی نیست.',
-            );
-        }
+        $modal = File::get(base_path(self::HELP_MODAL));
+
+        $this->assertStringContainsString(
+            "config('help.sections')",
+            $modal,
+            'مودال باید لیست sectionها را از config/help.php بخواند.',
+        );
+
+        $this->assertStringContainsString(
+            'data-sections="{{ implode',
+            $modal,
+            'مودال باید همان لیست را با data-sections به Alpine بدهد.',
+        );
+
+        $this->assertStringContainsString(
+            '$helpSections) }}"',
+            $modal,
+            'مودال باید همان لیست را با data-sections به Alpine بدهد.',
+        );
+
+        $js = File::get(base_path(self::APP_COMPONENTS));
+
+        $this->assertMatchesRegularExpression(
+            '/noHelpContent\(\)\s*\{[^}]*dataset\.sections/s',
+            $js,
+            'noHelpContent() باید لیست را از dataset بخواند، نه از یک لیست جدا.',
+        );
+
+        $this->assertStringNotContainsString(
+            "'hr-dashboard'",
+            $js,
+            'app-components.js نباید لیست section جدا نگه دارد.',
+        );
     }
 
     /**
@@ -330,50 +359,6 @@ final class HelpSectionGuardTest extends TestCase
         sort($sections);
 
         return $sections;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function providerSections(): array
-    {
-        $source = File::get(base_path(self::APP_PROVIDER));
-
-        if (! preg_match('/\$helpContents\s*=\s*\[(.*?)\];/s', $source, $match)) {
-            $this->fail('آرایهٔ $helpContents در AppServiceProvider پیدا نشد.');
-        }
-
-        preg_match_all('/\'([^\']+)\'/', $match[1], $sections);
-
-        return array_values($sections[1]);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function modalSections(): array
-    {
-        $source = File::get(base_path(self::HELP_MODAL));
-
-        preg_match_all('/x-if="helpSection === \'([^\']+)\'"/', $source, $sections);
-
-        return array_values($sections[1]);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function jsNoHelpContentSections(): array
-    {
-        $source = File::get(base_path(self::APP_COMPONENTS));
-
-        if (! preg_match('/noHelpContent\(\)\s*\{\s*return\s*!\[(.*?)\]/s', $source, $match)) {
-            $this->fail('آرایهٔ noHelpContent() در app-components.js پیدا نشد.');
-        }
-
-        preg_match_all('/\'([^\']+)\'/', $match[1], $sections);
-
-        return array_values($sections[1]);
     }
 
     private function sectionOf(string $tag): ?string
