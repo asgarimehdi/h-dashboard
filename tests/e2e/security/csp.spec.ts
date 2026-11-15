@@ -26,6 +26,9 @@ const PAGES = [
   '/maps/route2',
   '/units',
   '/settings',
+  // #1536: four Highcharts + Alpine on one page — the highest-risk CSP surface
+  // in the app, and it must stay violation-free while it sets chart heights.
+  '/hr-dashboard',
 ];
 
 async function collectCspViolations(page: import('@playwright/test').Page) {
@@ -59,6 +62,12 @@ test.describe('CSP audit (#1281)', () => {
     const csp = media.headers();
     enforcing = csp['content-security-policy'] !== undefined;
   });
+
+  // Nine pages × (networkidle + 1.5s) leaves almost no headroom under
+  // Playwright's 30s default — adding /hr-dashboard (#1536) pushed the walk
+  // over it, and the run failed on budget rather than on a violation. Raise the
+  // budget; the assertion itself is unchanged.
+  test.describe.configure({ timeout: 120_000 });
 
   test('no violations on key pages', async ({ page }) => {
     const violations: CspViolation[] = [];

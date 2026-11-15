@@ -137,16 +137,17 @@ async function measureValueLabels(
 
 test.describe('HR dashboard value labels (#1530)', () => {
   /**
-   * Row overlap is deliberately NOT asserted. The seeded e2e database has 113
-   * units, so `#hrChartByUnit` would need 113 × 28px = 3164px, but the
-   * container is 400px: the `#hrChartByUnit { height: … }` block in
-   * `hr/dashboard.blade.php` is a column-0 `<style>` in a Livewire 4
-   * single-file component, which `SingleFileParser::extractStylePortion()`
-   * pulls out as a CSS module — written verbatim (`{{ max(… ) }}` stays raw,
-   * i.e. invalid CSS) and never linked. Every row is ~3.5px tall, so labels
-   * overlap with or without this fix; that is a separate pre-existing #1352
-   * regression, reported on #1530. This spec still pins what #1530 owns: the
-   * per-label style and that no label is clipped by the container.
+   * Row overlap is deliberately NOT asserted here: it is pinned by the #1536
+   * spec below. When this spec was written the height rule was dead — the
+   * `#hrChartByUnit { height: … }` block in `hr/dashboard.blade.php` is a
+   * column-0 `<style>` in a Livewire 4 single-file component, which
+   * `SingleFileParser::extractStylePortion()` pulls out as a CSS module —
+   * written verbatim (`{{ max(… ) }}` stays raw, i.e. invalid CSS) and never
+   * linked — so every row was ~3.5px tall and labels overlapped with or
+   * without the halo fix. #1536 moved the rule into `dashboard-charts.js`, so
+   * the seeded 113 units now get 3164px and labels render at step 1. This spec
+   * pins what #1530 owns: the per-label style and that no label is clipped by
+   * the container.
    */
   test('all four bar charts render outline-free 12px labels in the theme colour', async ({
     page,
@@ -182,5 +183,102 @@ test.describe('HR dashboard value labels (#1530)', () => {
         ).toBeLessThanOrEqual(0);
       }
     }
+  });
+});
+
+/**
+ * Issue #1536 — chart heights are data-driven (#1352's rule) but the rule lived
+ * in a `<style nonce>` block inside the single-file component. Livewire's
+ * SingleFileParser::extractStylePortion() lifts that tag out verbatim and Blade
+ * never translates it, so `{{ max(240, count($byUnit) * 28) }}` stayed literal
+ * CSS: a dead module. Every chart therefore fell back to Highcharts' 400px box,
+ * where 113 category labels get thinned (step 4) and overlap.
+ *
+ * The rule now runs in dashboard-charts.js off the same `rows` array that feeds
+ * the series. Expectations are derived from the rendered payload, so a seed
+ * change cannot break them — only a broken rule can.
+ */
+const HR_CHARTS = [
+  { id: '#hrChartByUnit', key: 'byUnit', rowHeight: 28 },
+  { id: '#hrChartBySemat', key: 'bySemat', rowHeight: 28 },
+  { id: '#hrChartByTahsil', key: 'byTahsil', rowHeight: 32 },
+  { id: '#hrChartByEstekhdam', key: 'byEstekhdam', rowHeight: 32 },
+] as const;
+
+test.describe('HR dashboard chart heights (#1536)', () => {
+  test('chart heights follow the row counts', async ({ page }) => {
+    await login(page);
+    await page.goto('/hr-dashboard');
+    await page.waitForLoadState('networkidle');
+
+    const payload = await page.evaluate(() =>
+      JSON.parse(document.getElementById('hr-chart-data')!.getAttribute('data-chart') || '{}'));
+
+    // Non-vacuity: under ~15 rows the 240px floor makes every assertion pass.
+    expect(payload.byUnit.length).toBeGreaterThanOrEqual(15);
+
+    for (const { id, key, rowHeight } of HR_CHARTS) {
+      // The charts paint from waitForHighchartsHr's poll, not from networkidle.
+      await page.waitForSelector(`${id} svg`, { state: 'attached' });
+
+      const expected = Math.max(240, payload[key].length * rowHeight);
+      const m = await page.evaluate((sel) => {
+        const el = document.querySelector(sel)!;
+        const chart = (window as any).Highcharts.charts.find((c: any) => c?.renderTo === el);
+        const boxes = [...el.querySelectorAll('.highcharts-xaxis-labels text')]
+          .map((t) => t.getBoundingClientRect()).sort((a, b) => a.top - b.top);
+
+        return {
+          css: parseFloat(getComputedStyle(el).height),
+          chartHeight: chart?.chartHeight,
+          labels: boxes.length,
+          overlaps: boxes.slice(1).filter((b, i) => b.top < boxes[i].bottom - 0.5).length,
+        };
+      }, id);
+
+      expect(m.css, `${id} container height`).toBe(expected);
+      expect(m.chartHeight, `${id} Highcharts height (not the 400 fallback)`).toBe(expected);
+      expect(m.labels, `${id} every category label rendered (step 1)`).toBe(payload[key].length);
+      expect(m.overlaps, `${id} no two labels overlap`).toBe(0);
+    }
+  });
+
+  test('height survives a real morph and a theme switch, set via CSSOM', async ({ page }) => {
+    await login(page);
+    await page.goto('/hr-dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('#hrChartByUnit svg', { state: 'attached' });
+
+    const payload = await page.evaluate(() =>
+      JSON.parse(document.getElementById('hr-chart-data')!.getAttribute('data-chart') || '{}'));
+    const expectedUnit = Math.max(240, payload.byUnit.length * 28);
+
+    const unitHeight = () => page.evaluate(() =>
+      parseFloat(getComputedStyle(document.getElementById('hrChartByUnit')!).height));
+    const liveCharts = () => page.evaluate(
+      () => (window as any).Highcharts.charts.filter(Boolean).length);
+
+    // The height is a runtime CSSOM assignment, never a `style=` attribute
+    // (style-src-attr is not in the policy) and never an inline <style>.
+    expect(await page.evaluate(() => document.getElementById('hrChartByUnit')!.getAttribute('style')))
+      .toContain('height');
+    expect(await unitHeight()).toBe(expectedUnit);
+
+    // A theme switch repaints from the cached payload — same rows, same height.
+    const themeBefore = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    await page.locator('label:has(input.theme-controller)').first().click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
+      .not.toBe(themeBefore);
+    await page.waitForSelector('#hrChartByUnit svg', { state: 'attached' });
+    expect(await unitHeight()).toBe(expectedUnit);
+    expect(await liveCharts()).toBe(4);
+
+    // A real morph (#1499): the help modal commits `showHelpModal` with `$set`.
+    // The `morphed` hook must put the same height back. Runs last — the modal
+    // covers the page until it is dismissed.
+    await page.click('button[aria-label="نمایش راهنمای hr-dashboard"]');
+    await page.waitForTimeout(1000);
+    expect(await unitHeight()).toBe(expectedUnit);
+    expect(await liveCharts()).toBe(4);
   });
 });
