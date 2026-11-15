@@ -33,12 +33,18 @@ class TicketComment extends Model
 {
     use SoftDeletes;
 
+    /**
+     * #1521: `body_html` is deliberately NOT mass-assignable. The thread
+     * renders `body` (escaped) and never the column, so the column is being
+     * retired: no writer, present or future, can repopulate it through mass
+     * assignment. It stays in the database (nullable, inert) until a separate
+     * migration drops it.
+     */
     protected $fillable = [
         'ticket_id',
         'user_id',
         'parent_id',
         'body',
-        'body_html',
         'is_system',
         'system_event',
     ];
