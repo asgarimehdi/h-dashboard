@@ -15,6 +15,14 @@
          be linked globally below (~11.5 KB of parser-blocking CSS in the hot
          path for three pages that use them). Their pages push them now. --}}
     @stack('styles')
+    {{-- Alpine's `x-cloak` contract, once for every page (#1532): the auth
+         banner and every other initially-hidden panel rely on it, and the
+         layout used to define it only in the auth layout. --}}
+    <style nonce="{{ Vite::cspNonce() }}">
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 

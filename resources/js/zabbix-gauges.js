@@ -38,6 +38,8 @@
  * original IIFE).
  */
 
+import { ApiAuthError, apiFetch, isAuthFailed } from './api-fetch';
+
 function ensureGaugeState() {
   // Shared state: whoever runs first creates it; gauges may be
   // built before the page poller, so creating it must be
@@ -116,6 +118,9 @@ export function registerSignalGauge(Alpine) {
       if (
         !this.error &&
         state.loaded &&
+        // #1532: an auth latch is the banner's story; "no data" per gauge
+        // would bury it under a wall of identical messages.
+        !isAuthFailed() &&
         this.signal === null &&
         this.frequency === null &&
         this.responseTime === null
@@ -272,6 +277,11 @@ export function registerTrafficChart(Alpine) {
       if (!this.chart) {
         return;
       }
+      // #1532: a 401/403 already proved this host is not stateful; every
+      // further tick would just be another doomed request.
+      if (isAuthFailed()) {
+        return;
+      }
       if (show) {
         this.loading = true;
       }
@@ -279,7 +289,10 @@ export function registerTrafficChart(Alpine) {
 
       try {
         const url = `/api/zabbix/traffic?out_item_id=${this.outItemId}&in_item_id=${this.inItemId}&duration=${this.duration}`;
-        const res = await fetch(url);
+        // #1532: cookie-authenticated (no bearer token) via `apiFetch`, so a
+        // 401/403 latches the shared banner instead of parsing JSON into an
+        // empty chart.
+        const res = await apiFetch(url);
 
         // #703: 503 means Zabbix is unreachable — show the requested
         // friendly message, not a silent empty chart. Other statuses
@@ -297,6 +310,17 @@ export function registerTrafficChart(Alpine) {
           this.chart.redraw(false);
         }
       } catch (e) {
+        // #1532: terminal — stop the timer, let the one banner speak.
+        if (e instanceof ApiAuthError) {
+          if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+          }
+          this.error = null;
+
+          return;
+        }
+
         console.error(e);
 
         // #703: a TypeError means the request never reached the
@@ -367,6 +391,10 @@ export function setupZabbixPoller() {
     if (!itemIds.length || state.loading) {
       return;
     }
+    // #1532: latched off — see the traffic chart above.
+    if (isAuthFailed()) {
+      return;
+    }
 
     state.loading = true;
     publish();
@@ -382,7 +410,9 @@ export function setupZabbixPoller() {
         const params = new URLSearchParams();
         itemIds.slice(offset, offset + CHUNK).forEach((id, index) => params.append(`item_ids[${index}]`, id));
 
-        const response = await fetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
+        // #1532: cookie-authenticated (`localStorage.token` is a Flutter-app
+        // credential the web UI does not carry), latched on 401/403.
+        const response = await apiFetch(`/api/zabbix/multi-latest?${params.toString()}`, { headers });
 
         if (!response.ok) {
           // #703: a 503 from our API means Zabbix itself is
@@ -418,6 +448,18 @@ export function setupZabbixPoller() {
       state.values = values;
       state.error = null;
     } catch (e) {
+      // #1532: terminal auth failure — stop polling, the shared banner is the
+      // only message (no per-gauge "داده‌ای یافت نشد" wall).
+      if (e instanceof ApiAuthError) {
+        if (state.timer) {
+          clearInterval(state.timer);
+          state.timer = null;
+        }
+        state.error = null;
+
+        return;
+      }
+
       console.error('Error fetching values:', e);
 
       // #703: a TypeError from fetch() means the request never
