@@ -39,6 +39,8 @@ class TicketPriorityVocabularyTest extends TestCase
     public function test_api_store_accepts_every_canonical_priority(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        // #1523: a bare factory unit is not a valid ticket target.
+        $unit->update(['is_active' => true, 'can_receive_tickets' => true]);
         $token = $user->createToken('test-token', ['tickets:write'])->plainTextToken;
 
         foreach (Ticket::PRIORITIES as $priority) {
@@ -50,6 +52,8 @@ class TicketPriorityVocabularyTest extends TestCase
     public function test_api_store_refuses_off_enum_priorities(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        // #1523: keep the unit eligible so the only error under test is priority.
+        $unit->update(['is_active' => true, 'can_receive_tickets' => true]);
         $token = $user->createToken('test-token', ['tickets:write'])->plainTextToken;
 
         // `medium` and `high` pass the DB CHECK constraint (the migration on

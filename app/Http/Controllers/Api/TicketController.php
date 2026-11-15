@@ -8,6 +8,7 @@ use App\Http\Resources\TicketDetailResource;
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Rules\TicketTargetUnit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
@@ -68,7 +69,7 @@ class TicketController extends Controller
             'subject' => 'required|string|max:255',
             'content' => 'required|string',
             'priority' => ['required', Rule::in(Ticket::PRIORITIES)],
-            'unit_id' => 'required|exists:units,id',
+            'unit_id' => ['required', 'integer', new TicketTargetUnit],
             'deadline' => 'nullable|date',
         ]);
 

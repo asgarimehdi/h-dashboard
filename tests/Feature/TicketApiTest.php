@@ -54,6 +54,23 @@ class TicketApiTest extends TestCase
         return $user;
     }
 
+    /**
+     * #1523: a ticket target must be both receiving and active. `UnitFactory`
+     * sets neither flag, so the migration defaults apply (`is_active = true`,
+     * `can_receive_tickets = false`) and a bare factory unit is NOT a valid
+     * destination. Opt in explicitly wherever the ticket must be created.
+     *
+     * @param  array<string>  $permissions
+     * @return array{user: User, unit: Unit}
+     */
+    protected function createUserWithReceivingUnit(array $permissions = [], ?string $role = null): array
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit($permissions, $role);
+        $unit->update(['is_active' => true, 'can_receive_tickets' => true]);
+
+        return ['user' => $user, 'unit' => $unit];
+    }
+
     public function test_unauthenticated_user_cannot_access_tickets(): void
     {
         $response = $this->getJson('/api/tickets');
@@ -120,7 +137,7 @@ class TicketApiTest extends TestCase
 
     public function test_user_can_create_ticket(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
         $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
         $response = $this->apiPost('/api/tickets', [
@@ -140,7 +157,7 @@ class TicketApiTest extends TestCase
 
     public function test_user_can_create_ticket_with_medium_priority(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
 
         $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
         $response = $this->apiPost('/api/tickets', [
@@ -154,6 +171,176 @@ class TicketApiTest extends TestCase
             ->assertJson(['success' => true]);
 
         $this->assertDatabaseHas('tickets', ['subject' => 'Urgent Priority', 'priority' => 'urgent']);
+    }
+
+    /**
+     * #1523: `POST /api/tickets` only ran `exists:units,id`, so a ticket could
+     * be created in a unit that cannot receive tickets. The destination must
+     * now pass `App\Rules\TicketTargetUnit` like the three web paths do.
+     */
+    public function test_cannot_create_ticket_for_a_unit_that_cannot_receive_tickets(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $unit->update(['is_active' => true, 'can_receive_tickets' => false]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Blocked',
+            'content' => 'Description',
+            'priority' => 'normal',
+            'unit_id' => $unit->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id')
+            ->assertJsonPath('errors.unit_id.0', 'این واحد امکان دریافت تیکت ندارد.');
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Blocked']);
+    }
+
+    /**
+     * #1523: the narrow half — an inactive unit is reachable through the
+     * caller's own root/`user_units` seed, so the scope never filters it out.
+     */
+    public function test_cannot_create_ticket_for_an_inactive_root_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $unit->update(['is_active' => false, 'can_receive_tickets' => true]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Blocked',
+            'content' => 'Description',
+            'priority' => 'normal',
+            'unit_id' => $unit->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id')
+            ->assertJsonPath('errors.unit_id.0', 'این واحد غیرفعال است.');
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Blocked']);
+    }
+
+    /**
+     * #1523: pins the rule-before-scope order. An inactive child of an active
+     * parent is filtered OUT of the scope, so scope-first would answer 403.
+     * The eligibility rule runs in `validate()` and answers 422 instead.
+     */
+    public function test_cannot_create_ticket_for_an_inactive_child_of_an_active_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $child = Unit::create(['name' => 'Inactive Child', 'parent_id' => $unit->id]);
+        $child->update(['is_active' => false, 'can_receive_tickets' => true]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Blocked',
+            'content' => 'Description',
+            'priority' => 'normal',
+            'unit_id' => $child->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id')
+            ->assertJsonPath('errors.unit_id.0', 'این واحد غیرفعال است.');
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Blocked']);
+    }
+
+    /**
+     * #1523: eligibility is not accessibility — a valid destination outside
+     * the caller's scope keeps the existing 403 contract.
+     */
+    public function test_cannot_create_ticket_for_an_eligible_unit_outside_the_scope(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $otherUnit = Unit::create(['name' => 'Elsewhere']);
+        $otherUnit->update(['is_active' => true, 'can_receive_tickets' => true]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Out of Scope',
+            'content' => 'Description',
+            'priority' => 'normal',
+            'unit_id' => $otherUnit->id,
+        ], $token);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Unit not accessible.']);
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Out of Scope']);
+    }
+
+    /**
+     * #1523: `exists:units,id` was dropped because the rule already reports a
+     * missing unit. Keeping both would return two errors — one English and
+     * one Persian — for the same input.
+     */
+    public function test_create_ticket_with_a_missing_unit_reports_only_the_persian_message(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Missing Unit',
+            'content' => 'Description',
+            'priority' => 'normal',
+            'unit_id' => 999999,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id')
+            ->assertJsonPath('errors.unit_id.0', 'واحد انتخابی معتبر نیست.');
+
+        $this->assertCount(1, $response->json('errors.unit_id'));
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Missing Unit']);
+    }
+
+    /**
+     * #1523: without `integer`, `unit_id[]` slipped past `exists` and hit the
+     * typed `assertAccessibleUnit(int)` — a TypeError/500. It is a 422.
+     */
+    public function test_create_ticket_with_an_array_unit_id_is_a_validation_error(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Array Unit',
+            'content' => 'Description',
+            'priority' => 'normal',
+            'unit_id' => [$unit->id],
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id');
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Array Unit']);
+    }
+
+    /**
+     * #1523: `update()` never listed `unit_id` in its rules, and `validate()`
+     * returns only ruled keys — so retargeting is impossible. Pin it.
+     */
+    public function test_update_cannot_retarget_the_ticket_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = Ticket::create(['ticket_code' => 'T-RETARGET', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Original', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
+        $otherUnit = Unit::create(['name' => 'Other Unit']);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Updated',
+            'unit_id' => $otherUnit->id,
+        ], $token);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'subject' => 'Updated',
+            'unit_id' => $unit->id,
+        ]);
     }
 
     public function test_user_can_update_ticket(): void

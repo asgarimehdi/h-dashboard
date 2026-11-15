@@ -143,7 +143,7 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 | Method | URL | Description |
 |---|---|---|
 | GET | `/api/tickets` | List with filters: `status`, `priority`, `unit_id`, `assignee_id` |
-| POST | `/api/tickets` | Create ticket |
+| POST | `/api/tickets` | Create ticket. The target unit must be both `is_active` and `can_receive_tickets`; otherwise **422** with `errors.unit_id`. Clients should key on `errors.unit_id`, not on the message text. `PUT` never retargets `unit_id`. |
 | GET | `/api/tickets/{ticket}` | Show details |
 | PUT | `/api/tickets/{ticket}` | Update |
 | DELETE | `/api/tickets/{ticket}` | Delete |

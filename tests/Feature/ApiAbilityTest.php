@@ -266,6 +266,9 @@ class ApiAbilityTest extends TestCase
         $this->seed(RoleSeeder::class);
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit([], 'user');
 
+        // #1523: the destination must be active and receiving.
+        $unit->update(['is_active' => true, 'can_receive_tickets' => true]);
+
         $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
 
         // Sanity: this role holds create_ticket and nothing that grants tickets:read.
@@ -350,6 +353,9 @@ class ApiAbilityTest extends TestCase
     {
         ['user' => $user, 'token' => $token] = $this->createTicketWriterInOwnUnit();
         $foreignUnit = Unit::factory()->create();
+        // #1523: eligibility runs before scope — the foreign unit must be a
+        // valid destination so the 403 under test is the scope rejection.
+        $foreignUnit->update(['is_active' => true, 'can_receive_tickets' => true]);
 
         $this->apiPost('/api/tickets', [
             'subject' => 'Foreign unit',

@@ -40,6 +40,9 @@ class TicketControllerEdgeCasesTest extends TestCase
     {
         ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
         $otherUnit = Unit::create(['name' => 'Other Unit']);
+        // #1523: eligibility runs before scope, so the unit must be a VALID
+        // destination for this test to reach (and pin) the scope 403.
+        $otherUnit->update(['is_active' => true, 'can_receive_tickets' => true]);
 
         $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
         $response = $this->apiPost('/api/tickets', [
