@@ -213,8 +213,8 @@ final class HelpSectionGuardTest extends TestCase
             'مودال باید لیست sectionها را از config/help.php بخواند.',
         );
 
-        $this->assertMatchesRegularExpression(
-            '/data-sections="\{\{\s*implode\(',', \$helpSections\)\s*\}\}"/',
+        $this->assertStringContainsString(
+            "data-sections=\"{{ implode(',', \$helpSections) }}"",
             $modal,
             'مودال باید همان لیست را با data-sections به Alpine بدهد.',
         );
