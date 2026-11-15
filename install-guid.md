@@ -159,6 +159,13 @@ ZABBIX_TOKEN=...
 TILE_URL_TEMPLATE=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
 
+`APP_URL` is the canonical public URL — it no longer has to equal the host the
+browser uses. The GIS map and the Zabbix charts call `/api/*` with the session
+cookie, and Sanctum always trusts the incoming request host plus the `APP_URL`
+host (`config/sanctum.php`, #1532); `SANCTUM_STATEFUL_DOMAINS` only adds extra
+origins. A deployment served from `http://sad1:8000` with a different `APP_URL`
+needs no cookie-domain change — after deploying, run `php artisan config:clear`.
+
 Initialize the app:
 
 ```bash

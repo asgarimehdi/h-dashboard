@@ -18,6 +18,15 @@
 - Livewire components expect session-based auth. **API tokens are NOT accepted** for Livewire pages.
 - Login form at `/login`. API login: `POST /api/login` with `n_code` + `password` (throttled 5/min).
 
+### Cookie-authenticated `/api/*` calls from the web UI (#1399, #1532)
+
+The GIS dashboard and the Zabbix pages call `/api/gis/*` and `/api/zabbix/*` with the **session cookie and no `Authorization` header**. Sanctum only runs the stateful pipeline for such a request when its `Referer`/`Origin` host is in `config('sanctum.stateful')`; otherwise every call answers `401 {"message":"Unauthenticated."}`.
+
+- The list is **merged, never env-only**: the incoming request host (`Sanctum::$currentRequestHostPlaceholder`, resolved per request by `fromFrontend()`) and the `APP_URL` host are always stateful, and `SANCTUM_STATEFUL_DOMAINS` only allowlists extra origins. A deployment served from a host/port outside the env list (sad1:8000, a LAN IP, a second port) therefore works without an env edit — `php artisan config:clear` after deploy.
+- The placeholder is safe: it only matches a `Referer`/`Origin` equal to the request's own host, which a cross-site page cannot forge; a forged `Host` gets no victim cookie, and writes still need CSRF + `SameSite=lax`.
+- The client side is one shared helper: `resources/js/api-fetch.js` `apiFetch()` adds `Accept: application/json` + `credentials: 'include'` and **latches** 401/403 for the whole page. The latch is terminal — retrying a cookie call cannot make Sanctum trust the host, and a 403 does not heal — so map pans and Zabbix timers stop instead of re-firing. Render `<x-api-auth-banner />` **once per page**; never a per-layer or per-chart message.
+- A 401 here is a config/deployment condition, not a transient failure: sign in again or fix `config/sanctum.php` + `config:clear`. `tests/e2e/maps/auth-failure.spec.ts` pins the client half (one request per layer, one banner, zero retries).
+
 ### API Token Abilities (issue #690)
 
 Every `/api/*` route group additionally requires a **token ability** — `auth:sanctum` alone is not enough (403 otherwise) — **except three intentionally exempt routes**: `POST /api/login` (public; it mints the token), `GET /api/user` and `POST /api/logout` (self-scoped; they act on the caller, not on a resource — logout by #1071, following the pre-existing `/api/user` precedent).
