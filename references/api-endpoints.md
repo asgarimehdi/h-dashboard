@@ -500,7 +500,7 @@ DB_ROOT_PASSWORD=...       # docker postgres superuser
 DB_DEFAULT_EMAIL=...       # seeded admin email
 DB_DEFAULT_PASSWORD=...    # seeded admin password
 
-CACHE_DRIVER=redis
+CACHE_STORE=redis
 SESSION_DRIVER=redis
 QUEUE_CONNECTION=redis
 REDIS_HOST=127.0.0.1
@@ -600,7 +600,7 @@ php artisan config:clear && php artisan route:clear && XDEBUG_MODE=off php artis
 
 ### E2E Testing (Playwright)
 
-**~165 tests** across **40 spec files** in `tests/e2e/` (static counts re-checked 2026-10-01; not verified by a run — no browser/.env.e2e on that machine). Full setup, credentials, and failure table: **AGENTS.md → "E2E Testing (Playwright)"**. Essentials:
+**64 spec files** in `tests/e2e/` (`find tests/e2e -name '*.spec.ts' | wc -l`, on `beta @ 7325b6ec`, 2026-11-14). No absolute test count is recorded here: `npx playwright test --list` needs a live e2e env, and a static `test(` grep undercounts loop-generated suites — run the suite to get the figure. Full setup, credentials, and failure table: **AGENTS.md → "E2E Testing (Playwright)"**. Essentials:
 
 - Always run through the lifecycle script: `bash scripts/e2e-test.sh [optional spec paths]` — swaps `.env` ← `.env.e2e`, `config:clear` + `route:clear`, `migrate:fresh --seed` on `h_dashboard_e2e`, creates the password-mutation user, serves on `:8001`, runs Playwright, restores `.env`.
 - **`.env.e2e` is gitignored — generate it locally with `bash scripts/build-env-e2e.sh`** (issue #703), which copies `APP_KEY` / `DB_PASSWORD` / `REDIS_PASSWORD` out of `.env` into a copy of `.env.e2e.example` **without printing the values** (the terminal masks secrets, so a read-and-rewrite would write a literal `***` into the file). Fill `DB_USERNAME` yourself. It **must** carry `APP_LOCALE=fa` — `.env.e2e.example` **does** include it now (`7485043`), but a hand-written copy from an older example does not, and `config/app.php` falls back to `en`, failing **11 Persian-text specs** (`Showing 1 to 20 of 318 results`, English validation messages instead of `نمایش…` / `باید مطابقت داشته باشند`).

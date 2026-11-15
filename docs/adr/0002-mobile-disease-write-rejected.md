@@ -7,7 +7,7 @@
 
 CRUD پروندهٔ بیماری در وب‌UI کامل است. API بیماری عمداً فقط سه endpoint تجمیعیِ
 read-only و PII-free دارد — `GET /api/gis/diseases`، `GET /api/gis/disease-stats` و
-`GET /api/gis/disease-map` (`routes/api.php:271-275`) — که زیر گیت `gis:read` و
+`GET /api/gis/disease-map` (`routes/api.php:280-282` — گیت گروه در `:271`) — که زیر گیت `gis:read` و
 `role_or_permission:map|bw` قرار دارند و به `manage_diseases` نیازی ندارند.
 هیچ endpoint نوشتنیِ بیماری در API وجود ندارد.
 
