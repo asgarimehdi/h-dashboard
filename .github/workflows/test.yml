@@ -30,6 +30,28 @@ jobs:
           php-version: '8.5'
           tools: composer:latest
 
+      # Issue #1506. No CI step audited the dependencies, so an advisory
+      # affecting a reachable runtime path surfaced only on a machine where
+      # somebody remembered to run `composer audit`. It runs before
+      # `composer install` because `--locked` needs only composer.lock — no
+      # dependency code, script or plugin executes first — and it runs in
+      # `lint` for the same reason the APP_KEY guard below does: that is the
+      # cheapest blocking job, so a vulnerable lock fails a PR in seconds.
+      #
+      # The script, not the exit code, decides: `composer audit` exits 1 for an
+      # advisory AND for a hard error (invalid lock, unreachable advisory DB),
+      # and its `--ignore-severity` filter never matches a null severity
+      # (Composer applies it only to string severities) and accepts an unknown
+      # value silently. critical/high/null block; medium/low are reported.
+      - name: 'Audit PHP dependencies (blocking: critical/high)'
+        run: |
+          set +e
+          composer audit --locked --format=json --no-interaction --abandoned=report > composer-audit.json
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+          php scripts/dependency-audit-gate.php composer-audit.json
+
       - name: Cache Composer download cache
         uses: actions/cache@v5
         with:
@@ -80,6 +102,15 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      # Issue #1506 — the JS half of the dependency gate. `--package-lock-only`
+      # reads package-lock.json and works without node_modules, so this runs
+      # before `npm ci`. npm's `--audit-level=high` IS the policy on this side:
+      # it sets the failure threshold and still prints moderate/low, and npm has
+      # no null severity (Composer spells the report-only tier `medium`, npm
+      # `moderate`).
+      - name: 'Audit JS dependencies (blocking: high/critical)'
+        run: npm audit --package-lock-only --audit-level=high
 
       - name: Install dependencies
         # `npm ci` also proves package.json and package-lock.json agree.
