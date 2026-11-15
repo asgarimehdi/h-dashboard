@@ -509,8 +509,7 @@ REDIS_PASSWORD=123
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=...
-# Map tiles: only TILE_URL_TEMPLATE has any effect. TILE_SERVER_IP / TILE_SERVER_PORT /
-# TILE_SERVER_SCHEME are reserved — they build map.tile_url, which nothing consumes.
+# Map tiles: only TILE_URL_TEMPLATE has any effect (TILE_SERVER_* were retired in #1508).
 TILE_URL_TEMPLATE=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
 
