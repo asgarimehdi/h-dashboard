@@ -5,6 +5,7 @@
          cacheDirectory=".phpunit.cache"
          colors="true"
          failOnEmptyTestSuite="true"
+         failOnRisky="true"
          executionOrder="random">
     <testsuites>
         <testsuite name="Unit">
