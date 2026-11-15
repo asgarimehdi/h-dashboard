@@ -543,6 +543,18 @@
     color: var(--menu-active-fg) !important;
 }
 
+/* #1529: MaryUI on every menu anchor/summary puts `hover:text-inherit`.
+   On the ACTIVE item that keyword resolves to the page text colour and
+   lands on the neutral background (light 1.12, fantasy 1.00). daisyUI
+   already skips `[aria-current]` in its own hover rule, so the pair must
+   be pinned here, in the same unlayered block as the autumn/pastel
+   override — no theme's resting state changes. */
+.menu a.mary-active-menu:hover,
+.menu details[open] > summary:has(+ ul > li > a.mary-active-menu):hover {
+    color: var(--menu-active-fg);
+    background-color: var(--menu-active-bg);
+}
+
 /* glass modal: valentine's dark-ish base-content on the 70% glass measures
    4.00. Raising the glass to 88% and darkening the content by 25% measures
    8.29 (visual review: screenshots in the PR/issue). */

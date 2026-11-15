@@ -6,7 +6,8 @@ import { SURFACES, SweepRecorder, sweepTheme, toMarkdown, toSummary } from './sw
 
 /**
  * #1227 — the full matrix: 35 enabled daisyUI themes × every SURFACES cell
- * (33 after the #1226 per-variant badge probes joined the shared runner).
+ * (35 after the #1226 per-variant badge probes and the #1529 active-hover cells
+ * joined the shared runner).
  *
  * Why this is a separate, non-blocking spec: on CI the blocking sweep costs
  * ≈39 s per theme (9-theme run measured 5.8 min, 2026-10-24), so 35 themes
