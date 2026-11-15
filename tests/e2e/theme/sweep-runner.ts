@@ -42,7 +42,9 @@ export const SURFACES = [
   'menu normal',
   'menu hover',
   'menu active',
+  'menu active hover',
   'submenu header',
+  'submenu header hover',
   'toast info',
   'toast success',
   'toast warning',
@@ -273,24 +275,36 @@ async function capture(page: Page, theme: string, name: string, options: SweepOp
  * caller decides whether that aborts the run or just becomes an `n/a` cell).
  */
 export async function sweepTheme(page: Page, theme: string, recorder: SweepRecorder, options: SweepOptions = {}): Promise<void> {
-  // ---- 1. Menu: normal / hover / active / open submenu header ------------
+  // ---- 1. Menu: normal / hover / active / active hover / header / header hover
   await page.goto('/kargozini/persons');
   await page.waitForLoadState('networkidle');
   await setTheme(page, theme);
+
+  const active = '.drawer-side a.mary-active-menu[aria-current="page"]';
+  // #1529: the header of the submenu that CONTAINS the active item. The old
+  // `details[open] > summary` picked the first open submenu, which stops being
+  // the active one as soon as a second submenu is opened.
+  const activeSummary = '.drawer-side details:has(> ul > li > a.mary-active-menu) > summary';
 
   const inactive = '.drawer-side .menu a:not([aria-current="page"])';
   recorder.add(theme, 'menu normal', await measureText(page, 'menu normal', inactive));
   await page.locator(inactive).first().hover();
   recorder.add(theme, 'menu hover', await measureText(page, 'menu hover', inactive));
+  recorder.add(theme, 'menu active', await measureText(page, 'menu active', active));
+  recorder.add(theme, 'submenu header', await measureText(page, 'submenu header', activeSummary));
+  // #1529: the active pair must survive hover unchanged. Both cells are what
+  // exposed the 19 failing themes in the 35-theme matrix.
+  await page.locator(active).first().hover();
   recorder.add(
     theme,
-    'menu active',
-    await measureText(page, 'menu active', '.drawer-side a.mary-active-menu[aria-current="page"]')
+    'menu active hover',
+    await measureText(page, 'menu active hover', active)
   );
+  await page.locator(activeSummary).first().hover();
   recorder.add(
     theme,
-    'submenu header',
-    await measureText(page, 'submenu header', '.drawer-side details[open] > summary')
+    'submenu header hover',
+    await measureText(page, 'submenu header hover', activeSummary)
   );
   await capture(page, theme, 'menu', options);
 
