@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -61,5 +62,36 @@ class HrDashboardChartPayloadTest extends TestCase
 
         $this->assertStringNotContainsString("component.call('chartPayload')", $source);
         $this->assertStringNotContainsString("'chartPayload'", $source);
+    }
+
+    /**
+     * Issue #1536 — a data-driven <style> block inside a single-file component
+     * is dead weight: Livewire's SingleFileParser::extractStylePortion() lifts
+     * the tag out verbatim and Blade never translates it, so the `{{ … }}` in
+     * it never becomes CSS. The third recurrence of the same class (#1352 →
+     * #1496 → #1536), and no render assertion can catch it because the block
+     * is gone from the DOM.
+     *
+     * Tests the INNER content only (SingleFileParser::generateStyleContents()):
+     * every nonce'd tag already carries `{{` in its nonce attribute, so matching
+     * the whole tag would flag seven static CSS blocks that are perfectly fine.
+     */
+    public function test_no_single_file_component_puts_blade_syntax_inside_a_column_zero_style_tag(): void
+    {
+        $offenders = collect(File::allFiles(resource_path('views/livewire')))
+            ->filter(fn ($f) => str_ends_with($f->getFilename(), '.blade.php')
+                && str_contains(file_get_contents($f->getPathname()), 'return new class'))
+            ->filter(function ($f) {
+                $contents = preg_replace('/@verbatim\s*.*?@endverbatim/s', '', file_get_contents($f->getPathname()));
+                // mirror SingleFileParser::extractStylePortion() (locked v4.4.8),
+                // but test the INNER content only (generateStyleContents):
+                // every nonce'd tag carries {{ in its nonce attribute.
+                preg_match_all('/<style\b[^>]*>(.*?)<\/style>/s', $contents, $m);
+
+                return (bool) preg_grep('/\{\{|\{!!|@php|@if|@foreach|@json/', $m[1] ?? []);
+            })
+            ->map(fn ($f) => $f->getRelativePathname())->values()->all();
+
+        expect($offenders)->toBe([]);
     }
 }
