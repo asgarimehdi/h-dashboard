@@ -145,7 +145,7 @@ return new class extends Component
             </x-slot:actions>
         </x-header>
 
-        <x-help:modal wireModel="showHelpModal" />
+        <x-help:modal wireModel="showHelpModal" section="settings" />
 
         <x-card shadow>
             <h2 class="font-bold mb-4">اعلان‌ها</h2>

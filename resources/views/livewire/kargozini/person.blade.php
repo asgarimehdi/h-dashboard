@@ -436,7 +436,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="personnel" />
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">

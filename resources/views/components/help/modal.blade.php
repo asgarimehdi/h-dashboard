@@ -1,10 +1,10 @@
 @props(['wireModel' => 'showHelpModal', 'section' => null])
 
 @php
-    $helpSection = $section ?? 'dashboard';
+    $helpSection = $section ?? 'default';
     // This is an anonymous Blade component, so it does not inherit the Livewire
     // view's data. Livewire shares the rendering instance as $__livewire, which
-    // lets us read the open flag without touching the 24 consumers.
+    // lets us read the open flag without touching the call sites.
     $helpModalOpen = data_get($__livewire ?? null, $wireModel, false);
 @endphp
 

@@ -72,7 +72,10 @@ it('hardware page help modal opens via button', function () {
     Livewire::actingAs($user)->test('hardware.index')
         ->assertOk()
         ->call('$set', 'showHelpModal', true)
-        ->assertSet('showHelpModal', true);
+        ->assertSet('showHelpModal', true)
+        // #1537: the wrapper's data-section is the only per-section marker in
+        // the open response, since every content body is shipped at once.
+        ->assertSee('data-section="hardware"', false);
 });
 
 it('does not ship the help modal body while the modal is closed', function () {
@@ -136,9 +139,9 @@ it('every help content section renders without errors', function (string $sectio
     // Render each help content file standalone via the modal component path
     $content = view("components.help.content.{$section}")->render();
     expect($content)->toBeString()->not->toBeEmpty();
-})->with([
-    'dashboard', 'hardware', 'hardware-import', 'persons-import', 'personnel',
-    'units', 'tickets', 'todos', 'reports', 'maps', 'settings', 'roles',
-    'permissions', 'users', 'activity-log', 'networks', 'wireless', 'tools',
-    'search', 'profile', 'hr-dashboard',
-]);
+})->with(
+    array_map(
+        fn (string $path) => [basename($path, '.blade.php')],
+        glob(dirname(__DIR__, 2).'/resources/views/components/help/content/*.blade.php') ?: [],
+    )
+);

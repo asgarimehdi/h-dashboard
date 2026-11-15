@@ -151,7 +151,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="reports" />
 
     @if($emptyScope)
         <div class="alert alert-info mb-6" role="alert">

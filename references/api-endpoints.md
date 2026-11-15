@@ -388,12 +388,12 @@ nothing.
 
 In-app help is a per-page modal (`?` button in page headers):
 
-- **Components:** `resources/views/components/help/` — `button.blade.php` (dispatches `help-open` with the section) + `modal.blade.php` (listens via `Livewire.on('help-open')`, switches content with Alpine `x-if` on `helpSection`, opens by setting the page's `showHelpModal` property)
+- **Components:** `resources/views/components/help/` — `button.blade.php` (dispatches the `help-open` DOM event with the section) + `modal.blade.php` (reads its `section` prop into `data-section`, switches content with Alpine `x-if` on `helpSection`, opens by setting the page's `showHelpModal` property); `app-components.js` listens for `help-open` on `document` and holds the fallback array
 - **Content:** one file per section under `resources/views/components/help/content/<section>.blade.php`, registered in `AppServiceProvider::boot()` (`$helpContents`) as `help-content:<section>` components
-- **Wiring a new page:** add `public bool $showHelpModal = false;`, `<x-help:button section="<section>" wireModel="showHelpModal" />` in the header actions, and `<x-help:modal wireModel="showHelpModal" />`; create the content file + register it + add an `x-if` case in the modal
-- **Sections (20):** dashboard, hardware, hardware-import, persons-import, personnel, units, tickets, todos, reports, maps, settings, roles, permissions, users, activity-log, networks, wireless, tools, search, profile
+- **Wiring a new page:** add `public bool $showHelpModal = false;`, `<x-help:button section="<section>" wireModel="showHelpModal" />` in the header actions, and `<x-help:modal wireModel="showHelpModal" section="<section>" />`; create the content file + register it + add an `x-if` case in the modal
+- **Sections (21):** dashboard, hardware, hardware-import, persons-import, personnel, units, tickets, todos, reports, maps, settings, roles, permissions, users, activity-log, networks, wireless, tools, search, profile, hr-dashboard
 - **Gotchas:** escape Blade directives in content with `@@` (e.g. `@@can(...)`); use only icons present in the heroicons set (`o-*` in `vendor/blade-ui-kit/blade-heroicons/resources/svg/`)
-- **Tests:** `tests/Feature/HelpSystemTest.php` — page renders + all 20 content sections render
+- **Tests:** `tests/Feature/HelpSystemTest.php` — page renders + all 21 content sections render; `tests/Feature/HelpSectionGuardTest.php` pins every call site's `section`
 
 ---
 

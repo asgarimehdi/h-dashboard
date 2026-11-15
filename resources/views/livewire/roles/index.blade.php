@@ -152,7 +152,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="roles" />
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">

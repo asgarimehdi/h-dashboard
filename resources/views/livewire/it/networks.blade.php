@@ -63,7 +63,7 @@ return new class extends Component {
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="networks" />
 
     <!-- TABLE  -->
     <x-card shadow>

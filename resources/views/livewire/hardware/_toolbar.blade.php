@@ -5,7 +5,7 @@
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="hardware" />
         {{-- #1175: the row checkbox is bound DEFERRED (see table.blade.php), so the
              server does not know about the ticked rows yet. The count and the
              disabled state therefore live on the client — with a server-rendered

@@ -285,13 +285,13 @@ export function registerAppComponents(Alpine) {
   // build, so it lives here. noHelpContent() keeps the fallback
   // paragraph's array check out of the template expression.
   Alpine.data('helpModal', () => ({
-    helpSection: 'dashboard',
+    helpSection: 'default',
 
     /** @type {((event: any) => void) | null} */
     _helpListener: null,
 
     init() {
-      this.helpSection = this.$el.dataset.section || 'dashboard';
+      this.helpSection = this.$el.dataset.section || 'default';
       this._helpListener = (event) => {
         if (event.detail && event.detail.section) {
           this.helpSection = event.detail.section;
