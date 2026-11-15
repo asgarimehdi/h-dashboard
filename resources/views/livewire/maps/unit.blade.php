@@ -262,7 +262,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="maps" />
 
     {{-- Filter bar above the map --}}
     <x-card shadow class="mb-4 p-3">

@@ -549,7 +549,7 @@ return new class extends Component
             <x-help:button section="persons-import" wireModel="showHelpModal" />
         </div>
 
-        <x-help:modal wireModel="showHelpModal" />
+        <x-help:modal wireModel="showHelpModal" section="persons-import" />
 
         <div class="alert alert-info mb-6">
             <x-icon name="o-information-circle" class="w-5 h-5" />
