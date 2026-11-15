@@ -7,6 +7,7 @@ use App\View\Components\AppBrand;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -42,6 +43,79 @@ function makeHelpUser(): User
     Session::put('current_unit_id', $unit->id);
 
     return $user;
+}
+
+/**
+ * Routed Livewire pages still waiting for their own help button.
+ *
+ * Phase 0 allowlist (#1535). Each rollout phase removes its own rows, so the
+ * static contract starts enforcing the page the moment it is wired. Phase 4
+ * leaves this list empty.
+ *
+ * @return list<string>
+ */
+function helpPagesPendingRollout(): array
+{
+    return [
+        'disease.index', 'disease.create', 'disease.manage', 'disease.patients',
+        'units.chart', 'units.map',
+        'maps/route', 'maps/route2', 'maps/county', 'maps/point',
+        'map.map-dashboard',
+        'kargozini.estekhdam', 'kargozini.tahsil', 'kargozini.semat', 'kargozini.radif',
+        'hr.org-chart',
+        'it/zabbix-devices',
+        'maintenance.index',
+        'reports.advanced', 'reports.persons',
+        'todo.todo',
+        'select-context',
+        'auth.changepassword',
+    ];
+}
+
+/**
+ * Routed pages that never own a help button in their own file.
+ *
+ * `auth.login` is public/pre-auth (the modal would ship the whole help payload
+ * to an anonymous visitor); `hardware.index` is served by its `_toolbar`
+ * partial, rendered by the same Livewire component.
+ *
+ * @return list<string>
+ */
+function helpPageExceptions(): array
+{
+    return ['auth.login', 'hardware.index'];
+}
+
+/**
+ * Livewire component names from every `Route::livewire(...)` call in web.php.
+ *
+ * Commented routes are skipped: `web.php` still carries a commented
+ * `auth.register` line and there is no such component.
+ *
+ * @return list<string>
+ */
+function routedLivewirePageComponents(): array
+{
+    $components = [];
+
+    foreach (file(base_path('routes/web.php')) as $line) {
+        $line = trim($line);
+
+        if (str_starts_with($line, '//')) {
+            continue;
+        }
+
+        if (preg_match("/Route::livewire\(\s*'[^']*'\s*,\s*'([^']+)'/", $line, $matches)) {
+            $components[] = $matches[1];
+        }
+    }
+
+    return array_values(array_unique($components));
+}
+
+function helpButtonCount(string $source): int
+{
+    return substr_count($source, '<x-help:button');
 }
 
 it('tools page renders with help button', function () {
@@ -131,14 +205,126 @@ it('keeps the unknown-section fallback when the help modal is open', function ()
         ->assertSee('محتوای راهنما تعریف نشده است');
 });
 
-it('every help content section renders without errors', function (string $section) {
-    $user = makeHelpUser();
-    // Render each help content file standalone via the modal component path
-    $content = view("components.help.content.{$section}")->render();
-    expect($content)->toBeString()->not->toBeEmpty();
+it('renders every registered help content section', function () {
+    makeHelpUser();
+
+    foreach (config('help.sections') as $section) {
+        $content = view("components.help.content.{$section}")->render();
+
+        expect($content)->toBeString()->not->toBeEmpty();
+    }
+});
+
+it('has a content file for every registered help section', function () {
+    foreach (config('help.sections') as $section) {
+        expect(resource_path("views/components/help/content/{$section}.blade.php"))->toBeFile();
+    }
+});
+
+it('registers every help content file', function () {
+    $files = collect(File::files(resource_path('views/components/help/content')))
+        ->map(fn ($file) => basename($file->getFilename(), '.blade.php'))
+        ->sort()
+        ->values()
+        ->all();
+
+    $registered = collect(config('help.sections'))->sort()->values()->all();
+
+    expect($files)->toBe($registered);
+});
+
+it('gives every routed page a help button except the allowlist', function () {
+    $finder = app('livewire.finder');
+    $allowed = [...helpPageExceptions(), ...helpPagesPendingRollout()];
+    $missing = [];
+    $duplicated = [];
+
+    $components = routedLivewirePageComponents();
+    expect($components)->not->toBeEmpty();
+
+    foreach ($components as $component) {
+        if (in_array($component, $allowed, true)) {
+            continue;
+        }
+
+        $path = $finder->resolveSingleFileComponentPath($component);
+
+        if ($path === null) {
+            $missing[] = "{$component}: no single-file component resolved";
+
+            continue;
+        }
+
+        $count = helpButtonCount(file_get_contents($path));
+
+        if ($count === 0) {
+            $missing[] = "{$component}: no help button ({$path})";
+        } elseif ($count > 1) {
+            $duplicated[] = "{$component}: {$count} help buttons ({$path})";
+        }
+    }
+
+    expect($missing)->toBe([])->and($duplicated)->toBe([]);
+});
+
+it('points every help button at a registered section', function () {
+    $registered = config('help.sections');
+    $unknown = [];
+
+    foreach (File::allFiles(resource_path('views')) as $file) {
+        if (! str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        preg_match_all('/<x-help:button\b[^>]*\bsection="([^"]+)"/s', $file->getContents(), $matches);
+
+        foreach ($matches[1] as $section) {
+            if (! in_array($section, $registered, true)) {
+                $unknown[] = "{$file->getRelativePathname()}: {$section}";
+            }
+        }
+    }
+
+    expect($unknown)->toBe([]);
+});
+
+it('maps every rolled-out page to its section', function (string $component, string $section) {
+    $path = app('livewire.finder')->resolveSingleFileComponentPath($component);
+    expect($path)->not->toBeNull();
+
+    $source = file_get_contents($path);
+
+    if (in_array($component, helpPagesPendingRollout(), true)) {
+        // Not wired yet; wiring the page without removing its allowlist row
+        // must fail here so the static contract cannot silently go stale.
+        expect(helpButtonCount($source))->toBe(0);
+
+        return;
+    }
+
+    expect($source)->toMatch('/<x-help:button\b[^>]*\bsection="'.preg_quote($section, '/').'"/s');
 })->with([
-    'dashboard', 'hardware', 'hardware-import', 'persons-import', 'personnel',
-    'units', 'tickets', 'todos', 'reports', 'maps', 'settings', 'roles',
-    'permissions', 'users', 'activity-log', 'networks', 'wireless', 'tools',
-    'search', 'profile', 'hr-dashboard',
+    ['disease.index', 'disease'],
+    ['disease.create', 'disease'],
+    ['disease.manage', 'disease'],
+    ['disease.patients', 'disease'],
+    ['units.chart', 'units'],
+    ['units.map', 'units'],
+    ['maps/route', 'maps'],
+    ['maps/route2', 'maps'],
+    ['maps/county', 'maps'],
+    ['maps/point', 'maps'],
+    ['map.map-dashboard', 'maps'],
+    ['kargozini.estekhdam', 'personnel'],
+    ['kargozini.tahsil', 'personnel'],
+    ['kargozini.semat', 'personnel'],
+    ['kargozini.radif', 'personnel'],
+    ['hr.org-chart', 'org-chart'],
+    ['it/zabbix-devices', 'zabbix-devices'],
+    ['maintenance.index', 'maintenance'],
+    ['reports.advanced', 'reports'],
+    ['reports.persons', 'reports'],
+    ['todo.todo', 'todos'],
+    ['select-context', 'select-context'],
+    ['auth.changepassword', 'change-password'],
 ]);

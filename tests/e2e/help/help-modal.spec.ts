@@ -48,10 +48,11 @@ test.describe('help modal', () => {
     await page.locator(HELP_BUTTON).first().click();
     await expect(page.locator(MODAL_BODY)).toBeVisible();
 
-    // The help-open listener lives on `document`, so dispatch there. `disease`
-    // is deliberately a real route family with no help content file.
+    // The help-open listener lives on `document`, so dispatch there.
+    // `__unknown__` is a synthetic value that is never registered in
+    // `config/help.sections` — Phase 2 makes `disease` a real section.
     await page.evaluate(() => {
-      document.dispatchEvent(new CustomEvent('help-open', { detail: { section: 'disease' } }));
+      document.dispatchEvent(new CustomEvent('help-open', { detail: { section: '__unknown__' } }));
     });
 
     await expect(page.getByText('راهنمای این بخش در دسترس نیست')).toBeVisible();
