@@ -10,6 +10,8 @@ use Mary\Traits\Toast;
 return new class extends Component {
     use Toast;
 
+    public bool $showHelpModal = false;
+
     #[Locked]
     public int $unitId;
     public ?array $unit = null;
@@ -159,6 +161,7 @@ return new class extends Component {
     <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="unit-map-data">@json(['tileTemplate' => config('map.tile_url_template', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'), 'geojson' => $geojson])</script>
     <x-header title="نقشه: {{ $unit['name'] ?? '' }}" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="units" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -194,6 +197,8 @@ return new class extends Component {
             @endif
         </div>
     </x-card>
+
+    <x-help:modal wireModel="showHelpModal" section="units" />
 </div>
 
 @assets

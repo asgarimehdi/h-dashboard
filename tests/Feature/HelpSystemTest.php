@@ -58,7 +58,6 @@ function helpPagesPendingRollout(): array
 {
     return [
         'disease.index', 'disease.create', 'disease.manage', 'disease.patients',
-        'units.chart', 'units.map',
         'maps/route', 'maps/route2', 'maps/county', 'maps/point',
         'map.map-dashboard',
         'kargozini.estekhdam', 'kargozini.tahsil', 'kargozini.semat', 'kargozini.radif',
