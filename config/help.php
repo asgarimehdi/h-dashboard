@@ -38,5 +38,6 @@ return [
         'profile',
         'hr-dashboard',
         'disease',
+        'maintenance',
     ],
 ];
