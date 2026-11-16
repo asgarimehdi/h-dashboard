@@ -278,7 +278,7 @@ new class extends Component
             </x-slot:actions>
         </x-header>
 
-        <x-help:modal wireModel="showHelpModal" />
+        <x-help:modal wireModel="showHelpModal" section="tickets" />
 
     <x-card shadow>
         {{-- #957: role="alert" تا خطای اعتبارسنجی تیکت واقعاً اعلام شود، نه فقط دیده. --}}

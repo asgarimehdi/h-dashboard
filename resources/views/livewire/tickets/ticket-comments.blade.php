@@ -87,12 +87,13 @@ return new class extends Component
             return;
         }
 
+        // #1521: `body` is the single source of truth; the thread renders it
+        // escaped. `body_html` is retired and no longer mass-assigned.
         TicketComment::create([
             'ticket_id' => $ticket->id,
             'user_id' => auth()->id(),
             'parent_id' => null,
             'body' => $this->body,
-            'body_html' => nl2br(e($this->body)),
         ]);
 
         $this->body = '';
@@ -127,7 +128,6 @@ return new class extends Component
             'user_id' => auth()->id(),
             'parent_id' => $parent->id,
             'body' => $this->replyBody,
-            'body_html' => nl2br(e($this->replyBody)),
         ]);
 
         $this->replyBody = '';
@@ -173,7 +173,6 @@ return new class extends Component
 
         $comment->update([
             'body' => $this->editBody,
-            'body_html' => nl2br(e($this->editBody)),
         ]);
 
         $this->editing = false;
@@ -289,7 +288,7 @@ return new class extends Component
                                     <x-ui.icon-button name="انصراف از ویرایش کامنت" icon="o-x-mark" wire:click="cancelEdit" class="btn-ghost btn-xs" />
                                 </div>
                             @else
-                                <p class="text-sm leading-6 whitespace-pre-wrap">{!! $comment->body_html !!}</p>
+                                <p class="text-sm leading-6 whitespace-pre-wrap">{{ $comment->body }}</p>
                             @endif
 
                             {{-- Reply button --}}
@@ -325,7 +324,7 @@ return new class extends Component
                                                 </div>
                                                 <span class="text-[10px] opacity-50 font-mono">{{ jdate($child->created_at)->format('H:i - Y/m/d') }}</span>
                                             </div>
-                                            <p class="text-sm leading-6 mt-2 whitespace-pre-wrap">{!! $child->body_html !!}</p>
+                                            <p class="text-sm leading-6 mt-2 whitespace-pre-wrap">{{ $child->body }}</p>
                                             @if ($child->user_id === auth()->id())
                                                 <div class="flex gap-1 mt-2">
                                                     <x-ui.icon-button name="ویرایش پاسخ" icon="o-pencil" wire:click="startEdit({{ $child->id }})" class="btn-ghost btn-xs" />

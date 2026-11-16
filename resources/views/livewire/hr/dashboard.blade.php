@@ -108,7 +108,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="hr-dashboard" />
 
     {{-- Overview stats --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -121,7 +121,9 @@ return new class extends Component
     {{-- Interactive Highcharts bar charts. Each chart is scaled to its own
          maximum, so a dominant category no longer squashes small rows into
          unreadable slivers (#494). Charts re-render on Livewire updates via
-         the hook below. --}}
+         the hook below. Chart heights are data-driven and set from the same
+         `rows` array in dashboard-charts.js (#1536) — not from a <style> block
+         here: Livewire extracts those verbatim, so Blade never runs in them. --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <x-card shadow title="پرسنل به تفکیک واحد">
             <div id="hrChartByUnit" class="w-full hr-chart"></div>
@@ -157,15 +159,6 @@ return new class extends Component
             <p class="text-sm text-base-content/50">همه واحدها پرسنل دارند 🎉</p>
         @endforelse
     </x-card>
-{{-- Issue #1352: chart heights scale with the row counts, so they live in this
-     nonce'd block (rendered server-side) instead of `style=` attributes. --}}
-<style nonce="{{ Vite::cspNonce() }}">
-    #hrChartByUnit { height: {{ max(240, count($byUnit) * 28) }}px; }
-    #hrChartBySemat { height: {{ max(240, count($bySemat) * 28) }}px; }
-    #hrChartByTahsil { height: {{ max(240, count($byTahsil) * 32) }}px; }
-    #hrChartByEstekhdam { height: {{ max(240, count($byEstekhdam) * 32) }}px; }
-</style>
-
 </div>
 
 @assets

@@ -119,11 +119,14 @@ class TicketCommentApiComprehensiveTest extends TestCase
 
     protected function makeComment(array $attrs = []): TicketComment
     {
+        // #1521: `body_html` is no longer fillable — the row's `body` is the
+        // single source of truth and the thread renders it escaped. A poisoned
+        // column is written straight through the query builder in the sink
+        // tests instead (tests/Feature/TicketCommentsLivewireTest.php).
         return TicketComment::create(array_merge([
             'ticket_id' => $this->ticket->id,
             'user_id' => $this->user->id,
             'body' => 'بدنه کامنت',
-            'body_html' => '<p>بدنه کامنت</p>',
         ], $attrs));
     }
 
@@ -362,7 +365,14 @@ class TicketCommentApiComprehensiveTest extends TestCase
         ], $this->authToken)->assertStatus(201);
     }
 
-    public function test_store_processes_markdown(): void
+    /**
+     * #1521: the web thread renders `body` (escaped) and never the stored
+     * `body_html`, so the column carries no authority. Removing it from
+     * `$fillable` means no writer populates it any more: `body` round-trips
+     * verbatim (markdown is no longer rendered on the web path — the accepted
+     * behaviour change of option A) and the column stays NULL.
+     */
+    public function test_store_persists_body_and_leaves_body_html_empty(): void
     {
         $this->authAsUserA();
         $body = '**bold** و `code` و [لینک](https://example.com)';
@@ -370,17 +380,36 @@ class TicketCommentApiComprehensiveTest extends TestCase
             'body' => $body,
         ], $this->authToken);
 
-        // #1189: the API returns `body` only; `body_html` stays an internal
-        // render for the Livewire web path and must not be serialized.
+        // #1189: the API returns `body` only; `body_html` stays internal.
         $response->assertStatus(201)
             ->assertJsonPath('data.body', $body)
             ->assertJsonMissingPath('data.body_html');
 
-        // The rendered column is still written for the web UI.
-        $html = TicketComment::findOrFail($response->json('data.id'))->body_html;
-        $this->assertStringContainsString('<strong>bold</strong>', $html);
-        $this->assertStringContainsString('<code>code</code>', $html);
-        $this->assertStringContainsString('<a href="https://example.com"', $html);
+        $comment = TicketComment::findOrFail($response->json('data.id'));
+        $this->assertSame($body, $comment->body);
+        $this->assertNull($comment->body_html);
+    }
+
+    /**
+     * #1521 guard: the raw payload is stored verbatim in `body` (that is the
+     * single source of truth) and the inert `body_html` column stays empty.
+     * Escaping happens at the render sink, which the Livewire suite pins
+     * directly.
+     */
+    public function test_store_keeps_an_html_payload_verbatim_in_body_and_leaves_body_html_empty(): void
+    {
+        $this->authAsUserA();
+        $payload = '<script>alert(1)</script>';
+
+        $response = $this->apiPost("/api/tickets/{$this->ticket->id}/comments", [
+            'body' => $payload,
+        ], $this->authToken)->assertStatus(201)
+            ->assertJsonPath('data.body', $payload)
+            ->assertJsonMissingPath('data.body_html');
+
+        $comment = TicketComment::findOrFail($response->json('data.id'));
+        $this->assertSame($payload, $comment->body);
+        $this->assertNull($comment->body_html);
     }
 
     public function test_store_out_of_scope_403(): void
@@ -460,6 +489,27 @@ class TicketCommentApiComprehensiveTest extends TestCase
         ], $this->authToken)->assertStatus(200)
             ->assertJsonPath('data.body', 'ویرایش درست')
             ->assertJsonMissingPath('data.body_html');
+    }
+
+    /**
+     * #1521 guard: the update path follows `store` — the raw payload lands in
+     * `body` and the inert `body_html` column is not populated.
+     */
+    public function test_update_keeps_an_html_payload_verbatim_in_body_and_leaves_body_html_empty(): void
+    {
+        $this->authAsUserA();
+        $comment = $this->makeComment();
+        $payload = '<script>alert(1)</script>';
+
+        $response = $this->apiPut("/api/tickets/{$this->ticket->id}/comments/{$comment->id}", [
+            'body' => $payload,
+        ], $this->authToken)->assertStatus(200)
+            ->assertJsonPath('data.body', $payload)
+            ->assertJsonMissingPath('data.body_html');
+
+        $row = TicketComment::findOrFail($comment->id);
+        $this->assertSame($payload, $row->body);
+        $this->assertNull($row->body_html);
     }
 
     // ─── Destroy ─────────────────────────────────────────────────────────

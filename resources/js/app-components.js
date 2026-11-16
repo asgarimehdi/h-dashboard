@@ -285,13 +285,13 @@ export function registerAppComponents(Alpine) {
   // build, so it lives here. noHelpContent() keeps the fallback
   // paragraph's array check out of the template expression.
   Alpine.data('helpModal', () => ({
-    helpSection: 'dashboard',
+    helpSection: 'default',
 
     /** @type {((event: any) => void) | null} */
     _helpListener: null,
 
     init() {
-      this.helpSection = this.$el.dataset.section || 'dashboard';
+      this.helpSection = this.$el.dataset.section || 'default';
       this._helpListener = (event) => {
         if (event.detail && event.detail.section) {
           this.helpSection = event.detail.section;
@@ -308,29 +308,11 @@ export function registerAppComponents(Alpine) {
     },
 
     noHelpContent() {
-      return ![
-        'dashboard',
-        'hardware',
-        'hardware-import',
-        'persons-import',
-        'personnel',
-        'units',
-        'tickets',
-        'todos',
-        'reports',
-        'maps',
-        'settings',
-        'roles',
-        'permissions',
-        'users',
-        'activity-log',
-        'networks',
-        'wireless',
-        'tools',
-        'search',
-        'profile',
-        'hr-dashboard',
-      ].includes(this.helpSection);
+      // #1535: the section list is rendered from config('help.sections') as
+      // `data-sections` on the modal root; keep no second list here.
+      const sections = (this.$el.dataset.sections || '').split(',');
+
+      return !sections.includes(this.helpSection);
     },
   }));
 

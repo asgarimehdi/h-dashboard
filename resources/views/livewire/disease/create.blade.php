@@ -56,6 +56,8 @@ return new class extends Component
      */
     public ?int $unitId = null;
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
         $this->authorize('manage_diseases');
@@ -422,9 +424,12 @@ return new class extends Component
 <div>
     <x-header title="ثبت کیس بیماری" separator>
         <x-slot:actions>
+            <x-help:button section="disease" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="disease" />
 
     {{-- Step 1 — patient by national code ───────────────────────────────── --}}
     <x-card shadow>

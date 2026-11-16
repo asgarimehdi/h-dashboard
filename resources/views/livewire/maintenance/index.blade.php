@@ -26,6 +26,8 @@ return new class extends Component
     public bool $showForm = false;
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
+    public bool $showHelpModal = false;
+
     private const SORTABLE_COLUMNS = ['id', 'title', 'frequency', 'next_due_at'];
 
     public function cancelEdit(): void
@@ -353,9 +355,12 @@ return new class extends Component
 <div>
     <x-header title="زمانبندی تعمیر و نگهداری" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="maintenance" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="maintenance" />
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">

@@ -63,9 +63,13 @@ return new class extends Component {
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="networks" />
 
     <!-- TABLE  -->
+    {{-- #1532: one banner for the whole page when a cookie-authenticated
+         `/api/zabbix/*` call answers 401 — never one per chart/gauge. --}}
+    <x-api-auth-banner class="m-4" />
+
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
             <div class="flex-1">

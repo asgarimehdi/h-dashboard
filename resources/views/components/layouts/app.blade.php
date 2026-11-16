@@ -15,6 +15,12 @@
          be linked globally below (~11.5 KB of parser-blocking CSS in the hot
          path for three pages that use them). Their pages push them now. --}}
     @stack('styles')
+    {{-- Alpine's `x-cloak` rule lives in resources/css/app.css (#1532), NOT in
+         a nonce'd `<style>` block: Livewire's `wire:navigate` head-merge parses
+         the new page with DOMParser, which strips the nonce, so the block is
+         blocked by `style-src-elem` with a per-run hash — the exact ruling that
+         moved the dashboard widths out of `<style>` in #1496. Do not move it
+         back here. --}}
     <link rel="stylesheet" href="{{ asset('css/leaflet/leaflet.css') }}" />
     <link rel="stylesheet" href="{{ asset('css/other/jalalidatepicker.min.css') }}" />
 
@@ -277,7 +283,7 @@
                 @can('manage_diseases')
                 <x-menu-sub title="بیماری‌ها" icon="o-heart">
                     <x-menu-item title="ثبت کیس" icon="o-plus-circle" link="/disease/create" wire:navigate />
-                    <x-menu-item title="لیست کیس‌ها" icon="o-list-bullet" link="/disease" wire:navigate />
+                    <x-menu-item title="لیست کیس‌ها" icon="o-list-bullet" link="/disease" :exact="true" wire:navigate />
                     <x-menu-item title="بیماران" icon="o-user-group" link="/disease/patients" wire:navigate />
                     <x-menu-item title="مدیریت بیماری‌ها" icon="o-cog-6-tooth" link="/disease/manage" wire:navigate />
                 </x-menu-sub>
@@ -323,7 +329,7 @@
                     {{-- `/tools` پشت `manage_users` است، نه گیت گروه — همان گیت روتش در
                          routes/web.php. آخر گروه می‌ماند تا آیتم‌های IT پیوسته و بی‌جابه‌جایی بمانند. --}}
                     @can('manage_users')
-                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" wire:navigate />
+                    <x-menu-item title="ابزارها" icon="o-wrench" link="/tools" :exact="true" wire:navigate />
                     @role('admin')
                     <x-menu-item title="بک‌آپ جدول‌ها" icon="o-cloud-arrow-down" link="/tools/backup" wire:navigate />
                     @endrole

@@ -195,7 +195,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="tools" />
 
     <div class="space-y-4">
         <p class="text-sm opacity-70">

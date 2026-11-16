@@ -11,6 +11,8 @@ return new class extends Component
 {
     use Toast;
 
+    public bool $showHelpModal = false;
+
     public string $search = '';
 
     public array $expanded = [];
@@ -130,6 +132,7 @@ return new class extends Component
 <div>
     <x-header title="ساختار درختی واحدها" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="units" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -229,4 +232,6 @@ return new class extends Component
         .tree-indent-11 { width: 308px; }
         .tree-indent-12 { width: 336px; }
     </style>
+
+    <x-help:modal wireModel="showHelpModal" section="units" />
 </div>

@@ -25,6 +25,8 @@ return new class extends Component
 
     public $mapZoom = 10;
 
+    public bool $showHelpModal = false;
+
     /**
      * Disease layer period (#1246). Jalali `Y/m/d`, both ends inclusive.
      *
@@ -147,18 +149,27 @@ return new class extends Component
 };
 ?>
 
-<div
-    wire:ignore
-    id="map-container"
-    class="w-full relative"
-    x-data="mapDashboard"
-    data-api-base="{{ url('/api/gis') }}"
-    data-center-lat="{{ $mapCenterLat }}"
-    data-center-lng="{{ $mapCenterLng }}"
-    data-zoom="{{ $mapZoom }}"
-    data-disease-from="{{ $diseaseFrom }}"
-    data-disease-to="{{ $diseaseTo }}"
->
+<div>
+    {{-- #1535: the root below is `wire:ignore`, so the server-gated help body
+         could never be morphed into it. The modal therefore lives OUTSIDE the
+         ignored subtree and this plain wrapper keeps the component at a single
+         Livewire root (two roots throw MultipleRootElementsDetectedException).
+         The button stays inside the ignored toolbar: `wire:click` is bound at
+         component init, and `help-modal.spec.ts` pins that it still opens. --}}
+    <x-help:modal wireModel="showHelpModal" section="maps" />
+
+    <div
+        wire:ignore
+        id="map-container"
+        class="w-full relative"
+        x-data="mapDashboard"
+        data-api-base="{{ url('/api/gis') }}"
+        data-center-lat="{{ $mapCenterLat }}"
+        data-center-lng="{{ $mapCenterLng }}"
+        data-zoom="{{ $mapZoom }}"
+        data-disease-from="{{ $diseaseFrom }}"
+        data-disease-to="{{ $diseaseTo }}"
+    >
     <!-- Map Toolbar -->
     <div class="absolute top-4 left-4 right-4 z-10 flex flex-wrap gap-2 justify-between p-2 bg-base-100/90 backdrop-blur rounded-box shadow-lg">
         <!-- Layer Controls -->
@@ -276,8 +287,15 @@ return new class extends Component
                 <i class="fa fa-ticket"></i>
                 <span>تیکت باز: <span x-text="stats.open_tickets"></span></span>
             </div>
+            <x-help:button section="maps" wireModel="showHelpModal" />
         </div>
     </div>
+
+    {{-- #1532: one banner for the whole page when `/api/gis/*` answers 401 —
+         never one per layer. The map itself stays interactive. --}}
+    <x-api-auth-banner
+        message="دسترسی به داده‌های نقشه برقرار نشد؛ دوباره وارد شوید."
+        class="absolute top-20 left-1/2 -translate-x-1/2 z-20 w-auto max-w-lg" />
 
     <!-- Map Element: the shared maps.map component owns the Leaflet instance
          (Alpine.store('map')); this page only attaches its layers via onReady. -->
@@ -314,6 +332,7 @@ return new class extends Component
     .map-marker-diamond { width: 12px; height: 12px; transform: rotate(45deg); border: 2px solid white; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
 </style>
 
+    </div>
 </div>
 
 @assets

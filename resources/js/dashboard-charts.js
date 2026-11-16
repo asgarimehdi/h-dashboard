@@ -201,6 +201,31 @@ const HR_CHART_COLORS = {
   dark: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24'],
 };
 
+// #1536: the dead column-0 <style> in hr/dashboard.blade.php never applied
+// (Livewire extracts that block verbatim — Blade untranslated). Heights are
+// data-driven, so the rule lives here: one px budget per row, scaled from the
+// same `rows` array that feeds the series. CSSOM assignment on the container,
+// NOT a style attribute and NOT a nonce'd <style> (#1496).
+const HR_MIN_HEIGHT = 240;
+/** @type {Record<string, number>} */
+const HR_ROW_HEIGHT = {
+  hrChartByUnit: 28,
+  hrChartBySemat: 28,
+  hrChartByTahsil: 32,
+  hrChartByEstekhdam: 32,
+};
+
+/**
+ * @param {string} id
+ * @param {Array<{ name: string, total: number }> | undefined} rows
+ */
+function applyHrChartHeight(id, rows) {
+  const container = document.getElementById(id);
+  if (!container) return;
+  const rowHeight = HR_ROW_HEIGHT[id] ?? 28;
+  container.style.height = `${Math.max(HR_MIN_HEIGHT, (rows || []).length * rowHeight)}px`;
+}
+
 function hrPalette() {
   const root = document.documentElement;
   const style = getComputedStyle(root);
@@ -235,13 +260,14 @@ function destroyHrChart(id) {
  */
 function renderHrBar(id, rows, color, palette) {
   destroyHrChart(id);
+  applyHrChartHeight(id, rows); // must precede Highcharts.chart(): it measures the box
   const data = (rows || [])
     .slice()
     .sort((a, b) => b.total - a.total)
     .map((r) => ({ name: r.name, y: r.total }));
 
   if (!data.length || typeof Highcharts === 'undefined') {
-    return;
+    return; // the box keeps the 240px floor
   }
 
   Highcharts.chart(id, {
@@ -270,7 +296,19 @@ function renderHrBar(id, rows, color, palette) {
           enabled: true,
           align: 'left',
           format: '{y}',
-          style: { color: palette.text },
+          // #1530: the label sits on the card, outside the bar, so the
+          // `textOutline: '1px contrast'` default has nothing to protect. Worse,
+          // `getContrast()` understands only hex/rgb/named, so the oklch
+          // `--color-base-content` falls back to #000000 and `applyTextOutline`
+          // doubles it to a 2px black halo — a smudge behind 11px bold digits.
+          // Pin all three inherited defaults explicitly instead of relying on
+          // Highcharts' deep merge; `12px` matches `xAxis.labels`.
+          style: {
+            color: palette.text,
+            textOutline: 'none',
+            fontWeight: 'normal',
+            fontSize: '12px',
+          },
         },
       },
     ],

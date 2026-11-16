@@ -7,6 +7,7 @@ use App\View\Components\AppBrand;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -44,6 +45,84 @@ function makeHelpUser(): User
     return $user;
 }
 
+/**
+ * Routed pages with no help button at all.
+ *
+ * Only `auth.login`: public/pre-auth (the modal would ship the whole help
+ * payload to an anonymous visitor). `hardware.index` is NOT here — its button
+ * lives in its `_toolbar` partial, which the counter below follows, so the
+ * page counts as having one.
+ *
+ * Phase 4 (#1535 close-out): the old `helpPagesPendingRollout()` allowlist is
+ * gone — every page is wired, so there is nothing left to roll out.
+ *
+ * @return list<string>
+ */
+function helpPageExceptions(): array
+{
+    return ['auth.login'];
+}
+
+/**
+ * Livewire component names from every `Route::livewire(...)` call in web.php.
+ *
+ * Commented routes are skipped: `web.php` still carries a commented
+ * `auth.register` line and there is no such component.
+ *
+ * @return list<string>
+ */
+function routedLivewirePageComponents(): array
+{
+    $components = [];
+
+    foreach (file(base_path('routes/web.php')) as $line) {
+        $line = trim($line);
+
+        if (str_starts_with($line, '//')) {
+            continue;
+        }
+
+        if (preg_match("/Route::livewire\(\s*'[^']*'\s*,\s*'([^']+)'/", $line, $matches)) {
+            $components[] = $matches[1];
+        }
+    }
+
+    return array_values(array_unique($components));
+}
+
+/**
+ * Help buttons a routed page renders: its own file plus every partial it
+ * directly @includes (recursively, so an included partial's own includes
+ * count too). Only literal `@include('...')` calls are followed — no page
+ * includes a button-bearing partial dynamically.
+ *
+ * `hardware.index` owns no button in its own file; the button lives in its
+ * `_toolbar` partial, included only by that page, so a source-only count
+ * would wrongly except it.
+ */
+function helpButtonCount(string $path, array &$seen = []): int
+{
+    if (isset($seen[$path]) || ! is_file($path)) {
+        return 0;
+    }
+
+    $seen[$path] = true;
+
+    $source = file_get_contents($path);
+    $count = substr_count($source, '<x-help:button');
+
+    if (preg_match_all("/@include\(\s*'([^']+)'/", $source, $matches)) {
+        foreach ($matches[1] as $view) {
+            $count += helpButtonCount(
+                resource_path('views/'.str_replace('.', '/', $view).'.blade.php'),
+                $seen,
+            );
+        }
+    }
+
+    return $count;
+}
+
 it('tools page renders with help button', function () {
     $this->seed(PermissionSeeder::class);
     $user = makeHelpUser();
@@ -67,12 +146,88 @@ it('profile page renders with help button', function () {
         ->assertSee('پروفایل');
 });
 
+it('disease page opens the disease help section', function () {
+    $this->seed(PermissionSeeder::class);
+    $user = makeHelpUser();
+    $user->givePermissionTo('manage_diseases');
+
+    Livewire::actingAs($user)->test('disease.index')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        // Unique to the `disease` content file: every section's body ships in
+        // the open response, so the heading must not appear anywhere else.
+        ->assertSee('پرونده و کیس‌های بیماری');
+});
+
+it('maintenance page opens its own help section', function () {
+    $this->seed(PermissionSeeder::class);
+    $user = makeHelpUser();
+    $user->givePermissionTo('manage_hardware');
+
+    Livewire::actingAs($user)->test('maintenance.index')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        // Unique to the `maintenance` content file — the page header repeats
+        // the section title, so the page's own heading cannot witness this.
+        ->assertSee('سررسید و تیکت خودکار');
+});
+
+it('org chart page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hr.org-chart')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('بج پرسنل');
+});
+
+it('zabbix devices page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('it.zabbix-devices')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('شناسه آیتم خروجی');
+});
+
+it('select context page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    // `mount()` redirects a single-unit user, so this page needs two units to
+    // render at all — the one `makeHelpUser()` attaches, plus one more.
+    $second = Unit::create(['name' => 'Second Unit']);
+    $user->units()->attach($second->id, ['role' => 'staff', 'is_primary' => false]);
+
+    Livewire::actingAs($user)->test('select-context')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('نقش شما در آن');
+});
+
+it('change password page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('auth.changepassword')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('فرم تغییر رمز');
+});
+
 it('hardware page help modal opens via button', function () {
     $user = makeHelpUser();
     Livewire::actingAs($user)->test('hardware.index')
         ->assertOk()
         ->call('$set', 'showHelpModal', true)
-        ->assertSet('showHelpModal', true);
+        ->assertSet('showHelpModal', true)
+        // #1537: the wrapper's data-section is the only per-section marker in
+        // the open response, since every content body is shipped at once.
+        ->assertSee('data-section="hardware"', false);
 });
 
 it('does not ship the help modal body while the modal is closed', function () {
@@ -131,14 +286,118 @@ it('keeps the unknown-section fallback when the help modal is open', function ()
         ->assertSee('محتوای راهنما تعریف نشده است');
 });
 
-it('every help content section renders without errors', function (string $section) {
-    $user = makeHelpUser();
-    // Render each help content file standalone via the modal component path
-    $content = view("components.help.content.{$section}")->render();
-    expect($content)->toBeString()->not->toBeEmpty();
+it('renders every registered help content section', function () {
+    makeHelpUser();
+
+    foreach (config('help.sections') as $section) {
+        $content = view("components.help.content.{$section}")->render();
+
+        expect($content)->toBeString()->not->toBeEmpty();
+    }
+});
+
+it('has a content file for every registered help section', function () {
+    foreach (config('help.sections') as $section) {
+        expect(resource_path("views/components/help/content/{$section}.blade.php"))->toBeFile();
+    }
+});
+
+it('registers every help content file', function () {
+    $files = collect(File::files(resource_path('views/components/help/content')))
+        ->map(fn ($file) => basename($file->getFilename(), '.blade.php'))
+        ->sort()
+        ->values()
+        ->all();
+
+    $registered = collect(config('help.sections'))->sort()->values()->all();
+
+    expect($files)->toBe($registered);
+});
+
+it('gives every routed page a help button except the allowlist', function () {
+    $finder = app('livewire.finder');
+    $allowed = helpPageExceptions();
+    $missing = [];
+    $duplicated = [];
+
+    $components = routedLivewirePageComponents();
+    expect($components)->not->toBeEmpty();
+
+    foreach ($components as $component) {
+        if (in_array($component, $allowed, true)) {
+            continue;
+        }
+
+        $path = $finder->resolveSingleFileComponentPath($component);
+
+        if ($path === null) {
+            $missing[] = "{$component}: no single-file component resolved";
+
+            continue;
+        }
+
+        $count = helpButtonCount($path);
+
+        if ($count === 0) {
+            $missing[] = "{$component}: no help button ({$path})";
+        } elseif ($count > 1) {
+            $duplicated[] = "{$component}: {$count} help buttons ({$path})";
+        }
+    }
+
+    expect($missing)->toBe([])->and($duplicated)->toBe([]);
+});
+
+it('points every help button at a registered section', function () {
+    $registered = config('help.sections');
+    $unknown = [];
+
+    foreach (File::allFiles(resource_path('views')) as $file) {
+        if (! str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        preg_match_all('/<x-help:button\b[^>]*\bsection="([^"]+)"/s', $file->getContents(), $matches);
+
+        foreach ($matches[1] as $section) {
+            if (! in_array($section, $registered, true)) {
+                $unknown[] = "{$file->getRelativePathname()}: {$section}";
+            }
+        }
+    }
+
+    expect($unknown)->toBe([]);
+});
+
+it('maps every rolled-out page to its section', function (string $component, string $section) {
+    $path = app('livewire.finder')->resolveSingleFileComponentPath($component);
+    expect($path)->not->toBeNull();
+
+    $source = file_get_contents($path);
+
+    expect($source)->toMatch('/<x-help:button\b[^>]*\bsection="'.preg_quote($section, '/').'"/s');
 })->with([
-    'dashboard', 'hardware', 'hardware-import', 'persons-import', 'personnel',
-    'units', 'tickets', 'todos', 'reports', 'maps', 'settings', 'roles',
-    'permissions', 'users', 'activity-log', 'networks', 'wireless', 'tools',
-    'search', 'profile', 'hr-dashboard',
+    ['disease.index', 'disease'],
+    ['disease.create', 'disease'],
+    ['disease.manage', 'disease'],
+    ['disease.patients', 'disease'],
+    ['units.chart', 'units'],
+    ['units.map', 'units'],
+    ['maps/route', 'maps'],
+    ['maps/route2', 'maps'],
+    ['maps/county', 'maps'],
+    ['maps/point', 'maps'],
+    ['map.map-dashboard', 'maps'],
+    ['kargozini.estekhdam', 'personnel'],
+    ['kargozini.tahsil', 'personnel'],
+    ['kargozini.semat', 'personnel'],
+    ['kargozini.radif', 'personnel'],
+    ['hr.org-chart', 'org-chart'],
+    ['it/zabbix-devices', 'zabbix-devices'],
+    ['maintenance.index', 'maintenance'],
+    ['reports.advanced', 'reports'],
+    ['reports.persons', 'reports'],
+    ['todo.todo', 'todos'],
+    ['select-context', 'select-context'],
+    ['auth.changepassword', 'change-password'],
 ]);

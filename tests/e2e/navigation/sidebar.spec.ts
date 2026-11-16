@@ -110,6 +110,13 @@ test.describe('active state highlight', () => {
     { path: '/users?page=1', href: '/users' },        // کوئری نباید هایلایت را بشکند
     { path: '/users/changepassword', href: '/users/changepassword' },
     { path: '/tickets/new', href: '/tickets/new' },
+    // #1531 — والد و فرزندانش هر دو ورودی سایدبار دارند؛ `:exact` روی والد
+    // باعث می‌شود فقط ورودی خود صفحه فعال بماند.
+    { path: '/disease', href: '/disease' },
+    { path: '/disease/create', href: '/disease/create' },
+    { path: '/disease/manage', href: '/disease/manage' },
+    { path: '/disease/patients', href: '/disease/patients' },
+    { path: '/tools/backup', href: '/tools/backup' },
   ];
 
   for (const { path, href } of ACTIVE_MATRIX) {
@@ -140,6 +147,17 @@ test.describe('submenu open state (#1389)', () => {
   test('submenu of the current page is open on full load', async ({ page }) => {
     await login(page);
     await page.goto('/disease');
+    await page.waitForLoadState('domcontentloaded');
+
+    await expect(diseaseDetails(page)).toHaveJSProperty('open', true);
+  });
+
+  // #1531 — `:exact` only clears the parent's own active class; the child
+  // entry that owns `/disease/manage` keeps `mary-active-menu`, so the section
+  // must still render open.
+  test('submenu of a child page is open on full load', async ({ page }) => {
+    await login(page);
+    await page.goto('/disease/manage');
     await page.waitForLoadState('domcontentloaded');
 
     await expect(diseaseDetails(page)).toHaveJSProperty('open', true);

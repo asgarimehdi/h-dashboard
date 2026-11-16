@@ -68,6 +68,16 @@
 }
 
 /* ------------------ */
+/* Alpine's `x-cloak` contract (#1532): one rule for every page — the
+   API-auth banner and every other initially-hidden panel rely on it, and only
+   the auth layout used to define it. It belongs in this stylesheet, not in a
+   nonce'd `<style>` block: Livewire's `wire:navigate` head-merge parses the new
+   page with DOMParser, which strips the nonce, so a block here violates
+   `style-src-elem` with a per-run hash (same ruling as #1496). */
+[x-cloak] {
+    display: none !important;
+}
+
 @font-face {
     font-family: "Vazirmatn";
     src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
@@ -541,6 +551,18 @@
 [data-theme="pastel"] .menu details[open] > summary {
     background-color: var(--menu-active-bg) !important;
     color: var(--menu-active-fg) !important;
+}
+
+/* #1529: MaryUI on every menu anchor/summary puts `hover:text-inherit`.
+   On the ACTIVE item that keyword resolves to the page text colour and
+   lands on the neutral background (light 1.12, fantasy 1.00). daisyUI
+   already skips `[aria-current]` in its own hover rule, so the pair must
+   be pinned here, in the same unlayered block as the autumn/pastel
+   override — no theme's resting state changes. */
+.menu a.mary-active-menu:hover,
+.menu details[open] > summary:has(+ ul > li > a.mary-active-menu):hover {
+    color: var(--menu-active-fg);
+    background-color: var(--menu-active-bg);
 }
 
 /* glass modal: valentine's dark-ish base-content on the 70% glass measures

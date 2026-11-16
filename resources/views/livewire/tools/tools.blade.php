@@ -157,7 +157,7 @@ return new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="tools" />
 
     {{-- آمار --}}
     <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">

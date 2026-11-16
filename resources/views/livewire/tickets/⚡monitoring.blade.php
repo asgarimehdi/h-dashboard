@@ -102,7 +102,7 @@ new class extends Component
         // `Eloquent\Builder` and `find()` keeps its `Unit|null` return type —
         // a bare `whereIn()` re-types the rest of the chain through
         // `Query\Builder`'s `@mixin` and yields `stdClass`. See AGENTS.md,
-        // "Eloquent chains vs PHPStan (no larastan)".
+        // "Eloquent chains vs PHPStan (with Larastan)".
         $this->currentUnit = $this->selectedUnitId
             ? Unit::query()
                 ->where(fn ($q) => $q->whereIn('id', $accessibleIds))
@@ -259,7 +259,7 @@ new class extends Component
         </x-slot:actions>
     </x-header>
 
-    <x-help:modal wireModel="showHelpModal" />
+    <x-help:modal wireModel="showHelpModal" section="tickets" />
 
     <x-card shadow>
         <div class="breadcrumbs flex gap-2 items-center">

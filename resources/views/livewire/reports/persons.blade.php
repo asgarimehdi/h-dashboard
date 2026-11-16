@@ -11,6 +11,8 @@ return new class extends Component
 {
     use WithPagination;
 
+    public bool $showHelpModal = false;
+
     /** Issue #1024 — the roster is paginated instead of hydrated whole. */
     public int $perPage = 25;
 
@@ -160,6 +162,7 @@ return new class extends Component
     @php $chart = $this->chartPayload(); @endphp
     <x-header title="گزارش پرسنل" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="reports" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -301,6 +304,8 @@ return new class extends Component
             </div>
         @endif
     </x-card>
+
+    <x-help:modal wireModel="showHelpModal" section="reports" />
 </div>
 
 @assets
