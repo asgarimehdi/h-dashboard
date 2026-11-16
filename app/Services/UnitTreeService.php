@@ -27,7 +27,7 @@ use Illuminate\Support\Collection;
  * needs a unit tree (e.g. covered population per unit) plugs its own badge
  * view into `unit.tree` and gets all of this for free.
  *
- * Query-shape note (PHPStan level 6, no larastan in this repo): every chain
+ * Query-shape note (PHPStan level 6, with larastan in this repo): every chain
  * starts with `Unit::query()->with(...)`, where `query()` and `with()` are
  * declared on `Eloquent\Builder`. An IN-filter goes inside a `where(Closure)`
  * instead of a top-level `whereIn()`, because `whereIn` lives only on
