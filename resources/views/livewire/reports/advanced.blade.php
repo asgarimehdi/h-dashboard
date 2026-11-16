@@ -23,6 +23,8 @@ return new class extends Component
 {
     use WithPagination;
 
+    public bool $showHelpModal = false;
+
     public string $reportType = 'tickets';
 
     public ?string $dateFrom = null;
@@ -465,6 +467,7 @@ return new class extends Component
     <div id="advancedChartData" class="hidden" data-chart='@json(['byDay' => $this->reportData['byDay'], 'byUnit' => $this->reportData['byUnit'], 'details' => $this->reportData['details']])'></div>
     <x-header title="گزارش تیکت‌ها" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="reports" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -606,6 +609,8 @@ return new class extends Component
         </x-card>
     </div>
     @endif
+
+    <x-help:modal wireModel="showHelpModal" section="reports" />
 </div>
 
 @assets

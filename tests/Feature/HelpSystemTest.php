@@ -63,8 +63,6 @@ function helpPagesPendingRollout(): array
         'hr.org-chart',
         'it/zabbix-devices',
         'maintenance.index',
-        'reports.advanced', 'reports.persons',
-        'todo.todo',
         'select-context',
         'auth.changepassword',
     ];
