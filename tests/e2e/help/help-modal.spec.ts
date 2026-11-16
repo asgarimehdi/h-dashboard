@@ -58,6 +58,30 @@ test.describe('help modal', () => {
     await expect(page.getByText('راهنمای این بخش در دسترس نیست')).toBeVisible();
   });
 
+  test('/map opens a populated help modal from inside the ignored toolbar', async ({ page }) => {
+    // #1535: `/map`'s root is `wire:ignore`, so the help modal now lives outside
+    // that subtree. If it ever moves back in, the server-gated body is never
+    // inserted and the dialog opens empty — which is exactly what this pins.
+    await page.goto('/map');
+
+    await page.locator(HELP_BUTTON).first().click();
+
+    // This page also renders the "جزئیات واحد" dialog, so `dialog.modal` is not
+    // unique here; the help dialog is the one titled «راهنما».
+    const dialog = page.locator('dialog.modal').filter({ hasText: 'راهنما' });
+    await expect(dialog).toHaveClass(/modal-open/);
+
+    const body = dialog.locator('.space-y-6.text-right');
+    await expect(body).toBeVisible();
+
+    // The heading is the section assertion: every content body ships in the
+    // open response, but only the active one is rendered by its `x-if`
+    // template, so a fallback (unknown section) or a wrong `data-section` both
+    // fail right here. Don't assert the fallback text is absent — it lives in an
+    // `x-show` node and is therefore always in the DOM.
+    await expect(body).toContainText('نقشه‌های تعاملی و تحلیل مکانی');
+  });
+
   test('follows wire:navigate and opens the target page section', async ({ page }) => {
     await page.goto('/dashboard');
 
