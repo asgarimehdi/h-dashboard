@@ -10,6 +10,8 @@ use Livewire\Component;
 
 return new class extends Component
 {
+    public bool $showHelpModal = false;
+
     /**
      * The county geometry is deliberately NOT a public property (#1173).
      *
@@ -88,6 +90,7 @@ return new class extends Component
 <div>
     <x-header title="تقسیم‌بندی شهرستان" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="maps" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -121,6 +124,8 @@ return new class extends Component
          under the CSP build at all — the parser rejects the IIFE wrapper
          itself — so the geometry must not be handed to JS via @script. --}}
     <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="county-regions-data">@json($this->regions)</script>
+
+    <x-help:modal wireModel="showHelpModal" section="maps" />
 </div>
 
 @assets

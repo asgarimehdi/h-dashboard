@@ -3,6 +3,8 @@
 use Livewire\Component;
 
 return new class extends Component {
+    public bool $showHelpModal = false;
+
     public string $map_tile_template;
     public string $routing_url;
     public string $waypoint1;
@@ -21,6 +23,7 @@ return new class extends Component {
 <div>
     <x-header title="محاسبه فاصله جاده‌ای بدون API" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="maps" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -52,6 +55,8 @@ return new class extends Component {
          for resources/js/map-pages.js. The old @script block cannot execute
          under the CSP build at all. --}}
     <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="route-data">@json(['waypoint1' => $waypoint1, 'waypoint2' => $waypoint2, 'routingUrl' => $routing_url])</script>
+
+    <x-help:modal wireModel="showHelpModal" section="maps" />
 </div>
 
 

@@ -11,6 +11,8 @@ return new class extends Component
     use Toast;
     use WithPagination;
 
+    public bool $showHelpModal = false;
+
     public $name;
 
     public ?int $editingId = null;
@@ -152,6 +154,7 @@ return new class extends Component
 <div>
     <x-header title="مدیریت وضعیت های استخدامی" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="personnel" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -230,4 +233,6 @@ return new class extends Component
             @endscope
         </x-table>
     </x-card>
+
+    <x-help:modal wireModel="showHelpModal" section="personnel" />
 </div>

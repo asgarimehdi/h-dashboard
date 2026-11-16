@@ -10,6 +10,8 @@ use Livewire\Component;
 
 return new class extends Component
 {
+    public bool $showHelpModal = false;
+
     /** Marker rows the bounded base query may return at most. */
     private const MAX_MARKERS = 2000;
 
@@ -153,6 +155,7 @@ return new class extends Component
 <div data-point-map>
     <x-header title="نقاط لوکیشن" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="maps" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
@@ -204,6 +207,8 @@ return new class extends Component
          144,137 B against 100,873 B on the dev payload. `county` can use a
          bare `@json` because its GeoJSON is ASCII; this block must not. --}}
     <script type="application/json" nonce="{{ Vite::cspNonce() }}" id="point-locations-data">@json($this->mapData['locations'], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)</script>
+
+    <x-help:modal wireModel="showHelpModal" section="maps" />
 </div>
 
 @assets
