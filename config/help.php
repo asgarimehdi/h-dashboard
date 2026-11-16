@@ -37,5 +37,8 @@ return [
         'search',
         'profile',
         'hr-dashboard',
+        'zabbix-devices',
+        'select-context',
+        'change-password',
     ],
 ];

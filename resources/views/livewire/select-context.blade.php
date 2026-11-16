@@ -6,6 +6,8 @@ use Livewire\Component;
 return new class extends Component {
     public ?int $selectedUnitId = null;
 
+    public bool $showHelpModal = false;
+
     public function mount()
     {
         $userUnits = auth()->user()->units;
@@ -61,7 +63,11 @@ return new class extends Component {
 
 <div class="flex items-center justify-center min-h-[60vh]">
     <x-card shadow class="max-w-md w-full">
-        <x-header title="انتخاب حوزه فعالیت" subtitle="لطفاً واحد سازمانی مورد نظر خود را انتخاب کنید" separator />
+        <x-header title="انتخاب حوزه فعالیت" subtitle="لطفاً واحد سازمانی مورد نظر خود را انتخاب کنید" separator>
+            <x-slot:actions>
+                <x-help:button section="select-context" wireModel="showHelpModal" />
+            </x-slot:actions>
+        </x-header>
 
         <x-form wire:submit="selectContext">
             <div class="space-y-3">
@@ -92,4 +98,6 @@ return new class extends Component {
             </x-slot:actions>
         </x-form>
     </x-card>
+
+    <x-help:modal wireModel="showHelpModal" section="select-context" />
 </div>

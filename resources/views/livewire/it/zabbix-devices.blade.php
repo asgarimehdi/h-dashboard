@@ -63,6 +63,8 @@ return new class extends Component
      */
     public array $connectionResults = [];
 
+    public bool $showHelpModal = false;
+
     private const SORTABLE_COLUMNS = ['id', 'name', 'type', 'sort_order'];
 
     /**
@@ -418,9 +420,12 @@ return new class extends Component
 <div>
     <x-header title="مدیریت دستگاه‌های زبیکس" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="zabbix-devices" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="zabbix-devices" />
 
     <x-card shadow>
         <div class="flex gap-2 items-center mb-4">
