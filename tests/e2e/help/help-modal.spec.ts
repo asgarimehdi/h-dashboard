@@ -73,8 +73,13 @@ test.describe('help modal', () => {
 
     const body = dialog.locator('.space-y-6.text-right');
     await expect(body).toBeVisible();
+
+    // The heading is the section assertion: every content body ships in the
+    // open response, but only the active one is rendered by its `x-if`
+    // template, so a fallback (unknown section) or a wrong `data-section` both
+    // fail right here. Don't assert the fallback text is absent — it lives in an
+    // `x-show` node and is therefore always in the DOM.
     await expect(body).toContainText('نقشه‌های تعاملی و تحلیل مکانی');
-    await expect(dialog).not.toContainText('راهنمای این بخش در دسترس نیست');
   });
 
   test('follows wire:navigate and opens the target page section', async ({ page }) => {
