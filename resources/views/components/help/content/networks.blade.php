@@ -30,7 +30,7 @@
         <ul class="space-y-1 text-sm text-base-content/70">
             <li>• هر لینک شامل دو آیتم زیبیکس: In Traffic و Out Traffic</li>
             <li>• شناسه‌ها (out-item-id، in-item-id) از زیبیکس گرفته شده‌اند</li>
-            <li>• برای اضافه کردن لینک جدید، آرایه networkItems در کنترلر ویرایش شود</li>
+            <li>• برای اضافه کردن یا ویرایش یک لینک، از صفحهٔ <a href="/it/zabbix-devices" class="link link-primary">مدیریت دستگاه‌های زیبیکس</a> استفاده کنید؛ همین صفحه فقط دستگاه‌های فعالِ نوع شبکه را نشان می‌دهد</li>
             <li>• نمودارها با island lazy-loading بارگذاری می‌شوند</li>
         </ul>
     </div>

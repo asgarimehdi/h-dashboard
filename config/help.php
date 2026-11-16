@@ -40,5 +40,8 @@ return [
         'disease',
         'maintenance',
         'org-chart',
+        'zabbix-devices',
+        'select-context',
+        'change-password',
     ],
 ];

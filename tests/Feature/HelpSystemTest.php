@@ -57,9 +57,6 @@ function makeHelpUser(): User
 function helpPagesPendingRollout(): array
 {
     return [
-        'it/zabbix-devices',
-        'select-context',
-        'auth.changepassword',
     ];
 }
 
@@ -168,6 +165,41 @@ it('org chart page opens its own help section', function () {
         ->call('$set', 'showHelpModal', true)
         ->assertSet('showHelpModal', true)
         ->assertSee('بج پرسنل');
+});
+
+it('zabbix devices page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('it.zabbix-devices')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('شناسه آیتم خروجی');
+});
+
+it('select context page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    // `mount()` redirects a single-unit user, so this page needs two units to
+    // render at all — the one `makeHelpUser()` attaches, plus one more.
+    $second = Unit::create(['name' => 'Second Unit']);
+    $user->units()->attach($second->id, ['role' => 'staff', 'is_primary' => false]);
+
+    Livewire::actingAs($user)->test('select-context')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('نقش شما در آن');
+});
+
+it('change password page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('auth.changepassword')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('فرم تغییر رمز');
 });
 
 it('hardware page help modal opens via button', function () {
