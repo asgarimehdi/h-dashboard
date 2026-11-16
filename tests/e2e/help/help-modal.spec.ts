@@ -58,6 +58,16 @@ test.describe('help modal', () => {
     await expect(page.getByText('راهنمای این بخش در دسترس نیست')).toBeVisible();
   });
 
+  test('opens the maintenance section on /maintenance, not the dashboard body', async ({ page }) => {
+    await page.goto('/maintenance');
+
+    await page.locator(HELP_BUTTON).first().click();
+    await expect(page.locator(MODAL)).toHaveClass(/modal-open/);
+    await expect(page.locator(MODAL_BODY)).toBeVisible();
+    await expect(page.locator(MODAL_BODY)).toContainText('سررسید و تیکت خودکار');
+    await expect(page.locator(MODAL_BODY)).not.toContainText('داشبورد مدیریت اطلاعات سلامت');
+  });
+
   test('follows wire:navigate and opens the target page section', async ({ page }) => {
     await page.goto('/dashboard');
 

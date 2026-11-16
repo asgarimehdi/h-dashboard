@@ -64,7 +64,6 @@ function helpPagesPendingRollout(): array
         'kargozini.estekhdam', 'kargozini.tahsil', 'kargozini.semat', 'kargozini.radif',
         'hr.org-chart',
         'it/zabbix-devices',
-        'maintenance.index',
         'reports.advanced', 'reports.persons',
         'todo.todo',
         'select-context',
@@ -139,6 +138,20 @@ it('profile page renders with help button', function () {
     Livewire::actingAs($user)->test('profile.index')
         ->assertOk()
         ->assertSee('پروفایل');
+});
+
+it('maintenance page opens its own help section', function () {
+    $this->seed(PermissionSeeder::class);
+    $user = makeHelpUser();
+    $user->givePermissionTo('manage_hardware');
+
+    Livewire::actingAs($user)->test('maintenance.index')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        // Unique to the `maintenance` content file — the page header repeats
+        // the section title, so the page's own heading cannot witness this.
+        ->assertSee('سررسید و تیکت خودکار');
 });
 
 it('hardware page help modal opens via button', function () {

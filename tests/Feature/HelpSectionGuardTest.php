@@ -8,7 +8,7 @@ use Tests\TestCase;
 /**
  * Issue #1537 — pin every help call site to the section it actually documents.
  *
- * The modal renders all 21 content bodies into the open response (#1166), so a
+ * The modal renders all 22 content bodies into the open response (#1166), so a
  * Pest `assertSee` on the modal body cannot tell which section is active. What
  * *is* per-section is the wrapper's `data-section` (modal.blade.php:13), which
  * comes from the `section` prop of the `<x-help:modal>` call site. Before #1537
@@ -38,14 +38,14 @@ final class HelpSectionGuardTest extends TestCase
 
     private const SECTION_ATTR = '/\bsection\s*=\s*["\']([^"\']*)["\']/';
 
-    /** 25 pages carry one button + one modal; the 26th must fail loudly. */
-    private const PAIRED_FILES = 25;
+    /** 26 pages carry one button + one modal; the 27th must fail loudly. */
+    private const PAIRED_FILES = 26;
 
-    /** 20 distinct button sections; `todos` has content but no live button. */
-    private const BUTTON_SECTIONS = 20;
+    /** 21 distinct button sections; `todos` has content but no live button. */
+    private const BUTTON_SECTIONS = 21;
 
-    /** The registry must hold exactly 21 sections. */
-    private const CONTENT_SECTIONS = 21;
+    /** The registry must hold exactly 22 sections. */
+    private const CONTENT_SECTIONS = 22;
 
     /**
      * A1 — no `<x-help:modal>` call site may fall back to a guessed section.
@@ -138,7 +138,7 @@ final class HelpSectionGuardTest extends TestCase
     }
 
     /**
-     * A3 — the button set and the modal set are the same 25 files.
+     * A3 — the button set and the modal set are the same 26 files.
      */
     public function test_a3_button_and_modal_file_sets_are_identical(): void
     {
@@ -159,7 +159,7 @@ final class HelpSectionGuardTest extends TestCase
     }
 
     /**
-     * A4 — the 20 distinct button sections all have a content file.
+     * A4 — the 21 distinct button sections all have a content file.
      */
     public function test_a4_every_button_section_has_a_content_file(): void
     {
