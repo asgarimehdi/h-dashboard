@@ -8,7 +8,7 @@ use Tests\TestCase;
 /**
  * Issue #1537 — pin every help call site to the section it actually documents.
  *
- * The modal renders all 24 content bodies into the open response (#1166), so a
+ * The modal renders all 27 content bodies into the open response (#1166), so a
  * Pest `assertSee` on the modal body cannot tell which section is active. What
  * *is* per-section is the wrapper's `data-section` (modal.blade.php:13), which
  * comes from the `section` prop of the `<x-help:modal>` call site. Before #1537
@@ -18,9 +18,9 @@ use Tests\TestCase;
  * This is a static scan, not a render test: rendering 28 pages for this fact
  * was rejected. `help-modal.spec.ts` test 3 stays the behavioural witness.
  *
- * Comments are stripped before matching because two views quote the tag in
- * prose (button.blade.php:11, backup/index.blade.php:40); a raw scan sees 30
- * call sites in 29 files instead of the 28 real ones.
+ * Comments are stripped before matching because one view quotes the tag in
+ * prose (backup/index.blade.php:40); a raw scan sees 97 call sites instead
+ * of the 96 real ones in 48 files.
  */
 final class HelpSectionGuardTest extends TestCase
 {
