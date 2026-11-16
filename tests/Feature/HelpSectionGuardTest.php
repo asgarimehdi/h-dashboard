@@ -38,12 +38,6 @@ final class HelpSectionGuardTest extends TestCase
 
     private const SECTION_ATTR = '/\bsection\s*=\s*["\']([^"\']*)["\']/';
 
-    /** 25 pages carry one button + one modal; the 26th must fail loudly. */
-    private const PAIRED_FILES = 25;
-
-    /** 20 distinct button sections; `todos` has content but no live button. */
-    private const BUTTON_SECTIONS = 20;
-
     /** The registry must hold exactly 21 sections. */
     private const CONTENT_SECTIONS = 21;
 
@@ -127,18 +121,18 @@ final class HelpSectionGuardTest extends TestCase
             }
         }
 
-        $this->assertCount(
-            self::PAIRED_FILES,
-            $files,
-            'صفحه‌های دارای دکمه/مودال راهنما باید دقیقاً '.self::PAIRED_FILES.' باشند.',
-        );
-
         $this->assertSame([], $problems, "section مودال باید زیرمجموعهٔ section دکمهٔ همان فایل باشد:\n"
             .implode("\n", $problems));
     }
 
     /**
-     * A3 — the button set and the modal set are the same 25 files.
+     * A3 — the button set and the modal set are the same files.
+     *
+     * #1535: the file *count* is deliberately not pinned. Rollout adds pages
+     * phase by phase, and `HelpSystemTest`'s routed-page test already forces
+     * every non-allowlisted page to carry a button; a literal count here would
+     * fail on each phase without expressing an invariant (the triage comment's
+     * "no count assertion" rule). What matters is that the two sets match.
      */
     public function test_a3_button_and_modal_file_sets_are_identical(): void
     {
@@ -154,12 +148,14 @@ final class HelpSectionGuardTest extends TestCase
             $modalFiles,
             'هر صفحه‌ای که دکمهٔ راهنما دارد باید همان مودال را هم داشته باشد و برعکس.',
         );
-
-        $this->assertCount(self::PAIRED_FILES, $buttonFiles);
     }
 
     /**
-     * A4 — the 20 distinct button sections all have a content file.
+     * A4 — every distinct button section has a content file.
+     *
+     * #1535: the distinct-section count is not pinned for the same reason as
+     * A3 — wiring `/todo` activates the already-shipped `todos` file without
+     * adding one. The set-membership check below is the invariant.
      */
     public function test_a4_every_button_section_has_a_content_file(): void
     {
@@ -167,8 +163,6 @@ final class HelpSectionGuardTest extends TestCase
 
         $distinct = array_values(array_unique(array_filter($buttonSections, fn ($s) => $s !== null)));
         sort($distinct);
-
-        $this->assertCount(self::BUTTON_SECTIONS, $distinct, 'sectionهای متمایز دکمه‌ها تغییر کرده‌اند.');
 
         $missing = array_values(array_diff($distinct, $this->contentSections()));
 
