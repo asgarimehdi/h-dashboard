@@ -44,6 +44,8 @@ return new class extends Component
 
     public int $descendantUserCount = 0;
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
         $this->loadPersonCounts();
@@ -116,9 +118,12 @@ return new class extends Component
 <div>
     <x-header title="چارت سازمانی" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="org-chart" wireModel="showHelpModal" />
             <x-theme-selector />
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="org-chart" />
 
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6" dir="rtl">
         <div class="lg:col-span-3">

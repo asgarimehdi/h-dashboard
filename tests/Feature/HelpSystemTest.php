@@ -62,7 +62,6 @@ function helpPagesPendingRollout(): array
         'maps/route', 'maps/route2', 'maps/county', 'maps/point',
         'map.map-dashboard',
         'kargozini.estekhdam', 'kargozini.tahsil', 'kargozini.semat', 'kargozini.radif',
-        'hr.org-chart',
         'it/zabbix-devices',
         'maintenance.index',
         'reports.advanced', 'reports.persons',
@@ -139,6 +138,16 @@ it('profile page renders with help button', function () {
     Livewire::actingAs($user)->test('profile.index')
         ->assertOk()
         ->assertSee('پروفایل');
+});
+
+it('org chart page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hr.org-chart')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('بج پرسنل');
 });
 
 it('hardware page help modal opens via button', function () {
