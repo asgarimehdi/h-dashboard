@@ -15,6 +15,8 @@ return new class extends Component
 {
     use Toast;
 
+    public bool $showHelpModal = false;
+
     public bool $modal = false;
 
     public string $title = '';
@@ -492,6 +494,7 @@ return new class extends Component
 <div>
     <x-header title="تقویم سازمانی" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="todos" wireModel="showHelpModal" />
             <x-theme-selector />
             <x-button icon="o-plus" label="تسک جدید" class="btn-primary" wire:click="openModal" />
         </x-slot:actions>
@@ -606,6 +609,5 @@ return new class extends Component
     <script src="{{ asset('js/other/full-calendar.min.js') }}"></script>
 @endassets
 
-
-
+    <x-help:modal wireModel="showHelpModal" section="todos" />
 </div>
