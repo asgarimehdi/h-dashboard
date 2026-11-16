@@ -61,7 +61,6 @@ function helpPagesPendingRollout(): array
         'units.chart', 'units.map',
         'maps/route', 'maps/route2', 'maps/county', 'maps/point',
         'map.map-dashboard',
-        'kargozini.estekhdam', 'kargozini.tahsil', 'kargozini.semat', 'kargozini.radif',
         'hr.org-chart',
         'it/zabbix-devices',
         'maintenance.index',
