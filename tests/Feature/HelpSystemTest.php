@@ -46,32 +46,21 @@ function makeHelpUser(): User
 }
 
 /**
- * Routed Livewire pages still waiting for their own help button.
+ * Routed pages with no help button at all.
  *
- * Phase 0 allowlist (#1535). Each rollout phase removes its own rows, so the
- * static contract starts enforcing the page the moment it is wired. Phase 4
- * leaves this list empty.
+ * Only `auth.login`: public/pre-auth (the modal would ship the whole help
+ * payload to an anonymous visitor). `hardware.index` is NOT here — its button
+ * lives in its `_toolbar` partial, which the counter below follows, so the
+ * page counts as having one.
  *
- * @return list<string>
- */
-function helpPagesPendingRollout(): array
-{
-    return [
-    ];
-}
-
-/**
- * Routed pages that never own a help button in their own file.
- *
- * `auth.login` is public/pre-auth (the modal would ship the whole help payload
- * to an anonymous visitor); `hardware.index` is served by its `_toolbar`
- * partial, rendered by the same Livewire component.
+ * Phase 4 (#1535 close-out): the old `helpPagesPendingRollout()` allowlist is
+ * gone — every page is wired, so there is nothing left to roll out.
  *
  * @return list<string>
  */
 function helpPageExceptions(): array
 {
-    return ['auth.login', 'hardware.index'];
+    return ['auth.login'];
 }
 
 /**
@@ -101,9 +90,37 @@ function routedLivewirePageComponents(): array
     return array_values(array_unique($components));
 }
 
-function helpButtonCount(string $source): int
+/**
+ * Help buttons a routed page renders: its own file plus every partial it
+ * directly @includes (recursively, so an included partial's own includes
+ * count too). Only literal `@include('...')` calls are followed — no page
+ * includes a button-bearing partial dynamically.
+ *
+ * `hardware.index` owns no button in its own file; the button lives in its
+ * `_toolbar` partial, included only by that page, so a source-only count
+ * would wrongly except it.
+ */
+function helpButtonCount(string $path, array &$seen = []): int
 {
-    return substr_count($source, '<x-help:button');
+    if (isset($seen[$path]) || ! is_file($path)) {
+        return 0;
+    }
+
+    $seen[$path] = true;
+
+    $source = file_get_contents($path);
+    $count = substr_count($source, '<x-help:button');
+
+    if (preg_match_all("/@include\(\s*'([^']+)'/", $source, $matches)) {
+        foreach ($matches[1] as $view) {
+            $count += helpButtonCount(
+                resource_path('views/'.str_replace('.', '/', $view).'.blade.php'),
+                $seen,
+            );
+        }
+    }
+
+    return $count;
 }
 
 it('tools page renders with help button', function () {
@@ -299,7 +316,7 @@ it('registers every help content file', function () {
 
 it('gives every routed page a help button except the allowlist', function () {
     $finder = app('livewire.finder');
-    $allowed = [...helpPageExceptions(), ...helpPagesPendingRollout()];
+    $allowed = helpPageExceptions();
     $missing = [];
     $duplicated = [];
 
@@ -319,7 +336,7 @@ it('gives every routed page a help button except the allowlist', function () {
             continue;
         }
 
-        $count = helpButtonCount(file_get_contents($path));
+        $count = helpButtonCount($path);
 
         if ($count === 0) {
             $missing[] = "{$component}: no help button ({$path})";
@@ -357,14 +374,6 @@ it('maps every rolled-out page to its section', function (string $component, str
     expect($path)->not->toBeNull();
 
     $source = file_get_contents($path);
-
-    if (in_array($component, helpPagesPendingRollout(), true)) {
-        // Not wired yet; wiring the page without removing its allowlist row
-        // must fail here so the static contract cannot silently go stale.
-        expect(helpButtonCount($source))->toBe(0);
-
-        return;
-    }
 
     expect($source)->toMatch('/<x-help:button\b[^>]*\bsection="'.preg_quote($section, '/').'"/s');
 })->with([

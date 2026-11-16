@@ -388,12 +388,12 @@ nothing.
 
 In-app help is a per-page modal (`?` button in page headers):
 
-- **Components:** `resources/views/components/help/` — `button.blade.php` (dispatches the `help-open` DOM event with the section) + `modal.blade.php` (reads its `section` prop into `data-section`, switches content with Alpine `x-if` on `helpSection`, opens by setting the page's `showHelpModal` property); `app-components.js` listens for `help-open` on `document` and holds the fallback array
-- **Content:** one file per section under `resources/views/components/help/content/<section>.blade.php`, registered in `AppServiceProvider::boot()` (`$helpContents`) as `help-content:<section>` components
-- **Wiring a new page:** add `public bool $showHelpModal = false;`, `<x-help:button section="<section>" wireModel="showHelpModal" />` in the header actions, and `<x-help:modal wireModel="showHelpModal" section="<section>" />`; create the content file + register it + add an `x-if` case in the modal
-- **Sections (21):** dashboard, hardware, hardware-import, persons-import, personnel, units, tickets, todos, reports, maps, settings, roles, permissions, users, activity-log, networks, wireless, tools, search, profile, hr-dashboard
+- **Components:** `resources/views/components/help/` — `button.blade.php` (dispatches the `help-open` DOM event with the section) + `modal.blade.php` (reads its `section` prop into `data-section`, switches content with Alpine `x-if` on `helpSection`, opens by setting the page's `showHelpModal` property); `app-components.js` listens for `help-open` on `document` and reads the section list from the modal's `data-sections` dataset (`noHelpContent()`)
+- **Content:** one file per section under `resources/views/components/help/content/<section>.blade.php`, registered in `config/help.php` (single source of truth, #1535 Phase 0); the modal iterates the registry with `@include`, no `help-content:` alias, no `x-if` cases to add
+- **Wiring a new page:** add `public bool $showHelpModal = false;`, `<x-help:button section="<section>" wireModel="showHelpModal" />` in the header actions, and `<x-help:modal wireModel="showHelpModal" section="<section>" />`; create the content file + add the section to `config/help.php`
+- **Sections (27):** dashboard, hardware, hardware-import, persons-import, personnel, units, tickets, todos, reports, maps, settings, roles, permissions, users, activity-log, networks, wireless, tools, search, profile, hr-dashboard, disease, maintenance, org-chart, zabbix-devices, select-context, change-password
 - **Gotchas:** escape Blade directives in content with `@@` (e.g. `@@can(...)`); use only icons present in the heroicons set (`o-*` in `vendor/blade-ui-kit/blade-heroicons/resources/svg/`)
-- **Tests:** `tests/Feature/HelpSystemTest.php` — page renders + all 21 content sections render; `tests/Feature/HelpSectionGuardTest.php` pins every call site's `section`
+- **Tests:** `tests/Feature/HelpSystemTest.php` — page renders + all 27 content sections render; `tests/Feature/HelpSectionGuardTest.php` pins every call site's `section`
 
 ---
 
