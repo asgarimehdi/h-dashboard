@@ -38,8 +38,8 @@ final class HelpSectionGuardTest extends TestCase
 
     private const SECTION_ATTR = '/\bsection\s*=\s*["\']([^"\']*)["\']/';
 
-    /** The registry must hold exactly 22 sections. */
-    private const CONTENT_SECTIONS = 22;
+    /** The registry must hold exactly 23 sections. */
+    private const CONTENT_SECTIONS = 23;
 
     /**
      * A1 — no `<x-help:modal>` call site may fall back to a guessed section.

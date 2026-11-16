@@ -59,7 +59,6 @@ function helpPagesPendingRollout(): array
     return [
         'hr.org-chart',
         'it/zabbix-devices',
-        'maintenance.index',
         'select-context',
         'auth.changepassword',
     ];
@@ -146,6 +145,20 @@ it('disease page opens the disease help section', function () {
         // Unique to the `disease` content file: every section's body ships in
         // the open response, so the heading must not appear anywhere else.
         ->assertSee('پرونده و کیس‌های بیماری');
+});
+
+it('maintenance page opens its own help section', function () {
+    $this->seed(PermissionSeeder::class);
+    $user = makeHelpUser();
+    $user->givePermissionTo('manage_hardware');
+
+    Livewire::actingAs($user)->test('maintenance.index')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        // Unique to the `maintenance` content file — the page header repeats
+        // the section title, so the page's own heading cannot witness this.
+        ->assertSee('سررسید و تیکت خودکار');
 });
 
 it('hardware page help modal opens via button', function () {
