@@ -39,6 +39,8 @@ return new class extends Component
 
     public string $gender = '';
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
         $this->authorize('manage_diseases');
@@ -346,9 +348,12 @@ return new class extends Component
 <div>
     <x-header title="پروندهٔ بیماران" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="disease" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="disease" />
 
     <x-card shadow>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">

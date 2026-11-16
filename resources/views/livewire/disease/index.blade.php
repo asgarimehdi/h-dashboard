@@ -58,6 +58,8 @@ return new class extends Component
 
     public bool $unitModal = false;
 
+    public bool $showHelpModal = false;
+
     /**
      * Stored keys with no active definition (#1242 may hide/delete one). They
      * are read-only history: never rendered as inputs, never destroyed (§8.4).
@@ -464,9 +466,12 @@ return new class extends Component
 <div>
     <x-header title="کیس‌های بیماری" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="disease" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="disease" />
 
     @if($emptyScope)
         <div class="alert alert-info mb-6" role="alert">

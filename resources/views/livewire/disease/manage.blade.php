@@ -53,6 +53,8 @@ return new class extends Component
 
     public int $perPage = 20;
 
+    public bool $showHelpModal = false;
+
     public function mount(): void
     {
         $this->authorize('manage_diseases');
@@ -452,9 +454,12 @@ return new class extends Component
 <div>
     <x-header title="مدیریت بیماری‌ها" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="disease" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="disease" />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div class="lg:col-span-2">

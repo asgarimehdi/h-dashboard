@@ -57,7 +57,6 @@ function makeHelpUser(): User
 function helpPagesPendingRollout(): array
 {
     return [
-        'disease.index', 'disease.create', 'disease.manage', 'disease.patients',
         'hr.org-chart',
         'it/zabbix-devices',
         'maintenance.index',
@@ -133,6 +132,20 @@ it('profile page renders with help button', function () {
     Livewire::actingAs($user)->test('profile.index')
         ->assertOk()
         ->assertSee('پروفایل');
+});
+
+it('disease page opens the disease help section', function () {
+    $this->seed(PermissionSeeder::class);
+    $user = makeHelpUser();
+    $user->givePermissionTo('manage_diseases');
+
+    Livewire::actingAs($user)->test('disease.index')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        // Unique to the `disease` content file: every section's body ships in
+        // the open response, so the heading must not appear anywhere else.
+        ->assertSee('پرونده و کیس‌های بیماری');
 });
 
 it('hardware page help modal opens via button', function () {
