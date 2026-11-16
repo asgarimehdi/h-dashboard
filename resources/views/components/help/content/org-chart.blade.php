@@ -16,7 +16,7 @@
         </h4>
         <ul class="space-y-2 text-sm text-base-content/70">
             <li class="flex gap-2"><x-icon name="o-check" class="w-4 h-4 text-success flex-shrink-0 mt-0.5" /> <strong>جستجو:</strong> کادر «جستجوی واحد...» واحدهای مطابق را پیدا می‌کند و مسیر تا والدها را باز می‌کند تا نتیجه پنهان نماند</li>
-            <li class="flex gap-2"><x-icon name="o-check" class="w-4 h-4 text-success flex-shrink-0 mt-0.5" /> <strong>باز و بسته کردن:</strong> دکمه‌های «باز کردن همه» و «جمع کردن» کل درخت را یک‌جا باز یا جمع می‌کنند؛ با فلش کنار هر گره هم می‌توان فقط همان شاخه را باز کرد</li>
+            <li class="flex gap-2"><x-icon name="o-check" class="w-4 h-4 text-success flex-shrink-0 mt-0.5" /> <strong>باز و بسته کردن:</strong> دکمه‌های «باز کردن همه» و «جمع کردن» کل درخت را یک‌جا باز یا جمع می‌کنند؛ با دکمهٔ +/− کنار هر گره هم فقط همان شاخه باز یا بسته می‌شود</li>
             <li class="flex gap-2"><x-icon name="o-check" class="w-4 h-4 text-success flex-shrink-0 mt-0.5" /> <strong>کلیک روی گره:</strong> با انتخاب هر واحد، جزئیات آن در کارت کناری پر می‌شود</li>
             <li class="flex gap-2"><x-icon name="o-check" class="w-4 h-4 text-success flex-shrink-0 mt-0.5" /> <strong>بج پرسنل:</strong> کنار هر گره تعداد پرسنل مستقیم همان واحد نوشته شده است؛ واحد بدون پرسنل بج «خالی» می‌گیرد</li>
         </ul>
