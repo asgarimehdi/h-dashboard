@@ -191,9 +191,11 @@ async function expectUnitDetailsModal(page: Page): Promise<void> {
 
   const dialog = page.locator('dialog[open]');
   await expect(dialog, 'a unit-marker click must open the details dialog').toBeVisible({ timeout: 15000 });
-  await expect(page.locator('.modal-box')).toContainText('جزئیات واحد');
+  // `/map` also ships the help modal (#1535), so `.modal-box` is not unique
+  // on this page — scope every assertion to the dialog that actually opened.
+  await expect(dialog.locator('.modal-box')).toContainText('جزئیات واحد');
 
-  const fields = page.locator('.modal-box .space-y-2 > div');
+  const fields = dialog.locator('.modal-box .space-y-2 > div');
   const nameField = fields.nth(0).locator('span');
   const typeField = fields.nth(1).locator('span');
   const locationField = fields.nth(2).locator('span');
@@ -206,13 +208,13 @@ async function expectUnitDetailsModal(page: Page): Promise<void> {
   await expect(childrenField).not.toHaveText('');
 
   // `x-show="loading"` must have cleared once the payload is in.
-  await expect(page.locator('.modal-box .loading')).toBeHidden();
+  await expect(dialog.locator('.modal-box .loading')).toBeHidden();
 
   // The direct regression assertion: an empty collector after the interaction.
   expect(errors, `console errors while opening the unit-details modal:\n${errors.join('\n')}`).toEqual([]);
 
   // Hardening: the modal is interactive, not merely visible.
-  await page.locator('.modal-box button', { hasText: 'بستن' }).click();
+  await dialog.locator('.modal-box button', { hasText: 'بستن' }).click();
   await expect(page.locator('dialog[open]')).toBeHidden();
 }
 

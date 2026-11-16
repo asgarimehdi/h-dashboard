@@ -59,7 +59,6 @@ function helpPagesPendingRollout(): array
     return [
         'disease.index', 'disease.create', 'disease.manage', 'disease.patients',
         'units.chart', 'units.map',
-        'map.map-dashboard',
         'hr.org-chart',
         'it/zabbix-devices',
         'maintenance.index',
