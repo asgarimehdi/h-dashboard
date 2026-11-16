@@ -39,5 +39,6 @@ return [
         'hr-dashboard',
         'disease',
         'maintenance',
+        'org-chart',
     ],
 ];

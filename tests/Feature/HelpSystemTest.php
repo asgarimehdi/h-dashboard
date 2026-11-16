@@ -57,7 +57,6 @@ function makeHelpUser(): User
 function helpPagesPendingRollout(): array
 {
     return [
-        'hr.org-chart',
         'it/zabbix-devices',
         'select-context',
         'auth.changepassword',
@@ -159,6 +158,16 @@ it('maintenance page opens its own help section', function () {
         // Unique to the `maintenance` content file — the page header repeats
         // the section title, so the page's own heading cannot witness this.
         ->assertSee('سررسید و تیکت خودکار');
+});
+
+it('org chart page opens its own help section', function () {
+    $user = makeHelpUser();
+
+    Livewire::actingAs($user)->test('hr.org-chart')
+        ->assertOk()
+        ->call('$set', 'showHelpModal', true)
+        ->assertSet('showHelpModal', true)
+        ->assertSee('بج پرسنل');
 });
 
 it('hardware page help modal opens via button', function () {
