@@ -8,19 +8,19 @@ use Tests\TestCase;
 /**
  * Issue #1537 — pin every help call site to the section it actually documents.
  *
- * The modal renders all 21 content bodies into the open response (#1166), so a
+ * The modal renders all 24 content bodies into the open response (#1166), so a
  * Pest `assertSee` on the modal body cannot tell which section is active. What
  * *is* per-section is the wrapper's `data-section` (modal.blade.php:13), which
  * comes from the `section` prop of the `<x-help:modal>` call site. Before #1537
  * 24 of 25 pages omitted that prop and relied on the `help-open` event and a
  * `'dashboard'` fallback; the copy stayed right only by accident of ordering.
  *
- * This is a static scan, not a render test: rendering 25 pages for this fact
+ * This is a static scan, not a render test: rendering 28 pages for this fact
  * was rejected. `help-modal.spec.ts` test 3 stays the behavioural witness.
  *
  * Comments are stripped before matching because two views quote the tag in
- * prose (button.blade.php:11, backup/index.blade.php:40); a raw scan sees 27
- * call sites in 26 files instead of the 25 real ones.
+ * prose (button.blade.php:11, backup/index.blade.php:40); a raw scan sees 30
+ * call sites in 29 files instead of the 28 real ones.
  */
 final class HelpSectionGuardTest extends TestCase
 {
@@ -38,8 +38,8 @@ final class HelpSectionGuardTest extends TestCase
 
     private const SECTION_ATTR = '/\bsection\s*=\s*["\']([^"\']*)["\']/';
 
-    /** The registry must hold exactly 24 sections. */
-    private const CONTENT_SECTIONS = 24;
+    /** The registry must hold exactly 27 sections. */
+    private const CONTENT_SECTIONS = 27;
 
     /**
      * A1 — no `<x-help:modal>` call site may fall back to a guessed section.

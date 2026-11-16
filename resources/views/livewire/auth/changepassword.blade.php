@@ -12,6 +12,8 @@ return new class extends Component {
     public string $newPassword = '';
     public string $newPasswordConfirmation = '';
 
+    public bool $showHelpModal = false;
+
     public function rules()
     {
         return [
@@ -57,9 +59,12 @@ return new class extends Component {
     <!-- HEADER -->
     <x-header title="تغییر رمز ورود به سیستم" separator progress-indicator>
         <x-slot:actions>
+            <x-help:button section="change-password" wireModel="showHelpModal" />
             <x-theme-selector/>
         </x-slot:actions>
     </x-header>
+
+    <x-help:modal wireModel="showHelpModal" section="change-password" />
 
     <div class="flex justify-center">
         <x-card shadow class="w-full max-w-xl">
