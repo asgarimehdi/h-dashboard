@@ -137,7 +137,7 @@ jobs:
         # `set -o pipefail` (#1570): the implicit shell is `bash -e` without
         # pipefail, so Playwright's non-zero exit was swallowed by `tee`. With
         # it a failing run reddens this step and the assert step is skipped
-        # (default `if: success()`). See :139-146 for why there is no scan.
+        # (default `if: success()`). See :145-152 for why there is no scan.
         run: |
           set -o pipefail
           bash scripts/e2e-test.sh tests/e2e/theme/sweep-35.spec.ts --reporter=list 2>&1 | tee sweep-35.log
