@@ -166,7 +166,7 @@ export function registerMaryComponents(Alpine) {
         /** @type {any} */ (this)._morphOff = syncOnMorph(syncOpen);
 
         const close = () => {
-          wireSet(this.$wire, this.modelName, false);
+          this.$wire.set(this.modelName, false);
         };
         // #1469: the ✕ form sits in `dialog > .modal-box > form`, NOT as a
         // direct child of the dialog — the first version matched the backdrop
