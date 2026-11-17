@@ -200,6 +200,12 @@ class TicketAttachmentDownloadTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString('inline', $response->headers->get('Content-Disposition'));
+
+        // #1567: the controller now sets X-Frame-Options for the API route; on
+        // the web route `SecurityHeaders` sets the same header with the same
+        // value, so Symfony's header bag must collapse them into ONE value
+        // rather than emit a duplicate.
+        $this->assertSame(['DENY'], $response->headers->all('X-Frame-Options'));
     }
 
     public function test_response_is_private_and_not_cached(): void
@@ -269,6 +275,20 @@ class TicketAttachmentDownloadTest extends TestCase
 
         $response->assertOk();
         $response->assertStreamedContent(self::PDF_BYTES);
+
+        // #1567: `/api/*` skips `SecurityHeaders` on purpose, so the download
+        // route is the only place the document-safety subset can come from.
+        // Pin exactly that subset — including what must NOT be there.
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        // Symfony re-orders `Cache-Control`, so pin the directive SET, not the
+        // literal order.
+        $cacheDirectives = array_map('trim', explode(',', (string) $response->headers->get('Cache-Control')));
+        sort($cacheDirectives);
+        $this->assertSame(['max-age=0', 'no-store', 'private'], $cacheDirectives);
+
+        $response->assertHeader('X-Frame-Options', 'DENY');
+        $response->assertHeaderMissing('Referrer-Policy');
     }
 
     // ---------------------------------------------------------------------
