@@ -91,5 +91,7 @@ test.describe('35-theme sweep', () => {
     if (REPORT_ONLY) return;
 
     expect(recorder.failures(), JSON.stringify(recorder.failures(), null, 2)).toEqual([]);
+
+    expect(recorder.aborted(), JSON.stringify(recorder.aborted(), null, 2)).toEqual([]);
   });
 });
