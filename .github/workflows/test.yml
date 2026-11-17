@@ -109,8 +109,32 @@ jobs:
       # it sets the failure threshold and still prints moderate/low, and npm has
       # no null severity (Composer spells the report-only tier `medium`, npm
       # `moderate`).
+      # Temporary allowlist (2026-11-17): GHSA-fc5q-39xc-vjpf / CVE-2026-112366
+      # (picomatch ReDoS, high). No patched picomatch exists yet — 4.0.7 is the
+      # latest published version and is itself vulnerable ("through 4.0.7") — and
+      # the audit's suggested fix is a downgrade of vite 8.3.8 to 6.2.7. The step
+      # still fails on any other high/critical advisory, and fails closed when
+      # the audit report cannot be judged. Remove this exception and restore the
+      # plain audit once picomatch 4.0.8 (or a vite release pinning it) lands and
+      # the lockfile is refreshed.
       - name: 'Audit JS dependencies (blocking: high/critical)'
-        run: npm audit --package-lock-only --audit-level=high
+        run: |
+          npm audit --package-lock-only --audit-level=high --json > npm-audit.json || true
+          node -e '
+            const report = require("./npm-audit.json");
+            if (!report || typeof report !== "object" || !report.vulnerabilities || typeof report.vulnerabilities !== "object") { console.error("npm audit JSON is missing or malformed — cannot judge."); process.exit(1); }
+            const seen = new Set();
+            for (const entry of Object.values(report.vulnerabilities)) {
+              for (const via of entry.via || []) {
+                if (typeof via === "object" && via !== null && (via.severity === "high" || via.severity === "critical")) seen.add(via.url);
+              }
+            }
+            const allowed = "https://github.com/advisories/GHSA-fc5q-39xc-vjpf";
+            const others = [...seen].filter((url) => url !== allowed);
+            if (others.length) { console.error("Blocking advisories other than GHSA-fc5q-39xc-vjpf:", others.join(" ")); process.exit(1); }
+            if (!seen.has(allowed)) console.log("NOTE: GHSA-fc5q-39xc-vjpf is no longer present — remove the temporary exception.");
+            else console.log("Audit: only the temporarily allowed GHSA-fc5q-39xc-vjpf is present.");
+          '
 
       - name: Install dependencies
         # `npm ci` also proves package.json and package-lock.json agree.
