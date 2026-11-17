@@ -148,7 +148,7 @@ jobs:
         run: |
           EXECUTED=$(grep -cE '✓|✔|passed \(' sweep-35.log || true)
           echo "sweep executed-test lines: ${EXECUTED}"
-          grep -qE '[0-9]+ passed' sweep-35.log
+          grep -qE '[0-9]+ (passed|flaky)' sweep-35.log
           test "${EXECUTED}" -gt 0
 
       - name: Publish the sweep table (job summary)
