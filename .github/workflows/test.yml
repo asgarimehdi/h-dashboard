@@ -225,20 +225,20 @@ jobs:
         # verified on this tree. The per-file sweep in the next step is the
         # guard that actually catches that class.
         #
-        # The status WORD is guarded too (issue #1565): PHPUnit 12 reports
-        # `Tests: 3506 deprecated, 11 passed`, so a grep for "N passed" matches
-        # a suite where nearly every row was marked deprecated. The line must
-        # not contain `deprecated` at all.
+        # The status WORD is guarded too (issue #1565): on beta @ 77cf7a26 CI
+        # read `Tests: 3506 deprecated, 11 passed (13005 assertions)` (3,517
+        # rows), so a grep for "N passed" matches a suite where nearly every
+        # row was marked deprecated. The line must not contain `deprecated`.
         run: |
           sed -e 's/\x1b\[[0-9;]*m//g' pest-list.log > pest-plain.log
           EXECUTED=$(grep -cE 'Tests:.*[0-9]+ passed' pest-plain.log || true)
           echo "pest summary lines: ${EXECUTED}"
-          SUMMARY=$(grep -E 'Tests:' pest-plain.log | tail -1)
+          SUMMARY=$(grep -E 'Tests:' pest-plain.log | tail -1 || true)
           echo "summary: ${SUMMARY}"
-          test "${EXECUTED}" -gt 0
           case "${SUMMARY}" in
             *deprecated*) echo "::error::the suite reported deprecated tests — 'Tests:' must read 'passed'"; exit 1 ;;
           esac
+          test "${EXECUTED}" -gt 0
 
       - name: Assert no test file runs zero tests
         # Issue #935 — `tests/Feature/TicketWorkflowTest.php` sat in the suite

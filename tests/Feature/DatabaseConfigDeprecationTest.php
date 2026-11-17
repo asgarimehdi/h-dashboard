@@ -53,8 +53,9 @@ class DatabaseConfigDeprecationTest extends TestCase
 
         if (PHP_VERSION_ID < 80500 || ! extension_loaded('pdo_mysql')) {
             // The constant is not deprecated below 8.5 and is never evaluated
-            // without the driver: nothing to assert here.
-            return;
+            // without the driver. Skip loudly: a silent pass would hide the
+            // day the driver disappears from the job that carries the gate.
+            $this->markTestSkipped('PHP < 8.5 or pdo_mysql not loaded');
         }
 
         $this->assertSame(
@@ -68,29 +69,34 @@ class DatabaseConfigDeprecationTest extends TestCase
     {
         $source = (string) file_get_contents(base_path('config/database.php'));
 
-        $expected = '(PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env(\'MYSQL_ATTR_SSL_CA\')';
+        // Layout-independent on purpose: a Pint-clean wrap of the ternary (the
+        // natural edit when a connection gains a comment) must not turn this
+        // red — measured: Pint accepts the wrapped form and leaves it wrapped.
+        $ternary = '/\(PHP_VERSION_ID >= 80500 \? (?:\\\\?Pdo\\\\Mysql|Mysql)::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA\) => env\(\'MYSQL_ATTR_SSL_CA\'\)/';
 
-        $this->assertStringContainsString('use Pdo\\Mysql;', $source);
+        $this->assertMatchesRegularExpression(
+            '/use Pdo\\\\Mysql;|\\\\?Pdo\\\\Mysql::ATTR_SSL_CA/',
+            $source,
+            'the Pdo\Mysql class must be referenced — imported or fully qualified'
+        );
 
         foreach (['mysql', 'mariadb'] as $connection) {
-            $this->assertStringContainsString(
-                $expected,
-                $this->connectionBlock($source, $connection),
+            $this->assertMatchesRegularExpression(
+                $ternary,
+                (string) preg_replace('/\s+/', ' ', $this->connectionBlock($source, $connection)),
                 "the {$connection} connection must fetch the SSL CA constant through the PHP-version ternary"
             );
         }
 
-        foreach (explode("\n", $source) as $line) {
-            if (! str_contains($line, 'PDO::MYSQL_ATTR_SSL_CA')) {
-                continue;
-            }
+        // Every legacy fetch must be part of a version ternary: remove the
+        // ternaries and nothing deprecated may be left behind.
+        $leftovers = (string) preg_replace($ternary, '', (string) preg_replace('/\s+/', ' ', $source));
 
-            $this->assertStringContainsString(
-                'PHP_VERSION_ID >= 80500',
-                $line,
-                'PDO::MYSQL_ATTR_SSL_CA is deprecated on PHP 8.5: it may only appear in the version ternary'
-            );
-        }
+        $this->assertStringNotContainsString(
+            'PDO::MYSQL_ATTR_SSL_CA',
+            $leftovers,
+            'PDO::MYSQL_ATTR_SSL_CA is deprecated on PHP 8.5: it may only appear inside the version ternary'
+        );
     }
 
     private function connectionBlock(string $source, string $connection): string
@@ -99,6 +105,7 @@ class DatabaseConfigDeprecationTest extends TestCase
         $start = strpos($source, $header);
 
         $this->assertNotFalse($start, "connection block for {$connection} was not found");
+        $this->assertSame(1, substr_count($source, $header), "the {$connection} connection block must be unique");
 
         $next = strpos($source, "\n        '", $start + strlen($header));
 
