@@ -807,7 +807,15 @@ jobs:
         # local parallel-workers flake (sidebar.spec.ts) is not worth
         # re-proving here. --timeout=60000: OSM tile requests can hang and
         # eat the 30s default on the map legs (seen locally on #1391).
-        run: bash scripts/e2e-test.sh tests/e2e/smoke/actions-smoke.spec.ts --workers=1 --timeout=60000 --reporter=list 2>&1 | tee smoke-list.log
+        # `set -o pipefail` (#1563): the implicit shell is `bash -e` without
+        # pipefail, so Playwright's non-zero exit was swallowed by `tee` and
+        # this blocking job stayed green on a 9-passed/1-failed run. With it,
+        # a failing run reddens this step and the assert step below is skipped
+        # (default `if: success()`). No failure scan on purpose: CI retries
+        # twice, and a flaky-then-passing run exits 0 with no `failed` token.
+        run: |
+          set -o pipefail
+          bash scripts/e2e-test.sh tests/e2e/smoke/actions-smoke.spec.ts --workers=1 --timeout=60000 --reporter=list 2>&1 | tee smoke-list.log
 
       - name: Assert the smoke suite really executed
         run: |
