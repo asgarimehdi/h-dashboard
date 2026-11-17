@@ -43,6 +43,21 @@ test.describe('help modal', () => {
     await expect(page.locator(MODAL_BODY)).toContainText('داشبورد مدیریت اطلاعات سلامت');
   });
 
+  test('Escape closes the help modal', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.locator(HELP_BUTTON).first().click();
+    await expect(page.locator(MODAL)).toHaveClass(/modal-open/);
+    await expect(page.locator(MODAL_BODY)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+
+    // Required: the dialog's own state must change.
+    await expect(page.locator(MODAL)).not.toHaveClass(/modal-open/);
+    // Recommended: the body is server-gated (#1166); a client-only close that
+    // never reaches the server would leave it in the DOM.
+    await expect(page.locator(MODAL_BODY)).toHaveCount(0);
+  });
+
   test('shows the fallback for a section without a content file', async ({ page }) => {
     await page.goto('/dashboard');
     await page.locator(HELP_BUTTON).first().click();
