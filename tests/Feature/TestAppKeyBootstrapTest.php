@@ -212,19 +212,20 @@ class TestAppKeyBootstrapTest extends TestCase
         // Strip them before matching, or the pattern never matches.
         $plain = preg_replace('/\e\[[0-9;]*m/', '', $output);
 
-        // `passed|deprecated`, never `passed` alone: CI runs PHP 8.5 where the
-        // same file emits a PDO deprecation and Pest prints "10 deprecated"
-        // instead. `VerifyWrapperScriptTest::test_composer_test_forwards_a_path_argument_to_the_runner`
-        // records the same trap. The FILE name proves the path argument
-        // arrived; the COUNT proves all ten ran to completion.
+        // `passed`, never `passed|deprecated`: until #1565 CI's PHP 8.5 emitted
+        // the PDO deprecation for every app-booting test and Pest printed
+        // "12 deprecated" instead, so this pattern tolerated it. The config fix
+        // removed that source and `failOnDeprecation` is armed — tolerating the
+        // word here would let the deprecation return and still read as a pass.
         $this->assertMatchesRegularExpression(
-            '/Tests:\s+12 (passed|deprecated)/',
+            '/Tests:\s+12 passed/',
             (string) $plain,
             $output
         );
 
         // And no test failed — the fixture must be green WITHOUT the bootstrap
         // for this assertion to mean anything.
+        $this->assertSame(0, $exit, 'the narrowed `composer test` run must exit 0: '.$output);
         $this->assertStringNotContainsString('FAILED', $output);
     }
 }
