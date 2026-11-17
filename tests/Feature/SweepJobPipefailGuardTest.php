@@ -94,10 +94,10 @@ final class SweepJobPipefailGuardTest extends TestCase
 
     /**
      * A3 — decision (A) stays pinned: the assert step proves a run happened
-     * (`passed` token + at least one executed-test line) and never scans for
-     * failures, so a flaky-but-green run is not turned red.
+     * (a `passed` **or** `flaky` summary token + at least one executed-test line)
+     * and never scans for failures, so a flaky-but-green run is not turned red (#1577).
      */
-    public function test_the_assert_step_is_unchanged_and_has_no_failure_scan(): void
+    public function test_the_assert_step_accepts_a_flaky_summary_and_has_no_failure_scan(): void
     {
         $step = $this->assertStepBody($this->sweepJobBody($this->workflow()));
 
@@ -108,9 +108,9 @@ final class SweepJobPipefailGuardTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            "grep -qE '[0-9]+ passed' sweep-35.log",
+            "grep -qE '[0-9]+ (passed|flaky)' sweep-35.log",
             $step,
-            'the assert step must still require a `N passed` summary token.'
+            'the assert step must require a success summary token — `N passed` or `N flaky` (#1577: a single flaky-then-pass test prints `1 flaky` and exits 0).'
         );
 
         $this->assertStringContainsString(
