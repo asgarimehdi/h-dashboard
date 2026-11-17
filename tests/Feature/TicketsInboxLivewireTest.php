@@ -11,6 +11,7 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +77,47 @@ class TicketsInboxLivewireTest extends TestCase
             'priority' => 'normal',
             'status' => 'created',
         ], $overrides));
+    }
+
+    /**
+     * Make acceptTicket()'s `FOR UPDATE` probe observe a stale snapshot.
+     *
+     * `DB::spy()` / `DB::partialMock()` cannot express this (#1564 review §4):
+     * both swap the container `db` binding, so Eloquent resolves the mock too,
+     * the transaction callback never runs and the stubbed select is never
+     * called. A constructed DatabaseManager subclass avoids that — but it MUST
+     * delegate `connection()` to the real manager, because a fresh manager
+     * opens a second PDO outside RefreshDatabase's open transaction and sees
+     * no rows at all (which silently turns the test into a no-op).
+     *
+     * @param  object|null  $row  the row the lock reports, or null for "gone"
+     */
+    protected function fakeLockedTicketRow(?object $row): void
+    {
+        /** @var DatabaseManager $inner */
+        $inner = DB::getFacadeRoot();
+
+        DB::swap(new class(app(), app('db.factory'), $inner, $row) extends DatabaseManager
+        {
+            public function __construct($app, $factory, private DatabaseManager $inner, private ?object $row)
+            {
+                parent::__construct($app, $factory);
+            }
+
+            public function connection($name = null)
+            {
+                return $this->inner->connection($name);
+            }
+
+            public function select($query, $bindings = [], $useReadPdo = true)
+            {
+                if (str_contains($query, 'FOR UPDATE')) {
+                    return $this->row === null ? [] : [$this->row];
+                }
+
+                return $this->inner->connection()->select($query, $bindings, $useReadPdo);
+            }
+        });
     }
 
     // =====================================================================
@@ -517,14 +559,142 @@ class TicketsInboxLivewireTest extends TestCase
         $ticket = $this->createTicket(['status' => 'created', 'current_assignee_id' => $user->id]);
 
         Livewire::test('tickets.inbox')
+            ->set('targetUnitId', 777)
+            ->set('forwardNote', 'یادداشت پیش‌نویس')
             ->call('acceptTicket', $ticket->id)
-            ->assertDispatched('swal');
+            // #1564: assert the success toast's TITLE — `assertDispatched('swal')`
+            // with no payload also passes when the dispatch is dropped entirely.
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت پذیرفته شد';
+            })
+            ->assertSet('showModal', false)
+            // closeDetail() is part of the success cut: it must still reset the
+            // flow state on the winning branch.
+            ->assertSet('targetUnitId', null)
+            ->assertSet('forwardNote', '');
 
         $ticket->refresh();
         $this->assertSame('accepted', $ticket->status);
         $this->assertSame($user->id, $ticket->current_assignee_id);
         $this->assertNotNull($ticket->accepted_at);
         $this->assertDatabaseHas('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'accepted',
+        ]);
+    }
+
+    public function test_accept_ticket_loses_race_when_status_changed_under_lock(): void
+    {
+        // #1564: the row moved from `created` to `accepted` between the
+        // component's read (:350) and its FOR UPDATE probe. The loser must get
+        // the warning only — never the success toast (which would replace the
+        // warning before it renders) and never closeDetail().
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'create_ticket']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'created', 'current_assignee_id' => $user->id]);
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('targetUnitId', 777)
+            ->call('acceptTicket', $ticket->id)
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت قبلاً پذیرفته شده است';
+            })
+            ->assertNotDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت پذیرفته شد';
+            })
+            // Unchanged relative to before the call: the modal is closed and
+            // closeDetail() must not have reset the flow state.
+            ->assertSet('showModal', false)
+            ->assertSet('targetUnitId', 777);
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertNull($ticket->accepted_at);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'accepted',
+        ]);
+    }
+
+    public function test_accept_ticket_loses_race_when_assignee_changed_under_lock(): void
+    {
+        // #1564 review §2: assign() / forward() can move current_assignee_id
+        // WITHOUT changing the status value, so comparing status alone would
+        // let the earlier reader accept a ticket now assigned to a teammate —
+        // the seizure #529 exists to prevent, one transaction deeper.
+        ['user' => $expert, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'create_ticket']);
+
+        $teammate = $this->createUserOnUnit($unit);
+
+        $ticket = $this->createTicket([
+            'unit' => $unit,
+            'status' => 'forwarded',
+            'current_assignee_id' => $expert->id,
+        ]);
+
+        $this->actingAs($expert);
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'forwarded',                 // unchanged
+            'current_assignee_id' => $teammate->id,  // moved under us
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('targetUnitId', 777)
+            ->call('acceptTicket', $ticket->id)
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت قبلاً پذیرفته شده است';
+            })
+            ->assertNotDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت پذیرفته شد';
+            })
+            ->assertSet('showModal', false)
+            ->assertSet('targetUnitId', 777);
+
+        $ticket->refresh();
+        $this->assertSame('forwarded', $ticket->status);
+        $this->assertSame($expert->id, $ticket->current_assignee_id);
+        $this->assertNull($ticket->accepted_at);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'accepted',
+        ]);
+    }
+
+    public function test_accept_ticket_loses_race_when_row_vanished_under_lock(): void
+    {
+        // #1564: a DELETE (/api/tickets/{ticket}) between :350 and the lock
+        // leaves nothing to lock. That is a loss, not a 500 from $locked[0].
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'create_ticket']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'created', 'current_assignee_id' => $user->id]);
+
+        $this->fakeLockedTicketRow(null);
+
+        Livewire::test('tickets.inbox')
+            ->set('targetUnitId', 777)
+            ->call('acceptTicket', $ticket->id)
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت قبلاً پذیرفته شده است';
+            })
+            ->assertNotDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت پذیرفته شد';
+            })
+            ->assertSet('showModal', false)
+            ->assertSet('targetUnitId', 777);
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertNull($ticket->accepted_at);
+        $this->assertDatabaseMissing('task_activities', [
             'ticket_id' => $ticket->id,
             'action' => 'accepted',
         ]);
