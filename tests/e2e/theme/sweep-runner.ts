@@ -170,6 +170,17 @@ export class SweepRecorder {
   failures(): Row[] {
     return this.rows.filter((row) => row.verdict === '❌');
   }
+
+  /**
+   * Themes whose sweep threw before it could measure them: the spec records one
+   * `n/a` row whose surface is `sweep aborted`, and `fillMatrix()` seeds the
+   * rest of that theme's cells. Unlike the intentional `n/a` cells
+   * (`dark: utilities`, a page with no badge), this is a coverage hole — a
+   * hard-lock run must fail on it.
+   */
+  aborted(): Row[] {
+    return this.rows.filter((row) => row.surface === 'sweep aborted');
+  }
 }
 
 async function computedColor(
