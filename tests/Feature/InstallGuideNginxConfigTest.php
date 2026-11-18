@@ -20,7 +20,11 @@ use Tests\TestCase;
  *     `X-Content-Type-Options` and `X-Frame-Options` from EVERY static asset
  *     — and the PHP `SecurityHeaders` middleware cannot cover them, because
  *     assets never pass through PHP. Each location that declares an
- *     `add_header` must repeat both security headers.
+ *     `add_header` must repeat `X-Content-Type-Options: nosniff`.
+ *
+ *     `X-Frame-Options` is NOT one of them (#1571): the middleware owns it on
+ *     web responses, and nginx `add_header` APPENDS, so a server-level
+ *     `SAMEORIGIN` would ship beside the middleware's `DENY`.
  *
  *  2. `expires` and `add_header Cache-Control` together emit TWO
  *     `Cache-Control` headers. The hashed location must therefore use
@@ -164,17 +168,17 @@ class InstallGuideNginxConfigTest extends TestCase
         $this->assertStringNotContainsString('expires', $location);
     }
 
-    public function test_the_hashed_location_repeats_both_security_headers(): void
+    public function test_the_hashed_location_repeats_nosniff(): void
     {
         $block = $this->serverBlock();
 
         $location = $this->locationBody($block, 'location ^~ /build/assets/');
 
-        // The whole point of repeating them: `add_header` does not inherit, so
-        // without the repetition these assets would ship with no security
-        // headers at all — and the PHP middleware never sees them.
+        // The whole point of repeating it: `add_header` does not inherit, so
+        // without the repetition these assets would ship with no
+        // `X-Content-Type-Options` at all — and the PHP middleware never sees
+        // them.
         $this->assertStringContainsString('add_header X-Content-Type-Options nosniff;', $location);
-        $this->assertStringContainsString('add_header X-Frame-Options SAMEORIGIN;', $location);
     }
 
     public function test_immutable_is_reserved_for_the_hashed_assets(): void
@@ -203,24 +207,29 @@ class InstallGuideNginxConfigTest extends TestCase
         $this->assertStringNotContainsString('immutable', $location);
     }
 
-    public function test_the_unhashed_location_repeats_both_security_headers(): void
+    public function test_the_unhashed_location_repeats_nosniff(): void
     {
         $block = $this->serverBlock();
 
         $location = $this->locationBody($block, 'location ~* ^/(?:js|css|icons|fonts)/');
 
         $this->assertStringContainsString('add_header X-Content-Type-Options nosniff;', $location);
-        $this->assertStringContainsString('add_header X-Frame-Options SAMEORIGIN;', $location);
     }
 
-    public function test_the_server_block_still_carries_the_security_headers(): void
+    public function test_the_server_block_carries_nosniff_but_never_x_frame_options(): void
     {
         $block = $this->serverBlock();
 
-        // The server-level pair is what the locations repeat; dropping it
-        // would leave every other response unprotected.
+        // The server-level `nosniff` is what the locations repeat; dropping it
+        // would leave every response that bypasses the PHP middleware without
+        // it (API 2xx, every static asset).
         $this->assertStringContainsString('add_header X-Content-Type-Options nosniff;', $block);
-        $this->assertStringContainsString('add_header X-Frame-Options SAMEORIGIN;', $block);
+
+        // #1571: `X-Frame-Options` has exactly one owner — the SecurityHeaders
+        // middleware on web responses. nginx `add_header` appends rather than
+        // replaces, so any directive here ships a second, conflicting value
+        // (`DENY` from the app, `SAMEORIGIN` from nginx) on every page.
+        $this->assertStringNotContainsString('X-Frame-Options', $block);
     }
 
     public function test_the_guide_tells_the_operator_to_reload_nginx(): void

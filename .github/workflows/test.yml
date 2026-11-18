@@ -109,8 +109,32 @@ jobs:
       # it sets the failure threshold and still prints moderate/low, and npm has
       # no null severity (Composer spells the report-only tier `medium`, npm
       # `moderate`).
+      # Temporary allowlist (2026-11-17): GHSA-fc5q-39xc-vjpf / CVE-2026-112366
+      # (picomatch ReDoS, high). No patched picomatch exists yet — 4.0.7 is the
+      # latest published version and is itself vulnerable ("through 4.0.7") — and
+      # the audit's suggested fix is a downgrade of vite 8.3.8 to 6.2.7. The step
+      # still fails on any other high/critical advisory, and fails closed when
+      # the audit report cannot be judged. Remove this exception and restore the
+      # plain audit once picomatch 4.0.8 (or a vite release pinning it) lands and
+      # the lockfile is refreshed.
       - name: 'Audit JS dependencies (blocking: high/critical)'
-        run: npm audit --package-lock-only --audit-level=high
+        run: |
+          npm audit --package-lock-only --audit-level=high --json > npm-audit.json || true
+          node -e '
+            const report = require("./npm-audit.json");
+            if (!report || typeof report !== "object" || !report.vulnerabilities || typeof report.vulnerabilities !== "object") { console.error("npm audit JSON is missing or malformed — cannot judge."); process.exit(1); }
+            const seen = new Set();
+            for (const entry of Object.values(report.vulnerabilities)) {
+              for (const via of entry.via || []) {
+                if (typeof via === "object" && via !== null && (via.severity === "high" || via.severity === "critical")) seen.add(via.url);
+              }
+            }
+            const allowed = "https://github.com/advisories/GHSA-fc5q-39xc-vjpf";
+            const others = [...seen].filter((url) => url !== allowed);
+            if (others.length) { console.error("Blocking advisories other than GHSA-fc5q-39xc-vjpf:", others.join(" ")); process.exit(1); }
+            if (!seen.has(allowed)) console.log("NOTE: GHSA-fc5q-39xc-vjpf is no longer present — remove the temporary exception.");
+            else console.log("Audit: only the temporarily allowed GHSA-fc5q-39xc-vjpf is present.");
+          '
 
       - name: Install dependencies
         # `npm ci` also proves package.json and package-lock.json agree.
@@ -224,11 +248,20 @@ jobs:
         # live ones is silently skipped even under --parallel (issue #935) —
         # verified on this tree. The per-file sweep in the next step is the
         # guard that actually catches that class.
+        #
+        # The status WORD is guarded too (issue #1565): on beta @ 77cf7a26 CI
+        # read `Tests: 3506 deprecated, 11 passed (13005 assertions)` (3,517
+        # rows), so a grep for "N passed" matches a suite where nearly every
+        # row was marked deprecated. The line must not contain `deprecated`.
         run: |
           sed -e 's/\x1b\[[0-9;]*m//g' pest-list.log > pest-plain.log
           EXECUTED=$(grep -cE 'Tests:.*[0-9]+ passed' pest-plain.log || true)
           echo "pest summary lines: ${EXECUTED}"
-          echo "summary: $(grep -E 'Tests:' pest-plain.log | tail -1)"
+          SUMMARY=$(grep -E 'Tests:' pest-plain.log | tail -1 || true)
+          echo "summary: ${SUMMARY}"
+          case "${SUMMARY}" in
+            *deprecated*) echo "::error::the suite reported deprecated tests — 'Tests:' must read 'passed'"; exit 1 ;;
+          esac
           test "${EXECUTED}" -gt 0
 
       - name: Assert no test file runs zero tests
@@ -807,7 +840,15 @@ jobs:
         # local parallel-workers flake (sidebar.spec.ts) is not worth
         # re-proving here. --timeout=60000: OSM tile requests can hang and
         # eat the 30s default on the map legs (seen locally on #1391).
-        run: bash scripts/e2e-test.sh tests/e2e/smoke/actions-smoke.spec.ts --workers=1 --timeout=60000 --reporter=list 2>&1 | tee smoke-list.log
+        # `set -o pipefail` (#1563): the implicit shell is `bash -e` without
+        # pipefail, so Playwright's non-zero exit was swallowed by `tee` and
+        # this blocking job stayed green on a 9-passed/1-failed run. With it,
+        # a failing run reddens this step and the assert step below is skipped
+        # (default `if: success()`). No failure scan on purpose: CI retries
+        # twice, and a flaky-then-passing run exits 0 with no `failed` token.
+        run: |
+          set -o pipefail
+          bash scripts/e2e-test.sh tests/e2e/smoke/actions-smoke.spec.ts --workers=1 --timeout=60000 --reporter=list 2>&1 | tee smoke-list.log
 
       - name: Assert the smoke suite really executed
         run: |

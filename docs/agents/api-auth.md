@@ -67,15 +67,29 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 
 ### Security Headers
 
-`SecurityHeaders` middleware sets on every response:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Content-Security-Policy` (enforcing) or `Content-Security-Policy-Report-Only` (default) — per-request nonce (`App\Support\CspPolicy::for($nonce)`); `'unsafe-inline'` is gone from `script-src`/`style-src`, `both `'unsafe-eval'` (phase 2 PR 2, #1352 — Livewire serves its CSP-safe build via `config('livewire.csp_safe')`) and `style-src-attr 'unsafe-inline'` (phase 2 PR 1, #1352, after the `style=` migration) are gone; `connect-src` carries the OSRM/Nominatim origins from `config/map.php`; switch via `config('csp.enforcing')` / `CSP_ENFORCING` (#1281, phase 1).
-- `Reporting-Endpoints: csp-endpoint="/csp-report"` — the Reporting API destination
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS)
+`App\Http\Middleware\SecurityHeaders` is appended to the **`web` middleware group** in
+`bootstrap/app.php` (after the default stack; only `RequestId` sits inside it). Coverage is
+therefore a property of that group and of the middleware's position in it — four distinct layers:
+
+| What the client requested | Layer | Headers present |
+|---|---|---|
+| A web response that enters the group — `GET /login` 200, and controller errors such as `abort(404)` or a thrown 500 (rendered inside the pipeline, so the rendered response unwinds back out through the middleware) | app — `SecurityHeaders` | **all six**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Content-Security-Policy` (enforcing) or `Content-Security-Policy-Report-Only` (default), `Reporting-Endpoints: csp-endpoint="/csp-report"`, `Strict-Transport-Security: max-age=31536000; includeSubDomains` |
+| A response produced **before** the middleware runs — the auth `302 → /login`, a CSRF `419`, a router-level `404`/`405`, and `GET /up` 200 | app — `web` group ordering; `/up` is outside the group | **none of the six** |
+| `/api/*` | app — `api` group, where `SecurityHeaders` is **not** registered | `X-Request-Id` only (#1068). Deliberate exception: `GET /api/tickets/{ticket}/attachments/{attachment}` sets `Cache-Control: private, no-store, max-age=0`, `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` itself (`TicketAttachmentController::DOWNLOAD_HEADERS`) — the inline jpg/jpeg/png/pdf attachment is the only browser-rendered document on the API, so XFO is the one header that does real work there |
+| Static assets — `/build/assets`, and the regex locations `/js`, `/css`, `/icons`, `/fonts` | **nginx** | `X-Content-Type-Options: nosniff` via `add_header` in `install-guid.md` (§ static assets, ~lines 262–291); repeated per location because `add_header` does not inherit, and pinned by `InstallGuideNginxConfigTest`. **No `X-Frame-Options`** (#1571): assets are never framing targets, and nginx `add_header` appends rather than replaces, so a value here would ship beside the middleware's `DENY` as a duplicate — the single `X-Frame-Options` a browser sees on web responses comes from the app |
+
+The app-layer CSP is single-sourced in `App\Support\CspPolicy::for($nonce)` with a per-request
+nonce: `'unsafe-inline'` is gone from `script-src`/`style-src`; `'unsafe-eval'` (phase 2 PR 2,
+#1352 — Livewire serves its CSP-safe build via `config('livewire.csp_safe')`) and
+`style-src-attr 'unsafe-inline'` (phase 2 PR 1, #1352, after the `style=` migration) are gone;
+`connect-src` carries the OSRM/Nominatim origins from `config/map.php`; the mode switches via
+`config('csp.enforcing')` / `CSP_ENFORCING` (#1281, phase 1).
 
 > **Do not add `X-XSS-Protection`** — replaced by CSP. The old header is removed.
+
+> **The old "all responses" claim was wrong twice over:** the `web` group does not cover
+> responses generated before `SecurityHeaders` runs, and `/api/*` never runs it at all. Layer
+> nginx on top and the header set also differs per location.
 
 ### CSP violation reporting (issue #742)
 

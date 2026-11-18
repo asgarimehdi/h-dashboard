@@ -379,17 +379,30 @@ trait TicketsInboxFlow
             return;
         }
 
-        DB::transaction(function () use ($ticket, $oldStatus) {
-            // Plan 002: Pessimistic lock to prevent concurrent accept
-            $locked = DB::select('SELECT id, status FROM tickets WHERE id = ? FOR UPDATE', [$ticket->id]);
+        $accepted = DB::transaction(function () use ($ticket, $oldStatus) {
+            // Plan 002: Pessimistic lock to prevent concurrent accept.
+            //
+            // #1564: the lock must compare the whole claim, not just status.
+            // `assign()` (Api\TicketController:128-158) and `forward()` write
+            // `current_assignee_id` while keeping status at `forwarded`, so a
+            // ticket can be re-assigned to a teammate between the read at :350
+            // and this probe — accepting then would seize it (#529). The row
+            // can also have been DELETEd (:350 → here), so an empty result is
+            // a loss, not an undefined-offset 500.
+            $locked = DB::select(
+                'SELECT id, status, current_assignee_id FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
 
-            if ($locked[0]->status !== $oldStatus) {
+            if ($locked === []
+                || $locked[0]->status !== $oldStatus
+                || (int) $locked[0]->current_assignee_id !== (int) $ticket->current_assignee_id) {
                 $this->dispatch('swal', [
                     'title' => 'تیکت قبلاً پذیرفته شده است',
                     'icon' => 'warning',
                 ]);
 
-                return;
+                return false;
             }
 
             $ticket->update([
@@ -411,7 +424,17 @@ trait TicketsInboxFlow
                 ['status' => 'accepted'],
                 "پذیرش تیکت {$ticket->ticket_code}"
             );
+
+            return true;
         });
+
+        // #1564: the losing branch already dispatched its warning. Running these
+        // unconditionally would replace that toast before it renders (the swal
+        // listener calls Swal.fire synchronously) and reset modal state for a
+        // write that never happened.
+        if (! $accepted) {
+            return;
+        }
 
         $this->dispatch('swal', ['title' => 'تیکت پذیرفته شد', 'icon' => 'success']);
         $this->closeDetail();

@@ -35,6 +35,12 @@ class TicketAttachmentController extends Controller
     private const DOWNLOAD_HEADERS = [
         'Cache-Control' => 'private, no-store, max-age=0',
         'X-Content-Type-Options' => 'nosniff',
+        // #1567: the inline attachment (jpg/jpeg/png/pdf) is the only
+        // browser-rendered document served from `/api/*`, and that group does
+        // not run `SecurityHeaders` — so the framing guard must be set here.
+        // On the web route `SecurityHeaders` sets the same value and Symfony's
+        // header bag dedupes it into one.
+        'X-Frame-Options' => 'DENY',
     ];
 
     public function show(Ticket $ticket, Attachment $attachment): StreamedResponse

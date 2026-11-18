@@ -259,10 +259,16 @@ server {
     #
     # `add_header` does NOT inherit: a location that declares its own
     # `add_header` discards every `add_header` of the enclosing server block.
-    # Each location below therefore repeats the two security headers — without
-    # that repetition the static assets would ship without them, and the PHP
-    # SecurityHeaders middleware cannot cover them because they never pass
+    # Each location below therefore repeats `X-Content-Type-Options: nosniff` —
+    # without that repetition the static assets would ship without it, and the
+    # PHP SecurityHeaders middleware cannot cover them because they never pass
     # through PHP.
+    #
+    # `X-Frame-Options` is deliberately NOT added here or at server level
+    # (#1571). It is owned by the SecurityHeaders middleware on web responses,
+    # and nginx `add_header` APPENDS rather than replaces: adding it here would
+    # ship a duplicate (`DENY` from the app, `SAMEORIGIN` from nginx) on every
+    # page the middleware covers.
     #
     # Vite emits CONTENT-HASHED filenames under /build/assets, so the content
     # never changes under the same URL: cache it for a year and never
@@ -271,7 +277,6 @@ server {
     location ^~ /build/assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable" always;
         add_header X-Content-Type-Options nosniff;
-        add_header X-Frame-Options SAMEORIGIN;
     }
 
     # These paths are NOT hashed: a deploy can replace their content under the
@@ -281,11 +286,9 @@ server {
     location ~* ^/(?:js|css|icons|fonts)/ {
         expires 1d;
         add_header X-Content-Type-Options nosniff;
-        add_header X-Frame-Options SAMEORIGIN;
     }
 
     add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options SAMEORIGIN;
 }
 ```
 

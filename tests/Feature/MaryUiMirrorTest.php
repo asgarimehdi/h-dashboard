@@ -135,7 +135,7 @@ class MaryUiMirrorTest extends TestCase
             'js_requires' => [
                 "'close'",
                 "'open'",
-                'wireSet(this.$wire, this.modelName, false)',
+                'this.$wire.set(this.modelName, false)',
                 "'modal-open'",
             ],
             'ops' => [

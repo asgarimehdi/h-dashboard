@@ -134,7 +134,13 @@ jobs:
           # Lifts playwright.config.ts's testIgnore for this one spec; without
           # it the per-PR E2E job would try to run the 15-minute matrix too.
           SWEEP_35: '1'
-        run: bash scripts/e2e-test.sh tests/e2e/theme/sweep-35.spec.ts --reporter=list 2>&1 | tee sweep-35.log
+        # `set -o pipefail` (#1570): the implicit shell is `bash -e` without
+        # pipefail, so Playwright's non-zero exit was swallowed by `tee`. With
+        # it a failing run reddens this step and the assert step is skipped
+        # (default `if: success()`). See :145-152 for why there is no scan.
+        run: |
+          set -o pipefail
+          bash scripts/e2e-test.sh tests/e2e/theme/sweep-35.spec.ts --reporter=list 2>&1 | tee sweep-35.log
 
       - name: Assert the sweep really executed
         # A green hard-lock run with zero tests is a failure, not a pass
@@ -142,7 +148,7 @@ jobs:
         run: |
           EXECUTED=$(grep -cE '✓|✔|passed \(' sweep-35.log || true)
           echo "sweep executed-test lines: ${EXECUTED}"
-          grep -qE '[0-9]+ passed' sweep-35.log
+          grep -qE '[0-9]+ (passed|flaky)' sweep-35.log
           test "${EXECUTED}" -gt 0
 
       - name: Publish the sweep table (job summary)

@@ -170,6 +170,17 @@ export class SweepRecorder {
   failures(): Row[] {
     return this.rows.filter((row) => row.verdict === '❌');
   }
+
+  /**
+   * Themes whose sweep threw before it could measure them: the spec records one
+   * `n/a` row whose surface is `sweep aborted`, and `fillMatrix()` seeds the
+   * rest of that theme's cells. Unlike the intentional `n/a` cells
+   * (`dark: utilities`, a page with no badge), this is a coverage hole — a
+   * hard-lock run must fail on it.
+   */
+  aborted(): Row[] {
+    return this.rows.filter((row) => row.surface === 'sweep aborted');
+  }
 }
 
 async function computedColor(
@@ -330,7 +341,18 @@ export async function sweepTheme(page: Page, theme: string, recorder: SweepRecor
   await expect(page.locator('.modal-box')).toBeVisible();
   recorder.add(theme, 'glass modal', await measureText(page, 'glass modal', '.modal-box'));
   await capture(page, theme, 'settings', options);
-  await page.keyboard.press('Escape');
+  // Close the help dialog before measuring the page's form controls. Escape no
+  // longer closes it (regression since the 2026-11-14 lock refresh); ✕ is the
+  // path `tests/e2e/help/help-modal.spec.ts` pins. While the dialog is open,
+  // every `.select:visible` pixel is sampled from behind daisyUI's 40% black
+  // backdrop, so the cell measures 0.6× its real value.
+  await page
+    .locator('dialog.modal.modal-open .modal-box > form[method="dialog"] button')
+    .first()
+    .click();
+  // Wait for the close AND guard the invariant: the sweep must never sample a
+  // page control from behind an open dialog again.
+  await expect(page.locator('dialog.modal.modal-open')).toHaveCount(0);
 
   // ---- 4. Form controls --------------------------------------------------
   const selectColor = await computedColor(page, '.select:visible', 'color');
