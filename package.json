@@ -14,7 +14,7 @@
         "@playwright/test": "^1.65.1",
         "@tailwindcss/vite": "^4.3",
         "@types/node": "^26.6.6",
-        "concurrently": "^9.0.1",
+        "concurrently": "^10.0.7",
         "daisyui": "^5.8.1",
         "eslint": "^10.14.0",
         "eslint-config-prettier": "^10.1.8",
