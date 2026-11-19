@@ -135,6 +135,7 @@ APP_NAME=h-dashboard
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=http://your-host.example.com        # canonical public URL
+CSP_ENFORCING=false                          # flip to true at go-live — see §13
 
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
@@ -165,6 +166,15 @@ cookie, and Sanctum always trusts the incoming request host plus the `APP_URL`
 host (`config/sanctum.php`, #1532); `SANCTUM_STATEFUL_DOMAINS` only adds extra
 origins. A deployment served from `http://sad1:8000` with a different `APP_URL`
 needs no cookie-domain change — after deploying, run `php artisan config:clear`.
+
+`SESSION_SECURE_COOKIE` is deliberately absent from this block — leave it
+**unset**: `Secure` is then derived from the request scheme, which is correct on
+the plain-`http` nginx block in §8 and on HTTPS alike. Force
+`SESSION_SECURE_COOKIE=true` **only** when TLS terminates at a proxy that is not
+pinned in `TRUSTED_PROXIES` (#855); forced on a plain-`http` deployment it
+reproduces the #1003 419 "Page Expired" login wall. The full rationale sits
+beside the key in `.env.example.pgsql` — read it there instead of duplicating it
+here. It is checked again at go-live in §13.4.
 
 Initialize the app:
 
@@ -458,6 +468,97 @@ docker ps                            # postgis healthy, redis up
 Then log in through a browser with the seeded admin (`DB_DEFAULT_EMAIL` /
 `DB_DEFAULT_PASSWORD`) and open a few pages — especially `/hr-dashboard`, which
 exercises Livewire view compilation.
+
+---
+
+## 13. Go-live checklist (production)
+
+An install that follows this guide arrives in production with
+`CSP_ENFORCING=false` — the template default — so the app ships
+`Content-Security-Policy-Report-Only`, which browsers **report but never block**.
+Everything in #1281 and #1352 (the switch, the nonce, the CSP-safe build, the CI
+gate) only becomes real protection after this section. Finish it in exactly one
+of two ways: enforce at handoff (13.1 → 13.3), or take the dated deferral in
+"Choosing your exit". A deployment that leaves Report-Only on with neither is the
+failure this section exists to prevent.
+
+### 13.1 Report-only soak — before handoff (minutes, not weeks)
+
+Log in and walk the pages the CI gate covers — `/login`, `/dashboard`, `/map`,
+`/maps/route2`, `/hr-dashboard`, `/tickets/inbox`, plus `/todo`,
+`/reports/tickets`, `/units` and `/settings` — then read the report backlog:
+
+```bash
+grep 'csp-report' storage/logs/laravel.log | tail -n 50
+```
+
+**Blocking** is a `script-src` / `connect-src` / `default-src` violation on a
+**first-party** asset. Ignore `chrome-extension://`, `moz-extension://`, and
+third-party analytics you do not control. Treat the log as an early signal, not
+proof: the policy advertises `report-to` without `report-uri` (#742), which
+Firefox and Safari do not implement — on those browsers the console walk in
+13.3 is the only real proof.
+
+Over HTTPS, also confirm the session cookie carries `Secure`:
+
+```bash
+curl -sI https://<host>/login | grep -i '^set-cookie:'
+```
+
+### 13.2 Flip
+
+```bash
+# in .env
+CSP_ENFORCING=true
+
+# then rebuild the cached config (§10)
+php artisan config:clear && php artisan optimize
+```
+
+Without the cache rebuild the new value never reaches the running app and the
+flip silently does nothing.
+
+### 13.3 Verify
+
+```bash
+curl -sI http://<host>/login | grep -i '^content-security-policy:'
+```
+
+It must print `content-security-policy:` — **never**
+`content-security-policy-report-only:`. `Reporting-Endpoints` must still be
+present (the middleware emits it in both modes). Then repeat the 13.1 walk with
+the browser devtools console open: zero `Content-Security-Policy` errors.
+
+> The check has to hit a **200 web route**. `curl -I http://<host>/` proves
+> nothing: `/` answers with the auth 302, which is produced *before*
+> `SecurityHeaders` runs and carries none of the six headers (see the table in
+> `docs/agents/api-auth.md:76`).
+
+**Rollback:** set `CSP_ENFORCING=false` and re-run
+`php artisan config:clear && php artisan optimize` — no web-server restart is
+involved.
+
+### 13.4 HTTPS / session cookie
+
+`SESSION_SECURE_COOKIE` stays **unset**, so `Secure` is derived from the request
+scheme — safe on every server, including the plain-`http` nginx block in §8.
+Force `SESSION_SECURE_COOKIE=true` **only** when TLS terminates at a proxy that
+is not pinned in `TRUSTED_PROXIES` (#855). Forced on a plain-`http` deployment it
+reproduces the #1003 419 "Page Expired" login wall. The reasoning lives beside
+the key in `.env.example.pgsql`; do not copy it into a deployment unread.
+
+### 13.5 Debug
+
+Confirm `APP_DEBUG=false` survived any local debugging. It is the template
+default (§6), and a deployment left on `true` leaks stack traces on every error.
+
+### Choosing your exit
+
+- **Enforce at handoff:** 13.1 clean → 13.2 → 13.3 clean. Done.
+- **Dated deferral:** if you cannot enforce at handoff, record in YOUR
+  deployment's ops log: the reason, the owner, and the date you will re-run
+  13.1–13.3 — then re-run them at each release. Leaving it undated is the
+  failure this section exists to prevent.
 
 ---
 
