@@ -206,8 +206,12 @@ class CoverageReportComponentTableTest extends TestCase
             'the job re-runs the suite: #1011 moved the pest run to the `test` job and hands the Clover over as an artifact'
         );
 
+        // The optional `# vX.Y.Z` group is #1595: every action ref is pinned to a
+        // full commit SHA and carries the resolved version as a trailing comment
+        // so Dependabot can rewrite both on a bump. The `name:` contract below it
+        // is what this guard is actually about.
         $this->assertMatchesRegularExpression(
-            '/uses: actions\/download-artifact@\S+\s*\n\s*with:\s*\n\s*name: coverage-xml/',
+            '/uses: actions\/download-artifact@\S+(?:\s+#\s*\S+)?\s*\n\s*with:\s*\n\s*name: coverage-xml/',
             $job,
             'the job must download the `coverage-xml` artifact the `test` job uploads: a drift here silently reports "no data" (the #865 trap)'
         );

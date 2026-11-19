@@ -1,0 +1,9 @@
+name: "CodeQL config"
+
+# Structural exclusions only. public/js/ holds vendored third-party browser
+# bundles (Highcharts, Leaflet + plugins, FullCalendar, jalalidatepicker) that
+# are shipped as-is from Blade and updated by replacing the file, so an alert
+# there is not actionable in this repo. Everything we actually write —
+# resources/js, tests/e2e and .github/workflows — stays in scope (#1594).
+paths-ignore:
+  - "public/js/**"

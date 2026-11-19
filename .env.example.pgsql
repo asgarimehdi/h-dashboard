@@ -4,6 +4,10 @@ APP_KEY=
 APP_DEBUG=false
 APP_URL=http://127.0.0.1:8000
 
+# CSP (#1281): Report-Only until this is true. Production flips it at go-live —
+# see install-guid.md §13. Run `php artisan config:clear` after changing it.
+CSP_ENFORCING=false
+
 # ── Trusted proxies (#855) ──
 # Leave EMPTY for a direct nginx+FPM deployment — nothing is trusted, so a
 # client-supplied X-Forwarded-Host/Proto/Port/Prefix is ignored.

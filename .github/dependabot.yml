@@ -5,3 +5,25 @@ updates:
     target-branch: "beta"
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "composer"
+    directory: "/"
+    target-branch: "beta"
+    schedule:
+      interval: "weekly"
+    groups:
+      composer-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "beta"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

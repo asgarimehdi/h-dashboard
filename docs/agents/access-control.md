@@ -26,10 +26,14 @@ Uses **Spatie Permission** package:
   ```
   The blind sweep above cannot see the third leak shape: a scoping
   precondition that is simply **absent** — no `when`, no empty guard, no
-  predicate at all, just an unscoped query. The ticket selectors in
-  `tickets/⚡inbox.blade.php` and `tickets/⚡create.blade.php` shipped
-  exactly this shape (#980's correction) and their fix was a plain
-  scoping `whereIn` added where nothing guarded the picker before.
+  predicate at all, just an unscoped query. The ticket unit pickers
+  looked like this shape, but #980 was closed as wrongly framed: per
+  the settled #818 decision the ticket destination is eligibility
+  (`can_receive_tickets` + `is_active`, `TicketTargetUnit`), not
+  accessibility — ticketing is cross-unit, so no `whereIn(... unitIds())`
+  was ever added there (PR #988 closed unmerged). The `whereIn`
+  occurrences in those two files scope other things (the todo picker,
+  #847; inbox bulk actions), not the unit pickers.
   Grep for suspicious models too, not only for fail-open spellings:
   ```bash
   grep -rnE 'Unit::query\(\)|Person::query\(\)|Ticket::query\(\)' resources/views/ app/
@@ -38,6 +42,8 @@ Uses **Spatie Permission** package:
   `whereIn(... unitIds())` at all is the same leak this section is about,
   just silent — no fail-open spelling to catch. Read **every** hit; the
   two sweeps together catch the `when`/`empty` shapes **and** absence.
+  Exception: the ticket unit picker is deliberately eligibility-filtered,
+  not accessibility-scoped (#818/#980) — do not "fix" it with a `whereIn`.
 
 ### Guard (issue #1306)
 
