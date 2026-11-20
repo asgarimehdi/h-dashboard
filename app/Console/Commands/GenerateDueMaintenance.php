@@ -89,40 +89,56 @@ class GenerateDueMaintenance extends Command
      */
     private function processSchedule(MaintenanceSchedule $schedule): bool
     {
+        // Issue #1610: the guard below and the insert are two statements, so
+        // two overlapping runs — a manual run racing the scheduled one, or a
+        // run that outlived the scheduler's `withoutOverlapping` window — both
+        // read "no open ticket" and both write one. The row lock is what makes
+        // the pair atomic: the second run waits here, then its guard sees the
+        // ticket the first run committed. Same pattern as the sibling writer
+        // GenerateRecurringTodos (#1278). This is inside the per-schedule
+        // transaction that handle() opens, so the lock lives until commit.
+        /** @var MaintenanceSchedule|null $locked */
+        $locked = MaintenanceSchedule::query()->whereKey($schedule->id)->lockForUpdate()->first();
+
+        if ($locked === null) {
+            // Deleted between reading the due set and its turn.
+            return false;
+        }
+
         // Issue #533: idempotency guard — skip if an open ticket already exists
         // for this schedule (prevents duplicates on scheduler overlap or crash).
         // Issue #876: `unit_id` is guaranteed non-null here — unit-less
         // schedules are filtered out in handle() — so this guard can actually
         // match. (With a null unit it compiled to `IS NULL`, which can never
         // match the NOT NULL `tickets.unit_id` column and was vacuous.)
-        $existingTicket = Ticket::where('unit_id', $schedule->unit_id)
-            ->where('subject', $schedule->title)
+        $existingTicket = Ticket::where('unit_id', $locked->unit_id)
+            ->where('subject', $locked->title)
             ->where('status', '!=', 'completed')
             ->where('created_at', '>=', now()->subDay())
             ->exists();
 
         if ($existingTicket) {
-            $this->warn("  Skipping schedule #{$schedule->id} — open ticket already exists.");
+            $this->warn("  Skipping schedule #{$locked->id} — open ticket already exists.");
             // Still advance the schedule to avoid getting stuck
-            $this->advance($schedule);
+            $this->advance($locked);
 
             return false;
         }
 
         Ticket::create([
             'ticket_code' => 'T-'.strtoupper(Str::random(8)),
-            'subject' => $schedule->title,
-            'content' => 'Generated from maintenance schedule #'.$schedule->id,
+            'subject' => $locked->title,
+            'content' => 'Generated from maintenance schedule #'.$locked->id,
             'status' => 'created',
             // #954: the app vocabulary is Ticket::PRIORITIES (three
             // values). `medium` passed the DB CHECK but no report reads
             // it — this unattended nightly writer must stay inside the
             // buckets every aggregation has.
             'priority' => 'normal',
-            'unit_id' => $schedule->unit_id,
+            'unit_id' => $locked->unit_id,
         ]);
 
-        $this->advance($schedule);
+        $this->advance($locked);
 
         return true;
     }
