@@ -20,19 +20,19 @@ return new class extends Component
     use WithFileUploads;
 
     /**
-     * #1375 — the uploaded backup archive. The restore reads it inside the
-     * same request, so it never leaves Livewire's temporary directory.
+     * The uploaded backup archive. The restore reads it inside the same
+     * request, so it never leaves Livewire's temporary directory.
      */
     public ?TemporaryUploadedFile $backupFile = null;
 
     /**
-     * #1375 — the table to restore, or `full` for a complete restore.
+     * The table to restore, or `full` for a complete restore.
      */
     public string $restoreTarget = 'full';
 
     /**
-     * #1375 — the admin has to confirm the `users` warning (owner decision
-     * Q2-(a)) before a restore that replaces the accounts may run.
+     * The admin has to confirm the `users` warning (owner decision Q2-(a))
+     * before a restore that replaces the accounts may run.
      */
     public bool $restoreConfirmed = false;
 
@@ -94,7 +94,7 @@ return new class extends Component
     }
 
     /**
-     * Restore an uploaded backup archive (issue #1375).
+     * Restore an uploaded backup archive.
      *
      * The restore is synchronous and atomic: the service validates the whole
      * file first and then replaces the rows inside ONE transaction, so a
@@ -118,7 +118,8 @@ return new class extends Component
 
         // Owner decision Q2-(a): restoring the accounts replaces them, and
         // the role assignments and the API tokens of the old accounts are
-        // NOT part of the backup — so the admin has to confirm the warning.
+        // NOT part of the backup — the restore revokes them, so the admin has
+        // to confirm the warning first.
         if ($this->touchesUsers() && ! $this->restoreConfirmed) {
             $this->error('برای بازگردانی جدول کاربران باید هشدار را تأیید کنید.', position: 'toast-bottom');
 
@@ -248,7 +249,9 @@ return new class extends Component
                         <p class="font-bold">هشدار: بازگردانی جدول کاربران</p>
                         <p class="text-sm">
                             بازگردانی جدول «users» حساب‌ها را جایگزین می‌کند؛
-                            نقش‌ها و توکن‌های کاربران بازگردانی نمی‌شوند و کاربران بدون نقش و بدون توکن بازمی‌گردند.
+                            نقش‌ها و توکن‌های همهٔ حساب‌های پیش از بازگردانی در همان تراکنش باطل می‌شوند و بازنمی‌گردند.
+                            کاربران اپ موبایل باید دوباره وارد شوند و نقش‌ها باید دستی تخصیص داده شوند؛
+                            نشست‌های وب با این بازگردانی باطل نمی‌شوند.
                             همین هشدار برای بازگردانی کامل هم صدق می‌کند.
                         </p>
                         <label class="flex items-center gap-2 mt-2">

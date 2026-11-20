@@ -202,11 +202,11 @@ test('the warning about the users table is shown when users is the target', func
 
     Livewire::test('backup.index')
         ->set('restoreTarget', 'users')
-        ->assertSee('نقش‌ها و توکن‌های کاربران بازگردانی نمی‌شوند');
+        ->assertSee('نقش‌ها و توکن‌های همهٔ حساب‌های پیش از بازگردانی در همان تراکنش باطل می‌شوند');
 
     Livewire::test('backup.index')
         ->set('restoreTarget', 'tickets')
-        ->assertDontSee('نقش‌ها و توکن‌های کاربران بازگردانی نمی‌شوند');
+        ->assertDontSee('نقش‌ها و توکن‌های همهٔ حساب‌های پیش از بازگردانی در همان تراکنش باطل می‌شوند');
 });
 
 test('the users restore only runs after the warning was confirmed', function () {
