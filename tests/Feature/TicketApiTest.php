@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\PermissionRegistrar;
@@ -659,5 +660,350 @@ class TicketApiTest extends TestCase
             ->assertJson(['message' => 'Only the assigned user can accept this ticket.']);
 
         $this->assertSame('completed', $ticket->fresh()->status);
+    }
+
+    // =====================================================================
+    // #1608 — transitions are atomic; closed tickets stay closed
+    // =====================================================================
+
+    /**
+     * Create a ticket already assigned to $user.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    protected function createAssignedTicket(User $user, Unit $unit, string $status = 'created', array $overrides = []): Ticket
+    {
+        return Ticket::create(array_merge([
+            'ticket_code' => 'T-'.fake()->unique()->numerify('######'),
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Race',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'status' => $status,
+            'current_assignee_id' => $user->id,
+        ], $overrides));
+    }
+
+    /**
+     * Make the controller's `FOR UPDATE` probe observe a stale snapshot.
+     *
+     * Same mechanism as TicketsInboxLivewireTest (#1564 review §4): `DB::spy()`
+     * swaps the container `db` binding, so Eloquent resolves the mock too and
+     * the transaction callback never runs. A DatabaseManager subclass that
+     * delegates `connection()` to the real manager avoids that — a fresh
+     * manager would open a second PDO outside RefreshDatabase's transaction
+     * and see no rows at all.
+     *
+     * @param  object|null  $row  the row the lock reports, or null for "gone"
+     */
+    protected function fakeLockedTicketRow(?object $row): void
+    {
+        /** @var DatabaseManager $inner */
+        $inner = DB::getFacadeRoot();
+
+        DB::swap(new class(app(), app('db.factory'), $inner, $row) extends DatabaseManager
+        {
+            public function __construct($app, $factory, private DatabaseManager $inner, private ?object $row)
+            {
+                parent::__construct($app, $factory);
+            }
+
+            public function connection($name = null)
+            {
+                return $this->inner->connection($name);
+            }
+
+            public function select($query, $bindings = [], $useReadPdo = true)
+            {
+                if (str_contains($query, 'FOR UPDATE')) {
+                    return $this->row === null ? [] : [$this->row];
+                }
+
+                return $this->inner->connection()->select($query, $bindings, $useReadPdo);
+            }
+        });
+    }
+
+    public function test_accept_loses_race_when_status_changed_under_lock(): void
+    {
+        // The row moved from `created` to `accepted` between the controller's
+        // read and its FOR UPDATE probe. The loser must not re-stamp accepted_at.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Only created or forwarded tickets can be accepted.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('created', $fresh->status);
+        $this->assertNull($fresh->accepted_at);
+    }
+
+    public function test_accept_loses_race_when_assignee_changed_under_lock(): void
+    {
+        // assign()/forward() move current_assignee_id without changing status,
+        // so comparing status alone would let the earlier reader seize a ticket
+        // now assigned to a teammate (#529, one transaction deeper).
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $ticket = $this->createAssignedTicket($user, $unit, 'forwarded');
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'forwarded',
+            'current_assignee_id' => $teammate->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Only the assigned user can accept this ticket.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('forwarded', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+        $this->assertNull($fresh->accepted_at);
+    }
+
+    public function test_accept_loses_race_when_row_vanished_under_lock(): void
+    {
+        // A DELETE between route-model binding and the lock leaves nothing to
+        // lock. That is a loss (422), never a 500 or a success.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow(null);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Only created or forwarded tickets can be accepted.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('created', $fresh->status);
+        $this->assertNull($fresh->accepted_at);
+    }
+
+    public function test_complete_loses_race_when_status_changed_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'accepted', ['accepted_at' => now()]);
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'forwarded',
+            'current_assignee_id' => $user->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Ticket must be accepted before completing.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('accepted', $fresh->status);
+        $this->assertNull($fresh->completed_at);
+    }
+
+    public function test_complete_loses_race_when_assignee_changed_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $ticket = $this->createAssignedTicket($user, $unit, 'accepted', ['accepted_at' => now()]);
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'accepted',
+            'current_assignee_id' => $teammate->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Only the assigned user can complete this ticket.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('accepted', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+        $this->assertNull($fresh->completed_at);
+    }
+
+    public function test_assign_completed_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $completedAt = now()->subDay()->startOfSecond();
+        $ticket = $this->createAssignedTicket($user, $unit, 'completed', ['completed_at' => $completedAt]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $teammate->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be reassigned.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('completed', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+        $this->assertSame($completedAt->toDateTimeString(), $fresh->completed_at->toDateTimeString());
+    }
+
+    public function test_assign_rejected_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $ticket = $this->createAssignedTicket($user, $unit, 'rejected');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $teammate->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be reassigned.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('rejected', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+    }
+
+    public function test_assign_archived_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $archivedAt = now()->subDay()->startOfSecond();
+        $ticket = $this->createAssignedTicket($user, $unit, 'completed', [
+            'completed_at' => $archivedAt,
+            'archived_at' => $archivedAt,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $teammate->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be reassigned.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('completed', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+        $this->assertSame($archivedAt->toDateTimeString(), $fresh->archived_at->toDateTimeString());
+    }
+
+    public function test_assign_rejects_ticket_closed_under_lock(): void
+    {
+        // A concurrent complete() lands between the controller's read and the
+        // update. A pre-transaction status check would miss it; the guard must
+        // run on the locked row.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'completed',
+            'current_assignee_id' => $user->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $teammate->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be reassigned.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('created', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+    }
+
+    public function test_assign_loses_race_when_row_vanished_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow(null);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $teammate->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Ticket no longer exists.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('created', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+    }
+
+    public function test_accept_from_created_status_still_works(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token);
+
+        $response->assertStatus(200)
+            ->assertJson(['data' => ['status' => 'accepted']]);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('accepted', $fresh->status);
+        $this->assertSame($user->id, $fresh->current_assignee_id);
+        $this->assertNotNull($fresh->accepted_at);
+    }
+
+    public function test_assign_is_allowed_from_forwarded_and_accepted_statuses(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $teammate = $this->createSecondUserInUnit($unit);
+        $acceptedAt = now()->subDay()->startOfSecond();
+
+        foreach (['forwarded', 'accepted'] as $status) {
+            $ticket = $this->createAssignedTicket($user, $unit, $status, [
+                'ticket_code' => 'T-ASSIGN-'.strtoupper($status),
+                'accepted_at' => $status === 'accepted' ? $acceptedAt : null,
+            ]);
+
+            $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+            $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+                'assignee_id' => $teammate->id,
+            ], $token);
+
+            $response->assertStatus(200)
+                ->assertJson(['data' => ['status' => 'forwarded', 'current_assignee_id' => $teammate->id]]);
+
+            $fresh = $ticket->fresh();
+            $this->assertSame('forwarded', $fresh->status);
+            $this->assertSame($teammate->id, $fresh->current_assignee_id);
+            $this->assertSame(
+                $status === 'accepted' ? $acceptedAt->toDateTimeString() : null,
+                $fresh->accepted_at?->toDateTimeString()
+            );
+        }
     }
 }
