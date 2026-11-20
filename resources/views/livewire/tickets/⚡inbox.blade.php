@@ -312,35 +312,45 @@ new class extends Component
         // Get accessible unit IDs for scope filtering
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های قبلاً completed شده + محدوده سازمانی
-        //
-        // #1040: «انتخاب همه» is NOT the whole accessible pool any more —
-        // the approved semantics expand it right here, against the page's
-        // ACTIVE filter/search/view-mode, minus the rows the operator
-        // un-picked. The manual path is unchanged (`selectedTickets` holds
-        // only hand-picked ids in that mode).
-        if ($this->selectAll) {
-            $scope = Ticket::query();
-            $this->applyInboxFilters($scope);
-            $ticketIds = $scope
-                ->whereNotIn('id', $this->selectedTickets)
-                ->where('status', '!=', 'completed')
-                ->whereIn('unit_id', $accessibleIds)
-                ->pluck('id');
-        } else {
-            $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
-                ->where('status', '!=', 'completed')
-                ->whereIn('unit_id', $accessibleIds)
-                ->pluck('id');
-        }
+        // #1620: resolution AND the writes stay in ONE transaction. The
+        // terminal-state definition the single-ticket paths already share
+        // (`TicketsInboxFlow::isClosedTicketRow()`) counts `completed`,
+        // `rejected` AND a non-null `archived_at` as closed; the bulk filter
+        // mirrors it so a rejected ticket can never be completed/forwarded in
+        // bulk. `lockForUpdate()` closes the check-then-act window a
+        // concurrent single-ticket transition would otherwise open between
+        // resolution and the set-based UPDATE.
+        $ticketIds = DB::transaction(function () use ($accessibleIds, $now, $userId, $bulkNote) {
+            // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های پایانی (completed/rejected/آرشیوشده) + محدوده سازمانی
+            //
+            // #1040: «انتخاب همه» is NOT the whole accessible pool any more —
+            // the approved semantics expand it right here, against the page's
+            // ACTIVE filter/search/view-mode, minus the rows the operator
+            // un-picked. The manual path is unchanged (`selectedTickets` holds
+            // only hand-picked ids in that mode).
+            if ($this->selectAll) {
+                $scope = Ticket::query();
+                $this->applyInboxFilters($scope);
+                $ticketIds = $scope
+                    ->whereNotIn('id', $this->selectedTickets)
+                    ->whereNotIn('status', ['completed', 'rejected'])
+                    ->whereNull('archived_at')
+                    ->whereIn('unit_id', $accessibleIds)
+                    ->lockForUpdate()
+                    ->pluck('id');
+            } else {
+                $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
+                    ->whereNotIn('status', ['completed', 'rejected'])
+                    ->whereNull('archived_at')
+                    ->whereIn('unit_id', $accessibleIds)
+                    ->lockForUpdate()
+                    ->pluck('id');
+            }
 
-        if ($ticketIds->isEmpty()) {
-            $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
-            $this->closeAllModals();
-            return;
-        }
+            if ($ticketIds->isEmpty()) {
+                return $ticketIds;
+            }
 
-        DB::transaction(function () use ($ticketIds, $now, $userId, $bulkNote) {
             // Issue #531: capture old statuses BEFORE the bulk update
             // #1409: one combined pre-read replaces the old-status pluck AND the
             // per-branch re-fetch; ticket_code/task_id feed the batched log insert.
@@ -448,7 +458,15 @@ new class extends Component
 
                 \App\Models\ActivityLog::query()->insert($activityLogRows);
             }
+
+            return $ticketIds;
         });
+
+        if ($ticketIds->isEmpty()) {
+            $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
+            $this->closeAllModals();
+            return;
+        }
 
         // #1001: report the tickets actually processed after scope/status
         // filtering — not how many the operator selected.
