@@ -4,6 +4,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Support\RoleGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
@@ -351,6 +352,11 @@ return new class extends Component
 
         if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
             $this->authorize('manage_roles');
+
+            // Issue #1607: `manage_roles` is a delegation, not a blank cheque —
+            // nothing above the actor's own ceiling may be ADDED. A brand-new
+            // account has no current set, so every submitted privilege is new.
+            RoleGuard::assertCanAssign($this->actor(), null, $this->role_ids, $this->user_permissions);
         }
 
         $this->validate([
@@ -429,6 +435,11 @@ return new class extends Component
 
         if (! empty($this->role_ids) || ! empty($this->user_permissions)) {
             $this->authorize('manage_roles');
+
+            // Issue #1607: same ceiling as createUser(), measured as a DELTA
+            // against the target's current set — a no-op edit of a user that
+            // already sits above the actor's ceiling must still save.
+            RoleGuard::assertCanAssign($this->actor(), $target, $this->role_ids, $this->user_permissions);
         }
 
         $this->validate([

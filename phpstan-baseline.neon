@@ -2785,43 +2785,43 @@ parameters:
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:editRole\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:editRole\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:roles\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:roles\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:\$headers type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$headers type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:\$permissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$permissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:9\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
@@ -3355,103 +3355,103 @@ parameters:
 			path: resources/views/livewire/units/map.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:edit\(\) has parameter \$userId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:edit\(\) has parameter \$userId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:restore\(\) has parameter \$userId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:restore\(\) has parameter \$userId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:selectPerson\(\) has parameter \$n_code with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:selectPerson\(\) has parameter \$n_code with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:users\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:users\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$allRoles type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$allRoles type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$editing_user_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$editing_user_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$expanded type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$expanded type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$n_code has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$n_code has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$password has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$password has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$person_search has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$person_search has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$role_ids type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$role_ids type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$unit_ids type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$unit_ids type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:16\:\:\$user_permissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$user_permissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php

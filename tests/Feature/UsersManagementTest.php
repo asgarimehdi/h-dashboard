@@ -1053,6 +1053,135 @@ test('#1277: a failed unit sync on edit leaves password, role, unit and tokens u
     $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
 });
 
+/*
+ * ---------------------------------------------------------------------------
+ * Issue #1607 — the delegation ceiling for manage_users + manage_roles
+ * ---------------------------------------------------------------------------
+ * `manage_roles` is a delegation, not a blank cheque: a non-admin may only
+ * hand out privileges it already holds, and the `admin` ROLE (which carries
+ * `role:admin` route access, routes/web.php) is off-limits entirely. These
+ * tests use `users849Fixtures()` so the actor holds BOTH permissions and no
+ * unit-scope check can be what answers with a 403 — the ceiling is the only
+ * thing that can refuse.
+ */
+test('#1607: a non-admin cannot grant the admin role on create', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $adminRole = Role::where('name', 'admin')->firstOrFail();
+
+    Person::create([
+        'n_code' => '1607000001',
+        'f_name' => 'کاربر',
+        'l_name' => 'تازه',
+        'u_id' => $f['unitA']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '1607000001')
+        ->set('password', 'password123')
+        ->set('role_ids', [$adminRole->id])
+        ->set('unit_ids', [$f['unitA']->id])
+        ->call('createUser')
+        ->assertForbidden();
+
+    expect(User::where('n_code', '1607000001')->exists())->toBeFalse();
+});
+
+test('#1607: a non-admin cannot promote itself to admin', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $adminRole = Role::where('name', 'admin')->firstOrFail();
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->set('editing_user_id', $f['attacker']->id)
+        ->set('n_code', $f['attacker']->n_code)
+        ->set('role_ids', [$adminRole->id])
+        ->set('user_permissions', [])
+        ->set('unit_ids', [$f['unitA']->id])
+        ->call('updateUser')
+        ->assertForbidden();
+
+    expect($f['attacker']->fresh()->hasRole('admin'))->toBeFalse();
+});
+
+test('#1607: a non-admin cannot grant a permission it does not hold', function () {
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+    $operator = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+    $f['attacker']->assignRole($operator);
+
+    // Direct permissions are the same hole as roles: probe 2 of the issue.
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->set('editing_user_id', $f['attacker']->id)
+        ->set('n_code', $f['attacker']->n_code)
+        ->set('role_ids', [$operator->id])
+        ->set('user_permissions', ['manage_diseases'])
+        ->set('unit_ids', [$f['unitA']->id])
+        ->call('updateUser')
+        ->assertForbidden();
+
+    expect($f['attacker']->fresh()->hasPermissionTo('manage_diseases'))->toBeFalse();
+});
+
+test('#1607: a delegated manager can still edit a user above its own ceiling without adding anything', function () {
+    // Anti-over-blocking: the rule compares the DELTA, so a target that already
+    // holds a privilege above the actor's ceiling stays editable as long as the
+    // write does not ADD one.
+    $f = users849Fixtures(['manage_users', 'manage_roles']);
+
+    Person::create([
+        'n_code' => '1607000004',
+        'f_name' => 'همکار',
+        'l_name' => 'بیماری',
+        'u_id' => $f['unitA']->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+    $colleague = User::create(['n_code' => '1607000004', 'password' => bcrypt('secret-1234')]);
+    $colleague->units()->attach($f['unitA']->id, ['role' => 'staff', 'is_primary' => true]);
+
+    $diseaseRole = Role::create(['name' => 'disease_manager', 'label' => 'مدیر بیماری‌ها']);
+    $diseaseRole->givePermissionTo('manage_diseases');
+    $colleague->assignRole($diseaseRole);
+
+    Livewire::actingAs($f['attacker'])
+        ->test('users.index')
+        ->call('edit', $colleague->id)
+        ->set('password', 'new-secret-123')
+        ->call('updateUser')
+        ->assertHasNoErrors();
+
+    expect(Hash::check('new-secret-123', $colleague->fresh()->password))->toBeTrue();
+    expect($colleague->fresh()->hasRole('disease_manager'))->toBeTrue();
+});
+
+test('#1607: an admin-role holder can still grant the admin role', function () {
+    // The bypass is on the ROLE, not on the permission: `$this->admin` holds
+    // manage_users + manage_roles only, so the role has to be assigned here.
+    $adminRole = Role::where('name', 'admin')->firstOrFail();
+    $this->admin->assignRole($adminRole);
+
+    Person::create([
+        'n_code' => '1607000005',
+        'f_name' => 'کاربر',
+        'l_name' => 'مدیر',
+        'u_id' => $this->unit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', '1607000005')
+        ->set('password', 'password123')
+        ->set('role_ids', [$adminRole->id])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('createUser');
+
+    expect(User::where('n_code', '1607000005')->first()?->hasRole('admin'))->toBeTrue();
+});
+
 test('#1277: a failed role sync on a password reset leaves the old password and tokens alive', function () {
     $oldRole = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
     $newRole = Role::create(['name' => 'supervisor', 'label' => 'سرپرست']);
