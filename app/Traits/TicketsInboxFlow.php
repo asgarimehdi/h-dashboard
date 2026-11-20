@@ -456,18 +456,53 @@ trait TicketsInboxFlow
             return;
         }
 
-        DB::transaction(function () use ($ticket) {
-            $ticket->update([
-                'status' => 'rejected',
-                'current_assignee_id' => auth()->id(),
-            ]);
+        // #1609: the write used to be unconditional, so rejecting a
+        // `completed`/`rejected` ticket silently resurrected a closed row
+        // (`completed_at`/`archived_at` left behind) — archiving is one-way
+        // (#929). The decision now rides on a locked re-read, exactly like
+        // acceptTicket() (#1564): a status that moved, an archived row, or a
+        // deleted one is a loss, not a write.
+        $rejected = DB::transaction(function () use ($ticket) {
+            $locked = DB::select(
+                'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
+
+            $lockedRow = $locked[0] ?? null;
+
+            if ($lockedRow === null
+                || $lockedRow->archived_at !== null
+                || ! in_array($lockedRow->status, ['created', 'forwarded', 'accepted'], true)) {
+                $this->dispatch('swal', [
+                    'title' => 'تیکت قابل رد شدن نیست',
+                    'icon' => 'warning',
+                ]);
+
+                return false;
+            }
+
+            // #1609: `current_assignee_id` is deliberately NOT rewritten with
+            // the rejecter — the activity row's `user_id` is the rejecter
+            // record, and overwriting the assignment erased who held the
+            // ticket.
+            $ticket->update(['status' => 'rejected']);
 
             $ticket->activities()->create([
                 'user_id' => auth()->id(),
                 'action' => 'rejected',
                 'description' => 'تیکت توسط واحد '.(auth()->user()->person?->unit?->name ?? 'بدون واحد').' رد شد.',
             ]);
+
+            return true;
         });
+
+        // The losing branch already dispatched its warning. Running the success
+        // toast and closeDetail() unconditionally would replace that warning
+        // before it renders and reset modal state for a write that never
+        // happened (#1564).
+        if (! $rejected) {
+            return;
+        }
 
         $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
         $this->closeDetail();
@@ -529,6 +564,51 @@ trait TicketsInboxFlow
         try {
             DB::beginTransaction();
 
+            // #1609: the pre-check above reads a row that can move before this
+            // write — `assign()`/`forward()`/`acceptTicket()` all mutate it,
+            // and with `targetUnitId` set the pre-check was skipped entirely,
+            // so the forwarded branch ran for ANY status (a closed ticket could
+            // be moved and reopened as `forwarded`). Mirror acceptTicket()'s
+            // locked re-read (#1564): the transition decision is made on the
+            // row this transaction will write. `archived_at` rides along
+            // because an archived row is terminal for both branches (#929).
+            $locked = DB::select(
+                'SELECT id, status, current_assignee_id, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
+
+            $lockedRow = $locked[0] ?? null;
+
+            // A deleted row is a loss, not an undefined-offset 500.
+            if ($lockedRow === null
+                || $lockedRow->archived_at !== null
+                || in_array($lockedRow->status, ['completed', 'rejected'], true)) {
+                DB::rollBack();
+                $this->addError('completionNote', 'تیکت بسته را نمی‌توان مجدداً ارجاع داد یا مختومه کرد.');
+
+                return;
+            }
+
+            if ($actionType === 'completed') {
+                // The pre-check is only a fast fail; the locked row decides.
+                if ($lockedRow->status !== 'accepted') {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
+
+                    return;
+                }
+
+                // #1609: parity with Api\TicketController::complete() (#530) —
+                // only the ticket's current assignee may close it, even when the
+                // caller holds manage_unit_tickets.
+                if ((int) $lockedRow->current_assignee_id !== (int) Auth::id()) {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را مختومه کند.');
+
+                    return;
+                }
+            }
+
             if ($actionType === 'forwarded') {
                 $ticket->update([
                     'unit_id' => $this->targetUnitId,
@@ -558,6 +638,12 @@ trait TicketsInboxFlow
                 $message = 'تیکت با موفقیت مختومه و بسته شد.';
 
                 // اگر وظیفه مرتبطی دارد و تمام تیکت‌های آن وظیفه بسته شده‌اند، وظیفه را تکمیل کن
+                //
+                // #1609: this runs AFTER the locked re-check and reads sibling
+                // tickets, which the row lock does not cover. Locking the
+                // siblings is deliberately not attempted: two concurrent
+                // completions of the last open tickets both marking the task
+                // complete is the same benign outcome.
                 if ($ticket->task_id) {
                     $relatedTicket = Ticket::where('task_id', $ticket->task_id)
                         ->where('status', '!=', 'completed')
