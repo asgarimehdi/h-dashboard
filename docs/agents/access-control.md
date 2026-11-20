@@ -83,6 +83,36 @@ the guard can.
 - Scope lists that miss the `…Ids` contract (`$accessible_ids`, `$allowedUnits`,
   `$scope`) are not matched, and `resources/views/` outside `livewire/` is not scanned.
 
+### Delegation ceiling (issue #1607)
+
+`manage_roles` / `manage_users` are a **delegation, not a blank cheque**.
+`App\Support\RoleGuard` enforces one rule: a non-admin may never **ADD** a privilege it does not
+itself hold — via a role, a direct permission, or an edit of an existing role. The comparison is a
+**delta** (submitted minus the target's current set), so removals and no-op edits of a user or role
+that already sits above the ceiling still save; an `admin`-role holder bypasses the guard entirely.
+
+The `admin` role is protected by **identity**, not by its permissions: it carries `role:admin`
+route access (the backup groups in `routes/web.php`) that no permission represents. A non-admin
+cannot assign it, edit it, rename it or delete it — and cannot create a role **named** `admin` or
+rename one into `admin`, which would otherwise pick that route access up under the ceiling.
+
+Five call sites, each **after** `authorize()` and **before** validation / the transaction / the
+`try` in `delete()`: route middleware never sees a Livewire action, and an `abort(403)` inside the
+`delete()` try would be swallowed into a toast (#892).
+
+| Component | Mutator | Guard |
+|---|---|---|
+| `users/index` | `createUser()` | `assertCanAssign($actor, null, …)` |
+| `users/index` | `updateUser()` | `assertCanAssign($actor, $target, …)` |
+| `roles/index` | `createRole()` | `assertCanCreateRole($actor, $name, …)` |
+| `roles/index` | `updateRole()` | `assertCanMutateRole($actor, $role, $name, …)` |
+| `roles/index` | `delete()` | `assertCanDeleteRole($actor, $role)` |
+
+Do **not** re-gate these actions with a new `authorize('…')` name:
+`RolePermissionMutatorAuthorizationTest` scans every `authorize('…')` in `roles/index` and requires
+exactly `manage_roles`. Pinned by the `#1607` blocks in `tests/Feature/UsersManagementTest.php` and
+`tests/Feature/RolesPageTest.php`.
+
 - Users see only their own unit's data (plus sub-units via recursive CTE)
 - **`users.index` is unit-scoped (issue #849) — `manage_users` is NOT a global grant.** The whole file avoids every fail-open spelling: no `when($ids, …)`, no `! empty($ids)` — each predicate is an unconditional `whereIn` / `in_array`, so an empty scope is `0 = 1`, never "no filter".
   - `users()` filters with the **disjunction** `person.u_id ∈ scope` **OR** a `user_units` row ∈ scope. Do not copy `activity-log`'s `whereHas('person', …)` verbatim here: alone it hides accounts with no linked person (admin accounts).
