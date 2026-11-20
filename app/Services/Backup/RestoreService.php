@@ -3,12 +3,13 @@
 namespace App\Services\Backup;
 
 use App\Exceptions\BackupValidationException;
+use App\Models\User;
 use App\Support\Backup\RestoreResult;
 use App\Support\Backup\TableRegistry;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Restores a backup file (issue #1375).
+ * Restores a backup file.
  *
  * The restore is ATOMIC: the validation runs first, and the whole
  * replacement happens inside ONE database transaction. Any error — a broken
@@ -30,19 +31,37 @@ use Illuminate\Support\Facades\DB;
  * belong to a later one). The ids are staged in a transaction-local temp
  * table and the delete is an anti-join.
  *
- * ## The `users` orphan consequence (owner decision Q2-(a))
+ * ## Revoking the grants of the replaced accounts (owner decision Q2-(a))
  *
  * Replacing the `users` table replaces the ACCOUNTS, while the tables that
- * point at an account are NOT part of the backup:
+ * point at an account are NOT part of the backup and have no foreign key to
+ * `users`:
  *
- * - `model_has_roles` / `model_has_permissions` — the role and permission
- *   assignments of the old accounts (polymorphic, so no FK protects them),
- * - `personal_access_tokens` — the API tokens of the old accounts.
+ * - `model_has_roles` / `model_has_permissions` — polymorphic (`model_type` +
+ *   `model_id`), so the database cannot cascade a replaced account,
+ * - `personal_access_tokens` — polymorphic as well (`tokenable_type` +
+ *   `tokenable_id`), so no FK protects a token either.
  *
- * After a `users` restore those rows can point at an account that no longer
- * exists: the user is restored WITHOUT its roles and WITHOUT its tokens.
- * This is ACCEPTED for v1 (role re-sync is out of scope); the UI warns about
- * it before a `users` restore, and the report of the change says so too.
+ * Left alone, those rows keep the numeric id and re-bind to whoever holds
+ * that id after the restore — a former staff member's mobile token, or a
+ * token leaked from another instance, becomes a live session for a different
+ * account (an admin one, when the ids line up). A restore therefore REVOKES
+ * the grants of every account that existed BEFORE it, inside the same
+ * transaction as the replacement: every one of those ids is either
+ * re-upserted from the file or deleted by it, and neither may keep a token
+ * or a role it did not carry.
+ *
+ * The set is deliberately the PRE-restore ids, not only the ids in the file.
+ * Role re-sync stays out of scope (Q2-(a)): no role is backfilled, so the
+ * admin assigns roles again after a `users` restore, and the Flutter app has
+ * to log in again to mint a new token. Web sessions are NOT affected —
+ * `SESSION_DRIVER=file` keeps them alive independently of the token table —
+ * so "log in again" is true of the mobile app, not of the browser.
+ *
+ * `tokenable_type` and `model_type` hold the raw FQCN `App\Models\User`: no
+ * morph map is registered. If `personal_access_tokens` is ever registered in
+ * {@see TableRegistry}, this revocation has to be re-examined — restoring
+ * back-up tokens would re-open the re-binding hazard it closes.
  */
 class RestoreService
 {
@@ -120,6 +139,12 @@ class RestoreService
         return DB::transaction(function () use ($table, $source): RestoreResult {
             $this->validator->validateTable($table, $source);
 
+            if ($table === 'users') {
+                // Before the replace: the ids of the accounts that are about
+                // to be upserted or deleted are the ones whose grants go.
+                $this->revokeAccountGrants($this->existingUserIds());
+            }
+
             $rowCount = $this->replaceRows($table, $source);
             $this->resyncSequence($table);
 
@@ -153,6 +178,12 @@ class RestoreService
             $order = $this->registry->topologicalOrder();
             $available = array_flip($source->tables());
 
+            if (in_array('users', $order, true)) {
+                // Every account row is replaced by a full restore, so the
+                // snapshot has to be taken before the tables are emptied.
+                $this->revokeAccountGrants($this->existingUserIds());
+            }
+
             foreach (array_reverse($order) as $table) {
                 DB::table($table)->delete();
             }
@@ -177,6 +208,53 @@ class RestoreService
                 rowCount: $rowCount,
             );
         });
+    }
+
+    /**
+     * The ids of every account that exists BEFORE the restore.
+     *
+     * Every one of them is either re-upserted from the file or deleted by
+     * it, so its role/permission rows and its API tokens must not survive the
+     * replace: a token that keeps the same numeric id re-binds to whoever
+     * holds that id after the restore.
+     *
+     * @return list<int>
+     */
+    private function existingUserIds(): array
+    {
+        $ids = DB::table('users')->orderBy('id')->pluck('id')->all();
+
+        return array_values(array_map(static fn ($id): int => (int) $id, $ids));
+    }
+
+    /**
+     * Delete the role/permission assignments and API tokens of the given ids.
+     *
+     * HAS to run inside the restore transaction and BEFORE the rows are
+     * replaced, so any failure rolls the revocation back together with the
+     * restore.
+     *
+     * @param  list<int>  $ids
+     */
+    private function revokeAccountGrants(array $ids): void
+    {
+        if ($ids === []) {
+            return;
+        }
+
+        $morph = User::class;
+
+        DB::table('personal_access_tokens')
+            ->where('tokenable_type', $morph)
+            ->whereIn('tokenable_id', $ids)
+            ->delete();
+
+        foreach (['model_has_roles', 'model_has_permissions'] as $pivot) {
+            DB::table($pivot)
+                ->where('model_type', $morph)
+                ->whereIn('model_id', $ids)
+                ->delete();
+        }
     }
 
     /**
