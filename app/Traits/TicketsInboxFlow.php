@@ -13,6 +13,7 @@ use App\Support\ActorLabel;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 
 /**
@@ -602,7 +603,28 @@ trait TicketsInboxFlow
         // or the notification body.
         $targetUnitName = $this->resolveTargetUnitName();
 
+        // #1615: files are written BEFORE the transaction, off the row lock —
+        // the same split #1303 made in `saveTicket()`. The `finally` below
+        // deletes them on every exit path that does not commit, and that is not
+        // optional: five early `rollBack()` returns further down run before the
+        // attachment rows are written, so moving `store()` up without the
+        // cleanup would orphan a file on each of them. The loop stays inside the
+        // `try` on purpose — a failure while storing the Nth file must still
+        // delete the N-1 files already written to disk.
+        /** @var list<array{path: string, file_name: string, file_size: int}> $storedFiles */
+        $storedFiles = [];
+
+        $committed = false;
+
         try {
+            foreach ($this->completionFiles ?: [] as $file) {
+                $storedFiles[] = [
+                    'path' => $file->store('attachments', 'local'),
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize(),
+                ];
+            }
+
             DB::beginTransaction();
 
             // #1609: the pre-check above reads a row that can move before this
@@ -727,20 +749,25 @@ trait TicketsInboxFlow
                 'to_unit_id' => $this->targetUnitId ?? $ticket->unit_id,
             ]);
 
-            if ($this->completionFiles) {
-                foreach ($this->completionFiles as $file) {
-                    $path = $file->store('attachments', 'local');
-                    $ticket->attachments()->create([
-                        'user_id' => auth()->id(),
-                        'activity_id' => $newActivity->id,
-                        'file_path' => $path,
-                        'file_name' => $file->getClientOriginalName(),
-                        'file_size' => $file->getSize(),
-                    ]);
-                }
+            // #1615: the files are already on disk (see the top of this method);
+            // this loop only records them. Nothing here touches the disk, so a
+            // rollback can never strand a file on its own.
+            foreach ($storedFiles as $stored) {
+                $ticket->attachments()->create([
+                    'user_id' => auth()->id(),
+                    'activity_id' => $newActivity->id,
+                    'file_path' => $stored['path'],
+                    'file_name' => $stored['file_name'],
+                    'file_size' => $stored['file_size'],
+                ]);
             }
 
             DB::commit();
+
+            // Only a commit makes the files permanent. Set it immediately —
+            // before the UI resets below, which live inside this `try` — so a
+            // post-commit failure never deletes the files of durable rows.
+            $committed = true;
 
             // #1176: `showingTicket` became a computed — resetting it meant
             // writing to a computed and blowing up. The id reset covers the
@@ -754,9 +781,24 @@ trait TicketsInboxFlow
                 'text' => $message,
                 'icon' => 'success',
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
+            // #1615: \Throwable, not \Exception — a PHP `Error` (TypeError,
+            // ErrorException) is not an \Exception, so it escaped the old catch
+            // and left the transaction and its writes open. The level guard
+            // covers a failure that happened before `beginTransaction()` (a
+            // disk error above), where `rollBack()` would throw "There is no
+            // active transaction." and hide the original message.
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
             $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: '.$e->getMessage());
+        } finally {
+            // Every non-committing exit — the five early returns, the catch, and
+            // a future `throw` — lands here. One cleanup point, not seven.
+            if (! $committed) {
+                Storage::disk('local')->delete(array_column($storedFiles, 'path'));
+            }
         }
     }
 
