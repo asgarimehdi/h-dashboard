@@ -285,7 +285,25 @@ trait TicketsInboxFlow
         $targetUnitName = $this->resolveTargetUnitName();
 
         try {
-            DB::transaction(function () use ($ticket, $targetUnitName) {
+            $outcome = DB::transaction(function () use ($ticket, $targetUnitName): string {
+                // #1608: this write sets status = 'forwarded' and clears the
+                // assignee, which on a closed ticket resurrects it and leaves
+                // stale completed_at / archived_at behind. Archiving is one-way
+                // (#929), so the guard reads the LOCKED row — a pre-check on the
+                // bound model leaves the same check-then-act window as the API.
+                $locked = DB::select(
+                    'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                    [$ticket->id]
+                );
+
+                if ($locked === []) {
+                    return 'missing';
+                }
+
+                if ($this->isClosedTicketRow($locked[0])) {
+                    return 'closed';
+                }
+
                 $ticket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
@@ -313,13 +331,36 @@ trait TicketsInboxFlow
                     "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
                     '/tickets/inbox'
                 );
+
+                return 'ok';
             });
+
+            if ($outcome === 'missing') {
+                $this->dispatch('swal', ['title' => 'تیکت یافت نشد.', 'icon' => 'error']);
+
+                return;
+            }
+
+            if ($outcome !== 'ok') {
+                $this->dispatch('swal', ['title' => 'تیکت بسته قابل ارجاع مجدد نیست.', 'icon' => 'error']);
+
+                return;
+            }
 
             $this->dispatch('swal', ['title' => 'تیکت با موفقیت ارجاع شد', 'icon' => 'success']);
             $this->closeDetail();
         } catch (\Exception $e) {
             $this->dispatch('swal', ['title' => 'خطا در انجام عملیات', 'icon' => 'error']);
         }
+    }
+
+    /**
+     * #1608: a ticket is closed once its status is terminal or it is archived
+     * (#929: archiving is a timestamp on a `completed` row, one-way).
+     */
+    protected function isClosedTicketRow(object $row): bool
+    {
+        return in_array($row->status, ['completed', 'rejected'], true) || $row->archived_at !== null;
     }
 
     /**
@@ -530,6 +571,29 @@ trait TicketsInboxFlow
             DB::beginTransaction();
 
             if ($actionType === 'forwarded') {
+                // #1608: same locked terminal-state guard as forward(). The
+                // status check above runs on the bound model and only covers
+                // the completion branch, so a closed ticket forwarded through
+                // this modal used to be resurrected as `forwarded`.
+                $locked = DB::select(
+                    'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                    [$ticket->id]
+                );
+
+                if ($locked === []) {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'تیکت یافت نشد.');
+
+                    return;
+                }
+
+                if ($this->isClosedTicketRow($locked[0])) {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'تیکت بسته قابل ارجاع مجدد نیست.');
+
+                    return;
+                }
+
                 $ticket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
