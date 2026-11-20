@@ -2680,4 +2680,192 @@ class TicketsInboxLivewireTest extends TestCase
             ->reject(fn (array $query): bool => Str::startsWith($query['query'], ['BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT']))
             ->count();
     }
+
+    // =====================================================================
+    // #1608 — closed tickets cannot be forwarded back open
+    // =====================================================================
+
+    public function test_forward_rejects_completed_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['unit' => $unit, 'status' => 'completed', 'completed_at' => now()]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('forwardNote', 'بررسی مجدد')
+            ->call('forward')
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت بسته قابل ارجاع مجدد نیست.';
+            })
+            ->assertNotDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت با موفقیت ارجاع شد';
+            });
+
+        $ticket->refresh();
+        $this->assertSame('completed', $ticket->status);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_forward_rejects_rejected_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['unit' => $unit, 'status' => 'rejected']);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('forwardNote', 'بررسی مجدد')
+            ->call('forward')
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت بسته قابل ارجاع مجدد نیست.';
+            });
+
+        $ticket->refresh();
+        $this->assertSame('rejected', $ticket->status);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_forward_rejects_archived_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $archivedAt = now()->subDay()->startOfSecond();
+        $ticket = $this->createTicket([
+            'unit' => $unit,
+            'status' => 'completed',
+            'completed_at' => $archivedAt,
+            'archived_at' => $archivedAt,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('forwardNote', 'بررسی مجدد')
+            ->call('forward')
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت بسته قابل ارجاع مجدد نیست.';
+            });
+
+        $ticket->refresh();
+        $this->assertSame('completed', $ticket->status);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertSame($archivedAt->toDateTimeString(), $ticket->archived_at->toDateTimeString());
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_forward_rejects_ticket_closed_under_lock(): void
+    {
+        // The bound model still says `created`; a concurrent complete() landed
+        // before the lock. The guard must read the locked row, not the model.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['unit' => $unit, 'status' => 'created']);
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'completed',
+            'current_assignee_id' => null,
+            'archived_at' => null,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('forwardNote', 'بررسی مجدد')
+            ->call('forward')
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['title'] ?? '') === 'تیکت بسته قابل ارجاع مجدد نیست.';
+            });
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_submit_action_forward_rejects_completed_ticket(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['unit' => $unit, 'status' => 'completed', 'completed_at' => now()]);
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('completionNote', 'بررسی مجدد')
+            ->call('submitAction')
+            ->assertHasErrors(['completionNote']);
+
+        $ticket->refresh();
+        $this->assertSame('completed', $ticket->status);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_submit_action_forward_rejects_ticket_closed_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['unit' => $unit, 'status' => 'created']);
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'rejected',
+            'current_assignee_id' => null,
+            'archived_at' => null,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('completionNote', 'بررسی مجدد')
+            ->call('submitAction')
+            ->assertHasErrors(['completionNote']);
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
 }
