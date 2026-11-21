@@ -118,8 +118,27 @@ class Todo extends Model
         return match ($this->recurrence_rule) {
             'daily' => $base->copy()->addDays($interval),
             'weekly' => $base->copy()->addWeeks($interval),
-            'monthly' => $base->copy()->addMonths($interval),
+            'monthly' => $this->addMonthsAnchored(
+                $base,
+                $interval,
+                $this->start_at === null ? $base->day : $this->start_at->day,
+            ),
             default => $base->copy()->addDays($interval),
         };
+    }
+
+    /**
+     * گام ماهانهٔ بدون سرریز، لنگرشده روی روزِ اصلیِ تکرار (ایشو #1623).
+     *
+     * `addMonths` سرریز می‌کند (۳۱ ژانویه + ۱ ماه = ۳ مارس) و فوریه را
+     * جا می‌اندازد. اینجا روزِ `start_at` لنگر می‌ماند و فقط در ماه‌های
+     * کوتاه به آخرین روز clamp می‌شود، پس ۳۱ ژانویه → ۲۸ فوریه → ۳۱ مارس.
+     */
+    private function addMonthsAnchored(Carbon $base, int $months, int $anchorDay): Carbon
+    {
+        $next = $base->copy()->addMonthsNoOverflow($months);
+        $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
+
+        return $next;
     }
 }

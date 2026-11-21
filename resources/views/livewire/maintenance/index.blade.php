@@ -16,14 +16,21 @@ return new class extends Component
     use WithPagination;
 
     public string $title = '';
+
     public string $frequency = 'monthly';
+
     public int $recurrenceInterval = 1;
+
     public ?int $unitId = null;
 
     public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 20;
+
     public bool $showForm = false;
+
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     public bool $showHelpModal = false;
@@ -141,7 +148,7 @@ return new class extends Component
                 'frequency' => $this->frequency,
                 'recurrence_interval' => $this->recurrenceInterval,
                 'unit_id' => $this->unitId,
-                'next_due_at' => $this->calculateNextDue(),
+                'next_due_at' => $this->calculateNextDue($schedule->created_at?->day),
             ]);
 
             $this->success("«{$this->title}» بروزرسانی شد", 'با موفقیت', position: 'toast-bottom');
@@ -319,8 +326,8 @@ return new class extends Component
             $q->whereNull('unit_id')->orWhereIn('unit_id', $ids);
         });
 
-        if (!empty($this->search)) {
-            $query->where('title', 'LIKE', '%' . $this->search . '%');
+        if (! empty($this->search)) {
+            $query->where('title', 'LIKE', '%'.$this->search.'%');
         }
 
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
@@ -341,14 +348,33 @@ return new class extends Component
         ];
     }
 
-    private function calculateNextDue(): \Carbon\CarbonInterface
+    private function calculateNextDue(?int $anchorDay = null): \Carbon\CarbonInterface
     {
         return match ($this->frequency) {
             'daily' => now()->addDays($this->recurrenceInterval),
             'weekly' => now()->addWeeks($this->recurrenceInterval),
-            'monthly' => now()->addMonths($this->recurrenceInterval),
-            default => now()->addMonth(),
+            'monthly' => $this->nextMonthlyDue($this->recurrenceInterval, $anchorDay),
+            default => $this->nextMonthlyDue(1, $anchorDay),
         };
+    }
+
+    /**
+     * گام ماهانهٔ بدون سرریز برای پیش‌نمایش (ایشو #1623).
+     *
+     * مبنا `now()` است (رفتار فعلی ساخت/ویرایش)، ولی روزِ لنگر در ماه‌های
+     * کوتاه clamp می‌شود تا پیش‌نمایش با `advance()` هم‌خوان باشد و ۳۱
+     * ژانویه به ۳ مارس سرریز نکند. هنگام ویرایش، روزِ ساختِ زمان‌بندی به
+     * عنوان لنگر پاس داده می‌شود؛ هنگام ساخت، امروز لنگر است.
+     */
+    private function nextMonthlyDue(int $months, ?int $anchorDay = null): \Carbon\CarbonInterface
+    {
+        $base = now();
+        $anchorDay ??= $base->day;
+
+        $next = $base->copy()->addMonthsNoOverflow($months);
+        $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
+
+        return $next;
     }
 }; ?>
 
