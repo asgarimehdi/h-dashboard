@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\TrafficController;
+use App\Models\ZabbixDevice;
 use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +37,21 @@ class TrafficApiTest extends TestCase
         $mock = Mockery::mock(ZabbixService::class);
         $mock->shouldReceive('getInterfaceTraffic')->andReturn([['x' => 1, 'y' => 1.5]]);
         $this->app->instance(ZabbixService::class, $mock);
+
+        // #1621: item ids are only accepted from the active-device allowlist.
+        // These two rows cover every id the happy-path/error tests request:
+        // 100/200 on the first device, 250 (used as `in_item_id` in the
+        // contested-refresh test) as an out column on the second.
+        ZabbixDevice::factory()->create([
+            'type' => ZabbixDevice::TYPE_NETWORK,
+            'out_item_id' => '100',
+            'in_item_id' => '200',
+        ]);
+        ZabbixDevice::factory()->create([
+            'type' => ZabbixDevice::TYPE_NETWORK,
+            'out_item_id' => '250',
+            'in_item_id' => '251',
+        ]);
     }
 
     protected function tearDown(): void
@@ -159,6 +175,65 @@ class TrafficApiTest extends TestCase
         $oversizedId = str_repeat('1', 40);
 
         $response = $this->apiGet("/api/zabbix/traffic?out_item_id={$oversizedId}&in_item_id=200", $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['out_item_id']);
+    }
+
+    public function test_traffic_rejects_an_unregistered_out_item_id_before_touching_the_upstream(): void
+    {
+        // #1621: a well-formed numeric id that belongs to no active device is
+        // rejected during validation — the cache key is never built and the
+        // upstream is never called.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
+
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=999&in_item_id=200', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['out_item_id']);
+    }
+
+    public function test_traffic_rejects_an_unregistered_in_item_id_before_touching_the_upstream(): void
+    {
+        // The `in` side is checked independently of the `out` side.
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
+
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=100&in_item_id=999', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['in_item_id']);
+    }
+
+    public function test_traffic_rejects_item_ids_belonging_to_an_inactive_device(): void
+    {
+        // #1621 pins the `active()` scope: a deactivated device's ids are not
+        // in the allowlist, so a live tab polling them gets a diagnosable 422
+        // and recovers on its own once the device is re-activated.
+        ZabbixDevice::factory()->create([
+            'type' => ZabbixDevice::TYPE_NETWORK,
+            'out_item_id' => '300',
+            'in_item_id' => '301',
+            'is_active' => false,
+        ]);
+
+        $mock = Mockery::mock(ZabbixService::class);
+        $mock->shouldReceive('getInterfaceTraffic')->never();
+        $this->app->instance(ZabbixService::class, $mock);
+
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
+        $token = $user->createToken('test-token', $user->getApiTokenAbilities())->plainTextToken;
+
+        $response = $this->apiGet('/api/zabbix/traffic?out_item_id=300&in_item_id=200', $token);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['out_item_id']);
