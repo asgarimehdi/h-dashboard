@@ -29,6 +29,13 @@ return new class extends Component
     /** Issue #819 — see the dashboard's `emptyScope` banner for the rationale. */
     public bool $emptyScope = false;
 
+    // Issue #1632: the route gate (`role_or_permission:manage_personnel`) runs only
+    // on the full page load, never on `/livewire/update`, so it is re-checked here.
+    public function boot(): void
+    {
+        $this->authorize('manage_personnel');
+    }
+
     public function mount(): void
     {
         $this->dateFrom = Jalalian::fromCarbon(now()->subDays(30))->format('Y/m/d');

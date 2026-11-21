@@ -70,7 +70,7 @@ class ReportsPersonsLivewireTest extends TestCase
 
     public function test_renders_stats(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         Livewire::test('reports.persons')
@@ -83,7 +83,7 @@ class ReportsPersonsLivewireTest extends TestCase
 
     public function test_counts_match(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         // Seed 2 more persons into this unit (createUserWithUnit already created 1)
@@ -112,6 +112,7 @@ class ReportsPersonsLivewireTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $parent->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('manage_personnel');
         $user->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
 
         $this->createPersonInUnit($child, 'در فرزند', 'کاربر');
@@ -146,6 +147,7 @@ class ReportsPersonsLivewireTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => null,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('manage_personnel');
 
         // A whole other unit's person, which an empty-scope viewer must not see.
         $outside = Unit::create(['name' => 'خارج']);
@@ -180,6 +182,7 @@ class ReportsPersonsLivewireTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unitA->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('manage_personnel');
         $user->units()->attach($unitA->id, ['role' => 'staff', 'is_primary' => true]);
         $user->units()->attach($unitB->id, ['role' => 'staff', 'is_primary' => false]);
 
@@ -202,6 +205,7 @@ class ReportsPersonsLivewireTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unitA->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('manage_personnel');
         $user->units()->attach($unitA->id, ['role' => 'staff', 'is_primary' => true]);
 
         $this->createPersonInUnit($unitB, 'ب', 'کاربر');
@@ -228,7 +232,7 @@ class ReportsPersonsLivewireTest extends TestCase
     // per-person scaling (4 lazy queries x persons) still blows the budget.
     public function test_roster_small_query_budget(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 4; $i++) {
@@ -240,7 +244,7 @@ class ReportsPersonsLivewireTest extends TestCase
 
     public function test_roster_large_same_query_budget(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 19; $i++) {
@@ -256,7 +260,7 @@ class ReportsPersonsLivewireTest extends TestCase
         // (morphed on every render) instead of a second method request, so
         // the div must carry exactly the inline-@php aggregates — and not
         // the roster (charts never read it; ~53KB saved per update).
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 9; $i++) {

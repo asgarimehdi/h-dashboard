@@ -45,6 +45,13 @@ return new class extends Component
         'unitSelected' => 'onUnitSelected',
     ];
 
+    // Issue #1632: the route gate (`role_or_permission:map`) runs only
+    // on the full page load, never on `/livewire/update`, so it is re-checked here.
+    public function boot(): void
+    {
+        $this->authorize('map');
+    }
+
     public function mount()
     {
         $this->diseaseFrom = \Morilog\Jalali\Jalalian::now()->getYear().'/01/01';

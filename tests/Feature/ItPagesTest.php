@@ -42,6 +42,9 @@ test('guest is redirected from IT pages', function () {
 });
 
 test('authenticated user can load IT pages', function () {
+    // /it/networks and /it/wireless are gated by `role_or_permission:map|bw`
+    // (routes/web.php); the components re-check that gate on every update (#1632).
+    $this->user->givePermissionTo('map');
     $this->actingAs($this->user);
 
     Livewire::test('it/networks')->assertStatus(200);
