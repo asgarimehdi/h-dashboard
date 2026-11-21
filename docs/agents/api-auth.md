@@ -37,7 +37,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 |---|---|---|
 | `/api/login`, `/api/user`, `/api/logout` | **none** — `POST /api/login` is public (no `auth:sanctum`); `GET /api/user` + `POST /api/logout` are `auth:sanctum` only (self-scoped; logout by #1071) | — |
 | `/api/units` | `ability:units:read` + `role_or_permission:organization` | `abilities:units:write` + `role_or_permission:organization` |
-| `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` + `role_or_permission:map\|bw` | — |
+| `/api/zabbix/traffic`, `/api/zabbix/multi-latest` | `ability:traffic:read` + `role_or_permission:map\|bw`; item IDs must also be registered on an active `zabbix_devices` row (#1621, 422 otherwise) | — |
 | `/api/hardware/*` | `ability:hardware:read` + `role_or_permission:manage_hardware` | `abilities:hardware:write` + `role_or_permission:manage_hardware` |
 | `/api/tickets*` (+ comments) | `ability:tickets:read` + `role_or_permission:view_assigned_tickets\|view_all_tickets` | `abilities:tickets:write` + per-route `permission:create_ticket` / `permission:manage_unit_tickets` — **`tickets:read` is NOT required for writes** (#895); reads and writes are two independent groups |
 | `/api/reports/*` | `ability:reports:read` + `role_or_permission:manage_personnel` | — |

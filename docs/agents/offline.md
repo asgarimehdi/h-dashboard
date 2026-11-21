@@ -53,7 +53,7 @@ row carries `file:line` and local/external, never a general description.
 | 11 | `resources/views/livewire/maps/route.blade.php:14,54,63,76` | JS + fetch | Leaflet/LRM local; OSRM `config('map.routing_url')`; dead OSM literal at `:13` | local/internal (OSM literal unused) | `ROUTING_SERVER_*` |
 | 12 | `resources/views/livewire/maps/route2.blade.php:19,21,91,98,111` | JS + fetch | Leaflet/LRM local; geocoding `config('map.geocoding_url')`; OSRM; dead OSM literal at `:19` | local/internal (OSM literal unused) | `GEOCODING_SERVER_*`, `ROUTING_SERVER_*` |
 | 13 | `resources/views/livewire/map/map-dashboard.blade.php:155` | fetch | `/api/gis/*` (same origin) | local | — |
-| 14 | `resources/js/zabbix-gauges.js:281` (traffic), `:385` (multi-latest) | fetch | `/api/zabbix/*` (same origin) | local | — |
+| 14 | `resources/js/zabbix-gauges.js:291` (traffic), `:415` (multi-latest) | fetch | `/api/zabbix/*` (same origin) | local | — |
 | 15 | `resources/views/livewire/todo/todo.blade.php:599` | JS | `js/other/full-calendar.min.js` | local | — |
 | 16 | `resources/views/livewire/dashboard.blade.php:659-660`, `reports/advanced.blade.php:620-621`, `reports/{persons,units,todos}.blade.php`, `hr/dashboard.blade.php:172`, `it/network-traffic-chart.blade.php:55` | JS | `js/chart/highcharts.js` (+ `accessibility.js` only on dashboard/advanced) | local | — |
 | 17 | `resources/views/op/index.php:525-527` | CDN scripts | `cdnjs.cloudflare.com` → React 18 / ReactDOM 18 / axios | **external — `/op`, local-only** | — (needs a code change; separate issue) |

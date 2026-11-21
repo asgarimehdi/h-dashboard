@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ZabbixDevice;
 use App\Services\Zabbix\ZabbixClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 use Throwable;
 
@@ -19,9 +21,16 @@ class TrafficController extends Controller
         // Zabbix item ids are numeric strings (nonNumeric=0 across the five
         // zabbix_devices id columns), so constrain them here — validation runs
         // before any cache, lock or upstream access.
+        //
+        // #1621: the ids must also belong to an active registered device. The
+        // check lives in the same validate() call so an unregistered id can
+        // never mint a cache key or reach the upstream. `Rule::in([])` rejects
+        // everything, so an empty registry is fail-closed, not fail-open.
+        $allowedItemIds = ZabbixDevice::registeredItemIds();
+
         $validated = $request->validate([
-            'out_item_id' => ['required', 'string', 'max:32', 'regex:/^\d+$/'],
-            'in_item_id' => ['required', 'string', 'max:32', 'regex:/^\d+$/'],
+            'out_item_id' => ['required', 'string', 'max:32', 'regex:/^\d+$/', Rule::in($allowedItemIds)],
+            'in_item_id' => ['required', 'string', 'max:32', 'regex:/^\d+$/', Rule::in($allowedItemIds)],
             'duration' => 'nullable|integer|min:60|max:86400',
         ]);
 
