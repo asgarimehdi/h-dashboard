@@ -359,6 +359,157 @@ class TicketApiTest extends TestCase
             ->assertJson(['data' => ['subject' => 'Updated', 'content' => 'Body']]);
     }
 
+    /**
+     * #1633: a completed ticket is immutable — its subject/content/priority/
+     * deadline cannot be rewritten after the work is done and audited.
+     */
+    public function test_update_completed_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $completedAt = now()->subDay()->startOfSecond();
+        $ticket = $this->createAssignedTicket($user, $unit, 'completed', ['completed_at' => $completedAt]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Rewritten',
+            'content' => 'Rewritten body',
+            'priority' => 'urgent',
+            'deadline' => now()->addWeek()->toDateString(),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be edited.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('Race', $fresh->subject);
+        $this->assertSame('Body', $fresh->content);
+        $this->assertSame('normal', $fresh->priority);
+        $this->assertNull($fresh->deadline);
+        $this->assertSame('completed', $fresh->status);
+        $this->assertSame($completedAt->toDateTimeString(), $fresh->completed_at->toDateTimeString());
+    }
+
+    public function test_update_rejected_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'rejected');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Rewritten',
+            'content' => 'Rewritten body',
+            'priority' => 'urgent',
+            'deadline' => now()->addWeek()->toDateString(),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be edited.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('Race', $fresh->subject);
+        $this->assertSame('normal', $fresh->priority);
+        $this->assertSame('rejected', $fresh->status);
+        $this->assertNull($fresh->completed_at);
+    }
+
+    public function test_update_archived_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $at = now()->subDay()->startOfSecond();
+        $ticket = $this->createAssignedTicket($user, $unit, 'completed', [
+            'completed_at' => $at,
+            'archived_at' => $at,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Rewritten',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be edited.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('Race', $fresh->subject);
+        $this->assertSame('completed', $fresh->status);
+        $this->assertSame($at->toDateTimeString(), $fresh->completed_at->toDateTimeString());
+        $this->assertSame($at->toDateTimeString(), $fresh->archived_at->toDateTimeString());
+    }
+
+    public function test_update_open_tickets_remains_editable(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $acceptedAt = now()->subDay()->startOfSecond();
+
+        foreach (['created', 'forwarded', 'accepted'] as $status) {
+            $ticket = $this->createAssignedTicket($user, $unit, $status, [
+                'accepted_at' => $status === 'accepted' ? $acceptedAt : null,
+            ]);
+
+            $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+            $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+                'subject' => "Updated {$status}",
+            ], $token);
+
+            $response->assertStatus(200)
+                ->assertJson(['data' => ['subject' => "Updated {$status}", 'status' => $status]]);
+
+            $this->assertDatabaseHas('tickets', [
+                'id' => $ticket->id,
+                'subject' => "Updated {$status}",
+                'status' => $status,
+            ]);
+        }
+    }
+
+    public function test_update_loses_race_when_ticket_closed_under_lock(): void
+    {
+        // A concurrent complete() lands between the controller's read and the
+        // write. A pre-transaction status check would miss it; the guard must
+        // run on the locked row.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'completed',
+            'current_assignee_id' => $user->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Hijacked',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be edited.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('Race', $fresh->subject);
+        $this->assertSame('created', $fresh->status);
+    }
+
+    public function test_update_loses_race_when_row_vanished_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow(null);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Hijacked',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Ticket no longer exists.']);
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('Race', $fresh->subject);
+        $this->assertSame('created', $fresh->status);
+    }
+
     public function test_user_can_delete_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');

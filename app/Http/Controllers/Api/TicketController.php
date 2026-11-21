@@ -122,7 +122,18 @@ class TicketController extends Controller
             'deadline' => 'nullable|date',
         ]);
 
-        $ticket->update($validated);
+        // #1633: a closed ticket is immutable. Same locked-row guard as assign()
+        // (#1608) — a pre-check on the bound model would leave the same
+        // check-then-act window a concurrent complete()/reject() can slip through.
+        $transition = $this->atomicTransition($ticket, [], $validated, rejectClosed: true);
+
+        if ($transition === self::TRANSITION_MISSING) {
+            return response()->json(['message' => 'Ticket no longer exists.'], 422);
+        }
+
+        if ($transition !== self::TRANSITION_OK) {
+            return response()->json(['message' => 'Closed tickets cannot be edited.'], 422);
+        }
 
         return response()->json([
             'success' => true,
