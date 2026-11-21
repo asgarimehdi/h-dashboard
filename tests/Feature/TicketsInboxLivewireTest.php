@@ -1664,6 +1664,104 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertDatabaseMissing('task_activities', ['ticket_id' => $outOfScope->id, 'action' => 'forwarded']);
     }
 
+    // =====================================================================
+    // #1620 — bulk inbox actions must not resurrect a REJECTED ticket:
+    // `rejected` is terminal for every other path (`isClosedTicketRow()`), so
+    // the bulk id-resolution filter must mirror that definition.
+    // =====================================================================
+
+    public function test_bulk_complete_skips_rejected_ticket(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $open = $this->createTicket(['status' => 'created', 'subject' => 'تیکت باز']);
+        $rejected = $this->createTicket(['status' => 'rejected', 'subject' => 'تیکت ردشده']);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$open->id, $rejected->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return str_contains($title, '1 تیکت') && ! str_contains($title, '2 تیکت');
+            });
+
+        $this->assertSame('completed', $open->fresh()->status);
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $open->id, 'action' => 'completed']);
+
+        $rejected->refresh();
+        $this->assertSame('rejected', $rejected->status);
+        $this->assertNull($rejected->completed_at);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $rejected->id, 'action' => 'completed']);
+    }
+
+    public function test_bulk_forward_skips_rejected_ticket_and_preserves_assignee(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $open = $this->createTicket(['status' => 'created', 'subject' => 'تیکت باز']);
+        $rejected = $this->createTicket([
+            'status' => 'rejected',
+            'subject' => 'تیکت ردشده',
+            'current_assignee_id' => $user->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$open->id, $rejected->id])
+            ->set('bulkAction', 'forward')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return str_contains($title, '1 تیکت') && ! str_contains($title, '2 تیکت');
+            });
+
+        $this->assertSame('forwarded', $open->fresh()->status);
+
+        $rejected->refresh();
+        $this->assertSame('rejected', $rejected->status);
+        $this->assertSame($user->id, $rejected->current_assignee_id);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $rejected->id, 'action' => 'forwarded']);
+    }
+
+    public function test_select_all_with_all_filter_skips_rejected_and_archived_tickets(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $open = $this->createTicket(['status' => 'created', 'subject' => 'تیکت باز']);
+        $rejected = $this->createTicket(['status' => 'rejected', 'subject' => 'تیکت ردشده']);
+        // The terminal-state definition (`isClosedTicketRow()`) also treats a
+        // non-null `archived_at` as closed; the bulk filter mirrors it.
+        $archived = $this->createTicket([
+            'status' => 'created',
+            'subject' => 'تیکت آرشیوشده',
+            'archived_at' => now(),
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('statusFilter', 'all')
+            ->call('toggleSelectAll')
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return str_contains($title, '1 تیکت') && ! str_contains($title, '3 تیکت');
+            });
+
+        $this->assertSame('completed', $open->fresh()->status);
+        $this->assertSame('rejected', $rejected->fresh()->status);
+        $this->assertSame('created', $archived->fresh()->status);
+
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $open->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $rejected->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $archived->id, 'action' => 'completed']);
+    }
+
     /**
      * #1408: count the `count(*) as "aggregate" from "tickets"` queries a
      * callback runs. The paginator emits exactly one per render, so the delta
