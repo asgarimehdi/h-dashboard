@@ -8,12 +8,14 @@ use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(GenerateRecurringTodos::class);
 
 class GenerateRecurringTodosCommandTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -330,5 +332,60 @@ class GenerateRecurringTodosCommandTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('todos', 1);
+    }
+
+    /**
+     * Issue #1623: a monthly template anchored on the 31st must generate the
+     * February instance (clamped to the 28th). The old addMonths() overflowed
+     * to March 3, so the February run found no reached occurrence and skipped
+     * the month entirely.
+     */
+    public function test_monthly_template_on_31st_generates_february_instance(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-02-28 08:00:00'));
+
+        $template = Todo::create([
+            'title' => 'Monthly report',
+            'start_at' => '2026-01-31 08:00:00',
+            'is_completed' => false,
+            'recurrence_rule' => 'monthly',
+            'recurrence_interval' => 1,
+            'last_generated_at' => '2026-01-31 08:00:00',
+        ]);
+
+        $this->artisan('todos:generate-recurring')
+            ->expectsOutputToContain('Created 1 new todo instance(s)')
+            ->assertExitCode(0);
+
+        $instance = Todo::where('recurrence_rule', 'none')->firstOrFail();
+        $this->assertSame('2026-02-28', $instance->start_at->toDateString());
+
+        $template->refresh();
+        $this->assertSame('2026-02-28', $template->last_generated_at->toDateString());
+    }
+
+    /**
+     * Issue #1623: the day-of-month anchor survives the short month — the
+     * March run lands back on the 31st instead of drifting to the 28th.
+     */
+    public function test_monthly_template_recovers_the_31st_after_february(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-31 08:00:00'));
+
+        Todo::create([
+            'title' => 'Monthly report',
+            'start_at' => '2026-01-31 08:00:00',
+            'is_completed' => false,
+            'recurrence_rule' => 'monthly',
+            'recurrence_interval' => 1,
+            'last_generated_at' => '2026-02-28 08:00:00',
+        ]);
+
+        $this->artisan('todos:generate-recurring')
+            ->expectsOutputToContain('Created 1 new todo instance(s)')
+            ->assertExitCode(0);
+
+        $instance = Todo::where('recurrence_rule', 'none')->firstOrFail();
+        $this->assertSame('2026-03-31', $instance->start_at->toDateString());
     }
 }

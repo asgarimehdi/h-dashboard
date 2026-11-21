@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\MaintenanceSchedule;
 use App\Models\Ticket;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -149,13 +150,39 @@ class GenerateDueMaintenance extends Command
         $next = match ($schedule->frequency) {
             'daily' => now()->addDays($interval),
             'weekly' => now()->addWeeks($interval),
-            'monthly' => now()->addMonths($interval),
-            default => now()->addMonths($interval),
+            // 'monthly' — and the legacy default, which has always stepped by
+            // months — use the anchored, non-overflowing step below.
+            default => $this->nextMonthlyDue($schedule, $interval),
         };
 
         $schedule->update([
             'last_generated_at' => now(),
             'next_due_at' => $next,
         ]);
+    }
+
+    /**
+     * گام ماهانهٔ بدون سرریز، لنگرشده روی روزِ ساختِ زمان‌بندی (ایشو #1623).
+     *
+     * `MaintenanceSchedule` ستون `start_at` ندارد؛ تنها روزِ پایدارِ ساخت
+     * `created_at->day` است (تصمیم مالک). مبنا سررسیدِ فعلی است نه `now()`،
+     * تا اجرای دیرهنگام روزِ اجرا را روی سررسید بعدی تحمیل نکند. حلقهٔ
+     * catch-up چند ماهِ ازدست‌رفته را جبران می‌کند تا `next_due_at` در گذشته
+     * نماند و زمان‌بندی برای همیشه سررسید نماند.
+     */
+    private function nextMonthlyDue(MaintenanceSchedule $schedule, int $interval): Carbon
+    {
+        $anchorDay = $schedule->created_at === null ? now()->day : $schedule->created_at->day;
+
+        $next = ($schedule->next_due_at ?? now())->copy()->addMonthsNoOverflow($interval);
+        $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
+
+        $guard = 0;
+        while ($next->lessThanOrEqualTo(now()) && $guard++ < 120) {
+            $next = $next->copy()->addMonthsNoOverflow($interval);
+            $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
+        }
+
+        return $next;
     }
 }

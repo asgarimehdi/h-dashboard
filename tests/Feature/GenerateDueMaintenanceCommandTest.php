@@ -7,15 +7,24 @@ use App\Models\MaintenanceSchedule;
 use App\Models\Ticket;
 use App\Models\Unit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
+use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(GenerateDueMaintenance::class);
 
 class GenerateDueMaintenanceCommandTest extends TestCase
 {
+    use InteractsWithTestSetup;
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
 
     public function test_due_schedule_creates_ticket_and_bumps_next_due(): void
     {
@@ -482,5 +491,85 @@ PHP;
         // `normal` is the honest mapping: matters more than `low`, less than
         // a person's `urgent` request — and it is a bucket every report has.
         $this->assertSame('normal', $ticket->priority);
+    }
+
+    /**
+     * Issue #1623: a monthly schedule created on the 31st must advance to
+     * February 28, not overflow to March 3 and skip February entirely.
+     */
+    public function test_monthly_schedule_advanced_on_31st_sets_next_due_to_feb_28(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-01-31 08:00:00'));
+
+        $unit = Unit::create(['name' => 'Ward K']);
+        $schedule = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Month-end inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => '2026-01-31 08:00:00',
+        ]);
+
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Created 1 maintenance ticket(s)')
+            ->assertExitCode(0);
+
+        $schedule->refresh();
+        $this->assertSame('2026-02-28', $schedule->next_due_at?->toDateString());
+    }
+
+    /**
+     * Issue #1623: the step is anchored on the schedule's creation day, so a
+     * late run (due Jan 31, executed Feb 2) still lands on February 28 instead
+     * of imposing the run day (March 2) on the next due date.
+     */
+    public function test_monthly_schedule_late_run_anchors_on_creation_not_now(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-02-02 08:00:00'));
+
+        $unit = Unit::create(['name' => 'Ward L']);
+        $schedule = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Late month-end inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => '2026-01-31 08:00:00',
+        ]);
+        // The schedule was created on the 31st; only the run is late.
+        DB::table('maintenance_schedules')
+            ->where('id', $schedule->id)
+            ->update(['created_at' => '2026-01-31 08:00:00']);
+
+        $this->artisan('maintenance:generate-due')->assertExitCode(0);
+
+        $schedule->refresh();
+        $this->assertSame('2026-02-28', $schedule->next_due_at?->toDateString());
+    }
+
+    /**
+     * Issue #1623: a run that missed several months must catch up to the first
+     * future occurrence, keeping the 31st anchor (Feb 28 → Mar 31 → Apr 30 →
+     * May 31) instead of leaving the schedule due forever.
+     */
+    public function test_monthly_schedule_catches_up_missed_months(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-01 08:00:00'));
+
+        $unit = Unit::create(['name' => 'Ward M']);
+        $schedule = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Long-overdue inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => '2026-01-31 08:00:00',
+        ]);
+        DB::table('maintenance_schedules')
+            ->where('id', $schedule->id)
+            ->update(['created_at' => '2026-01-31 08:00:00']);
+
+        $this->artisan('maintenance:generate-due')->assertExitCode(0);
+
+        $schedule->refresh();
+        $this->assertSame('2026-05-31', $schedule->next_due_at?->toDateString());
     }
 }
