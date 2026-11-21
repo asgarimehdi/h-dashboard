@@ -9,6 +9,7 @@ use App\Models\Todo;
 use App\Rules\PerPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class TodoController extends Controller
 {
@@ -142,7 +143,27 @@ class TodoController extends Controller
             return response()->json(['message' => 'Unauthorized to modify this todo.'], 403);
         }
 
-        $todo->update(['is_completed' => ! $todo->is_completed]);
+        // #1634: read-then-write lost updates — two concurrent toggles read the
+        // same value and both write its inverse, so one toggle vanishes. Same
+        // shape as TicketController::atomicTransition() (#1608): lock the row,
+        // derive the new value from the LOCKED read, write inside the same
+        // transaction. The write goes through the model so `Todo::updated` still
+        // fires (AppServiceProvider invalidates report_todos + dashboard).
+        $toggled = DB::transaction(function () use ($todo): bool {
+            $rows = DB::select('SELECT id, is_completed FROM todos WHERE id = ? FOR UPDATE', [$todo->id]);
+
+            if ($rows === []) {
+                return false;
+            }
+
+            $todo->update(['is_completed' => ! (bool) $rows[0]->is_completed]);
+
+            return true;
+        });
+
+        if (! $toggled) {
+            return response()->json(['message' => 'Todo no longer exists.'], 422);
+        }
 
         return response()->json([
             'success' => true,
