@@ -124,6 +124,15 @@ new class extends Component
 
     public function saveTicket(): void
     {
+        // Issue #892: the route gate (`role_or_permission:create_ticket`,
+        // routes/web.php:174) runs once, on the page load. Livewire does NOT
+        // re-apply route middleware on POST /livewire/update, so without this
+        // a session that lost `create_ticket` while the tab stayed open could
+        // still create a ticket — plus its linked todo, attachments and the
+        // unit-wide notification fan-out below.
+        // It must come FIRST, outside the `try` that starts at :174.
+        $this->authorize('create_ticket');
+
         $this->validate([
             'unit_id' => [
                 'required',
