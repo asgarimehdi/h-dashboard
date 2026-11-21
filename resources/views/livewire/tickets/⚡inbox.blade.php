@@ -296,12 +296,18 @@ new class extends Component
             return;
         }
 
-        // Issue #818: the bulk `complete` branch closes tickets in bulk, which is
-        // the same state change the single-ticket path needed
-        // manage_unit_tickets for. `forward` stays open to the route gate
-        // because it does not move the ticket out of its unit (its own latent
-        // issue — see #818 "Out of scope").
-        if ($this->bulkAction === 'complete') {
+        // Issue #818 / #1624: the bulk `complete` branch closes tickets in
+        // bulk, which is the same state change the single-ticket path needed
+        // `manage_unit_tickets` for. The bulk `forward` branch unassigns
+        // tickets (`current_assignee_id = null`) in bulk — the same state
+        // change the single-ticket `forward()` gates — so it needs the same
+        // permission. The UI hides both buttons behind
+        // `@can('manage_unit_tickets')`, but that is presentation only:
+        // Livewire mutators are reachable via `POST /livewire/update`, where
+        // the route gate does not run. Only the two named branches are gated:
+        // an unknown `bulkAction` still falls through to the no-op toast
+        // (`test_execute_bulk_action_unknown_action`).
+        if ($this->bulkAction === 'complete' || $this->bulkAction === 'forward') {
             $this->authorizeMutation();
         }
 
