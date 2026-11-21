@@ -81,6 +81,12 @@ return new class extends Component {
 
     public function saveBoundary($geojsonData): void
     {
+        // Issue #1626 (same class as #975): the route gate
+        // (`role_or_permission:organization`) does not re-run on
+        // `/livewire/update`. Permission first, scope second — they answer
+        // different questions and neither substitutes for the other.
+        $this->authorize('organization');
+
         // #817: scope-check before touching the boundary rows.
         if (! $this->assertUnitInScope($this->unitId)) {
             return;
@@ -119,6 +125,11 @@ return new class extends Component {
 
     public function deleteBoundary(): void
     {
+        // Issue #1626 (same class as #975): the route gate
+        // (`role_or_permission:organization`) does not re-run on
+        // `/livewire/update`. Permission first, scope second.
+        $this->authorize('organization');
+
         // #817: scope-check before nulling the FK or deleting geometry.
         if (! $this->assertUnitInScope($this->unitId)) {
             return;

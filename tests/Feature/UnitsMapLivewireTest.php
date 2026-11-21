@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -436,6 +437,67 @@ class UnitsMapLivewireTest extends TestCase
         // Foreign boundary row untouched.
         $this->assertDatabaseHas('boundaries', ['id' => $boundaryId]);
         $this->assertEquals($boundaryId, $outsider->fresh()->boundary_id);
+    }
+
+    // ==================== #1626: revoked permission is refused, not just scope ====================
+
+    public function test_save_boundary_forbidden_after_organization_revoked(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        // 1. Mount while the permission is still held.
+        $component = Livewire::test('units.map', ['id' => $unit->id])->assertStatus(200);
+
+        // 2. Seed the row the mutator touches, BEFORE the revoke. This also
+        //    proves the pre-revoke write works: a typo in the permission name
+        //    would fail here instead of letting the negative half pass vacuously.
+        $component->call('saveBoundary', $this->makePolygonGeoJson());
+        $unit->refresh();
+        $boundaryId = $unit->boundary_id;
+        $this->assertNotNull($boundaryId, 'setup: organization holder could not save');
+
+        $wkt = fn (): string => DB::selectOne(
+            'SELECT ST_AsText(boundary) AS wkt FROM boundaries WHERE id = ?', [$boundaryId]
+        )->wkt;
+        $before = $wkt();
+
+        // 3. Revoke mid-session and flush Spatie's cache (#975 contract).
+        $user->revokePermissionTo('organization');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        // 4. Scope still passes — proving the 403 below comes from
+        //    authorization, not from the #817 scope predicate.
+        $component->call('loadUnit')->assertSet('unit.id', $unit->id);
+
+        // 5. Same mounted instance, different geometry.
+        $component->call('saveBoundary', $this->makePolygonGeoJson(49.0, 37.0))->assertForbidden();
+
+        $this->assertSame($before, $wkt(), 'boundary geometry changed after the permission was revoked');
+        $this->assertEquals($boundaryId, $unit->fresh()->boundary_id);
+    }
+
+    public function test_delete_boundary_forbidden_after_organization_revoked(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $component = Livewire::test('units.map', ['id' => $unit->id])->assertStatus(200);
+        $component->call('saveBoundary', $this->makePolygonGeoJson());
+
+        $unit->refresh();
+        $boundaryId = $unit->boundary_id;
+        $this->assertNotNull($boundaryId, 'setup: organization holder could not save');
+
+        $user->revokePermissionTo('organization');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $component->call('loadUnit')->assertSet('unit.id', $unit->id);
+
+        $component->call('deleteBoundary')->assertForbidden();
+
+        $this->assertDatabaseHas('boundaries', ['id' => $boundaryId]);
+        $this->assertEquals($boundaryId, $unit->fresh()->boundary_id);
     }
 
     // ==================== #1419: boundary writes roll the `maps` namespace ====================
