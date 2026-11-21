@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -303,6 +304,46 @@ class TicketsCreateLivewireTest extends TestCase
             ->assertSet('content', '')
             ->assertSet('unit_id', null)
             ->assertSet('search', '');
+    }
+
+    public function test_save_ticket_is_refused_after_create_ticket_is_revoked(): void
+    {
+        // Issue #892/#975: the route gate is not re-applied on
+        // POST /livewire/update, so the mutator must re-check it. This test
+        // mounts WHILE the permission is held — the snapshot then exists — and
+        // revokes afterwards, reproducing an open tab whose permission was
+        // revoked mid-session.
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket']);
+        $target = $this->createTargetUnit('واحد مقصد لغو مجوز');
+
+        // Mount FIRST, while still authorized — this is the load-bearing part.
+        $component = Livewire::actingAs($user)->test('tickets.create')->assertOk();
+
+        $user->revokePermissionTo('create_ticket');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $this->assertFalse($user->fresh()->can('create_ticket'));
+
+        $ticketsBefore = Ticket::count();
+        $todosBefore = Todo::count();
+        $notificationsBefore = Notification::count();
+        $attachmentsBefore = Attachment::count();
+
+        $component
+            ->set('unit_id', $target->id)
+            ->set('subject', 'تیکت پس از لغو مجوز')
+            ->set('content', 'محتوای کافی برای اعتبارسنجی')
+            ->set('priority', 'normal')
+            ->call('saveTicket')
+            ->assertForbidden();
+
+        // The row assertions are load-bearing: a validation failure would also
+        // write nothing, so assertForbidden() + "nothing written" together prove
+        // the refusal came from authorization, not from the validator.
+        $this->assertSame($ticketsBefore, Ticket::count());
+        $this->assertSame($todosBefore, Todo::count());
+        $this->assertSame($notificationsBefore, Notification::count());
+        $this->assertSame($attachmentsBefore, Attachment::count());
+        $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت پس از لغو مجوز']);
     }
 
     public function test_auto_creates_todo(): void
