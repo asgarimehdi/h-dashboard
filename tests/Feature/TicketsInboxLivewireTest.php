@@ -1127,6 +1127,68 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertSame('accepted', $ticket->status);
     }
 
+    /**
+     * #1624: the bulk `forward` branch unassigns tickets in bulk — the same
+     * state change the single-ticket `forward()` gates on
+     * `manage_unit_tickets`. An expert (view-only inbox) must not be able to
+     * reach it through the Livewire mutator.
+     */
+    public function test_bulk_forward_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $this->assertFalse($user->can('manage_unit_tickets'));
+
+        $ticket = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'forward')
+            ->call('executeBulkAction')
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+        $this->assertSame($user->id, $ticket->current_assignee_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    /**
+     * #1624: the select-all expansion is the same mutator, so the gate must
+     * close that path too — no ticket in scope may be forwarded.
+     */
+    public function test_bulk_forward_via_select_all_without_permission_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $this->assertFalse($user->can('manage_unit_tickets'));
+
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        Livewire::test('tickets.inbox')
+            ->call('toggleSelectAll')
+            ->assertSet('selectAll', true)
+            ->set('bulkAction', 'forward')
+            ->call('executeBulkAction')
+            ->assertForbidden();
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertNull($ticket->current_assignee_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
     public function test_forward_to_unit_that_cannot_receive_tickets_is_rejected(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
