@@ -46,6 +46,13 @@ return new class extends Component
 
     public bool $showHelpModal = false;
 
+    // Issue #1632: route gate `role_or_permission:manage_org_chart|view_hr_dashboard` (ANY) does not run on
+    // `/livewire/update`; mirror it with canAny here.
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->canAny(['manage_org_chart', 'view_hr_dashboard']), 403);
+    }
+
     public function mount(): void
     {
         $this->loadPersonCounts();

@@ -307,7 +307,7 @@ class CacheVersionMigration1348Test extends TestCase
 
     public function test_advanced_report_units_refresh_after_unit_rename(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
@@ -333,7 +333,7 @@ class CacheVersionMigration1348Test extends TestCase
 
     public function test_no_boundary_map_refresh_after_region_rename(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $region = Region::create(['name' => 'OldRegion', 'type' => 'province']);
@@ -360,7 +360,7 @@ class CacheVersionMigration1348Test extends TestCase
 
     public function test_unit_types_list_refresh_after_rename(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $type = UnitType::create(['name' => 'OldTypeName']);

@@ -57,7 +57,7 @@ class ReportsDailyWindowTest extends TestCase
 
     public function test_dashboard_ticket_chart_shows_the_most_recent_days_not_the_oldest(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // 40 distinct days: more than the 30-day window, so a LIMIT applied
@@ -83,7 +83,7 @@ class ReportsDailyWindowTest extends TestCase
 
     public function test_dashboard_ticket_chart_keeps_ascending_display_order(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $this->createTicketAt($user, 'OLD', now()->subDays(5)->startOfDay());
@@ -107,7 +107,7 @@ class ReportsDailyWindowTest extends TestCase
 
     public function test_dashboard_ticket_chart_includes_days_without_tickets_as_zero(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $this->createTicketAt($user, 'ONE', now()->startOfDay());
@@ -123,7 +123,7 @@ class ReportsDailyWindowTest extends TestCase
 
     public function test_reports_todos_by_day_fills_empty_days_over_the_chosen_range(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $from = now()->subDays(6);
@@ -171,7 +171,7 @@ class ReportsDailyWindowTest extends TestCase
      */
     public function test_reports_todos_by_day_axis_follows_a_past_range(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $from = now()->subDays(40);
@@ -198,7 +198,7 @@ class ReportsDailyWindowTest extends TestCase
 
     public function test_reports_advanced_by_day_fills_empty_days_over_the_chosen_range(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // One ticket *outside* the picked range. The old test put its only ticket
@@ -237,7 +237,7 @@ class ReportsDailyWindowTest extends TestCase
      */
     public function test_reports_advanced_by_day_counts_a_ticket_inside_a_past_range(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $inRange = now()->subDays(37)->startOfDay();

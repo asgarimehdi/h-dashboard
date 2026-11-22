@@ -15,6 +15,13 @@ return new class extends Component {
 
     public bool $showHelpModal = false;
 
+    // Issue #1632: route gate `role_or_permission:map|bw` (ANY) does not run on
+    // `/livewire/update`; mirror it with canAny here.
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->canAny(['map', 'bw']), 403);
+    }
+
     public function mount(): void
     {
         $this->networkItems = $this->loadNetworkItems();

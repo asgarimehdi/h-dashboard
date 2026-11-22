@@ -25,6 +25,13 @@ return new class extends Component
 
     public int $directUserCount = 0;
 
+    // Issue #1632: the route gate (`role_or_permission:organization`) runs only
+    // on the full page load, never on `/livewire/update`, so it is re-checked here.
+    public function boot(): void
+    {
+        $this->authorize('organization');
+    }
+
     public function mount(): void
     {
         $this->loadData();

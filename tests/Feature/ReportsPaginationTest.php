@@ -105,7 +105,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_persons_roster_is_capped_to_one_page(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         // createUserWithUnit already put one person in the unit.
@@ -129,7 +129,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_persons_aggregates_still_cover_the_whole_set(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 30; $i++) {
@@ -158,7 +158,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_persons_second_page_returns_the_next_rows(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 30; $i++) {
@@ -181,7 +181,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_persons_filter_change_returns_to_page_one(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 30; $i++) {
@@ -211,7 +211,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_persons_roster_query_is_bounded(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 0; $i < 30; $i++) {
@@ -247,6 +247,7 @@ class ReportsPaginationTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unitA->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => bcrypt('password')]);
+        $user->givePermissionTo('manage_personnel');
         $user->units()->attach($unitA->id, ['role' => 'staff', 'is_primary' => true]);
         $user->units()->attach($unitB->id, ['role' => 'staff', 'is_primary' => false]);
 
@@ -267,7 +268,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_todos_list_is_capped_to_one_page(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 1; $i <= 30; $i++) {
@@ -295,7 +296,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_todos_list_query_is_bounded(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 1; $i <= 30; $i++) {
@@ -321,7 +322,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_units_inventory_is_capped_to_one_page(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         // Children of the user's unit: the scope CTE includes descendants.
@@ -347,7 +348,7 @@ class ReportsPaginationTest extends TestCase
 
     public function test_units_inventory_query_is_bounded(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingWithUnit($user);
 
         for ($i = 1; $i <= 30; $i++) {

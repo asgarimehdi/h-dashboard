@@ -27,6 +27,13 @@ return new class extends Component
 
     public ?int $showOnlyNoBoundary = null;
 
+    // Issue #1632: the route gate (`role_or_permission:manage_personnel`) runs only
+    // on the full page load, never on `/livewire/update`, so it is re-checked here.
+    public function boot(): void
+    {
+        $this->authorize('manage_personnel');
+    }
+
     public function mount(): void
     {
         $this->loadUnitTypes();

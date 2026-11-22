@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\OrgChartController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ class HrLivewireTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(PermissionSeeder::class);
         $this->seedLookupTables();
         Session::flush();
 
@@ -46,6 +48,7 @@ class HrLivewireTest extends TestCase
         ]);
 
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $this->user->givePermissionTo('view_hr_dashboard');
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
         Session::put('current_unit_id', $this->unit->id);
         $this->actingAs($this->user);
