@@ -451,13 +451,39 @@ return new class extends Component
 
         $todo = Todo::find($id);
 
-        if (! $this->isTodoAccessible($todo)) {
+        if ($todo === null || ! $this->isTodoAccessible($todo)) {
             $this->error('شما دسترسی به این تسک را ندارید');
 
             return;
         }
 
-        $todo->update(['is_completed' => ! $todo->is_completed]);
+        // #1634: read-then-write lost updates — two concurrent toggles read the
+        // same value and both write its inverse, so one toggle vanishes. Same
+        // shape as the API path: lock the row, derive the new value from the
+        // LOCKED read, write inside the same transaction. The write goes through
+        // the model so `Todo::updated` still invalidates report_todos +
+        // dashboard (AppServiceProvider). FQCN on purpose: no new `use` here.
+        $toggled = \Illuminate\Support\Facades\DB::transaction(function () use ($todo): bool {
+            $rows = \Illuminate\Support\Facades\DB::select(
+                'SELECT id, is_completed FROM todos WHERE id = ? FOR UPDATE',
+                [$todo->id],
+            );
+
+            if ($rows === []) {
+                return false;
+            }
+
+            $todo->update(['is_completed' => ! (bool) $rows[0]->is_completed]);
+
+            return true;
+        });
+
+        if (! $toggled) {
+            $this->error('این تسک دیگر وجود ندارد');
+
+            return;
+        }
+
         $this->invalidateEventCache();
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
