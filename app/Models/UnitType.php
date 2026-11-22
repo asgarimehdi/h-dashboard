@@ -20,6 +20,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class UnitType extends Model
 {
+    /**
+     * وزارت بهداشت — اولین ردیف `UnitTypeSeeder`؛ تنها نوعی که والد نمی‌خواهد.
+     *
+     * Do NOT confuse this with `App\Support\BaseUnitTypes::IDS` (#1245): that
+     * constant lists the leaf types that carry population for the map layer,
+     * a different concept from the hierarchy root. Issue #1649: the web form
+     * and the API both derive "needs a parent" from this constant.
+     */
+    public const int ROOT_ID = 1;
+
     protected $fillable = ['name', 'description'];
 
     protected static function booted(): void
