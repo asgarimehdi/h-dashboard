@@ -6,6 +6,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Support\RoleGuard;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,7 @@ use Livewire\Livewire;
 use ReflectionMethod;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -1201,4 +1203,72 @@ test('#1277: a failed role sync on a password reset leaves the old password and 
     expect(Hash::check('password', $target->fresh()->password))->toBeTrue();
     expect($target->fresh()->hasRole($oldRole->name))->toBeTrue();
     $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue #1663 — the last-admin safeguard on users.index
+ * ---------------------------------------------------------------------------
+ * `delete()` cannot reach zero admins through the UI: only an `admin` holder
+ * may deactivate an admin (:259) and self-deletion is refused (:251), so the
+ * actor always survives. `updateUser()` is the reachable path — a forged or
+ * direct `editing_user_id` = self demotion. The invariant is therefore tested
+ * at the write boundary, not through a fake Livewire scenario.
+ */
+test('#1663: the last admin cannot remove the admin role from themselves', function () {
+    $this->admin->assignRole('admin');
+    $operator = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->set('editing_user_id', $this->admin->id)
+        ->set('n_code', $this->admin->n_code)
+        ->set('role_ids', [$operator->id])
+        ->set('user_permissions', [])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('updateUser')
+        ->assertForbidden();
+
+    expect($this->admin->fresh()->hasRole('admin'))->toBeTrue();
+    expect($this->admin->fresh()->hasRole('operator'))->toBeFalse();
+});
+
+test('#1663: an admin can still demote another admin when one remains', function () {
+    $this->admin->assignRole('admin');
+    $other = users1030Target($this->unit, '1663000002');
+    $other->assignRole('admin');
+    $operator = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('edit', $other->id)
+        ->set('role_ids', [$operator->id])
+        ->call('updateUser')
+        ->assertHasNoErrors();
+
+    expect($other->fresh()->hasRole('admin'))->toBeFalse();
+    expect($other->fresh()->hasRole('operator'))->toBeTrue();
+    expect($this->admin->fresh()->hasRole('admin'))->toBeTrue();
+});
+
+test('#1663: an admin can still deactivate another admin', function () {
+    $this->admin->assignRole('admin');
+    $other = users1030Target($this->unit, '1663000003');
+    $other->assignRole('admin');
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('delete', $other->id);
+
+    $this->assertSoftDeleted($other);
+    expect($this->admin->fresh()->hasRole('admin'))->toBeTrue();
+});
+
+test('#1663: the deactivation guard refuses to leave zero active admins', function () {
+    $this->admin->assignRole('admin');
+
+    expect(fn () => DB::transaction(fn () => RoleGuard::assertAdminUserSurvives($this->admin)))
+        ->toThrow(HttpException::class);
+
+    expect($this->admin->fresh()->trashed())->toBeFalse();
 });

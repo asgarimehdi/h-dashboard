@@ -90,15 +90,24 @@ the guard can.
 itself hold — via a role, a direct permission, or an edit of an existing role. The comparison is a
 **delta** (submitted minus the target's current set), so removals and no-op edits of a user or role
 that already sits above the ceiling still save; an `admin`-role holder bypasses the guard entirely.
+The last-admin rule (#1663) sits **on top of** that ceiling and has **no** admin bypass:
+`assertAdminRoleSurvives()` refuses to delete the `admin` role and
+`assertAdminRoleKeepsItsName()` refuses to rename it, for every actor;
+`assertAdminUserSurvives()` refuses a role sync or a deactivation that would leave zero
+**active** `admin` holders. It runs **inside** the write's transaction (`FOR UPDATE`,
+`pluck()` not `count()` — Postgres forbids the aggregate) and only fires when the write
+removes the role from its last holder.
 
 The `admin` role is protected by **identity**, not by its permissions: it carries `role:admin`
 route access (the backup groups in `routes/web.php`) that no permission represents. A non-admin
 cannot assign it, edit it, rename it or delete it — and cannot create a role **named** `admin` or
 rename one into `admin`, which would otherwise pick that route access up under the ceiling.
 
-Five call sites, each **after** `authorize()` and **before** validation / the transaction / the
-`try` in `delete()`: route middleware never sees a Livewire action, and an `abort(403)` inside the
-`delete()` try would be swallowed into a toast (#892).
+Five ceiling call sites, each **after** `authorize()` and **before** validation / the transaction /
+the `try` in `delete()`: route middleware never sees a Livewire action, and an `abort(403)` inside
+the `delete()` try would be swallowed into a toast (#892). The #1663 invariant guards are the
+exception to the "before the transaction" part — a role sync or deactivation must count inside the
+write's transaction, or two concurrent admins could both see a survivor.
 
 | Component | Mutator | Guard |
 |---|---|---|
@@ -107,6 +116,14 @@ Five call sites, each **after** `authorize()` and **before** validation / the tr
 | `roles/index` | `createRole()` | `assertCanCreateRole($actor, $name, …)` |
 | `roles/index` | `updateRole()` | `assertCanMutateRole($actor, $role, $name, …)` |
 | `roles/index` | `delete()` | `assertCanDeleteRole($actor, $role)` |
+| `users/index` | `updateUser()` | `assertAdminUserSurvives($target, $roleIds)` — inside the transaction |
+| `users/index` | `delete()` | `assertAdminUserSurvives($target)` — inside the transaction |
+| `roles/index` | `delete()` | `assertAdminRoleSurvives($role)` |
+| `roles/index` | `updateRole()` | `assertAdminRoleKeepsItsName($role, $name)` |
+
+Every future writer that deletes a role or a user, or syncs a user's roles, must call the
+matching `assertAdmin…` guard. There is deliberately no model-level observer: the existing
+tests delete the `admin` role directly through the model to build the "role is absent" state.
 
 Do **not** re-gate these actions with a new `authorize('…')` name:
 `RolePermissionMutatorAuthorizationTest` scans every `authorize('…')` in `roles/index` and requires

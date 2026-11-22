@@ -206,3 +206,60 @@ test('#1607: an admin-role holder can create, rename and delete a role', functio
 
     $this->assertDatabaseMissing('roles', ['id' => $created->id]);
 });
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue #1663 — the last-admin safeguard on roles.index
+ * ---------------------------------------------------------------------------
+ * #1607 stops a NON-admin from touching `admin`; the admin-role holder was
+ * deliberately exempt. These are the reachable lockouts: with the role gone
+ * (or renamed) `role:admin` matches nobody and the backup page — the only
+ * in-app recovery route — is closed to everyone.
+ */
+test('#1663: even an admin-role holder cannot delete the admin role', function () {
+    $this->user->givePermissionTo('manage_roles');
+    $this->user->assignRole('admin');
+    $adminRole = Role::where('name', 'admin')->firstOrFail();
+
+    Livewire::actingAs($this->user)
+        ->test('roles/index')
+        ->call('delete', $adminRole->id)
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('roles', ['id' => $adminRole->id, 'name' => 'admin']);
+    expect($this->user->fresh()->hasRole('admin'))->toBeTrue();
+});
+
+test('#1663: even an admin-role holder cannot rename the admin role', function () {
+    $this->user->givePermissionTo('manage_roles');
+    $this->user->assignRole('admin');
+    $adminRole = Role::where('name', 'admin')->firstOrFail();
+
+    Livewire::actingAs($this->user)
+        ->test('roles/index')
+        ->call('editRole', $adminRole->id)
+        ->set('name', 'superadmin')
+        ->set('label', 'مدیر کل')
+        ->set('permissions', ['manage_roles'])
+        ->call('updateRole')
+        ->assertForbidden();
+
+    expect($adminRole->fresh()->name)->toBe('admin');
+});
+
+test('#1663: an admin-role holder can still save the admin role unchanged', function () {
+    // Anti-over-blocking: a label/permission edit is not a lockout.
+    $this->user->givePermissionTo('manage_roles');
+    $this->user->assignRole('admin');
+    $adminRole = Role::where('name', 'admin')->firstOrFail();
+
+    Livewire::actingAs($this->user)
+        ->test('roles/index')
+        ->call('editRole', $adminRole->id)
+        ->set('label', 'مدیر سیستم')
+        ->set('permissions', ['manage_roles'])
+        ->call('updateRole')
+        ->assertHasNoErrors();
+
+    expect($adminRole->fresh()->label)->toBe('مدیر سیستم');
+});
