@@ -101,7 +101,7 @@ trait BuildsDiseaseCaseForm
                             return;
                         }
 
-                        if (! is_string($value) || JalaliDateRange::parse($value) === null) {
+                        if (! is_string($value) || JalaliDateRange::parseStrict($value) === null) {
                             $fail('تاریخ واردشده معتبر نیست.');
                         }
                     },
@@ -149,7 +149,9 @@ trait BuildsDiseaseCaseForm
 
         foreach ($fields as $key => $value) {
             if (in_array($key, $dateKeys, true) && is_string($value) && trim($value) !== '') {
-                $out[$key] = JalaliDateRange::parse($value)?->toDateString() ?? $value;
+                // Strict: an impossible date must reach the service as the raw string so
+                // DiseaseFieldValidator::normalizeDate() rejects it instead of storing a rollover.
+                $out[$key] = JalaliDateRange::parseStrict($value)?->toDateString() ?? $value;
 
                 continue;
             }
