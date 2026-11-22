@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Imports\PersonImport;
+use App\Jobs\Concerns\RevalidatesImportActor;
 use App\Support\ImportStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -18,11 +19,16 @@ use Maatwebsite\Excel\Facades\Excel;
  * Confirmed personnel imports (#1167) — the PersonImport counterpart of
  * {@see ImportHardwareJob}, without the audit half (persons have no audit
  * observer).
+ *
+ * #1639: like ImportHardwareJob, the captured scope is a dispatch-time
+ * snapshot, not an authorization decision — `handle()` re-validates the
+ * actor's permission and scope before writing.
  */
 #[Connection('redis-reports')]
 class ImportPersonsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use RevalidatesImportActor;
 
     public int $timeout = 600;
 
@@ -40,7 +46,8 @@ class ImportPersonsJob implements ShouldQueue
      * rejected with a message instead of silently duplicating rows.
      *
      * @param  array<string, string>  $selectedActions  `row_{n}` => create|update|skip
-     * @param  array<int, int>  $accessibleUnitIds  Scope captured from the dispatcher.
+     * @param  array<int, int>  $accessibleUnitIds  Scope captured from the dispatcher;
+     *                                              re-validated and intersected in `handle()`.
      * @param  string|null  $statusToken  Identifies this dispatch to the browser
      *                                    (see {@see ImportStatus}).
      */
@@ -58,8 +65,20 @@ class ImportPersonsJob implements ShouldQueue
 
     public function handle(): void
     {
+        $scope = $this->authorizedImportScope(
+            'manage_personnel',
+            $this->userId,
+            $this->accessibleUnitIds,
+            $this->path,
+            $this->statusToken,
+        );
+
+        if ($scope === null) {
+            return;
+        }
+
         $import = new PersonImport;
-        $import->setAccessibleUnitIds($this->accessibleUnitIds);
+        $import->setAccessibleUnitIds($scope);
         $import->setSelectedActions($this->selectedActions);
 
         Excel::import($import, Storage::path($this->path));
