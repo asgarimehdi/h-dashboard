@@ -84,7 +84,7 @@ class TicketController extends Controller
     {
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
-            'content' => 'required|string',
+            'content' => 'required|string|max:20000',
             'priority' => ['required', Rule::in(Ticket::PRIORITIES)],
             'unit_id' => ['required', 'integer', new TicketTargetUnit],
             'deadline' => 'nullable|date',
@@ -117,7 +117,7 @@ class TicketController extends Controller
 
         $validated = $request->validate([
             'subject' => 'sometimes|required|string|max:255',
-            'content' => 'sometimes|required|string',
+            'content' => 'sometimes|required|string|max:20000',
             'priority' => ['sometimes', 'required', Rule::in(Ticket::PRIORITIES)],
             'deadline' => 'nullable|date',
         ]);

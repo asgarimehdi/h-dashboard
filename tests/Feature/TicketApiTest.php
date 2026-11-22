@@ -1157,4 +1157,64 @@ class TicketApiTest extends TestCase
             );
         }
     }
+
+    /**
+     * #1652: `content` had no upper bound on either API write path, so the
+     * lowest role could store multi-MB bodies. The cap is 20000 characters —
+     * Laravel counts characters (`mb_strlen`), not bytes.
+     */
+    public function test_store_rejects_content_above_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Too Long',
+            'content' => str_repeat('ا', 20001),
+            'priority' => 'normal',
+            'unit_id' => $unit->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('content');
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Too Long']);
+    }
+
+    public function test_update_rejects_content_above_max_length_and_keeps_old_body(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = Ticket::create(['ticket_code' => 'T-1652', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Old', 'content' => 'Body', 'priority' => 'low', 'status' => 'created']);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPut("/api/tickets/{$ticket->id}", [
+            'content' => str_repeat('ا', 20001),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('content');
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id, 'content' => 'Body']);
+    }
+
+    public function test_store_accepts_content_at_exactly_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $content = str_repeat('ا', 20000);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiPost('/api/tickets', [
+            'subject' => 'Boundary',
+            'content' => $content,
+            'priority' => 'normal',
+            'unit_id' => $unit->id,
+        ], $token);
+
+        // Proves `max` counts characters, not bytes: 20000 Persian letters
+        // are ~40KB in UTF-8.
+        $response->assertStatus(201)
+            ->assertJsonPath('data.content', $content);
+
+        $this->assertDatabaseHas('tickets', ['subject' => 'Boundary']);
+    }
 }

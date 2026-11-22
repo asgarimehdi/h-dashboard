@@ -875,6 +875,27 @@ class TicketsCreateLivewireTest extends TestCase
 
         $this->assertDatabaseMissing('tickets', ['subject' => 'تیکت به واحد غیرفعال']);
     }
+
+    /**
+     * #1652: the web write path also had no upper bound on `content`.
+     */
+    public function test_save_ticket_rejects_content_above_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        Session::put('current_unit_id', $unit->id);
+        $target = $this->createTargetUnit('واحد سقف محتوا');
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('subject', 'تیکت با متن بیش از حد مجاز')
+            ->set('content', str_repeat('ا', 20001))
+            ->set('priority', 'normal')
+            ->call('saveTicket')
+            ->assertHasErrors(['content']);
+
+        $this->assertDatabaseCount('tickets', 0);
+    }
 }
 
 if (! function_exists('Tests\Feature\StorageFake')) {
