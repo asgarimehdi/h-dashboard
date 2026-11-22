@@ -551,25 +551,111 @@ PHP;
      * future occurrence, keeping the 31st anchor (Feb 28 → Mar 31 → Apr 30 →
      * May 31) instead of leaving the schedule due forever.
      */
-    public function test_monthly_schedule_catches_up_missed_months(): void
+    /**
+     * Issue #1640: two schedules with the same title in the same unit are two
+     * independent schedules. The guard must key on the schedule that produced
+     * the ticket, not on its content, or the second schedule is silently
+     * starved every cycle while its `next_due_at` still advances.
+     */
+    public function test_two_same_title_schedules_in_same_unit_both_generate(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-05-01 08:00:00'));
-
-        $unit = Unit::create(['name' => 'Ward M']);
-        $schedule = MaintenanceSchedule::create([
+        $unit = Unit::create(['name' => 'Ward N']);
+        $scheduleA = MaintenanceSchedule::create([
             'unit_id' => $unit->id,
-            'title' => 'Long-overdue inspection',
+            'title' => 'Quarterly inspection',
             'frequency' => 'monthly',
             'recurrence_interval' => 1,
-            'next_due_at' => '2026-01-31 08:00:00',
+            'next_due_at' => now()->subDay(),
         ]);
-        DB::table('maintenance_schedules')
-            ->where('id', $schedule->id)
-            ->update(['created_at' => '2026-01-31 08:00:00']);
+        $scheduleB = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Quarterly inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
 
-        $this->artisan('maintenance:generate-due')->assertExitCode(0);
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Created 2 maintenance ticket(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('tickets', 2);
+
+        $this->assertEqualsCanonicalizing(
+            [$scheduleA->id, $scheduleB->id],
+            Ticket::all()->pluck('schedule_id')->all(),
+        );
+    }
+
+    /**
+     * Issue #1640 (legacy fallback): a ticket written before the identity
+     * column existed carries `schedule_id = null`. The unit/subject fallback
+     * must still stop the same cycle from producing a duplicate — the fallback
+     * is a permanent safety net, not dead code.
+     */
+    public function test_legacy_ticket_without_schedule_id_still_blocks_regeneration(): void
+    {
+        $unit = Unit::create(['name' => 'Ward O']);
+        $schedule = MaintenanceSchedule::create([
+            'unit_id' => $unit->id,
+            'title' => 'Legacy check',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+
+        Ticket::create([
+            'ticket_code' => 'T-LEGACY01',
+            'subject' => 'Legacy check',
+            'content' => 'Pre-migration ticket',
+            'priority' => 'normal',
+            'status' => 'created',
+            'unit_id' => $unit->id,
+            // `schedule_id` intentionally left null: a pre-migration row.
+        ]);
+
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Created 0 maintenance ticket(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('tickets', 1);
 
         $schedule->refresh();
-        $this->assertSame('2026-05-31', $schedule->next_due_at?->toDateString());
+        $this->assertNotNull($schedule->last_generated_at);
+        $this->assertTrue($schedule->next_due_at->isFuture());
+    }
+
+    /**
+     * Issue #1640: the same title in two different units was already two
+     * independent schedules — pin it so the identity guard cannot regress it.
+     */
+    public function test_two_schedules_same_title_different_units_both_generate(): void
+    {
+        $unitA = Unit::create(['name' => 'Ward P']);
+        $unitB = Unit::create(['name' => 'Ward Q']);
+        $scheduleA = MaintenanceSchedule::create([
+            'unit_id' => $unitA->id,
+            'title' => 'Shared inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+        $scheduleB = MaintenanceSchedule::create([
+            'unit_id' => $unitB->id,
+            'title' => 'Shared inspection',
+            'frequency' => 'monthly',
+            'recurrence_interval' => 1,
+            'next_due_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('maintenance:generate-due')
+            ->expectsOutputToContain('Created 2 maintenance ticket(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('tickets', 2);
+        $this->assertEqualsCanonicalizing(
+            [$scheduleA->id, $scheduleB->id],
+            Ticket::all()->pluck('schedule_id')->all(),
+        );
     }
 }

@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $recurrence_rule
  * @property int $recurrence_interval
  * @property Carbon|null $last_generated_at
+ * @property int|null $template_id
  * @property-read Unit $unit
  * @property-read User $user
  * @property-read Collection<int, Ticket> $tickets
@@ -46,6 +47,7 @@ class Todo extends Model
         'recurrence_rule',
         'recurrence_interval',
         'last_generated_at',
+        'template_id',
     ];
 
     protected $casts = [

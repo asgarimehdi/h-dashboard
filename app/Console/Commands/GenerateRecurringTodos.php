@@ -95,10 +95,20 @@ class GenerateRecurringTodos extends Command
      * Generate the instance for one template's next occurrence (or skip it).
      * Returns true when an instance was created.
      *
-     * The guard key is the occurrence itself — `last_generated_at` stores the
-     * `start_at` of the newest generated instance, never a run time — and it
-     * deliberately contains no `created_at` comparison: such a guard would
-     * always match after the first success and kill recurrence entirely.
+     * The guard key is now the pair *(template id, occurrence)*: every instance
+     * records the `template_id` that produced it, so two templates with the
+     * same title in the same unit no longer starve each other. `last_generated_at`
+     * stores the `start_at` of the newest generated instance, never a run time —
+     * and the guard deliberately contains no `created_at` comparison: such a
+     * guard would always match after the first success and kill recurrence
+     * entirely.
+     *
+     * Rows with `template_id IS NULL` — instances written before the identity
+     * column existed, or instances whose template was later deleted (the FK is
+     * `set null`) — still fall back to the old title/unit match. That fallback
+     * is permanent, not temporary: it is hard-bound to NULL-identity rows, so it
+     * can never hide a post-fix instance, and it only causes a narrow skip,
+     * never a duplicate.
      */
     private function processTemplate(Todo $template, CarbonInterface $now): bool
     {
@@ -133,13 +143,14 @@ class GenerateRecurringTodos extends Command
         }
 
         Todo::create([
-            'title' => $template->title,
+            'title' => $locked->title,
             'start_at' => $next,
             'end_at' => null,
             'is_completed' => false,
-            'unit_id' => $template->unit_id,
-            'user_id' => $template->user_id,
+            'unit_id' => $locked->unit_id,
+            'user_id' => $locked->user_id,
             'recurrence_rule' => 'none',
+            'template_id' => $locked->id,
         ]);
 
         // Same meaning as above: this is the generated occurrence, not the
@@ -152,10 +163,23 @@ class GenerateRecurringTodos extends Command
     private function occurrenceExists(Todo $template, CarbonInterface $occurrence): bool
     {
         return Todo::query()
-            ->where('title', $template->title)
-            ->where('unit_id', $template->unit_id)
             ->where('recurrence_rule', 'none')
             ->where('start_at', $occurrence)
+            ->where(function ($q) use ($template) {
+                $q->where('template_id', $template->id)
+                    ->orWhere(function ($legacy) use ($template) {
+                        // Pre-migration instances have no template_id, and a
+                        // deleted template nulls the column (FK set null). The
+                        // branch is hard-bound to NULL-identity rows, so it can
+                        // never match a post-fix instance; it can still collide
+                        // across same-title templates, deliberately, and is a
+                        // permanent safety net rather than something that ages
+                        // out.
+                        $legacy->whereNull('template_id')
+                            ->where('title', $template->title)
+                            ->where('unit_id', $template->unit_id);
+                    });
+            })
             ->exists();
     }
 }

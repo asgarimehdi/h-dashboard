@@ -108,14 +108,35 @@ class GenerateDueMaintenance extends Command
 
         // Issue #533: idempotency guard — skip if an open ticket already exists
         // for this schedule (prevents duplicates on scheduler overlap or crash).
+        // The guard key is now *(schedule id, open, last day)*: each generated
+        // ticket records the `schedule_id` that produced it, so two same-title
+        // schedules in one unit no longer starve each other.
+        // `status != 'completed'` and the one-day window stay shared outer
+        // predicates: they bound the guard to "this cycle already produced a
+        // ticket" — a rejected ticket is still this cycle's ticket (re-creating
+        // it in the window would be a duplicate), while a long-open ticket from
+        // an older cycle must not block the next legitimate generation.
         // Issue #876: `unit_id` is guaranteed non-null here — unit-less
         // schedules are filtered out in handle() — so this guard can actually
         // match. (With a null unit it compiled to `IS NULL`, which can never
         // match the NOT NULL `tickets.unit_id` column and was vacuous.)
-        $existingTicket = Ticket::where('unit_id', $locked->unit_id)
-            ->where('subject', $locked->title)
+        // Rows with `schedule_id IS NULL` — tickets written before the identity
+        // column existed, or tickets whose schedule was later deleted (the FK is
+        // `set null`) — keep the old unit/subject match. That fallback is
+        // permanent, not temporary: it is hard-bound to NULL-identity rows, so it
+        // can never hide a post-fix ticket, and it only causes a narrow skip,
+        // never a duplicate.
+        $existingTicket = Ticket::query()
             ->where('status', '!=', 'completed')
             ->where('created_at', '>=', now()->subDay())
+            ->where(function ($q) use ($locked) {
+                $q->where('schedule_id', $locked->id)
+                    ->orWhere(function ($legacy) use ($locked) {
+                        $legacy->whereNull('schedule_id')
+                            ->where('unit_id', $locked->unit_id)
+                            ->where('subject', $locked->title);
+                    });
+            })
             ->exists();
 
         if ($existingTicket) {
@@ -137,6 +158,7 @@ class GenerateDueMaintenance extends Command
             // buckets every aggregation has.
             'priority' => 'normal',
             'unit_id' => $locked->unit_id,
+            'schedule_id' => $locked->id,
         ]);
 
         $this->advance($locked);
