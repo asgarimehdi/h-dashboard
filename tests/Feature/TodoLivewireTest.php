@@ -1176,3 +1176,202 @@ test('create todo accepts title at exactly max length', function () {
 
     $this->assertDatabaseHas('todos', ['title' => $title]);
 });
+
+// ==================== #1659: todo date range on update paths ====================
+
+test('save rejects an end date before the start date', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/02')
+        ->set('start_time_picker', '09:00')
+        ->set('end_date_picker', '1405/07/01')
+        ->set('end_time_picker', '09:00')
+        ->call('save')
+        ->assertHasErrors(['end_date_picker']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('save rejects an end time before the start time on the same day', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/02')
+        ->set('start_time_picker', '10:00')
+        ->set('end_date_picker', '1405/07/02')
+        ->set('end_time_picker', '08:00')
+        ->call('save')
+        ->assertHasErrors(['end_date_picker']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('save accepts an end equal to the start', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/02')
+        ->set('start_time_picker', '10:00')
+        ->set('end_date_picker', '1405/07/02')
+        ->set('end_time_picker', '10:00')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseCount('todos', 1);
+});
+
+test('edit with an inverted range leaves the stored row unchanged', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'عنوان قبل',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->set('end_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertHasErrors(['end_date_picker']);
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+});
+
+test('save allows an empty end date', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/02')
+        ->set('start_time_picker', '10:00')
+        ->set('end_date_picker', '')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('todos', ['title' => 'وظیفه تستی', 'end_at' => null]);
+});
+
+test('update_todo_dates rejects an end before the start and does not write', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'درگ',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('updateTodoDates', $todo->id, '2026-09-24T10:00:00', '2026-09-23T10:00:00')
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'error';
+        });
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+});
+
+test('update_todo_dates writes a valid range', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'درگ',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('updateTodoDates', $todo->id, '2026-09-26T10:00:00', '2026-09-27T11:00:00')
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'success';
+        });
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'start_at' => '2026-09-26 10:00:00',
+        'end_at' => '2026-09-27 11:00:00',
+    ]);
+});
+
+test('update_todo_dates treats an empty end as no end', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'درگ',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('updateTodoDates', $todo->id, '2026-09-26T10:00:00', '');
+
+    $fresh = $todo->fresh();
+
+    expect($fresh->start_at->format('Y-m-d H:i'))->toBe('2026-09-26 10:00')
+        ->and($fresh->end_at->format('Y-m-d H:i'))->toBe('2026-09-26 10:00');
+});
+
+test('update_todo_dates rejects an unparseable date without writing', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'درگ',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('updateTodoDates', $todo->id, 'not-a-date', null)
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'error';
+        });
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+});
+
+test('update_todo_dates accepts end equal to start', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'درگ',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => '2026-09-25 10:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('updateTodoDates', $todo->id, '2026-09-26T10:00:00', '2026-09-26T10:00:00')
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'success';
+        });
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'start_at' => '2026-09-26 10:00:00',
+        'end_at' => '2026-09-26 10:00:00',
+    ]);
+});

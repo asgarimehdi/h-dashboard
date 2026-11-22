@@ -138,8 +138,186 @@ class TodoApiTest extends TestCase
         ]);
     }
 
+    /**
+     * #1659: `after_or_equal:start_at` only sees submitted fields, so an
+     * update that submits one side of the range never compares against the
+     * stored counterpart. These lock the effective-range check on the API.
+     */
+    public function test_update_only_start_after_stored_end_is_rejected(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'بازه',
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'start_at' => '2026-07-03 10:00:00',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'The end date must be after or equal to the start date.']);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+    }
+
+    public function test_update_only_end_before_stored_start_is_rejected(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'بازه',
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'end_at' => '2026-06-30 10:00:00',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'The end date must be after or equal to the start date.']);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+    }
+
+    public function test_update_start_equal_to_stored_end_is_accepted(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'بازه',
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'start_at' => '2026-07-02 10:00:00',
+        ], $token);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'start_at' => '2026-07-02 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+    }
+
+    public function test_update_with_stored_null_end_accepts_a_later_start(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'بازه',
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => null,
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'start_at' => '2026-07-05 10:00:00',
+        ], $token);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'start_at' => '2026-07-05 10:00:00',
+            'end_at' => null,
+        ]);
+    }
+
+    public function test_update_can_clear_end_at_with_explicit_null(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'بازه',
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'end_at' => null,
+        ], $token);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => null,
+        ]);
+    }
+
+    public function test_update_with_a_valid_range_still_succeeds(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'بازه',
+            'start_at' => '2026-07-01 10:00:00',
+            'end_at' => '2026-07-02 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'start_at' => '2026-07-03 10:00:00',
+            'end_at' => '2026-07-04 10:00:00',
+        ], $token);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'start_at' => '2026-07-03 10:00:00',
+            'end_at' => '2026-07-04 10:00:00',
+        ]);
+    }
+
+    public function test_title_only_update_of_a_legacy_inverted_row_still_succeeds(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'title' => 'قدیمی',
+            'start_at' => '2026-07-02 10:00:00',
+            'end_at' => '2026-07-01 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'title' => 'عنوان جدید',
+        ], $token);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('todos', [
+            'id' => $todo->id,
+            'title' => 'عنوان جدید',
+            'start_at' => '2026-07-02 10:00:00',
+            'end_at' => '2026-07-01 10:00:00',
+        ]);
+    }
+
     public function test_user_can_delete_own_todo(): void
     {
+
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
 
         $todo = Todo::factory()->create(['unit_id' => $unit->id]);

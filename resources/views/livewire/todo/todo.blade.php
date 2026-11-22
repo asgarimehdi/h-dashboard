@@ -245,10 +245,30 @@ return new class extends Component
             return;
         }
 
-        $todo->update([
-            'start_at' => $startDate,
-            'end_at' => $endDate ?? $startDate,
-        ]);
+        // #1659: FullCalendar sends `endStr === ''` for an event with no end.
+        // `'' ?? $startDate` is still '' and Eloquent's datetime cast parses ''
+        // as now(), so blank must be normalised to null BEFORE the range is
+        // resolved — otherwise this path itself can store end < start.
+        $endDate = $endDate !== null && trim($endDate) !== '' ? $endDate : null;
+
+        try {
+            $start = Carbon::parse($startDate);
+            $end = $endDate !== null ? Carbon::parse($endDate) : $start;
+        } catch (\Exception) {
+            $this->dispatch('swal', ['title' => 'تاریخ واردشده معتبر نیست.', 'icon' => 'error']);
+            $this->dispatch('calendar-updated', events: $this->getEvents());
+
+            return;
+        }
+
+        if ($end->lt($start)) {
+            $this->dispatch('swal', ['title' => 'تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد.', 'icon' => 'error']);
+            $this->dispatch('calendar-updated', events: $this->getEvents());
+
+            return;
+        }
+
+        $todo->update(['start_at' => $start, 'end_at' => $end]);
 
         app(CacheInvalidationServiceInterface::class)->increment('calendar');
 
@@ -355,6 +375,12 @@ return new class extends Component
 
                 return;
             }
+        }
+
+        if ($endMildadi !== null && $endMildadi->lt($startMildadi)) {
+            $this->addError('end_date_picker', 'تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد.');
+
+            return;
         }
 
         $todo = Todo::updateOrCreate(
