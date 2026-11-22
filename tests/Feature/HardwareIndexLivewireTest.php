@@ -890,4 +890,64 @@ class HardwareIndexLivewireTest extends TestCase
             ->call('historyPage', 2)
             ->assertSet('historyCurrentPage', 2);
     }
+
+    /**
+     * #1658: the Livewire write paths validated only `n_code`/`pc_name`, so
+     * `comments` reached the `text` column unbounded. The cap is 20000
+     * characters (mirrors ticket content, #1652).
+     */
+    public function test_create_hardware_rejects_comments_above_max_length(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $data['user']->n_code)
+            ->set('pc_name', 'PC-1658')
+            ->set('comments', str_repeat('ا', 20001))
+            ->call('createHardware')
+            ->assertHasErrors(['comments']);
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-1658']);
+    }
+
+    public function test_update_hardware_rejects_comments_above_max_length(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-1658-UPD',
+            'comments' => 'old',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->call('editHardware', $hw->id)
+            ->set('comments', str_repeat('ا', 20001))
+            ->call('updateHardware')
+            ->assertHasErrors(['comments']);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'comments' => 'old']);
+    }
+
+    public function test_create_hardware_accepts_comments_at_exactly_max_length(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $data['user']->n_code)
+            ->set('pc_name', 'PC-1658-CAP')
+            ->set('comments', str_repeat('ا', 20000))
+            ->call('createHardware')
+            ->assertHasNoErrors();
+
+        $stored = Hardware::where('pc_name', 'PC-1658-CAP')->value('comments');
+        $this->assertSame(20000, mb_strlen($stored));
+    }
 }

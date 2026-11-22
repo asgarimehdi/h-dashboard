@@ -1146,3 +1146,33 @@ test('dead guard property hasPubliclyVisibleDates is absent from the codebase', 
     // The property should not appear anywhere in the file
     expect($view)->not->toContain('hasPubliclyVisibleDates');
 });
+
+// #1658: `title` had no upper bound on the Livewire write path, so an
+// over-long title reached the varchar(255) column and failed with a 500
+// instead of a validation error. The cap is exactly the column width.
+test('create todo rejects title above max length', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', str_repeat('ا', 256))
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertHasErrors(['title']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('create todo accepts title at exactly max length', function () {
+    $this->actingAs($this->user);
+    $title = str_repeat('ا', 255);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', $title)
+        ->set('start_date_picker', '1405/07/01')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('todos', ['title' => $title]);
+});

@@ -1197,4 +1197,47 @@ class UnitsIndexLivewireTest extends TestCase
 
         return '';
     }
+
+    /**
+     * #1658: `saveUnit()` had no `description` rule at all, so the Livewire
+     * path wrote the `text` column unbounded. The cap is 20000 characters
+     * (mirrors ticket content, #1652).
+     */
+    public function test_save_unit_rejects_description_above_max_length(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->set('name', 'unit_1658_long')
+            ->set('unit_type_id', 3)
+            ->set('parent_id', $parent->id)
+            ->set('description', str_repeat('ا', 20001))
+            ->call('saveUnit')
+            ->assertHasErrors(['description']);
+
+        $this->assertDatabaseMissing('units', ['name' => 'unit_1658_long']);
+    }
+
+    public function test_edit_unit_accepts_description_at_exactly_max_length(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد ۱۶۵۸', 'unit_type_id' => 3,
+            'region_id' => 2, 'parent_id' => $parent->id,
+        ]);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $target->id)
+            ->set('description', str_repeat('ا', 20000))
+            ->call('saveUnit')
+            ->assertHasNoErrors();
+
+        $stored = Unit::find($target->id)->description;
+        $this->assertSame(20000, mb_strlen($stored));
+    }
 }

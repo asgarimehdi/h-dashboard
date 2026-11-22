@@ -57,7 +57,7 @@ class UnitController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:20000',
             'region_id' => 'nullable|exists:regions,id',
             'parent_id' => 'nullable|exists:units,id',
             'unit_type_id' => 'required|exists:unit_types,id',
@@ -116,7 +116,7 @@ class UnitController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:20000',
             'region_id' => 'nullable|exists:regions,id',
             'parent_id' => 'nullable|exists:units,id',
             'unit_type_id' => 'sometimes|required|exists:unit_types,id',

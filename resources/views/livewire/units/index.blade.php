@@ -358,6 +358,8 @@ return new class extends Component
             'region_id' => 'nullable|exists:regions,id',
             'parent_id' => $this->unit_type_id == UnitType::ROOT_ID ? 'nullable' : 'required|exists:units,id',
             'can_receive_tickets' => 'boolean',
+            // #1658: free-text cap on both write paths (mirrors ticket content, #1652).
+            'description' => 'nullable|string|max:20000',
             // #1246: validated only where it can be written. Hiding the input
             // in Blade is not the guard — the server must ignore the payload
             // for a non-base unit.
@@ -857,7 +859,7 @@ return new class extends Component
     <x-modal wire:model="modal" title="{{ $editingId ? 'ویرایش واحد' : 'ثبت واحد جدید' }}" separator persistent>
         <x-form wire:submit.prevent="saveUnit" class="grid grid-cols-2 gap-4">
             <x-input wire:model="name" label="نام واحد" placeholder="نام واحد" required/>
-            <x-input wire:model="description" label="توضیحات" placeholder="توضیحات"/>
+            <x-input wire:model="description" label="توضیحات" placeholder="توضیحات" maxlength="20000"/>
             
             <x-select wire:model.live="unit_type_id" label="نوع واحد" :options="$unitTypes" option-value="id"
                       option-label="name" required placeholder="انتخاب کنید"/>
