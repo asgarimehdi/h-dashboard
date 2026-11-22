@@ -857,3 +857,126 @@ test('a case outside the unit scope cannot be deleted', function () {
 
     $this->assertDatabaseHas('disease_cases', ['id' => $case->id]);
 });
+
+// ── #1650: diagnosedAt / recordedAt must reject impossible Jalali dates ───
+
+test('create rejects an impossible Jalali diagnosed date without inserting', function (string $value) {
+    $disease = dc_disease();
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('diagnosedAt', $value)
+        ->call('save')
+        ->assertHasErrors('diagnosedAt');
+
+    $this->assertDatabaseCount('disease_cases', 0);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('create rejects an impossible Jalali recorded date without inserting', function (string $value) {
+    $disease = dc_disease();
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('recordedAt', $value)
+        ->call('save')
+        ->assertHasErrors('recordedAt');
+
+    $this->assertDatabaseCount('disease_cases', 0);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('edit rejects an impossible Jalali diagnosed date without changing the row', function (string $value) {
+    $disease = dc_disease('edit-strict-diagnosed');
+    $patient = dc_patient();
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('diagnosedAt', $value)
+        ->call('saveEdit')
+        ->assertHasErrors('diagnosedAt');
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'diagnosed_at' => '2026-10-01',
+        'recorded_at' => '2026-10-01',
+    ]);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('edit rejects an impossible Jalali recorded date without changing the row', function (string $value) {
+    $disease = dc_disease('edit-strict-recorded');
+    $patient = dc_patient();
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('recordedAt', $value)
+        ->call('saveEdit')
+        ->assertHasErrors('recordedAt');
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'diagnosed_at' => '2026-10-01',
+        'recorded_at' => '2026-10-01',
+    ]);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('create stores valid Jalali diagnosed and recorded dates as Gregorian', function () {
+    $disease = dc_disease('create-date-both-valid');
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('diagnosedAt', '1404/02/15')
+        ->set('recordedAt', '1404/02/15')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_cases', [
+        'patient_id' => $patient->id,
+        'diagnosed_at' => '2025-05-05',
+        'recorded_at' => '2025-05-05',
+    ]);
+});
+
+test('edit stores valid Jalali diagnosed and recorded dates as Gregorian', function () {
+    $disease = dc_disease('edit-date-both-valid');
+    $patient = dc_patient();
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('diagnosedAt', '1404/02/15')
+        ->set('recordedAt', '1404/02/15')
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'diagnosed_at' => '2025-05-05',
+        'recorded_at' => '2025-05-05',
+    ]);
+});
