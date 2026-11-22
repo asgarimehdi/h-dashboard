@@ -88,6 +88,23 @@ test('a malformed jalali birth date is a validation error, not a raw exception',
     $this->assertDatabaseCount('patients', 0);
 });
 
+test('an impossible month in a birth date is rejected instead of silently shifted', function () {
+    // parse() normalises 1404/13/01 to 2026-03-22 (past), so the future
+    // check alone lets it through today. Strict parsing must reject it.
+    expect(registryCreateErrors(['birth_date_jalali' => '1404/13/01']))
+        ->toContain('birth_date_jalali');
+
+    $this->assertDatabaseCount('patients', 0);
+});
+
+test('a day past the end of a month is rejected instead of silently shifted', function () {
+    // parse() normalises 1404/02/32 to 2025-05-22 (past).
+    expect(registryCreateErrors(['birth_date_jalali' => '1404/02/32']))
+        ->toContain('birth_date_jalali');
+
+    $this->assertDatabaseCount('patients', 0);
+});
+
 test('whitespace-only names are validation errors, not a null-column violation', function () {
     expect(registryCreateErrors(['first_name' => '   ', 'last_name' => '']))
         ->toContain('first_name', 'last_name');
