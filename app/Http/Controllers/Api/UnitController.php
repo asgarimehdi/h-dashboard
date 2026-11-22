@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Unit;
+use App\Models\UnitType;
+use App\Models\UnitTypeRelationship;
 use App\Rules\PerPage;
 use App\Services\AccessService;
 use App\Services\UnitDeletionService;
@@ -70,6 +72,27 @@ class UnitController extends Controller
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
         }
 
+        // Issue #1649: enforce the allowed-parent-type rule (web/API parity).
+        // Ordering is deliberate: authorization (403) first, then the business
+        // rule (422), then the cycle guard — a parent outside the caller's
+        // scope must never have its type read out.
+        $childTypeId = (int) $validated['unit_type_id'];
+
+        if (empty($validated['parent_id'])) {
+            if ($childTypeId !== UnitType::ROOT_ID) {
+                return response()->json(['message' => 'A parent unit is required for this unit type.'], 422);
+            }
+        } else {
+            $parentTypeId = Unit::query()->whereKey($validated['parent_id'])->value('unit_type_id');
+
+            if (! UnitTypeRelationship::allowsParentType(
+                $childTypeId,
+                $parentTypeId === null ? null : (int) $parentTypeId,
+            )) {
+                return response()->json(['message' => 'Parent unit type is not allowed for this unit type.'], 422);
+            }
+        }
+
         $unit = Unit::create($validated);
 
         // Invalidate AccessService cache if hierarchy changed (new child created)
@@ -106,6 +129,43 @@ class UnitController extends Controller
 
         if (! empty($validated['parent_id']) && ! in_array($validated['parent_id'], $accessibleIds)) {
             return response()->json(['message' => 'Parent unit not accessible.'], 403);
+        }
+
+        // Issue #1649: enforce the allowed-parent-type rule on the FINAL
+        // combination, not just the submitted fields — an update may change the
+        // type, the parent, or both. It fires only when the payload touches the
+        // hierarchy, so a name-only edit of a legacy unit is never blocked.
+        $hierarchyTouched = array_key_exists('parent_id', $validated)
+            || array_key_exists('unit_type_id', $validated);
+
+        if ($hierarchyTouched) {
+            $finalTypeId = array_key_exists('unit_type_id', $validated)
+                ? (int) $validated['unit_type_id']
+                : ($unit->unit_type_id === null ? null : (int) $unit->unit_type_id);
+
+            // A null unit_type_id only exists on factory/seeder/legacy rows —
+            // neither write surface can produce one — so the type rule is not
+            // defined for it; the cycle guard still applies below.
+            if ($finalTypeId !== null) {
+                $finalParentId = array_key_exists('parent_id', $validated)
+                    ? $validated['parent_id']
+                    : $unit->parent_id;
+
+                if ($finalParentId === null) {
+                    if ($finalTypeId !== UnitType::ROOT_ID) {
+                        return response()->json(['message' => 'A parent unit is required for this unit type.'], 422);
+                    }
+                } else {
+                    $parentTypeId = Unit::query()->whereKey($finalParentId)->value('unit_type_id');
+
+                    if (! UnitTypeRelationship::allowsParentType(
+                        $finalTypeId,
+                        $parentTypeId === null ? null : (int) $parentTypeId,
+                    )) {
+                        return response()->json(['message' => 'Parent unit type is not allowed for this unit type.'], 422);
+                    }
+                }
+            }
         }
 
         $oldParentId = $unit->parent_id; // Capture before update for hierarchy-change detection (#371)

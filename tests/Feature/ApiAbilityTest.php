@@ -10,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\UnitType;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -132,11 +133,19 @@ class ApiAbilityTest extends TestCase
 
     public function test_units_write_allowed_with_ability(): void
     {
-        $unitTypeId = DB::table('unit_types')->insertGetId(['name' => 'Test Type']);
+        // Issue #1649: non-root units need an allowed parent, so pin the root
+        // type id instead of relying on the sequence.
+        DB::table('unit_types')->insert([
+            'id' => UnitType::ROOT_ID,
+            'name' => 'Test Type',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->resyncSequence('unit_types');
         $token = $this->createTokenWithAbilities(['units:read', 'units:write'], ['organization']);
         $this->apiPost('/api/units', [
             'name' => 'Test Unit',
-            'unit_type_id' => $unitTypeId,
+            'unit_type_id' => UnitType::ROOT_ID,
         ], $token)->assertCreated();
     }
 
