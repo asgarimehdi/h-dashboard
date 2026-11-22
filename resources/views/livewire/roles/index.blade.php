@@ -77,6 +77,10 @@ return new class extends Component
         // turn it into a toast (the #892 shape).
         RoleGuard::assertCanDeleteRole($this->actor(), $role);
 
+        // Issue #1663: `role:admin` exists only while this role does — no
+        // actor, admin included, may delete it (there is no in-app recovery).
+        RoleGuard::assertAdminRoleSurvives($role);
+
         try {
             $role->delete();
             $this->warning("$role->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
@@ -144,6 +148,10 @@ return new class extends Component
         // against the role's current set; the `admin` identity and name are
         // admin-only regardless of permissions.
         RoleGuard::assertCanMutateRole($this->actor(), $role, $this->name, $this->permissions);
+
+        // Issue #1663: the route gate follows the NAME, so renaming `admin`
+        // locks everyone out exactly like deleting it.
+        RoleGuard::assertAdminRoleKeepsItsName($role, $this->name);
 
         $role->update(['name' => $this->name, 'label' => $this->label]);
         $role->syncPermissions($this->permissions);

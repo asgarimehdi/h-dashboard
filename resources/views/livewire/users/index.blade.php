@@ -260,7 +260,16 @@ return new class extends Component
             abort(403, 'تنها مدیران می‌توانند کاربران مدیر را غیرفعال کنند.');
         }
 
-        $user->delete();
+        // Issue #1663: the count and the write are one transaction, and the
+        // count takes FOR UPDATE — otherwise two admins deactivating each
+        // other could both see a survivor. The guard is unreachable through
+        // today's UI (an admin cannot delete themselves, :251, and only an
+        // admin may deactivate an admin, :259) — it keeps the invariant at the
+        // write boundary if either check is ever relaxed.
+        \Illuminate\Support\Facades\DB::transaction(function () use ($user): void {
+            RoleGuard::assertAdminUserSurvives($user);
+            $user->delete();
+        });
         $this->warning("$user->name غیرفعال شد", 'غیرفعال شد!', position: 'toast-bottom');
     }
 
@@ -471,6 +480,11 @@ return new class extends Component
                 if ($user->hasRole('admin') && ! $this->actor()->hasRole('admin')) {
                     abort(403, 'تنها مدیران می‌توانند کاربران مدیر را ویرایش کنند.');
                 }
+
+                // Issue #1663: the sync below must not leave zero active
+                // admins. Before any write, inside the same transaction, so a
+                // 403 rolls back everything.
+                RoleGuard::assertAdminUserSurvives($user, $this->role_ids);
 
                 $data = ['n_code' => $this->n_code];
 
