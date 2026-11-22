@@ -325,6 +325,7 @@ return new class extends Component
         $this->validate([
             'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $this->accessibleUnitIds()))],
             'pc_name' => 'required|string|max:255',
+            'comments' => 'nullable|string|max:20000',
         ]);
 
         $person = Person::where('n_code', $this->n_code)->firstOrFail();
@@ -399,6 +400,7 @@ return new class extends Component
         $this->validate([
             'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $accessibleIds))],
             'pc_name' => 'required|string|max:255',
+            'comments' => 'nullable|string|max:20000',
         ]);
 
         $hw = Hardware::with('person')->findOrFail($this->editingId);

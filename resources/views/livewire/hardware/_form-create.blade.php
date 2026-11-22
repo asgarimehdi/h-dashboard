@@ -55,7 +55,7 @@
                         </label>
                     </div>
                     <div class="md:col-span-2 lg:col-span-3">
-                        <x-input wire:model="comments" label="توضیحات" />
+                        <x-input wire:model="comments" label="توضیحات" maxlength="20000" />
                     </div>
                 </div>
                 <div class="flex gap-2 mt-4">

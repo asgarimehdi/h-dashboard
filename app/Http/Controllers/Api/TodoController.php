@@ -58,7 +58,7 @@ class TodoController extends Controller
     public function store(UnitScopedRequest $request): JsonResponse
     {
         $validated = $request->validate([
-            'title' => 'required|string|min:3',
+            'title' => 'required|string|min:3|max:255',
             'start_at' => 'required|date',
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'is_completed' => 'boolean',
@@ -109,7 +109,7 @@ class TodoController extends Controller
         }
 
         $validated = $request->validate([
-            'title' => 'sometimes|required|string|min:3',
+            'title' => 'sometimes|required|string|min:3|max:255',
             'start_at' => 'sometimes|required|date',
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'is_completed' => 'boolean',

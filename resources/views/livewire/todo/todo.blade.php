@@ -302,7 +302,7 @@ return new class extends Component
         $this->authorize('calendar');
 
         $this->validate([
-            'title' => 'required|min:3',
+            'title' => 'required|string|min:3|max:255',
             'start_date_picker' => ['required', 'string', $this->jalaliDateRule()],
             'end_date_picker' => ['nullable', 'string', $this->jalaliDateRule()],
             'start_time_picker' => ['nullable', 'string', 'date_format:H:i'],
@@ -602,7 +602,7 @@ return new class extends Component
 
     <x-modal wire:model="modal" title="جزئیات تسک" separator>
         <x-form wire:submit="save">
-            <x-input label="عنوان فعالیت" wire:model="title" placeholder="مثلاً: جلسه فنی" />
+            <x-input label="عنوان فعالیت" wire:model="title" placeholder="مثلاً: جلسه فنی" maxlength="255" />
 
             <div class="space-y-4">
                 <div class="form-control">

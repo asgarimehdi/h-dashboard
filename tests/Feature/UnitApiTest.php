@@ -408,4 +408,77 @@ class UnitApiTest extends TestCase
         $ok->assertStatus(200);
         $this->assertCount(20, $ok->json('data'));
     }
+
+    /**
+     * #1658: `description` had no upper bound on either API write path. The cap
+     * is 20000 characters (mirrors ticket content, #1652) — Laravel counts
+     * characters (`mb_strlen`), not bytes.
+     */
+    private function seedRootUnitType(): void
+    {
+        DB::table('unit_types')->insert([
+            'id' => UnitType::ROOT_ID,
+            'name' => 'Test Type',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->resyncSequence('unit_types');
+    }
+
+    public function test_store_rejects_description_above_max_length(): void
+    {
+        $this->createUserWithUnit(['organization']);
+        $this->seedRootUnitType();
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiPost('/api/units', [
+            'name' => 'Unit-1658',
+            'unit_type_id' => UnitType::ROOT_ID,
+            'description' => str_repeat('ا', 20001),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('description');
+
+        $this->assertDatabaseMissing('units', ['name' => 'Unit-1658']);
+    }
+
+    public function test_update_rejects_description_above_max_length_and_keeps_old(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['description' => 'old']);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiPut("/api/units/{$unit->id}", [
+            'description' => str_repeat('ا', 20001),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('description');
+
+        $this->assertDatabaseHas('units', ['id' => $unit->id, 'description' => 'old']);
+    }
+
+    public function test_store_accepts_description_at_exactly_max_length(): void
+    {
+        $this->createUserWithUnit(['organization']);
+        $this->seedRootUnitType();
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+        $description = str_repeat('ا', 20000);
+
+        $response = $this->apiPost('/api/units', [
+            'name' => 'Unit-1658-CAP',
+            'unit_type_id' => UnitType::ROOT_ID,
+            'description' => $description,
+        ], $token);
+
+        // Proves `max` counts characters, not bytes.
+        $response->assertStatus(201);
+
+        $stored = Unit::where('name', 'Unit-1658-CAP')->value('description');
+        $this->assertSame(20000, mb_strlen($stored));
+    }
 }

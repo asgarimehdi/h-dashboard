@@ -47,7 +47,7 @@ class HardwareController extends Controller
             'cpu' => 'nullable|string|max:100',
             'ram' => 'nullable|string|max:50',
             'hdd' => 'nullable|string|max:100',
-            'comments' => 'nullable|string',
+            'comments' => 'nullable|string|max:20000',
             'mark' => 'boolean',
             'clean_at' => 'nullable|date',
         ];

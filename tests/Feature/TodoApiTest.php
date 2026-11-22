@@ -618,4 +618,61 @@ class TodoApiTest extends TestCase
 
         $response->assertStatus(404);
     }
+
+    /**
+     * #1658: `title` had no upper bound on either API write path, so an
+     * over-long title hit the varchar(255) column and produced a 500. The cap
+     * is exactly the column width.
+     */
+    public function test_store_rejects_title_above_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPost('/api/todos', [
+            'title' => str_repeat('ا', 256),
+            'start_at' => '2026-07-15 10:00:00',
+            'unit_id' => $unit->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('title');
+
+        $this->assertDatabaseCount('todos', 0);
+    }
+
+    public function test_update_rejects_title_above_max_length_and_keeps_old(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $todo = Todo::factory()->create(['unit_id' => $unit->id, 'title' => 'Old']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPut("/api/todos/{$todo->id}", [
+            'title' => str_repeat('ا', 256),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('title');
+
+        $this->assertDatabaseHas('todos', ['id' => $todo->id, 'title' => 'Old']);
+    }
+
+    public function test_store_accepts_title_at_exactly_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+        $title = str_repeat('ا', 255);
+
+        $response = $this->apiPost('/api/todos', [
+            'title' => $title,
+            'start_at' => '2026-07-15 10:00:00',
+            'unit_id' => $unit->id,
+        ], $token);
+
+        // 255 Persian characters = 510 bytes; proves the cap matches the
+        // varchar(255) column without a 500.
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('todos', ['title' => $title]);
+    }
 }

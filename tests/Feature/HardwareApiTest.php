@@ -486,4 +486,65 @@ class HardwareApiTest extends TestCase
         $this->assertContains('PC-IN-SCOPE', $names);
         $this->assertNotContains('PC-OUT-OF-SCOPE', $names);
     }
+
+    /**
+     * #1658: `comments` had no upper bound on the API write path. The cap is
+     * 20000 characters (mirrors ticket content, #1652) — Laravel counts
+     * characters (`mb_strlen`), not bytes.
+     */
+    public function test_store_rejects_comments_above_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $person = Person::first();
+
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost('/api/hardware', [
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-1658',
+            'comments' => str_repeat('ا', 20001),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('comments');
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-1658']);
+    }
+
+    public function test_update_rejects_comments_above_max_length_and_keeps_old(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $person = Person::first();
+        $hardware = Hardware::create(['n_code' => $person->n_code, 'pc_name' => 'PC-1658-UPD', 'comments' => 'old']);
+
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPut("/api/hardware/{$hardware->id}", [
+            'comments' => str_repeat('ا', 20001),
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('comments');
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'comments' => 'old']);
+    }
+
+    public function test_store_accepts_comments_at_exactly_max_length(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+        $person = Person::first();
+        $comments = str_repeat('ا', 20000);
+
+        $token = $this->createApiToken($user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost('/api/hardware', [
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-1658-CAP',
+            'comments' => $comments,
+        ], $token);
+
+        // Proves `max` counts characters, not bytes: 20000 Persian letters are
+        // ~40KB in UTF-8.
+        $response->assertStatus(201);
+
+        $stored = Hardware::where('pc_name', 'PC-1658-CAP')->value('comments');
+        $this->assertSame(20000, mb_strlen($stored));
+    }
 }
