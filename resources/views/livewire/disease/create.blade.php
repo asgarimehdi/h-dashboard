@@ -295,12 +295,18 @@ return new class extends Component
             'subjectUnitId' => ['required', 'integer', new AccessibleUnit],
         ] + $this->fieldRules($this->diseaseId));
 
-        $diagnosedAt = JalaliDateRange::parse($this->diagnosedAt);
-        $recordedAt = JalaliDateRange::parse($this->recordedAt);
+        $diagnosedAt = JalaliDateRange::parseStrict($this->diagnosedAt);
+        $recordedAt = JalaliDateRange::parseStrict($this->recordedAt);
 
-        if ($diagnosedAt === null || $recordedAt === null) {
-            // Unreachable after the rules above; keeps the types honest.
+        if ($diagnosedAt === null) {
+            // Defense in depth: the strict rule above already rejects this.
             $this->addError('diagnosedAt', 'تاریخ واردشده معتبر نیست.');
+
+            return;
+        }
+
+        if ($recordedAt === null) {
+            $this->addError('recordedAt', 'تاریخ واردشده معتبر نیست.');
 
             return;
         }
@@ -366,7 +372,7 @@ return new class extends Component
     private function jalaliDateRule(): \Closure
     {
         return static function (string $attribute, mixed $value, \Closure $fail): void {
-            if (! is_string($value) || JalaliDateRange::parse($value) === null) {
+            if (! is_string($value) || JalaliDateRange::parseStrict($value) === null) {
                 $fail('تاریخ واردشده معتبر نیست.');
             }
         };
