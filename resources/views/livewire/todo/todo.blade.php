@@ -303,7 +303,10 @@ return new class extends Component
 
         $this->validate([
             'title' => 'required|min:3',
-            'start_date_picker' => 'required',
+            'start_date_picker' => ['required', 'string', $this->jalaliDateRule()],
+            'end_date_picker' => ['nullable', 'string', $this->jalaliDateRule()],
+            'start_time_picker' => ['nullable', 'string', 'date_format:H:i'],
+            'end_time_picker' => ['nullable', 'string', 'date_format:H:i'],
         ]);
 
         // Validate unit_id is accessible
@@ -335,13 +338,23 @@ return new class extends Component
             }
         }
 
-        $startDateTime = $this->start_date_picker.' '.($this->start_time_picker ?: '00:00');
-        $startMildadi = $this->convertToMiladi($startDateTime);
+        $startMildadi = $this->convertToMiladi($this->start_date_picker, $this->start_time_picker);
+
+        if ($startMildadi === null) {
+            $this->addError('start_date_picker', 'تاریخ واردشده معتبر نیست.');
+
+            return;
+        }
 
         $endMildadi = null;
         if ($this->end_date_picker) {
-            $endDateTime = $this->end_date_picker.' '.($this->end_time_picker ?: '00:00');
-            $endMildadi = $this->convertToMiladi($endDateTime);
+            $endMildadi = $this->convertToMiladi($this->end_date_picker, $this->end_time_picker);
+
+            if ($endMildadi === null) {
+                $this->addError('end_date_picker', 'تاریخ واردشده معتبر نیست.');
+
+                return;
+            }
         }
 
         $todo = Todo::updateOrCreate(
@@ -368,22 +381,48 @@ return new class extends Component
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
 
-    private function convertToMiladi($jalaliDate)
+    /**
+     * Strict Jalali `Y/m/d` rule for the pickers (issue #1655).
+     *
+     * The inputs are readonly pickers, but Livewire properties are
+     * server-trusted, so `/livewire/update` can carry an impossible date.
+     * `parseStrict()` rejects it instead of letting morilog normalise it.
+     * Empty values pass — `end_date_picker` is optional.
+     */
+    private function jalaliDateRule(): \Closure
     {
-        $parts = explode(' ', $jalaliDate);
-        $dateParts = explode('/', $parts[0]);
-        $timeParts = isset($parts[1]) ? explode(':', $parts[1]) : [0, 0];
+        return static function (string $attribute, mixed $value, \Closure $fail): void {
+            if (! is_string($value) || trim($value) === '') {
+                return;
+            }
 
-        $jalalian = new Jalalian(
-            (int) $dateParts[0],
-            (int) $dateParts[1],
-            (int) $dateParts[2],
-            (int) $timeParts[0],
-            (int) $timeParts[1],
-            0
-        );
+            if (\App\Support\JalaliDateRange::parseStrict($value) === null) {
+                $fail('تاریخ واردشده معتبر نیست.');
+            }
+        };
+    }
 
-        return $jalalian->toCarbon();
+    private function convertToMiladi(mixed $date, mixed $time): ?Carbon
+    {
+        if (! is_string($date)) {
+            return null;
+        }
+
+        $parsed = \App\Support\JalaliDateRange::parseStrict($date);
+
+        if ($parsed === null) {
+            return null;
+        }
+
+        $time = is_string($time) && $time !== '' ? $time : '00:00';
+
+        if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $time) !== 1) {
+            return null;
+        }
+
+        [$hour, $minute] = array_map('intval', explode(':', $time));
+
+        return $parsed->setTime($hour, $minute);
     }
 
     /**
