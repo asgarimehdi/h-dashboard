@@ -175,7 +175,11 @@ it('maintenance page opens its own help section', function () {
 });
 
 it('org chart page opens its own help section', function () {
+    $this->seed(PermissionSeeder::class);
     $user = makeHelpUser();
+    // hr.org-chart is gated by `role_or_permission:manage_org_chart|view_hr_dashboard`
+    // and re-checks that gate on every Livewire update (#1632).
+    $user->givePermissionTo('view_hr_dashboard');
 
     Livewire::actingAs($user)->test('hr.org-chart')
         ->assertOk()

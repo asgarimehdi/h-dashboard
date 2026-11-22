@@ -886,13 +886,15 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     /**
      * #890: the importer must understand the tokens the EXPORTER writes.
      *
-     * `HardwareExport` renders `shutdown` as «روشن»/«خاموش» and `mark` as
+     * `HardwareExport` renders `shutdown` as «خاموش»/«روشن» and `mark` as
      * «علامت‌دار»/«-», so re-importing an exported sheet fed those labels into a
      * parser that only knew latin tokens: every `true` came back `false`. The
      * measured round-trip in HardwareExportImportRoundTripTest is what proved it.
      *
-     * «روشن» is the on state; «خاموش» and «-» are off. The export's own `mark`
-     * column writes «-» for false, so that has to read as false here too.
+     * #1637: `shutdown = true` means «خاموش شود» (the owner's off-hours power-off
+     * program reads those rows), so «خاموش» is `true` and «روشن»/«فعال» are
+     * `false`. The export's own `mark` column writes «-» for false, so that has
+     * to read as false here too.
      */
     private function parseBoolean($value): ?bool
     {
@@ -906,12 +908,14 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         }
 
         // The Persian labels this repo's own exports emit (#890).
-        if (in_array($val, ['روشن', 'فعال', 'علامت‌دار', 'علامت', 'دارد'], true)) {
+        // #1637: the exporter writes «خاموش» for shutdown=true.
+        if (in_array($val, ['خاموش', 'علامت‌دار', 'علامت', 'دارد'], true)) {
             return true;
         }
 
         // Explicit false tokens, including the exporter's own dash.
-        if (in_array($val, ['0', 'false', 'no', 'off', 'خیر', 'خاموش', '-', 'بدون علامت'], true)) {
+        // #1637: the exporter writes «روشن» for shutdown=false.
+        if (in_array($val, ['0', 'false', 'no', 'off', 'خیر', 'روشن', 'فعال', '-', 'بدون علامت'], true)) {
             return false;
         }
 

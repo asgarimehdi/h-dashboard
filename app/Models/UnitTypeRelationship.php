@@ -33,4 +33,27 @@ class UnitTypeRelationship extends Model
     {
         return $this->belongsTo(UnitType::class, 'allowed_parent_unit_type_id');
     }
+
+    /**
+     * Is `$parentUnitTypeId` an allowed parent type for `$childUnitTypeId`?
+     *
+     * Issue #1649: the single definition of the allowed-parent-type rule. The
+     * web form (`units.index`) and `Api\UnitController` both call this, so the
+     * two write surfaces can never disagree about what a valid hierarchy is.
+     *
+     * A `null` parent type (a legacy unit whose `unit_type_id` is null) and a
+     * type with no relationship rows both answer `false`: the rule is
+     * fail-closed, exactly like the web check it replaces.
+     */
+    public static function allowsParentType(int $childUnitTypeId, ?int $parentUnitTypeId): bool
+    {
+        if ($parentUnitTypeId === null) {
+            return false;
+        }
+
+        return static::query()
+            ->where('child_unit_type_id', $childUnitTypeId)
+            ->where('allowed_parent_unit_type_id', $parentUnitTypeId)
+            ->exists();
+    }
 }

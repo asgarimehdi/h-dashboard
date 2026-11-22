@@ -145,7 +145,7 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 | GET | `/api/tickets` | List with filters: `status`, `priority`, `unit_id`, `assignee_id` |
 | POST | `/api/tickets` | Create ticket. The target unit must be both `is_active` and `can_receive_tickets`; otherwise **422** with `errors.unit_id`. Clients should key on `errors.unit_id`, not on the message text. `PUT` never retargets `unit_id`. |
 | GET | `/api/tickets/{ticket}` | Show details |
-| PUT | `/api/tickets/{ticket}` | Update |
+| PUT | `/api/tickets/{ticket}` | Update subject/content/priority/deadline. **422** if the ticket is closed (`completed`/`rejected`/archived). |
 | DELETE | `/api/tickets/{ticket}` | Delete |
 | POST | `/api/tickets/{ticket}/assign` | Assign to user |
 | POST | `/api/tickets/{ticket}/accept` | Accept assigned ticket |
@@ -235,8 +235,10 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 
 | Method | URL | Description |
 |---|---|---|
-| GET | `/api/zabbix/traffic` | Network traffic from Zabbix |
-| GET | `/api/zabbix/multi-latest` | Multi-item latest values (cached) |
+| GET | `/api/zabbix/traffic` | Network traffic from Zabbix — item IDs must be registered on an active `zabbix_devices` row (else 422) |
+| GET | `/api/zabbix/multi-latest` | Multi-item latest values (cached) — same active-device allowlist (any unregistered ID rejects the whole request, 422) |
+
+**Item-ID allowlist (#1621):** both endpoints accept only item IDs present on an **active** `zabbix_devices` row (`ZabbixDevice::registeredItemIds()` — the union of the five id columns). The check runs inside validation, before any cache key is built or the upstream is called, so an unregistered ID never mints a cache entry. An empty registry is fail-closed (`Rule::in([])` rejects everything). Malformed input stays 422 with the same per-field keys; the 503 upstream contract is unchanged.
 
 **Typed transport (issue #741):** controllers depend on the `App\Services\Zabbix\ZabbixClient` interface, not on `ZabbixService` directly.
 
@@ -246,7 +248,7 @@ All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` 
 - `tests/Unit/ZabbixAdapterTest.php` proves every classification (timeout, connection refused, HTTP error status, invalid JSON, unexpected throw) against a **stub client, with no Zabbix server**.
 - **Connection test (issue #713):** `ZabbixService::testApiConnection()` calls the real `apiinfo.version` RPC and throws unless the response carries a string `result`; `testConnection()` checks API reachability before item existence and surfaces the reported version.
 - **Per-page batching:** `/it/networks` and `/it/wireless` each issue **one batched poll**, not one request per gauge/widget.
-- **Client-side unreachable state (#703):** the two widgets show «دسترسی به سرور مقدور نمی باشد» for a **connection failure only**; a 400 from bad item ids must keep surfacing as an error so real bugs stay visible. Both widgets clear `error` at the start of each fetch, so it does not linger after recovery. e2e `tests/e2e/it/zabbix-unavailable.spec.ts`.
+- **Client-side unreachable state (#703):** the two widgets show «دسترسی به سرور مقدور نمی باشد» for a **connection failure only**; a 422 from bad or unregistered item ids must keep surfacing as an error so real bugs stay visible. Both widgets clear `error` at the start of each fetch, so it does not linger after recovery. e2e `tests/e2e/it/zabbix-unavailable.spec.ts`.
 
 ### Zabbix sync observability (issue #740)
 

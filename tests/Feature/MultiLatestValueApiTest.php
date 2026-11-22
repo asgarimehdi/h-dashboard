@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\MultiLatestValueController;
+use App\Models\ZabbixDevice;
 use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,6 +27,12 @@ class MultiLatestValueApiTest extends TestCase
         $this->seed(PermissionSeeder::class);
         $this->seedLookupTables();
         Session::flush();
+
+        // #1621: item ids are only accepted from the active-device allowlist.
+        // 100/200 are used by the values test; 999 is registered so the
+        // "missing item" test still reaches the upstream and can assert null.
+        ZabbixDevice::factory()->create(['out_item_id' => '100', 'in_item_id' => '200']);
+        ZabbixDevice::factory()->create(['out_item_id' => '999']);
     }
 
     protected function tearDown(): void
@@ -84,6 +91,10 @@ class MultiLatestValueApiTest extends TestCase
 
     public function test_multi_latest_returns_null_for_missing_items(): void
     {
+        // #1621: the allowlist narrows what "missing" means — the id must be
+        // registered (seeded as 999 in setUp) but unknown to Zabbix, which
+        // still maps to null. An id on no device never reaches this path; it
+        // is rejected during validation instead.
         ['user' => $user] = $this->createUserWithUnit(permissions: ['map']);
 
         $mock = Mockery::mock(ZabbixService::class);

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\MultiLatestValueController;
 use App\Models\User;
+use App\Models\ZabbixDevice;
 use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,6 +26,12 @@ class MultiLatestValueControllerTest extends TestCase
     {
         parent::setUp();
         $this->seed(PermissionSeeder::class);
+
+        // #1621: item ids are only accepted from the active-device allowlist.
+        // These rows cover every id the tests below request.
+        ZabbixDevice::factory()->create(['out_item_id' => '123']);
+        ZabbixDevice::factory()->create(['out_item_id' => '12', 'in_item_id' => '34']);
+        ZabbixDevice::factory()->create(['out_item_id' => '20', 'in_item_id' => '30']);
     }
 
     private function authUser(): string
@@ -116,13 +123,18 @@ class MultiLatestValueControllerTest extends TestCase
 
     public function test_accepts_exactly_100_item_ids(): void
     {
+        // #1621: all 100 ids must be registered, so seed 50 devices covering
+        // 1..100 before making the boundary request.
+        $itemIds = array_map('strval', range(1, 100));
+        foreach (array_chunk($itemIds, 2) as [$out, $in]) {
+            ZabbixDevice::factory()->create(['out_item_id' => $out, 'in_item_id' => $in]);
+        }
+
         $this->mock(ZabbixService::class, function ($mock) {
             $mock->shouldReceive('getLatestValues')
                 ->once()
                 ->andReturn([]);
         });
-
-        $itemIds = array_map('strval', range(1, 100));
 
         $response = $this->apiGet(
             '/api/zabbix/multi-latest?'.http_build_query(['item_ids' => $itemIds]),
@@ -130,6 +142,76 @@ class MultiLatestValueControllerTest extends TestCase
         );
 
         $response->assertStatus(200);
+    }
+
+    public function test_rejects_a_list_containing_an_unregistered_item_id(): void
+    {
+        // #1621: fail-closed on the whole request — one unregistered id among
+        // registered ones rejects everything, never a partial result.
+        $this->mock(ZabbixService::class, function ($mock) {
+            $mock->shouldReceive('getLatestValues')->never();
+        });
+
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=12&item_ids[]=34&item_ids[]=999',
+            $this->authUser()
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['item_ids.2']);
+    }
+
+    public function test_rejects_a_list_of_only_unregistered_item_ids(): void
+    {
+        $this->mock(ZabbixService::class, function ($mock) {
+            $mock->shouldReceive('getLatestValues')->never();
+        });
+
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=900&item_ids[]=901',
+            $this->authUser()
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['item_ids.0', 'item_ids.1']);
+    }
+
+    public function test_accepts_a_registered_only_list_and_calls_the_upstream_once(): void
+    {
+        // The allowlist must not change the upstream call shape for registered
+        // ids: one batched call with the sorted ids, exactly as before.
+        $this->mock(ZabbixService::class, function ($mock) {
+            $mock->shouldReceive('getLatestValues')
+                ->once()
+                ->with(['12', '34'])
+                ->andReturn(['12' => 12.5, '34' => 8.0]);
+        });
+
+        $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=12&item_ids[]=34',
+            $this->authUser()
+        )
+            ->assertStatus(200)
+            ->assertJson(['12' => 12.5, '34' => 8.0]);
+    }
+
+    public function test_rejects_every_item_id_when_the_registry_is_empty(): void
+    {
+        // `Rule::in([])` always fails: an empty registry is fail-closed, never
+        // "no allowlist configured, accept anything".
+        ZabbixDevice::query()->delete();
+
+        $this->mock(ZabbixService::class, function ($mock) {
+            $mock->shouldReceive('getLatestValues')->never();
+        });
+
+        $response = $this->apiGet(
+            '/api/zabbix/multi-latest?item_ids[]=12',
+            $this->authUser()
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['item_ids.0']);
     }
 
     public function test_returns_500_when_zabbix_fails(): void

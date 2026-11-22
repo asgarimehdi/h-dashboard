@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Storage;
  * @property string $status
  * @property int|null $current_assignee_id
  * @property int $task_id
+ * @property int|null $schedule_id
  * @property Carbon|null $deadline
  * @property Carbon|null $accepted_at
  * @property Carbon|null $completed_at
@@ -67,6 +68,7 @@ class Ticket extends Model
         'priority',
         'status',
         'task_id',
+        'schedule_id',
         'deadline',
         'current_assignee_id',
         'accepted_at',

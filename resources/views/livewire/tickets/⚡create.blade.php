@@ -124,6 +124,15 @@ new class extends Component
 
     public function saveTicket(): void
     {
+        // Issue #892: the route gate (`role_or_permission:create_ticket`,
+        // routes/web.php:174) runs once, on the page load. Livewire does NOT
+        // re-apply route middleware on POST /livewire/update, so without this
+        // a session that lost `create_ticket` while the tab stayed open could
+        // still create a ticket — plus its linked todo, attachments and the
+        // unit-wide notification fan-out below.
+        // It must come FIRST, outside the `try` that starts at :174.
+        $this->authorize('create_ticket');
+
         $this->validate([
             'unit_id' => [
                 'required',
@@ -135,7 +144,7 @@ new class extends Component
                 },
             ],
             'subject' => 'required|string|min:5|max:255',
-            'content' => 'required|string|min:10',
+            'content' => 'required|string|min:10|max:20000',
             // #847: priority was also unvalidated, so the web form stored
             // values (`medium`, `high`) the CHECK constraint allows but the
             // picker and the API both refuse — and anything outside the set
@@ -325,7 +334,8 @@ new class extends Component
                     label="شرح درخواست"
                     wire:model="content"
                     placeholder="جزئیات مشکل خود را اینجا بنویسید..."
-                    rows="4" />
+                    rows="4"
+                    maxlength="20000" />
             </div>
 
             @if(count($todos) > 0)

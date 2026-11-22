@@ -295,7 +295,25 @@ test('the dynamic field matrix rejects bad input without inserting and never 500
     'select outside options' => [['sys' => 120, 'dia' => 80, 'stage' => 'nope'], 'fields.stage'],
     'unknown key' => [['sys' => 120, 'dia' => 80, 'mystery' => 'x'], 'fields.mystery'],
     'invalid date' => [['sys' => 120, 'dia' => 80, 'onset' => 'not-a-date'], 'fields.onset'],
+    'impossible month 13' => [['sys' => 120, 'dia' => 80, 'onset' => '1404/13/01'], 'fields.onset'],
+    'impossible day 32' => [['sys' => 120, 'dia' => 80, 'onset' => '1404/02/32'], 'fields.onset'],
+    'esfand 30 of a non-leap year' => [['sys' => 120, 'dia' => 80, 'onset' => '1404/12/30'], 'fields.onset'],
 ]);
+
+test('a valid Jalali date in a dynamic date field is stored as Gregorian', function () {
+    $disease = dc_disease('create-date-valid');
+    dc_required_defs($disease);
+    $patient = dc_patient();
+
+    dc_form($patient, $disease, ['sys' => 120, 'dia' => 80, 'onset' => '1404/02/15'])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_cases', [
+        'patient_id' => $patient->id,
+        'fields->onset' => '2025-05-05',
+    ]);
+});
 
 test('a duplicate patient-disease-day key becomes a friendly error, not a 500', function () {
     $disease = dc_disease();
@@ -713,6 +731,26 @@ test('editing changes the dynamic fields and subject unit but never the recorder
     ]);
 });
 
+test('editing a case rejects an impossible Jalali date in a dynamic date field', function () {
+    $disease = dc_disease('edit-date-strict');
+    dc_required_defs($disease);
+    $patient = dc_patient();
+
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80],
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('fields.onset', '1404/13/01')
+        ->call('saveEdit')
+        ->assertHasErrors('fields.onset');
+
+    expect($case->refresh()->fields)->not->toHaveKey('onset');
+});
+
 test('editing preserves stored field keys whose definition no longer exists', function () {
     $disease = dc_disease('orphan-disease');
     dc_required_defs($disease);
@@ -818,4 +856,127 @@ test('a case outside the unit scope cannot be deleted', function () {
         ->assertStatus(403);
 
     $this->assertDatabaseHas('disease_cases', ['id' => $case->id]);
+});
+
+// ── #1650: diagnosedAt / recordedAt must reject impossible Jalali dates ───
+
+test('create rejects an impossible Jalali diagnosed date without inserting', function (string $value) {
+    $disease = dc_disease();
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('diagnosedAt', $value)
+        ->call('save')
+        ->assertHasErrors('diagnosedAt');
+
+    $this->assertDatabaseCount('disease_cases', 0);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('create rejects an impossible Jalali recorded date without inserting', function (string $value) {
+    $disease = dc_disease();
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('recordedAt', $value)
+        ->call('save')
+        ->assertHasErrors('recordedAt');
+
+    $this->assertDatabaseCount('disease_cases', 0);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('edit rejects an impossible Jalali diagnosed date without changing the row', function (string $value) {
+    $disease = dc_disease('edit-strict-diagnosed');
+    $patient = dc_patient();
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('diagnosedAt', $value)
+        ->call('saveEdit')
+        ->assertHasErrors('diagnosedAt');
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'diagnosed_at' => '2026-10-01',
+        'recorded_at' => '2026-10-01',
+    ]);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('edit rejects an impossible Jalali recorded date without changing the row', function (string $value) {
+    $disease = dc_disease('edit-strict-recorded');
+    $patient = dc_patient();
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('recordedAt', $value)
+        ->call('saveEdit')
+        ->assertHasErrors('recordedAt');
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'diagnosed_at' => '2026-10-01',
+        'recorded_at' => '2026-10-01',
+    ]);
+})->with([
+    'month 13' => ['1404/13/01'],
+    'day 32' => ['1404/02/32'],
+    'esfand 30 of a non-leap year' => ['1404/12/30'],
+]);
+
+test('create stores valid Jalali diagnosed and recorded dates as Gregorian', function () {
+    $disease = dc_disease('create-date-both-valid');
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('diagnosedAt', '1404/02/15')
+        ->set('recordedAt', '1404/02/15')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_cases', [
+        'patient_id' => $patient->id,
+        'diagnosed_at' => '2025-05-05',
+        'recorded_at' => '2025-05-05',
+    ]);
+});
+
+test('edit stores valid Jalali diagnosed and recorded dates as Gregorian', function () {
+    $disease = dc_disease('edit-date-both-valid');
+    $patient = dc_patient();
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('diagnosedAt', '1404/02/15')
+        ->set('recordedAt', '1404/02/15')
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('disease_cases', [
+        'id' => $case->id,
+        'diagnosed_at' => '2025-05-05',
+        'recorded_at' => '2025-05-05',
+    ]);
 });

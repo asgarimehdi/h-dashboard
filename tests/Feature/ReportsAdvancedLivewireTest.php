@@ -28,7 +28,7 @@ class ReportsAdvancedLivewireTest extends TestCase
 
     public function test_advanced_report_renders_for_authorized_user(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
@@ -37,7 +37,7 @@ class ReportsAdvancedLivewireTest extends TestCase
 
     public function test_advanced_report_mounts_with_default_dates(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
@@ -49,7 +49,7 @@ class ReportsAdvancedLivewireTest extends TestCase
 
     public function test_advanced_report_has_units_loaded(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
@@ -64,8 +64,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_todos_completed_filter_excludes_incomplete_todos(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Todo::factory()->completed()->create([
@@ -96,8 +95,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_todos_pending_filter_includes_null_deadline_todos(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Todo::factory()->create([
@@ -121,8 +119,7 @@ class ReportsAdvancedLivewireTest extends TestCase
 
     public function test_advanced_report_todos_overdue_filter_matches_only_past_deadline_todos(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Todo::factory()->overdue()->create([
@@ -152,8 +149,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_unknown_status_filter_falls_back_to_all(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
@@ -170,8 +166,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_switching_report_type_resets_status_filter(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
@@ -188,8 +183,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_tickets_accepted_and_rejected_are_filterable(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         foreach (['created', 'forwarded', 'accepted', 'completed', 'rejected'] as $status) {
@@ -221,8 +215,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_persons_status_filter_applies_to_persons_status(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Person::factory()->create(['u_id' => $unit->id, 'status' => 'inactive']);
@@ -244,8 +237,7 @@ class ReportsAdvancedLivewireTest extends TestCase
      */
     public function test_advanced_report_status_options_round_trip_with_predicates(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
-        $user->givePermissionTo('manage_personnel');
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         $reflection = new \ReflectionClass(Livewire::test('reports.advanced')->instance());

@@ -13,6 +13,7 @@ use App\Support\ActorLabel;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 
 /**
@@ -285,7 +286,25 @@ trait TicketsInboxFlow
         $targetUnitName = $this->resolveTargetUnitName();
 
         try {
-            DB::transaction(function () use ($ticket, $targetUnitName) {
+            $outcome = DB::transaction(function () use ($ticket, $targetUnitName): string {
+                // #1608: this write sets status = 'forwarded' and clears the
+                // assignee, which on a closed ticket resurrects it and leaves
+                // stale completed_at / archived_at behind. Archiving is one-way
+                // (#929), so the guard reads the LOCKED row — a pre-check on the
+                // bound model leaves the same check-then-act window as the API.
+                $locked = DB::select(
+                    'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                    [$ticket->id]
+                );
+
+                if ($locked === []) {
+                    return 'missing';
+                }
+
+                if ($this->isClosedTicketRow($locked[0])) {
+                    return 'closed';
+                }
+
                 $ticket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
@@ -313,13 +332,36 @@ trait TicketsInboxFlow
                     "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
                     '/tickets/inbox'
                 );
+
+                return 'ok';
             });
+
+            if ($outcome === 'missing') {
+                $this->dispatch('swal', ['title' => 'تیکت یافت نشد.', 'icon' => 'error']);
+
+                return;
+            }
+
+            if ($outcome !== 'ok') {
+                $this->dispatch('swal', ['title' => 'تیکت بسته قابل ارجاع مجدد نیست.', 'icon' => 'error']);
+
+                return;
+            }
 
             $this->dispatch('swal', ['title' => 'تیکت با موفقیت ارجاع شد', 'icon' => 'success']);
             $this->closeDetail();
         } catch (\Exception $e) {
             $this->dispatch('swal', ['title' => 'خطا در انجام عملیات', 'icon' => 'error']);
         }
+    }
+
+    /**
+     * #1608: a ticket is closed once its status is terminal or it is archived
+     * (#929: archiving is a timestamp on a `completed` row, one-way).
+     */
+    protected function isClosedTicketRow(object $row): bool
+    {
+        return in_array($row->status, ['completed', 'rejected'], true) || $row->archived_at !== null;
     }
 
     /**
@@ -456,18 +498,53 @@ trait TicketsInboxFlow
             return;
         }
 
-        DB::transaction(function () use ($ticket) {
-            $ticket->update([
-                'status' => 'rejected',
-                'current_assignee_id' => auth()->id(),
-            ]);
+        // #1609: the write used to be unconditional, so rejecting a
+        // `completed`/`rejected` ticket silently resurrected a closed row
+        // (`completed_at`/`archived_at` left behind) — archiving is one-way
+        // (#929). The decision now rides on a locked re-read, exactly like
+        // acceptTicket() (#1564): a status that moved, an archived row, or a
+        // deleted one is a loss, not a write.
+        $rejected = DB::transaction(function () use ($ticket) {
+            $locked = DB::select(
+                'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
+
+            $lockedRow = $locked[0] ?? null;
+
+            if ($lockedRow === null
+                || $lockedRow->archived_at !== null
+                || ! in_array($lockedRow->status, ['created', 'forwarded', 'accepted'], true)) {
+                $this->dispatch('swal', [
+                    'title' => 'تیکت قابل رد شدن نیست',
+                    'icon' => 'warning',
+                ]);
+
+                return false;
+            }
+
+            // #1609: `current_assignee_id` is deliberately NOT rewritten with
+            // the rejecter — the activity row's `user_id` is the rejecter
+            // record, and overwriting the assignment erased who held the
+            // ticket.
+            $ticket->update(['status' => 'rejected']);
 
             $ticket->activities()->create([
                 'user_id' => auth()->id(),
                 'action' => 'rejected',
                 'description' => 'تیکت توسط واحد '.(auth()->user()->person?->unit?->name ?? 'بدون واحد').' رد شد.',
             ]);
+
+            return true;
         });
+
+        // The losing branch already dispatched its warning. Running the success
+        // toast and closeDetail() unconditionally would replace that warning
+        // before it renders and reset modal state for a write that never
+        // happened (#1564).
+        if (! $rejected) {
+            return;
+        }
 
         $this->dispatch('swal', ['title' => 'تیکت با موفقیت رد شد', 'icon' => 'info']);
         $this->closeDetail();
@@ -526,10 +603,99 @@ trait TicketsInboxFlow
         // or the notification body.
         $targetUnitName = $this->resolveTargetUnitName();
 
+        // #1615: files are written BEFORE the transaction, off the row lock —
+        // the same split #1303 made in `saveTicket()`. The `finally` below
+        // deletes them on every exit path that does not commit, and that is not
+        // optional: five early `rollBack()` returns further down run before the
+        // attachment rows are written, so moving `store()` up without the
+        // cleanup would orphan a file on each of them. The loop stays inside the
+        // `try` on purpose — a failure while storing the Nth file must still
+        // delete the N-1 files already written to disk.
+        /** @var list<array{path: string, file_name: string, file_size: int}> $storedFiles */
+        $storedFiles = [];
+
+        $committed = false;
+
         try {
+            foreach ($this->completionFiles ?: [] as $file) {
+                $storedFiles[] = [
+                    'path' => $file->store('attachments', 'local'),
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize(),
+                ];
+            }
+
             DB::beginTransaction();
 
+            // #1609: the pre-check above reads a row that can move before this
+            // write — `assign()`/`forward()`/`acceptTicket()` all mutate it,
+            // and with `targetUnitId` set the pre-check was skipped entirely,
+            // so the forwarded branch ran for ANY status (a closed ticket could
+            // be moved and reopened as `forwarded`). Mirror acceptTicket()'s
+            // locked re-read (#1564): the transition decision is made on the
+            // row this transaction will write. `archived_at` rides along
+            // because an archived row is terminal for both branches (#929).
+            $locked = DB::select(
+                'SELECT id, status, current_assignee_id, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
+
+            $lockedRow = $locked[0] ?? null;
+
+            // A deleted row is a loss, not an undefined-offset 500.
+            if ($lockedRow === null
+                || $lockedRow->archived_at !== null
+                || in_array($lockedRow->status, ['completed', 'rejected'], true)) {
+                DB::rollBack();
+                $this->addError('completionNote', 'تیکت بسته را نمی‌توان مجدداً ارجاع داد یا مختومه کرد.');
+
+                return;
+            }
+
+            if ($actionType === 'completed') {
+                // The pre-check is only a fast fail; the locked row decides.
+                if ($lockedRow->status !== 'accepted') {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
+
+                    return;
+                }
+
+                // #1609: parity with Api\TicketController::complete() (#530) —
+                // only the ticket's current assignee may close it, even when the
+                // caller holds manage_unit_tickets.
+                if ((int) $lockedRow->current_assignee_id !== (int) Auth::id()) {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را مختومه کند.');
+
+                    return;
+                }
+            }
+
             if ($actionType === 'forwarded') {
+                // #1608: same locked terminal-state guard as forward(). The
+                // status check above runs on the bound model and only covers
+                // the completion branch, so a closed ticket forwarded through
+                // this modal used to be resurrected as `forwarded`.
+                $locked = DB::select(
+                    'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                    [$ticket->id]
+                );
+
+                if ($locked === []) {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'تیکت یافت نشد.');
+
+                    return;
+                }
+
+                if ($this->isClosedTicketRow($locked[0])) {
+                    DB::rollBack();
+                    $this->addError('completionNote', 'تیکت بسته قابل ارجاع مجدد نیست.');
+
+                    return;
+                }
+
                 $ticket->update([
                     'unit_id' => $this->targetUnitId,
                     'status' => 'forwarded',
@@ -558,6 +724,12 @@ trait TicketsInboxFlow
                 $message = 'تیکت با موفقیت مختومه و بسته شد.';
 
                 // اگر وظیفه مرتبطی دارد و تمام تیکت‌های آن وظیفه بسته شده‌اند، وظیفه را تکمیل کن
+                //
+                // #1609: this runs AFTER the locked re-check and reads sibling
+                // tickets, which the row lock does not cover. Locking the
+                // siblings is deliberately not attempted: two concurrent
+                // completions of the last open tickets both marking the task
+                // complete is the same benign outcome.
                 if ($ticket->task_id) {
                     $relatedTicket = Ticket::where('task_id', $ticket->task_id)
                         ->where('status', '!=', 'completed')
@@ -577,20 +749,25 @@ trait TicketsInboxFlow
                 'to_unit_id' => $this->targetUnitId ?? $ticket->unit_id,
             ]);
 
-            if ($this->completionFiles) {
-                foreach ($this->completionFiles as $file) {
-                    $path = $file->store('attachments', 'local');
-                    $ticket->attachments()->create([
-                        'user_id' => auth()->id(),
-                        'activity_id' => $newActivity->id,
-                        'file_path' => $path,
-                        'file_name' => $file->getClientOriginalName(),
-                        'file_size' => $file->getSize(),
-                    ]);
-                }
+            // #1615: the files are already on disk (see the top of this method);
+            // this loop only records them. Nothing here touches the disk, so a
+            // rollback can never strand a file on its own.
+            foreach ($storedFiles as $stored) {
+                $ticket->attachments()->create([
+                    'user_id' => auth()->id(),
+                    'activity_id' => $newActivity->id,
+                    'file_path' => $stored['path'],
+                    'file_name' => $stored['file_name'],
+                    'file_size' => $stored['file_size'],
+                ]);
             }
 
             DB::commit();
+
+            // Only a commit makes the files permanent. Set it immediately —
+            // before the UI resets below, which live inside this `try` — so a
+            // post-commit failure never deletes the files of durable rows.
+            $committed = true;
 
             // #1176: `showingTicket` became a computed — resetting it meant
             // writing to a computed and blowing up. The id reset covers the
@@ -604,9 +781,24 @@ trait TicketsInboxFlow
                 'text' => $message,
                 'icon' => 'success',
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
+            // #1615: \Throwable, not \Exception — a PHP `Error` (TypeError,
+            // ErrorException) is not an \Exception, so it escaped the old catch
+            // and left the transaction and its writes open. The level guard
+            // covers a failure that happened before `beginTransaction()` (a
+            // disk error above), where `rollBack()` would throw "There is no
+            // active transaction." and hide the original message.
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
             $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: '.$e->getMessage());
+        } finally {
+            // Every non-committing exit — the five early returns, the catch, and
+            // a future `throw` — lands here. One cleanup point, not seven.
+            if (! $committed) {
+                Storage::disk('local')->delete(array_column($storedFiles, 'path'));
+            }
         }
     }
 

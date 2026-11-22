@@ -11,11 +11,28 @@ use App\Models\User;
 use App\Rules\TicketTargetUnit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
+    /**
+     * #1608: outcomes of atomicTransition(). The caller maps them to the
+     * existing 403/422 responses — the Flutter app depends on those codes and
+     * messages, so the helper must not collapse assignee drift into status
+     * drift.
+     */
+    private const TRANSITION_OK = 'ok';
+
+    private const TRANSITION_ASSIGNEE_MISMATCH = 'assignee-mismatch';
+
+    private const TRANSITION_STATUS_MISMATCH = 'status-mismatch';
+
+    private const TRANSITION_CLOSED = 'closed';
+
+    private const TRANSITION_MISSING = 'missing';
+
     public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
         $request->validate([
@@ -67,7 +84,7 @@ class TicketController extends Controller
     {
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
-            'content' => 'required|string',
+            'content' => 'required|string|max:20000',
             'priority' => ['required', Rule::in(Ticket::PRIORITIES)],
             'unit_id' => ['required', 'integer', new TicketTargetUnit],
             'deadline' => 'nullable|date',
@@ -100,12 +117,23 @@ class TicketController extends Controller
 
         $validated = $request->validate([
             'subject' => 'sometimes|required|string|max:255',
-            'content' => 'sometimes|required|string',
+            'content' => 'sometimes|required|string|max:20000',
             'priority' => ['sometimes', 'required', Rule::in(Ticket::PRIORITIES)],
             'deadline' => 'nullable|date',
         ]);
 
-        $ticket->update($validated);
+        // #1633: a closed ticket is immutable. Same locked-row guard as assign()
+        // (#1608) — a pre-check on the bound model would leave the same
+        // check-then-act window a concurrent complete()/reject() can slip through.
+        $transition = $this->atomicTransition($ticket, [], $validated, rejectClosed: true);
+
+        if ($transition === self::TRANSITION_MISSING) {
+            return response()->json(['message' => 'Ticket no longer exists.'], 422);
+        }
+
+        if ($transition !== self::TRANSITION_OK) {
+            return response()->json(['message' => 'Closed tickets cannot be edited.'], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -146,10 +174,25 @@ class TicketController extends Controller
             return response()->json(['message' => 'Assignee is not in an accessible unit.'], 403);
         }
 
-        $ticket->update([
-            'current_assignee_id' => $validated['assignee_id'],
-            'status' => 'forwarded',
-        ]);
+        // #1608: this write sets status = 'forwarded' unconditionally, so on a
+        // closed ticket it silently resurrects it and leaves the stale
+        // completed_at / accepted_at / archived_at behind. Archiving is one-way
+        // (#929), so the guard runs on the locked row — a pre-check on the
+        // bound model would leave the same check-then-act window.
+        $transition = $this->atomicTransition(
+            $ticket,
+            [],
+            ['current_assignee_id' => $validated['assignee_id'], 'status' => 'forwarded'],
+            rejectClosed: true,
+        );
+
+        if ($transition === self::TRANSITION_MISSING) {
+            return response()->json(['message' => 'Ticket no longer exists.'], 422);
+        }
+
+        if ($transition !== self::TRANSITION_OK) {
+            return response()->json(['message' => 'Closed tickets cannot be reassigned.'], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -176,10 +219,24 @@ class TicketController extends Controller
             return response()->json(['message' => 'Only created or forwarded tickets can be accepted.'], 422);
         }
 
-        $ticket->update([
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
+        // #1608: the checks above read the bound model. Re-check the same claim
+        // on the locked row, so a concurrent accept(), an assign()/forward()
+        // that moved the assignee (without changing status) or a DELETE between
+        // the read and the write is a loss instead of a silent overwrite. Same
+        // shape as TicketsInboxFlow::acceptTicket() (#1564).
+        $transition = $this->atomicTransition(
+            $ticket,
+            ['status' => $ticket->status, 'current_assignee_id' => $request->user()->id],
+            ['status' => 'accepted', 'accepted_at' => now()],
+        );
+
+        if ($transition === self::TRANSITION_ASSIGNEE_MISMATCH) {
+            return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
+        }
+
+        if ($transition !== self::TRANSITION_OK) {
+            return response()->json(['message' => 'Only created or forwarded tickets can be accepted.'], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -203,14 +260,79 @@ class TicketController extends Controller
             return response()->json(['message' => 'Ticket must be accepted before completing.'], 422);
         }
 
-        $ticket->update([
-            'status' => 'completed',
-            'completed_at' => now(),
-        ]);
+        // #1608: same locked re-check as accept() — completion after a
+        // concurrent reassignment is a loss (403), and a status that moved on
+        // is a 422, never a silent double-complete.
+        $transition = $this->atomicTransition(
+            $ticket,
+            ['status' => 'accepted', 'current_assignee_id' => $request->user()->id],
+            ['status' => 'completed', 'completed_at' => now()],
+        );
+
+        if ($transition === self::TRANSITION_ASSIGNEE_MISMATCH) {
+            return response()->json(['message' => 'Only the assigned user can complete this ticket.'], 403);
+        }
+
+        if ($transition !== self::TRANSITION_OK) {
+            return response()->json(['message' => 'Ticket must be accepted before completing.'], 422);
+        }
 
         return response()->json([
             'success' => true,
             'data' => new TicketDetailResource($ticket->fresh()->load(['unit:id,name', 'assignee:id,n_code'])),
         ]);
+    }
+
+    /**
+     * #1608: perform a ticket write atomically.
+     *
+     * The controller validates the bound model first (fast path, and the source
+     * of the 403/422 messages), then this helper re-reads the row under
+     * `SELECT ... FOR UPDATE` inside a transaction and re-checks it against the
+     * values the caller already validated. Anything that moved between the two
+     * reads — a concurrent transition, an assignee change, a closed ticket, a
+     * DELETEd row — is a loss, never a silent overwrite. The query shape
+     * mirrors the web `TicketsInboxFlow::acceptTicket()` (#1564, PR #1568).
+     *
+     * @param  array{status?: string, current_assignee_id?: int}  $expected
+     * @param  array<string, mixed>  $attributes
+     * @return string one of the TRANSITION_* constants
+     */
+    private function atomicTransition(Ticket $ticket, array $expected, array $attributes, bool $rejectClosed = false): string
+    {
+        return DB::transaction(function () use ($ticket, $expected, $attributes, $rejectClosed): string {
+            $locked = DB::select(
+                'SELECT id, status, current_assignee_id, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
+
+            // The row was DELETEd between route-model binding and the lock.
+            if ($locked === []) {
+                return self::TRANSITION_MISSING;
+            }
+
+            $row = $locked[0];
+
+            if (array_key_exists('current_assignee_id', $expected)
+                && (int) $row->current_assignee_id !== (int) $expected['current_assignee_id']) {
+                return self::TRANSITION_ASSIGNEE_MISMATCH;
+            }
+
+            // #929: archiving is one-way — a closed ticket stays closed unless a
+            // human reopens it deliberately. Checked on the locked row so a
+            // concurrent complete() cannot land after a stale pre-check.
+            if ($rejectClosed
+                && (in_array($row->status, ['completed', 'rejected'], true) || $row->archived_at !== null)) {
+                return self::TRANSITION_CLOSED;
+            }
+
+            if (array_key_exists('status', $expected) && $row->status !== $expected['status']) {
+                return self::TRANSITION_STATUS_MISMATCH;
+            }
+
+            $ticket->update($attributes);
+
+            return self::TRANSITION_OK;
+        });
     }
 }

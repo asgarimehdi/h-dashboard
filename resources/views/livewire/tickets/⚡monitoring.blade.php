@@ -53,6 +53,13 @@ new class extends Component
     public array $filterUnits = [];
     public ?Unit $currentUnit = null;
 
+    // Issue #1632: the route gate (`role_or_permission:view_all_tickets`) runs only
+    // on the full page load, never on `/livewire/update`, so it is re-checked here.
+    public function boot(): void
+    {
+        $this->authorize('view_all_tickets');
+    }
+
     public function mount(): void
     {
         $this->loadData();

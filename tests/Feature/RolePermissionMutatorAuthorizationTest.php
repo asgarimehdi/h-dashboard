@@ -314,11 +314,13 @@ test('the mutator permission matches the page gate permission', function () {
         'resources/views/livewire/tools/tools.blade.php' => 'manage_users',
         'resources/views/livewire/hardware/index.blade.php' => 'manage_hardware',
         'resources/views/livewire/units/index.blade.php' => 'organization',
+        'resources/views/livewire/units/map.blade.php' => 'organization',
         'resources/views/livewire/kargozini/estekhdam.blade.php' => 'kargozini',
         'resources/views/livewire/kargozini/tahsil.blade.php' => 'kargozini',
         'resources/views/livewire/kargozini/semat.blade.php' => 'kargozini',
         'resources/views/livewire/kargozini/radif.blade.php' => 'kargozini',
         'resources/views/livewire/todo/todo.blade.php' => 'calendar',
+        'resources/views/livewire/tickets/⚡create.blade.php' => 'create_ticket',
     ];
 
     foreach ($source as $file => $permission) {

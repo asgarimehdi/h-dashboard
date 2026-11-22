@@ -197,7 +197,7 @@ return new class extends Component
     public function getAllowedUnitTypes()
     {
         if ($this->userUnitLevel === 'ministry') {
-            return UnitType::where('id', '!=', 1)->get();
+            return UnitType::where('id', '!=', UnitType::ROOT_ID)->get();
         }
 
         return $this->walkAllowedUnitTypes();
@@ -301,7 +301,7 @@ return new class extends Component
             return collect();
         }
 
-        if ($this->unit_type_id == 1) {
+        if ($this->unit_type_id == UnitType::ROOT_ID) {
             return collect();
         }
 
@@ -356,7 +356,7 @@ return new class extends Component
             'name' => 'required|string|max:255',
             'unit_type_id' => 'required|exists:unit_types,id',
             'region_id' => 'nullable|exists:regions,id',
-            'parent_id' => $this->unit_type_id == 1 ? 'nullable' : 'required|exists:units,id',
+            'parent_id' => $this->unit_type_id == UnitType::ROOT_ID ? 'nullable' : 'required|exists:units,id',
             'can_receive_tickets' => 'boolean',
             // #1246: validated only where it can be written. Hiding the input
             // in Blade is not the guard — the server must ignore the payload
@@ -382,9 +382,13 @@ return new class extends Component
 
         if ($this->parent_id) {
             $parentUnit = Unit::find($this->parent_id);
-            $allowedParentTypeIds = UnitTypeRelationship::where('child_unit_type_id', $this->unit_type_id)
-                ->pluck('allowed_parent_unit_type_id')->toArray();
-            if (! in_array($parentUnit->unit_type_id, $allowedParentTypeIds)) {
+
+            // Issue #1649: shared rule with Api\UnitController — one definition
+            // of "allowed parent type", no duplicated relationship query here.
+            if (! $parentUnit || ! UnitTypeRelationship::allowsParentType(
+                (int) $this->unit_type_id,
+                $parentUnit->unit_type_id,
+            )) {
                 $this->error('واحد بالادستی انتخاب‌شده مجاز نیست.');
 
                 return;
@@ -869,7 +873,7 @@ return new class extends Component
             @endif
 
             <x-select wire:model.live="parent_id" label="واحد بالادستی" :options="$this->parentUnits" option-value="id"
-                      option-label="name" :required="$unit_type_id != 1" placeholder="انتخاب کنید"/>
+                      option-label="name" :required="$unit_type_id != \App\Models\UnitType::ROOT_ID" placeholder="انتخاب کنید"/>
 
             {{-- #1246: only base units carry a population; the server ignores
                  the field for every other type. --}}

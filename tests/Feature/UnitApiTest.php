@@ -99,19 +99,28 @@ class UnitApiTest extends TestCase
     public function test_user_can_create_unit(): void
     {
         $this->createUserWithUnit(['organization']);
-        $type = UnitType::create(['name' => 'Test Type']);
+        // Issue #1649: a non-root unit now requires an allowed parent, so the
+        // create happy path uses the root type (id = ROOT_ID, parentless) and
+        // pins the id instead of depending on the sequence.
+        DB::table('unit_types')->insert([
+            'id' => UnitType::ROOT_ID,
+            'name' => 'Test Type',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->resyncSequence('unit_types');
         $user = User::first();
         $token = $this->createApiToken($user, ['units:read', 'units:write']);
 
         $response = $this->apiPost('/api/units', [
             'name' => 'New Unit',
-            'unit_type_id' => $type->id,
+            'unit_type_id' => UnitType::ROOT_ID,
         ], $token);
 
         $response->assertStatus(201)
             ->assertJson(['success' => true]);
 
-        $this->assertDatabaseHas('units', ['name' => 'New Unit']);
+        $this->assertDatabaseHas('units', ['name' => 'New Unit', 'unit_type_id' => UnitType::ROOT_ID]);
     }
 
     public function test_user_can_update_accessible_unit(): void

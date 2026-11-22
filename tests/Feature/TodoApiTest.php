@@ -5,8 +5,11 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\TodoController;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -172,6 +175,146 @@ class TodoApiTest extends TestCase
             ]);
 
         $this->assertTrue((bool) $todo->fresh()->is_completed);
+    }
+
+    // =====================================================================
+    // #1634 — toggleComplete is atomic; a toggle is never silently lost
+    // =====================================================================
+
+    /**
+     * Make the toggle's `FOR UPDATE` probe observe a stale snapshot.
+     *
+     * Same mechanism as `TicketApiTest::fakeLockedTicketRow()` (#1608): the
+     * facade is swapped for a `DatabaseManager` subclass that delegates
+     * `connection()` to the real manager (a fresh manager would open a second
+     * PDO outside RefreshDatabase's transaction and see no rows at all) and
+     * answers only the `FOR UPDATE` probe with the given row.
+     *
+     * @param  object|null  $row  the row the lock reports, or null for "gone"
+     */
+    protected function fakeLockedTodoRow(?object $row): void
+    {
+        /** @var DatabaseManager $inner */
+        $inner = DB::getFacadeRoot();
+
+        DB::swap(new class(app(), app('db.factory'), $inner, $row) extends DatabaseManager
+        {
+            public function __construct($app, $factory, private DatabaseManager $inner, private ?object $row)
+            {
+                parent::__construct($app, $factory);
+            }
+
+            public function connection($name = null)
+            {
+                return $this->inner->connection($name);
+            }
+
+            public function select($query, $bindings = [], $useReadPdo = true)
+            {
+                if (str_contains($query, 'FOR UPDATE')) {
+                    return $this->row === null ? [] : [$this->row];
+                }
+
+                return $this->inner->connection()->select($query, $bindings, $useReadPdo);
+            }
+        });
+    }
+
+    public function test_toggle_complete_uses_the_locked_row_not_the_stale_model(): void
+    {
+        // The stale in-memory model says `false`, but another writer already
+        // flipped the row to `true` before our lock. Deriving the new value from
+        // the stale model writes `true` again and silently loses our toggle; the
+        // locked read must be the source of truth.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'is_completed' => false,
+        ]);
+        $this->assertFalse($todo->is_completed);
+
+        $this->fakeLockedTodoRow((object) array_merge(
+            $todo->getAttributes(),
+            ['is_completed' => true],
+        ));
+
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+        $response = $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'is_completed' => false,
+                ],
+            ]);
+
+        $this->assertFalse((bool) $todo->fresh()->is_completed);
+    }
+
+    public function test_toggle_complete_returns_422_when_row_vanished_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'is_completed' => false,
+        ]);
+
+        $this->fakeLockedTodoRow(null);
+
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+        $response = $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Todo no longer exists.']);
+
+        $this->assertDatabaseHas('todos', ['id' => $todo->id, 'is_completed' => false]);
+    }
+
+    public function test_double_toggle_returns_to_the_starting_value(): void
+    {
+        // Sanity only: two sequential flips also return to the starting value on
+        // the buggy read-then-write code, so this is NOT the race guard — the
+        // locked-row test above is.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'is_completed' => false,
+        ]);
+
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token)->assertStatus(200);
+        $this->assertTrue((bool) $todo->fresh()->is_completed);
+
+        $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token)->assertStatus(200);
+        $this->assertFalse((bool) $todo->fresh()->is_completed);
+    }
+
+    public function test_toggle_complete_still_invalidates_report_and_dashboard_caches(): void
+    {
+        // The write must go through the model: a query-builder mass update fires
+        // no `Todo::updated`, so report_todos + dashboard would silently stop
+        // invalidating (AppServiceProvider).
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $todo = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'is_completed' => false,
+        ]);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $reportVersion = $cache->getVersion('report_todos');
+        $dashboardVersion = $cache->getVersion('dashboard');
+
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+        $this->apiPost("/api/todos/{$todo->id}/toggle-complete", [], $token)->assertStatus(200);
+
+        $this->assertGreaterThan($reportVersion, $cache->getVersion('report_todos'));
+        $this->assertGreaterThan($dashboardVersion, $cache->getVersion('dashboard'));
     }
 
     public function test_todo_list_respects_jalali_date_filtering(): void

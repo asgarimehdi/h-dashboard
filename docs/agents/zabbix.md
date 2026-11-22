@@ -30,7 +30,7 @@
 
 `ZabbixService::testApiConnection()` calls `apiinfo.version` and throws unless the response carries a string `result`. `testConnection()` verifies API reachability **before** item checks and surfaces the reported Zabbix version. `tests/Unit/ZabbixServiceTest.php` + `tests/Feature/ZabbixDeviceTest.php` cover it.
 
-> The `/it` widgets' friendly «دسترسی به سرور مقدور نمی باشد» message (#703) is **client-side and only for a connection failure** — a 400 from bad item ids must keep surfacing as an error, or real bugs get hidden.
+> The `/it` widgets' friendly «دسترسی به سرور مقدور نمی باشد» message (#703) is **client-side and only for a connection failure** — a 422 from bad or unregistered item ids must keep surfacing as an error, or real bugs get hidden. The two endpoints only accept item IDs registered on an **active** `zabbix_devices` row (#1621), checked in validation before any cache or upstream access.
 
 ### Batched Zabbix polling (issue #722 sibling, `f002cfc`)
 

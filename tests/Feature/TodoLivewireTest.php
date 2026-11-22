@@ -8,11 +8,14 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Cache\Events\KeyWritten;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Features\SupportTesting\Testable;
@@ -38,6 +41,45 @@ function calendarEventsForWideWindow(): array
     );
 
     return $component->getEvents();
+}
+
+/**
+ * Make the toggle's `FOR UPDATE` probe observe a stale snapshot (#1634).
+ *
+ * Same mechanism as `TicketApiTest::fakeLockedTicketRow()` (#1608): the facade
+ * is swapped for a `DatabaseManager` subclass that delegates `connection()` to
+ * the real manager (a fresh manager would open a second PDO outside
+ * RefreshDatabase's transaction and see no rows at all) and answers only the
+ * `FOR UPDATE` probe with the given row.
+ *
+ * @param  object|null  $row  the row the lock reports, or null for "gone"
+ */
+function fakeLockedTodoRow(?object $row): void
+{
+    /** @var DatabaseManager $inner */
+    $inner = DB::getFacadeRoot();
+
+    DB::swap(new class(app(), app('db.factory'), $inner, $row) extends DatabaseManager
+    {
+        public function __construct($app, $factory, private DatabaseManager $inner, private ?object $row)
+        {
+            parent::__construct($app, $factory);
+        }
+
+        public function connection($name = null)
+        {
+            return $this->inner->connection($name);
+        }
+
+        public function select($query, $bindings = [], $useReadPdo = true)
+        {
+            if (str_contains($query, 'FOR UPDATE')) {
+                return $this->row === null ? [] : [$this->row];
+            }
+
+            return $this->inner->connection()->select($query, $bindings, $useReadPdo);
+        }
+    });
 }
 
 beforeEach(function () {
@@ -163,6 +205,97 @@ test('create todo requires start_date_picker', function () {
         ->assertHasErrors(['start_date_picker']);
 });
 
+// Issue #1655: Livewire properties are server-trusted, so the date pickers
+// must be validated strictly instead of relying on the readonly picker UI.
+test('create todo rejects an impossible start date (Aban 31)', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1404/08/31')
+        ->set('start_time_picker', '09:00')
+        ->call('save')
+        ->assertHasErrors(['start_date_picker']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('create todo rejects month 13', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1404/13/01')
+        ->set('start_time_picker', '09:00')
+        ->call('save')
+        ->assertHasErrors(['start_date_picker']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('create todo rejects an impossible end date', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/01')
+        ->set('start_time_picker', '09:00')
+        ->set('end_date_picker', '1404/08/31')
+        ->call('save')
+        ->assertHasErrors(['end_date_picker']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('create todo rejects an impossible time', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/01')
+        ->set('start_time_picker', '25:99')
+        ->call('save')
+        ->assertHasErrors(['start_time_picker']);
+
+    $this->assertDatabaseCount('todos', 0);
+});
+
+test('create todo stores the expected Gregorian start_at', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1405/07/01')
+        ->set('start_time_picker', '10:30')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $todo = Todo::query()->where('title', 'وظیفه تستی')->firstOrFail();
+
+    expect($todo->start_at->format('Y-m-d H:i'))->toBe('2026-09-23 10:30');
+});
+
+test('create todo accepts the 31st of Shahrivar', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openModal')
+        ->set('title', 'وظیفه تستی')
+        ->set('start_date_picker', '1404/06/31')
+        ->set('start_time_picker', '10:30')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $todo = Todo::query()->where('title', 'وظیفه تستی')->firstOrFail();
+
+    expect($todo->start_at->format('Y-m-d H:i'))->toBe('2025-09-22 10:30');
+});
+
 // ==================== Edit Todo ====================
 
 test('can edit a todo', function () {
@@ -195,6 +328,27 @@ test('edit saves changes', function () {
         ->call('save');
 
     $this->assertDatabaseHas('todos', ['id' => $todo->id, 'title' => 'عنوان جدید']);
+});
+
+test('edit with an impossible date leaves the stored row unchanged', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'عنوان قبل',
+        'start_at' => '2026-01-01 08:00:00',
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('editEvent', $todo->id)
+        ->set('start_date_picker', '1404/08/31')
+        ->call('save')
+        ->assertHasErrors(['start_date_picker']);
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $todo->id,
+        'start_at' => '2026-01-01 08:00:00',
+    ]);
 });
 
 test('editing a todo preserves the original owner', function () {
@@ -266,6 +420,90 @@ test('toggle complete on completed todo marks incomplete', function () {
 
     $todo->refresh();
     $this->assertFalse($todo->is_completed);
+});
+
+// ==================== #1634 — atomic toggleComplete ====================
+
+test('toggleComplete uses the locked row, not the stale model', function () {
+    // The stale in-memory model says `false`, but another writer already flipped
+    // the row to `true` before our lock. Deriving the new value from the stale
+    // model writes `true` again and silently loses our toggle; the locked read
+    // must be the source of truth.
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'is_completed' => false,
+    ]);
+    $this->assertFalse($todo->is_completed);
+
+    fakeLockedTodoRow((object) array_merge(
+        $todo->getAttributes(),
+        ['is_completed' => true],
+    ));
+
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+
+    $this->assertFalse((bool) $todo->fresh()->is_completed);
+});
+
+test('toggleComplete reports a vanished todo without writing', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'is_completed' => false,
+    ]);
+
+    fakeLockedTodoRow(null);
+
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+
+    $this->assertDatabaseHas('todos', ['id' => $todo->id, 'is_completed' => false]);
+});
+
+test('double toggleComplete returns to the starting value', function () {
+    // Sanity only: two sequential flips also return to the starting value on the
+    // buggy read-then-write code, so this is NOT the race guard — the
+    // locked-row test above is.
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'is_completed' => false,
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+    $this->assertTrue((bool) $todo->fresh()->is_completed);
+
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+    $this->assertFalse((bool) $todo->fresh()->is_completed);
+});
+
+test('toggleComplete bumps report_todos and dashboard versions', function () {
+    // The write must go through the model: a query-builder mass update fires no
+    // `Todo::updated`, so report_todos + dashboard would silently stop
+    // invalidating (AppServiceProvider).
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'is_completed' => false,
+    ]);
+
+    $cache = app(CacheInvalidationServiceInterface::class);
+    $reportVersion = $cache->getVersion('report_todos');
+    $dashboardVersion = $cache->getVersion('dashboard');
+
+    Livewire::test('todo.todo')
+        ->call('toggleComplete', $todo->id);
+
+    $this->assertGreaterThan($reportVersion, $cache->getVersion('report_todos'));
+    $this->assertGreaterThan($dashboardVersion, $cache->getVersion('dashboard'));
 });
 
 // ==================== Unit Scope ====================

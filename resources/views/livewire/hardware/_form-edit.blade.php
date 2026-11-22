@@ -38,7 +38,7 @@
                     <div class="form-control">
                         <label class="label cursor-pointer gap-2">
                             <input type="checkbox" wire:model="shutdown" class="checkbox checkbox-sm" />
-                            <span class="label-text">فعال</span>
+                            <span class="label-text">خاموش شود</span>
                         </label>
                     </div>
                     <div class="form-control">

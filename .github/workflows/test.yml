@@ -56,7 +56,7 @@ jobs:
           php scripts/dependency-audit-gate.php composer-audit.json
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -167,7 +167,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -250,7 +250,7 @@ jobs:
         run: php scripts/find-dead-test-files.php
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         if: always()
         with:
           files: ./coverage.xml
@@ -449,7 +449,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -517,7 +517,7 @@ jobs:
         # packages) is NOT cacheable and still runs every time; and a PR from
         # a fork can read caches but never write one, so it will not hit until
         # a same-repo run has saved this entry.
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -631,7 +631,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -682,7 +682,7 @@ jobs:
         run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
 
       - name: Cache Playwright chromium (issue #1067)
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -759,7 +759,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -803,7 +803,7 @@ jobs:
         run: PGPASSWORD=secret psql -h 127.0.0.1 -U postgres -d h_dashboard_e2e -c "SELECT 1;"
 
       - name: Cache Playwright chromium (issue #1067)
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -888,7 +888,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -941,7 +941,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer download cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
@@ -1014,7 +1014,7 @@ jobs:
           tools: composer:latest
 
       - name: Cache Composer packages
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vendor
           key: composer-vendor-${{ runner.os }}-${{ hashFiles('composer.lock') }}

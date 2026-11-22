@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Imports\HardwareImport;
+use App\Jobs\Concerns\RevalidatesImportActor;
 use App\Support\ImportStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,11 +28,17 @@ use Maatwebsite\Excel\Facades\Excel;
  * per-row actions, the scope captured at dispatch time (a worker has no
  * session, so `accessibleUnitIds()` would resolve to `[]`) and the actor
  * context for the audit trail.
+ *
+ * #1639: the captured scope is a dispatch-time snapshot, never an
+ * authorization decision. `handle()` re-validates the actor's permission and
+ * intersects the captured scope with their current one before writing (see
+ * {@see RevalidatesImportActor}).
  */
 #[Connection('redis-reports')]
 class ImportHardwareJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use RevalidatesImportActor;
 
     /**
      * A large sheet is CPU + DB bound. The default 60s worker timeout is not
@@ -55,7 +62,8 @@ class ImportHardwareJob implements ShouldQueue
      * instead of silently duplicating rows.
      *
      * @param  array<string, string>  $selectedActions  `row_{n}` => create|update|skip
-     * @param  array<int, int>  $accessibleUnitIds  Scope captured from the dispatcher.
+     * @param  array<int, int>  $accessibleUnitIds  Scope captured from the dispatcher;
+     *                                              re-validated and intersected in `handle()`.
      * @param  string|null  $statusToken  Identifies this dispatch to the browser
      *                                    (see {@see ImportStatus}).
      */
@@ -73,9 +81,21 @@ class ImportHardwareJob implements ShouldQueue
 
     public function handle(): void
     {
+        $scope = $this->authorizedImportScope(
+            'manage_hardware',
+            $this->userId,
+            $this->accessibleUnitIds,
+            $this->path,
+            $this->statusToken,
+        );
+
+        if ($scope === null) {
+            return;
+        }
+
         $import = new HardwareImport;
         $import->setCompareKey($this->compareKey);
-        $import->setAccessibleUnitIds($this->accessibleUnitIds);
+        $import->setAccessibleUnitIds($scope);
         $import->setSelectedActions($this->selectedActions);
         $import->setAuditContext($this->userId, $this->source ?? 'import', $this->ip, $this->userAgent);
 

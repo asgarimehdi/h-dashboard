@@ -193,6 +193,7 @@ class UsersPageTest extends TestCase
     public function test_reports_pages_load_for_authorized_user(): void
     {
         $user = $this->createAdminUser();
+        $user->givePermissionTo('manage_personnel');
         Session::put('current_unit_id', 1);
 
         $this->actingAs($user);

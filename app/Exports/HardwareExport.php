@@ -96,13 +96,13 @@ class HardwareExport implements FromQuery, ShouldAutoSize, WithCustomChunkSize, 
                 ? trim($hardware->person->f_name.' '.$hardware->person->l_name)
                 : '-',
             'unit_name' => $hardware->person?->unit?->name ?? '-',
-            'shutdown' => $hardware->shutdown ? 'روشن' : 'خاموش',
+            'shutdown' => $hardware->shutdown ? 'خاموش' : 'روشن',
             'mark' => $hardware->mark ? 'علامت‌دار' : '-',
             'clean_at' => $this->formatJalaliOrDash($hardware->clean_at),
             'comments' => $hardware->comments ?? '-',
             'status' => $hardware->mark
                 ? 'علامت'
-                : ($hardware->shutdown ? 'فعال' : 'خاموش'),
+                : ($hardware->shutdown ? 'خاموش' : 'فعال'),
             default => $hardware->{$key} ?? '-',
         };
     }

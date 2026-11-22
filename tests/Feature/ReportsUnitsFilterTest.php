@@ -30,7 +30,7 @@ class ReportsUnitsFilterTest extends TestCase
 
     public function test_empty_boundary_filter_is_coerced_to_null(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
         session(['current_unit_id' => $unit->id]);
 

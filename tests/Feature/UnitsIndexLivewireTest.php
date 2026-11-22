@@ -478,6 +478,26 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertEquals($outsider->id, Unit::find($outsider->id)->id);
     }
 
+    // ==================== #1649: incompatible parent type refused ====================
+
+    public function test_save_unit_denied_with_incompatible_parent_type(): void
+    {
+        // Parent = type 2 (university); type 4 (network) may only sit under
+        // type 3 (deputy). The shared rule must reject this, as the old inline
+        // check did — this is the web half of the #1649 parity contract.
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->set('name', 'واحد نامجاز')
+            ->set('unit_type_id', 4)
+            ->set('parent_id', $parent->id)
+            ->call('saveUnit');
+
+        $this->assertDatabaseMissing('units', ['name' => 'واحد نامجاز']);
+    }
+
     // ==================== #817: self/descendant parent (cycle) refused ====================
 
     public function test_save_unit_denied_with_descendant_parent(): void

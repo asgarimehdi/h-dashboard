@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\User;
+use App\Support\RoleGuard;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -50,9 +52,30 @@ return new class extends Component
         $this->reset(['name', 'label', 'permissions', 'editingId', 'modal']);
     }
 
+    /**
+     * The acting user, typed as the Eloquent model so static analysis can
+     * resolve the role checks in RoleGuard (same shape as users.index).
+     */
+    private function actor(): User
+    {
+        $actor = \Illuminate\Support\Facades\Auth::user();
+
+        if (! $actor instanceof User) {
+            abort(403);
+        }
+
+        return $actor;
+    }
+
     public function delete(Role $role): void
     {
         $this->authorize('manage_roles');
+
+        // Issue #1607: the `admin` role carries `role:admin` route access that
+        // no permission represents, so it is admin-only. BEFORE the try block:
+        // `abort(403)` is an HttpException and the generic catch below would
+        // turn it into a toast (the #892 shape).
+        RoleGuard::assertCanDeleteRole($this->actor(), $role);
 
         try {
             $role->delete();
@@ -71,6 +94,11 @@ return new class extends Component
     public function createRole(): void
     {
         $this->authorize('manage_roles');
+
+        // Issue #1607: `manage_roles` is a delegation, not a blank cheque —
+        // a non-admin may only hand out permissions it already holds, and the
+        // `admin` NAME is reserved. Before validation, so a 403 wins.
+        RoleGuard::assertCanCreateRole($this->actor(), $this->name, $this->permissions);
 
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
@@ -110,7 +138,13 @@ return new class extends Component
             'permissions' => 'required',
         ]);
 
-        $role = Role::findOrFail($this->editingId);
+        $role = Role::with('permissions')->findOrFail($this->editingId);
+
+        // Issue #1607: same ceiling as createRole(), measured as a DELTA
+        // against the role's current set; the `admin` identity and name are
+        // admin-only regardless of permissions.
+        RoleGuard::assertCanMutateRole($this->actor(), $role, $this->name, $this->permissions);
+
         $role->update(['name' => $this->name, 'label' => $this->label]);
         $role->syncPermissions($this->permissions);
 

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\MaintenanceSchedule;
 use App\Models\Ticket;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -89,40 +90,78 @@ class GenerateDueMaintenance extends Command
      */
     private function processSchedule(MaintenanceSchedule $schedule): bool
     {
+        // Issue #1610: the guard below and the insert are two statements, so
+        // two overlapping runs — a manual run racing the scheduled one, or a
+        // run that outlived the scheduler's `withoutOverlapping` window — both
+        // read "no open ticket" and both write one. The row lock is what makes
+        // the pair atomic: the second run waits here, then its guard sees the
+        // ticket the first run committed. Same pattern as the sibling writer
+        // GenerateRecurringTodos (#1278). This is inside the per-schedule
+        // transaction that handle() opens, so the lock lives until commit.
+        /** @var MaintenanceSchedule|null $locked */
+        $locked = MaintenanceSchedule::query()->whereKey($schedule->id)->lockForUpdate()->first();
+
+        if ($locked === null) {
+            // Deleted between reading the due set and its turn.
+            return false;
+        }
+
         // Issue #533: idempotency guard — skip if an open ticket already exists
         // for this schedule (prevents duplicates on scheduler overlap or crash).
+        // The guard key is now *(schedule id, open, last day)*: each generated
+        // ticket records the `schedule_id` that produced it, so two same-title
+        // schedules in one unit no longer starve each other.
+        // `status != 'completed'` and the one-day window stay shared outer
+        // predicates: they bound the guard to "this cycle already produced a
+        // ticket" — a rejected ticket is still this cycle's ticket (re-creating
+        // it in the window would be a duplicate), while a long-open ticket from
+        // an older cycle must not block the next legitimate generation.
         // Issue #876: `unit_id` is guaranteed non-null here — unit-less
         // schedules are filtered out in handle() — so this guard can actually
         // match. (With a null unit it compiled to `IS NULL`, which can never
         // match the NOT NULL `tickets.unit_id` column and was vacuous.)
-        $existingTicket = Ticket::where('unit_id', $schedule->unit_id)
-            ->where('subject', $schedule->title)
+        // Rows with `schedule_id IS NULL` — tickets written before the identity
+        // column existed, or tickets whose schedule was later deleted (the FK is
+        // `set null`) — keep the old unit/subject match. That fallback is
+        // permanent, not temporary: it is hard-bound to NULL-identity rows, so it
+        // can never hide a post-fix ticket, and it only causes a narrow skip,
+        // never a duplicate.
+        $existingTicket = Ticket::query()
             ->where('status', '!=', 'completed')
             ->where('created_at', '>=', now()->subDay())
+            ->where(function ($q) use ($locked) {
+                $q->where('schedule_id', $locked->id)
+                    ->orWhere(function ($legacy) use ($locked) {
+                        $legacy->whereNull('schedule_id')
+                            ->where('unit_id', $locked->unit_id)
+                            ->where('subject', $locked->title);
+                    });
+            })
             ->exists();
 
         if ($existingTicket) {
-            $this->warn("  Skipping schedule #{$schedule->id} — open ticket already exists.");
+            $this->warn("  Skipping schedule #{$locked->id} — open ticket already exists.");
             // Still advance the schedule to avoid getting stuck
-            $this->advance($schedule);
+            $this->advance($locked);
 
             return false;
         }
 
         Ticket::create([
             'ticket_code' => 'T-'.strtoupper(Str::random(8)),
-            'subject' => $schedule->title,
-            'content' => 'Generated from maintenance schedule #'.$schedule->id,
+            'subject' => $locked->title,
+            'content' => 'Generated from maintenance schedule #'.$locked->id,
             'status' => 'created',
             // #954: the app vocabulary is Ticket::PRIORITIES (three
             // values). `medium` passed the DB CHECK but no report reads
             // it — this unattended nightly writer must stay inside the
             // buckets every aggregation has.
             'priority' => 'normal',
-            'unit_id' => $schedule->unit_id,
+            'unit_id' => $locked->unit_id,
+            'schedule_id' => $locked->id,
         ]);
 
-        $this->advance($schedule);
+        $this->advance($locked);
 
         return true;
     }
@@ -133,13 +172,39 @@ class GenerateDueMaintenance extends Command
         $next = match ($schedule->frequency) {
             'daily' => now()->addDays($interval),
             'weekly' => now()->addWeeks($interval),
-            'monthly' => now()->addMonths($interval),
-            default => now()->addMonths($interval),
+            // 'monthly' — and the legacy default, which has always stepped by
+            // months — use the anchored, non-overflowing step below.
+            default => $this->nextMonthlyDue($schedule, $interval),
         };
 
         $schedule->update([
             'last_generated_at' => now(),
             'next_due_at' => $next,
         ]);
+    }
+
+    /**
+     * گام ماهانهٔ بدون سرریز، لنگرشده روی روزِ ساختِ زمان‌بندی (ایشو #1623).
+     *
+     * `MaintenanceSchedule` ستون `start_at` ندارد؛ تنها روزِ پایدارِ ساخت
+     * `created_at->day` است (تصمیم مالک). مبنا سررسیدِ فعلی است نه `now()`،
+     * تا اجرای دیرهنگام روزِ اجرا را روی سررسید بعدی تحمیل نکند. حلقهٔ
+     * catch-up چند ماهِ ازدست‌رفته را جبران می‌کند تا `next_due_at` در گذشته
+     * نماند و زمان‌بندی برای همیشه سررسید نماند.
+     */
+    private function nextMonthlyDue(MaintenanceSchedule $schedule, int $interval): Carbon
+    {
+        $anchorDay = $schedule->created_at === null ? now()->day : $schedule->created_at->day;
+
+        $next = ($schedule->next_due_at ?? now())->copy()->addMonthsNoOverflow($interval);
+        $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
+
+        $guard = 0;
+        while ($next->lessThanOrEqualTo(now()) && $guard++ < 120) {
+            $next = $next->copy()->addMonthsNoOverflow($interval);
+            $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
+        }
+
+        return $next;
     }
 }

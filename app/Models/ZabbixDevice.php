@@ -137,4 +137,30 @@ class ZabbixDevice extends Model
             $this->response_item_id,
         ], fn ($id) => $id !== null && $id !== ''));
     }
+
+    /**
+     * Every item ID registered on an ACTIVE device — the allowlist enforced by
+     * `GET /api/zabbix/traffic` and `GET /api/zabbix/multi-latest` (#1621).
+     *
+     * Reuses `itemIds()` so the five-column list lives in exactly one place:
+     * a sixth id column must be added there or its gauges will be rejected.
+     * Not cached on purpose — the table is admin-managed and tiny, and a stale
+     * allowlist would 422 a live gauge after a device is re-activated.
+     *
+     * @return array<int, string>
+     */
+    public static function registeredItemIds(): array
+    {
+        $ids = [];
+
+        foreach (self::query()->active()->get() as $device) {
+            foreach ($device->itemIds() as $id) {
+                // Array keys dedupe IDs shared by two columns or two devices;
+                // PHP casts numeric string keys to int, so re-stringify below.
+                $ids[$id] = true;
+            }
+        }
+
+        return array_map('strval', array_keys($ids));
+    }
 }

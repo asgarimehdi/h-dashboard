@@ -42,6 +42,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => $unit->id,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('manage_personnel');
         $this->actingAs($user);
 
         Livewire::test('reports.map-no-boundary')
@@ -50,7 +51,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
 
     public function test_renders_stats_and_map(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.map-no-boundary')
@@ -65,7 +66,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
 
     public function test_help_modal(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.map-no-boundary')
@@ -76,7 +77,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
 
     public function test_counts_match(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // Create child units under user's unit (so they appear in accessible scope)
@@ -95,7 +96,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
 
     public function test_table_visibility(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // Create child units: 1 with coords (should NOT appear in table), 1 without (should appear)
@@ -110,7 +111,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
 
     public function test_child_map_present(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.map-no-boundary')
@@ -122,7 +123,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
 
     public function test_scope_filtering(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         // In-scope: child of user's unit
@@ -147,6 +148,7 @@ class ReportsMapNoBoundaryLivewireTest extends TestCase
             't_id' => 1, 'e_id' => 1, 's_id' => 1, 'r_id' => 1, 'u_id' => null,
         ]);
         $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->givePermissionTo('manage_personnel');
         $this->actingAs($user);
 
         Livewire::test('reports.map-no-boundary')

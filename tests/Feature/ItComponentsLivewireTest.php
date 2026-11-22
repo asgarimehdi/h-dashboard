@@ -27,7 +27,7 @@ class ItComponentsLivewireTest extends TestCase
 
     public function test_it_networks_renders_for_authorized_user(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('it.networks')
@@ -36,7 +36,7 @@ class ItComponentsLivewireTest extends TestCase
 
     public function test_it_networks_has_network_items(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('it.networks')
@@ -45,7 +45,7 @@ class ItComponentsLivewireTest extends TestCase
 
     public function test_it_wireless_renders_for_authorized_user(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('it.wireless')
@@ -54,7 +54,7 @@ class ItComponentsLivewireTest extends TestCase
 
     public function test_it_wireless_has_signal_items(): void
     {
-        ['user' => $user] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['map']);
         $this->actingAs($user);
 
         Livewire::test('it.wireless')

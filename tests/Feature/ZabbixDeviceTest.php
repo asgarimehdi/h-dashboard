@@ -289,7 +289,9 @@ test('deactivated devices disappear from the display pages', function () {
 
 test('device list is cached and refreshed after a write', function () {
     $this->seed(ZabbixDeviceSeeder::class);
-    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    // `it.networks` is gated by `role_or_permission:map|bw` (routes/web.php); the
+    // component re-checks that gate on every Livewire update (#1632).
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix', 'map']);
     $this->actingAs($user);
 
     // warm the cache with the seeded list
