@@ -7,6 +7,7 @@ use App\Http\Requests\UnitScopedRequest;
 use App\Http\Resources\TodoResource;
 use App\Models\Todo;
 use App\Rules\PerPage;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -114,6 +115,29 @@ class TodoController extends Controller
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'is_completed' => 'boolean',
         ]);
+
+        // #1659: `after_or_equal:start_at` only compares two SUBMITTED values.
+        // When `start_at` is absent the rule degrades to `compare($endTs, null, '>=')`
+        // — i.e. it always passes — so a partial update can write an inverted
+        // range. Resolve the effective pair (submitted value, else the stored
+        // one) and reject only when this request actually touches a date, so a
+        // legacy inverted row stays editable by non-date fields.
+        if (array_key_exists('start_at', $validated) || array_key_exists('end_at', $validated)) {
+            $start = array_key_exists('start_at', $validated)
+                ? Carbon::parse($validated['start_at'])
+                : $todo->start_at;
+
+            // An explicit null means "clear the end", not "compare against it".
+            $end = array_key_exists('end_at', $validated)
+                ? ($validated['end_at'] === null ? null : Carbon::parse($validated['end_at']))
+                : $todo->end_at;
+
+            if ($start !== null && $end !== null && $end->lt($start)) {
+                return response()->json([
+                    'message' => 'The end date must be after or equal to the start date.',
+                ], 422);
+            }
+        }
 
         $todo->update($validated);
 
