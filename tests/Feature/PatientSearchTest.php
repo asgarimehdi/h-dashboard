@@ -434,6 +434,23 @@ class PatientSearchTest extends TestCase
         $this->assertSame(0, Patient::query()->count());
     }
 
+    public function test_an_impossible_birth_date_is_rejected_by_the_form(): void
+    {
+        // The picker is `readonly`; the reachable vector is a property set
+        // outside it. The shared rule must still reject the value (#1643).
+        Livewire::test('disease.patients')
+            ->call('openCreateForm')
+            ->set('kod_melli', '0499370899')
+            ->set('first_name', 'آرش')
+            ->set('last_name', 'حسن‌زاده')
+            ->set('gender', 'male')
+            ->set('birth_date_jalali', '1404/13/01')
+            ->call('savePatient')
+            ->assertHasErrors('birth_date_jalali');
+
+        $this->assertSame(0, Patient::query()->count());
+    }
+
     // ==================== PatientService — write path ====================
 
     public function test_create_stores_latin_digits_and_a_gregorian_birth_date(): void

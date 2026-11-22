@@ -65,7 +65,10 @@ final class PatientService
                         return;
                     }
 
-                    $date = JalaliDateRange::parse($value);
+                    // Strict: an impossible date (month 13, day 32) must fail here —
+                    // parse() silently normalises it to a different real date (#1643).
+                    // Unpadded/persian-digit input is already rejected by both parsers.
+                    $date = JalaliDateRange::parseStrict($value);
 
                     // Closed decision «ب»: a future birth date is rejected.
                     if ($date === null || $date->isFuture()) {
