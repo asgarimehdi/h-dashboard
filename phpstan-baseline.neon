@@ -3061,18 +3061,6 @@ parameters:
 			path: resources/views/livewire/todo/todo.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:14\:\:convertToMiladi\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:14\:\:convertToMiladi\(\) has parameter \$jalaliDate with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/todo/todo.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/todo/todo\.blade\.php\:14\:\:editEvent\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
