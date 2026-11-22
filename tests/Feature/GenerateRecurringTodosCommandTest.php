@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Console\Commands\GenerateRecurringTodos;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -368,24 +369,134 @@ class GenerateRecurringTodosCommandTest extends TestCase
      * Issue #1623: the day-of-month anchor survives the short month — the
      * March run lands back on the 31st instead of drifting to the 28th.
      */
-    public function test_monthly_template_recovers_the_31st_after_february(): void
+    /**
+     * Issue #1640: two templates with the same title in the same unit are two
+     * independent schedules. The occurrence guard must key on the template that
+     * produced the instance, not on its content, or the second template is
+     * silently starved while its `last_generated_at` still advances.
+     */
+    public function test_same_title_same_unit_templates_both_generate(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-03-31 08:00:00'));
+        $unit = Unit::create(['name' => 'Ward Gamma']);
 
-        Todo::create([
-            'title' => 'Monthly report',
-            'start_at' => '2026-01-31 08:00:00',
+        $templateA = Todo::create([
+            'title' => 'Shared check',
+            'unit_id' => $unit->id,
+            'start_at' => now()->subDay(),
             'is_completed' => false,
-            'recurrence_rule' => 'monthly',
+            'recurrence_rule' => 'daily',
             'recurrence_interval' => 1,
-            'last_generated_at' => '2026-02-28 08:00:00',
+            'last_generated_at' => now()->subDay(),
+        ]);
+        $templateB = Todo::create([
+            'title' => 'Shared check',
+            'unit_id' => $unit->id,
+            'start_at' => now()->subDay(),
+            'is_completed' => false,
+            'recurrence_rule' => 'daily',
+            'recurrence_interval' => 1,
+            'last_generated_at' => now()->subDay(),
         ]);
 
         $this->artisan('todos:generate-recurring')
-            ->expectsOutputToContain('Created 1 new todo instance(s)')
+            ->expectsOutputToContain('Created 2 new todo instance(s)')
             ->assertExitCode(0);
 
-        $instance = Todo::where('recurrence_rule', 'none')->firstOrFail();
-        $this->assertSame('2026-03-31', $instance->start_at->toDateString());
+        $this->assertDatabaseCount('todos', 4);
+
+        $instances = Todo::where('recurrence_rule', 'none')->get();
+        $this->assertCount(2, $instances);
+        $this->assertEqualsCanonicalizing(
+            [$templateA->id, $templateB->id],
+            $instances->pluck('template_id')->all(),
+        );
+    }
+
+    /**
+     * Issue #1640: the old content guard also ignored `user_id`, so two
+     * same-title templates in one unit owned by different users collided. The
+     * identity key makes ownership irrelevant — both must generate.
+     */
+    public function test_two_same_title_templates_with_different_owners_both_generate(): void
+    {
+        $unit = Unit::create(['name' => 'Ward Epsilon']);
+        $ownerA = User::factory()->create();
+        $ownerB = User::factory()->create();
+
+        $templateA = Todo::create([
+            'title' => 'Shared check',
+            'unit_id' => $unit->id,
+            'user_id' => $ownerA->id,
+            'start_at' => now()->subDay(),
+            'is_completed' => false,
+            'recurrence_rule' => 'daily',
+            'recurrence_interval' => 1,
+            'last_generated_at' => now()->subDay(),
+        ]);
+        $templateB = Todo::create([
+            'title' => 'Shared check',
+            'unit_id' => $unit->id,
+            'user_id' => $ownerB->id,
+            'start_at' => now()->subDay(),
+            'is_completed' => false,
+            'recurrence_rule' => 'daily',
+            'recurrence_interval' => 1,
+            'last_generated_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('todos:generate-recurring')
+            ->expectsOutputToContain('Created 2 new todo instance(s)')
+            ->assertExitCode(0);
+
+        $instances = Todo::where('recurrence_rule', 'none')->get();
+        $this->assertCount(2, $instances);
+        $this->assertEqualsCanonicalizing(
+            [$templateA->id, $templateB->id],
+            $instances->pluck('template_id')->all(),
+        );
+        $this->assertEqualsCanonicalizing(
+            [$ownerA->id, $ownerB->id],
+            $instances->pluck('user_id')->all(),
+        );
+    }
+
+    /**
+     * Issue #1640 (legacy fallback): an instance written before the identity
+     * column existed carries `template_id = null`. The title/unit fallback must
+     * still stop that occurrence from being generated twice — the fallback is a
+     * permanent safety net, not dead code.
+     */
+    public function test_legacy_instance_without_template_id_still_blocks_regeneration(): void
+    {
+        $unit = Unit::create(['name' => 'Ward Zeta']);
+        $template = Todo::create([
+            'title' => 'Legacy check',
+            'unit_id' => $unit->id,
+            'start_at' => now()->subDay(),
+            'is_completed' => false,
+            'recurrence_rule' => 'daily',
+            'recurrence_interval' => 1,
+            'last_generated_at' => now()->subDay(),
+        ]);
+        $occurrence = $template->nextOccurrence();
+        $this->assertNotNull($occurrence);
+
+        Todo::create([
+            'title' => 'Legacy check',
+            'unit_id' => $unit->id,
+            'start_at' => $occurrence,
+            'is_completed' => false,
+            'recurrence_rule' => 'none',
+            // `template_id` intentionally left null: a pre-migration row.
+        ]);
+
+        $this->artisan('todos:generate-recurring')
+            ->expectsOutputToContain('Created 0 new todo instance(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('todos', 2);
+
+        $template->refresh();
+        $this->assertTrue($template->last_generated_at->equalTo($occurrence));
     }
 }
