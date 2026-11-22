@@ -12,6 +12,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithCustomChunkSize;
@@ -495,7 +496,39 @@ class HardwareExportTest extends TestCase
         $export = new HardwareExport($query, ['shutdown']);
 
         $mapped = $export->map($hw);
-        $this->assertEquals('روشن', $mapped[0]);
+        $this->assertEquals('خاموش', $mapped[0]);
+    }
+
+    /**
+     * #1637: the sheet and the list must read `shutdown` the same way.
+     *
+     * The owner's off-hours program reads the `shutdown` rows and powers those
+     * machines off, so `shutdown = true` means «خاموش». Before this fix the
+     * export called the same row «روشن»/«فعال» while the list called it off.
+     */
+    #[Test]
+    public function export_and_list_agree_on_shutdown_polarity(): void
+    {
+        $shutdownRow = $this->createHardware(['pc_name' => 'AGREE-OFF', 'shutdown' => true, 'mark' => false]);
+        $activeRow = $this->createHardware(['pc_name' => 'AGREE-ON', 'shutdown' => false, 'mark' => false]);
+
+        // Surface 1: the sheet.
+        $export = new HardwareExport(
+            Hardware::query()->whereIn('id', [$shutdownRow->id, $activeRow->id]),
+            ['shutdown', 'status']
+        );
+
+        $this->assertSame(['خاموش', 'خاموش'], $export->map($shutdownRow));
+        $this->assertSame(['روشن', 'فعال'], $export->map($activeRow));
+
+        // Surface 2: the rows the list view renders.
+        $rows = collect(Livewire::test('hardware.index')->viewData('hardwares')->items())
+            ->keyBy('pc_name');
+
+        $this->assertSame('off', $rows['AGREE-OFF']['status']);
+        $this->assertSame('بله', $rows['AGREE-OFF']['shutdown_display']);
+        $this->assertSame('on', $rows['AGREE-ON']['status']);
+        $this->assertSame('خیر', $rows['AGREE-ON']['shutdown_display']);
     }
 
     #[Test]
