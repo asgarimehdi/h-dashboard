@@ -418,10 +418,11 @@ class HardwareImportTest extends TestCase
     {
         $data = $this->createTestData();
 
-        // Arabic Yeh (U+064A) must fold to Persian Yeh (U+06CC); «بله»/«خاموش»
-        // are the boolean tokens the exporter emits; the date is Jalali.
+        // Arabic Yeh (U+064A) must fold to Persian Yeh (U+06CC); «بله»/«روشن»
+        // are boolean tokens this repo's exports emit (#1637: «روشن» is the
+        // shutdown=false label); the date is Jalali.
         $file = $this->csvPath(
-            [['1234567890', "PC\u{064A}", 'pc', 'Windows 11', 'بله', 'خاموش', '1404/11/19']],
+            [['1234567890', "PC\u{064A}", 'pc', 'Windows 11', 'بله', 'روشن', '1404/11/19']],
             ['n_code', 'pc_name', 'type', 'os', 'mark', 'shutdown', 'clean_at']
         );
 
