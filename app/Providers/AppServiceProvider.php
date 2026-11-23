@@ -37,6 +37,7 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -71,6 +72,35 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by(
                 $request->user()->id ?? $request->ip()
             );
+        });
+
+        // #1666: login budget for /api/login. Two independent limits:
+        //  - per-account: keyed by the SUBMITTED n_code only, so rotating
+        //    source IPs cannot reset it (the actual fix);
+        //  - per-IP: keeps the old throttle:5,1 budget and stops one host
+        //    spraying many accounts.
+        // Keys are prefixed so the two limits never share a counter. The
+        // middleware hashes them (md5(limiterName.key)), so raw n_code never
+        // reaches the cache.
+        RateLimiter::for('api-login', function ($request) {
+            $nCode = $request->input('n_code');
+
+            // Throttle runs BEFORE validation, so work from the raw input: a
+            // missing or non-scalar n_code gets the IP limit only, and the
+            // limiter never 500s on a hostile body.
+            $account = is_string($nCode) || is_int($nCode) ? (string) $nCode : '';
+
+            $limits = [
+                Limit::perMinute(5)->by('ip:'.$request->ip()),
+            ];
+
+            if ($account !== '') {
+                $limits[] = Limit::perMinute(5)->by(
+                    'account:'.Str::transliterate(Str::lower($account))
+                );
+            }
+
+            return $limits;
         });
 
         // Register anonymous help components with colon syntax for Blade

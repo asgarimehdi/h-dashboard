@@ -16,7 +16,7 @@
 | **API (Token)** | `/api/*` routes | Bearer token via `sanctum` guard |
 
 - Livewire components expect session-based auth. **API tokens are NOT accepted** for Livewire pages.
-- Login form at `/login`. API login: `POST /api/login` with `n_code` + `password` (throttled 5/min).
+- Login form at `/login`. API login: `POST /api/login` with `n_code` + `password` (throttled 5/min per account **and** per IP; the per-account key is the submitted `n_code`, so rotating IPs does not reset it — #1666).
 
 ### Cookie-authenticated `/api/*` calls from the web UI (#1399, #1532)
 
