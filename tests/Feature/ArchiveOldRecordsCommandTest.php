@@ -290,4 +290,149 @@ class ArchiveOldRecordsCommandTest extends TestCase
         $this->assertDatabaseCount('activity_log_archives', 1500);
         $this->assertDatabaseCount('activity_logs', 0);
     }
+
+    /**
+     * #1696: `--months` used to be cast with `(int)` and fed straight to
+     * `subMonths()`. Zero moves the cutoff to `now()`, so every live row is
+     * "older than now" and the whole table is archived by a typo.
+     */
+    public function test_archive_rejects_zero_months_without_archiving(): void
+    {
+        $user = User::factory()->create();
+
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subYears(2)])->save();
+
+        $recent = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'recent',
+        ]);
+        $recent->forceFill(['created_at' => now()->subDays(1)])->save();
+
+        $this->artisan('data:archive', ['--months' => 0])
+            ->expectsOutputToContain('Invalid --months')
+            ->doesntExpectOutputToContain('Found')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseCount('activity_logs', 2);
+        $this->assertDatabaseCount('activity_log_archives', 0);
+    }
+
+    public function test_archive_rejects_invalid_months_values(): void
+    {
+        $user = User::factory()->create();
+
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subYears(2)])->save();
+
+        foreach ([-3, 'abc', 1201] as $value) {
+            $this->artisan('data:archive', ['--months' => $value])
+                ->expectsOutputToContain('Invalid --months')
+                ->assertExitCode(1);
+        }
+
+        $this->assertDatabaseCount('activity_logs', 1);
+        $this->assertDatabaseCount('activity_log_archives', 0);
+    }
+
+    /**
+     * `{--months=12}` is VALUE_OPTIONAL in Symfony, so a bare `--months`
+     * reaches `handle()` as `null` — which `(int)` used to turn into 0.
+     */
+    public function test_archive_rejects_a_bare_months_flag(): void
+    {
+        $this->artisan('data:archive', ['--months' => null])
+            ->expectsOutputToContain('Invalid --months value "(none)"')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseCount('activity_logs', 0);
+        $this->assertDatabaseCount('activity_log_archives', 0);
+    }
+
+    public function test_archive_dry_run_rejects_invalid_months_before_counting(): void
+    {
+        $user = User::factory()->create();
+
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subYears(2)])->save();
+
+        $this->artisan('data:archive', ['--months' => 0, '--dry-run' => true])
+            ->expectsOutputToContain('Invalid --months')
+            ->doesntExpectOutputToContain('Found')
+            ->doesntExpectOutputToContain('Dry run')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseCount('activity_log_archives', 0);
+    }
+
+    /**
+     * A usage error must win over the lock's skip message: otherwise the
+     * operator sees "another run is in progress" and looks in the wrong place.
+     */
+    public function test_invalid_months_is_rejected_before_the_lock_is_taken(): void
+    {
+        Cache::lock(ArchiveOldRecords::LOCK_KEY, 60)->get();
+
+        $this->artisan('data:archive', ['--months' => 0])
+            ->expectsOutputToContain('Invalid --months')
+            ->doesntExpectOutputToContain('Another data:archive run is in progress')
+            ->assertExitCode(1);
+    }
+
+    public function test_invalid_months_does_not_leave_the_lock_held(): void
+    {
+        $user = User::factory()->create();
+
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subYears(2)])->save();
+
+        $this->artisan('data:archive', ['--months' => 0])->assertExitCode(1);
+
+        $this->artisan('data:archive', ['--months' => 12])
+            ->expectsOutputToContain('Archived 1 record(s)')
+            ->assertExitCode(0);
+    }
+
+    public function test_archive_accepts_one_month_and_archives_older_rows(): void
+    {
+        $user = User::factory()->create();
+
+        $old = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'old',
+        ]);
+        $old->forceFill(['created_at' => now()->subDays(45)])->save();
+
+        $recent = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'recent',
+        ]);
+        $recent->forceFill(['created_at' => now()->subDays(1)])->save();
+
+        $this->artisan('data:archive', ['--months' => 1])
+            ->expectsOutputToContain('Archived 1 record(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('activity_logs', 1);
+        $this->assertDatabaseCount('activity_log_archives', 1);
+    }
 }
