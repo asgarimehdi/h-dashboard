@@ -235,13 +235,80 @@ class BackupService
      */
     private function backupDirectory(): string
     {
-        $directory = storage_path('app/private/backup');
+        $directory = $this->backupPath();
 
         if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
             throw new RuntimeException("پوشهٔ بک‌آپ ساخته نشد: {$directory}");
         }
 
         return $directory;
+    }
+
+    /**
+     * The directory archives are written to — never creates it.
+     *
+     * Issue #1692: the download removes its archive after sending, and
+     * `backup:prune-archives` sweeps the leftovers a killed worker leaves
+     * behind. Any future export that writes a file here must either delete it
+     * after send or fall under that prune.
+     */
+    public function backupPath(): string
+    {
+        return storage_path('app/private/backup');
+    }
+
+    /**
+     * Delete leftover archives from earlier runs (issue #1692).
+     *
+     * Only files whose name matches `backup-*` with a `.zip` / `.part`
+     * suffix are candidates, so a hand-placed archive in this directory is
+     * never touched. The age comes from `filemtime`, never from parsing the
+     * name — and a file whose mtime cannot be read is skipped, never deleted.
+     *
+     * @return list<string> file names that were (or, in a dry run, would be) removed
+     */
+    public function pruneArchives(int $retainDays, bool $dryRun = false): array
+    {
+        if ($retainDays < 1) {
+            throw new InvalidArgumentException('پنجرهٔ نگهداری باید دست‌کم یک روز باشد.');
+        }
+
+        $directory = $this->backupPath();
+
+        if (! is_dir($directory)) {
+            return [];
+        }
+
+        $cutoff = now()->subDays($retainDays)->getTimestamp();
+        $removed = [];
+
+        foreach (glob($directory.'/backup-*') ?: [] as $path) {
+            if (! is_file($path)) {
+                continue;
+            }
+
+            if (! str_ends_with($path, '.zip') && ! str_ends_with($path, '.part')) {
+                continue;
+            }
+
+            $modified = @filemtime($path);
+
+            if ($modified === false || $modified > $cutoff) {
+                continue;
+            }
+
+            if ($dryRun) {
+                $removed[] = basename($path);
+
+                continue;
+            }
+
+            if (@unlink($path)) {
+                $removed[] = basename($path);
+            }
+        }
+
+        return $removed;
     }
 
     /**

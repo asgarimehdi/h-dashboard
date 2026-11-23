@@ -54,7 +54,9 @@ class BackupController extends Controller
             "بک‌آپ جدول «{$table}» تهیه شد: {$archive->rowCount()} ردیف."
         );
 
-        return response()->download($archive->path, $archive->filename, self::DOWNLOAD_HEADERS);
+        return response()
+            ->download($archive->path, $archive->filename, self::DOWNLOAD_HEADERS)
+            ->deleteFileAfterSend(true);
     }
 
     /**
@@ -72,7 +74,9 @@ class BackupController extends Controller
             "بک‌آپ کامل تهیه شد: {$archive->rowCount()} ردیف در ۳۲ جدول."
         );
 
-        return response()->download($archive->path, $archive->filename, self::DOWNLOAD_HEADERS);
+        return response()
+            ->download($archive->path, $archive->filename, self::DOWNLOAD_HEADERS)
+            ->deleteFileAfterSend(true);
     }
 
     /**
