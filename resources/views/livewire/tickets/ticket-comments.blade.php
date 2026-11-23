@@ -15,12 +15,19 @@ return new class extends Component
     use WithPagination;
 
     public ?int $ticketId = null;
+
     public string $body = '';
+
     public ?int $replyToId = null;
+
     public string $replyBody = '';
+
     public bool $showModal = false;
+
     public bool $editing = false;
+
     public ?int $editCommentId = null;
+
     public string $editBody = '';
 
     protected $listeners = ['openComments' => 'openForTicket'];
@@ -80,6 +87,12 @@ return new class extends Component
 
     public function addComment(): void
     {
+        // #1662: the same write on the API is gated on
+        // `permission:create_ticket` (routes/api.php:180-181). Livewire does
+        // not re-apply route middleware on POST /livewire/update, so the
+        // mutator re-checks it itself — before validation, like #892.
+        $this->authorize('create_ticket');
+
         $this->validate(['body' => 'required|string|min:1|max:5000']);
 
         $ticket = $this->accessibleThreadTicket();
@@ -112,6 +125,9 @@ return new class extends Component
 
     public function addReply(int $commentId): void
     {
+        // #1662: API parity — the reply write is gated on `create_ticket` too.
+        $this->authorize('create_ticket');
+
         $this->validate(['replyBody' => 'required|string|min:1|max:5000']);
 
         $ticket = $this->accessibleThreadTicket();
@@ -122,6 +138,16 @@ return new class extends Component
         // والد باید متعلق به همین تیکت باشد (ایشو #814) — وگرنه پاسخ به
         // کامنتِ تیکتِ دیگری گره می‌خورد.
         $parent = $this->findTicketComment($commentId);
+
+        // #1662: the API refuses a reply whose parent is already at depth 3
+        // (TicketCommentController:135-139 → 422
+        // `Maximum thread depth reached (3).`); a direct Livewire call must
+        // not be able to grow the thread without bound.
+        if ($this->getThreadDepth($parent) >= 3) {
+            $this->addError('replyBody', 'حداکثر عمق پاسخ ۳ سطح است.');
+
+            return;
+        }
 
         TicketComment::create([
             'ticket_id' => $ticket->id,
@@ -215,6 +241,37 @@ return new class extends Component
     }
 
     /**
+     * Depth of a comment in its thread (root = 0), mirroring
+     * Api\TicketCommentController::getThreadDepth() — the API rejects a reply
+     * whose parent is already at depth 3 ("Maximum thread depth reached (3).",
+     * 422), so a thread never grows past four levels.
+     *
+     * The API reads the chain with a recursive CTE over the raw table, which
+     * does not apply the SoftDeletes scope — a soft-deleted ancestor still
+     * counts there. `withTrashed()` below keeps the two paths in agreement.
+     *
+     * Walks at most 3 ancestors: the caller only needs the `>= 3` decision,
+     * which also bounds the query count.
+     */
+    private function getThreadDepth(TicketComment $comment): int
+    {
+        $depth = 0;
+        $node = $comment;
+
+        while ($node->parent_id !== null && $depth < 3) {
+            $node = TicketComment::withTrashed()->find($node->parent_id);
+
+            if (! $node) {
+                break;
+            }
+
+            $depth++;
+        }
+
+        return $depth;
+    }
+
+    /**
      * #1176: the open thread's ticket, re-derived from the public id with the
      * same fail-closed scope shape as the load — null when nothing is open or
      * the ticket has left the viewer's scope. The WRITE paths rule on this
@@ -303,6 +360,7 @@ return new class extends Component
                                     <x-ui.icon-button name="ارسال پاسخ" icon="o-paper-airplane" wire:click="addReply({{ $comment->id }})" class="btn-primary btn-xs" spinner />
                                     <x-ui.icon-button name="انصراف از ارسال پاسخ" icon="o-x-mark" wire:click="cancelReply" class="btn-ghost btn-xs" />
                                 </div>
+                                @error('replyBody') <p class="text-error text-xs">{{ $message }}</p> @enderror
                             @endif
 
                             {{-- Replies (children) --}}
