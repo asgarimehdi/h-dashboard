@@ -58,6 +58,16 @@ class TicketCommentController extends Controller
     ];
 
     /**
+     * Issue #1689: reply authors are display names, not Person records. The web
+     * thread renders `f_name`/`l_name` only (ticket-comments.blade.php:374,377)
+     * and `Person` has no `$hidden`, so an unconstrained `children.user.person`
+     * shipped `phone`, `birth_date`, `hire_date` and the `*_folded` columns to
+     * every ticket reader. `n_code` is mandatory: it is the owner key of
+     * `User::person()` and a select without it silently nulls the relation.
+     */
+    private const REPLY_AUTHOR_PERSON_COLUMNS = 'id,n_code,f_name,l_name';
+
+    /**
      * Issue #1177: `children()` is a plain `hasMany`, so the thread is one
      * level deep — the payload risk is the unbounded number of replies a
      * single parent may carry, not recursion. Ten keeps a thread readable
@@ -92,7 +102,8 @@ class TicketCommentController extends Controller
             $comments = $query->with([
                 'children:'.implode(',', self::COMMENT_LIST_COLUMNS),
                 'children' => fn ($q) => $q->orderBy('id')->limit(self::MAX_THREADED_REPLIES),
-                'children.user.person',
+                'children.user:id,n_code',
+                'children.user.person:'.self::REPLY_AUTHOR_PERSON_COLUMNS,
                 'children.reactions',
             ])->paginate($perPage);
         } else {
@@ -183,13 +194,14 @@ class TicketCommentController extends Controller
         }
 
         // `children()` no longer force-loads `user.person` (#1177); the detail
-        // response keeps exposing it, so it is requested explicitly here.
+        // response exposes the reply author's display name only (#1689), so the
+        // person relation is requested with an explicit column list here.
         return response()->json([
             'data' => $this->withoutBodyHtml($comment->load([
                 'user:id,n_code',
                 'reactions',
                 'children.user:id,n_code',
-                'children.user.person',
+                'children.user.person:'.self::REPLY_AUTHOR_PERSON_COLUMNS,
             ])),
         ]);
     }
