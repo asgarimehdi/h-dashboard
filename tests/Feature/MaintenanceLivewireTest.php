@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -92,6 +93,120 @@ test('edit schedule via livewire', function () {
         'id' => $schedule->id,
         'title' => 'عنوان جدید',
     ]);
+});
+
+test('title-only edit never reschedules an overdue schedule (issue #1706)', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-06-15 10:00:00'));
+
+    $schedule = MaintenanceSchedule::create([
+        'title' => 'بازدید ماهانه',
+        'frequency' => 'monthly',
+        'recurrence_interval' => 1,
+        'unit_id' => $this->unit->id,
+        'next_due_at' => now()->subDays(3),
+    ]);
+    $originalDue = $schedule->next_due_at->toDateTimeString();
+
+    Livewire::test('maintenance.index')
+        ->call('editSchedule', $schedule->id)
+        ->set('title', 'بازدید ماهانه (اصلاح تایپو)')
+        ->call('updateSchedule')
+        ->assertHasNoErrors();
+
+    $schedule->refresh();
+    expect($schedule->title)->toBe('بازدید ماهانه (اصلاح تایپو)')
+        ->and($schedule->next_due_at->toDateTimeString())->toBe($originalDue)
+        ->and($schedule->isDue())->toBeTrue();
+});
+
+test('title-only edit leaves a null next_due_at untouched (issue #1706)', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-06-15 10:00:00'));
+
+    $schedule = MaintenanceSchedule::create([
+        'title' => 'بدون سررسید',
+        'frequency' => 'weekly',
+        'recurrence_interval' => 1,
+        'unit_id' => $this->unit->id,
+        'next_due_at' => null,
+    ]);
+
+    Livewire::test('maintenance.index')
+        ->call('editSchedule', $schedule->id)
+        ->set('title', 'بدون سررسید (اصلاح)')
+        ->call('updateSchedule')
+        ->assertHasNoErrors();
+
+    $schedule->refresh();
+    expect($schedule->next_due_at)->toBeNull()
+        ->and($schedule->isDue())->toBeTrue();
+});
+
+test('changing frequency recomputes next_due_at from now() (issue #1706)', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-06-15 10:00:00'));
+
+    $schedule = MaintenanceSchedule::create([
+        'title' => 'تغییر دوره',
+        'frequency' => 'monthly',
+        'recurrence_interval' => 1,
+        'unit_id' => $this->unit->id,
+        'next_due_at' => now()->subDays(3),
+    ]);
+
+    Livewire::test('maintenance.index')
+        ->call('editSchedule', $schedule->id)
+        ->set('frequency', 'weekly')
+        ->call('updateSchedule')
+        ->assertHasNoErrors();
+
+    $schedule->refresh();
+    expect($schedule->frequency)->toBe('weekly')
+        ->and($schedule->next_due_at->toDateTimeString())
+        ->toBe(now()->addWeek()->toDateTimeString());
+});
+
+test('changing recurrence interval recomputes next_due_at from now() (issue #1706)', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-06-15 10:00:00'));
+
+    $schedule = MaintenanceSchedule::create([
+        'title' => 'تغییر فاصله',
+        'frequency' => 'weekly',
+        'recurrence_interval' => 1,
+        'unit_id' => $this->unit->id,
+        'next_due_at' => now()->subDays(3),
+    ]);
+
+    Livewire::test('maintenance.index')
+        ->call('editSchedule', $schedule->id)
+        ->set('recurrenceInterval', 3)
+        ->call('updateSchedule')
+        ->assertHasNoErrors();
+
+    $schedule->refresh();
+    expect($schedule->recurrence_interval)->toBe(3)
+        ->and($schedule->next_due_at->toDateTimeString())
+        ->toBe(now()->addWeeks(3)->toDateTimeString());
+});
+
+test('create still computes next_due_at from now() (issue #1706 guard)', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-06-15 10:00:00'));
+
+    Livewire::test('maintenance.index')
+        ->call('startCreate')
+        ->set('title', 'ساخت با سررسید')
+        ->set('frequency', 'monthly')
+        ->set('recurrenceInterval', 1)
+        ->set('unitId', $this->unit->id)
+        ->call('createSchedule')
+        ->assertHasNoErrors();
+
+    $schedule = MaintenanceSchedule::where('title', 'ساخت با سررسید')->firstOrFail();
+    expect($schedule->next_due_at->toDateTimeString())
+        ->toBe(now()->addMonth()->toDateTimeString());
 });
 
 test('delete schedule via livewire', function () {
