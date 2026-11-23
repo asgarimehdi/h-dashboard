@@ -7,12 +7,14 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -33,6 +35,10 @@ class TicketCommentsLivewireTest extends TestCase
     {
         parent::setUp();
         $this->seedLookupTables();
+        // #1662: `addComment`/`addReply` now re-check the `create_ticket`
+        // permission the API route already requires, so the fixture user
+        // needs it (it held none before).
+        $this->seed(PermissionSeeder::class);
         Session::flush();
 
         $tId = DB::table('tahsils')->first()->id;
@@ -49,6 +55,7 @@ class TicketCommentsLivewireTest extends TestCase
         ]);
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+        $this->user->givePermissionTo('create_ticket');
         Session::put('current_unit_id', $this->unit->id);
         $this->actingAs($this->user);
 
@@ -296,6 +303,152 @@ class TicketCommentsLivewireTest extends TestCase
         $comment = TicketComment::where('ticket_id', $this->ticket->id)->firstOrFail();
 
         $this->assertNull($comment->body_html);
+    }
+
+    // ─── #1662: `create_ticket` gate + reply-depth cap ───────────────────────
+
+    public function test_comment_is_refused_without_create_ticket(): void
+    {
+        $this->actingAs($this->makeUserInUnit(['view_assigned_tickets']));
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('body', 'کامنت بدون مجوز')
+            ->call('addComment')
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'کامنت بدون مجوز']);
+    }
+
+    public function test_reply_is_refused_without_create_ticket(): void
+    {
+        $parent = $this->makeComment('والد');
+        $this->actingAs($this->makeUserInUnit(['view_assigned_tickets']));
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('replyBody', 'پاسخ بدون مجوز')
+            ->call('addReply', $parent->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'پاسخ بدون مجوز']);
+    }
+
+    // #1662/#1632: the modal is already open and the permission is taken away;
+    // POST /livewire/update never passes the route middleware again.
+    public function test_comment_is_refused_after_create_ticket_is_revoked(): void
+    {
+        $component = Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->assertOk();
+
+        $this->user->revokePermissionTo('create_ticket');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $this->assertFalse($this->user->fresh()->can('create_ticket'));
+
+        $component->set('body', 'کامنت پس از سلب')->call('addComment')->assertForbidden();
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'کامنت پس از سلب']);
+    }
+
+    public function test_reply_is_refused_after_create_ticket_is_revoked(): void
+    {
+        $parent = $this->makeComment('والد');
+
+        $component = Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->assertOk();
+
+        $this->user->revokePermissionTo('create_ticket');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $this->assertFalse($this->user->fresh()->can('create_ticket'));
+
+        $component->set('replyBody', 'پاسخ پس از سلب')->call('addReply', $parent->id)->assertForbidden();
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'پاسخ پس از سلب']);
+    }
+
+    // Boundary (root = 0): a reply to a depth-2 parent lands at depth 3 and is
+    // allowed; a reply to a depth-3 parent is refused — same line as the API.
+    public function test_reply_to_depth_two_parent_is_allowed(): void
+    {
+        $root = $this->makeComment('ریشه');
+        $d1 = $this->makeComment('سطح ۱', $root->id);
+        $d2 = $this->makeComment('سطح ۲', $d1->id);
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('replyBody', 'پاسخ به عمق ۲')
+            ->call('addReply', $d2->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_comments', [
+            'parent_id' => $d2->id,
+            'body' => 'پاسخ به عمق ۲',
+        ]);
+    }
+
+    public function test_reply_to_depth_three_parent_is_refused(): void
+    {
+        $root = $this->makeComment('ریشه');
+        $d1 = $this->makeComment('سطح ۱', $root->id);
+        $d2 = $this->makeComment('سطح ۲', $d1->id);
+        $d3 = $this->makeComment('سطح ۳', $d2->id);
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('replyBody', 'پاسخ به عمق ۳')
+            ->call('addReply', $d3->id)
+            ->assertHasErrors(['replyBody']);
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'پاسخ به عمق ۳']);
+    }
+
+    // Pins the `withTrashed()` parity with the API's raw CTE: a soft-deleted
+    // ancestor still counts, so a depth-3 parent stays depth 3 here.
+    public function test_soft_deleted_ancestor_still_counts_towards_depth(): void
+    {
+        $root = $this->makeComment('ریشه');
+        $d1 = $this->makeComment('سطح ۱', $root->id);
+        $d2 = $this->makeComment('سطح ۲', $d1->id);
+        $d3 = $this->makeComment('سطح ۳', $d2->id);
+
+        $root->delete();
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->set('replyBody', 'پاسخ با جد حذف‌شده')
+            ->call('addReply', $d3->id)
+            ->assertHasErrors(['replyBody']);
+
+        $this->assertDatabaseMissing('ticket_comments', ['body' => 'پاسخ با جد حذف‌شده']);
+    }
+
+    /**
+     * A second user in the SAME unit holding only the given permissions — the
+     * "expert after an individual revocation" shape (no seeded role matches it).
+     *
+     * @param  array<int, string>  $permissions
+     */
+    private function makeUserInUnit(array $permissions = []): User
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+        Person::create([
+            'n_code' => $nCode, 'f_name' => 'کاربر', 'l_name' => 'محدود',
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $this->unit->id,
+        ]);
+        $user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        if ($permissions) {
+            $user->givePermissionTo($permissions);
+        }
+
+        return $user;
     }
 
     private function makeComment(string $body, ?int $parentId = null): TicketComment

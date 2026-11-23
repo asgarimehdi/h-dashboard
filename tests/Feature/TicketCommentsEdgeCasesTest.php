@@ -34,6 +34,10 @@ class TicketCommentsEdgeCasesTest extends TestCase
     {
         parent::setUp();
         $this->seedLookupTables();
+        // #1662: `addComment`/`addReply` now re-check `create_ticket` (API
+        // parity), so the fixture user needs it — otherwise the validation
+        // and #814-guard tests below would go green/red for the wrong reason.
+        $this->seed(PermissionSeeder::class);
         Session::flush();
 
         $tId = DB::table('tahsils')->first()->id;
@@ -50,6 +54,7 @@ class TicketCommentsEdgeCasesTest extends TestCase
         ]);
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+        $this->user->givePermissionTo('create_ticket');
         Session::put('current_unit_id', $this->unit->id);
         $this->actingAs($this->user);
 

@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -32,6 +33,9 @@ class TicketCommentsRefreshTest extends TestCase
     {
         parent::setUp();
         $this->seedLookupTables();
+        // #1662: `addComment`/`addReply` now re-check `create_ticket` (API
+        // parity), so the fixture user needs it.
+        $this->seed(PermissionSeeder::class);
         Session::flush();
 
         $tId = DB::table('tahsils')->first()->id;
@@ -44,6 +48,7 @@ class TicketCommentsRefreshTest extends TestCase
         Person::create(['n_code' => $nCode, 'f_name' => 'علی', 'l_name' => 'محمدی', 't_id' => $tId, 'e_id' => $eId, 's_id' => $sId, 'r_id' => $rId, 'u_id' => $this->unit->id]);
         $this->user = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
         $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+        $this->user->givePermissionTo('create_ticket');
         Session::put('current_unit_id', $this->unit->id);
         $this->actingAs($this->user);
 
