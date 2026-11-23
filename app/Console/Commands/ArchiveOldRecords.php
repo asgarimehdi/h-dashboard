@@ -28,13 +28,33 @@ class ArchiveOldRecords extends Command
      */
     public const LOCK_TTL_SECONDS = 6 * 60 * 60;
 
-    protected $signature = 'data:archive {--months=12 : رکوردهای قدیمی‌تر از این تعداد ماه آرشیو شوند}
+    /**
+     * #1696: 0 or below moves the cutoff to `now()` or the future — archives
+     * the entire live activity log.
+     */
+    public const MIN_MONTHS = 1;
+
+    /**
+     * #1696: sanity/overflow guard only — keeps `subMonths()` inside the
+     * timestamp range; not a retention policy.
+     */
+    public const MAX_MONTHS = 1200;
+
+    protected $signature = 'data:archive {--months=12 : رکوردهای قدیمی‌تر از این تعداد ماه آرشیو شوند (۱ تا ۱۲۰۰)}
                                         {--dry-run : بدون انتقال، فقط اعتبارسنجی مسیر نوشتن}';
 
     protected $description = 'Archive old activity log records to historical storage';
 
     public function handle(): int
     {
+        // #1696: validate before the lock so a typo never touches cache or DB,
+        // and the usage error wins over the "another run is in progress" skip.
+        $months = $this->resolveMonths();
+
+        if ($months === null) {
+            return 1;
+        }
+
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_TTL_SECONDS);
 
         // A scheduled run's output goes to /dev/null, so log the skip as well.
@@ -46,7 +66,6 @@ class ArchiveOldRecords extends Command
         }
 
         try {
-            $months = (int) $this->option('months');
             $cutoff = now()->subMonths($months);
             $dryRun = (bool) $this->option('dry-run');
 
@@ -112,6 +131,39 @@ class ArchiveOldRecords extends Command
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * #1696: the option used to be cast with `(int)` and fed straight to
+     * `subMonths()`. `--months=0`, `--months=-3`, `--months=abc` and a bare
+     * `--months` (VALUE_OPTIONAL → null) all produced a cutoff at or after
+     * `now()`, which archives the entire live activity log. Validate the raw
+     * value before the lock is taken.
+     *
+     * @return int|null null when the value is invalid (message already printed)
+     */
+    private function resolveMonths(): ?int
+    {
+        $raw = $this->option('months');
+
+        $months = filter_var(
+            is_scalar($raw) ? trim((string) $raw) : '',
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => self::MIN_MONTHS, 'max_range' => self::MAX_MONTHS]],
+        );
+
+        if ($months === false) {
+            $shown = is_scalar($raw) && trim((string) $raw) !== '' ? (string) $raw : '(none)';
+
+            $this->error(
+                "Invalid --months value \"{$shown}\": expected an integer between "
+                .self::MIN_MONTHS.' and '.self::MAX_MONTHS.'.'
+            );
+
+            return null;
+        }
+
+        return $months;
     }
 
     /**
