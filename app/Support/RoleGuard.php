@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Spatie\Permission\Models\Role;
 
 /**
@@ -18,7 +19,8 @@ use Spatie\Permission\Models\Role;
  * The comparison is a DELTA (submitted minus current), so a delegated manager
  * can still save a user or role that already holds privileges above its own
  * ceiling, as long as the write does not ADD any. Removals are always allowed;
- * an `admin`-role holder bypasses the whole guard.
+ * an `admin`-role holder bypasses the whole guard. The `assertAdmin…`
+ * guards below are the exception (#1663): they have no actor bypass.
  */
 final class RoleGuard
 {
@@ -96,6 +98,77 @@ final class RoleGuard
         }
 
         self::assertRoleIsNotAdmin($role);
+    }
+
+    /**
+     * Issue #1663 — the `admin` ROLE itself can never be deleted, by anyone.
+     *
+     * `role:admin` (backup download + backup page, `routes/web.php:246-259`)
+     * exists only while a role NAMED `admin` exists, and no permission
+     * represents it, so deleting the role is a one-click lockout with no
+     * in-app recovery. Unlike the #1607 ceiling this guard has NO actor bypass.
+     */
+    public static function assertAdminRoleSurvives(Role $role): void
+    {
+        if ($role->name === self::ADMIN) {
+            abort(403, 'نقش مدیر حذف‌شدنی نیست؛ دسترسی بک‌آپ و ابزارهای مدیریتی فقط از این نقش می‌آید.');
+        }
+    }
+
+    /**
+     * Issue #1663 — the reserved name may not be renamed AWAY from `admin`
+     * either: the route gate follows the name, so a rename is the same lockout
+     * as a delete. Renaming INTO `admin` is `assertNameIsNotAdmin()`'s job.
+     */
+    public static function assertAdminRoleKeepsItsName(Role $role, string $name): void
+    {
+        if ($role->name === self::ADMIN && $name !== self::ADMIN) {
+            abort(403, 'نام نقش مدیر رزرو شده و قابل تغییر نیست.');
+        }
+    }
+
+    /**
+     * Issue #1663 — no write may leave zero ACTIVE `admin`-role holders.
+     *
+     * `$roleIdsAfter === null` means "this user is being deactivated"; an array
+     * is the role set the caller is about to `sync()`. Only a write that
+     * REMOVES the role from its last holder is refused — a system that already
+     * has no admin (every test fixture, a fresh install) must stay writable.
+     *
+     * MUST run inside a DB transaction: the `FOR UPDATE` is what stops two
+     * admins from deactivating each other concurrently. `count()` cannot carry
+     * `FOR UPDATE` on Postgres ("FOR UPDATE is not allowed with aggregate
+     * functions"), hence `pluck()`.
+     *
+     * @param  array<int|string>|null  $roleIdsAfter
+     */
+    public static function assertAdminUserSurvives(User $target, ?array $roleIdsAfter = null): void
+    {
+        // A soft-deleted account cannot authenticate (EloquentUserProvider reads
+        // through the SoftDeletes global scope), so it is not a live admin.
+        if ($target->trashed() || ! $target->hasRole(self::ADMIN)) {
+            return;
+        }
+
+        if ($roleIdsAfter !== null) {
+            $adminRoleId = Role::query()->where('name', self::ADMIN)->value('id');
+
+            if ($adminRoleId !== null
+                && in_array((int) $adminRoleId, array_map('intval', $roleIdsAfter), true)) {
+                return; // the sync keeps the role on this user
+            }
+        }
+
+        $otherAdmins = User::query()
+            ->whereHas('roles', fn (Builder $query) => $query->where('roles.name', self::ADMIN))
+            ->whereKeyNot($target->getKey())
+            ->orderBy('users.id')
+            ->lockForUpdate()
+            ->pluck('users.id');
+
+        if ($otherAdmins->isEmpty()) {
+            abort(403, 'این آخرین کاربر دارای نقش مدیر است؛ با این تغییر هیچ مدیر فعالی باقی نمی‌ماند.');
+        }
     }
 
     private static function assertRoleIsNotAdmin(Role $role): void
