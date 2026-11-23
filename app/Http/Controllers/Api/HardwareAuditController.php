@@ -11,6 +11,7 @@ use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
 use App\Rules\PerPage;
 use App\Services\HardwareAuditScope;
+use App\Support\HardwareAuditChange;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -139,18 +140,45 @@ class HardwareAuditController extends Controller
             }
         }
 
-        // Update the hardware record
-        $hardware->update([$request->field => $restoredValue]);
-
-        // Log the rollback as a new audit entry
         $rollbackChanges = [[
             'field' => $request->field,
             'old' => $newValue,
             'new' => $oldValue,
         ]];
 
-        app(HardwareAuditObserver::class)
-            ->recordRollbackAudit($hardware, $rollbackChanges, $request->user()?->id);
+        // #1669: refuse to overwrite a value that moved on after this audit row
+        // was written. bulk_delete rows store a sentinel in `new`, not a value.
+        $guardApplies = $audit->action !== 'bulk_delete';
+
+        $outcome = DB::transaction(function () use ($hardware, $request, $restoredValue, $newValue, $rollbackChanges, $guardApplies): string {
+            $locked = Hardware::query()->whereKey($hardware->getKey())->lockForUpdate()->first();
+
+            if ($locked === null) {
+                return 'missing';
+            }
+
+            if ($guardApplies
+                && HardwareAuditChange::storedForm($locked->getAttribute($request->field))
+                    !== HardwareAuditChange::storedForm($newValue)) {
+                return 'stale';
+            }
+
+            $locked->update([$request->field => $restoredValue]);
+
+            // Log the rollback as a new audit entry (same transaction).
+            app(HardwareAuditObserver::class)
+                ->recordRollbackAudit($locked, $rollbackChanges, $request->user()?->id);
+
+            return 'ok';
+        });
+
+        if ($outcome !== 'ok') {
+            return response()->json([
+                'message' => $outcome === 'stale'
+                    ? "Field '{$request->field}' has changed since this audit entry; rollback refused."
+                    : 'Hardware record no longer exists.',
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

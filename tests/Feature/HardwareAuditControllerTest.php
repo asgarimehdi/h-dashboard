@@ -190,6 +190,30 @@ class HardwareAuditControllerTest extends TestCase
         ]);
     }
 
+    public function test_rollback_refuses_stale_field_value(): void
+    {
+        $this->hardware->update(['cpu' => 'Intel i7']);            // A→B
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')->first();
+        $this->hardware->update(['cpu' => 'Intel i9']);            // B→C
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost(
+            "/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback",
+            ['field' => 'cpu'],
+            $token
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', "Field 'cpu' has changed since this audit entry; rollback refused.");
+
+        $this->assertDatabaseHas('hardwares', ['id' => $this->hardware->id, 'cpu' => 'Intel i9']);
+        $this->assertDatabaseMissing('hardware_audits', [
+            'hardware_id' => $this->hardware->id,
+            'action' => 'rollback',
+        ]);
+    }
+
     public function test_export_endpoint_returns_downloadable_file(): void
     {
         $this->hardware->update(['cpu' => 'Intel i9']);
