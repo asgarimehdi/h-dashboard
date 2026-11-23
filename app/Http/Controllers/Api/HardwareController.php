@@ -289,35 +289,56 @@ class HardwareController extends Controller
             'mark' => 'required|boolean',
         ]);
 
+        // #1670: `whereIn` collapses duplicates, so the count check must compare
+        // against the distinct ids — a retried `ids: [5, 5]` is not "inaccessible".
+        $ids = array_values(array_unique($validated['ids']));
+        // `boolean` validation does not cast the payload; normalise once so the
+        // comparison, the update and the audit `new` value are all real booleans.
+        $targetMark = (bool) $validated['mark'];
+
         $accessibleIds = $request->accessibleIds();
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
-            ->whereIn('hardwares.id', $validated['ids'])
+            ->whereIn('hardwares.id', $ids)
             ->whereIn('persons.u_id', $accessibleIds)
             ->select('hardwares.*')
             ->get();
 
-        if ($hardwares->count() !== count($validated['ids'])) {
+        if ($hardwares->count() !== count($ids)) {
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
         $accessibleHardwareIds = $hardwares->pluck('id')->toArray();
+
+        // #1670: the writer inserts one row per model it is handed — an empty diff
+        // still lands as `changes = null` — so unchanged rows must be filtered out
+        // here, before the mass update (which does not touch these instances).
+        $auditTargets = $hardwares
+            ->filter(fn (Hardware $hw): bool => $hw->mark !== $targetMark)
+            ->values();
 
         // Suppress individual audit entries during bulk operations
         request()->attributes->set('suppress_audit', true);
         try {
             // Single update query on the verified IDs
             $count = Hardware::whereIn('id', $accessibleHardwareIds)
-                ->update(['mark' => $validated['mark']]);
+                ->update(['mark' => $targetMark]);
         } finally {
             request()->attributes->remove('suppress_audit');
         }
 
-        // Batch insert audit entries
-        app(HardwareBulkAuditWriter::class)->batchInsertAudits($hardwares, 'bulk_mark', [
-            ['field' => 'mark', 'old' => ! $validated['mark'], 'new' => $validated['mark']],
-        ]);
+        // Batch insert audit entries, one field-level diff per actually changed row
+        if ($auditTargets->isNotEmpty()) {
+            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                $auditTargets,
+                'bulk_mark',
+                null,
+                fn (Hardware $hw): array => [
+                    ['field' => 'mark', 'old' => $hw->mark, 'new' => $targetMark],
+                ],
+            );
+        }
 
         app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
             event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
@@ -334,16 +355,20 @@ class HardwareController extends Controller
             'ids.*' => 'integer|exists:hardwares,id',
         ]);
 
+        // #1670: `whereIn` collapses duplicates, so the count check must compare
+        // against the distinct ids — a retried `ids: [5, 5]` is not "inaccessible".
+        $ids = array_values(array_unique($validated['ids']));
+
         $accessibleIds = $request->accessibleIds();
 
         // Single query: load accessible hardwares
         $hardwares = Hardware::join('persons', 'hardwares.n_code', '=', 'persons.n_code')
-            ->whereIn('hardwares.id', $validated['ids'])
+            ->whereIn('hardwares.id', $ids)
             ->whereIn('persons.u_id', $accessibleIds)
             ->select('hardwares.*')
             ->get();
 
-        if ($hardwares->count() !== count($validated['ids'])) {
+        if ($hardwares->count() !== count($ids)) {
             return response()->json(['message' => 'Some hardware records are not accessible.'], 403);
         }
 
