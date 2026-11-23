@@ -95,6 +95,29 @@ return new class extends Component
         $this->resetPage();
     }
 
+    /**
+     * #1678: a freshly uploaded file invalidates the preview of the previous
+     * one (defence in depth behind the hash guard in `confirmImport()`).
+     *
+     * Do NOT call `resetForm()` here: it resets `file` too, and this hook runs
+     * *after* Livewire has stored the new upload — that would destroy it.
+     * `importRunning`/`statusToken`/`importStats` belong to #1194 and are left
+     * untouched.
+     */
+    public function updatedFile(): void
+    {
+        if ($this->previewToken === null && ! $this->showPreview) {
+            return; // first upload: there is no preview to invalidate
+        }
+
+        \App\Support\ImportPreviewStore::forget($this->previewToken);
+        $this->reset(['previewToken', 'importResults', 'rowActions', 'showPreview', 'importConfirmed']);
+        $this->importResults = null;
+        $this->rowActions = [];
+
+        $this->info('فایل تغییر کرد و پیش‌نمایش قبلی باطل شد؛ لطفاً دوباره پیش‌نمایش بگیرید.', 'توجه');
+    }
+
     public function importPreview(): void
     {
         // لایه‌ی دوم مجوز (ایشو #814 / الگوی #805): همان مجوزِ گیتِ مسیر
@@ -119,13 +142,25 @@ return new class extends Component
 
             $results = $import->getImportResults();
 
+            // #1678: bind the preview to the *bytes* of the uploaded file. The
+            // hash lives in the server-side store, never in the snapshot; the
+            // confirm step recomputes it from the request's file.
+            $filePath = $this->file->getRealPath();
+            $fileHash = is_string($filePath) ? hash_file('sha256', $filePath) : false;
+
+            if (! is_string($fileHash)) {
+                $this->error('خواندن فایل برای پیش‌نمایش ممکن نشد؛ لطفاً دوباره تلاش کنید.', 'خطا');
+
+                return;
+            }
+
             // Issue #1168: the whole parsed result (rows + counters + errors)
             // goes to the server-side store; only its token enters the
             // snapshot. `importResults` keeps the small counters so the rest
             // of the component can tell "a preview exists".
             \App\Support\ImportPreviewStore::forget($this->previewToken);
             $token = (string) \Illuminate\Support\Str::uuid();
-            \App\Support\ImportPreviewStore::put($token, $results);
+            \App\Support\ImportPreviewStore::put($token, $results, $fileHash);
 
             $this->previewToken = $token;
             $this->rowActions = [];
@@ -173,8 +208,34 @@ return new class extends Component
         // Issue #1168: confirm reads the choices from the cached preview. An
         // expired/unknown token must produce a readable message, not a raw
         // exception from a half-hydrated component.
-        if (\App\Support\ImportPreviewStore::get($this->previewToken) === null) {
+        $preview = \App\Support\ImportPreviewStore::get($this->previewToken);
+
+        if ($preview === null) {
             $this->error('پیش‌نمایش ایمپورت منقضی شده است؛ لطفاً فایل را دوباره بارگذاری کنید.', 'خطا');
+            $this->resetForm();
+
+            return;
+        }
+
+        // #1678: the confirm must act on the very file that was previewed and
+        // must still satisfy the upload rules. Hiding the input in Blade while
+        // the preview is shown is not a server-side guard, and `validate()`
+        // does not populate the error bag when it is caught — so we set it
+        // explicitly. This guard sits outside the `try` below: a
+        // ValidationException inside it would be swallowed by `catch
+        // (\Exception)`.
+        try {
+            $this->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->setErrorBag($e->validator->errors());
+            $this->error('فایل انتخاب‌شده معتبر نیست؛ لطفاً آن را دوباره بارگذاری کنید.', 'خطا');
+            $this->resetForm();
+
+            return;
+        }
+
+        if (! $this->fileMatchesPreview($preview)) {
+            $this->error('فایل انتخاب‌شده با فایل پیش‌نمایش‌شده یکسان نیست؛ لطفاً دوباره پیش‌نمایش بگیرید.', 'خطا');
             $this->resetForm();
 
             return;
@@ -328,6 +389,35 @@ return new class extends Component
         $this->error('حساب شما به هیچ واحدی تخصیص نیافته است؛ ایمپورت ممکن نیست.', 'خطا');
 
         return false;
+    }
+
+    /**
+     * #1678: the preview is bound to the *bytes* of the uploaded file, not to
+     * any client-round-tripped handle. Any unknown state ⇒ false (fail-closed).
+     *
+     * @param  array<string, mixed>  $preview
+     */
+    private function fileMatchesPreview(array $preview): bool
+    {
+        $expected = $preview['file_hash'] ?? null;
+
+        if (! is_string($expected) || $expected === '') {
+            return false;
+        }
+
+        if (! $this->file instanceof \Illuminate\Http\UploadedFile) {
+            return false;
+        }
+
+        $path = $this->file->getRealPath();
+
+        if (! is_string($path) || ! is_file($path)) {
+            return false;
+        }
+
+        $actual = hash_file('sha256', $path);
+
+        return is_string($actual) && hash_equals($expected, $actual);
     }
 
     /**

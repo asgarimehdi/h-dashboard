@@ -13,12 +13,16 @@ use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\ImportPreviewStore;
 use App\Support\ImportStatus;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -605,4 +609,197 @@ test('hardware import requires manage_hardware inside the component', function (
         ->assertForbidden();
 
     $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-NEW']);
+});
+
+// ==================== #1678: the confirmed file must be the previewed file ====================
+
+function issue1678HardwareCsv(string $pcName): string
+{
+    return "n_code\tpc_name\ttype\tos\tcpu\tram\thdd\tmac\n"
+        ."1234567890\t{$pcName}\tpc\tWindows 11\tIntel i7\t16384\tSSD 512GB\t11:22:33:44:55:66\n";
+}
+
+function issue1678PersonsCsv(
+    string $nCode,
+    int $unitId,
+    int $sematId,
+    int $tahsilId,
+    int $estekhdamId,
+    int $radifId,
+): string {
+    return "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n"
+        ."{$nCode}\tعلی\tرضایی\t{$tahsilId}\t{$estekhdamId}\t{$sematId}\t{$radifId}\t{$unitId}\n";
+}
+
+/**
+ * #1678: build the crafted shape — preview file A, then upload file B (the
+ * `updatedFile` hook forgets the stored preview), then restore the stale
+ * preview entry and its handles. Without restoring the cache entry the request
+ * would only exercise the expired-token branch, not the hash guard.
+ */
+function issue1678ConfirmWithSwappedFile(
+    User $user,
+    string $component,
+    UploadedFile $original,
+    UploadedFile $swapped,
+): Testable {
+    Queue::fake();
+    Storage::fake('local');
+
+    $livewire = Livewire::actingAs($user)
+        ->test($component)
+        ->set('file', $original)
+        ->call('importPreview')
+        ->assertSet('showPreview', true);
+
+    $token = (string) $livewire->get('previewToken');
+    $payload = ImportPreviewStore::get($token);
+    $results = $livewire->get('importResults');
+
+    $livewire->set('file', $swapped);
+
+    Cache::put(ImportPreviewStore::key($token), $payload, ImportPreviewStore::TTL_SECONDS);
+
+    return $livewire
+        ->set('previewToken', $token)
+        ->set('importResults', $results)
+        ->set('showPreview', true)
+        ->call('confirmImport');
+}
+
+test('hardware confirm refuses a spreadsheet swapped after preview', function () {
+    $component = issue1678ConfirmWithSwappedFile(
+        $this->user,
+        'hardware.import-hardware.import-hardware',
+        UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-ORIGINAL')),
+        UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-SWAPPED')),
+    );
+
+    Queue::assertNotPushed(ImportHardwareJob::class);
+    Storage::disk('local')->assertDirectoryEmpty('imports');
+
+    expect(assertToastContains($component, 'یکسان نیست'))->not->toBeEmpty();
+});
+
+test('person confirm refuses a spreadsheet swapped after preview', function () {
+    $lookups = [$this->unit->id, $this->semat->id, $this->tahsil->id, $this->estekhdam->id, $this->radif->id];
+
+    $component = issue1678ConfirmWithSwappedFile(
+        $this->user,
+        'kargozini.import-persons.import-persons',
+        UploadedFile::fake()->createWithContent('persons.csv', issue1678PersonsCsv('9876500001', ...$lookups)),
+        UploadedFile::fake()->createWithContent('persons.csv', issue1678PersonsCsv('9876500002', ...$lookups)),
+    );
+
+    Queue::assertNotPushed(ImportPersonsJob::class);
+    Storage::disk('local')->assertDirectoryEmpty('imports');
+
+    expect(assertToastContains($component, 'یکسان نیست'))->not->toBeEmpty();
+});
+
+test('hardware confirm refuses a swapped non-spreadsheet file', function () {
+    $component = issue1678ConfirmWithSwappedFile(
+        $this->user,
+        'hardware.import-hardware.import-hardware',
+        UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-ORIGINAL')),
+        UploadedFile::fake()->createWithContent('hardware.txt', 'not a spreadsheet'),
+    );
+
+    Queue::assertNotPushed(ImportHardwareJob::class);
+    Storage::disk('local')->assertDirectoryEmpty('imports');
+    $component->assertHasErrors(['file']);
+
+    expect(assertToastContains($component, 'معتبر نیست'))->not->toBeEmpty();
+});
+
+test('person confirm refuses a swapped non-spreadsheet file', function () {
+    $lookups = [$this->unit->id, $this->semat->id, $this->tahsil->id, $this->estekhdam->id, $this->radif->id];
+
+    $component = issue1678ConfirmWithSwappedFile(
+        $this->user,
+        'kargozini.import-persons.import-persons',
+        UploadedFile::fake()->createWithContent('persons.csv', issue1678PersonsCsv('9876500001', ...$lookups)),
+        UploadedFile::fake()->createWithContent('persons.txt', 'not a spreadsheet'),
+    );
+
+    Queue::assertNotPushed(ImportPersonsJob::class);
+    Storage::disk('local')->assertDirectoryEmpty('imports');
+    $component->assertHasErrors(['file']);
+
+    expect(assertToastContains($component, 'معتبر نیست'))->not->toBeEmpty();
+});
+
+test('uploading a new hardware file clears the previous preview', function () {
+    Queue::fake();
+    Storage::fake('local');
+
+    $livewire = Livewire::actingAs($this->user)
+        ->test('hardware.import-hardware.import-hardware')
+        ->set('file', UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-FIRST')))
+        ->call('importPreview')
+        ->set('rowActions', ['row_2' => 'skip']);
+
+    $token = (string) $livewire->get('previewToken');
+
+    $livewire
+        ->set('file', UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-SECOND')))
+        ->assertSet('showPreview', false)
+        ->assertSet('previewToken', null)
+        ->assertSet('importResults', null)
+        ->assertSet('rowActions', []);
+
+    expect(ImportPreviewStore::get($token))->toBeNull();
+});
+
+test('uploading a new person file clears the previous preview', function () {
+    Queue::fake();
+    Storage::fake('local');
+
+    $lookups = [$this->unit->id, $this->semat->id, $this->tahsil->id, $this->estekhdam->id, $this->radif->id];
+
+    $livewire = Livewire::actingAs($this->user)
+        ->test('kargozini.import-persons.import-persons')
+        ->set('file', UploadedFile::fake()->createWithContent('persons.csv', issue1678PersonsCsv('9876500001', ...$lookups)))
+        ->call('importPreview')
+        ->set('rowActions', ['row_2' => 'skip']);
+
+    $token = (string) $livewire->get('previewToken');
+
+    $livewire
+        ->set('file', UploadedFile::fake()->createWithContent('persons.csv', issue1678PersonsCsv('9876500002', ...$lookups)))
+        ->assertSet('showPreview', false)
+        ->assertSet('previewToken', null)
+        ->assertSet('importResults', null)
+        ->assertSet('rowActions', []);
+
+    expect(ImportPreviewStore::get($token))->toBeNull();
+});
+
+test('confirm fails closed when the cached preview has no file hash', function () {
+    Queue::fake();
+    Storage::fake('local');
+
+    // A preview created by the previous deployment can still be inside its TTL
+    // when this one lands. It has no `file_hash`, so confirm must refuse.
+    $token = (string) Str::uuid();
+    Cache::put(ImportPreviewStore::key($token), [
+        'created' => 1,
+        'updated' => 0,
+        'skipped' => 0,
+        'errors' => [],
+        'changes' => [],
+        'preview' => [['n_code' => '1234567890', 'pc_name' => 'PC-X', 'status' => 'create']],
+    ], ImportPreviewStore::TTL_SECONDS);
+
+    $component = Livewire::actingAs($this->user)
+        ->test('hardware.import-hardware.import-hardware')
+        ->set('file', UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-X')))
+        ->set('previewToken', $token)
+        ->set('importResults', ['created' => 1, 'updated' => 0, 'skipped' => 0])
+        ->set('showPreview', true)
+        ->call('confirmImport');
+
+    Queue::assertNotPushed(ImportHardwareJob::class);
+    Storage::disk('local')->assertDirectoryEmpty('imports');
+    expect(assertToastContains($component, 'یکسان نیست'))->not->toBeEmpty();
 });
