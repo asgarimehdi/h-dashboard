@@ -40,6 +40,7 @@ return new class extends Component
 
         if (! Auth::attempt(['n_code' => $this->n_code, 'password' => $this->password], $this->remember)) {
             RateLimiter::hit($this->throttleKey());
+            RateLimiter::hit($this->accountThrottleKey());
 
             throw ValidationException::withMessages([
                 'n_code' => __('نام کاربری یا رمز عبور اشتباه است'),
@@ -47,6 +48,7 @@ return new class extends Component
         }
 
         RateLimiter::clear($this->throttleKey());
+        RateLimiter::clear($this->accountThrottleKey());
 
         // لاگین موفق - سشن ری‌جنریت میشه خودکار توسط Laravel
         Session::regenerate();
@@ -64,13 +66,19 @@ return new class extends Component
      */
     protected function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        $ipLocked = RateLimiter::tooManyAttempts($this->throttleKey(), 5);
+        $accountLocked = RateLimiter::tooManyAttempts($this->accountThrottleKey(), 5);
+
+        if (! $ipLocked && ! $accountLocked) {
             return;
         }
 
         event(new Lockout(request()));
 
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = max(
+            RateLimiter::availableIn($this->throttleKey()),
+            RateLimiter::availableIn($this->accountThrottleKey()),
+        );
 
         throw ValidationException::withMessages([
             'n_code' => __('auth.throttle', [
@@ -82,10 +90,22 @@ return new class extends Component
 
     /**
      * Get the authentication rate limiting throttle key.
+     *
+     * Per account+IP budget (historical dimension), hashed so raw n_code
+     * never reaches the cache: RateLimiter::hit() does not hash keys.
      */
     protected function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->n_code).'|'.request()->ip());
+        return 'login-ip:'.hash('sha256', Str::transliterate(Str::lower($this->n_code).'|'.request()->ip()));
+    }
+
+    /**
+     * #1674: per-account budget, independent of the source IP so rotating
+     * IPs cannot reset it.
+     */
+    protected function accountThrottleKey(): string
+    {
+        return 'login-account:'.hash('sha256', Str::transliterate(Str::lower($this->n_code)));
     }
 };
 ?>

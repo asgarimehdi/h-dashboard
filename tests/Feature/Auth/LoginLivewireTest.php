@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -33,7 +34,24 @@ class LoginLivewireTest extends TestCase
     {
         parent::setUp();
         Session::flush();
-        RateLimiter::clear('test|127.0.0.1');
+        RateLimiter::clear($this->ipKey());
+        RateLimiter::clear($this->accountKey());
+    }
+
+    /**
+     * Per-account+IP throttle key, mirroring production normalization.
+     */
+    private function ipKey(string $nCode = '1234567890'): string
+    {
+        return 'login-ip:'.hash('sha256', Str::transliterate(Str::lower($nCode).'|127.0.0.1'));
+    }
+
+    /**
+     * Per-account throttle key, independent of the source IP.
+     */
+    private function accountKey(string $nCode = '1234567890'): string
+    {
+        return 'login-account:'.hash('sha256', Str::transliterate(Str::lower($nCode)));
     }
 
     protected function makeUser(string $nCode = '1234567890', string $password = 'secret123'): User
@@ -141,7 +159,7 @@ class LoginLivewireTest extends TestCase
 
         // Exhaust the 5-attempt budget with the IP used by the test kernel.
         for ($i = 0; $i < 5; $i++) {
-            RateLimiter::hit('1234567890|127.0.0.1');
+            RateLimiter::hit($this->ipKey());
         }
 
         Livewire::test('auth.login')
@@ -151,21 +169,74 @@ class LoginLivewireTest extends TestCase
             ->assertHasErrors('n_code');
 
         // The throttle key is now locked.
-        $this->assertTrue(RateLimiter::tooManyAttempts('1234567890|127.0.0.1', 5));
+        $this->assertTrue(RateLimiter::tooManyAttempts($this->ipKey(), 5));
     }
 
-    public function test_successful_login_clears_rate_limiter(): void
+    public function test_successful_login_clears_both_throttle_budgets(): void
     {
         $this->makeUser('1234567890', 'secret123');
 
-        // Pre-seed one failed attempt so we can verify it is cleared on success.
-        RateLimiter::hit('1234567890|127.0.0.1');
+        // Pre-seed one failed attempt on each budget so we can verify both are cleared.
+        RateLimiter::hit($this->ipKey());
+        RateLimiter::hit($this->accountKey());
 
         Livewire::test('auth.login')
             ->set('n_code', '1234567890')
             ->set('password', 'secret123')
             ->call('login');
 
-        $this->assertEquals(0, RateLimiter::attempts('1234567890|127.0.0.1'));
+        $this->assertSame(0, RateLimiter::attempts($this->ipKey()));
+        $this->assertSame(0, RateLimiter::attempts($this->accountKey()));
+    }
+
+    public function test_account_budget_survives_source_ip_rotation(): void
+    {
+        $this->makeUser('1234567890', 'secret123');
+
+        for ($i = 0; $i < 5; $i++) {
+            Livewire::test('auth.login')
+                ->set('n_code', '1234567890')
+                ->set('password', 'wrong-password')
+                ->call('login')
+                ->assertHasErrors('n_code');
+        }
+
+        // A brand-new source IP: its per-IP key starts empty. The account budget must not.
+        RateLimiter::clear($this->ipKey());
+
+        $component = Livewire::test('auth.login')
+            ->set('n_code', '1234567890')
+            ->set('password', 'wrong-password')
+            ->call('login');
+
+        $this->assertNotSame('نام کاربری یا رمز عبور اشتباه است', (string) $component->errors()->first('n_code'));
+        $this->assertSame(5, RateLimiter::attempts($this->accountKey())); // blocked before hit()
+        $this->assertSame(0, RateLimiter::attempts($this->ipKey()));
+    }
+
+    public function test_one_accounts_failures_do_not_lock_another_account(): void
+    {
+        $this->makeUser('1234567890', 'secret123');
+        $this->makeUser('0987654321', 'secret456');
+
+        for ($i = 0; $i < 5; $i++) {
+            Livewire::test('auth.login')
+                ->set('n_code', '1234567890')
+                ->set('password', 'wrong-password')
+                ->call('login')
+                ->assertHasErrors('n_code');
+        }
+
+        // Fresh source IP; the other account must still be able to log in.
+        RateLimiter::clear($this->ipKey());
+
+        Livewire::test('auth.login')
+            ->set('n_code', '0987654321')
+            ->set('password', 'secret456')
+            ->call('login')
+            ->assertHasNoErrors()
+            ->assertRedirect('/');
+
+        $this->assertTrue(Auth::check());
     }
 }
