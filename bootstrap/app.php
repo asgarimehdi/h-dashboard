@@ -52,6 +52,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Data archival — weekly Monday 04:00 Tehran time
         $schedule->command('data:archive')->weeklyOn(1, '04:00')->withoutOverlapping(120);
 
+        // Issue #1692: the download removes its archive once it is sent, so any
+        // archive still here is a leftover from a killed worker. 05:00 clears
+        // them daily, between archival and report generation.
+        $schedule->command('backup:prune-archives')->dailyAt('05:00')->withoutOverlapping(60);
+
         // Report generation — daily at 06:00 Tehran time
         // Issue #1021: withoutOverlapping() so a slow run cannot stack on the
         // next one, matching the Zabbix entry below. This stays a command rather

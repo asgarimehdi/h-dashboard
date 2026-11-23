@@ -61,6 +61,7 @@ class ScheduledJobInfrastructureTest extends TestCase
         $this->assertContains('todos:generate-recurring', $commands);
         $this->assertContains('maintenance:generate-due', $commands);
         $this->assertContains('data:archive', $commands);
+        $this->assertContains('backup:prune-archives', $commands);
         $this->assertContains('reports:generate-daily', $commands);
 
         // zabbix:sync is now dispatched as SyncZabbixJob, not an artisan command
@@ -80,9 +81,9 @@ class ScheduledJobInfrastructureTest extends TestCase
         $events = $this->app->make(Schedule::class)->events();
 
         $this->assertCount(
-            6,
+            7,
             $events,
-            'the schedule must keep exactly the six registered items — zero means the wiring was dropped'
+            'the schedule must keep exactly the seven registered items — zero means the wiring was dropped'
         );
     }
 
