@@ -169,6 +169,117 @@ class HardwareBulkOperationsTest extends TestCase
         $this->assertTrue($entry['new']);
     }
 
+    // ==================== #1670: duplicate ids & phantom audits ====================
+
+    public function test_bulk_mark_accepts_duplicate_ids(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $id = $data['hardware'][0]->id;
+
+        // A retried/double-submitted client sends the same id twice. `whereIn`
+        // collapses duplicates, so the accessibility count must compare against
+        // the distinct ids instead of the raw payload (#1670).
+        $this->postJson('/api/hardware/bulk-mark', [
+            'ids' => [$id, $id],
+            'mark' => true,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('hardwares', ['id' => $id, 'mark' => true]);
+
+        $this->assertSame(1, HardwareAudit::query()
+            ->where('hardware_id', $id)
+            ->where('action', 'bulk_mark')
+            ->count(), 'a duplicated id must not produce a second audit row');
+    }
+
+    public function test_bulk_delete_accepts_duplicate_ids(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $id = $data['hardware'][0]->id;
+
+        $this->postJson('/api/hardware/bulk-delete', [
+            'ids' => [$id, $id],
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('hardwares', ['id' => $id]);
+
+        $this->assertSame(1, HardwareAudit::query()
+            ->where('hardware_id', $id)
+            ->where('action', 'bulk_delete')
+            ->count(), 'a duplicated id must not produce a second audit row');
+    }
+
+    public function test_bulk_mark_skips_the_audit_row_for_a_device_already_at_the_target_value(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $alreadyMarked = Hardware::create([
+            'n_code' => $data['user']->n_code,
+            'pc_name' => 'PC-ALREADY-MARKED',
+            'type' => 'pc',
+            'mark' => true,
+        ]);
+
+        $this->postJson('/api/hardware/bulk-mark', [
+            'ids' => [$alreadyMarked->id],
+            'mark' => true,
+        ])->assertOk();
+
+        $this->assertSame(0, HardwareAudit::query()
+            ->where('hardware_id', $alreadyMarked->id)
+            ->where('action', 'bulk_mark')
+            ->count(), 'a no-op bulk mark must not write an audit row');
+    }
+
+    public function test_bulk_mark_audits_only_the_rows_whose_mark_changes(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $unmarked = Hardware::create([
+            'n_code' => $data['user']->n_code,
+            'pc_name' => 'PC-UNMARKED',
+            'type' => 'pc',
+            'mark' => false,
+        ]);
+
+        $alreadyMarked = Hardware::create([
+            'n_code' => $data['user']->n_code,
+            'pc_name' => 'PC-ALREADY-MARKED',
+            'type' => 'pc',
+            'mark' => true,
+        ]);
+
+        $response = $this->postJson('/api/hardware/bulk-mark', [
+            'ids' => [$unmarked->id, $alreadyMarked->id],
+            'mark' => true,
+        ])->assertOk();
+
+        // The response count keeps its "matched rows" semantics (#1670).
+        $response->assertJsonPath('count', 2);
+
+        $audits = HardwareAudit::query()
+            ->where('hardware_id', $unmarked->id)
+            ->where('action', 'bulk_mark')
+            ->get();
+
+        $this->assertCount(1, $audits);
+        $this->assertCount(1, $audits->first()->changes);
+        $this->assertSame('mark', $audits->first()->changes[0]['field']);
+        $this->assertFalse($audits->first()->changes[0]['old']);
+        $this->assertTrue($audits->first()->changes[0]['new']);
+
+        $this->assertSame(0, HardwareAudit::query()
+            ->where('hardware_id', $alreadyMarked->id)
+            ->where('action', 'bulk_mark')
+            ->count(), 'the row already at the target value must not be audited');
+    }
+
     // ==================== Auth ====================
 
     public function test_unauthenticated_user_cannot_bulk_mark(): void
