@@ -469,19 +469,58 @@ return new class extends Component
         }
 
         $accessibleIds = $this->accessibleUnitIds();
-        $scopedIds = Hardware::whereIn('id', $this->selected)
+        // #1026/#1675: load the rows, not just the ids — the pre-update `mark`
+        // is the audit diff's `old`, exactly like HardwareController::bulkMark().
+        $hardwares = Hardware::whereIn('id', $this->selected)
             ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
-            ->pluck('id')
-            ->toArray();
+            ->get();
 
-        if (empty($scopedIds)) {
+        if ($hardwares->isEmpty()) {
             $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
 
             return;
         }
 
-        Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
-        Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
+        $scopedIds = $hardwares->pluck('id')->all();
+
+        // #1670: the writer inserts one row per model it is handed (an empty diff
+        // still lands as `changes = null`), so rows already at the target value
+        // must be filtered out before the mass update.
+        $auditTargets = $hardwares
+            ->filter(fn (Hardware $hw): bool => $hw->mark !== $value)
+            ->values();
+
+        // A query-builder update fires no model events, so the observer cannot
+        // double-audit these rows; the window is kept for structural parity with
+        // bulkDelete() / the API, and so a future per-model rewrite cannot
+        // silently double-audit.
+        request()->attributes->set('suppress_audit', true);
+        try {
+            Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
+        } finally {
+            request()->attributes->remove('suppress_audit');
+        }
+
+        // #1675/#1362: written only AFTER the update succeeds, and only for rows
+        // whose value actually changed — same writer and shape as the API.
+        if ($auditTargets->isNotEmpty()) {
+            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                $auditTargets,
+                'bulk_mark',
+                null,
+                fn (Hardware $hw): array => [
+                    ['field' => 'mark', 'old' => $hw->mark, 'new' => $value],
+                ],
+            );
+        }
+
+        // #1026/#1675: parity with the API path — listeners on HardwareUpdated
+        // and the stats cache must see a web bulk mark too.
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
+            event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
+            Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
+        });
+
         // Keep the selection so the user can immediately toggle back (e.g. "برداشتن")
         // without having to re-select — do NOT clear $this->selected here.
         $this->success('وضعیت علامت‌گذاری تغییر کرد.', position: 'toast-bottom');
