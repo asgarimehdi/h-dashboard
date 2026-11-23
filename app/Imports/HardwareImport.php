@@ -57,7 +57,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      */
     private array $previewErrorMessages = [];
 
-    /** @var list<array{data: array<string, mixed>, changes: array<string, mixed>}> */
+    /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> */
     private array $pendingCreates = [];
 
     /** @var list<array{id: int, data: array<string, mixed>, changes: array<string, mixed>}> */
@@ -405,6 +405,36 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         return null;
     }
 
+    /**
+     * #1667: the keys a queued create occupies, per the active compare key.
+     * A key is only registered for a non-empty value, so rows with no mac (or
+     * no pc_name) never collapse onto each other — the same rule PersonImport
+     * applies to an empty n_code.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    private function createDedupeKeys(array $data): array
+    {
+        $keys = [];
+
+        if ($this->compareKey === 'pc_name' || $this->compareKey === 'both') {
+            $pcName = $data['pc_name'] ?? null;
+            if (is_string($pcName) && $pcName !== '') {
+                $keys[] = 'pc_name:'.$pcName;
+            }
+        }
+
+        if ($this->compareKey === 'mac' || $this->compareKey === 'both') {
+            $mac = $data['mac'] ?? null;
+            if (is_string($mac) && $mac !== '') {
+                $keys[] = 'mac:'.$mac;
+            }
+        }
+
+        return $keys;
+    }
+
     private function mapRowToData(array $row): array
     {
         return [
@@ -523,6 +553,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
                 $writeData = $this->normalizeWriteData($data);
 
                 $this->pendingCreates[] = [
+                    'row' => $rowNumber,
                     'data' => $writeData,
                     'changes' => $this->createAuditChanges($writeData),
                 ];
@@ -649,6 +680,84 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      */
     private function flushPendingWrites(): void
     {
+        // #1667: a sheet can carry the same NEW device twice (copy-paste, a
+        // re-exported range). `hardwares` has no unique constraint on the
+        // compare key (see ImportHardwareJob), so both rows would be inserted
+        // and a later import could match either one. Collapse queued creates
+        // like PersonImport does for n_code (#1194) — last write wins — but
+        // keyed on the compare key, because a match is what makes two rows the
+        // same device.
+        //
+        // Under `both` a row collides when EITHER field matches the current
+        // survivor: that is what the row-by-row matcher did
+        // (findExistingRecord() tries pc_name, then mac). Replacing a survivor
+        // also RELEASES its old keys, because the surviving row has been
+        // renamed by the later sheet row: A=(p1,m1), B=(p2,m1), C=(p1,m2)
+        // yields TWO rows (B renames A to p2, so C matches nothing), while
+        // A=(p1,m1), B=(p1,m2), C=(p2,m2) yields ONE.
+        //
+        // The replaced row's `changes` are dropped: the audit trail records one
+        // `created` row with the surviving (last) values, exactly as the update
+        // dedupe below and PersonImport already do. Every dropped row is also
+        // reported in `errors`, naming its sheet row, the key it collided on
+        // and the surviving row, so a swapped/mistyped pc_name or mac is
+        // visible instead of vanishing silently.
+        /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> $kept */
+        $kept = [];
+        /** @var array<string, int> $keyIndex */
+        $keyIndex = [];
+
+        foreach ($this->pendingCreates as $item) {
+            $keys = $this->createDedupeKeys($item['data']);
+
+            // Collect every survivor this row collides with (pc_name may hit
+            // one row while mac hits another), keeping the first key that
+            // matched so the report names a concrete column and value.
+            /** @var array<int, string> $victims */
+            $victims = [];
+            foreach ($keys as $key) {
+                if (isset($keyIndex[$key])) {
+                    $victims[$keyIndex[$key]] ??= $key;
+                }
+            }
+
+            foreach ($victims as $index => $collidingKey) {
+                $victim = $kept[$index];
+
+                foreach ($this->createDedupeKeys($victim['data']) as $victimKey) {
+                    unset($keyIndex[$victimKey]);
+                }
+
+                unset($kept[$index]);
+
+                [$field, $value] = explode(':', $collidingKey, 2);
+
+                $this->importResults['errors'][] = [
+                    'row' => $victim['row'],
+                    'error' => "دستگاه تکراری؛ با ردیف {$item['row']} روی {$field} «{$value}» یکسان است و نادیده گرفته شد.",
+                    'data' => $victim['data'],
+                    'key' => $field,
+                    'value' => $value,
+                    'duplicate_of' => $item['row'],
+                ];
+            }
+
+            $kept[] = $item;
+            $index = array_key_last($kept);
+
+            foreach ($keys as $key) {
+                $keyIndex[$key] = $index;
+            }
+        }
+
+        $droppedCreates = count($this->pendingCreates) - count($kept);
+
+        if ($droppedCreates > 0) {
+            $this->importResults['created'] = max(0, $this->importResults['created'] - $droppedCreates);
+        }
+
+        $this->pendingCreates = array_values($kept);
+
         $wrote = ! empty($this->pendingCreates) || ! empty($this->pendingUpdates);
 
         foreach (array_chunk($this->pendingCreates, self::CHUNK_SIZE) as $chunk) {
@@ -681,7 +790,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     }
 
     /**
-     * @param  list<array{data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
+     * @param  list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
      */
     private function insertCreates(array $chunk): void
     {

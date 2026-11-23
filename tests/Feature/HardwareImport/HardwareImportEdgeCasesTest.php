@@ -396,15 +396,18 @@ class HardwareImportEdgeCasesTest extends TestCase
     {
         $this->createPerson();
 
+        // #1667: distinct MACs — these are four genuinely different devices,
+        // and the shared `row()` fixture MAC would make them one NIC under the
+        // `both` compare key now that duplicate creates are deduped.
         $file = $this->writeCsv([
-            $this->row(['pc_name' => 'PC-A', 'clean_at' => '2026-01-05']),
-            $this->row(['pc_name' => 'PC-B', 'clean_at' => '05/01/2026']),
+            $this->row(['pc_name' => 'PC-A', 'mac' => 'AA:BB:CC:DD:EE:0A', 'clean_at' => '2026-01-05']),
+            $this->row(['pc_name' => 'PC-B', 'mac' => 'AA:BB:CC:DD:EE:0B', 'clean_at' => '05/01/2026']),
             // #890: the exporter emits Jalali `Y/m/d` and the importer used to
             // null it out, so a re-import of an exported sheet silently erased
             // `clean_at`. Jalali dashed (`1405-01-05`) must be recognised as
             // Jalali too, not stored verbatim in a `date` column.
-            $this->row(['pc_name' => 'PC-C', 'clean_at' => '1404/11/19']),
-            $this->row(['pc_name' => 'PC-D', 'clean_at' => '1404-11-19']),
+            $this->row(['pc_name' => 'PC-C', 'mac' => 'AA:BB:CC:DD:EE:0C', 'clean_at' => '1404/11/19']),
+            $this->row(['pc_name' => 'PC-D', 'mac' => 'AA:BB:CC:DD:EE:0D', 'clean_at' => '1404-11-19']),
         ]);
 
         $import = $this->scopedImport();
@@ -433,9 +436,9 @@ class HardwareImportEdgeCasesTest extends TestCase
         $this->createPerson();
 
         $file = $this->writeCsv([
-            $this->row(['pc_name' => 'PC-BAD-MONTH', 'clean_at' => '1404/13/01']),
-            $this->row(['pc_name' => 'PC-BAD-DAY', 'clean_at' => '1404/01/32']),
-            $this->row(['pc_name' => 'PC-OK', 'clean_at' => '1404/12/29']),
+            $this->row(['pc_name' => 'PC-BAD-MONTH', 'mac' => 'AA:BB:CC:DD:EE:0A', 'clean_at' => '1404/13/01']),
+            $this->row(['pc_name' => 'PC-BAD-DAY', 'mac' => 'AA:BB:CC:DD:EE:0B', 'clean_at' => '1404/01/32']),
+            $this->row(['pc_name' => 'PC-OK', 'mac' => 'AA:BB:CC:DD:EE:0C', 'clean_at' => '1404/12/29']),
         ]);
 
         $import = $this->scopedImport();
