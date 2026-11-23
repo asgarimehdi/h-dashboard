@@ -221,6 +221,7 @@ new class extends Component
                         'end_at' => now()->addWeek(),
                         'is_completed' => false,
                         'unit_id' => $destinationInScope ? $this->unit_id : session('current_unit_id', auth()->user()->person?->u_id),
+                        'user_id' => auth()->id(),
                     ]);
                     $ticket->update(['task_id' => $todo->id]);
                 }

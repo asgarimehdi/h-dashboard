@@ -377,11 +377,53 @@ class TicketsCreateLivewireTest extends TestCase
         // removes, which put the fresh link out of every reader's reach.
         $this->assertEquals($unit->id, $todo->unit_id);
 
+        // #1682: the auto-created todo must be owned by the ticket creator.
+        // Without this the row is ownerless and, when the unit fallback is
+        // also null, matches no reader at all.
+        $this->assertSame($user->id, $todo->user_id);
+
         // Ticket must reference the new todo via task_id.
         $this->assertDatabaseHas('tickets', [
             'subject' => 'تیکت با تولید خودکار وظیفه',
             'task_id' => $todo->id,
         ]);
+    }
+
+    public function test_auto_created_todo_is_creator_owned_when_no_unit_context_exists(): void
+    {
+        // #1682: an account with no organizational unit and no person unit —
+        // exactly the case where the todo's unit fallback resolves to null.
+        // `createUserWithUnit()` cannot build it (it sets both `person->u_id`
+        // and `current_unit_id`) and `UserFactory` always seeds a Person with
+        // a `u_id`, so drop it explicitly.
+        $user = User::factory()->create();
+        $user->givePermissionTo('create_ticket');
+        $user->person->update(['u_id' => null]);
+        Session::forget('current_unit_id');
+
+        $target = $this->createTargetUnit('واحد مقصد بدون اسکوپ');
+
+        Livewire::actingAs($user)
+            ->test('tickets.create')
+            ->set('unit_id', $target->id)
+            ->set('subject', 'تیکت بدون بافت واحد')
+            ->set('content', 'محتوای تستی برای سازندهٔ بدون واحد')
+            ->call('saveTicket')
+            ->assertHasNoErrors();
+
+        $todo = Todo::where('title', 'تیکت بدون بافت واحد')->firstOrFail();
+
+        // A unit-less row is a supported state (null-unit contract); it must
+        // still be creator-owned so the contract keeps it visible to him.
+        $this->assertSame($user->id, $todo->user_id);
+        $this->assertNull($todo->unit_id);
+
+        $this->assertTrue(
+            Todo::accessibleTo([], $user->id)->whereKey($todo->id)->exists()
+        );
+        $this->assertFalse(
+            Todo::accessibleTo([$target->id], User::factory()->create()->id)->whereKey($todo->id)->exists()
+        );
     }
 
     public function test_links_existing_todo_when_task_id_provided(): void
