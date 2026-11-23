@@ -1456,8 +1456,9 @@ class TicketsInboxLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
-        $t1 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت یک']);
-        $t2 = $this->createTicket(['status' => 'forwarded', 'subject' => 'تیکت دو']);
+        // #1686: bulk `complete` only closes accepted, self-assigned tickets.
+        $t1 = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت یک']);
+        $t2 = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت دو']);
         $t3 = $this->createTicket(['status' => 'accepted', 'subject' => 'تیکت سه']);
 
         // toggleTicketSelection
@@ -1546,14 +1547,16 @@ class TicketsInboxLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
-        // In the active search AND in the pending tab.
-        $inScope = $this->createTicket(['status' => 'created', 'subject' => 'دارای مارکر']);
-        // Pending but hidden by the active search — «انتخاب همه» must respect it.
-        $hiddenBySearch = $this->createTicket(['status' => 'created', 'subject' => 'بدون عبارت خاص']);
-        // Found by the search but outside the active tab (pending).
-        $outsideTab = $this->createTicket(['status' => 'accepted', 'subject' => 'دارای مارکر']);
+        // In the active search AND in the active tab (#1686: completion only
+        // applies to accepted, self-assigned tickets, so the tab is `accepted`).
+        $inScope = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'دارای مارکر']);
+        // In the tab but hidden by the active search — «انتخاب همه» must respect it.
+        $hiddenBySearch = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'بدون عبارت خاص']);
+        // Found by the search but outside the active tab (accepted).
+        $outsideTab = $this->createTicket(['status' => 'created', 'subject' => 'دارای مارکر']);
 
         Livewire::test('tickets.inbox')
+            ->set('statusFilter', 'accepted')
             ->set('search', 'دارای مارکر')
             ->call('toggleSelectAll')
             ->assertSet('selectAll', true)
@@ -1564,8 +1567,8 @@ class TicketsInboxLivewireTest extends TestCase
             ->call('executeBulkAction');
 
         $this->assertSame('completed', $inScope->fresh()->status);
-        $this->assertSame('created', $hiddenBySearch->fresh()->status);
-        $this->assertSame('accepted', $outsideTab->fresh()->status);
+        $this->assertSame('accepted', $hiddenBySearch->fresh()->status);
+        $this->assertSame('created', $outsideTab->fresh()->status);
 
         $this->assertDatabaseHas('task_activities', ['ticket_id' => $inScope->id, 'action' => 'completed']);
         $this->assertDatabaseMissing('task_activities', ['ticket_id' => $hiddenBySearch->id, 'action' => 'completed']);
@@ -1584,11 +1587,14 @@ class TicketsInboxLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
-        $t1 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت یک']);
-        $t2 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت دو']);
-        $t3 = $this->createTicket(['status' => 'forwarded', 'subject' => 'تیکت سه']);
+        // #1686: completion only applies to accepted, self-assigned tickets,
+        // so the active tab is `accepted` — otherwise select-all resolves zero.
+        $t1 = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت یک']);
+        $t2 = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت دو']);
+        $t3 = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت سه']);
 
         Livewire::test('tickets.inbox')
+            ->set('statusFilter', 'accepted')
             // ۱. a manual pick (ledger = inclusions)
             ->call('toggleTicketSelection', $t1->id)
             ->assertSet('selectedTickets', [$t1->id])
@@ -1606,7 +1612,7 @@ class TicketsInboxLivewireTest extends TestCase
             ->assertSet('selectedTickets', []);
 
         $this->assertSame('completed', $t1->fresh()->status);
-        $this->assertSame('created', $t2->fresh()->status);
+        $this->assertSame('accepted', $t2->fresh()->status);
         $this->assertSame('completed', $t3->fresh()->status);
 
         $this->assertDatabaseHas('task_activities', ['ticket_id' => $t1->id, 'action' => 'completed']);
@@ -1673,10 +1679,11 @@ class TicketsInboxLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
-        $created = $this->createTicket(['status' => 'created']);
-        $forwarded = $this->createTicket(['status' => 'forwarded']);
+        // #1686: only accepted, self-assigned tickets are completable.
+        $created = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $forwarded = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
         $alreadyDone = $this->createTicket(['status' => 'completed']);
-        $outOfScope = $this->createTicket(['status' => 'created', 'unit' => Unit::factory()->create()]);
+        $outOfScope = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'unit' => Unit::factory()->create()]);
 
         Livewire::test('tickets.inbox')
             ->set('selectedTickets', [$created->id, $forwarded->id, $alreadyDone->id, $outOfScope->id])
@@ -1692,7 +1699,8 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertSame('completed', $created->fresh()->status);
         $this->assertSame('completed', $forwarded->fresh()->status);
         $this->assertSame('completed', $alreadyDone->fresh()->status);
-        $this->assertSame('created', $outOfScope->fresh()->status);
+        // #1686: unchanged because it is outside the accessible scope.
+        $this->assertSame('accepted', $outOfScope->fresh()->status);
 
         $this->assertDatabaseHas('task_activities', ['ticket_id' => $created->id, 'action' => 'completed']);
         $this->assertDatabaseHas('task_activities', ['ticket_id' => $forwarded->id, 'action' => 'completed']);
@@ -1737,7 +1745,7 @@ class TicketsInboxLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
-        $open = $this->createTicket(['status' => 'created', 'subject' => 'تیکت باز']);
+        $open = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت باز']);
         $rejected = $this->createTicket(['status' => 'rejected', 'subject' => 'تیکت ردشده']);
 
         Livewire::test('tickets.inbox')
@@ -1794,7 +1802,7 @@ class TicketsInboxLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
-        $open = $this->createTicket(['status' => 'created', 'subject' => 'تیکت باز']);
+        $open = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'subject' => 'تیکت باز']);
         $rejected = $this->createTicket(['status' => 'rejected', 'subject' => 'تیکت ردشده']);
         // The terminal-state definition (`isClosedTicketRow()`) also treats a
         // non-null `archived_at` as closed; the bulk filter mirrors it.
@@ -1943,7 +1951,10 @@ class TicketsInboxLivewireTest extends TestCase
         $this->actingAs($user);
 
         // 5 tickets in varying pre-complete states
-        $tickets = collect(range(1, 5))->map(fn () => $this->createTicket(['status' => 'accepted']))->all();
+        $tickets = collect(range(1, 5))->map(fn () => $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+        ]))->all();
 
         $beforeCount = ActivityLog::count();
 
@@ -1983,6 +1994,211 @@ class TicketsInboxLivewireTest extends TestCase
                 && str_contains($q['query'], 'activity_logs'))
             ->count();
         $this->assertSame(1, $inserts, 'Expected exactly one batched INSERT into activity_logs');
+    }
+
+    // =====================================================================
+    // #1686 — bulk `complete` must mirror the single-ticket completion rules:
+    // only an `accepted` ticket whose `current_assignee_id` is the actor may
+    // be closed (`TicketsInboxFlow::submitAction()` :655-672 / #1609, parity
+    // with `Api\TicketController::complete()`). `forward` is NOT restricted.
+    // =====================================================================
+
+    public function test_bulk_complete_skips_unaccepted_and_foreign_assigned_tickets(): void
+    {
+        // `createUserWithUnit()` pins `session('current_unit_id')` to the unit
+        // it just created, so the actor is made LAST: the session (and thus the
+        // accessible scope) must point at the actor's unit while another
+        // expert's unit exists alongside it.
+        ['user' => $other] = $this->createUserWithUnit();
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+        $unitId = $user->units()->first()->id;
+
+        $unaccepted = $this->createTicket([
+            'unit_id' => $unitId,
+            'status' => 'created',
+            'subject' => 'تیکت تأییدنشده',
+            'current_assignee_id' => $user->id,
+        ]);
+        $foreign = $this->createTicket([
+            'unit_id' => $unitId,
+            'status' => 'accepted',
+            'subject' => 'تیکت کارشناس دیگر',
+            'current_assignee_id' => $other->id,
+        ]);
+        $own = $this->createTicket([
+            'unit_id' => $unitId,
+            'status' => 'accepted',
+            'subject' => 'تیکت خودم',
+            'current_assignee_id' => $user->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$unaccepted->id, $foreign->id, $own->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return str_contains($title, '1 تیکت با موفقیت پردازش شد')
+                    && str_contains($title, '2 تیکت رد شد');
+            });
+
+        $unaccepted->refresh();
+        $this->assertSame('created', $unaccepted->status);
+        $this->assertNull($unaccepted->completed_at);
+
+        $foreign->refresh();
+        $this->assertSame('accepted', $foreign->status);
+        $this->assertSame($other->id, $foreign->current_assignee_id);
+        $this->assertNull($foreign->completed_at);
+
+        $own->refresh();
+        $this->assertSame('completed', $own->status);
+        $this->assertNotNull($own->completed_at);
+
+        $this->assertDatabaseHas('task_activities', ['ticket_id' => $own->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $unaccepted->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $foreign->id, 'action' => 'completed']);
+
+        $this->assertDatabaseHas('activity_logs', [
+            'subject_id' => $own->id,
+            'subject_type' => 'App\\Models\\Ticket',
+        ]);
+        $this->assertDatabaseMissing('activity_logs', [
+            'subject_id' => $unaccepted->id,
+            'subject_type' => 'App\\Models\\Ticket',
+        ]);
+        $this->assertDatabaseMissing('activity_logs', [
+            'subject_id' => $foreign->id,
+            'subject_type' => 'App\\Models\\Ticket',
+        ]);
+    }
+
+    public function test_bulk_complete_zero_processed_reports_skipped_count(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket([
+            'status' => 'created',
+            'current_assignee_id' => $user->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return ($params[0]['icon'] ?? '') === 'warning'
+                    && str_contains($title, '1 تیکت رد شد')
+                    && ! str_contains($title, 'با موفقیت پردازش شد');
+            });
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertNull($ticket->completed_at);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $ticket->id, 'action' => 'completed']);
+        $this->assertDatabaseMissing('activity_logs', [
+            'subject_id' => $ticket->id,
+            'subject_type' => 'App\\Models\\Ticket',
+        ]);
+    }
+
+    public function test_bulk_complete_does_not_auto_complete_parent_task_when_sibling_is_skipped(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه تست',
+            'start_at' => now(),
+            'is_completed' => false,
+            'unit_id' => $user->units()->first()->id,
+        ]);
+
+        $own = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+        ]);
+        $skipped = $this->createTicket([
+            'status' => 'created',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$own->id, $skipped->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        $this->assertSame('completed', $own->fresh()->status);
+        $this->assertSame('created', $skipped->fresh()->status);
+        $this->assertFalse($todo->fresh()->is_completed);
+    }
+
+    public function test_bulk_complete_auto_completes_parent_task_when_all_children_completed(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه تست',
+            'start_at' => now(),
+            'is_completed' => false,
+            'unit_id' => $user->units()->first()->id,
+        ]);
+
+        $t1 = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+        ]);
+        $t2 = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$t1->id, $t2->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        $this->assertSame('completed', $t1->fresh()->status);
+        $this->assertSame('completed', $t2->fresh()->status);
+        $this->assertTrue($todo->fresh()->is_completed);
+    }
+
+    public function test_select_all_then_complete_on_pending_tab_processes_nothing(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $t1 = $this->createTicket(['status' => 'created', 'current_assignee_id' => $user->id]);
+        $t2 = $this->createTicket(['status' => 'forwarded', 'current_assignee_id' => $user->id]);
+
+        Livewire::test('tickets.inbox')
+            ->call('toggleSelectAll')
+            ->assertSet('selectAll', true)
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                $title = (string) ($params[0]['title'] ?? '');
+
+                return ($params[0]['icon'] ?? '') === 'warning'
+                    && str_contains($title, '2 تیکت رد شد');
+            });
+
+        $this->assertSame('created', $t1->fresh()->status);
+        $this->assertSame('forwarded', $t2->fresh()->status);
+        $this->assertDatabaseMissing('task_activities', ['action' => 'completed']);
+        $this->assertDatabaseMissing('activity_logs', ['subject_type' => 'App\\Models\\Ticket']);
     }
 
     // =====================================================================

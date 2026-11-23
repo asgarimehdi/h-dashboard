@@ -326,7 +326,7 @@ new class extends Component
         // bulk. `lockForUpdate()` closes the check-then-act window a
         // concurrent single-ticket transition would otherwise open between
         // resolution and the set-based UPDATE.
-        $ticketIds = DB::transaction(function () use ($accessibleIds, $now, $userId, $bulkNote) {
+        [$ticketIds, $skippedCount] = DB::transaction(function () use ($accessibleIds, $now, $userId, $bulkNote) {
             // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های پایانی (completed/rejected/آرشیوشده) + محدوده سازمانی
             //
             // #1040: «انتخاب همه» is NOT the whole accessible pool any more —
@@ -334,27 +334,47 @@ new class extends Component
             // ACTIVE filter/search/view-mode, minus the rows the operator
             // un-picked. The manual path is unchanged (`selectedTickets` holds
             // only hand-picked ids in that mode).
+            $candidatesQuery = Ticket::query();
+
             if ($this->selectAll) {
-                $scope = Ticket::query();
-                $this->applyInboxFilters($scope);
-                $ticketIds = $scope
-                    ->whereNotIn('id', $this->selectedTickets)
-                    ->whereNotIn('status', ['completed', 'rejected'])
-                    ->whereNull('archived_at')
-                    ->whereIn('unit_id', $accessibleIds)
-                    ->lockForUpdate()
-                    ->pluck('id');
+                $this->applyInboxFilters($candidatesQuery);
+                $candidatesQuery->whereNotIn('id', $this->selectedTickets);
             } else {
-                $ticketIds = Ticket::whereIn('id', $this->selectedTickets)
-                    ->whereNotIn('status', ['completed', 'rejected'])
-                    ->whereNull('archived_at')
-                    ->whereIn('unit_id', $accessibleIds)
-                    ->lockForUpdate()
-                    ->pluck('id');
+                $candidatesQuery->whereIn('id', $this->selectedTickets);
             }
 
+            $candidates = $candidatesQuery
+                ->whereNotIn('status', ['completed', 'rejected'])
+                ->whereNull('archived_at')
+                ->whereIn('unit_id', $accessibleIds)
+                ->lockForUpdate()
+                ->get(['id', 'status', 'current_assignee_id']);
+
+            // #1686: bulk `complete` mirrors the single-ticket completion rule —
+            // `TicketsInboxFlow::submitAction()` (:655-672) requires the LOCKED
+            // row to be `accepted` and its `current_assignee_id` to be the actor
+            // (#1609: only the ticket's current assignee may close it, even when
+            // the caller holds `manage_unit_tickets`; parity with
+            // `Api\TicketController::complete()`). The decision is taken on the
+            // locked rows rather than in SQL so the check-then-act window stays
+            // closed and the skipped count needs no second query. `forward`
+            // keeps its own (unrestricted) rules.
+            $skippedCount = 0;
+
+            if ($this->bulkAction === 'complete') {
+                [$eligible, $skipped] = $candidates->partition(
+                    fn ($row) => $row->status === 'accepted'
+                        && (int) $row->current_assignee_id === (int) $userId
+                );
+                $skippedCount = $skipped->count();
+            } else {
+                $eligible = $candidates;
+            }
+
+            $ticketIds = $eligible->pluck('id');
+
             if ($ticketIds->isEmpty()) {
-                return $ticketIds;
+                return [$ticketIds, $skippedCount];
             }
 
             // Issue #531: capture old statuses BEFORE the bulk update
@@ -465,18 +485,30 @@ new class extends Component
                 \App\Models\ActivityLog::query()->insert($activityLogRows);
             }
 
-            return $ticketIds;
+            return [$ticketIds, $skippedCount];
         });
 
         if ($ticketIds->isEmpty()) {
-            $this->dispatch('swal', ['title' => 'هیچ تیکت قابل پردازشی یافت نشد', 'icon' => 'warning']);
+            $this->dispatch('swal', [
+                'title' => $skippedCount > 0
+                    ? "{$skippedCount} تیکت رد شد: فقط تیکت‌های تأییدشده و ارجاع‌شده به شما قابل تکمیل هستند"
+                    : 'هیچ تیکت قابل پردازشی یافت نشد',
+                'icon' => 'warning',
+            ]);
             $this->closeAllModals();
             return;
         }
 
         // #1001: report the tickets actually processed after scope/status
-        // filtering — not how many the operator selected.
-        $this->dispatch('swal', ['title' => "{$ticketIds->count()} تیکت با موفقیت پردازش شد", 'icon' => 'success']);
+        // filtering — not how many the operator selected. #1686: a bulk
+        // `complete` that closed nothing (or only some) now says how many
+        // candidates were refused by the accepted/assignee rule.
+        $title = "{$ticketIds->count()} تیکت با موفقیت پردازش شد";
+        if ($skippedCount > 0) {
+            $title .= "؛ {$skippedCount} تیکت رد شد (تأییدنشده یا ارجاع‌شده به کارشناس دیگر)";
+        }
+
+        $this->dispatch('swal', ['title' => $title, 'icon' => 'success']);
         $this->closeAllModals();
         $this->resetPage();
     }
