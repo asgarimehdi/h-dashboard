@@ -9,6 +9,7 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use App\Traits\PersianNormalizer;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Facades\Excel;
@@ -426,10 +427,15 @@ class PersonImportEdgeCasesTest extends TestCase
         @unlink($file);
     }
 
-    public function test_integer_parsing_treats_empty_and_null_marker_as_null(): void
+    /**
+     * #1697: an empty lookup cell maps to null, but `t_id`/`e_id`/`r_id`/`s_id`
+     * are NOT NULL on `persons` — writing null aborts the whole sheet with
+     * 23502, so the preview must reject the row instead of offering it as
+     * creatable.
+     */
+    public function test_empty_lookup_cells_map_to_null_and_are_rejected(): void
     {
-        // e_id empty cell and r_id "\N" marker must both parse to null
-        // (reference checks skip null ids); row still previews as creatable.
+        // e_id empty cell and r_id "\N" marker must both parse to null.
         $file = $this->csv([['9876543210', 'علی', 'رضایی', $this->tahsil->id, '', $this->semat->id, '\\N', $this->unit->id]]);
 
         $import = $this->scopedImport();
@@ -438,9 +444,157 @@ class PersonImportEdgeCasesTest extends TestCase
         $results = $import->getImportResults();
 
         $this->assertCount(1, $results['preview']);
-        $this->assertEquals('create', $results['preview'][0]['status']);
+        $this->assertEquals('error', $results['preview'][0]['status']);
         $this->assertNull($results['preview'][0]['data']['e_id']);
         $this->assertNull($results['preview'][0]['data']['r_id']);
+        $this->assertSame(
+            'شناسه نوع استخدام (e_id) خالی است؛ شناسه ردیف سازمانی (r_id) خالی است',
+            $results['preview'][0]['message']
+        );
+
+        @unlink($file);
+    }
+
+    // -----------------------------------------------------------
+    //  ایشو #1697: شناسه‌های lookup غیرعددی نباید به ۰ تبدیل شوند
+    // -----------------------------------------------------------
+
+    public function test_preview_rejects_a_non_numeric_lookup_id(): void
+    {
+        $bad = $this->personRow('9876543210');
+        $bad[3] = 'abc';
+
+        $file = $this->csv([$bad, $this->personRow('9876543211')]);
+
+        $import = $this->scopedImport();
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertCount(2, $results['preview']);
+        $this->assertSame('error', $results['preview'][0]['status']);
+        $this->assertNull($results['preview'][0]['data']['t_id']);
+        $this->assertSame(
+            'شناسه تحصیلات (t_id) باید یک عدد صحیح باشد؛ مقدار سلول: abc',
+            $results['preview'][0]['message']
+        );
+        $this->assertCount(1, $results['errors']);
+        $this->assertSame(0, $results['skipped']);
+        $this->assertSame('create', $results['preview'][1]['status']);
+        // Sheet order and row numbering must survive the rejection.
+        $this->assertSame([2, 3], array_column($results['preview'], 'row'));
+
+        @unlink($file);
+    }
+
+    public function test_confirm_writes_the_good_rows_when_one_lookup_id_is_non_numeric(): void
+    {
+        $bad = $this->personRow('9876543210');
+        $bad[3] = 'abc';
+
+        $file = $this->csv([$bad, $this->personRow('9876543211')]);
+
+        $import = $this->scopedImport();
+        // The operator confirms the rejected row too: #1209 keeps it skipped.
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['created']);
+        $this->assertSame(1, $results['skipped']);
+        $this->assertCount(1, $results['errors']);
+        $this->assertSame(2, $results['errors'][0]['row']);
+        $this->assertSame(
+            'شناسه تحصیلات (t_id) باید یک عدد صحیح باشد؛ مقدار سلول: abc',
+            $results['errors'][0]['error']
+        );
+        $this->assertDatabaseHas('persons', ['n_code' => '9876543211', 't_id' => $this->tahsil->id]);
+        $this->assertDatabaseMissing('persons', ['n_code' => '9876543210']);
+        $this->assertDatabaseCount('persons', 1);
+
+        @unlink($file);
+    }
+
+    public function test_fractional_lookup_id_is_rejected_not_truncated(): void
+    {
+        $row = $this->personRow('9876543210');
+        $row[3] = '12.9';
+
+        $file = $this->csv([$row]);
+
+        $import = $this->scopedImport();
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame('error', $results['preview'][0]['status']);
+        $this->assertNull($results['preview'][0]['data']['t_id']);
+        $this->assertStringContainsString('12.9', $results['preview'][0]['message']);
+        // No silent truncation to 12 and a misleading "not found" message.
+        $this->assertStringNotContainsString('با شناسه 12 ', $results['preview'][0]['message']);
+
+        @unlink($file);
+    }
+
+    public function test_whole_float_lookup_cell_is_accepted(): void
+    {
+        $row = $this->personRow('9876543210');
+        $row[3] = $this->tahsil->id.'.0';
+
+        $file = $this->csv([$row]);
+
+        $import = $this->scopedImport();
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame('create', $results['preview'][0]['status']);
+        $this->assertSame($this->tahsil->id, $results['preview'][0]['data']['t_id']);
+
+        @unlink($file);
+    }
+
+    public function test_persian_digit_lookup_id_is_normalized(): void
+    {
+        $row = $this->personRow('9876543210');
+        $row[3] = strtr((string) $this->tahsil->id, array_flip(PersianNormalizer::digitMap()));
+
+        $file = $this->csv([$row]);
+
+        $import = $this->scopedImport();
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame('create', $results['preview'][0]['status']);
+        $this->assertSame($this->tahsil->id, $results['preview'][0]['data']['t_id']);
+
+        @unlink($file);
+    }
+
+    public function test_zero_and_negative_lookup_ids_are_rejected(): void
+    {
+        $zeroTId = $this->personRow('9876543210');
+        $zeroTId[3] = '0';
+
+        $negativeSId = $this->personRow('9876543211');
+        $negativeSId[5] = '-1';
+
+        $file = $this->csv([$zeroTId, $negativeSId]);
+
+        $import = $this->scopedImport();
+        $import->setSelectedActions(['row_2' => 'create']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame('error', $results['preview'][0]['status']);
+        $this->assertSame('error', $results['preview'][1]['status']);
+        $this->assertStringContainsString('مقدار سلول: 0', $results['preview'][0]['message']);
+        $this->assertStringContainsString('مقدار سلول: -1', $results['preview'][1]['message']);
+        $this->assertSame(0, $results['created']);
+        $this->assertDatabaseCount('persons', 0);
 
         @unlink($file);
     }
