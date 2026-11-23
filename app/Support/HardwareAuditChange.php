@@ -199,6 +199,21 @@ final class HardwareAuditChange
     }
 
     /**
+     * Canonical form of a value as it is **stored** in a `changes` entry.
+     *
+     * Observer rows store `ExcelCell::escape(formatValueForDisplay($value))`
+     * (#927 + #886/#1194), while `HardwareController::bulkMark()` stores the raw
+     * boolean. The currency guard (#1669) compares the current attribute to a
+     * row's `new` value, so both sides go through this one form — `escape()` is
+     * idempotent on an already-escaped string, so a stored value round-trips to
+     * itself.
+     */
+    public static function storedForm(mixed $value): string
+    {
+        return (string) ExcelCell::escape(self::formatValueForDisplay($value));
+    }
+
+    /**
      * Interpolate an already-stored diff value without changing how it reads.
      *
      * Scalars render exactly as string interpolation has always rendered them

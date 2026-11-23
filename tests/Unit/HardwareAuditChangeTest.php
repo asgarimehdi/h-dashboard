@@ -196,4 +196,19 @@ class HardwareAuditChangeTest extends TestCase
 
         $this->assertSame($created->values()->all(), array_column($snapshot, 'field'));
     }
+
+    // ==================== storedForm (currency guard, #1669) ====================
+
+    public function test_stored_form_matches_every_writer(): void
+    {
+        // The stored `new` value is `ExcelCell::escape(formatValueForDisplay())`
+        // for observer rows, but `bulk_mark` stores raw booleans. Both sides of
+        // the #1669 comparison go through this one canonical form.
+        $this->assertSame('بله', HardwareAuditChange::storedForm(true));
+        $this->assertSame('خیر', HardwareAuditChange::storedForm(false));
+        $this->assertSame('—', HardwareAuditChange::storedForm(null));
+        $this->assertSame('8192', HardwareAuditChange::storedForm(8192));
+        $this->assertSame("'=SUM(A1)", HardwareAuditChange::storedForm('=SUM(A1)'));
+        $this->assertSame("'=SUM(A1)", HardwareAuditChange::storedForm("'=SUM(A1)"));
+    }
 }

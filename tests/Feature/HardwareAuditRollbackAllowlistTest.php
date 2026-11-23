@@ -8,6 +8,7 @@ use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\HardwareAuditChange;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -199,6 +200,25 @@ class HardwareAuditRollbackAllowlistTest extends TestCase
             'hardware_id' => $this->hardware->id,
             'action' => 'rollback',
         ]);
+    }
+
+    public function test_rollback_of_bulk_delete_row_is_not_blocked_by_the_currency_guard(): void
+    {
+        // bulk_delete rows store HardwareAuditChange::DELETED_VALUE ('deleted')
+        // in `new`, not the field's real value — the currency guard must skip them.
+        $audit = HardwareAudit::create([
+            'hardware_id' => $this->hardware->id,
+            'user_id' => $this->user->id,
+            'action' => 'bulk_delete',
+            'changes' => [['field' => 'cpu', 'old' => 'Intel i5', 'new' => HardwareAuditChange::DELETED_VALUE]],
+            'source' => 'bulk',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", ['field' => 'cpu']);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('hardwares', ['id' => $this->hardware->id, 'cpu' => 'Intel i5']);
     }
 
     public function test_rollback_valid_fillable_field_succeeds(): void

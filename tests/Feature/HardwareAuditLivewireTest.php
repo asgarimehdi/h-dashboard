@@ -113,6 +113,25 @@ it('rollbackHistoryField restores field value and logs rollback', function () {
     ]);
 });
 
+it('rollbackHistoryField refuses a stale audit row', function () {
+    [$user, $hardware] = makeAuditLivewireUser();
+
+    $hardware->update(['cpu' => 'Intel i7']);                  // A→B
+    $audit = HardwareAudit::where('hardware_id', $hardware->id)
+        ->where('action', 'updated')->first();
+    $hardware->update(['cpu' => 'Intel i9']);                  // B→C
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->call('loadHistory', $hardware->id)
+        ->call('rollbackHistoryField', $audit->id, 'cpu');
+
+    expect($hardware->fresh()->cpu)->toBe('Intel i9');
+    $this->assertDatabaseMissing('hardware_audits', [
+        'hardware_id' => $hardware->id,
+        'action' => 'rollback',
+    ]);
+});
+
 it('rollbackHistoryField errors on invalid audit id', function () {
     [$user, $hardware] = makeAuditLivewireUser();
 

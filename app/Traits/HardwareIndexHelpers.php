@@ -7,6 +7,7 @@ use App\Models\HardwareAudit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\HardwareAuditScope;
+use App\Support\HardwareAuditChange;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -227,18 +228,47 @@ trait HardwareIndexHelpers
             return;
         }
 
-        $hw->update([$field => $restoredValue]);
+        // #1669: refuse to overwrite a value that moved on after this audit row
+        // was written. bulk_delete rows store a sentinel in `new`, not a value.
+        $guardApplies = $audit->action !== 'bulk_delete';
 
-        // Log rollback
-        app(HardwareAuditObserver::class)->recordRollbackAudit(
-            $hw,
-            [[
-                'field' => $field,
-                'old' => $fieldChange['new'] ?? '—',
-                'new' => $fieldChange['old'] ?? '—',
-            ]],
-            auth()->id()
-        );
+        $outcome = DB::transaction(function () use ($audit, $field, $fieldChange, $restoredValue, $guardApplies): string {
+            $locked = Hardware::query()->whereKey($audit->hardware_id)->lockForUpdate()->first();
+
+            if ($locked === null) {
+                return 'missing';
+            }
+
+            if ($guardApplies
+                && HardwareAuditChange::storedForm($locked->getAttribute($field))
+                    !== HardwareAuditChange::storedForm($fieldChange['new'] ?? HardwareAuditChange::NO_VALUE)) {
+                return 'stale';
+            }
+
+            $locked->update([$field => $restoredValue]);
+
+            // Log rollback (same transaction).
+            app(HardwareAuditObserver::class)->recordRollbackAudit(
+                $locked,
+                [[
+                    'field' => $field,
+                    'old' => $fieldChange['new'] ?? '—',
+                    'new' => $fieldChange['old'] ?? '—',
+                ]],
+                auth()->id()
+            );
+
+            return 'ok';
+        });
+
+        if ($outcome !== 'ok') {
+            $this->error(match ($outcome) {
+                'stale' => 'مقدار فعلی فیلد با این ردیف تاریخچه مطابقت ندارد؛ فیلد بعد از آن تغییر کرده است.',
+                default => 'سخت افزار یافت نشد.',
+            }, position: 'toast-bottom');
+
+            return;
+        }
 
         $this->success("فیلد {$field} به مقدار قبلی بازگردانده شد.", position: 'toast-bottom');
         $this->fetchHistory();
