@@ -528,6 +528,305 @@ class HardwareImportTest extends TestCase
         @unlink($file);
     }
 
+    // ==================== #1667: dedupe duplicate creates ====================
+
+    /**
+     * #1667: `hardwares` has no unique constraint on the compare key, so two
+     * identical NEW device rows used to be inserted as two rows. Queued
+     * creates are collapsed at flush time (last write wins), like
+     * PersonImport does for n_code.
+     *
+     * Note: the preview still reports two `create` entries — preview counting
+     * is not deduped (a pre-existing divergence, identical in PersonImport),
+     * so this test only pins the confirm-pass result.
+     */
+    public function test_two_identical_new_device_rows_create_one_hardware(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i7', 'AA:BB:CC:00:00:01'],
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i7', 'AA:BB:CC:00:00:01'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['created']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, Hardware::where('pc_name', 'PC-DUP')->count());
+
+        // The dropped row's audit payload is discarded: one `created` audit
+        // carrying the surviving (last) values, same as the update dedupe.
+        $this->assertSame(1, HardwareAudit::where('source', 'import')->count());
+
+        @unlink($file);
+    }
+
+    /**
+     * #1667: under `both`, a row collides when EITHER field matches the
+     * survivor — a matching pc_name alone makes it the same device.
+     */
+    public function test_same_pc_name_with_a_different_mac_creates_one_hardware_under_both(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i7', 'AA:BB:CC:00:00:0A'],
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i9', 'AA:BB:CC:00:00:0B'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['created']);
+        $this->assertSame(1, Hardware::where('pc_name', 'PC-DUP')->count());
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-DUP',
+            'mac' => 'AA:BB:CC:00:00:0B',
+            'cpu' => 'Intel i9',
+        ]);
+        $this->assertDatabaseMissing('hardwares', ['mac' => 'AA:BB:CC:00:00:0A']);
+
+        @unlink($file);
+    }
+
+    public function test_duplicate_new_rows_create_one_hardware_under_pc_name_compare_key(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i7'],
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i7'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('pc_name');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['created']);
+        $this->assertSame(1, Hardware::where('pc_name', 'PC-DUP')->count());
+
+        @unlink($file);
+    }
+
+    /**
+     * #1667: a replacement RELEASES the victim's keys, because the surviving
+     * row was renamed by the later sheet row — A=(PC-A,macA), B=(PC-A,macB)
+     * collapses A into B, and C=(PC-B,macB) then collides with B on mac.
+     */
+    public function test_a_chain_of_create_rows_collapsing_through_different_keys_creates_one_hardware(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-A', 'pc', 'Intel i7', 'AA:BB:CC:00:00:01'],
+                ['1234567890', 'PC-A', 'pc', 'Intel i7', 'AA:BB:CC:00:00:02'],
+                ['1234567890', 'PC-B', 'pc', 'Intel i7', 'AA:BB:CC:00:00:02'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create', 'row_4' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['created']);
+        $this->assertSame(1, Hardware::query()->whereIn('pc_name', ['PC-A', 'PC-B'])->count());
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-B',
+            'mac' => 'AA:BB:CC:00:00:02',
+        ]);
+
+        @unlink($file);
+    }
+
+    /**
+     * #1667: the anti-over-collapse guard for the rename chain — B releases
+     * pc_name PC-A when it renames A to PC-B, so C=(PC-A,macB) is a genuine
+     * second device. A naive seen-set that never releases keys would wrongly
+     * collapse these three rows to one.
+     */
+    public function test_a_rename_chain_keeps_genuinely_different_devices(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-A', 'pc', 'Intel i7', 'AA:BB:CC:00:00:01'],
+                ['1234567890', 'PC-B', 'pc', 'Intel i7', 'AA:BB:CC:00:00:01'],
+                ['1234567890', 'PC-A', 'pc', 'Intel i7', 'AA:BB:CC:00:00:03'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create', 'row_4' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(2, $results['created']);
+        $this->assertSame(2, Hardware::query()->whereIn('pc_name', ['PC-A', 'PC-B'])->count());
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-B',
+            'mac' => 'AA:BB:CC:00:00:01',
+        ]);
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-A',
+            'mac' => 'AA:BB:CC:00:00:03',
+        ]);
+        $this->assertDatabaseMissing('hardwares', [
+            'pc_name' => 'PC-A',
+            'mac' => 'AA:BB:CC:00:00:01',
+        ]);
+
+        @unlink($file);
+    }
+
+    public function test_two_different_devices_still_create_two_hardware_rows(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-X', 'pc', 'Intel i7', 'AA:BB:CC:00:00:0A'],
+                ['1234567890', 'PC-Y', 'pc', 'Intel i7', 'AA:BB:CC:00:00:0B'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(2, $results['created']);
+        $this->assertSame(2, Hardware::query()->whereIn('pc_name', ['PC-X', 'PC-Y'])->count());
+
+        @unlink($file);
+    }
+
+    /**
+     * #1667: an empty compare field is never registered as a key, so rows
+     * without a mac never collapse onto each other — the same rule
+     * PersonImport applies to an empty n_code.
+     */
+    public function test_rows_without_mac_do_not_collapse_under_both(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-X', 'pc', ''],
+                ['1234567890', 'PC-Y', 'pc', ''],
+            ],
+            ['n_code', 'pc_name', 'type', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(2, $results['created']);
+        $this->assertSame(2, Hardware::query()->whereIn('pc_name', ['PC-X', 'PC-Y'])->count());
+
+        @unlink($file);
+    }
+
+    public function test_rows_without_mac_do_not_collapse_under_mac_compare_key(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-X', 'pc', ''],
+                ['1234567890', 'PC-Y', 'pc', ''],
+            ],
+            ['n_code', 'pc_name', 'type', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('mac');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(2, $results['created']);
+        $this->assertSame(2, Hardware::query()->whereIn('pc_name', ['PC-X', 'PC-Y'])->count());
+
+        @unlink($file);
+    }
+
+    /**
+     * #1667: compare-key fidelity — under `pc_name`, sharing a mac must not
+     * collapse two rows with different pc_names.
+     */
+    public function test_pc_name_compare_key_does_not_collapse_on_mac(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-X', 'pc', 'AA:BB:CC:00:00:0A'],
+                ['1234567890', 'PC-Y', 'pc', 'AA:BB:CC:00:00:0A'],
+            ],
+            ['n_code', 'pc_name', 'type', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('pc_name');
+        $import->setSelectedActions(['row_2' => 'create', 'row_3' => 'create']);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(2, $results['created']);
+        $this->assertSame(2, Hardware::query()->whereIn('pc_name', ['PC-X', 'PC-Y'])->count());
+
+        @unlink($file);
+    }
+
     /**
      * #1194: the bulk import path writes its audit rows through
      * `HardwareBulkAuditWriter`, which must escape a formula payload exactly
