@@ -572,6 +572,67 @@ class HardwareImportTest extends TestCase
     }
 
     /**
+     * #1667 (owner requirement): a dropped duplicate must not vanish
+     * silently. The `errors` entry names the dropped sheet row, the key/value
+     * it collided on (`pc_name` or `mac`, whichever matched) and the surviving
+     * row, so a swapped/mistyped field is visible. The import still proceeds
+     * and the last row wins.
+     */
+    public function test_a_dropped_duplicate_create_is_reported_in_errors(): void
+    {
+        $data = $this->createTestData();
+
+        $file = $this->csvPath(
+            [
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i7', 'AA:BB:CC:00:00:01'],
+                ['1234567890', 'PC-DUP', 'pc', 'Intel i9', 'AA:BB:CC:00:00:02'],
+                ['1234567890', 'PC-OTHER', 'pc', 'Intel i7', 'AA:BB:CC:00:00:03'],
+                ['1234567890', 'PC-THIRD', 'pc', 'Intel i7', 'AA:BB:CC:00:00:03'],
+            ],
+            ['n_code', 'pc_name', 'type', 'cpu', 'mac']
+        );
+
+        $import = $this->scopedImport($data);
+        $import->setCompareKey('both');
+        $import->setSelectedActions([
+            'row_2' => 'create',
+            'row_3' => 'create',
+            'row_4' => 'create',
+            'row_5' => 'create',
+        ]);
+
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        // Two real devices survive (rows 3 and 5); the earlier duplicates are
+        // reported, not counted as created.
+        $this->assertSame(2, $results['created']);
+        $this->assertCount(2, $results['errors']);
+
+        // Same pc_name, different mac → pc_name is the colliding field.
+        $this->assertSame(2, $results['errors'][0]['row']);
+        $this->assertSame('pc_name', $results['errors'][0]['key']);
+        $this->assertSame('PC-DUP', $results['errors'][0]['value']);
+        $this->assertSame(3, $results['errors'][0]['duplicate_of']);
+        $this->assertStringContainsString('ردیف 3', $results['errors'][0]['error']);
+        $this->assertStringContainsString('pc_name', $results['errors'][0]['error']);
+        $this->assertStringContainsString('PC-DUP', $results['errors'][0]['error']);
+
+        // Different pc_name, same mac → mac is the colliding field.
+        $this->assertSame(4, $results['errors'][1]['row']);
+        $this->assertSame('mac', $results['errors'][1]['key']);
+        $this->assertSame('AA:BB:CC:00:00:03', $results['errors'][1]['value']);
+        $this->assertSame(5, $results['errors'][1]['duplicate_of']);
+        $this->assertStringContainsString('ردیف 5', $results['errors'][1]['error']);
+        $this->assertStringContainsString('mac', $results['errors'][1]['error']);
+
+        $this->assertSame(2, Hardware::query()->whereIn('pc_name', ['PC-DUP', 'PC-THIRD'])->count());
+
+        @unlink($file);
+    }
+
+    /**
      * #1667: under `both`, a row collides when EITHER field matches the
      * survivor — a matching pc_name alone makes it the same device.
      */

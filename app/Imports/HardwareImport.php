@@ -57,7 +57,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      */
     private array $previewErrorMessages = [];
 
-    /** @var list<array{data: array<string, mixed>, changes: array<string, mixed>}> */
+    /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> */
     private array $pendingCreates = [];
 
     /** @var list<array{id: int, data: array<string, mixed>, changes: array<string, mixed>}> */
@@ -553,6 +553,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
                 $writeData = $this->normalizeWriteData($data);
 
                 $this->pendingCreates[] = [
+                    'row' => $rowNumber,
                     'data' => $writeData,
                     'changes' => $this->createAuditChanges($writeData),
                 ];
@@ -697,8 +698,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         //
         // The replaced row's `changes` are dropped: the audit trail records one
         // `created` row with the surviving (last) values, exactly as the update
-        // dedupe below and PersonImport already do.
-        /** @var list<array{data: array<string, mixed>, changes: array<string, mixed>}> $kept */
+        // dedupe below and PersonImport already do. Every dropped row is also
+        // reported in `errors`, naming its sheet row, the key it collided on
+        // and the surviving row, so a swapped/mistyped pc_name or mac is
+        // visible instead of vanishing silently.
+        /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> $kept */
         $kept = [];
         /** @var array<string, int> $keyIndex */
         $keyIndex = [];
@@ -707,20 +711,35 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             $keys = $this->createDedupeKeys($item['data']);
 
             // Collect every survivor this row collides with (pc_name may hit
-            // one row while mac hits another), then drop them together.
+            // one row while mac hits another), keeping the first key that
+            // matched so the report names a concrete column and value.
+            /** @var array<int, string> $victims */
             $victims = [];
             foreach ($keys as $key) {
                 if (isset($keyIndex[$key])) {
-                    $victims[$keyIndex[$key]] = true;
+                    $victims[$keyIndex[$key]] ??= $key;
                 }
             }
 
-            foreach (array_keys($victims) as $index) {
-                foreach ($this->createDedupeKeys($kept[$index]['data']) as $victimKey) {
+            foreach ($victims as $index => $collidingKey) {
+                $victim = $kept[$index];
+
+                foreach ($this->createDedupeKeys($victim['data']) as $victimKey) {
                     unset($keyIndex[$victimKey]);
                 }
 
                 unset($kept[$index]);
+
+                [$field, $value] = explode(':', $collidingKey, 2);
+
+                $this->importResults['errors'][] = [
+                    'row' => $victim['row'],
+                    'error' => "دستگاه تکراری؛ با ردیف {$item['row']} روی {$field} «{$value}» یکسان است و نادیده گرفته شد.",
+                    'data' => $victim['data'],
+                    'key' => $field,
+                    'value' => $value,
+                    'duplicate_of' => $item['row'],
+                ];
             }
 
             $kept[] = $item;
@@ -771,7 +790,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     }
 
     /**
-     * @param  list<array{data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
+     * @param  list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
      */
     private function insertCreates(array $chunk): void
     {
