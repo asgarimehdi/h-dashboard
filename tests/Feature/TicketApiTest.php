@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\TicketController;
 use App\Models\Attachment;
 use App\Models\Person;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -520,6 +521,165 @@ class TicketApiTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertDatabaseMissing('tickets', ['id' => $ticket->id]);
+
+        // #1683: an allowed delete leaves an audit row behind. activity_logs
+        // has no FK to subject_id, so the row outlives the ticket (and its
+        // cascaded comments/attachments/task_activities).
+        $log = DB::table('activity_logs')
+            ->where('type', 'deleted')
+            ->where('subject_type', Ticket::class)
+            ->where('subject_id', $ticket->id)
+            ->first();
+
+        $this->assertNotNull($log);
+        $this->assertSame($user->id, (int) $log->user_id);
+
+        $old = json_decode((string) $log->old_values, true);
+        $this->assertSame('created', $old['status']);
+        $this->assertSame($unit->id, $old['unit_id']);
+    }
+
+    // =====================================================================
+    // #1683 — a closed/archived ticket is not deletable (terminal-state guard)
+    // =====================================================================
+
+    public function test_delete_completed_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = Ticket::create([
+            'ticket_code' => 'T-DEL-COMPLETED',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Done',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        $comment = TicketComment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'body' => 'History that must survive.',
+        ]);
+
+        $attachment = Attachment::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'file_path' => 'attachments/report.pdf',
+            'file_name' => 'report.pdf',
+            'file_size' => 9,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be deleted.']);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+        $this->assertDatabaseHas('ticket_comments', ['id' => $comment->id]);
+        $this->assertDatabaseHas('attachments', ['id' => $attachment->id]);
+        $this->assertDatabaseMissing('activity_logs', ['type' => 'deleted', 'subject_id' => $ticket->id]);
+    }
+
+    public function test_delete_rejected_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'rejected');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be deleted.']);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+    }
+
+    public function test_delete_archived_ticket_returns_422(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        // #929: archiving is one-way. The status may still read `created`
+        // while `archived_at` is stamped — the archived branch alone must block.
+        $ticket = $this->createAssignedTicket($user, $unit, 'created', ['archived_at' => now()]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be deleted.']);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+    }
+
+    public function test_delete_loses_race_when_ticket_closed_under_lock(): void
+    {
+        // A concurrent complete() lands between the controller's read and the
+        // delete. A pre-transaction status check would miss it; the guard must
+        // run on the locked row.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow((object) [
+            'id' => $ticket->id,
+            'status' => 'completed',
+            'unit_id' => $unit->id,
+            'archived_at' => null,
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Closed tickets cannot be deleted.']);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+    }
+
+    public function test_delete_loses_race_when_row_vanished_under_lock(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $this->fakeLockedTicketRow(null);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Ticket no longer exists.']);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+    }
+
+    public function test_delete_without_manage_unit_tickets_is_forbidden(): void
+    {
+        // #1683 regression pin: the route gate stays `permission:manage_unit_tickets`.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        $ticket = $this->createAssignedTicket($user, $unit, 'created');
+
+        $token = $this->createApiToken($user, ['tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(403);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+    }
+
+    public function test_delete_ticket_outside_unit_scope_is_forbidden(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $otherUnit = Unit::create(['name' => 'Other']);
+        $ticket = Ticket::create(['ticket_code' => 'T-DEL-SCOPE', 'user_id' => $user->id, 'unit_id' => $otherUnit->id, 'subject' => 'Hidden', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+        $response = $this->apiDelete("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Unit not accessible.']);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
     }
 
     public function test_user_can_assign_ticket(): void

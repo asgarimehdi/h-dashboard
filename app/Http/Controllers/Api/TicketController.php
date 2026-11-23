@@ -9,6 +9,7 @@ use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Rules\TicketTargetUnit;
+use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -148,7 +149,20 @@ class TicketController extends Controller
             return $result;
         }
 
-        $ticket->delete();
+        // #1683: a closed ticket is not deletable — the same one-way rule (#929)
+        // every other ticket write enforces (#1608, #1633). The check and the
+        // delete share ONE transaction on the locked row; a pre-check followed
+        // by a delete outside the lock would reopen the check-then-act window a
+        // concurrent complete()/reject()/archive can slip through.
+        $outcome = $this->atomicDelete($ticket);
+
+        if ($outcome === self::TRANSITION_MISSING) {
+            return response()->json(['message' => 'Ticket no longer exists.'], 422);
+        }
+
+        if ($outcome !== self::TRANSITION_OK) {
+            return response()->json(['message' => 'Closed tickets cannot be deleted.'], 422);
+        }
 
         return response()->json(['success' => true]);
     }
@@ -321,8 +335,7 @@ class TicketController extends Controller
             // #929: archiving is one-way — a closed ticket stays closed unless a
             // human reopens it deliberately. Checked on the locked row so a
             // concurrent complete() cannot land after a stale pre-check.
-            if ($rejectClosed
-                && (in_array($row->status, ['completed', 'rejected'], true) || $row->archived_at !== null)) {
+            if ($rejectClosed && $this->isClosedRow($row)) {
                 return self::TRANSITION_CLOSED;
             }
 
@@ -334,5 +347,60 @@ class TicketController extends Controller
 
             return self::TRANSITION_OK;
         });
+    }
+
+    /**
+     * #1683: delete a ticket atomically.
+     *
+     * Same locked-row shape as atomicTransition() (#1608) — the raw
+     * `DB::select(... FOR UPDATE)` is deliberate: the test harness
+     * (TicketApiTest::fakeLockedTicketRow) only intercepts that spelling, and the
+     * delete MUST happen inside the same transaction as the guard.
+     *
+     * @return string one of the TRANSITION_* constants
+     */
+    private function atomicDelete(Ticket $ticket): string
+    {
+        return DB::transaction(function () use ($ticket): string {
+            $locked = DB::select(
+                'SELECT id, status, unit_id, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
+
+            if ($locked === []) {
+                return self::TRANSITION_MISSING;
+            }
+
+            $row = $locked[0];
+
+            if ($this->isClosedRow($row)) {
+                return self::TRANSITION_CLOSED;
+            }
+
+            $ticket->delete();
+
+            // activity_logs has no FK to subject_id, so this row outlives the
+            // ticket and its cascaded comments/attachments/task_activities.
+            // Same order as DiseaseCaseService::delete().
+            ActivityLogService::log(
+                'deleted',
+                $ticket,
+                "حذف تیکت {$ticket->ticket_code}",
+                ['status' => $row->status, 'unit_id' => $row->unit_id],
+                null,
+            );
+
+            return self::TRANSITION_OK;
+        });
+    }
+
+    /**
+     * #1683: the single closed-ticket definition shared by every ticket write
+     * (#1608, #1633). #929: archiving is one-way — an `archived_at` timestamp
+     * counts as closed even while the status still reads an open value.
+     */
+    private function isClosedRow(object $row): bool
+    {
+        return in_array($row->status, ['completed', 'rejected'], true) || $row->archived_at !== null;
     }
 }
