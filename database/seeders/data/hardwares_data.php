@@ -76,7 +76,7 @@ return [
         'switch' => null,
         'port' => null,
         'shutdown' => true,
-        'vlan' => '1752',
+        'vlan' => '1755',
         'motherboard' => 'H61MA-D2V',
         'cpu' => 'Intel(R) Core(TM) i3-2100 CPU @ 3.10GHz',
         'ram' => '2048',
