@@ -292,9 +292,91 @@ class TicketCommentApiComprehensiveTest extends TestCase
         $this->assertArrayNotHasKey('body_html', $child);
 
         // The relation no longer force-loads `user.person` (#1177); the list
-        // still exposes it, so the controller must keep requesting it.
+        // requests it explicitly with the display-only column list (#1689).
         $this->assertArrayHasKey('person', $child['user']);
         $this->assertSame($this->user->n_code, $child['user']['person']['n_code']);
+    }
+
+    /**
+     * #1689: a reply author is a display name, not a Person record. `Person` has
+     * no `$hidden`, so an unconstrained `children.user.person` eager load shipped
+     * `phone`, `birth_date`, `hire_date` and the four `*_folded` search columns to
+     * every lowest-privilege ticket reader. `n_code` stays: it is the owner key of
+     * `User::person()` and the top-level author already exposes it.
+     */
+    public function test_reply_author_person_is_display_only_in_list_and_detail(): void
+    {
+        $replyAuthor = $this->makeScopedUser($this->unit->id);
+        $replyAuthor->person->update([
+            'phone' => '09120000001',
+            'birth_date' => '1990-01-01',
+            'hire_date' => '2015-01-01',
+        ]);
+
+        $root = $this->makeComment(['body' => 'ریشه']);
+        $this->makeComment([
+            'body' => 'پاسخ',
+            'parent_id' => $root->id,
+            'user_id' => $replyAuthor->id,
+        ]);
+
+        $token = $this->makeLowPrivilegeReaderToken($this->unit->id);
+
+        $list = $this->apiGet("/api/tickets/{$this->ticket->id}/comments?threaded=true", $token);
+        $list->assertStatus(200);
+        $this->assertDisplayOnlyReplyPerson($list->json('data.0.children.0.user.person'), $replyAuthor);
+
+        // The reply author's `user` object now matches `show()` and the root author.
+        $childUser = array_keys($list->json('data.0.children.0.user'));
+        sort($childUser);
+        $this->assertSame(['id', 'n_code', 'person'], $childUser);
+
+        // The root author contract is unchanged: `id, n_code`, no person.
+        $rootUser = array_keys($list->json('data.0.user'));
+        sort($rootUser);
+        $this->assertSame(['id', 'n_code'], $rootUser);
+
+        $detail = $this->apiGet("/api/tickets/{$this->ticket->id}/comments/{$root->id}", $token);
+        $detail->assertStatus(200);
+        $this->assertDisplayOnlyReplyPerson($detail->json('data.children.0.user.person'), $replyAuthor);
+    }
+
+    /** Lowest read privilege: `tickets:read` + `view_all_tickets`, no admin/write. */
+    protected function makeLowPrivilegeReaderToken(int $unitId): string
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+
+        Person::create([
+            'n_code' => $nCode,
+            'f_name' => 'خواننده',
+            'l_name' => 'تست',
+            't_id' => $this->lookupIds['tId'],
+            'e_id' => $this->lookupIds['eId'],
+            's_id' => $this->lookupIds['sId'],
+            'r_id' => $this->lookupIds['rId'],
+            'u_id' => $unitId,
+        ]);
+
+        $reader = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $reader->givePermissionTo('view_all_tickets');
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+        $reader->units()->attach($unitId, ['role' => 'staff', 'is_primary' => true]);
+
+        return $this->createApiToken($reader, ['tickets:read']);
+    }
+
+    /** @param array<string, mixed>|null $person */
+    protected function assertDisplayOnlyReplyPerson(?array $person, User $author): void
+    {
+        $this->assertNotNull($person, 'The reply author person relation must still load.');
+        $this->assertSame($author->n_code, $person['n_code']);
+
+        $keys = array_keys($person);
+        sort($keys);
+
+        // Exact keys: `phone`, `birth_date`, `hire_date` and every `*_folded`
+        // column must be absent, and a future un-hidden column fails loudly.
+        $this->assertSame(['f_name', 'id', 'l_name', 'n_code'], $keys);
     }
 
     /**
