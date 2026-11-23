@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Cache;
  * intended to be handed to the queued confirm job (#1167) together with the
  * stored file path, so the key format is a public contract, not an internal
  * detail of one component.
+ *
+ * #1678: the payload also carries `file_hash` — the sha256 of the uploaded
+ * file's bytes at preview time. Confirm must recompute it from the bytes of
+ * the file in that request and refuse when they differ (or when the key is
+ * missing). The hash is written here by `put()` and is never read from the
+ * Livewire snapshot: the snapshot is client-round-tripped and cannot be a
+ * trust anchor.
  */
 final class ImportPreviewStore
 {
@@ -25,9 +32,12 @@ final class ImportPreviewStore
 
     /**
      * @param  array<string, mixed>  $results  `HardwareImport`/`PersonImport` results (preview, counters, errors)
+     * @param  string  $fileHash  sha256 of the previewed file's bytes (#1678)
      */
-    public static function put(string $token, array $results): void
+    public static function put(string $token, array $results, string $fileHash): void
     {
+        $results['file_hash'] = $fileHash;
+
         Cache::put(self::key($token), $results, self::TTL_SECONDS);
     }
 

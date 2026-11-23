@@ -65,7 +65,7 @@ class ImportLivewireComponentTest extends TestCase
             'errors' => [],
             'changes' => [],
             'preview' => $preview,
-        ], $overrides));
+        ], $overrides), hash('sha256', $token));
 
         return $token;
     }
