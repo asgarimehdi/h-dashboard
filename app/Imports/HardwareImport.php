@@ -57,6 +57,18 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      */
     private array $previewErrorMessages = [];
 
+    /**
+     * #1704: `clean_at` cells that are non-empty but unparseable, keyed by
+     * sheet row. The date parser collapses "blank" and "invalid" to null, so
+     * the raw cell is captured where it is still readable (`collection()`) and
+     * the UPDATE path refuses the row instead of writing that null over a
+     * stored date. The raw text must never ride inside `$data`: those keys go
+     * straight into `Hardware::insert()`.
+     *
+     * @var array<int, string>
+     */
+    private array $unparseableCleanAt = [];
+
     /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> */
     private array $pendingCreates = [];
 
@@ -125,9 +137,20 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         // both passes. `rowNumber` is the spreadsheet line (header + 1-indexed),
         // which is also the `row_{n}` key the preview sends back.
         $dataByRow = [];
+        $this->unparseableCleanAt = [];
 
         foreach ($rows as $index => $row) {
-            $dataByRow[$index + 2] = $this->mapRowToData($row->toArray());
+            $rowNumber = $index + 2;
+            $rowData = $row->toArray();
+            $dataByRow[$rowNumber] = $this->mapRowToData($rowData);
+
+            // #1704: the raw cell is still readable here; `mapRowToData()`
+            // has already collapsed a bad date to null. Remember the text so
+            // `buildPreview()` can refuse an update row instead of writing
+            // that null over the date the record already stores.
+            if (($invalidCleanAt = $this->invalidCleanAtCell($rowData['clean_at'] ?? null)) !== null) {
+                $this->unparseableCleanAt[$rowNumber] = $invalidCleanAt;
+            }
         }
 
         // #1167: the four hardware cache namespaces must bump at most once per
@@ -346,6 +369,21 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         $matchKey = $existing ? ($existing['key'] ?? 'unknown') : null;
 
         if ($existing) {
+            // #1704: the cell is non-empty but not a date the parser accepts.
+            // Writing the parsed null over a stored date would silently destroy
+            // it, so the row is rejected instead — the same row-rejection
+            // contract as #1697. Create rows are untouched: there is no stored
+            // value to lose there, so #890 semantics (store NULL) still apply.
+            if (($invalidCleanAt = $this->unparseableCleanAt[$rowNumber] ?? null) !== null) {
+                $this->recordRejectedRow(
+                    $rowNumber,
+                    "تاریخ clean_at نامعتبر است: «{$invalidCleanAt}»؛ ردیف رد شد تا تاریخ ذخیره‌شده پاک نشود",
+                    $data,
+                );
+
+                return;
+            }
+
             $changes = $this->detectChanges($existing['record'], $data);
 
             if (! empty($changes)) {
@@ -1045,12 +1083,33 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      * — the operator's own file, read back, destroyed the field.
      *
      * Accepts ISO `2026-02-08`, Jalali `1404/11/19` and Jalali `1404-11-19`,
-     * and returns canonical Gregorian `Y-m-d` for storage. Returns null for
+     * with Persian `۰-۹` or Arabic-Indic `٠-٩` digits as well (#1704), and
+     * returns canonical Gregorian `Y-m-d` for storage. Returns null for
      * anything else, including a shape that matches but is not a real date.
+     *
+     * #1704: null means "blank cell OR unparseable cell" — the two are not
+     * distinguishable here. A consumer must classify the raw cell with
+     * `isBlankDateCell()` first when the difference matters: this importer
+     * rejects an UPDATE row whose cell is non-empty but unparseable (so a
+     * stored date is never silently erased) and stores NULL only for a blank
+     * one; a CREATE row keeps the documented #890 behaviour (`NULL`).
      */
     private function parseDate($value): ?string
     {
         return $this->parseGregorianOrJalaliDate($value);
+    }
+
+    /**
+     * #1704: the raw text of a `clean_at` cell that is neither blank nor
+     * parseable, or null when the cell is fine.
+     */
+    private function invalidCleanAtCell(mixed $value): ?string
+    {
+        if ($this->isBlankDateCell($value) || $this->parseDate($value) !== null) {
+            return null;
+        }
+
+        return trim((string) $value);
     }
 
     private function clean($value): ?string

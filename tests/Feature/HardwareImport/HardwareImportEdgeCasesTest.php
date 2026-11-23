@@ -394,6 +394,9 @@ class HardwareImportEdgeCasesTest extends TestCase
 
     public function test_clean_at_accepts_iso_date_and_nulls_other_formats(): void
     {
+        // #1704: the create path keeps #890's semantics (an unrecognised shape
+        // stores NULL); the SAME cell on an UPDATE row is rejected instead —
+        // see test_update_with_unparseable_clean_at_is_rejected_….
         $this->createPerson();
 
         // #1667: distinct MACs — these are four genuinely different devices,
@@ -457,6 +460,139 @@ class HardwareImportEdgeCasesTest extends TestCase
 
         // 1404 IS a Jalali leap year, so Esfand 29 exists and is accepted.
         $this->assertDatabaseHas('hardwares', ['pc_name' => 'PC-OK', 'clean_at' => '2026-03-20']);
+
+        @unlink($file);
+    }
+
+    // -----------------------------------------------------------
+    //  ایشو #1704: clean_at با ارقام فارسی و ردِ ردیفِ update
+    // -----------------------------------------------------------
+
+    /**
+     * #1704: an operator typing on a Persian keyboard writes `۱۴۰۴/۱۱/۱۹`. The
+     * parser used to reject it, `clean_at` came back null, and the upsert wrote
+     * that null over the stored date. Now the digits are folded and the row
+     * stores the same Gregorian date the ASCII form produces.
+     */
+    public function test_update_with_persian_digit_clean_at_writes_gregorian_date(): void
+    {
+        $this->createPerson();
+
+        Hardware::create([
+            'n_code' => '1234567890',
+            'pc_name' => 'PC-NEW',
+            'mac' => 'AA:BB:CC:DD:EE:01',
+            'cpu' => 'i5',
+            'shutdown' => false,
+            'clean_at' => null,
+        ]);
+
+        $file = $this->writeCsv([$this->row([
+            'clean_at' => '۱۴۰۴/۱۱/۱۹',
+        ])]);
+
+        $import = $this->scopedImport();
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertEquals(1, $results['updated']);
+        $this->assertEmpty($results['errors']);
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-NEW',
+            'clean_at' => '2026-02-08',
+        ]);
+
+        @unlink($file);
+    }
+
+    /**
+     * #1704: a non-empty cell the parser cannot read is NOT "no date". Writing
+     * the parsed null over a stored date would destroy it silently, so the row
+     * is rejected whole — the same contract #1697 used for lookup ids — and no
+     * column of that row is written.
+     */
+    public function test_update_with_unparseable_clean_at_is_rejected_and_keeps_stored_values(): void
+    {
+        $this->createPerson();
+
+        Hardware::create([
+            'n_code' => '1234567890',
+            'pc_name' => 'PC-NEW',
+            'mac' => 'AA:BB:CC:DD:EE:01',
+            'cpu' => 'i5',
+            'shutdown' => false,
+            'clean_at' => '2026-01-05',
+        ]);
+
+        $file = $this->writeCsv([$this->row([
+            'cpu' => 'i9',
+            'clean_at' => '05/01/2026',
+        ])]);
+
+        $import = $this->scopedImport();
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertEquals(0, $results['updated']);
+        $this->assertEquals(1, $results['skipped']);
+        $this->assertCount(1, $results['errors']);
+        $this->assertStringContainsString('clean_at', $results['errors'][0]['error']);
+        $this->assertStringContainsString('05/01/2026', $results['errors'][0]['error']);
+
+        // The stored date survived, and the rest of the row was not written
+        // either — a rejected row is rejected as a whole.
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-NEW',
+            'cpu' => 'i5',
+            'clean_at' => '2026-01-05',
+        ]);
+
+        @unlink($file);
+    }
+
+    /**
+     * #1704: the rejection is visible in the preview the operator approves —
+     * an `error` row, not a silent skip — and the preview pass writes nothing.
+     */
+    public function test_preview_flags_an_update_row_with_unparseable_clean_at(): void
+    {
+        $this->createPerson();
+
+        Hardware::create([
+            'n_code' => '1234567890',
+            'pc_name' => 'PC-NEW',
+            'mac' => 'AA:BB:CC:DD:EE:01',
+            'cpu' => 'i5',
+            'shutdown' => false,
+            'clean_at' => '2026-01-05',
+        ]);
+
+        $file = $this->writeCsv([$this->row([
+            'cpu' => 'i9',
+            'clean_at' => '05/01/2026',
+        ])]);
+
+        $import = $this->scopedImport();
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertEquals(0, $results['updated']);
+        $this->assertEquals(0, $results['created']);
+        $this->assertCount(1, $results['preview']);
+        $this->assertEquals('error', $results['preview'][0]['status']);
+        $this->assertEquals(2, $results['preview'][0]['row']);
+        $this->assertStringContainsString('05/01/2026', $results['preview'][0]['message']);
+
+        $this->assertDatabaseHas('hardwares', [
+            'pc_name' => 'PC-NEW',
+            'cpu' => 'i5',
+            'clean_at' => '2026-01-05',
+        ]);
 
         @unlink($file);
     }

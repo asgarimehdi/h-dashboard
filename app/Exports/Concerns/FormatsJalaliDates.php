@@ -2,6 +2,7 @@
 
 namespace App\Exports\Concerns;
 
+use App\Traits\PersianNormalizer;
 use Carbon\Carbon;
 use Morilog\Jalali\Jalalian;
 use Throwable;
@@ -60,9 +61,19 @@ trait FormatsJalaliDates
      *  - Jalali slashed `1404/11/19` (what this repo's exports emit)
      *  - Jalali dashed `1404-11-19`
      *
-     * Rejected (returns null, and the caller stores NULL rather than a
-     * half-parsed value): any other shape, and any date that fails the
-     * calendar check — `1404/13/01` is not a date.
+     * The digits may be Persian `۰-۹` or Arabic-Indic `٠-٩` as well as Latin:
+     * an operator typing on a Persian keyboard writes `۱۴۰۴/۱۱/۱۹`, and #1704
+     * is precisely the hole the ASCII-only regex left. Only digits are folded
+     * (digits and separators may be mixed); the separators are untouched.
+     *
+     * Rejected (returns null rather than a half-parsed value): any other shape,
+     * and any date that fails the calendar check — `1404/13/01` is not a date.
+     *
+     * #1704: `null` is ALSO what a blank cell returns, so the parser alone
+     * cannot tell "no date" from "unparseable". A caller that must not lose a
+     * stored value has to classify the raw cell first with `isBlankDateCell()`:
+     * `HardwareImport` rejects an update row whose `clean_at` is non-empty but
+     * unparseable, and stores NULL only for a genuinely blank cell.
      *
      * Jalali dashed has to be disambiguated from ISO by year range: the Jalali
      * year is always well below the Gregorian one, so `1404-11-19` cannot be
@@ -76,9 +87,17 @@ trait FormatsJalaliDates
         }
 
         $raw = trim((string) $value);
-        if ($raw === '' || $raw === '\N' || $raw === '-') {
+        if ($this->isBlankDateCell($raw)) {
             return null;
         }
+
+        // #1704: the operator types a date on a Persian keyboard (۱۴۰۴/۱۱/۱۹),
+        // which the ASCII `\d` below never matched. digitMap() is the repo's
+        // single Persian/Arabic-Indic digit map (search folds the same table in
+        // PHP and SQL), so a date never depends on the Latin layout — a second
+        // map here would drift from it. Digits ONLY: separators and ZWNJ are
+        // untouched, and strtr handles a cell that mixes the two scripts.
+        $raw = strtr($raw, PersianNormalizer::digitMap());
 
         // Jalali, slashed or dashed. Checked BEFORE the ISO branch, because
         // `1404-11-19` also matches the ISO shape and would otherwise be stored
@@ -112,6 +131,25 @@ trait FormatsJalaliDates
         }
 
         return null;
+    }
+
+    /**
+     * #1704: the one definition of a "no date" cell, shared with the importer.
+     *
+     * `parseGregorianOrJalaliDate()` returns null both for a blank cell and for
+     * an unparseable one, so a caller that has to tell them apart classifies
+     * the raw cell with this method instead of re-deriving the token list
+     * (which would drift from the parser).
+     */
+    protected function isBlankDateCell(mixed $value): bool
+    {
+        if ($value === null || is_array($value)) {
+            return true;
+        }
+
+        $raw = trim((string) $value);
+
+        return $raw === '' || $raw === '\N' || $raw === '-';
     }
 
     /**
