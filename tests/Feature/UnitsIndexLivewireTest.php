@@ -385,6 +385,120 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertDatabaseHas('units', ['id' => $target->id, 'name' => 'unit_updated_name']);
     }
 
+    // ==================== #1679: can_receive_tickets write authority ====================
+
+    public function test_edit_unit_preserves_can_receive_tickets_without_manage_permission(): void
+    {
+        // #1679: `organization` alone may open the edit modal but must not
+        // write the ticket flag. The stored value has to survive the update.
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد قبل', 'unit_type_id' => 3,
+            'region_id' => 2, 'parent_id' => $parent->id,
+            'can_receive_tickets' => true,
+        ]);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $target->id)
+            ->set('name', 'unit_updated_name')
+            ->call('saveUnit');
+
+        $this->assertDatabaseHas('units', [
+            'id' => $target->id,
+            'name' => 'unit_updated_name',
+            'can_receive_tickets' => true,
+        ]);
+    }
+
+    public function test_create_unit_never_grants_can_receive_tickets_without_manage_permission(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->call('openModalForCreate')
+            ->set('name', 'unit_created_name')
+            ->set('unit_type_id', 3)
+            ->set('parent_id', $parent->id)
+            ->set('can_receive_tickets', true)
+            ->call('saveUnit');
+
+        $this->assertDatabaseHas('units', [
+            'name' => 'unit_created_name',
+            'can_receive_tickets' => false,
+        ]);
+    }
+
+    public function test_edit_unit_can_clear_can_receive_tickets_with_manage_permission(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization', 'manage_unit_tickets']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد قبل', 'unit_type_id' => 3,
+            'region_id' => 2, 'parent_id' => $parent->id,
+            'can_receive_tickets' => true,
+        ]);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $target->id)
+            ->set('can_receive_tickets', false)
+            ->call('saveUnit');
+
+        $this->assertDatabaseHas('units', [
+            'id' => $target->id,
+            'can_receive_tickets' => false,
+        ]);
+    }
+
+    public function test_edit_unit_can_keep_can_receive_tickets_with_manage_permission(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization', 'manage_unit_tickets']);
+        $parent->update(['unit_type_id' => 2]);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد قبل', 'unit_type_id' => 3,
+            'region_id' => 2, 'parent_id' => $parent->id,
+            'can_receive_tickets' => true,
+        ]);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $target->id)
+            ->set('name', 'unit_updated_name')
+            ->call('saveUnit');
+
+        $this->assertDatabaseHas('units', [
+            'id' => $target->id,
+            'can_receive_tickets' => true,
+        ]);
+    }
+
+    public function test_ticket_capability_toggle_in_form_is_privileged_only(): void
+    {
+        // #1679: presentation only — the guard stays in saveUnit(). Assert on
+        // the wire:model binding, never on the «پذیرش تیکت» text (the table
+        // header carries the same label).
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->call('openModalForCreate')
+            ->assertDontSeeHtml('wire:model="can_receive_tickets"');
+
+        ['user' => $privileged] = $this->createUserWithUnit(['organization', 'manage_unit_tickets']);
+        $this->actingAs($privileged);
+
+        Livewire::test('units.index')
+            ->call('openModalForCreate')
+            ->assertSeeHtml('wire:model="can_receive_tickets"');
+    }
+
     // ==================== Validation errors ====================
 
     public function test_validation_errors(): void

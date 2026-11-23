@@ -415,10 +415,24 @@ return new class extends Component
             'unit_type_id' => $this->unit_type_id,
             'region_id' => $this->determineRegionId(),
             'parent_id' => $this->parent_id,
-            'can_receive_tickets' => auth()->user()->can('manage_unit_tickets')
-                ? $this->can_receive_tickets
-                : false,
         ];
+
+        if ($this->editingId) {
+            // #1679: a field this actor may not write is OMITTED, not
+            // overwritten with a default — `update()` then leaves the stored
+            // value untouched. Same boundary as toggleTicketCapability() below.
+            if (auth()->user()->can('manage_unit_tickets')) {
+                $data['can_receive_tickets'] = (bool) $this->can_receive_tickets;
+            }
+        } else {
+            // #1679: a creator without the permission can never mint a
+            // receiving unit, whatever the payload says (the #1246 doctrine:
+            // the server ignores the payload; hiding the input is not a guard).
+            $data['can_receive_tickets'] = (bool) (
+                auth()->user()->can('manage_unit_tickets')
+                && $this->can_receive_tickets
+            );
+        }
 
         $unit = null;
 
@@ -888,8 +902,16 @@ return new class extends Component
             @endif
 
             <div class="col-span-2">
-                <x-toggle wire:model="can_receive_tickets" label="پذیرش تیکت"
-                          hint="اگر فعال باشد، این واحد می‌تواند تیکت دریافت کند." />
+                @can('manage_unit_tickets')
+                    <x-toggle wire:model="can_receive_tickets" label="پذیرش تیکت"
+                              hint="اگر فعال باشد، این واحد می‌تواند تیکت دریافت کند." />
+                @else
+                    {{-- Presentation only: saveUnit() is the guard (#1246). --}}
+                    <p class="text-sm text-base-content/70">
+                        پذیرش تیکت: {{ $can_receive_tickets ? 'فعال' : 'غیرفعال' }}
+                        — تغییر این وضعیت نیاز به مجوز «مدیریت تیکت‌های واحد» دارد.
+                    </p>
+                @endcan
             </div>
 
             <div class="col-span-2 flex justify-end space-x-2">
