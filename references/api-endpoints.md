@@ -146,7 +146,7 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 | POST | `/api/tickets` | Create ticket. The target unit must be both `is_active` and `can_receive_tickets`; otherwise **422** with `errors.unit_id`. Clients should key on `errors.unit_id`, not on the message text. `PUT` never retargets `unit_id`. |
 | GET | `/api/tickets/{ticket}` | Show details |
 | PUT | `/api/tickets/{ticket}` | Update subject/content/priority/deadline. **422** if the ticket is closed (`completed`/`rejected`/archived). |
-| DELETE | `/api/tickets/{ticket}` | Delete |
+| DELETE | `/api/tickets/{ticket}` | Delete. **422** if the ticket is closed (`completed`/`rejected`/archived) — `Closed tickets cannot be deleted.`; **422** `Ticket no longer exists.` if the row vanished between binding and the lock. A successful delete writes a `deleted` row to `activity_logs` (subject = the ticket) before the row, its comments and its attachments go away. |
 | POST | `/api/tickets/{ticket}/assign` | Assign to user |
 | POST | `/api/tickets/{ticket}/accept` | Accept assigned ticket |
 | POST | `/api/tickets/{ticket}/complete` | Mark complete |
